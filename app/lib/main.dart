@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'features/hosts/connection_check_screen.dart';
+import 'features/hosts/host_list_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: RemoteFileExplorerApp()));
@@ -18,7 +18,7 @@ class RemoteFileExplorerApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF3B6EF6),
         useMaterial3: true,
       ),
-      home: const ConnectionCheckScreen(),
+      home: const HostListScreen(),
     );
   }
 }

@@ -12,11 +12,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/server"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
 const version = "0.1.0"
@@ -26,15 +30,55 @@ func main() {
 	name := flag.String("name", hostName(), "agent display name shown to the phone")
 	dataDir := flag.String("data", defaultDataDir(), "directory for certs, db, and state")
 	readOnly := flag.Bool("read-only", false, "reject all write operations")
+	roots := flag.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
 	flag.Parse()
+
+	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
+		log.Fatalf("data dir: %v", err)
+	}
 
 	cert, err := security.LoadOrCreateCert(*dataDir)
 	if err != nil {
 		log.Fatalf("tls: %v", err)
 	}
-	log.Printf("agent %q  cert-fingerprint=%s", *name, security.Fingerprint(cert))
+	fingerprint := security.Fingerprint(cert)
+	log.Printf("agent %q  cert-fingerprint=%s", *name, fingerprint)
 
-	handler := server.New(server.Config{Name: *name, Version: version, ReadOnly: *readOnly})
+	db, err := store.Open(*dataDir)
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer db.Close()
+
+	tempDir := filepath.Join(*dataDir, "transfers")
+	tm, err := transfer.New(db, tempDir)
+	if err != nil {
+		log.Fatalf("transfer: %v", err)
+	}
+
+	pm, err := pairing.New(*addr, fingerprint)
+	if err != nil {
+		log.Fatalf("pairing: %v", err)
+	}
+
+	var allowedRoots []string
+	if *roots != "" {
+		for _, r := range strings.Split(*roots, ",") {
+			r = strings.TrimSpace(r)
+			if r != "" {
+				allowedRoots = append(allowedRoots, r)
+			}
+		}
+	}
+
+	handler := server.New(server.Config{
+		Name:            *name,
+		Version:         version,
+		ReadOnly:        *readOnly,
+		CertFingerprint: fingerprint,
+		Address:         *addr,
+		AllowedRoots:    allowedRoots,
+	}, db, pm, tm)
 
 	srv := &http.Server{
 		Addr:    *addr,

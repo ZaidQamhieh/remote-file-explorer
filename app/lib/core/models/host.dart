@@ -22,4 +22,35 @@ class Host {
   final String? tailscaleName;
 
   Uri get baseUri => Uri.parse('https://$address/v1');
+
+  factory Host.fromJson(Map<String, dynamic> json) => Host(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        address: json['address'] as String,
+        certFingerprint: json['certFingerprint'] as String?,
+        tailscaleName: json['tailscaleName'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'address': address,
+        if (certFingerprint != null) 'certFingerprint': certFingerprint,
+        if (tailscaleName != null) 'tailscaleName': tailscaleName,
+      };
+
+  Host copyWith({
+    String? id,
+    String? label,
+    String? address,
+    String? certFingerprint,
+    String? tailscaleName,
+  }) =>
+      Host(
+        id: id ?? this.id,
+        label: label ?? this.label,
+        address: address ?? this.address,
+        certFingerprint: certFingerprint ?? this.certFingerprint,
+        tailscaleName: tailscaleName ?? this.tailscaleName,
+      );
 }

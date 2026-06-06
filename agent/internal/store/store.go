@@ -1,0 +1,246 @@
+// Package store manages the agent's SQLite database.
+// Tables: devices, config, transfers.
+// Tokens are only stored as SHA-256 hashes.
+package store
+
+import (
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	_ "modernc.org/sqlite" // pure-Go SQLite driver
+)
+
+// DB wraps the SQLite connection and exposes a typed API.
+type DB struct {
+	db *sql.DB
+}
+
+// Open opens (or creates) agent.db under dir.
+func Open(dir string) (*DB, error) {
+	path := dir + "/agent.db"
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+	db.SetMaxOpenConns(1) // SQLite WAL still prefers a single writer
+	s := &DB{db: db}
+	if err := s.migrate(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// Close closes the database.
+func (s *DB) Close() error { return s.db.Close() }
+
+// migrate creates tables if they don't exist.
+func (s *DB) migrate() error {
+	_, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS devices (
+    id          TEXT PRIMARY KEY,
+    label       TEXT NOT NULL,
+    token_hash  TEXT NOT NULL UNIQUE,
+    created     INTEGER NOT NULL,
+    last_seen   INTEGER NOT NULL,
+    revoked     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transfers (
+    id               TEXT PRIMARY KEY,
+    target_path      TEXT NOT NULL,
+    total_size       INTEGER NOT NULL,
+    chunk_size       INTEGER NOT NULL,
+    sha256           TEXT NOT NULL,
+    received_chunks  TEXT NOT NULL DEFAULT '[]',
+    status           TEXT NOT NULL DEFAULT 'open',
+    temp_path        TEXT NOT NULL,
+    total_chunks     INTEGER NOT NULL
+);
+`)
+	return err
+}
+
+// --------- devices ---------
+
+// Device represents a paired device.
+type Device struct {
+	ID        string
+	Label     string
+	TokenHash string
+	Created   time.Time
+	LastSeen  time.Time
+	Revoked   bool
+}
+
+// CreateDevice inserts a new device row. token is the raw bearer token —
+// only its SHA-256 hash is stored.
+func (s *DB) CreateDevice(id, label, token string) error {
+	hash := hashToken(token)
+	now := time.Now().Unix()
+	_, err := s.db.Exec(
+		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked) VALUES (?,?,?,?,?,0)`,
+		id, label, hash, now, now,
+	)
+	return err
+}
+
+// DeviceByToken returns the device whose token matches the given raw token,
+// or (nil,nil) if not found.
+func (s *DB) DeviceByToken(token string) (*Device, error) {
+	hash := hashToken(token)
+	row := s.db.QueryRow(
+		`SELECT id,label,token_hash,created,last_seen,revoked FROM devices WHERE token_hash=?`, hash,
+	)
+	d, err := scanDevice(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return d, err
+}
+
+// TouchDevice updates last_seen for the given id.
+func (s *DB) TouchDevice(id string) error {
+	_, err := s.db.Exec(`UPDATE devices SET last_seen=? WHERE id=?`, time.Now().Unix(), id)
+	return err
+}
+
+func scanDevice(row *sql.Row) (*Device, error) {
+	var d Device
+	var created, lastSeen int64
+	var revoked int
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked)
+	if err != nil {
+		return nil, err
+	}
+	d.Created = time.Unix(created, 0)
+	d.LastSeen = time.Unix(lastSeen, 0)
+	d.Revoked = revoked != 0
+	return &d, nil
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// --------- config ---------
+
+// GetConfig retrieves a config value by key.
+func (s *DB) GetConfig(key string) (string, error) {
+	var val string
+	err := s.db.QueryRow(`SELECT value FROM config WHERE key=?`, key).Scan(&val)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return val, err
+}
+
+// SetConfig upserts a config value.
+func (s *DB) SetConfig(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		key, value,
+	)
+	return err
+}
+
+// --------- transfers ---------
+
+// Transfer is an in-progress or completed upload session.
+type Transfer struct {
+	ID             string
+	TargetPath     string
+	TotalSize      int64
+	ChunkSize      int
+	SHA256         string
+	ReceivedChunks []int
+	Status         string // open | completed | failed
+	TempPath       string
+	TotalChunks    int
+}
+
+// CreateTransfer inserts a new transfer row.
+func (s *DB) CreateTransfer(t *Transfer) error {
+	chunks, _ := json.Marshal([]int{})
+	_, err := s.db.Exec(
+		`INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.TargetPath, t.TotalSize, t.ChunkSize, t.SHA256,
+		string(chunks), "open", t.TempPath, t.TotalChunks,
+	)
+	return err
+}
+
+// GetTransfer retrieves a transfer by ID.
+func (s *DB) GetTransfer(id string) (*Transfer, error) {
+	row := s.db.QueryRow(
+		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks
+         FROM transfers WHERE id=?`, id,
+	)
+	return scanTransfer(row)
+}
+
+// MarkChunkReceived atomically records chunk n as received.
+func (s *DB) MarkChunkReceived(id string, n int) error {
+	t, err := s.GetTransfer(id)
+	if err != nil {
+		return err
+	}
+	// Add n if not already present.
+	set := make(map[int]struct{}, len(t.ReceivedChunks)+1)
+	for _, c := range t.ReceivedChunks {
+		set[c] = struct{}{}
+	}
+	set[n] = struct{}{}
+	updated := make([]int, 0, len(set))
+	for c := range set {
+		updated = append(updated, c)
+	}
+	// Sort for determinism.
+	sortInts(updated)
+	b, _ := json.Marshal(updated)
+	_, err = s.db.Exec(`UPDATE transfers SET received_chunks=? WHERE id=?`, string(b), id)
+	return err
+}
+
+// SetTransferStatus updates the status of a transfer.
+func (s *DB) SetTransferStatus(id, status string) error {
+	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
+	return err
+}
+
+func scanTransfer(row *sql.Row) (*Transfer, error) {
+	var t Transfer
+	var chunksJSON string
+	err := row.Scan(
+		&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
+		&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(chunksJSON), &t.ReceivedChunks)
+	return &t, nil
+}
+
+func sortInts(a []int) {
+	// Simple insertion sort — chunk lists are tiny.
+	for i := 1; i < len(a); i++ {
+		for j := i; j > 0 && a[j] < a[j-1]; j-- {
+			a[j], a[j-1] = a[j-1], a[j]
+		}
+	}
+}

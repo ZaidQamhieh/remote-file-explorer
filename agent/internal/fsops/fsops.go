@@ -11,10 +11,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -505,18 +503,4 @@ func copyFile(src, dst string, mode os.FileMode) error {
 
 func apiErr(code, msg string) *Error {
 	return &Error{Code: code, Message: msg}
-}
-
-// birthTime returns the creation time on platforms that support it,
-// falling back to ModTime otherwise.
-func birthTime(info os.FileInfo) time.Time {
-	if runtime.GOOS == "linux" {
-		if st, ok := info.Sys().(*syscall.Stat_t); ok {
-			// Try Btim (birth time) — available on btrfs/ext4 with statx.
-			// Stat_t on Linux does not always expose Btim; fall back to Ctim.
-			// Use Ctim (status-change time) as a proxy for creation on Linux.
-			return time.Unix(st.Ctim.Sec, st.Ctim.Nsec)
-		}
-	}
-	return info.ModTime()
 }

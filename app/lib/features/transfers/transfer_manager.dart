@@ -139,9 +139,15 @@ class _TransferTile extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
         );
       case TransferStatus.completed:
+        final label = task.kind == TransferKind.upload
+            ? 'Uploaded'
+            : (task.savedLocation != null
+                ? 'Saved to ${task.savedLocation}'
+                : 'Downloaded');
         return Text(
-          task.kind == TransferKind.upload ? 'Uploaded' : 'Downloaded',
+          label,
           style: const TextStyle(color: Colors.green),
+          overflow: TextOverflow.ellipsis,
         );
       default:
         return Text(task.status.name);

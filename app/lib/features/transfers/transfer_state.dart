@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/host.dart';
+import '../../core/storage/download_saver.dart';
 import '../../core/storage/host_store.dart';
 import 'chunk_planner.dart';
 
@@ -29,6 +30,7 @@ class TransferTask {
     this.status = TransferStatus.queued,
     this.error,
     this.uploadSessionId,
+    this.savedLocation,
   });
 
   factory TransferTask.upload({
@@ -71,6 +73,9 @@ class TransferTask {
   /// Session ID for resumable uploads.
   final String? uploadSessionId;
 
+  /// Where a completed download was saved (e.g. "Downloads/report.pdf").
+  final String? savedLocation;
+
   double get progress => totalBytes > 0 ? transferredBytes / totalBytes : 0.0;
 
   String get displayName => remotePath.split(RegExp(r'[/\\]')).last;
@@ -81,6 +86,7 @@ class TransferTask {
     TransferStatus? status,
     Object? error = _sentinel,
     Object? uploadSessionId = _sentinel,
+    String? savedLocation,
   }) =>
       TransferTask._(
         id: id,
@@ -95,6 +101,7 @@ class TransferTask {
         uploadSessionId: uploadSessionId == _sentinel
             ? this.uploadSessionId
             : uploadSessionId as String?,
+        savedLocation: savedLocation ?? this.savedLocation,
       );
 }
 
@@ -184,10 +191,14 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     final localFile = File(task.localPath);
     final startByte = localFile.existsSync() ? localFile.lengthSync() : 0;
 
+    var mimeType = 'application/octet-stream';
     try {
       final meta = await client.meta(task.remotePath);
       if (meta.size != null) {
         _updateById(id, (t) => t.copyWith(totalBytes: meta.size));
+      }
+      if (meta.mimeType != null && meta.mimeType!.isNotEmpty) {
+        mimeType = meta.mimeType!;
       }
     } catch (_) {}
 
@@ -204,6 +215,12 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
                 ));
       },
     );
+
+    // The file streamed to app-private storage; move it into the public
+    // Downloads collection so it shows up in the phone's Files app.
+    final saved =
+        await DownloadSaver.saveToDownloads(localFile, task.displayName, mimeType);
+    _updateById(id, (t) => t.copyWith(savedLocation: saved));
   }
 
   // ---- Upload ----

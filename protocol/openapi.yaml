@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: Remote File Explorer — Host Agent API
+  version: 0.1.0
+  description: >
+    Contract between the Flutter mobile app and the Go host agent. JSON for control and
+    metadata; binary streams for file content; WebSocket (/v1/events) for progress and
+    filesystem change events. All routes except /pair and /health require a bearer device token.
+servers:
+  - url: https://{host}:{port}/v1
+    variables:
+      host: { default: "127.0.0.1" }
+      port: { default: "8765" }
+
+security:
+  - deviceToken: []
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe (unauthenticated)
+      security: []
+      responses:
+        "200":
+          description: Agent is up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /pair:
+    post:
+      summary: Complete device pairing (unauthenticated; consumes one-time pairing code)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PairRequest" }
+      responses:
+        "200":
+          description: Device paired; token issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /system/drives:
+    get:
+      summary: List drives / mount points (virtual roots)
+      responses:
+        "200":
+          description: Drives
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Drive" }
+
+  /fs:
+    get:
+      summary: List a directory
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+        - { in: query, name: cursor, schema: { type: string }, description: Pagination cursor (by name) }
+        - { in: query, name: limit, schema: { type: integer, default: 200 } }
+      responses:
+        "200":
+          description: Directory listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Listing" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Delete one or more paths
+      parameters:
+        - { in: query, name: path, schema: { type: string }, description: Single path; or use body for batch }
+        - { in: query, name: permanent, schema: { type: boolean, default: false } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paths: { type: array, items: { type: string } }
+                permanent: { type: boolean, default: false }
+      responses:
+        "200": { $ref: "#/components/responses/BatchResult" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /fs/folder:
+    post:
+      summary: Create a folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRequest" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /fs/file:
+    post:
+      summary: Create an empty file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRequest" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /fs/rename:
+    patch:
+      summary: Rename / move a single entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [src, dst]
+              properties:
+                src: { type: string }
+                dst: { type: string }
+      responses:
+        "200": { description: Renamed, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+
+  /fs/copy:
+    post:
+      summary: Copy / duplicate entries (batch-capable)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TransferOpRequest" } } }
+      responses:
+        "202": { $ref: "#/components/responses/BatchResult" }
+
+  /fs/move:
+    post:
+      summary: Move entries (batch-capable)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TransferOpRequest" } } }
+      responses:
+        "202": { $ref: "#/components/responses/BatchResult" }
+
+  /fs/meta:
+    get:
+      summary: Detailed metadata for a single entry
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Metadata, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /content:
+    get:
+      summary: Download file content (supports HTTP Range for resumable download)
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Full content, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        "206": { description: Partial content (Range) }
+        "416": { $ref: "#/components/responses/Error" }
+
+  /transfers:
+    post:
+      summary: Open a resumable upload session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, size, sha256, chunkSize]
+              properties:
+                path: { type: string }
+                size: { type: integer, format: int64 }
+                sha256: { type: string }
+                chunkSize: { type: integer }
+                overwrite: { type: boolean, default: false }
+      responses:
+        "201":
+          description: Session opened
+          content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } }
+
+  /transfers/{id}:
+    get:
+      summary: Get session status + missing chunks (for resume)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+      responses:
+        "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
+
+  /transfers/{id}/chunks/{n}:
+    put:
+      summary: Upload chunk n (Content-Range header; per-chunk checksum)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: n, required: true, schema: { type: integer } }
+        - { in: header, name: Content-Range, required: true, schema: { type: string } }
+        - { in: header, name: X-Chunk-Sha256, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses:
+        "204": { description: Chunk stored }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /transfers/{id}/complete:
+    post:
+      summary: Finalize upload (verify whole-file hash, atomic rename)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+      responses:
+        "200": { description: Completed, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /thumb:
+    get:
+      summary: Server-rendered thumbnail / preview (phase 2)
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+        - { in: query, name: size, schema: { type: integer, default: 256 } }
+      responses:
+        "200": { description: Thumbnail, content: { image/jpeg: { schema: { type: string, format: binary } } } }
+
+  /search:
+    get:
+      summary: Search files and folders (phase 2)
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string } }
+        - { in: query, name: root, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 100 } }
+      responses:
+        "200": { description: Results, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Entry" } } } } }
+
+components:
+  securitySchemes:
+    deviceToken:
+      type: http
+      scheme: bearer
+
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    BatchResult:
+      description: Per-item results for a batch operation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              results:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    path: { type: string }
+                    ok: { type: boolean }
+                    error: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        name: { type: string, description: Agent display name }
+        version: { type: string }
+        os: { type: string, enum: [windows, linux] }
+        readOnly: { type: boolean }
+
+    PairRequest:
+      type: object
+      required: [pairingCode, deviceLabel, clientPublicKey]
+      properties:
+        pairingCode: { type: string, description: One-time code shown by the agent }
+        deviceLabel: { type: string }
+        clientPublicKey: { type: string }
+
+    PairResponse:
+      type: object
+      properties:
+        deviceToken: { type: string }
+        deviceId: { type: string }
+        agentName: { type: string }
+        certFingerprint: { type: string, description: SHA-256 of agent TLS cert, for pinning }
+
+    Drive:
+      type: object
+      properties:
+        path: { type: string, example: "C:\\" }
+        label: { type: string }
+        totalBytes: { type: integer, format: int64 }
+        freeBytes: { type: integer, format: int64 }
+
+    Entry:
+      type: object
+      properties:
+        name: { type: string }
+        path: { type: string }
+        isDir: { type: boolean }
+        size: { type: integer, format: int64 }
+        mimeType: { type: string }
+        mode: { type: string, description: POSIX-style permission string }
+        modified: { type: string, format: date-time }
+        created: { type: string, format: date-time }
+        isSymlink: { type: boolean }
+
+    Listing:
+      type: object
+      properties:
+        path: { type: string }
+        entries: { type: array, items: { $ref: "#/components/schemas/Entry" } }
+        nextCursor: { type: string, nullable: true }
+
+    CreateRequest:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: Full path of the new folder/file }
+
+    TransferOpRequest:
+      type: object
+      required: [sources, destDir]
+      properties:
+        sources: { type: array, items: { type: string } }
+        destDir: { type: string }
+        duplicate: { type: boolean, default: false, description: When true, auto-rename on collision }
+
+    UploadSession:
+      type: object
+      properties:
+        id: { type: string }
+        path: { type: string }
+        size: { type: integer, format: int64 }
+        chunkSize: { type: integer }
+        totalChunks: { type: integer }
+        receivedChunks: { type: array, items: { type: integer }, description: Indices already stored }
+        status: { type: string, enum: [open, completed, failed] }
+
+    Error:
+      type: object
+      properties:
+        code: { type: string, example: PATH_NOT_FOUND }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }

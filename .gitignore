@@ -1,0 +1,25 @@
+# Go agent
+/agent/bin/
+/agent/agent
+*.exe
+
+# TLS / local state (never commit)
+*.pem
+agent.db
+agent.db-*
+
+# Flutter / Dart
+/app/.dart_tool/
+/app/.flutter-plugins
+/app/.flutter-plugins-dependencies
+/app/build/
+/app/.idea/
+/app/ios/Pods/
+/app/android/.gradle/
+/app/**/GeneratedPluginRegistrant.*
+*.iml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

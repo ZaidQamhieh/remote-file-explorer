@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/storage/favorites.dart';
 import '../../core/storage/host_store.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
@@ -60,6 +61,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
 
     final state = ref.watch(explorerProvider(_arg));
+    final favs = ref.watch(favoritesProvider).valueOrNull ?? const [];
+    final isFav =
+        favs.any((f) => f.hostId == widget.host.id && f.path == state.currentPath);
 
     return PopScope(
       canPop: state.atRoot,
@@ -67,7 +71,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         if (!didPop) _notifier.popDirectory();
       },
       child: Scaffold(
-        appBar: _buildAppBar(context, state),
+        appBar: _buildAppBar(context, state, isFav),
         body: _buildBody(context, state, client),
         floatingActionButton:
             state.multiSelect ? null : _buildFab(context, state, client),
@@ -83,13 +87,24 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  AppBar _buildAppBar(BuildContext context, ExplorerState state) {
+  AppBar _buildAppBar(BuildContext context, ExplorerState state, bool isFav) {
     return AppBar(
       leading: state.atRoot
           ? null
           : BackButton(onPressed: () => _notifier.popDirectory()),
       title: _BreadcrumbBar(state: state, notifier: _notifier),
       actions: [
+        IconButton(
+          icon: Icon(isFav ? Icons.star : Icons.star_border),
+          color: isFav ? Colors.amber : null,
+          tooltip: isFav ? 'Remove favorite' : 'Favorite this folder',
+          onPressed: () => _toggleFavorite(context, state, isFav),
+        ),
+        IconButton(
+          icon: const Icon(Icons.bookmarks_outlined),
+          tooltip: 'Favorites',
+          onPressed: () => _showFavorites(context),
+        ),
         IconButton(
           icon: Icon(state.gridView ? Icons.list : Icons.grid_view),
           tooltip: state.gridView ? 'List view' : 'Grid view',
@@ -102,6 +117,39 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           onPressed: () => _showTransfers(context),
         ),
       ],
+    );
+  }
+
+  void _toggleFavorite(
+      BuildContext context, ExplorerState state, bool isFav) {
+    ref.read(favoritesProvider.notifier).toggle(
+          Favorite(
+            hostId: widget.host.id,
+            path: state.currentPath,
+            label: _folderLabel(state.currentPath),
+          ),
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isFav
+            ? 'Removed from favorites'
+            : 'Added "${_folderLabel(state.currentPath)}" to favorites'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _showFavorites(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _FavoritesSheet(
+        host: widget.host,
+        onOpen: (path) {
+          Navigator.pop(context);
+          _notifier.jumpTo(path);
+        },
+      ),
     );
   }
 
@@ -763,8 +811,85 @@ class _DestinationDialog extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
+// Favorites sheet
+// ---------------------------------------------------------------------------
+
+class _FavoritesSheet extends ConsumerWidget {
+  const _FavoritesSheet({required this.host, required this.onOpen});
+
+  final Host host;
+  final void Function(String path) onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favs = ref
+        .watch(favoritesProvider)
+        .valueOrNull
+        ?.where((f) => f.hostId == host.id)
+        .toList() ??
+        const [];
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.bookmarks_outlined),
+                SizedBox(width: 8),
+                Text('Favorites', style: TextStyle(fontSize: 18)),
+              ],
+            ),
+          ),
+          if (favs.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+              child: Text(
+                'No favorites yet. Open a folder and tap the ☆ star to bookmark it.',
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: favs.length,
+                itemBuilder: (ctx, i) {
+                  final f = favs[i];
+                  return ListTile(
+                    leading: const Icon(Icons.folder_special, color: Colors.amber),
+                    title: Text(f.label),
+                    subtitle: Text(f.path, overflow: TextOverflow.ellipsis),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.star, color: Colors.amber),
+                      tooltip: 'Remove',
+                      onPressed: () => ref
+                          .read(favoritesProvider.notifier)
+                          .remove(f.hostId, f.path),
+                    ),
+                    onTap: () => onOpen(f.path),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Display name for a folder path (basename), or "Root" for the filesystem root.
+String _folderLabel(String path) {
+  if (path == '/' || RegExp(r'^[A-Za-z]:\\?$').hasMatch(path)) return 'Root';
+  final name = path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+  return name.isEmpty ? path : name;
+}
 
 String _formatSize(int? bytes) {
   if (bytes == null) return '';

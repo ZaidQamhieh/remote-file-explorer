@@ -147,6 +147,13 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
     _load();
   }
 
+  /// Jump directly to an absolute [path] (e.g. a favorite), rebuilding the
+  /// breadcrumb stack from the root so back/breadcrumb navigation still works.
+  void jumpTo(String path) {
+    state = state.copyWith(pathStack: buildPathStack(path));
+    _load();
+  }
+
   void setSort(SortOrder sort) => state = state.copyWith(sort: sort);
 
   void toggleView() => state = state.copyWith(gridView: !state.gridView);
@@ -214,3 +221,37 @@ final explorerProvider =
     NotifierProvider.family<ExplorerNotifier, ExplorerState, ExplorerArg>(
   ExplorerNotifier.new,
 );
+
+/// Expands an absolute path into the cumulative stack of ancestor paths,
+/// starting at the filesystem root. Handles both POSIX (`/a/b`) and Windows
+/// (`C:\a\b`) layouts.
+///
+/// `/home/x/Storage` -> ['/', '/home', '/home/x', '/home/x/Storage']
+List<String> buildPathStack(String path) {
+  // Windows drive path, e.g. C:\Users\x
+  final winDrive = RegExp(r'^[A-Za-z]:').firstMatch(path);
+  if (winDrive != null) {
+    final parts = path
+        .replaceAll('/', r'\')
+        .split(r'\')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final stack = <String>['${parts.first}\\']; // "C:\"
+    var cur = parts.first;
+    for (final p in parts.skip(1)) {
+      cur = '$cur\\$p';
+      stack.add(cur);
+    }
+    return stack;
+  }
+
+  // POSIX
+  final parts = path.split('/').where((s) => s.isNotEmpty).toList();
+  final stack = <String>['/'];
+  var cur = '';
+  for (final p in parts) {
+    cur = '$cur/$p';
+    stack.add(cur);
+  }
+  return stack;
+}

@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access to the host agent (LAN / Tailscale over HTTPS). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Camera for scanning the pairing QR code. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
-        android:label="remote_file_explorer"
+        android:label="Remote File Explorer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -19,7 +19,7 @@ import (
 
 const (
 	codeLen    = 8            // characters in the one-time code
-	codeExpiry = 5 * time.Minute
+	codeExpiry = 60 * time.Minute
 	// Alphabet chosen to be easy to type: no 0/O, 1/I/l confusion.
 	alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 )

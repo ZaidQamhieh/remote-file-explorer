@@ -1,13 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/health.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/update/update_service.dart';
 import '../explorer/explorer_screen.dart';
 import '../pairing/pairing_screen.dart';
+import '../settings/update_tile.dart';
 
 /// Displays all paired hosts with online/offline indicators.
 class HostListScreen extends ConsumerWidget {
@@ -55,7 +60,7 @@ class HostListScreen extends ConsumerWidget {
           return ListView.builder(
             itemCount: hosts.length,
             itemBuilder: (ctx, i) =>
-                _HostCard(host: hosts[i], store: store),
+                _HostCard(host: hosts[i], store: store, isFirst: i == 0),
           );
         },
       ),
@@ -81,10 +86,18 @@ class HostListScreen extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 
 class _HostCard extends ConsumerStatefulWidget {
-  const _HostCard({required this.host, required this.store});
+  const _HostCard({
+    required this.host,
+    required this.store,
+    this.isFirst = false,
+  });
 
   final Host host;
   final HostStore store;
+
+  /// Whether this is the first (most-recently-used) host — only that card
+  /// kicks off the best-effort launch-time update check.
+  final bool isFirst;
 
   @override
   ConsumerState<_HostCard> createState() => _HostCardState();
@@ -97,6 +110,49 @@ class _HostCardState extends ConsumerState<_HostCard> {
   void initState() {
     super.initState();
     _pingFuture = _ping();
+    if (widget.isFirst && Platform.isAndroid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeOfferUpdate(context);
+      });
+    }
+  }
+
+  /// Best-effort: check the host for a newer APK and show a dismissible banner.
+  /// Swallows all errors so a missing/old agent never blocks the host list.
+  Future<void> _maybeOfferUpdate(BuildContext context) async {
+    if (!Platform.isAndroid) return;
+    try {
+      final token = await widget.store.getToken(widget.host.id);
+      final client = AgentClient(widget.host, deviceToken: token);
+      final rel = await client.latestRelease();
+      final info = await PackageInfo.fromPlatform();
+      final installed = int.tryParse(info.buildNumber) ?? 0;
+      if (!isUpdateAvailable(installedBuild: installed, release: rel)) return;
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showMaterialBanner(
+        MaterialBanner(
+          content: Text('Update available → v${rel!.versionName}'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => UpdateScreen(host: widget.host),
+                ));
+              },
+              child: const Text('Update'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
+              child: const Text('Later'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      // best-effort; never block the host list
+    }
   }
 
   Future<Health?> _ping() async {
@@ -190,6 +246,16 @@ class _HostCardState extends ConsumerState<_HostCard> {
                   ],
                 ),
               ),
+              if (Platform.isAndroid)
+                IconButton(
+                  icon: const Icon(Icons.system_update),
+                  tooltip: 'Check for updates',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => UpdateScreen(host: widget.host),
+                    ),
+                  ),
+                ),
               const Icon(Icons.chevron_right),
             ],
           ),

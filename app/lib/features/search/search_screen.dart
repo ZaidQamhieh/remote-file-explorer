@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 
 /// Full-screen search UI for files and folders on [host].
@@ -156,12 +158,17 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: SizedBox.square(
+          dimension: 28,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      );
     }
     if (_error != null) {
-      return _CenteredMessage(
-        icon: Icons.error_outline,
+      return ErrorRetryCard(
         message: 'Search failed: $_error',
+        onRetry: () => _runSearch(_query),
       );
     }
     if (_results.isEmpty) {
@@ -198,7 +205,10 @@ class _ScopeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -208,7 +218,7 @@ class _ScopeToggle extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: Spacing.sm),
           const Text('From here'),
           Switch(
             value: !fromHere,
@@ -240,12 +250,21 @@ class _SearchResultTile extends StatelessWidget {
       if (entry.modified != null) _formatDate(entry.modified!),
     ];
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.xs,
+      ),
       leading: _resultIcon(entry),
-      title: Text(entry.name, overflow: TextOverflow.ellipsis),
+      title: Text(
+        entry.name,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
       subtitle: Text(
         subtitleParts.where((s) => s.isNotEmpty).join('  ·  '),
         overflow: TextOverflow.ellipsis,
         maxLines: 2,
+        style: Theme.of(context).textTheme.bodySmall,
       ),
       trailing: entry.isDir ? const Icon(Icons.chevron_right) : null,
       onTap: onTap,
@@ -293,12 +312,12 @@ class _CenteredMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(Spacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 12),
+            const SizedBox(height: Spacing.sm + Spacing.xs),
             Text(
               message,
               textAlign: TextAlign.center,

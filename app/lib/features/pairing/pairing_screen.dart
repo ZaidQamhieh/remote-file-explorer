@@ -9,6 +9,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 
 /// Hardware-stable device id (Android ID), used so re-pairing the same phone
@@ -194,22 +195,48 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
           const Center(child: CircularProgressIndicator()),
         if (_error != null)
           Positioned(
-            bottom: 32,
-            left: 16,
-            right: 16,
-            child: Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  _error!,
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.onErrorContainer),
-                ),
-              ),
-            ),
+            bottom: Spacing.xl,
+            left: Spacing.md,
+            right: Spacing.md,
+            child: _InlineErrorCard(message: _error!),
           ),
       ],
+    );
+  }
+}
+
+/// Styled inline error card — rounded, on the scheme's error container, used
+/// to surface pairing failures consistently across both tabs.
+class _InlineErrorCard extends StatelessWidget {
+  const _InlineErrorCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.errorContainer,
+      borderRadius: Radii.cardR,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm + Spacing.xs,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline, size: 20, color: scheme.onErrorContainer),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -291,13 +318,13 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(Spacing.lg),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: Spacing.sm),
             TextFormField(
               controller: _addressCtrl,
               decoration: const InputDecoration(
@@ -309,7 +336,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: Spacing.md),
             TextFormField(
               controller: _codeCtrl,
               decoration: const InputDecoration(
@@ -321,14 +348,10 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: Spacing.lg),
             if (_error != null) ...[
-              Text(
-                _error!,
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.error),
-              ),
-              const SizedBox(height: 12),
+              _InlineErrorCard(message: _error!),
+              const SizedBox(height: Spacing.sm + Spacing.xs),
             ],
             FilledButton.icon(
               onPressed: _loading ? null : _submit,

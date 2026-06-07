@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/theme/tokens.dart';
 import 'preview_common.dart';
 
 /// Plain-text preview: fetches the file's bytes through the pinned +
@@ -91,10 +92,15 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
           }
           final text = snapshot.data!;
           if (text.isEmpty) {
-            return const Center(child: Text('(empty file)'));
+            return Center(
+              child: Text(
+                '(empty file)',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+            );
           }
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(Spacing.md),
             child: SelectableText(
               text,
               style: const TextStyle(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/tokens.dart';
+
 /// Maximum size (in bytes) we'll happily load fully into memory for an
 /// in-app preview (images, text, PDFs). Beyond this we show a
 /// "too large to preview" state and suggest downloading instead.
@@ -28,12 +30,27 @@ class PreviewScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Image/video previews sit on a black canvas — render the chrome as a
+    // translucent overlay with light foreground so it reads on dark media
+    // without fighting the surrounding theme.
+    final onDark = backgroundColor == Colors.black;
+    final appBar = onDark
+        ? AppBar(
+            backgroundColor: Colors.black.withValues(alpha: 0.45),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: Text(title, overflow: TextOverflow.ellipsis),
+            actions: actions,
+          )
+        : AppBar(
+            title: Text(title, overflow: TextOverflow.ellipsis),
+            actions: actions,
+          );
+
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: Text(title, overflow: TextOverflow.ellipsis),
-        actions: actions,
-      ),
+      extendBodyBehindAppBar: onDark,
+      appBar: appBar,
       body: body,
     );
   }
@@ -57,7 +74,7 @@ class PreviewLoading extends StatelessWidget {
         children: [
           CircularProgressIndicator(value: progress),
           if (message != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: Spacing.md),
             Text(message!, textAlign: TextAlign.center),
           ],
         ],
@@ -78,16 +95,16 @@ class PreviewError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(Spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.error_outline,
                 size: 48, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 16),
+            const SizedBox(height: Spacing.md),
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: Spacing.md),
               OutlinedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
@@ -111,12 +128,13 @@ class PreviewTooLarge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(Spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.file_present, size: 48),
-            const SizedBox(height: 16),
+            Icon(Icons.file_present,
+                size: 48, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: Spacing.md),
             Text(
               'This file is too large to preview ($sizeLabel).\n'
               'Download it to view it instead.',

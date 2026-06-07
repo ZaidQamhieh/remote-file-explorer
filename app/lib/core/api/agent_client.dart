@@ -202,6 +202,26 @@ class AgentClient {
     return Entry.fromJson(data);
   }
 
+  /// Search for files and folders whose name contains [q] (case-insensitive).
+  ///
+  /// If [root] is provided the search is constrained to that subtree;
+  /// otherwise the agent searches every allowed root. [limit] caps the
+  /// number of results returned (server-side capped too).
+  Future<List<Entry>> search({
+    required String q,
+    String? root,
+    int limit = 100,
+  }) async {
+    final data = await _get<List<dynamic>>('/search', queryParameters: {
+      'q': q,
+      if (root != null) 'root': root,
+      'limit': limit,
+    });
+    return data
+        .map((e) => Entry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------------------------------------------------------------------------
   // Filesystem — write
   // ---------------------------------------------------------------------------

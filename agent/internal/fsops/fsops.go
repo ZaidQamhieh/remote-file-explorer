@@ -47,6 +47,16 @@ func New(allowedRoots []string, readOnly bool) *Ops {
 	return &Ops{allowedRoots: roots, readOnly: readOnly}
 }
 
+// Roots returns the configured allowed roots (a copy). An empty slice
+// means there is no jail (anything is allowed) — callers that need a
+// concrete starting point in that case should fall back to something
+// sensible (e.g. the user's home directory or filesystem drives).
+func (o *Ops) Roots() []string {
+	roots := make([]string, len(o.allowedRoots))
+	copy(roots, o.allowedRoots)
+	return roots
+}
+
 // --------- path jail ---------
 
 // Resolve cleans p and checks it against the jail.
@@ -405,6 +415,14 @@ func (o *Ops) Delete(paths []string) []BatchResult {
 }
 
 // --------- helpers ---------
+
+// EntryFromInfo builds an Entry from a FileInfo and its full resolved path,
+// using the same name/size/mime/mode/timestamp logic as ListDir and Meta.
+// Exported so other packages (e.g. the search handler) can build Entry
+// values consistently while walking the tree themselves.
+func EntryFromInfo(info os.FileInfo, fullPath string) Entry {
+	return entryFromInfo(info, fullPath)
+}
 
 func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 	isSymlink := info.Mode()&os.ModeSymlink != 0

@@ -66,6 +66,11 @@ func main() {
 		log.Fatalf("thumb cache dir: %v", err)
 	}
 
+	updatesDir := filepath.Join(*dataDir, "updates")
+	if err := os.MkdirAll(updatesDir, 0o755); err != nil {
+		log.Fatalf("updates dir: %v", err)
+	}
+
 	pm, err := pairing.New(lanAddr, tsAddr, fingerprint)
 	if err != nil {
 		log.Fatalf("pairing: %v", err)
@@ -90,6 +95,7 @@ func main() {
 		TailscaleAddress: tsAddr,
 		AllowedRoots:     allowedRoots,
 		ThumbCacheDir:    thumbCacheDir,
+		UpdatesDir:       updatesDir,
 	}, db, pm, tm)
 	if err != nil {
 		log.Fatalf("server: %v", err)

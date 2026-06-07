@@ -26,6 +26,7 @@ type Config struct {
 	TailscaleAddress string // Tailscale address, if detected
 	AllowedRoots     []string
 	ThumbCacheDir    string // directory for on-disk thumbnail cache
+	UpdatesDir       string // directory of downloadable APKs for in-app update
 }
 
 // New builds the v1 router and wires all routes.
@@ -59,6 +60,10 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 			// Thumbnails
 			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
+
+			// In-app updater
+			r.Get("/app/latest", latestAppHandler(cfg.UpdatesDir))
+			r.Get("/app/download", downloadAppHandler(cfg.UpdatesDir))
 
 			// Filesystem
 			r.Get("/fs", listDirHandler(ops))

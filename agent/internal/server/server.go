@@ -12,6 +12,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
@@ -24,11 +25,17 @@ type Config struct {
 	Address          string // LAN address used in QR payload / health response
 	TailscaleAddress string // Tailscale address, if detected
 	AllowedRoots     []string
+	ThumbCacheDir    string // directory for on-disk thumbnail cache
 }
 
 // New builds the v1 router and wires all routes.
-func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) http.Handler {
+func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
 	ops := fsops.New(cfg.AllowedRoots, cfg.ReadOnly)
+
+	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
+	if err != nil {
+		return nil, err
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -40,9 +47,6 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 		r.Get("/health", healthHandler(cfg))
 		r.Post("/pair", pairHandler(cfg, db, pm))
 
-		// Phase-2 stubs (unauthenticated paths that will never match auth).
-		r.Get("/thumb", notImplementedHandler)
-
 		// Authenticated sub-router.
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
@@ -52,6 +56,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 
 			// Search
 			r.Get("/search", searchHandler(ops))
+
+			// Thumbnails
+			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
 
 			// Filesystem
 			r.Get("/fs", listDirHandler(ops))
@@ -74,7 +81,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 		})
 	})
 
-	return r
+	return r, nil
 }
 
 // --------- helpers ---------
@@ -92,10 +99,6 @@ type apiError struct {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, apiError{Code: code, Message: message})
-}
-
-func notImplementedHandler(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "this endpoint is not yet implemented")
 }
 
 // --------- health ---------

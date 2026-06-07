@@ -9,6 +9,8 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/theme/motion.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
@@ -235,14 +237,18 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       itemCount: state.sortedEntries.length,
       itemBuilder: (ctx, i) {
         final entry = state.sortedEntries[i];
-        return _EntryListTile(
-          entry: entry,
-          selected: state.selected.contains(entry.path),
-          multiSelect: state.multiSelect,
-          onTap: () => _onEntryTap(context, entry, client),
-          onLongPress: () => _notifier.toggleSelect(entry.path),
-          onSelect: () => _notifier.toggleSelect(entry.path),
-          onMoveInto: (dragged, dest) => _moveInto(context, client, dragged, dest),
+        return AppearListItem(
+          index: i,
+          child: _EntryListTile(
+            entry: entry,
+            selected: state.selected.contains(entry.path),
+            multiSelect: state.multiSelect,
+            onTap: () => _onEntryTap(context, entry, client),
+            onLongPress: () => _notifier.toggleSelect(entry.path),
+            onSelect: () => _notifier.toggleSelect(entry.path),
+            onMoveInto: (dragged, dest) =>
+                _moveInto(context, client, dragged, dest),
+          ),
         );
       },
     );
@@ -267,24 +273,28 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   Widget _buildGrid(
       BuildContext context, ExplorerState state, AgentClient client) {
     return GridView.builder(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(Spacing.md),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 140,
-        mainAxisExtent: 120,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+        maxCrossAxisExtent: 144,
+        mainAxisExtent: 132,
+        crossAxisSpacing: Spacing.md,
+        mainAxisSpacing: Spacing.md,
       ),
       itemCount: state.sortedEntries.length,
       itemBuilder: (ctx, i) {
         final entry = state.sortedEntries[i];
-        return _EntryGridCell(
-          entry: entry,
-          client: client,
-          selected: state.selected.contains(entry.path),
-          multiSelect: state.multiSelect,
-          onTap: () => _onEntryTap(context, entry, client),
-          onLongPress: () => _notifier.toggleSelect(entry.path),
-          onMoveInto: (dragged, dest) => _moveInto(context, client, dragged, dest),
+        return AppearListItem(
+          index: i,
+          child: _EntryGridCell(
+            entry: entry,
+            client: client,
+            selected: state.selected.contains(entry.path),
+            multiSelect: state.multiSelect,
+            onTap: () => _onEntryTap(context, entry, client),
+            onLongPress: () => _notifier.toggleSelect(entry.path),
+            onMoveInto: (dragged, dest) =>
+                _moveInto(context, client, dragged, dest),
+          ),
         );
       },
     );
@@ -385,53 +395,87 @@ class _BreadcrumbBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stack = state.pathStack;
+    final scheme = Theme.of(context).colorScheme;
+    final lastIndex = stack.length - 1;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(stack.length, (i) {
-          final label =
-              i == 0 ? '/' : stack[i].split(RegExp(r'[/\\]')).last;
-          final crumb = GestureDetector(
-            onTap: () => notifier.navigateTo(i),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: i == stack.length - 1
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-                decoration: i < stack.length - 1
-                    ? TextDecoration.underline
-                    : null,
-              ),
-            ),
-          );
-          return Row(
-            children: [
-              if (i > 0) const Icon(Icons.chevron_right, size: 16),
-              if (onMoveInto != null)
-                DragTarget<Entry>(
-                  onWillAcceptWithDetails: (d) => d.data.path != stack[i],
-                  onAcceptWithDetails: (d) =>
-                      onMoveInto!(d.data, stack[i]),
-                  builder: (ctx, cand, rej) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: cand.isNotEmpty
-                        ? BoxDecoration(
-                            color: Theme.of(ctx)
-                                .colorScheme
-                                .primaryContainer
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(6),
-                          )
-                        : null,
-                    child: crumb,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(stack.length, (i) {
+            final label =
+                i == 0 ? '/' : stack[i].split(RegExp(r'[/\\]')).last;
+            final isCurrent = i == lastIndex;
+
+            final chip = Material(
+              color: isCurrent
+                  ? scheme.primaryContainer
+                  : scheme.secondaryContainer.withValues(alpha: 0.55),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+              child: InkWell(
+                borderRadius: Radii.chipR,
+                onTap: () => notifier.navigateTo(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.sm,
                   ),
-                )
-              else
-                crumb,
-            ],
-          );
-        }),
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: isCurrent
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSecondaryContainer,
+                          fontWeight:
+                              isCurrent ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ),
+            );
+
+            final crumb = onMoveInto != null
+                ? DragTarget<Entry>(
+                    onWillAcceptWithDetails: (d) => d.data.path != stack[i],
+                    onAcceptWithDetails: (d) =>
+                        onMoveInto!(d.data, stack[i]),
+                    builder: (ctx, cand, rej) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      decoration: BoxDecoration(
+                        borderRadius: Radii.chipR,
+                        border: cand.isNotEmpty
+                            ? Border.all(color: scheme.primary, width: 2)
+                            : Border.all(color: Colors.transparent, width: 2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: Radii.chipR,
+                        child: chip,
+                      ),
+                    ),
+                  )
+                : ClipRRect(borderRadius: Radii.chipR, child: chip);
+
+            return Padding(
+              padding: const EdgeInsets.only(right: Spacing.xs),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (i > 0)
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: Spacing.xs),
+                      child: Icon(Icons.chevron_right,
+                          size: 18, color: scheme.outline),
+                    ),
+                  crumb,
+                ],
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -506,21 +550,65 @@ class _EntryListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget tile = ListTile(
-      leading: multiSelect
-          ? Checkbox(value: selected, onChanged: (_) => onSelect())
-          : _EntryIcon(entry: entry),
-      title: Text(entry.name, overflow: TextOverflow.ellipsis),
-      subtitle: entry.isDir
-          ? null
-          : Text(_formatSize(entry.size) +
-              (entry.modified != null
-                  ? '  ·  ${_formatDate(entry.modified!)}'
-                  : '')),
-      trailing: entry.isDir ? const Icon(Icons.chevron_right) : null,
-      selected: selected,
-      onTap: onTap,
-      onLongPress: onLongPress,
+    final scheme = Theme.of(context).colorScheme;
+    final subtitle = entry.isDir
+        ? null
+        : _formatSize(entry.size) +
+            (entry.modified != null
+                ? '  ·  ${_formatDate(entry.modified!)}'
+                : '');
+
+    Widget leading = multiSelect
+        ? Checkbox(value: selected, onChanged: (_) => onSelect())
+        : _IconTile(entry: entry);
+
+    Widget tile = Material(
+      color: selected ? scheme.secondaryContainer.withValues(alpha: 0.55) : Colors.transparent,
+      borderRadius: Radii.cardR,
+      child: InkWell(
+        borderRadius: Radii.cardR,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md,
+            vertical: Spacing.sm,
+          ),
+          child: Row(
+            children: [
+              leading,
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      entry.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (entry.isDir)
+                Icon(Icons.chevron_right, color: scheme.outline),
+            ],
+          ),
+        ),
+      ),
     );
     return _wrapDraggable(
       context: context,
@@ -528,6 +616,31 @@ class _EntryListTile extends StatelessWidget {
       multiSelect: multiSelect,
       onMoveInto: onMoveInto,
       child: tile,
+    );
+  }
+}
+
+/// File-type icon presented inside a tonal rounded square — the roomier,
+/// "distinctive modern" leading element for list rows.
+class _IconTile extends StatelessWidget {
+  const _IconTile({required this.entry});
+
+  static const double _size = 44;
+
+  final Entry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: Radii.chipR,
+      ),
+      alignment: Alignment.center,
+      child: _EntryIcon(entry: entry, size: _size * 0.5),
     );
   }
 }
@@ -622,49 +735,68 @@ class _EntryGridCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final mime = entry.mimeType ?? '';
     final isImage = !entry.isDir && mime.startsWith('image/');
 
-    final cell = GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        decoration: BoxDecoration(
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outlineVariant,
-          ),
-        ),
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isImage)
-              SizedBox(
-                width: 56,
-                height: 56,
-                child: ThumbnailImage(
-                  entry: entry,
-                  client: client,
-                  fallback: Center(child: _EntryIcon(entry: entry, size: 40)),
-                ),
-              )
-            else
-              _EntryIcon(entry: entry, size: 40),
-            const SizedBox(height: 8),
-            Text(
-              entry.name,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
+    final cell = Material(
+      color: selected
+          ? scheme.secondaryContainer.withValues(alpha: 0.65)
+          : scheme.surfaceContainerLow,
+      borderRadius: Radii.cardR,
+      child: InkWell(
+        borderRadius: Radii.cardR,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: Radii.cardR,
+            border: Border.all(
+              color: selected ? Brand.accent : scheme.outlineVariant,
+              width: selected ? 1.6 : 1,
             ),
-          ],
+          ),
+          padding: const EdgeInsets.all(Spacing.sm),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isImage)
+                ClipRRect(
+                  borderRadius: Radii.chipR,
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: ThumbnailImage(
+                      entry: entry,
+                      client: client,
+                      fallback:
+                          Center(child: _EntryIcon(entry: entry, size: 40)),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: Radii.chipR,
+                  ),
+                  alignment: Alignment.center,
+                  child: _EntryIcon(entry: entry, size: 32),
+                ),
+              const SizedBox(height: Spacing.sm),
+              Text(
+                entry.name,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -727,6 +859,61 @@ class _EntryIcon extends StatelessWidget {
 // Multi-select bottom bar
 // ---------------------------------------------------------------------------
 
+/// A labelled icon action used in the multi-select bar — tonal icon button
+/// over a small caption, for tidier iconography than bare [IconButton]s.
+class _BarAction extends StatelessWidget {
+  const _BarAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = color ?? scheme.onSurfaceVariant;
+    return InkWell(
+      borderRadius: Radii.chipR,
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm,
+          vertical: Spacing.xs,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: (color ?? scheme.primary).withValues(alpha: 0.12),
+                borderRadius: Radii.chipR,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: fg),
+            ),
+            const SizedBox(height: Spacing.xs),
+            Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: fg, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MultiSelectBar extends ConsumerWidget {
   const _MultiSelectBar({
     required this.state,
@@ -742,44 +929,82 @@ class _MultiSelectBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final allSelected = state.selected.length == state.entries.length &&
+        state.entries.isNotEmpty;
+
     return SafeArea(
-      child: BottomAppBar(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(
+            Spacing.md, 0, Spacing.md, Spacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: Radii.cardR,
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.18),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Deselect all',
-              onPressed: notifier.clearSelection,
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Deselect all',
+                  onPressed: notifier.clearSelection,
+                ),
+                Expanded(
+                  child: Text(
+                    '${state.selected.length} selected',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed:
+                      allSelected ? notifier.clearSelection : notifier.selectAll,
+                  icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+                  label: Text(allSelected ? 'Clear' : 'Select all'),
+                ),
+              ],
             ),
-            TextButton.icon(
-              onPressed: state.selected.length == state.entries.length
-                  ? notifier.clearSelection
-                  : notifier.selectAll,
-              icon: Icon(state.selected.length == state.entries.length
-                  ? Icons.deselect
-                  : Icons.select_all),
-              label: Text('${state.selected.length}/${state.entries.length}'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.copy),
-              tooltip: 'Copy',
-              onPressed: () => _showDestPicker(context, 'copy'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.drive_file_move),
-              tooltip: 'Move',
-              onPressed: () => _showDestPicker(context, 'move'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.download),
-              tooltip: 'Download',
-              onPressed: () => _downloadSelected(context, ref),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete',
-              onPressed: () => _confirmDelete(context),
+            const SizedBox(height: Spacing.xs),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _BarAction(
+                  icon: Icons.copy_outlined,
+                  label: 'Copy',
+                  onPressed: () => _showDestPicker(context, 'copy'),
+                ),
+                _BarAction(
+                  icon: Icons.drive_file_move_outline,
+                  label: 'Move',
+                  onPressed: () => _showDestPicker(context, 'move'),
+                ),
+                _BarAction(
+                  icon: Icons.download_outlined,
+                  label: 'Download',
+                  onPressed: () => _downloadSelected(context, ref),
+                ),
+                _BarAction(
+                  icon: Icons.delete_outline,
+                  label: 'Delete',
+                  color: scheme.error,
+                  onPressed: () => _confirmDelete(context),
+                ),
+              ],
             ),
           ],
         ),

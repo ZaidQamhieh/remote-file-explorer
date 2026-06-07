@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/theme/tokens.dart';
 
 /// Process-wide in-memory cache of decoded thumbnail bytes, keyed by the
 /// entry's remote path. Capped at [_maxEntries] so re-scrolling the grid
@@ -120,7 +121,7 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
     final bytes = _bytes;
     if (bytes != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: Radii.chipR,
         child: Image.memory(
           bytes,
           fit: BoxFit.cover,

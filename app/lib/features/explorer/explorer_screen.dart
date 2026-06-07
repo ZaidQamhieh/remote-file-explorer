@@ -8,6 +8,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/host_store.dart';
+import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart';
@@ -95,6 +96,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       title: _BreadcrumbBar(state: state, notifier: _notifier),
       actions: [
         IconButton(
+          icon: const Icon(Icons.search),
+          tooltip: 'Search',
+          onPressed: () => _openSearch(context, state),
+        ),
+        IconButton(
           icon: Icon(isFav ? Icons.star : Icons.star_border),
           color: isFav ? Colors.amber : null,
           tooltip: isFav ? 'Remove favorite' : 'Favorite this folder',
@@ -151,6 +157,23 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openSearch(BuildContext context, ExplorerState state) async {
+    final client = _client;
+    if (client == null) return;
+    final parentPath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(
+          host: widget.host,
+          client: client,
+          currentPath: state.currentPath,
+        ),
+      ),
+    );
+    if (parentPath != null) {
+      _notifier.jumpTo(parentPath);
+    }
   }
 
   void _showTransfers(BuildContext context) {

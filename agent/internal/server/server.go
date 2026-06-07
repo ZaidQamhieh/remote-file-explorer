@@ -41,7 +41,6 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 		r.Post("/pair", pairHandler(cfg, db, pm))
 
 		// Phase-2 stubs (unauthenticated paths that will never match auth).
-		r.Get("/search", notImplementedHandler)
 		r.Get("/thumb", notImplementedHandler)
 
 		// Authenticated sub-router.
@@ -50,6 +49,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 
 			// Drives
 			r.Get("/system/drives", drivesHandler())
+
+			// Search
+			r.Get("/search", searchHandler(ops))
 
 			// Filesystem
 			r.Get("/fs", listDirHandler(ops))

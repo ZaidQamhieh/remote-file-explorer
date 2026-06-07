@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/storage/listing_cache.dart';
 
 // ---------------------------------------------------------------------------
 // Sort order
@@ -34,6 +35,8 @@ class ExplorerState {
     this.sort = const SortOrder(),
     this.gridView = false,
     this.selected = const {},
+    this.stale = false,
+    this.offline = false,
   });
 
   final Host host;
@@ -44,6 +47,8 @@ class ExplorerState {
   final SortOrder sort;
   final bool gridView;
   final Set<String> selected;
+  final bool stale;   // showing cached data, refresh in progress or failed
+  final bool offline; // last live fetch failed; data is from cache only
 
   String get currentPath => pathStack.last;
   bool get atRoot => pathStack.length == 1;
@@ -81,6 +86,8 @@ class ExplorerState {
     SortOrder? sort,
     bool? gridView,
     Set<String>? selected,
+    bool? stale,
+    bool? offline,
   }) =>
       ExplorerState(
         host: host,
@@ -91,6 +98,8 @@ class ExplorerState {
         sort: sort ?? this.sort,
         gridView: gridView ?? this.gridView,
         selected: selected ?? this.selected,
+        stale: stale ?? this.stale,
+        offline: offline ?? this.offline,
       );
 }
 
@@ -114,13 +123,44 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
     return ExplorerState(host: arg.host, pathStack: [arg.rootPath]);
   }
 
+  final ListingCache _cache = ListingCache();
+
   Future<void> _load() async {
-    state = state.copyWith(loading: true, error: null, selected: {});
+    final path = state.currentPath;
+
+    // 1. Paint cached entries instantly (if any) while we fetch live.
+    final cached = await _cache.get(arg.host.id, path);
+    if (cached != null) {
+      state = state.copyWith(
+        entries: cached.entries,
+        loading: false,
+        stale: true,
+        offline: false,
+        error: null,
+        selected: {},
+      );
+    } else {
+      state = state.copyWith(loading: true, error: null, selected: {});
+    }
+
+    // 2. Fetch live; on success replace + cache; on failure fall back to cache.
     try {
-      final listing = await arg.client.list(state.currentPath);
-      state = state.copyWith(loading: false, entries: listing.entries);
+      final listing = await arg.client.list(path);
+      await _cache.put(arg.host.id, path, listing.entries);
+      state = state.copyWith(
+        loading: false,
+        entries: listing.entries,
+        stale: false,
+        offline: false,
+        error: null,
+      );
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      if (cached != null) {
+        // Keep cached entries; mark offline rather than erroring out.
+        state = state.copyWith(loading: false, stale: true, offline: true);
+      } else {
+        state = state.copyWith(loading: false, error: e.toString());
+      }
     }
   }
 
@@ -197,19 +237,23 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
     await _load();
   }
 
-  Future<void> deleteSelected({bool permanent = false}) async {
-    await arg.client.delete(state.selected.toList(), permanent: permanent);
+  Future<Map<String, dynamic>> deleteSelected({bool permanent = false}) async {
+    final res =
+        await arg.client.delete(state.selected.toList(), permanent: permanent);
     await _load();
+    return res;
   }
 
-  Future<void> moveSelected(String destDir) async {
-    await arg.client.move(state.selected.toList(), destDir);
+  Future<Map<String, dynamic>> moveSelected(String destDir) async {
+    final res = await arg.client.move(state.selected.toList(), destDir);
     await _load();
+    return res;
   }
 
-  Future<void> copySelected(String destDir) async {
-    await arg.client.copy(state.selected.toList(), destDir);
+  Future<Map<String, dynamic>> copySelected(String destDir) async {
+    final res = await arg.client.copy(state.selected.toList(), destDir);
     await _load();
+    return res;
   }
 }
 

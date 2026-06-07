@@ -316,6 +316,13 @@ class AgentClient {
     await _delete<void>('/devices/$id');
   }
 
+  /// Permanently removes a device row (used to clear revoked devices). The
+  /// agent refuses to remove the device making the request.
+  Future<void> deleteDevice(String id) async {
+    await _delete<void>('/devices/$id',
+        queryParameters: {'purge': 'true'});
+  }
+
   // ---------------------------------------------------------------------------
   // Filesystem — write
   // ---------------------------------------------------------------------------

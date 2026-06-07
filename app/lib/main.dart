@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/theme/app_theme.dart';
 import 'features/hosts/host_list_screen.dart';
 
 void main() {
@@ -14,10 +15,9 @@ class RemoteFileExplorerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Remote File Explorer',
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF3B6EF6),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       home: const HostListScreen(),
     );
   }

@@ -57,7 +57,14 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
 			r.Get("/devices", listDevicesHandler(db))
 			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
-				revokeDeviceHandler(db)(w, req, chi.URLParam(req, "id"))
+				id := chi.URLParam(req, "id")
+				// ?purge=true permanently removes the row (used to clear
+				// revoked devices); otherwise the device is revoked.
+				if req.URL.Query().Get("purge") == "true" {
+					deleteDeviceHandler(db)(w, req, id)
+					return
+				}
+				revokeDeviceHandler(db)(w, req, id)
 			})
 
 			// Drives

@@ -1,0 +1,78 @@
+import 'package:flutter/material.dart';
+
+/// Subtle motion helpers. Kept deliberately cheap — a fade-through for screen
+/// transitions and a gentle one-shot appear for list rows — so the app feels
+/// alive without heavy effects that could stutter on large folders.
+
+/// A fade-through page transition (cross-fade + slight scale), a softer
+/// alternative to the default platform slide. Use in place of [MaterialPageRoute]
+/// where a calmer transition reads better.
+Route<T> fadeThroughPageRoute<T>(WidgetBuilder builder, {RouteSettings? settings}) {
+  return PageRouteBuilder<T>(
+    settings: settings,
+    transitionDuration: const Duration(milliseconds: 260),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondary) => builder(context),
+    transitionsBuilder: (context, animation, secondary, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: Transform.scale(
+          scale: 0.98 + 0.02 * curved.value,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// Wraps a list/grid item so it gently fades and slides up the first time it is
+/// built. [index] staggers the start slightly for a cascade; the effect is
+/// capped so long lists don't accumulate delay.
+class AppearListItem extends StatefulWidget {
+  const AppearListItem({super.key, required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<AppearListItem> createState() => _AppearListItemState();
+}
+
+class _AppearListItemState extends State<AppearListItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  late final Animation<double> _fade =
+      CurvedAnimation(parent: _c, curve: Curves.easeOut);
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 0.06),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic));
+
+  @override
+  void initState() {
+    super.initState();
+    // Stagger by index, capped so deep lists don't pile up delay.
+    final delayMs = (widget.index.clamp(0, 8)) * 30;
+    Future.delayed(Duration(milliseconds: delayMs), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}

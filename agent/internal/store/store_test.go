@@ -94,3 +94,25 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 		t.Fatalf("empty client id must not dedup")
 	}
 }
+
+func TestDeleteDeviceRemovesRow(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := db.DeleteDevice("id-1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	list, err := db.ListDevices()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected device removed, got %d rows", len(list))
+	}
+}

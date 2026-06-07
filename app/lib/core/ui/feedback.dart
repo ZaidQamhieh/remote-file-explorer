@@ -75,14 +75,18 @@ void _show(BuildContext context, String message, _Kind kind,
     {SnackBarAction? action}) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
-  final scheme = Theme.of(context).colorScheme;
+  final theme = Theme.of(context);
+  final scheme = theme.colorScheme;
+  final isDark = theme.brightness == Brightness.dark;
 
   late final Color bg;
   late final Color fg;
   late final IconData icon;
   switch (kind) {
     case _Kind.success:
-      bg = const Color(0xFF1B5E20); // green 900 — reads on light & dark
+      // No "success" role in Material's scheme; use a green tuned per brightness
+      // so the floating snackbar reads well in both light and dark.
+      bg = isDark ? const Color(0xFF2E7D32) : const Color(0xFF1B5E20);
       fg = Colors.white;
       icon = Icons.check_circle_outline;
     case _Kind.error:

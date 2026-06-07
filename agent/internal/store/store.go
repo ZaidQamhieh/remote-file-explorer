@@ -227,6 +227,13 @@ func (s *DB) RevokeDevice(id string) error {
 	return err
 }
 
+// DeleteDevice permanently removes a device row. Used to clear out revoked
+// devices so the paired-devices list doesn't accumulate stale entries.
+func (s *DB) DeleteDevice(id string) error {
+	_, err := s.db.Exec(`DELETE FROM devices WHERE id=?`, id)
+	return err
+}
+
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

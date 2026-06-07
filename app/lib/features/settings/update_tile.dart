@@ -120,6 +120,10 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
           : await getTemporaryDirectory();
       final apk = File('${base.path}/update-${rel!.versionCode}.apk');
 
+      // Remove any previously downloaded APKs so updates don't pile up in the
+      // app's cache — only the one we're about to install is kept.
+      await _pruneOldApks(base, keep: apk);
+
       _preInstallBuild = installed;
 
       if (!mounted) return;
@@ -152,6 +156,23 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         _statusIsError = true;
       });
     }
+  }
+
+  /// Deletes stale `update-*.apk` files in [dir], keeping only [keep]. Best
+  /// effort: failures (e.g. a file held open) are ignored.
+  Future<void> _pruneOldApks(Directory dir, {required File keep}) async {
+    try {
+      await for (final e in dir.list()) {
+        if (e is File &&
+            e.path != keep.path &&
+            e.uri.pathSegments.last.startsWith('update-') &&
+            e.path.endsWith('.apk')) {
+          try {
+            await e.delete();
+          } catch (_) {/* ignore individual file errors */}
+        }
+      }
+    } catch (_) {/* ignore: cleanup is best effort */}
   }
 
   /// Hands the APK to Android's package installer through the native channel.

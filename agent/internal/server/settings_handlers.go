@@ -108,3 +108,20 @@ func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+// deleteDeviceHandler permanently removes device `id` (used to clear revoked
+// devices from the list). Refuses to delete the device making the request.
+func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, string) {
+	return func(w http.ResponseWriter, r *http.Request, id string) {
+		cur := deviceFromContext(r)
+		if cur != nil && cur.ID == id {
+			writeError(w, http.StatusConflict, "CONFLICT", "cannot remove the device you are using")
+			return
+		}
+		if err := db.DeleteDevice(id); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

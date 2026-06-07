@@ -273,13 +273,23 @@ paths:
                 items: { $ref: '#/components/schemas/Device' }
   /devices/{id}:
     delete:
-      summary: Revoke a paired device
+      summary: Revoke a paired device, or permanently remove it with ?purge=true
+      description: >
+        By default revokes the device (its token is rejected thereafter). With
+        purge=true the device row is permanently deleted — used to clear revoked
+        devices from the list. Either way, the calling device cannot target
+        itself.
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+        - name: purge
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: When true, permanently delete the device instead of revoking it.
       responses:
-        '204': { description: Revoked }
-        '409': { description: Cannot revoke the calling device }
+        '204': { description: Revoked or removed }
+        '409': { description: Cannot target the calling device }
   /app/latest:
     get:
       summary: Latest available Android APK

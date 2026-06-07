@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -8,6 +10,19 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
+
+/// Hardware-stable device id (Android ID), used so re-pairing the same phone
+/// reuses its device row on the agent instead of creating a duplicate. Returns
+/// null on non-Android platforms or if it can't be read.
+Future<String?> _deviceId() async {
+  if (!Platform.isAndroid) return null;
+  try {
+    return await const MethodChannel('rfe/downloads')
+        .invokeMethod<String>('getDeviceId');
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Entry point for pairing a new host. Shows a tab bar with QR scan and
 /// manual-entry options.
@@ -127,6 +142,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
         pairingCode: pairingCode,
         deviceLabel: 'Mobile App',
         clientPublicKey: 'placeholder-key',
+        deviceId: await _deviceId(),
       );
 
       final capturedFp = client.lastSeenFingerprint;
@@ -242,6 +258,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
         pairingCode: _codeCtrl.text.trim(),
         deviceLabel: 'Mobile App',
         clientPublicKey: 'placeholder-key',
+        deviceId: await _deviceId(),
       );
 
       final capturedFp = client.lastSeenFingerprint;

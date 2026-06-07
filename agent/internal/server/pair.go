@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/google/uuid"
-
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -17,6 +15,9 @@ type pairRequest struct {
 	PairingCode     string `json:"pairingCode"`
 	DeviceLabel     string `json:"deviceLabel"`
 	ClientPublicKey string `json:"clientPublicKey"`
+	// DeviceID is a hardware-stable client identifier (Android ID). When
+	// present it deduplicates pairings so the same phone reuses its device row.
+	DeviceID string `json:"deviceId"`
 }
 
 type pairResponse struct {
@@ -43,14 +44,14 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc
 			req.DeviceLabel = "unnamed-device"
 		}
 
-		deviceID := uuid.New().String()
 		token, err := randomToken(32)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
 			return
 		}
 
-		if err := db.CreateDevice(deviceID, req.DeviceLabel, token); err != nil {
+		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}

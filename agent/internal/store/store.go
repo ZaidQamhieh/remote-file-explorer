@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 )
 
@@ -67,7 +69,19 @@ CREATE TABLE IF NOT EXISTS transfers (
     total_chunks     INTEGER NOT NULL
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	// Add the stable client identifier column to existing databases. A phone
+	// sends a hardware-stable id (Android ID) when pairing so re-pairing the
+	// same device reuses its row instead of piling up duplicates. Ignored when
+	// the column already exists.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN client_id TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	return nil
 }
 
 // --------- devices ---------
@@ -92,6 +106,47 @@ func (s *DB) CreateDevice(id, label, token string) error {
 		id, label, hash, now, now,
 	)
 	return err
+}
+
+// UpsertDevice pairs a device, deduplicating by the hardware-stable clientID.
+// If clientID is non-empty and a device with that clientID already exists, its
+// token is rotated, it is un-revoked, and its existing id is returned — so a
+// phone that re-pairs (after clearing app data, reinstalling, or losing its
+// token) reuses its row instead of creating a duplicate. Otherwise a fresh
+// device with a new UUID is inserted. Returns the device id to hand back to the
+// client.
+func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
+	hash := hashToken(token)
+	now := time.Now().Unix()
+
+	if clientID != "" {
+		var existingID string
+		err := s.db.QueryRow(
+			`SELECT id FROM devices WHERE client_id=?`, clientID,
+		).Scan(&existingID)
+		if err == nil {
+			// Same phone re-pairing: rotate token, clear revoked, refresh label.
+			if _, err := s.db.Exec(
+				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0 WHERE id=?`,
+				hash, label, now, existingID,
+			); err != nil {
+				return "", err
+			}
+			return existingID, nil
+		}
+		if err != sql.ErrNoRows {
+			return "", err
+		}
+	}
+
+	id := uuid.New().String()
+	if _, err := s.db.Exec(
+		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id) VALUES (?,?,?,?,?,0,?)`,
+		id, label, hash, now, now, clientID,
+	); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // DeviceByToken returns the device whose token matches the given raw token,

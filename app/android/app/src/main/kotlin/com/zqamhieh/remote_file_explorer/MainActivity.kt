@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -34,6 +35,14 @@ class MainActivity : FlutterActivity() {
                                 result.error("SAVE_FAILED", e.message, null)
                             }
                         }
+                    }
+                    "getDeviceId" -> {
+                        // Settings.Secure.ANDROID_ID: a stable per-device,
+                        // per-signing-key id that survives clearing app data and
+                        // reinstalls, so re-pairing reuses the same device row.
+                        val id = Settings.Secure.getString(
+                            contentResolver, Settings.Secure.ANDROID_ID)
+                        result.success(id)
                     }
                     "installApk" -> {
                         val path = call.argument<String>("path")

@@ -365,6 +365,12 @@ components:
         pairingCode: { type: string, description: One-time code shown by the agent }
         deviceLabel: { type: string }
         clientPublicKey: { type: string }
+        deviceId:
+          type: string
+          description: >
+            Optional hardware-stable client identifier (e.g. Android ID). When
+            present, the agent deduplicates pairings so the same device reuses
+            its device row instead of creating a duplicate on re-pair.
 
     PairResponse:
       type: object

@@ -219,11 +219,13 @@ class AgentClient {
     required String pairingCode,
     required String deviceLabel,
     required String clientPublicKey,
+    String? deviceId,
   }) async {
     final data = await _post<Map<String, dynamic>>('/pair', data: {
       'pairingCode': pairingCode,
       'deviceLabel': deviceLabel,
       'clientPublicKey': clientPublicKey,
+      if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
     });
     return PairResponse.fromJson(data);
   }

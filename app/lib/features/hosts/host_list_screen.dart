@@ -8,6 +8,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../explorer/explorer_screen.dart';
 import '../pairing/pairing_screen.dart';
+import '../settings/settings_screen.dart';
 
 /// Displays all paired hosts with online/offline indicators.
 class HostListScreen extends ConsumerWidget {
@@ -190,7 +191,20 @@ class _HostCardState extends ConsumerState<_HostCard> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'open') _openExplorer(context);
+                  if (v == 'settings') {
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => SettingsScreen(host: widget.host),
+                    ));
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'open', child: Text('Open')),
+                  PopupMenuItem(value: 'settings', child: Text('Settings')),
+                ],
+              ),
             ],
           ),
         ),

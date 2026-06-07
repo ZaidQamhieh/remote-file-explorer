@@ -21,6 +21,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/server"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
@@ -71,25 +72,29 @@ func main() {
 		log.Fatalf("pairing: %v", err)
 	}
 
-	var allowedRoots []string
+	// Parse seed roots from the flag (first-run only; DB wins thereafter).
+	var seedRoots []string
 	if *roots != "" {
 		for _, r := range strings.Split(*roots, ",") {
-			r = strings.TrimSpace(r)
-			if r != "" {
-				allowedRoots = append(allowedRoots, r)
+			if r = strings.TrimSpace(r); r != "" {
+				seedRoots = append(seedRoots, r)
 			}
 		}
 	}
 
+	st, err := settings.Load(db, *readOnly, seedRoots, *name)
+	if err != nil {
+		log.Fatalf("settings: %v", err)
+	}
+
 	handler, err := server.New(server.Config{
-		Name:             *name,
+		Name:             st.AgentName(),
 		Version:          version,
-		ReadOnly:         *readOnly,
 		CertFingerprint:  fingerprint,
 		Address:          lanAddr,
 		TailscaleAddress: tsAddr,
-		AllowedRoots:     allowedRoots,
 		ThumbCacheDir:    thumbCacheDir,
+		Settings:         st,
 	}, db, pm, tm)
 	if err != nil {
 		log.Fatalf("server: %v", err)

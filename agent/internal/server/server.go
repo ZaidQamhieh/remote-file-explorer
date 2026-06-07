@@ -11,6 +11,7 @@ import (
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
@@ -20,17 +21,16 @@ import (
 type Config struct {
 	Name             string
 	Version          string
-	ReadOnly         bool
 	CertFingerprint  string
 	Address          string // LAN address used in QR payload / health response
 	TailscaleAddress string // Tailscale address, if detected
-	AllowedRoots     []string
 	ThumbCacheDir    string // directory for on-disk thumbnail cache
+	Settings         *settings.Store
 }
 
 // New builds the v1 router and wires all routes.
 func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
-	ops := fsops.New(cfg.AllowedRoots, cfg.ReadOnly)
+	ops := fsops.NewWithSettings(cfg.Settings)
 
 	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
 	if err != nil {
@@ -50,6 +50,14 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 		// Authenticated sub-router.
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
+
+			// Settings & devices
+			r.Get("/settings", getSettingsHandler(cfg.Settings))
+			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
+			r.Get("/devices", listDevicesHandler(db))
+			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
+				revokeDeviceHandler(db)(w, req, chi.URLParam(req, "id"))
+			})
 
 			// Drives
 			r.Get("/system/drives", drivesHandler())
@@ -110,10 +118,10 @@ func healthHandler(cfg Config) http.HandlerFunc {
 		// time, simply by reaching the agent successfully via either one.
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":           "ok",
-			"name":             cfg.Name,
+			"name":             cfg.Settings.AgentName(),
 			"version":          cfg.Version,
 			"os":               runtime.GOOS,
-			"readOnly":         cfg.ReadOnly,
+			"readOnly":         cfg.Settings.IsReadOnly(),
 			"address":          cfg.Address,
 			"tailscaleAddress": cfg.TailscaleAddress,
 		})

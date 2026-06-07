@@ -9,6 +9,8 @@ import '../../core/api/providers.dart';
 import '../../core/models/health.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/theme/motion.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/update/update_service.dart';
 import '../explorer/explorer_screen.dart';
 import '../pairing/pairing_screen.dart';
@@ -22,6 +24,7 @@ class HostListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final storeAsync = ref.watch(hostStoreProvider);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -37,8 +40,10 @@ class HostListScreen extends ConsumerWidget {
                 if (v != null)
                   Text(
                     'v$v',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.normal),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.normal,
+                        ),
                   ),
               ],
             );
@@ -50,6 +55,7 @@ class HostListScreen extends ConsumerWidget {
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(hostStoreProvider),
           ),
+          const SizedBox(width: Spacing.xs),
         ],
       ),
       body: storeAsync.when(
@@ -58,28 +64,18 @@ class HostListScreen extends ConsumerWidget {
         data: (store) {
           final hosts = store.listHosts();
           if (hosts.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.computer_outlined,
-                      size: 72,
-                      color: Theme.of(context).colorScheme.outline),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No paired computers yet',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Tap + to add a computer'),
-                ],
-              ),
-            );
+            return _EmptyState(scheme: scheme);
           }
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.sm,
+              vertical: Spacing.md,
+            ),
             itemCount: hosts.length,
-            itemBuilder: (ctx, i) =>
-                _HostCard(host: hosts[i], store: store, isFirst: i == 0),
+            itemBuilder: (ctx, i) => AppearListItem(
+              index: i,
+              child: _HostCard(host: hosts[i], store: store, isFirst: i == 0),
+            ),
           );
         },
       ),
@@ -97,6 +93,61 @@ class HostListScreen extends ConsumerWidget {
     );
     // Reload the host store after pairing
     ref.invalidate(hostStoreProvider);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.scheme});
+
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primaryContainer.withValues(alpha: 0.5),
+              ),
+              child: Icon(
+                Icons.computer_outlined,
+                size: 44,
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(height: Spacing.lg),
+            Text(
+              'No paired computers yet',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: Spacing.sm),
+            Text(
+              'Tap “Add computer” to pair one over your network or Tailscale.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -124,6 +175,11 @@ class _HostCard extends ConsumerStatefulWidget {
 
 class _HostCardState extends ConsumerState<_HostCard> {
   late Future<Health?> _pingFuture;
+
+  /// Wall-clock time the most recent ping resolved, used only to render a
+  /// gentle relative "last checked" line — purely cosmetic, doesn't affect the
+  /// online/offline determination itself.
+  DateTime? _lastChecked;
 
   @override
   void initState() {
@@ -180,8 +236,10 @@ class _HostCardState extends ConsumerState<_HostCard> {
       final client = AgentClient(widget.host, deviceToken: token);
       final health = await client.health().timeout(const Duration(seconds: 5));
       await _learnAddresses(health);
+      if (mounted) setState(() => _lastChecked = DateTime.now());
       return health;
     } catch (_) {
+      if (mounted) setState(() => _lastChecked = DateTime.now());
       return null;
     }
   }
@@ -233,39 +291,57 @@ class _HostCardState extends ConsumerState<_HostCard> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: Radii.cardR,
         onTap: () => _openExplorer(context),
         onLongPress: () => _confirmRemove(context),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(Spacing.md),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _StatusIcon(pingFuture: _pingFuture),
-              const SizedBox(width: 16),
+              FutureBuilder<Health?>(
+                future: _pingFuture,
+                builder: (context, snap) => _StatusDot(snapshot: snap),
+              ),
+              const SizedBox(width: Spacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.host.label,
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 2),
+                    Text(
+                      widget.host.label,
+                      style: textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: Spacing.xs / 2),
                     Text(
                       widget.host.tailscaleAddress != null
                           ? '${widget.host.address}  ·  ${widget.host.tailscaleAddress} (Tailscale)'
                           : widget.host.address,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
                       overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: Spacing.sm),
+                    FutureBuilder<Health?>(
+                      future: _pingFuture,
+                      builder: (context, snap) => _StatusLine(
+                        snapshot: snap,
+                        lastChecked: _lastChecked,
+                      ),
                     ),
                   ],
                 ),
               ),
               PopupMenuButton<String>(
+                tooltip: 'More',
+                shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
                 onSelected: (v) {
                   if (v == 'open') _openExplorer(context);
                   if (v == 'settings') {
@@ -295,28 +371,145 @@ class _HostCardState extends ConsumerState<_HostCard> {
   }
 }
 
-class _StatusIcon extends StatelessWidget {
-  const _StatusIcon({required this.pingFuture});
-  final Future<Health?> pingFuture;
+// ---------------------------------------------------------------------------
+// Status indicator: a small dot inside a tonal circle
+// ---------------------------------------------------------------------------
+
+class _StatusDot extends StatelessWidget {
+  const _StatusDot({required this.snapshot});
+
+  final AsyncSnapshot<Health?> snapshot;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Health?>(
-      future: pingFuture,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox.square(
-            dimension: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          );
-        }
-        final online = snap.data != null;
-        return Icon(
-          online ? Icons.circle : Icons.circle_outlined,
-          color: online ? Colors.green : Theme.of(context).colorScheme.outline,
-          size: 14,
-        );
-      },
+    final scheme = Theme.of(context).colorScheme;
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: scheme.surfaceContainerHighest,
+        ),
+        child: const SizedBox.square(
+          dimension: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final online = snapshot.data != null;
+    final dotColor = online ? Brand.online : Brand.offline;
+
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: dotColor.withValues(alpha: 0.16),
+      ),
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: dotColor,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Status line: a colour pill ("Online"/"Offline"/"Checking…") plus a relative
+// "last checked" hint.
+// ---------------------------------------------------------------------------
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({required this.snapshot, required this.lastChecked});
+
+  final AsyncSnapshot<Health?> snapshot;
+  final DateTime? lastChecked;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return _Pill(
+        label: 'Checking…',
+        color: scheme.onSurfaceVariant,
+        background: scheme.surfaceContainerHighest,
+      );
+    }
+
+    final online = snapshot.data != null;
+    final pill = online
+        ? _Pill(label: 'Online', color: Brand.online)
+        : _Pill(label: 'Offline', color: Brand.offline);
+
+    final relative = _relativeLastSeen(lastChecked);
+    if (relative == null) return pill;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        pill,
+        const SizedBox(width: Spacing.sm),
+        Flexible(
+          child: Text(
+            online ? 'Checked $relative' : 'Last seen $relative',
+            style: textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _relativeLastSeen(DateTime? at) {
+    if (at == null) return null;
+    final diff = DateTime.now().difference(at);
+    if (diff.inSeconds < 5) return 'just now';
+    if (diff.inMinutes < 1) return '${diff.inSeconds}s ago';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+}
+
+/// A small rounded status badge. [background] defaults to a tonal wash of
+/// [color] so it reads consistently in both light and dark.
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.color, this.background});
+
+  final String label;
+  final Color color;
+  final Color? background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.sm,
+        vertical: Spacing.xs / 2,
+      ),
+      decoration: BoxDecoration(
+        color: background ?? color.withValues(alpha: 0.16),
+        borderRadius: Radii.chipR,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
     );
   }
 }

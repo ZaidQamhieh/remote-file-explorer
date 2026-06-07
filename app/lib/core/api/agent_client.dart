@@ -293,6 +293,27 @@ class AgentClient {
     }
   }
 
+  /// Fetch the full contents of [remotePath] into memory as raw bytes.
+  ///
+  /// Intended for small-ish files (previews of images/text/PDFs). Callers
+  /// should check [Entry.size] via [meta] first and avoid calling this for
+  /// very large files — there is no size cap enforced here.
+  Future<Uint8List> fetchBytes(String remotePath, {CancelToken? cancelToken}) async {
+    try {
+      final res = await _dio.get<List<int>>(
+        '/content',
+        queryParameters: {'path': remotePath},
+        options: Options(responseType: ResponseType.bytes),
+        cancelToken: cancelToken,
+      );
+      final data = res.data;
+      if (data is Uint8List) return data;
+      return Uint8List.fromList(data ?? const []);
+    } on DioException catch (e) {
+      throw _apiError(e);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Resumable upload
   // ---------------------------------------------------------------------------

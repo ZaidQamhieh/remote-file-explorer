@@ -187,3 +187,27 @@ func TestListDir_Pagination(t *testing.T) {
 		t.Fatal("expected nextCursor to be nil on last page")
 	}
 }
+
+// fakeSettings is a mutable SettingsView for testing live config.
+type fakeSettings struct {
+	ro    bool
+	roots []string
+}
+
+func (f *fakeSettings) IsReadOnly() bool { return f.ro }
+func (f *fakeSettings) Roots() []string  { return f.roots }
+
+func TestOps_LiveReadOnlyToggle(t *testing.T) {
+	root := t.TempDir()
+	fs := &fakeSettings{ro: false, roots: []string{root}}
+	ops := NewWithSettings(fs)
+
+	if _, err := ops.CreateFolder(filepath.Join(root, "ok")); err != nil {
+		t.Fatalf("write should succeed when not read-only: %v", err)
+	}
+	// Flip read-only live — no reconstruction of ops.
+	fs.ro = true
+	if _, err := ops.CreateFolder(filepath.Join(root, "blocked")); err == nil {
+		t.Fatal("expected write to be rejected after read-only toggled on")
+	}
+}

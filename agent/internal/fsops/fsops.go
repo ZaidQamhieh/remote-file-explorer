@@ -28,10 +28,26 @@ var ErrNotFound = errors.New("path not found")
 // ErrConflict is returned when a destination already exists.
 var ErrConflict = errors.New("destination already exists")
 
+// SettingsView supplies the live read-only flag and jail roots. fsops reads
+// through it on every operation so changes apply without reconstructing Ops.
+type SettingsView interface {
+	IsReadOnly() bool
+	Roots() []string
+}
+
+// staticSettings is an immutable SettingsView for callers (and tests) that
+// pass fixed values via New.
+type staticSettings struct {
+	readOnly bool
+	roots    []string
+}
+
+func (s staticSettings) IsReadOnly() bool { return s.readOnly }
+func (s staticSettings) Roots() []string  { return s.roots }
+
 // Ops performs filesystem operations with an optional path jail.
 type Ops struct {
-	allowedRoots []string // empty = allow all
-	readOnly     bool
+	settings SettingsView
 }
 
 // New creates an Ops with optional allowedRoots.
@@ -40,11 +56,16 @@ func New(allowedRoots []string, readOnly bool) *Ops {
 	roots := make([]string, 0, len(allowedRoots))
 	for _, r := range allowedRoots {
 		clean := filepath.Clean(r)
-		if clean != "" {
+		if clean != "" && clean != "." {
 			roots = append(roots, clean)
 		}
 	}
-	return &Ops{allowedRoots: roots, readOnly: readOnly}
+	return &Ops{settings: staticSettings{readOnly: readOnly, roots: roots}}
+}
+
+// NewWithSettings builds an Ops backed by a live SettingsView.
+func NewWithSettings(v SettingsView) *Ops {
+	return &Ops{settings: v}
 }
 
 // Roots returns the configured allowed roots (a copy). An empty slice
@@ -52,8 +73,9 @@ func New(allowedRoots []string, readOnly bool) *Ops {
 // concrete starting point in that case should fall back to something
 // sensible (e.g. the user's home directory or filesystem drives).
 func (o *Ops) Roots() []string {
-	roots := make([]string, len(o.allowedRoots))
-	copy(roots, o.allowedRoots)
+	src := o.settings.Roots()
+	roots := make([]string, len(src))
+	copy(roots, src)
 	return roots
 }
 
@@ -76,11 +98,12 @@ func (o *Ops) Resolve(p string) (string, error) {
 		real = clean
 	}
 
-	if len(o.allowedRoots) == 0 {
+	roots := o.settings.Roots()
+	if len(roots) == 0 {
 		return real, nil
 	}
 
-	for _, root := range o.allowedRoots {
+	for _, root := range roots {
 		if isUnder(real, root) {
 			return real, nil
 		}
@@ -216,7 +239,7 @@ func Drives() ([]Drive, error) {
 
 // CreateFolder creates a directory (and parents).
 func (o *Ops) CreateFolder(path string) (*Entry, error) {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		return nil, ErrReadOnly
 	}
 	resolved, err := o.Resolve(path)
@@ -234,7 +257,7 @@ func (o *Ops) CreateFolder(path string) (*Entry, error) {
 
 // CreateFile creates an empty file (creates parent dirs as needed).
 func (o *Ops) CreateFile(path string) (*Entry, error) {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		return nil, ErrReadOnly
 	}
 	resolved, err := o.Resolve(path)
@@ -259,7 +282,7 @@ func (o *Ops) CreateFile(path string) (*Entry, error) {
 
 // Rename moves src to dst.
 func (o *Ops) Rename(src, dst string) (*Entry, error) {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		return nil, ErrReadOnly
 	}
 	resSrc, err := o.Resolve(src)
@@ -271,9 +294,9 @@ func (o *Ops) Rename(src, dst string) (*Entry, error) {
 		return nil, fmt.Errorf("%w: dst must be absolute", ErrForbidden)
 	}
 	resDst := filepath.Clean(dst)
-	if len(o.allowedRoots) > 0 {
+	if roots := o.settings.Roots(); len(roots) > 0 {
 		found := false
-		for _, root := range o.allowedRoots {
+		for _, root := range roots {
 			if isUnder(resDst, root) {
 				found = true
 				break
@@ -309,7 +332,7 @@ type Error struct {
 
 // Copy copies sources into destDir.
 func (o *Ops) Copy(sources []string, destDir string, duplicate bool) []BatchResult {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		res := make([]BatchResult, len(sources))
 		for i, s := range sources {
 			res[i] = BatchResult{Path: s, Error: &Error{Code: "READ_ONLY", Message: ErrReadOnly.Error()}}
@@ -348,7 +371,7 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate bool) []BatchResu
 
 // Move moves sources into destDir (batch).
 func (o *Ops) Move(sources []string, destDir string, duplicate bool) []BatchResult {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		res := make([]BatchResult, len(sources))
 		for i, s := range sources {
 			res[i] = BatchResult{Path: s, Error: &Error{Code: "READ_ONLY", Message: ErrReadOnly.Error()}}
@@ -391,7 +414,7 @@ func (o *Ops) Move(sources []string, destDir string, duplicate bool) []BatchResu
 
 // Delete deletes one or more paths.
 func (o *Ops) Delete(paths []string) []BatchResult {
-	if o.readOnly {
+	if o.settings.IsReadOnly() {
 		res := make([]BatchResult, len(paths))
 		for i, p := range paths {
 			res[i] = BatchResult{Path: p, Error: &Error{Code: "READ_ONLY", Message: ErrReadOnly.Error()}}

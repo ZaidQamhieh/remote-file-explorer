@@ -34,6 +34,41 @@ func TestLoad_SeedsUnsetKeys(t *testing.T) {
 	}
 }
 
+func TestSetters_PersistAndApply(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := s.SetReadOnly(true); err != nil {
+		t.Fatalf("set ro: %v", err)
+	}
+	if err := s.SetRoots([]string{"/a", "/a", " /b "}); err != nil {
+		t.Fatalf("set roots: %v", err)
+	}
+	if err := s.SetAgentName("renamed"); err != nil {
+		t.Fatalf("set name: %v", err)
+	}
+
+	// In-memory reflects immediately.
+	if !s.IsReadOnly() {
+		t.Fatal("readOnly not applied in memory")
+	}
+	if got := s.Roots(); len(got) != 2 || got[0] != "/a" || got[1] != "/b" {
+		t.Fatalf("roots not normalized/deduped: %v", got)
+	}
+
+	// Persisted: a fresh Load sees the new values, not the seeds.
+	s2, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if !s2.IsReadOnly() || s2.AgentName() != "renamed" || len(s2.Roots()) != 2 {
+		t.Fatalf("persisted values wrong: ro=%v name=%s roots=%v",
+			s2.IsReadOnly(), s2.AgentName(), s2.Roots())
+	}
+}
+
 func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 	db := newDB(t)
 	// First load seeds readOnly=true.

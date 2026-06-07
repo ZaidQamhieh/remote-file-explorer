@@ -97,6 +97,40 @@ func (s *Store) AgentName() string {
 	return s.agentName
 }
 
+// SetReadOnly persists and applies the read-only flag.
+func (s *Store) SetReadOnly(v bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyReadOnly, boolToStr(v)); err != nil {
+		return err
+	}
+	s.readOnly = v
+	return nil
+}
+
+// SetRoots normalizes, persists, and applies the jail roots.
+func (s *Store) SetRoots(roots []string) error {
+	norm := normalizeRoots(roots)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyRoots, joinRoots(norm)); err != nil {
+		return err
+	}
+	s.roots = norm
+	return nil
+}
+
+// SetAgentName persists and applies the display name.
+func (s *Store) SetAgentName(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyAgentName, name); err != nil {
+		return err
+	}
+	s.agentName = name
+	return nil
+}
+
 func boolToStr(b bool) string {
 	if b {
 		return "true"

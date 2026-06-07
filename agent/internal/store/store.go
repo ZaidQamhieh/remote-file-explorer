@@ -128,6 +128,50 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	return &d, nil
 }
 
+// rowScanner is satisfied by both *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanDeviceFrom(sc rowScanner) (*Device, error) {
+	var d Device
+	var created, lastSeen int64
+	var revoked int
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked); err != nil {
+		return nil, err
+	}
+	d.Created = time.Unix(created, 0)
+	d.LastSeen = time.Unix(lastSeen, 0)
+	d.Revoked = revoked != 0
+	return &d, nil
+}
+
+// ListDevices returns all paired devices (including revoked), oldest first.
+func (s *DB) ListDevices() ([]Device, error) {
+	rows, err := s.db.Query(
+		`SELECT id,label,token_hash,created,last_seen,revoked FROM devices ORDER BY created`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Device
+	for rows.Next() {
+		d, err := scanDeviceFrom(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *d)
+	}
+	return out, rows.Err()
+}
+
+// RevokeDevice marks a device revoked; its token is rejected by authMiddleware.
+func (s *DB) RevokeDevice(id string) error {
+	_, err := s.db.Exec(`UPDATE devices SET revoked=1 WHERE id=?`, id)
+	return err
+}
+
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

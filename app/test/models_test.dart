@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/models/drive.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/health.dart';
+import 'package:remote_file_explorer/core/models/agent_settings.dart';
+import 'package:remote_file_explorer/core/models/device.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/core/models/pair_response.dart';
@@ -189,6 +191,35 @@ void main() {
       expect(h2.label, 'B');
       expect(h2.id, '1');
       expect(h2.address, 'a:1');
+    });
+  });
+
+  group('AgentSettings', () {
+    test('parses and round-trips', () {
+      final s = AgentSettings.fromJson({
+        'readOnly': true,
+        'roots': ['/a', '/b'],
+        'agentName': 'pc',
+      });
+      expect(s.readOnly, isTrue);
+      expect(s.roots, ['/a', '/b']);
+      expect(s.agentName, 'pc');
+    });
+  });
+
+  group('Device', () {
+    test('parses current flag', () {
+      final d = Device.fromJson({
+        'id': 'x',
+        'label': 'phone',
+        'created': 1000,
+        'lastSeen': 2000,
+        'revoked': false,
+        'current': true,
+      });
+      expect(d.id, 'x');
+      expect(d.current, isTrue);
+      expect(d.revoked, isFalse);
     });
   });
 }

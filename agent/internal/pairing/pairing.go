@@ -1,37 +1,37 @@
-// Package pairing manages the one-time device pairing flow.
+// Package pairing manages the device pairing flow.
 //
-// On startup the agent calls New which generates a short random code,
-// prints it prominently to the log, and renders a QR code to the terminal.
-// The code is valid for a few minutes and can only be consumed once.
+// Pairing codes are stored in the SQLite DB (not daemon memory) so the
+// `rfe-agent pair` CLI can mint a code that the already-running daemon will
+// accept, with no restart. A code is valid for a chosen TTL and is single-use.
 package pairing
 
 import (
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
-	"log"
 	"math/big"
-	"sync"
 	"time"
 
-	"github.com/skip2/go-qrcode"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
 const (
-	codeLen    = 8            // characters in the one-time code
-	codeExpiry = 60 * time.Minute
+	codeLen = 8 // characters in the one-time code
 	// Alphabet chosen to be easy to type: no 0/O, 1/I/l confusion.
 	alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 )
 
-// Manager generates and validates one-time pairing codes.
+// DefaultTTL is how long a newly minted pairing code stays valid.
+const DefaultTTL = 60 * time.Minute
+
+// Manager mints and validates pairing codes, backed by the store.
 type Manager struct {
-	mu      sync.Mutex
-	code    string
-	expires time.Time
+	db          *store.DB
+	lan         string
+	tailscale   string
+	fingerprint string
 }
 
-// QRPayload is the JSON embedded in the QR code.
+// QRPayload is the JSON embedded in the QR code the phone scans.
 type QRPayload struct {
 	Address          string `json:"address"`
 	TailscaleAddress string `json:"tailscaleAddress,omitempty"`
@@ -39,68 +39,54 @@ type QRPayload struct {
 	PairingCode      string `json:"pairingCode"`
 }
 
-// New creates a Manager, generates the first code, and logs/prints the QR.
-// lanAddress is the agent's LAN-reachable address (e.g. "192.168.1.5:8765");
-// tailscaleAddress is its Tailscale-reachable address, or "" if unknown.
-// fingerprint is the TLS cert's SHA-256 hex.
-func New(lanAddress, tailscaleAddress, fingerprint string) (*Manager, error) {
-	m := &Manager{}
-	if err := m.rotate(lanAddress, tailscaleAddress, fingerprint); err != nil {
-		return nil, err
+// New creates a Manager. It does not mint a code — codes are minted on demand
+// (by `rfe-agent pair`), so the daemon no longer rotates a code on every
+// restart. lanAddress/tailscaleAddress are the agent's reachable host:port
+// pairs; fingerprint is the TLS cert's SHA-256 hex.
+func New(db *store.DB, lanAddress, tailscaleAddress, fingerprint string) *Manager {
+	return &Manager{
+		db:          db,
+		lan:         lanAddress,
+		tailscale:   tailscaleAddress,
+		fingerprint: fingerprint,
 	}
-	return m, nil
 }
 
-// Consume validates code and clears it (single-use).
-// Returns true on success.
-func (m *Manager) Consume(code string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if code == "" || m.code == "" {
-		return false
+// Mint generates a new single-use pairing code valid for ttl, persists it, and
+// returns the code together with the QR payload the phone should scan.
+func (m *Manager) Mint(ttl time.Duration) (string, QRPayload, error) {
+	if ttl <= 0 {
+		ttl = DefaultTTL
 	}
-	if code != m.code {
-		return false
-	}
-	if time.Now().After(m.expires) {
-		return false
-	}
-	m.code = "" // single-use
-	return true
-}
-
-// rotate generates a new code and prints it.
-func (m *Manager) rotate(lanAddress, tailscaleAddress, fingerprint string) error {
 	code, err := randomCode(codeLen)
 	if err != nil {
-		return err
+		return "", QRPayload{}, err
 	}
-	m.mu.Lock()
-	m.code = code
-	m.expires = time.Now().Add(codeExpiry)
-	m.mu.Unlock()
+	if err := m.db.CreatePairingCode(code, time.Now().Add(ttl)); err != nil {
+		return "", QRPayload{}, err
+	}
+	return code, m.Payload(code), nil
+}
 
-	payload := QRPayload{
-		Address:          lanAddress,
-		TailscaleAddress: tailscaleAddress,
-		CertFingerprint:  fingerprint,
+// Payload builds the QR payload for a given code.
+func (m *Manager) Payload(code string) QRPayload {
+	return QRPayload{
+		Address:          m.lan,
+		TailscaleAddress: m.tailscale,
+		CertFingerprint:  m.fingerprint,
 		PairingCode:      code,
 	}
-	payloadJSON, _ := json.Marshal(payload)
+}
 
-	log.Printf("┌─────────────────────────────────────────┐")
-	log.Printf("│  PAIRING CODE:  %-8s  (expires %s)  │", code, m.expires.Format("15:04:05"))
-	log.Printf("└─────────────────────────────────────────┘")
-	log.Printf("QR payload: %s", payloadJSON)
+// PayloadJSON returns the QR payload as the JSON string embedded in the QR code.
+func (p QRPayload) JSON() string {
+	b, _ := json.Marshal(p)
+	return string(b)
+}
 
-	// Render QR to terminal (medium recovery for robustness with display fonts).
-	qr, err := qrcode.New(string(payloadJSON), qrcode.Medium)
-	if err != nil {
-		log.Printf("qr: %v", err)
-		return nil // non-fatal
-	}
-	fmt.Println(qr.ToString(false))
-	return nil
+// Consume validates code and clears it (single-use). Returns true on success.
+func (m *Manager) Consume(code string) bool {
+	return m.db.ConsumePairingCode(code)
 }
 
 func randomCode(n int) (string, error) {

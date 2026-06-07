@@ -2,6 +2,7 @@ package store
 
 import (
 	"testing"
+	"time"
 )
 
 func TestListAndRevokeDevices(t *testing.T) {
@@ -92,6 +93,73 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	b, _ := db.UpsertDevice("", "Legacy", "tok-5")
 	if a == b {
 		t.Fatalf("empty client id must not dedup")
+	}
+}
+
+func TestPairingCodeLifecycle(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	// A valid code can be consumed exactly once.
+	if err := db.CreatePairingCode("ABC123", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !db.ConsumePairingCode("ABC123") {
+		t.Fatalf("expected first consume to succeed")
+	}
+	if db.ConsumePairingCode("ABC123") {
+		t.Fatalf("expected second consume to fail (single-use)")
+	}
+
+	// An expired code is rejected.
+	if err := db.CreatePairingCode("OLD999", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatalf("create expired: %v", err)
+	}
+	if db.ConsumePairingCode("OLD999") {
+		t.Fatalf("expected expired code to be rejected")
+	}
+
+	// An unknown code is rejected.
+	if db.ConsumePairingCode("NOPE") {
+		t.Fatalf("expected unknown code to be rejected")
+	}
+}
+
+func TestResolveDeviceIDByPrefix(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateDevice("9789abcd-1111", "phone-a", "tok-a"); err != nil {
+		t.Fatalf("create a: %v", err)
+	}
+	if err := db.CreateDevice("9789ffff-2222", "phone-b", "tok-b"); err != nil {
+		t.Fatalf("create b: %v", err)
+	}
+	if err := db.CreateDevice("0000eeee-3333", "phone-c", "tok-c"); err != nil {
+		t.Fatalf("create c: %v", err)
+	}
+
+	// Unique prefix resolves.
+	if got, err := db.ResolveDeviceID("0000"); err != nil || got != "0000eeee-3333" {
+		t.Fatalf("unique prefix: got %q err %v", got, err)
+	}
+	// Exact id resolves even when it's also a prefix of itself.
+	if got, err := db.ResolveDeviceID("9789abcd-1111"); err != nil || got != "9789abcd-1111" {
+		t.Fatalf("exact id: got %q err %v", got, err)
+	}
+	// Ambiguous prefix errors.
+	if _, err := db.ResolveDeviceID("9789"); err == nil {
+		t.Fatalf("expected ambiguous prefix to error")
+	}
+	// No match errors.
+	if _, err := db.ResolveDeviceID("zzzz"); err == nil {
+		t.Fatalf("expected no-match to error")
 	}
 }
 

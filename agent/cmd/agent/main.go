@@ -1,5 +1,9 @@
 // Command agent is the Remote File Explorer host service. It serves the file
 // API to paired mobile devices over TLS, reachable on the LAN or via Tailscale.
+//
+// Invoked with no arguments (or a leading flag, or "serve") it runs the daemon.
+// Other first arguments are admin subcommands — see admin.go (pair, devices,
+// revoke, remove, status).
 package main
 
 import (
@@ -7,6 +11,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -29,12 +34,31 @@ import (
 const version = "0.1.0"
 
 func main() {
-	addr := flag.String("addr", ":8765", "listen address (host:port)")
-	name := flag.String("name", hostName(), "agent display name shown to the phone")
-	dataDir := flag.String("data", defaultDataDir(), "directory for certs, db, and state")
-	readOnly := flag.Bool("read-only", false, "reject all write operations")
-	roots := flag.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
-	flag.Parse()
+	args := os.Args[1:]
+	// Backward compatible: no args, a leading flag, or "serve" runs the daemon —
+	// so the existing systemd unit (`rfe-agent -addr ... -name ...`) is unchanged.
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") || args[0] == "serve" {
+		if len(args) > 0 && args[0] == "serve" {
+			args = args[1:]
+		}
+		runServe(args)
+		return
+	}
+	// Otherwise dispatch an admin subcommand (admin.go).
+	if err := runAdmin(args[0], args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+}
+
+func runServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	addr := fs.String("addr", ":8765", "listen address (host:port)")
+	name := fs.String("name", hostName(), "agent display name shown to the phone")
+	dataDir := fs.String("data", defaultDataDir(), "directory for certs, db, and state")
+	readOnly := fs.Bool("read-only", false, "reject all write operations")
+	roots := fs.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
+	_ = fs.Parse(args)
 
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
 		log.Fatalf("data dir: %v", err)
@@ -72,10 +96,8 @@ func main() {
 		log.Fatalf("updates dir: %v", err)
 	}
 
-	pm, err := pairing.New(lanAddr, tsAddr, fingerprint)
-	if err != nil {
-		log.Fatalf("pairing: %v", err)
-	}
+	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
+	log.Printf("run `rfe-agent pair` to add a device")
 
 	// Parse seed roots from the flag (first-run only; DB wins thereafter).
 	var seedRoots []string

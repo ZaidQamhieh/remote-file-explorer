@@ -24,7 +24,9 @@ type DB struct {
 // Open opens (or creates) agent.db under dir.
 func Open(dir string) (*DB, error) {
 	path := dir + "/agent.db"
-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	// busy_timeout lets the daemon and the `rfe-agent` admin CLI write to the
+	// same DB across processes without immediately erroring on a brief lock.
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
@@ -55,6 +57,11 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE TABLE IF NOT EXISTS config (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pairing_codes (
+    code    TEXT PRIMARY KEY,
+    expires INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transfers (
@@ -221,6 +228,36 @@ func (s *DB) ListDevices() ([]Device, error) {
 	return out, rows.Err()
 }
 
+// ResolveDeviceID maps a full id or a unique id prefix to a full device id, for
+// convenient CLI use (e.g. "revoke 9789"). Returns an error if the prefix
+// matches no device or more than one.
+func (s *DB) ResolveDeviceID(prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("empty device id")
+	}
+	devices, err := s.ListDevices()
+	if err != nil {
+		return "", err
+	}
+	var matches []string
+	for _, d := range devices {
+		if d.ID == prefix {
+			return d.ID, nil // exact match wins immediately
+		}
+		if strings.HasPrefix(d.ID, prefix) {
+			matches = append(matches, d.ID)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no device matches %q", prefix)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("%q is ambiguous (%d devices match)", prefix, len(matches))
+	}
+}
+
 // RevokeDevice marks a device revoked; its token is rejected by authMiddleware.
 func (s *DB) RevokeDevice(id string) error {
 	_, err := s.db.Exec(`UPDATE devices SET revoked=1 WHERE id=?`, id)
@@ -232,6 +269,39 @@ func (s *DB) RevokeDevice(id string) error {
 func (s *DB) DeleteDevice(id string) error {
 	_, err := s.db.Exec(`DELETE FROM devices WHERE id=?`, id)
 	return err
+}
+
+// --------- pairing codes ---------
+
+// CreatePairingCode stores a one-time pairing code valid until expires. Stored
+// in the DB (not daemon memory) so the `rfe-agent pair` CLI can mint a code the
+// running daemon will accept, without a restart. Opportunistically clears
+// already-expired codes.
+func (s *DB) CreatePairingCode(code string, expires time.Time) error {
+	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE expires < ?`, time.Now().Unix())
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO pairing_codes (code, expires) VALUES (?, ?)`,
+		code, expires.Unix(),
+	)
+	return err
+}
+
+// ConsumePairingCode validates code and removes it (single-use). Returns true
+// only if the code exists and has not expired.
+func (s *DB) ConsumePairingCode(code string) bool {
+	if code == "" {
+		return false
+	}
+	var expires int64
+	err := s.db.QueryRow(
+		`SELECT expires FROM pairing_codes WHERE code=?`, code,
+	).Scan(&expires)
+	if err != nil {
+		return false
+	}
+	// Remove it regardless (single-use); only accept if still valid.
+	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE code=?`, code)
+	return time.Now().Unix() <= expires
 }
 
 func hashToken(token string) string {

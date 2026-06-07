@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
@@ -48,32 +49,43 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.55,
       maxChildSize: 0.9,
-      builder: (_, controller) => Padding(
-        padding: const EdgeInsets.all(16),
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: Radii.sheetTopR,
+        ),
         child: CustomScrollView(
           controller: controller,
           slivers: [
-            SliverToBoxAdapter(child: _buildHeader(context)),
-            SliverList(
-              delegate: SliverChildListDelegate([
-                const Divider(),
-                _row('Path', _entry.path),
-                if (_entry.size != null) _row('Size', _formatSize(_entry.size)),
-                if (_entry.mimeType != null) _row('Type', _entry.mimeType!),
-                if (_entry.mode != null) _row('Permissions', _entry.mode!),
-                if (_entry.modified != null)
-                  _row('Modified', _entry.modified!.toLocal().toString()),
-                if (_entry.created != null)
-                  _row('Created', _entry.created!.toLocal().toString()),
-                _row('Symlink', _entry.isSymlink ? 'Yes' : 'No'),
-                const SizedBox(height: 16),
-                _buildActions(context),
-                const SizedBox(height: 32),
-              ]),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildGrabber(context),
+                    const SizedBox(height: Spacing.md),
+                    _buildHeader(context),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, 0, Spacing.lg, Spacing.xl),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  _buildMetaSection(context),
+                  const SizedBox(height: Spacing.lg),
+                  _buildActions(context),
+                ]),
+              ),
             ),
           ],
         ),
@@ -81,70 +93,162 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     );
   }
 
+  Widget _buildGrabber(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+
   Widget _buildHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(
-          _entry.isDir ? Icons.folder : Icons.insert_drive_file,
-          size: 40,
-          color: _entry.isDir ? Colors.amber : null,
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: Radii.chipR,
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            _entry.isDir ? Icons.folder : Icons.insert_drive_file,
+            size: 30,
+            color: _entry.isDir ? Colors.amber : scheme.onSurfaceVariant,
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: Spacing.md),
         Expanded(
           child: Text(_entry.name,
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
               overflow: TextOverflow.ellipsis),
         ),
       ],
     );
   }
 
-  Widget _row(String label, String? value) {
+  Widget _buildMetaSection(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rows = <Widget>[
+      _row(context, Icons.route_outlined, 'Path', _entry.path),
+      if (_entry.size != null)
+        _row(context, Icons.straighten_outlined, 'Size', _formatSize(_entry.size)),
+      if (_entry.mimeType != null)
+        _row(context, Icons.label_outline, 'Type', _entry.mimeType!),
+      if (_entry.mode != null)
+        _row(context, Icons.lock_outline, 'Permissions', _entry.mode!),
+      if (_entry.modified != null)
+        _row(context, Icons.edit_calendar_outlined, 'Modified',
+            _entry.modified!.toLocal().toString()),
+      if (_entry.created != null)
+        _row(context, Icons.event_outlined, 'Created',
+            _entry.created!.toLocal().toString()),
+      _row(context, Icons.link_outlined, 'Symlink', _entry.isSymlink ? 'Yes' : 'No'),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: Radii.cardR,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md, vertical: Spacing.xs),
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: scheme.outlineVariant),
+            rows[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, IconData icon, String label, String? value) {
     if (value == null) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: Spacing.sm),
           SizedBox(
-            width: 110,
+            width: 100,
             child: Text(label,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    )),
           ),
-          Expanded(child: Text(value, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(value,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildActions(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: Spacing.sm,
+      runSpacing: Spacing.sm,
       children: [
         if (!_entry.isDir && isPreviewable(_entry))
           FilledButton.icon(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: Spacing.sm),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
             icon: const Icon(Icons.visibility_outlined),
             label: const Text('Preview'),
             onPressed: () => _preview(context),
           ),
         if (!_entry.isDir)
-          FilledButton.icon(
-            icon: const Icon(Icons.download),
+          FilledButton.tonalIcon(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: Spacing.sm),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.download_outlined),
             label: const Text('Download'),
             onPressed: () => _download(context),
           ),
         OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md, vertical: Spacing.sm),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
           icon: const Icon(Icons.drive_file_rename_outline),
           label: const Text('Rename'),
           onPressed: () => _rename(context),
         ),
         OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md, vertical: Spacing.sm),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            foregroundColor: scheme.error,
+            side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
+          ),
           icon: const Icon(Icons.delete_outline),
           label: const Text('Delete'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.error,
-          ),
           onPressed: () => _delete(context),
         ),
       ],

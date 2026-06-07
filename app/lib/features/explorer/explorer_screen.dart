@@ -8,6 +8,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
@@ -187,41 +188,39 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildBody(
       BuildContext context, ExplorerState state, AgentClient client) {
-    if (state.loading) {
-      return const Center(child: CircularProgressIndicator());
+    // First load with nothing cached yet → lightweight skeleton.
+    if (state.loading && state.entries.isEmpty) {
+      return const ListingSkeleton();
     }
-    if (state.error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48),
-            const SizedBox(height: 8),
-            Text(state.error!),
-            const SizedBox(height: 12),
-            FilledButton(
-                onPressed: _notifier.refresh, child: const Text('Retry')),
-          ],
-        ),
-      );
+    // Hard error with no cached entries to fall back on → retry card.
+    if (state.error != null && state.entries.isEmpty) {
+      return ErrorRetryCard(message: state.error!, onRetry: _notifier.refresh);
     }
-    if (state.sortedEntries.isEmpty) {
+    // Empty (non-error) directory → friendly empty view.
+    if (!state.loading && state.entries.isEmpty && state.error == null) {
       return RefreshIndicator(
         onRefresh: _notifier.refresh,
         child: ListView(
           children: const [
             SizedBox(height: 120),
-            Center(child: Text('This folder is empty.')),
+            EmptyFolderView(),
           ],
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _notifier.refresh,
-      child: state.gridView
-          ? _buildGrid(context, state, client)
-          : _buildList(context, state, client),
+    return Column(
+      children: [
+        if (state.offline) const OfflineBanner(),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _notifier.refresh,
+            child: state.gridView
+                ? _buildGrid(context, state, client)
+                : _buildList(context, state, client),
+          ),
+        ),
+      ],
     );
   }
 

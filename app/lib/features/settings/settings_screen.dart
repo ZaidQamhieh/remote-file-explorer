@@ -6,6 +6,7 @@ import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import 'update_tile.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -232,6 +233,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: const Text('Revoke'),
                     ),
             )),
+        const Divider(),
+        UpdateTile(host: widget.host),
         const SizedBox(height: 24),
       ],
     );

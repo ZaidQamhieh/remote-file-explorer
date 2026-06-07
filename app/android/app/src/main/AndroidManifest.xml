@@ -3,6 +3,11 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Camera for scanning the pairing QR code. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- In-app updater: open the downloaded APK so Android's package installer
+         launches. open_filex ships its own FileProvider
+         (${applicationId}.fileProvider.com.crazecoder.openfile), so no custom
+         provider is declared here. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="Remote File Explorer"
         android:name="${applicationName}"

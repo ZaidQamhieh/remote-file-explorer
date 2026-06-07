@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
 import '../models/agent_settings.dart';
+import '../models/app_release.dart';
 import '../models/device.dart';
 import '../models/drive.dart';
 import '../models/entry.dart';
@@ -524,5 +525,41 @@ class AgentClient {
     final data =
         await _post<Map<String, dynamic>>('/transfers/$sessionId/complete');
     return Entry.fromJson(data);
+  }
+
+  // ---------------------------------------------------------------------------
+  // In-app updates
+  // ---------------------------------------------------------------------------
+
+  /// Returns the latest APK the agent offers, or `null` when none (204).
+  Future<AppRelease?> latestRelease() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/app/latest');
+      final data = res.data;
+      if (res.statusCode == 204 || data == null) return null;
+      return AppRelease.fromJson(data);
+    } on DioException catch (e) {
+      throw _apiError(e);
+    }
+  }
+
+  /// Downloads the latest APK to [localFile], reporting [onProgress].
+  Future<void> downloadApk({
+    required File localFile,
+    void Function(int received, int total)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      await _dio.download(
+        '/app/download',
+        localFile.path,
+        options: Options(responseType: ResponseType.stream),
+        deleteOnError: true,
+        cancelToken: cancelToken,
+        onReceiveProgress: onProgress,
+      );
+    } on DioException catch (e) {
+      throw _apiError(e);
+    }
   }
 }

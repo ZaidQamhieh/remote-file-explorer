@@ -280,6 +280,24 @@ paths:
       responses:
         '204': { description: Revoked }
         '409': { description: Cannot revoke the calling device }
+  /app/latest:
+    get:
+      summary: Latest available Android APK
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Release metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppRelease' }
+        '204': { description: No update available }
+  /app/download:
+    get:
+      summary: Download the latest APK (Range-enabled)
+      security: [{ deviceToken: [] }]
+      responses:
+        '200': { description: APK bytes (application/vnd.android.package-archive) }
+        '404': { description: No update available }
 
 components:
   securitySchemes:
@@ -325,6 +343,12 @@ components:
         lastSeen: { type: integer, format: int64 }
         revoked: { type: boolean }
         current: { type: boolean }
+    AppRelease:
+      type: object
+      properties:
+        versionName: { type: string }
+        versionCode: { type: integer }
+        size: { type: integer, format: int64 }
     Health:
       type: object
       properties:

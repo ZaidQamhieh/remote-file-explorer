@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/models/app_release.dart';
 import 'package:remote_file_explorer/core/models/drive.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/health.dart';
@@ -189,6 +190,19 @@ void main() {
       expect(h2.label, 'B');
       expect(h2.id, '1');
       expect(h2.address, 'a:1');
+    });
+  });
+
+  group('AppRelease', () {
+    test('parses metadata', () {
+      final r = AppRelease.fromJson({
+        'versionName': '1.2.0',
+        'versionCode': 12,
+        'size': 1048576,
+      });
+      expect(r.versionName, '1.2.0');
+      expect(r.versionCode, 12);
+      expect(r.size, 1048576);
     });
   });
 }

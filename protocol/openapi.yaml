@@ -236,6 +236,51 @@ paths:
       responses:
         "200": { description: Results, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Entry" } } } } }
 
+  /settings:
+    get:
+      summary: Get agent settings
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Current settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSettings' }
+    patch:
+      summary: Update agent settings (partial)
+      security: [{ deviceToken: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentSettings' }
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSettings' }
+  /devices:
+    get:
+      summary: List paired devices
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Device' }
+  /devices/{id}:
+    delete:
+      summary: Revoke a paired device
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Revoked }
+        '409': { description: Cannot revoke the calling device }
+
 components:
   securitySchemes:
     deviceToken:
@@ -263,6 +308,23 @@ components:
                     error: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    AgentSettings:
+      type: object
+      properties:
+        readOnly: { type: boolean }
+        roots:
+          type: array
+          items: { type: string }
+        agentName: { type: string }
+    Device:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        created: { type: integer, format: int64 }
+        lastSeen: { type: integer, format: int64 }
+        revoked: { type: boolean }
+        current: { type: boolean }
     Health:
       type: object
       properties:

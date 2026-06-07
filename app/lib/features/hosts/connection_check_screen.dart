@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/health.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
 
 /// Phase 0 connectivity check: enter a host agent address and ping `/health`.
 /// This validates the app -> agent transport (TLS + pinning) end to end and is
@@ -45,7 +46,7 @@ class _ConnectionCheckScreenState extends State<ConnectionCheckScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Remote File Explorer')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(Spacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -54,16 +55,15 @@ class _ConnectionCheckScreenState extends State<ConnectionCheckScreen> {
               decoration: const InputDecoration(
                 labelText: 'Agent address (host:port)',
                 hintText: 'mypc.tailnet.ts.net:8765',
-                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: Spacing.md),
             FilledButton.icon(
               onPressed: _connect,
               icon: const Icon(Icons.wifi_tethering),
               label: const Text('Check connection'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: Spacing.lg),
             Expanded(child: _buildResult()),
           ],
         ),
@@ -73,8 +73,14 @@ class _ConnectionCheckScreenState extends State<ConnectionCheckScreen> {
 
   Widget _buildResult() {
     final result = _result;
+    final scheme = Theme.of(context).colorScheme;
     if (result == null) {
-      return const Center(child: Text('Enter an agent address to begin.'));
+      return Center(
+        child: Text(
+          'Enter an agent address to begin.',
+          style: TextStyle(color: scheme.onSurfaceVariant),
+        ),
+      );
     }
     return FutureBuilder<Health>(
       future: result,
@@ -85,7 +91,7 @@ class _ConnectionCheckScreenState extends State<ConnectionCheckScreen> {
         if (snap.hasError) {
           return Center(
             child: Text('Failed: ${snap.error}',
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                style: TextStyle(color: scheme.error)),
           );
         }
         final h = snap.data!;
@@ -104,11 +110,14 @@ class _ConnectionCheckScreenState extends State<ConnectionCheckScreen> {
   }
 
   Widget _row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 130, child: Text(k, style: const TextStyle(fontWeight: FontWeight.bold))),
+            SizedBox(
+              width: 130,
+              child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
             Expanded(child: Text(v)),
           ],
         ),

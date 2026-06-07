@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -77,6 +78,26 @@ class AgentClient {
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
+
+  /// Best-effort extraction of the `code` field from an error response body,
+  /// regardless of whether Dio parsed it as JSON (`Map`) or left it as raw
+  /// bytes (`List<int>`, e.g. when the request used `ResponseType.bytes`).
+  static String? _errorCode(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return data['code'] as String?;
+    }
+    if (data is List<int>) {
+      try {
+        final decoded = jsonDecode(utf8.decode(data));
+        if (decoded is Map<String, dynamic>) {
+          return decoded['code'] as String?;
+        }
+      } catch (_) {
+        // Not JSON — ignore.
+      }
+    }
+    return null;
+  }
 
   static AgentApiException _apiError(DioException e) {
     final data = e.response?.data;
@@ -256,6 +277,36 @@ class AgentClient {
       '/fs',
       data: {'paths': paths, 'permanent': permanent},
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Thumbnails
+  // ---------------------------------------------------------------------------
+
+  /// Fetches a server-rendered JPEG thumbnail for the file at [remotePath],
+  /// resized so its longest side is roughly [size] px.
+  ///
+  /// Returns `null` when the agent has no thumbnail for this file (e.g. a
+  /// non-image, or a format it can't decode — reported as a 404 with code
+  /// `NOT_AVAILABLE`); callers should fall back to a generic icon in that
+  /// case rather than treating it as an error.
+  Future<Uint8List?> thumbnail(String remotePath, {int size = 256}) async {
+    try {
+      final res = await _dio.get<List<int>>(
+        '/thumb',
+        queryParameters: {'path': remotePath, 'size': size},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = res.data;
+      if (data == null) return null;
+      return Uint8List.fromList(data);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 404 || _errorCode(e.response?.data) == 'NOT_AVAILABLE') {
+        return null;
+      }
+      throw _apiError(e);
+    }
   }
 
   // ---------------------------------------------------------------------------

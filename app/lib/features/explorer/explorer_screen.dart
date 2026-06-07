@@ -12,6 +12,7 @@ import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
+import 'thumbnail_image.dart';
 
 class ExplorerScreen extends ConsumerStatefulWidget {
   const ExplorerScreen({super.key, required this.host});
@@ -234,6 +235,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         final entry = state.sortedEntries[i];
         return _EntryGridCell(
           entry: entry,
+          client: client,
           selected: state.selected.contains(entry.path),
           multiSelect: state.multiSelect,
           onTap: () => _onEntryTap(context, entry, client),
@@ -459,6 +461,7 @@ class _EntryListTile extends StatelessWidget {
 class _EntryGridCell extends StatelessWidget {
   const _EntryGridCell({
     required this.entry,
+    required this.client,
     required this.selected,
     required this.multiSelect,
     required this.onTap,
@@ -466,6 +469,7 @@ class _EntryGridCell extends StatelessWidget {
   });
 
   final Entry entry;
+  final AgentClient client;
   final bool selected;
   final bool multiSelect;
   final VoidCallback onTap;
@@ -473,6 +477,9 @@ class _EntryGridCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mime = entry.mimeType ?? '';
+    final isImage = !entry.isDir && mime.startsWith('image/');
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -492,7 +499,18 @@ class _EntryGridCell extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _EntryIcon(entry: entry, size: 40),
+            if (isImage)
+              SizedBox(
+                width: 56,
+                height: 56,
+                child: ThumbnailImage(
+                  entry: entry,
+                  client: client,
+                  fallback: Center(child: _EntryIcon(entry: entry, size: 40)),
+                ),
+              )
+            else
+              _EntryIcon(entry: entry, size: 40),
             const SizedBox(height: 8),
             Text(
               entry.name,

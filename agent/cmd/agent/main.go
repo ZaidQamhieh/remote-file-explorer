@@ -56,6 +56,11 @@ func main() {
 		log.Fatalf("transfer: %v", err)
 	}
 
+	thumbCacheDir := filepath.Join(*dataDir, "thumbs")
+	if err := os.MkdirAll(thumbCacheDir, 0o700); err != nil {
+		log.Fatalf("thumb cache dir: %v", err)
+	}
+
 	pm, err := pairing.New(*addr, fingerprint)
 	if err != nil {
 		log.Fatalf("pairing: %v", err)
@@ -71,14 +76,18 @@ func main() {
 		}
 	}
 
-	handler := server.New(server.Config{
+	handler, err := server.New(server.Config{
 		Name:            *name,
 		Version:         version,
 		ReadOnly:        *readOnly,
 		CertFingerprint: fingerprint,
 		Address:         *addr,
 		AllowedRoots:    allowedRoots,
+		ThumbCacheDir:   thumbCacheDir,
 	}, db, pm, tm)
+	if err != nil {
+		log.Fatalf("server: %v", err)
+	}
 
 	srv := &http.Server{
 		Addr:    *addr,

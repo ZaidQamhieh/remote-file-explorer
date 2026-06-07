@@ -12,6 +12,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
@@ -23,11 +24,17 @@ type Config struct {
 	CertFingerprint string
 	Address         string // LAN address used in QR payload
 	AllowedRoots    []string
+	ThumbCacheDir   string // directory for on-disk thumbnail cache
 }
 
 // New builds the v1 router and wires all routes.
-func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) http.Handler {
+func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
 	ops := fsops.New(cfg.AllowedRoots, cfg.ReadOnly)
+
+	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
+	if err != nil {
+		return nil, err
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -41,7 +48,6 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 
 		// Phase-2 stubs (unauthenticated paths that will never match auth).
 		r.Get("/search", notImplementedHandler)
-		r.Get("/thumb", notImplementedHandler)
 
 		// Authenticated sub-router.
 		r.Group(func(r chi.Router) {
@@ -49,6 +55,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 
 			// Drives
 			r.Get("/system/drives", drivesHandler())
+
+			// Thumbnails
+			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
 
 			// Filesystem
 			r.Get("/fs", listDirHandler(ops))
@@ -71,7 +80,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) ht
 		})
 	})
 
-	return r
+	return r, nil
 }
 
 // --------- helpers ---------

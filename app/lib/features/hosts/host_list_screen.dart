@@ -25,7 +25,25 @@ class HostListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Remote File Explorer'),
+        title: FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder: (context, snap) {
+            final v = snap.data?.version;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Remote File Explorer'),
+                if (v != null)
+                  Text(
+                    'v$v',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.normal),
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

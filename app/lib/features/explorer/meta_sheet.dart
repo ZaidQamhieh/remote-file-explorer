@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
@@ -120,6 +121,12 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (!_entry.isDir && isPreviewable(_entry))
+          FilledButton.icon(
+            icon: const Icon(Icons.visibility_outlined),
+            label: const Text('Preview'),
+            onPressed: () => _preview(context),
+          ),
         if (!_entry.isDir)
           FilledButton.icon(
             icon: const Icon(Icons.download),
@@ -140,6 +147,15 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           onPressed: () => _delete(context),
         ),
       ],
+    );
+  }
+
+  Future<void> _preview(BuildContext context) async {
+    await openPreview(
+      context,
+      entry: _entry,
+      host: widget.host,
+      client: widget.client,
     );
   }
 

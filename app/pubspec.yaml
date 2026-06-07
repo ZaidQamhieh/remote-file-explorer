@@ -1,7 +1,7 @@
 name: remote_file_explorer
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.1.0+3
+version: 1.2.0+4
 
 environment:
   sdk: ^3.7.0
@@ -23,6 +23,7 @@ dependencies:
   chewie: ^1.11.3
   package_info_plus: ^9.0.1
   open_filex: ^4.5.0
+  android_intent_plus: ^5.0.0
 
 dev_dependencies:
   flutter_test:

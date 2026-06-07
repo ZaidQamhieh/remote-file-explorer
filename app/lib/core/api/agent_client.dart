@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
+import '../models/agent_settings.dart';
+import '../models/device.dart';
 import '../models/drive.dart';
 import '../models/entry.dart';
 import '../models/health.dart';
@@ -276,6 +278,39 @@ class AgentClient {
     return data
         .map((e) => Entry.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings & device management
+  // ---------------------------------------------------------------------------
+
+  Future<AgentSettings> getSettings() async {
+    final data = await _get<Map<String, dynamic>>('/settings');
+    return AgentSettings.fromJson(data);
+  }
+
+  Future<AgentSettings> updateSettings({
+    bool? readOnly,
+    List<String>? roots,
+    String? agentName,
+  }) async {
+    final data = await _patch<Map<String, dynamic>>('/settings', data: {
+      if (readOnly != null) 'readOnly': readOnly,
+      if (roots != null) 'roots': roots,
+      if (agentName != null) 'agentName': agentName,
+    });
+    return AgentSettings.fromJson(data);
+  }
+
+  Future<List<Device>> listDevices() async {
+    final data = await _get<List<dynamic>>('/devices');
+    return data
+        .map((e) => Device.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> revokeDevice(String id) async {
+    await _delete<void>('/devices/$id');
   }
 
   // ---------------------------------------------------------------------------

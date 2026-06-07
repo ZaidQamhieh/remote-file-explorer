@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/ui/feedback.dart';
 import 'image_preview.dart';
 import 'pdf_preview.dart';
 import 'text_preview.dart';
@@ -104,9 +105,7 @@ Future<void> openPreview(
   }
 
   if (screen == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No preview available for this file type')),
-    );
+    showInfo(context, 'No preview available for this file type');
     return;
   }
 

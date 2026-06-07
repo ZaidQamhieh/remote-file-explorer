@@ -6,6 +6,7 @@ import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/ui/feedback.dart';
 import 'update_tile.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
@@ -55,7 +56,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _patch({bool? readOnly, List<String>? roots, String? name}) async {
+  Future<void> _patch(
+      {bool? readOnly, List<String>? roots, String? name, String? successMsg}) async {
     final client = _client;
     if (client == null) return;
     final prev = _settings;
@@ -74,12 +76,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         agentName: name,
       );
       setState(() => _settings = updated);
+      if (mounted && successMsg != null) showSuccess(context, successMsg);
     } catch (e) {
       setState(() => _settings = prev); // rollback
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Update failed: $e')));
-      }
+      if (mounted) showError(context, 'Update failed: $e');
     }
   }
 
@@ -89,11 +89,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       await client.revokeDevice(d.id);
       await _load();
+      if (mounted) showSuccess(context, 'Revoked "${d.label}"');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Revoke failed: $e')));
-      }
+      if (mounted) showError(context, 'Revoke failed: $e');
     }
   }
 
@@ -118,7 +116,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (path != null && path.isNotEmpty) {
       final roots = [...?_settings?.roots, path];
-      await _patch(roots: roots);
+      await _patch(roots: roots, successMsg: 'Added $path');
     }
   }
 
@@ -137,7 +135,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
-    if (name != null && name.isNotEmpty) await _patch(name: name);
+    if (name != null && name.isNotEmpty) {
+      await _patch(name: name, successMsg: 'Renamed to $name');
+    }
   }
 
   @override
@@ -209,6 +209,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: const Icon(Icons.remove_circle_outline),
                   onPressed: () => _patch(
                     roots: s.roots.where((x) => x != r).toList(),
+                    successMsg: 'Removed $r',
                   ),
                 ),
               )),

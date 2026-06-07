@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/ui/feedback.dart';
 import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
 
@@ -172,9 +173,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         );
     if (context.mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloading ${_entry.name}…')),
-      );
+      showInfo(context, 'Downloading ${_entry.name}…');
     }
   }
 
@@ -205,17 +204,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       final dst = '$parent/$newName';
       final updated = await widget.client.rename(_entry.path, dst);
       if (mounted) setState(() => _entry = updated);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Renamed to $newName')),
-        );
-      }
+      if (context.mounted) showSuccess(context, 'Renamed to $newName');
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (context.mounted) showError(context, 'Rename failed: $e');
     }
   }
 
@@ -237,19 +228,12 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     );
     if (confirmed != true || !context.mounted) return;
     try {
+      final name = _entry.name;
       await widget.client.delete([_entry.path]);
       if (context.mounted) Navigator.pop(context);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Deleted ${_entry.name}')),
-        );
-      }
+      if (context.mounted) showSuccess(context, 'Deleted $name');
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (context.mounted) showError(context, 'Delete failed: $e');
     }
   }
 

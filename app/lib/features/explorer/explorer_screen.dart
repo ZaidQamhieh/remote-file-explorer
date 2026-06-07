@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -8,6 +9,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
@@ -142,14 +144,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             label: _folderLabel(state.currentPath),
           ),
         );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isFav
-            ? 'Removed from favorites'
-            : 'Added "${_folderLabel(state.currentPath)}" to favorites'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    if (isFav) {
+      showInfo(context, 'Removed from favorites');
+    } else {
+      showSuccess(
+          context, 'Added "${_folderLabel(state.currentPath)}" to favorites');
+    }
   }
 
   void _showFavorites(BuildContext context) {
@@ -255,16 +255,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     try {
       await client.move([dragged.path], destFolder);
       await _notifier.refresh();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Moved ${dragged.name}')),
-        );
-      }
+      if (context.mounted) showSuccess(context, 'Moved ${dragged.name}');
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Move failed: $e')),
-        );
+        showError(context, 'Move failed: $e',
+            onRetry: () => _moveInto(context, client, dragged, destFolder));
       }
     }
   }
@@ -361,9 +356,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         );
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploading ${picked.name}...')),
-      );
+      showInfo(context, 'Uploading ${picked.name}…');
     }
   }
 
@@ -559,6 +552,7 @@ Widget _wrapDraggable({
   }
   tile = LongPressDraggable<Entry>(
     data: entry,
+    onDragStarted: HapticFeedback.mediumImpact,
     feedback: Material(
       elevation: 4,
       borderRadius: BorderRadius.circular(8),
@@ -809,9 +803,8 @@ class _MultiSelectBar extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        showError(context, '${action == 'copy' ? 'Copy' : 'Move'} failed: $e',
+            onRetry: () => _showDestPicker(context, action));
       }
     }
   }
@@ -827,8 +820,8 @@ class _MultiSelectBar extends ConsumerWidget {
         .toList();
     if (!context.mounted) return;
     if (failed.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$successVerb successfully')));
+      final n = results.length;
+      showSuccess(context, '$successVerb $n item${n == 1 ? '' : 's'}');
       return;
     }
     await showDialog<void>(
@@ -874,13 +867,10 @@ class _MultiSelectBar extends ConsumerWidget {
             ),
           );
     }
+    final count = state.selected.length;
     notifier.clearSelection();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text('Queued ${state.selected.length} download(s)')),
-      );
+      showSuccess(context, 'Queued $count download${count == 1 ? '' : 's'}');
     }
   }
 
@@ -908,11 +898,7 @@ class _MultiSelectBar extends ConsumerWidget {
           await _reportBatch(context, res, 'Deleted');
         }
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
-          );
-        }
+        if (context.mounted) showError(context, 'Delete failed: $e');
       }
     }
   }
@@ -980,16 +966,10 @@ class _CreateMenu extends StatelessWidget {
                 } else {
                   await notifier.createFile(name);
                 }
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Created $name')),
-                  );
-                }
+                if (context.mounted) showSuccess(context, 'Created $name');
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
+                  showError(context, 'Couldn\'t create $name: $e');
                 }
               }
             },

@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/ui/feedback.dart';
 
 /// Entry point for pairing a new host. Shows a tab bar with QR scan and
 /// manual-entry options.
@@ -156,6 +157,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
       }
 
       if (mounted) {
+        showSuccess(context, 'Paired with ${host.label}');
         Navigator.of(context).pop(host);
       }
     } on CertPinMismatch catch (e) {
@@ -259,6 +261,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
       }
 
       if (mounted) {
+        showSuccess(context, 'Paired with ${host.label}');
         Navigator.of(context).pop(host);
       }
     } catch (e) {

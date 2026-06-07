@@ -95,7 +95,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       leading: state.atRoot
           ? null
           : BackButton(onPressed: () => _notifier.popDirectory()),
-      title: _BreadcrumbBar(state: state, notifier: _notifier),
+      title: _BreadcrumbBar(
+        state: state,
+        notifier: _notifier,
+        onMoveInto: (dragged, dest) =>
+            _moveInto(context, _client!, dragged, dest),
+      ),
       actions: [
         IconButton(
           icon: const Icon(Icons.search),
@@ -237,9 +242,31 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           onTap: () => _onEntryTap(context, entry, client),
           onLongPress: () => _notifier.toggleSelect(entry.path),
           onSelect: () => _notifier.toggleSelect(entry.path),
+          onMoveInto: (dragged, dest) => _moveInto(context, client, dragged, dest),
         );
       },
     );
+  }
+
+  /// Moves a dragged [dragged] entry into the [destFolder] directory, then
+  /// refreshes the listing and reports the outcome.
+  Future<void> _moveInto(BuildContext context, AgentClient client,
+      Entry dragged, String destFolder) async {
+    try {
+      await client.move([dragged.path], destFolder);
+      await _notifier.refresh();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Moved ${dragged.name}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Move failed: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildGrid(
@@ -262,6 +289,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           multiSelect: state.multiSelect,
           onTap: () => _onEntryTap(context, entry, client),
           onLongPress: () => _notifier.toggleSelect(entry.path),
+          onMoveInto: (dragged, dest) => _moveInto(context, client, dragged, dest),
         );
       },
     );
@@ -352,9 +380,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 // ---------------------------------------------------------------------------
 
 class _BreadcrumbBar extends StatelessWidget {
-  const _BreadcrumbBar({required this.state, required this.notifier});
+  const _BreadcrumbBar({
+    required this.state,
+    required this.notifier,
+    this.onMoveInto,
+  });
   final ExplorerState state;
   final ExplorerNotifier notifier;
+  final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
 
   @override
   Widget build(BuildContext context) {
@@ -365,23 +398,44 @@ class _BreadcrumbBar extends StatelessWidget {
         children: List.generate(stack.length, (i) {
           final label =
               i == 0 ? '/' : stack[i].split(RegExp(r'[/\\]')).last;
+          final crumb = GestureDetector(
+            onTap: () => notifier.navigateTo(i),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: i == stack.length - 1
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                decoration: i < stack.length - 1
+                    ? TextDecoration.underline
+                    : null,
+              ),
+            ),
+          );
           return Row(
             children: [
               if (i > 0) const Icon(Icons.chevron_right, size: 16),
-              GestureDetector(
-                onTap: () => notifier.navigateTo(i),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: i == stack.length - 1
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    decoration: i < stack.length - 1
-                        ? TextDecoration.underline
+              if (onMoveInto != null)
+                DragTarget<Entry>(
+                  onWillAcceptWithDetails: (d) => d.data.path != stack[i],
+                  onAcceptWithDetails: (d) =>
+                      onMoveInto!(d.data, stack[i]),
+                  builder: (ctx, cand, rej) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: cand.isNotEmpty
+                        ? BoxDecoration(
+                            color: Theme.of(ctx)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(6),
+                          )
                         : null,
+                    child: crumb,
                   ),
-                ),
-              ),
+                )
+              else
+                crumb,
             ],
           );
         }),
@@ -446,6 +500,7 @@ class _EntryListTile extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     required this.onSelect,
+    this.onMoveInto,
   });
 
   final Entry entry;
@@ -454,10 +509,11 @@ class _EntryListTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onSelect;
+  final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    Widget tile = ListTile(
       leading: multiSelect
           ? Checkbox(value: selected, onChanged: (_) => onSelect())
           : _EntryIcon(entry: entry),
@@ -473,7 +529,78 @@ class _EntryListTile extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
     );
+    return _wrapDraggable(
+      context: context,
+      entry: entry,
+      multiSelect: multiSelect,
+      onMoveInto: onMoveInto,
+      child: tile,
+    );
   }
+}
+
+/// Wraps an entry [child] so it can be long-press dragged and (for folders)
+/// act as a drop target that moves the dropped entry into itself. In
+/// multi-select mode dragging is disabled to avoid clashing with tap-to-toggle.
+Widget _wrapDraggable({
+  required BuildContext context,
+  required Entry entry,
+  required bool multiSelect,
+  required Future<void> Function(Entry dragged, String destFolder)? onMoveInto,
+  required Widget child,
+}) {
+  Widget tile = child;
+  if (multiSelect || onMoveInto == null) {
+    // Selection mode (or no move handler): keep tap-to-toggle, skip drag.
+    if (entry.isDir && onMoveInto != null) {
+      return _folderDropTarget(context, entry, onMoveInto, tile);
+    }
+    return tile;
+  }
+  tile = LongPressDraggable<Entry>(
+    data: entry,
+    feedback: Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.drag_indicator),
+          const SizedBox(width: 4),
+          Text(entry.name),
+        ]),
+      ),
+    ),
+    childWhenDragging: Opacity(opacity: 0.4, child: tile),
+    child: tile,
+  );
+  if (entry.isDir) {
+    tile = _folderDropTarget(context, entry, onMoveInto, tile);
+  }
+  return tile;
+}
+
+/// A [DragTarget] that accepts an [Entry] dragged onto the folder [entry] and
+/// moves it in, highlighting while a candidate hovers.
+Widget _folderDropTarget(
+  BuildContext context,
+  Entry entry,
+  Future<void> Function(Entry dragged, String destFolder) onMoveInto,
+  Widget child,
+) {
+  return DragTarget<Entry>(
+    onWillAcceptWithDetails: (d) => d.data.path != entry.path,
+    onAcceptWithDetails: (d) => onMoveInto(d.data, entry.path),
+    builder: (ctx, cand, rej) => Container(
+      decoration: cand.isNotEmpty
+          ? BoxDecoration(
+              color: Theme.of(ctx).colorScheme.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+            )
+          : null,
+      child: child,
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +615,7 @@ class _EntryGridCell extends StatelessWidget {
     required this.multiSelect,
     required this.onTap,
     required this.onLongPress,
+    this.onMoveInto,
   });
 
   final Entry entry;
@@ -496,13 +624,14 @@ class _EntryGridCell extends StatelessWidget {
   final bool multiSelect;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
 
   @override
   Widget build(BuildContext context) {
     final mime = entry.mimeType ?? '';
     final isImage = !entry.isDir && mime.startsWith('image/');
 
-    return GestureDetector(
+    final cell = GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
       child: Container(
@@ -544,6 +673,14 @@ class _EntryGridCell extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    return _wrapDraggable(
+      context: context,
+      entry: entry,
+      multiSelect: multiSelect,
+      onMoveInto: onMoveInto,
+      child: cell,
     );
   }
 }

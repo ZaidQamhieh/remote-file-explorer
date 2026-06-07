@@ -20,10 +20,12 @@ type pairRequest struct {
 }
 
 type pairResponse struct {
-	DeviceToken     string `json:"deviceToken"`
-	DeviceID        string `json:"deviceId"`
-	AgentName       string `json:"agentName"`
-	CertFingerprint string `json:"certFingerprint"`
+	DeviceToken      string `json:"deviceToken"`
+	DeviceID         string `json:"deviceId"`
+	AgentName        string `json:"agentName"`
+	CertFingerprint  string `json:"certFingerprint"`
+	Address          string `json:"address"`
+	TailscaleAddress string `json:"tailscaleAddress,omitempty"`
 }
 
 func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc {
@@ -54,10 +56,12 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc
 		}
 
 		writeJSON(w, http.StatusOK, pairResponse{
-			DeviceToken:     token,
-			DeviceID:        deviceID,
-			AgentName:       cfg.Name,
-			CertFingerprint: cfg.CertFingerprint,
+			DeviceToken:      token,
+			DeviceID:         deviceID,
+			AgentName:        cfg.Name,
+			CertFingerprint:  cfg.CertFingerprint,
+			Address:          cfg.Address,
+			TailscaleAddress: cfg.TailscaleAddress,
 		})
 	}
 }

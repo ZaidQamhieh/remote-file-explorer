@@ -17,12 +17,13 @@ import (
 
 // Config holds the runtime settings the server needs.
 type Config struct {
-	Name            string
-	Version         string
-	ReadOnly        bool
-	CertFingerprint string
-	Address         string // LAN address used in QR payload
-	AllowedRoots    []string
+	Name             string
+	Version          string
+	ReadOnly         bool
+	CertFingerprint  string
+	Address          string // LAN address used in QR payload / health response
+	TailscaleAddress string // Tailscale address, if detected
+	AllowedRoots     []string
 }
 
 // New builds the v1 router and wires all routes.
@@ -99,12 +100,17 @@ func notImplementedHandler(w http.ResponseWriter, _ *http.Request) {
 
 func healthHandler(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Surfacing the agent's known addresses lets an already-paired app
+		// learn the Tailscale (or LAN) address it didn't capture at pairing
+		// time, simply by reaching the agent successfully via either one.
 		writeJSON(w, http.StatusOK, map[string]any{
-			"status":   "ok",
-			"name":     cfg.Name,
-			"version":  cfg.Version,
-			"os":       runtime.GOOS,
-			"readOnly": cfg.ReadOnly,
+			"status":           "ok",
+			"name":             cfg.Name,
+			"version":          cfg.Version,
+			"os":               runtime.GOOS,
+			"readOnly":         cfg.ReadOnly,
+			"address":          cfg.Address,
+			"tailscaleAddress": cfg.TailscaleAddress,
 		})
 	}
 }

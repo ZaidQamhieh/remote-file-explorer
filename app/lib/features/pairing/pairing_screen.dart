@@ -142,6 +142,10 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
         label: resp.agentName,
         address: address,
         certFingerprint: capturedFp ?? resp.certFingerprint,
+        // The agent reports both addresses it knows about itself, so the
+        // host is immediately reachable both at home (LAN) and away
+        // (Tailscale) — no separate "add as second host" step needed.
+        tailscaleAddress: resp.tailscaleAddress,
       );
 
       final store = await ref.read(hostStoreProvider.future);
@@ -244,6 +248,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
         label: resp.agentName,
         address: _addressCtrl.text.trim(),
         certFingerprint: capturedFp ?? resp.certFingerprint,
+        tailscaleAddress: resp.tailscaleAddress,
       );
 
       final store = await ref.read(hostStoreProvider.future);

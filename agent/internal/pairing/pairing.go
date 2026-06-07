@@ -33,17 +33,19 @@ type Manager struct {
 
 // QRPayload is the JSON embedded in the QR code.
 type QRPayload struct {
-	Address         string `json:"address"`
-	CertFingerprint string `json:"certFingerprint"`
-	PairingCode     string `json:"pairingCode"`
+	Address          string `json:"address"`
+	TailscaleAddress string `json:"tailscaleAddress,omitempty"`
+	CertFingerprint  string `json:"certFingerprint"`
+	PairingCode      string `json:"pairingCode"`
 }
 
 // New creates a Manager, generates the first code, and logs/prints the QR.
-// address is the LAN address of the agent (e.g. "192.168.1.5:8765").
+// lanAddress is the agent's LAN-reachable address (e.g. "192.168.1.5:8765");
+// tailscaleAddress is its Tailscale-reachable address, or "" if unknown.
 // fingerprint is the TLS cert's SHA-256 hex.
-func New(address, fingerprint string) (*Manager, error) {
+func New(lanAddress, tailscaleAddress, fingerprint string) (*Manager, error) {
 	m := &Manager{}
-	if err := m.rotate(address, fingerprint); err != nil {
+	if err := m.rotate(lanAddress, tailscaleAddress, fingerprint); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -68,7 +70,7 @@ func (m *Manager) Consume(code string) bool {
 }
 
 // rotate generates a new code and prints it.
-func (m *Manager) rotate(address, fingerprint string) error {
+func (m *Manager) rotate(lanAddress, tailscaleAddress, fingerprint string) error {
 	code, err := randomCode(codeLen)
 	if err != nil {
 		return err
@@ -79,9 +81,10 @@ func (m *Manager) rotate(address, fingerprint string) error {
 	m.mu.Unlock()
 
 	payload := QRPayload{
-		Address:         address,
-		CertFingerprint: fingerprint,
-		PairingCode:     code,
+		Address:          lanAddress,
+		TailscaleAddress: tailscaleAddress,
+		CertFingerprint:  fingerprint,
+		PairingCode:      code,
 	}
 	payloadJSON, _ := json.Marshal(payload)
 

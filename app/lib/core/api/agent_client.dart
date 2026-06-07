@@ -41,7 +41,8 @@ class AgentApiException implements Exception {
 /// pairing for the first time (trust on first use) and the caller captures the
 /// fingerprint via [lastSeenFingerprint].
 class AgentClient {
-  AgentClient(this.host, {String? deviceToken}) {
+  AgentClient(this.host, {String? deviceToken})
+      : _addresses = host.addresses {
     final adapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
@@ -57,19 +58,53 @@ class AgentClient {
       },
     );
 
+    // Start from whichever address worked last time for this host (e.g. LAN
+    // at home, Tailscale away) so reconnects don't pay the fallback latency.
+    _addrIndex = (_lastGoodAddrIndex[host.id] ?? 0).clamp(0, _addresses.length - 1);
+
     _dio = Dio(
       BaseOptions(
-        baseUrl: host.baseUri.toString(),
+        baseUrl: _baseUrlFor(_addresses[_addrIndex]),
         connectTimeout: const Duration(seconds: 10),
         headers: deviceToken == null
             ? null
             : {'Authorization': 'Bearer $deviceToken'},
       ),
     )..httpClientAdapter = adapter;
+
+    // Dual-address fallback: if the active address is unreachable (e.g. the
+    // LAN address while we're away from home), retry the same request against
+    // the next candidate (typically the Tailscale address) and, on success,
+    // stick with it for the rest of this client's life.
+    _dio.interceptors.add(InterceptorsWrapper(onError: (e, handler) async {
+      final isConnectionFailure = e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout;
+      if (!isConnectionFailure || _addrIndex + 1 >= _addresses.length) {
+        return handler.next(e);
+      }
+      _addrIndex++;
+      final newBase = _baseUrlFor(_addresses[_addrIndex]);
+      _dio.options.baseUrl = newBase;
+      try {
+        final retried = await _dio.fetch(e.requestOptions..baseUrl = newBase);
+        _lastGoodAddrIndex[host.id] = _addrIndex;
+        return handler.resolve(retried);
+      } on DioException catch (e2) {
+        return handler.next(e2);
+      }
+    }));
   }
+
+  static String _baseUrlFor(String address) => 'https://$address/v1';
+
+  /// Remembers, per host id, which candidate address last succeeded — so the
+  /// next [AgentClient] for that host starts there instead of probing again.
+  static final Map<String, int> _lastGoodAddrIndex = {};
 
   final Host host;
   late final Dio _dio;
+  late final List<String> _addresses;
+  late int _addrIndex;
 
   /// Fingerprint observed on the most recent TLS handshake (for TOFU capture).
   String? lastSeenFingerprint;

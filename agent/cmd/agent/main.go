@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/netinfo"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/server"
@@ -44,6 +46,9 @@ func main() {
 	fingerprint := security.Fingerprint(cert)
 	log.Printf("agent %q  cert-fingerprint=%s", *name, fingerprint)
 
+	lanAddr, tsAddr := reachableAddresses(*addr)
+	log.Printf("reachable at  lan=%s  tailscale=%s", orNone(lanAddr), orNone(tsAddr))
+
 	db, err := store.Open(*dataDir)
 	if err != nil {
 		log.Fatalf("store: %v", err)
@@ -56,7 +61,7 @@ func main() {
 		log.Fatalf("transfer: %v", err)
 	}
 
-	pm, err := pairing.New(*addr, fingerprint)
+	pm, err := pairing.New(lanAddr, tsAddr, fingerprint)
 	if err != nil {
 		log.Fatalf("pairing: %v", err)
 	}
@@ -72,12 +77,13 @@ func main() {
 	}
 
 	handler := server.New(server.Config{
-		Name:            *name,
-		Version:         version,
-		ReadOnly:        *readOnly,
-		CertFingerprint: fingerprint,
-		Address:         *addr,
-		AllowedRoots:    allowedRoots,
+		Name:             *name,
+		Version:          version,
+		ReadOnly:         *readOnly,
+		CertFingerprint:  fingerprint,
+		Address:          lanAddr,
+		TailscaleAddress: tsAddr,
+		AllowedRoots:     allowedRoots,
 	}, db, pm, tm)
 
 	srv := &http.Server{
@@ -124,4 +130,34 @@ func defaultDataDir() string {
 		return ".rfe-agent"
 	}
 	return filepath.Join(dir, "remote-file-explorer")
+}
+
+// reachableAddresses turns the listen address into the concrete host:port
+// pairs the phone can actually dial. If the user bound to a specific host
+// (e.g. "192.168.1.5:8765") that's trusted as-is and treated as the LAN
+// address; a wildcard bind ("0.0.0.0:8765", ":8765") is resolved to the
+// machine's real LAN and Tailscale IPs via netinfo.
+func reachableAddresses(listenAddr string) (lan, tailscale string) {
+	host, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return "", ""
+	}
+	if host != "" && host != "0.0.0.0" && host != "::" {
+		return listenAddr, ""
+	}
+	lanIP, tsIP := netinfo.LocalAddresses()
+	if lanIP != "" {
+		lan = net.JoinHostPort(lanIP, port)
+	}
+	if tsIP != "" {
+		tailscale = net.JoinHostPort(tsIP, port)
+	}
+	return lan, tailscale
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "(none detected)"
+	}
+	return s
 }

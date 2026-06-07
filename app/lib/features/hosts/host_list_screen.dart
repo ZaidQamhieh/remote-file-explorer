@@ -103,10 +103,25 @@ class _HostCardState extends ConsumerState<_HostCard> {
     try {
       final token = await widget.store.getToken(widget.host.id);
       final client = AgentClient(widget.host, deviceToken: token);
-      return await client.health().timeout(const Duration(seconds: 5));
+      final health = await client.health().timeout(const Duration(seconds: 5));
+      await _learnAddresses(health);
+      return health;
     } catch (_) {
       return null;
     }
+  }
+
+  /// Adopts any LAN/Tailscale address the agent reports that we don't already
+  /// know, so a host paired before Wave 2 (or paired only via one network)
+  /// gradually learns to be reachable both at home and away.
+  Future<void> _learnAddresses(Health health) async {
+    final learnedTailscale = health.tailscaleAddress;
+    if (learnedTailscale == null) return;
+    if (learnedTailscale == widget.host.tailscaleAddress) return;
+    if (learnedTailscale == widget.host.address) return;
+
+    final updated = widget.host.copyWith(tailscaleAddress: learnedTailscale);
+    await widget.store.addHost(updated);
   }
 
   Future<void> _openExplorer(BuildContext context) async {
@@ -162,13 +177,16 @@ class _HostCardState extends ConsumerState<_HostCard> {
                     Text(widget.host.label,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 2),
-                    Text(widget.host.address,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(
-                                color:
-                                    Theme.of(context).colorScheme.outline)),
+                    Text(
+                      widget.host.tailscaleAddress != null
+                          ? '${widget.host.address}  ·  ${widget.host.tailscaleAddress} (Tailscale)'
+                          : widget.host.address,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),

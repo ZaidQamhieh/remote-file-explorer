@@ -1,10 +1,9 @@
 import 'dart:io';
 
-import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -18,9 +17,11 @@ import '../../core/update/update_service.dart';
 /// with clear feedback at every stage. Hidden on non-Android platforms.
 ///
 /// Flow: tap → check → (if newer) a progress dialog downloads the APK with a
-/// live percentage, then hands it to Android's package installer. The installer
-/// runs in the system UI, so completion is confirmed when the app resumes by
-/// re-reading the installed build number.
+/// live percentage, then hands it to Android's package installer via a native
+/// FileProvider intent (MainActivity.installApk). The installer runs in the
+/// system UI — including any "install unknown apps" permission prompt — so
+/// completion is confirmed when the app resumes by re-reading the installed
+/// build number.
 class UpdateTile extends ConsumerStatefulWidget {
   const UpdateTile({super.key, required this.host});
   final Host host;
@@ -31,6 +32,9 @@ class UpdateTile extends ConsumerStatefulWidget {
 
 class _UpdateTileState extends ConsumerState<UpdateTile>
     with WidgetsBindingObserver {
+  // Native channel into MainActivity (shared with the downloads helper).
+  static const _platform = MethodChannel('rfe/downloads');
+
   String _status = '';
   bool _busy = false;
   bool _statusIsError = false;
@@ -127,8 +131,6 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
           release: rel,
           apk: apk,
           onLaunchInstaller: _launchInstaller,
-          onOpenPermissionSettings: () =>
-              _openUnknownSourcesSettings(info.packageName),
         ),
       );
 
@@ -152,24 +154,12 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     }
   }
 
-  /// Hands the APK to Android's package installer. Records that an install was
-  /// launched so the resume handler can confirm the outcome.
-  Future<OpenResult> _launchInstaller(File apk) async {
+  /// Hands the APK to Android's package installer through the native channel.
+  /// Records that an install was launched so the resume handler can confirm the
+  /// outcome. Throws on failure (handled by the caller).
+  Future<void> _launchInstaller(File apk) async {
     _installLaunched = true;
-    return OpenFilex.open(
-      apk.path,
-      type: 'application/vnd.android.package-archive',
-    );
-  }
-
-  /// Opens the per-app "Install unknown apps" settings page so the user can
-  /// grant permission, then return and retry.
-  Future<void> _openUnknownSourcesSettings(String appId) async {
-    final intent = AndroidIntent(
-      action: 'android.settings.MANAGE_UNKNOWN_APP_SOURCES',
-      data: 'package:$appId',
-    );
-    await intent.launch();
+    await _platform.invokeMethod<void>('installApk', {'path': apk.path});
   }
 
   @override
@@ -207,7 +197,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
 // Progress dialog
 // ---------------------------------------------------------------------------
 
-enum _Stage { downloading, opening, permissionDenied, error }
+enum _Stage { downloading, opening, error }
 
 /// Modal dialog that downloads the APK (with a live percentage) and hands it to
 /// the installer, surfacing a clear result for every outcome.
@@ -217,14 +207,12 @@ class _UpdateProgressDialog extends StatefulWidget {
     required this.release,
     required this.apk,
     required this.onLaunchInstaller,
-    required this.onOpenPermissionSettings,
   });
 
   final AgentClient client;
   final AppRelease release;
   final File apk;
-  final Future<OpenResult> Function(File apk) onLaunchInstaller;
-  final Future<void> Function() onOpenPermissionSettings;
+  final Future<void> Function(File apk) onLaunchInstaller;
 
   @override
   State<_UpdateProgressDialog> createState() => _UpdateProgressDialogState();
@@ -273,23 +261,19 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
 
   Future<void> _install() async {
     setState(() => _stage = _Stage.opening);
-    final result = await widget.onLaunchInstaller(widget.apk);
-    if (!mounted) return;
-    switch (result.type) {
-      case ResultType.done:
-        // Installer opened in the system UI — close; the tile confirms on resume.
-        Navigator.of(context).pop();
-      case ResultType.permissionDenied:
-        setState(() => _stage = _Stage.permissionDenied);
-      case ResultType.noAppToOpen:
-      case ResultType.fileNotFound:
-      case ResultType.error:
-        setState(() {
-          _stage = _Stage.error;
-          _errorMsg = result.message.isEmpty
-              ? 'Could not open the installer.'
-              : result.message;
-        });
+    try {
+      await widget.onLaunchInstaller(widget.apk);
+      if (!mounted) return;
+      // Installer opened in the system UI — close; the tile confirms on resume.
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _stage = _Stage.error;
+        _errorMsg = e is PlatformException
+            ? (e.message ?? 'Could not open the installer.')
+            : '$e';
+      });
     }
   }
 
@@ -304,9 +288,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   Widget build(BuildContext context) {
     final v = widget.release.versionName;
     return AlertDialog(
-      title: Text(_stage == _Stage.permissionDenied
-          ? 'Permission needed'
-          : 'Updating to v$v'),
+      title: Text('Updating to v$v'),
       content: _buildContent(context),
       actions: _buildActions(context),
     );
@@ -337,12 +319,6 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
             Expanded(child: Text('Opening installer…')),
           ],
         );
-      case _Stage.permissionDenied:
-        return const Text(
-          'Android needs permission to let this app install updates. '
-          'Open settings, enable "Allow from this source", then come back '
-          'and tap Retry.',
-        );
       case _Stage.error:
         return Text(_errorMsg ?? 'Something went wrong.');
     }
@@ -356,23 +332,6 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
-          ),
-        ];
-      case _Stage.permissionDenied:
-        return [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () async {
-              await widget.onOpenPermissionSettings();
-            },
-            child: const Text('Open settings'),
-          ),
-          FilledButton(
-            onPressed: _install,
-            child: const Text('Retry'),
           ),
         ];
       case _Stage.error:

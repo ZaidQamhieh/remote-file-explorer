@@ -3,10 +3,10 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Camera for scanning the pairing QR code. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <!-- In-app updater: open the downloaded APK so Android's package installer
-         launches. open_filex ships its own FileProvider
-         (${applicationId}.fileProvider.com.crazecoder.openfile), so no custom
-         provider is declared here. -->
+    <!-- In-app updater: hand the downloaded APK to Android's package installer
+         via our own FileProvider + ACTION_VIEW (see MainActivity.installApk).
+         The system installer manages the "install unknown apps" permission
+         natively, which is reliable on Android 16 (unlike a Dart-side check). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="Remote File Explorer"
@@ -34,6 +34,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- FileProvider used by the in-app updater to grant the system
+             installer read access to the downloaded APK. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

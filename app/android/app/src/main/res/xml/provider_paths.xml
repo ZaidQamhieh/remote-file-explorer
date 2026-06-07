@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paths the updater's FileProvider may share with the system installer.
+     The downloaded APK lives in the app's external cache
+     (getExternalCacheDirectories) — external-cache-path covers that. The others
+     are included for robustness across devices. -->
+<paths>
+    <external-cache-path name="external_cache" path="." />
+    <cache-path name="cache" path="." />
+    <external-path name="external" path="." />
+    <files-path name="files" path="." />
+</paths>

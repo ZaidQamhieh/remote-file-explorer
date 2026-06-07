@@ -758,7 +758,15 @@ class _MultiSelectBar extends ConsumerWidget {
               tooltip: 'Deselect all',
               onPressed: notifier.clearSelection,
             ),
-            Text('${state.selected.length} selected'),
+            TextButton.icon(
+              onPressed: state.selected.length == state.entries.length
+                  ? notifier.clearSelection
+                  : notifier.selectAll,
+              icon: Icon(state.selected.length == state.entries.length
+                  ? Icons.deselect
+                  : Icons.select_all),
+              label: Text('${state.selected.length}/${state.entries.length}'),
+            ),
             IconButton(
               icon: const Icon(Icons.copy),
               tooltip: 'Copy',
@@ -792,17 +800,12 @@ class _MultiSelectBar extends ConsumerWidget {
     );
     if (dest == null || !context.mounted) return;
     try {
-      if (action == 'copy') {
-        await notifier.copySelected(dest);
-      } else {
-        await notifier.moveSelected(dest);
-      }
+      final res = action == 'copy'
+          ? await notifier.copySelected(dest)
+          : await notifier.moveSelected(dest);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  '${action == 'copy' ? 'Copied' : 'Moved'} successfully')),
-        );
+        await _reportBatch(
+            context, res, action == 'copy' ? 'Copied' : 'Moved');
       }
     } catch (e) {
       if (context.mounted) {
@@ -811,6 +814,50 @@ class _MultiSelectBar extends ConsumerWidget {
         );
       }
     }
+  }
+
+  /// Inspects a batch operation [res] for per-item failures and either shows a
+  /// success snackbar or a dialog listing the failed items.
+  Future<void> _reportBatch(BuildContext context, Map<String, dynamic> res,
+      String successVerb) async {
+    final results = (res['results'] as List?) ?? const [];
+    final failed = results
+        .whereType<Map>()
+        .where((r) => r['ok'] == false)
+        .toList();
+    if (!context.mounted) return;
+    if (failed.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$successVerb successfully')));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$successVerb with ${failed.length} error(s)'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: failed.map((f) {
+              final err = f['error'];
+              final msg = err is Map
+                  ? (err['message'] ?? err['code'] ?? 'failed')
+                  : 'failed';
+              return ListTile(
+                dense: true,
+                title: Text('${f['path'] ?? '?'}'),
+                subtitle: Text('$msg'),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
   }
 
   Future<void> _downloadSelected(
@@ -856,11 +903,9 @@ class _MultiSelectBar extends ConsumerWidget {
     );
     if (confirmed == true) {
       try {
-        await notifier.deleteSelected();
+        final res = await notifier.deleteSelected();
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Deleted')),
-          );
+          await _reportBatch(context, res, 'Deleted');
         }
       } catch (e) {
         if (context.mounted) {

@@ -237,19 +237,23 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
     await _load();
   }
 
-  Future<void> deleteSelected({bool permanent = false}) async {
-    await arg.client.delete(state.selected.toList(), permanent: permanent);
+  Future<Map<String, dynamic>> deleteSelected({bool permanent = false}) async {
+    final res =
+        await arg.client.delete(state.selected.toList(), permanent: permanent);
     await _load();
+    return res;
   }
 
-  Future<void> moveSelected(String destDir) async {
-    await arg.client.move(state.selected.toList(), destDir);
+  Future<Map<String, dynamic>> moveSelected(String destDir) async {
+    final res = await arg.client.move(state.selected.toList(), destDir);
     await _load();
+    return res;
   }
 
-  Future<void> copySelected(String destDir) async {
-    await arg.client.copy(state.selected.toList(), destDir);
+  Future<Map<String, dynamic>> copySelected(String destDir) async {
+    final res = await arg.client.copy(state.selected.toList(), destDir);
     await _load();
+    return res;
   }
 }
 

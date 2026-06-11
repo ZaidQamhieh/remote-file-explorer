@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -182,5 +183,103 @@ func TestDeleteDeviceRemovesRow(t *testing.T) {
 	}
 	if len(list) != 0 {
 		t.Fatalf("expected device removed, got %d rows", len(list))
+	}
+}
+
+// TestOpenEnablesWAL verifies the DSN params from Open actually take effect:
+// modernc.org/sqlite only honors `_pragma=...` query params, so the
+// mattn-style `_journal_mode`/`_busy_timeout` keys would otherwise be
+// silently ignored and the database would stay in its default journal mode.
+func TestOpenEnablesWAL(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	var mode string
+	if err := db.db.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil {
+		t.Fatalf("query journal_mode: %v", err)
+	}
+	if mode != "wal" {
+		t.Fatalf("expected journal_mode=wal, got %q", mode)
+	}
+
+	var busyTimeout int
+	if err := db.db.QueryRow(`PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatalf("query busy_timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("expected busy_timeout=5000, got %d", busyTimeout)
+	}
+}
+
+// TestMarkChunkReceivedConcurrent reproduces the lost-update race: many
+// goroutines each mark a distinct chunk received concurrently. Without a
+// transaction around the read-modify-write of received_chunks, concurrent
+// writers can clobber each other's updates and some chunks go unrecorded.
+func TestMarkChunkReceivedConcurrent(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	const n = 32
+	tr := &Transfer{
+		ID:          "transfer-1",
+		TargetPath:  "/tmp/whatever",
+		TotalSize:   int64(n) * 1024,
+		ChunkSize:   1024,
+		SHA256:      "deadbeef",
+		TempPath:    "/tmp/whatever.tmp",
+		TotalChunks: n,
+	}
+	if err := db.CreateTransfer(tr); err != nil {
+		t.Fatalf("create transfer: %v", err)
+	}
+
+	const workers = 8
+	var wg sync.WaitGroup
+	chunkCh := make(chan int, n)
+	for i := 0; i < n; i++ {
+		chunkCh <- i
+	}
+	close(chunkCh)
+
+	errCh := make(chan error, workers)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for chunk := range chunkCh {
+				if err := db.MarkChunkReceived(tr.ID, chunk); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("MarkChunkReceived: %v", err)
+	}
+
+	got, err := db.GetTransfer(tr.ID)
+	if err != nil {
+		t.Fatalf("get transfer: %v", err)
+	}
+	if len(got.ReceivedChunks) != n {
+		t.Fatalf("expected %d received chunks, got %d: %v", n, len(got.ReceivedChunks), got.ReceivedChunks)
+	}
+	seen := make(map[int]bool, n)
+	for _, c := range got.ReceivedChunks {
+		seen[c] = true
+	}
+	for i := 0; i < n; i++ {
+		if !seen[i] {
+			t.Fatalf("chunk %d missing from received_chunks: %v", i, got.ReceivedChunks)
+		}
 	}
 }

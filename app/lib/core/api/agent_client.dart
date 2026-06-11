@@ -37,6 +37,23 @@ class AgentApiException implements Exception {
   String toString() => 'AgentApiException($statusCode): $code — $message';
 }
 
+/// Thrown by [AgentClient.downloadFile] when a resumed download (a Range
+/// request with `startByte > 0`) was answered with a full `200 OK` instead
+/// of a `206 Partial Content`.
+///
+/// This means the server ignored (or didn't honor) the `Range` header and
+/// streamed the *entire* file, which — combined with append-mode writing —
+/// would have produced a corrupted local file (stale partial bytes followed
+/// by the full file). [downloadFile] deletes the partial file before
+/// throwing this; callers should restart the download from scratch
+/// (`startByte = 0`).
+class RangeNotSatisfiedException implements Exception {
+  @override
+  String toString() =>
+      'RangeNotSatisfiedException: server returned full content for a '
+      'ranged request; partial file deleted, restart from 0';
+}
+
 /// HTTPS client for a single host agent.
 ///
 /// The agent uses a self-signed certificate, so standard CA validation is
@@ -99,6 +116,13 @@ class AgentClient {
     }));
   }
 
+  /// Releases the underlying HTTP client's connections.
+  ///
+  /// Safe to call multiple times. Callers that create short-lived
+  /// [AgentClient]s (e.g. one per transfer attempt) should call this once the
+  /// client is no longer needed so idle sockets don't linger.
+  void close() => _dio.close(force: true);
+
   static String _baseUrlFor(String address) => 'https://$address/v1';
 
   /// Remembers, per host id, which candidate address last succeeded — so the
@@ -151,6 +175,17 @@ class AgentClient {
       'UNKNOWN',
       e.message ?? e.toString(),
     );
+  }
+
+  /// Converts [e] to an [AgentApiException] and throws it — *unless* [e] is
+  /// a cancellation (from a [CancelToken] passed in by the caller), in which
+  /// case the original [DioException] is rethrown unchanged so callers can
+  /// distinguish "user paused/canceled" from a real API/network failure.
+  static Never _throwTransferError(DioException e) {
+    if (e.type == DioExceptionType.cancel) {
+      throw e;
+    }
+    throw _apiError(e);
   }
 
   Future<T> _get<T>(
@@ -417,7 +452,14 @@ class AgentClient {
   /// as bytes received / total bytes.
   ///
   /// Supports HTTP Range resumption: pass [startByte] to skip already-received
-  /// data (set to 0 or omit for a fresh download).
+  /// data (set to 0 or omit for a fresh download). When resuming, bytes are
+  /// *appended* to [localFile] (it must already contain exactly [startByte]
+  /// bytes); a fresh download (`startByte == 0`) overwrites/truncates it.
+  ///
+  /// If the server responds to a ranged request (`startByte > 0`) with a
+  /// full `200 OK` instead of `206 Partial Content`, the partial file is
+  /// deleted and [RangeNotSatisfiedException] is thrown so the caller can
+  /// restart the download from scratch.
   Future<void> downloadFile({
     required String remotePath,
     required File localFile,
@@ -430,17 +472,30 @@ class AgentClient {
       if (startByte > 0) {
         headers['Range'] = 'bytes=$startByte-';
       }
-      await _dio.download(
+      final response = await _dio.download(
         '/content',
         localFile.path,
         queryParameters: {'path': remotePath},
         options: Options(headers: headers, responseType: ResponseType.stream),
         deleteOnError: false,
         cancelToken: cancelToken,
+        fileAccessMode:
+            startByte > 0 ? FileAccessMode.append : FileAccessMode.write,
         onReceiveProgress: onProgress,
       );
+
+      if (startByte > 0 && response.statusCode != 206) {
+        // Server ignored our Range header and sent the full file, which we
+        // just appended onto the existing partial — the file is now
+        // corrupt (stale bytes + full file). Delete it and signal the
+        // caller to restart from 0.
+        if (await localFile.exists()) {
+          await localFile.delete();
+        }
+        throw RangeNotSatisfiedException();
+      }
     } on DioException catch (e) {
-      throw _apiError(e);
+      _throwTransferError(e);
     }
   }
 
@@ -518,14 +573,14 @@ class AgentClient {
             'Content-Range': contentRange,
             'X-Chunk-Sha256': chunkSha256,
             'Content-Type': 'application/octet-stream',
+            Headers.contentLengthHeader: data.length,
           },
-          requestEncoder: (_, __) => data,
         ),
         onSendProgress: onProgress,
         cancelToken: cancelToken,
       );
     } on DioException catch (e) {
-      throw _apiError(e);
+      _throwTransferError(e);
     }
   }
 

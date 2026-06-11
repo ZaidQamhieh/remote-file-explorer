@@ -53,6 +53,11 @@ func downloadHandler(ops *fsops.Ops) http.HandlerFunc {
 	}
 }
 
+// maxChunkSize caps the client-chosen chunkSize for an upload session.
+// Chunks are buffered fully in memory (see uploadChunkHandler), so an
+// unbounded chunkSize would let a client force large allocations.
+const maxChunkSize = 32 * 1024 * 1024 // 32 MiB
+
 // --------- POST /transfers ---------
 
 func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc {
@@ -70,6 +75,10 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 		}
 		if req.Path == "" || req.SHA256 == "" || req.ChunkSize <= 0 {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path, sha256, and chunkSize required")
+			return
+		}
+		if req.ChunkSize > maxChunkSize {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "chunkSize exceeds maximum of 32MiB")
 			return
 		}
 		// Validate path is in jail.
@@ -124,8 +133,26 @@ func uploadChunkHandler(tm *transfer.Manager) http.HandlerFunc {
 			return
 		}
 
+		t, err := tm.Status(id)
+		if err != nil {
+			if errors.Is(err, transfer.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+
+		// Cap the request body to the session's chunk size. The final chunk
+		// may be smaller, which is fine since this is just an upper bound.
+		r.Body = http.MaxBytesReader(w, r.Body, int64(t.ChunkSize))
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "chunk exceeds session chunk size")
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to read body")
 			return
 		}

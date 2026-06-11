@@ -91,11 +91,9 @@ func (o *Ops) Resolve(p string) (string, error) {
 	}
 	clean := filepath.Clean(p)
 
-	// Evaluate symlinks if the path exists.
-	real, err := filepath.EvalSymlinks(clean)
+	real, err := resolveReal(clean)
 	if err != nil {
-		// Path doesn't exist yet (e.g. create operations) — use the cleaned path.
-		real = clean
+		return "", err
 	}
 
 	roots := o.settings.Roots()
@@ -109,6 +107,58 @@ func (o *Ops) Resolve(p string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%w: %s", ErrForbidden, p)
+}
+
+// resolveReal returns the symlink-free form of a cleaned, absolute path.
+//
+// If the path exists it is simply EvalSymlinks'd. If it (or any part of it)
+// doesn't exist yet — e.g. create/rename/upload destinations — symlinks are
+// resolved on the deepest existing ancestor only, and the non-existent
+// suffix is re-joined onto that resolved ancestor. This prevents a symlink
+// placed inside the jail (e.g. jail/link -> /etc) from letting a
+// not-yet-created path (jail/link/newfile) pass the jail check while the
+// later os.MkdirAll/os.Create follows the symlink outside the jail.
+func resolveReal(clean string) (string, error) {
+	real, err := filepath.EvalSymlinks(clean)
+	if err == nil {
+		return real, nil
+	}
+	if !os.IsNotExist(err) {
+		// Anything other than "doesn't exist yet" (e.g. ENOTDIR because a
+		// path component is a regular file, or a permission error) is a
+		// real problem the caller's filesystem op would hit anyway —
+		// surface it instead of guessing at a fallback path.
+		return "", err
+	}
+
+	// Walk up to the deepest existing ancestor.
+	dir := clean
+	var suffix []string
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached the filesystem root without finding an existing
+			// ancestor; nothing to resolve against.
+			return clean, nil
+		}
+		suffix = append([]string{filepath.Base(dir)}, suffix...)
+		dir = parent
+		if _, statErr := os.Lstat(dir); statErr == nil {
+			break
+		} else if !os.IsNotExist(statErr) {
+			return "", statErr
+		}
+	}
+
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+
+	// Re-join the non-existent suffix onto the resolved ancestor and clean
+	// the result so any ".." segments in the suffix are normalized before
+	// the jail check.
+	return filepath.Clean(filepath.Join(append([]string{realDir}, suffix...)...)), nil
 }
 
 // isUnder returns true if p is equal to or a descendant of root.
@@ -289,22 +339,11 @@ func (o *Ops) Rename(src, dst string) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	// dst might not exist yet; resolve against cleaned path.
-	if !filepath.IsAbs(dst) {
-		return nil, fmt.Errorf("%w: dst must be absolute", ErrForbidden)
-	}
-	resDst := filepath.Clean(dst)
-	if roots := o.settings.Roots(); len(roots) > 0 {
-		found := false
-		for _, root := range roots {
-			if isUnder(resDst, root) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("%w: dst %s", ErrForbidden, dst)
-		}
+	// dst might not exist yet; Resolve handles non-existent paths by
+	// resolving symlinks on the deepest existing ancestor.
+	resDst, err := o.Resolve(dst)
+	if err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(resDst), 0o755); err != nil {
 		return nil, err

@@ -135,7 +135,19 @@ func runServe(args []string) {
 			Certificates: []tls.Certificate{cert},
 			MinVersion:   tls.VersionTLS12,
 		},
+		// Headers should arrive quickly regardless of payload size.
 		ReadHeaderTimeout: 10 * time.Second,
+		// Large file uploads/downloads stream through this server (chunked
+		// transfers and /v1/content), so Read/Write timeouts must be generous
+		// enough to cover slow links transferring big files. 30 minutes
+		// comfortably covers a multi-GB transfer over a slow connection
+		// without leaving truly-stuck connections open indefinitely.
+		ReadTimeout:  30 * time.Minute,
+		WriteTimeout: 30 * time.Minute,
+		// IdleTimeout bounds how long a keep-alive connection can sit idle
+		// between requests; 2 minutes is plenty for normal browsing/polling
+		// while freeing resources from abandoned connections.
+		IdleTimeout: 2 * time.Minute,
 	}
 
 	go func() {

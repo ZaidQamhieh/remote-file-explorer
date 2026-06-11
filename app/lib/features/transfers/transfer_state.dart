@@ -1,7 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
@@ -9,6 +10,23 @@ import '../../core/models/host.dart';
 import '../../core/storage/download_saver.dart';
 import '../../core/storage/host_store.dart';
 import 'chunk_planner.dart';
+
+// ---------------------------------------------------------------------------
+// Task id generation
+// ---------------------------------------------------------------------------
+
+/// Monotonic counter used to make task ids unique even when several tasks are
+/// created within the same microsecond (e.g. a multi-select "upload all").
+int _taskIdCounter = 0;
+
+/// Returns an id that is unique for the lifetime of the process: a
+/// timestamp for rough ordering plus a monotonically increasing sequence
+/// number to break ties.
+String _nextTaskId() {
+  final ts = DateTime.now().microsecondsSinceEpoch;
+  final seq = _taskIdCounter++;
+  return '$ts-$seq';
+}
 
 // ---------------------------------------------------------------------------
 // Transfer task model
@@ -39,7 +57,7 @@ class TransferTask {
     required Host host,
   }) =>
       TransferTask._(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: _nextTaskId(),
         kind: TransferKind.upload,
         localPath: localPath,
         remotePath: remotePath,
@@ -52,7 +70,7 @@ class TransferTask {
     required Host host,
   }) =>
       TransferTask._(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: _nextTaskId(),
         kind: TransferKind.download,
         localPath: localPath,
         remotePath: remotePath,
@@ -107,13 +125,55 @@ class TransferTask {
 
 const _sentinel = Object();
 
+/// Internal signal thrown by `_run*` helpers when they notice the task has
+/// been paused or removed and should stop without being marked completed or
+/// failed. Caught by [TransferQueueNotifier._execute].
+class _TaskStopped implements Exception {}
+
+/// Computes the SHA-256 of the file at [path] by streaming it in fixed-size
+/// chunks, so the whole file never has to fit in memory.
+///
+/// Designed to be run via [compute] (a background isolate) so hashing a
+/// large file doesn't jank the UI.
+Future<String> hashFileSha256(String path) async {
+  final sink = _DigestSink();
+  final input = sha256.startChunkedConversion(sink);
+  await for (final chunk in File(path).openRead()) {
+    input.add(chunk);
+  }
+  input.close();
+  return sink.digest.toString();
+}
+
+class _DigestSink implements Sink<Digest> {
+  Digest? digest;
+
+  @override
+  void add(Digest data) => digest = data;
+
+  @override
+  void close() {}
+}
+
 // ---------------------------------------------------------------------------
 // Queue notifier (Riverpod 3.x Notifier)
 // ---------------------------------------------------------------------------
 
 class TransferQueueNotifier extends Notifier<List<TransferTask>> {
+  TransferQueueNotifier({
+    AgentClient Function(Host host, {String? deviceToken})? clientFactory,
+  }) : _clientFactory = clientFactory ?? AgentClient.new;
+
+  /// Builds the [AgentClient] used to run a transfer. Overridable so tests
+  /// can substitute a fake client without spinning up real Dio/TLS/network.
+  final AgentClient Function(Host host, {String? deviceToken}) _clientFactory;
+
   @override
   List<TransferTask> build() => [];
+
+  /// Cancel tokens for tasks currently executing, keyed by task id. Used by
+  /// [pause] and [remove] to actually interrupt in-flight HTTP calls.
+  final Map<String, CancelToken> _cancelTokens = {};
 
   void enqueue(TransferTask task) {
     state = [...state, task];
@@ -123,17 +183,32 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   Future<void> retry(String id) async {
     _updateById(id, (t) => t.copyWith(
           status: TransferStatus.queued,
-          transferredBytes: 0,
           error: null,
         ));
     _runNext();
   }
 
+  /// Pauses a queued or running task.
+  ///
+  /// If the task is currently running, its in-flight HTTP request is
+  /// canceled so the underlying connection actually stops; [_execute] sees
+  /// the cancellation, notices the task is already marked [TransferStatus.paused]
+  /// and leaves it alone (rather than marking it failed or completed).
   void pause(String id) {
+    final idx = state.indexWhere((t) => t.id == id);
+    if (idx == -1) return;
+    final current = state[idx];
+    if (current.status != TransferStatus.running &&
+        current.status != TransferStatus.queued) {
+      return;
+    }
     _updateById(id, (t) => t.copyWith(status: TransferStatus.paused));
+    _cancelTokens[id]?.cancel('paused');
   }
 
+  /// Removes a task from the queue, canceling it first if it's running.
   void remove(String id) {
+    _cancelTokens[id]?.cancel('removed');
     state = state.where((t) => t.id != id).toList();
   }
 
@@ -145,6 +220,15 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     final list = List<TransferTask>.from(state);
     list[idx] = fn(list[idx]);
     state = list;
+  }
+
+  /// Throws [_TaskStopped] if [id] is no longer running (paused or removed),
+  /// so `_run*` loops can bail out cleanly between chunks/requests.
+  void _checkStillRunning(String id) {
+    final current = state.firstWhereOrNull((t) => t.id == id);
+    if (current == null || current.status != TransferStatus.running) {
+      throw _TaskStopped();
+    }
   }
 
   void _runNext() {
@@ -161,17 +245,53 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     _updateById(id, (t) => t.copyWith(status: TransferStatus.running));
 
     final task = state.firstWhere((t) => t.id == id);
+    final cancelToken = CancelToken();
+    _cancelTokens[id] = cancelToken;
+    AgentClient? client;
+
     try {
-      final store = await ref.read(hostStoreProvider.future);
-      final token = await store.getToken(task.host.id);
-      final client = AgentClient(task.host, deviceToken: token);
+      String? token;
+      try {
+        final store = await ref.read(hostStoreProvider.future);
+        token = await store.getToken(task.host.id);
+      } catch (_) {
+        // Token lookup is best-effort: if secure storage is unavailable the
+        // request will simply go out unauthenticated and the agent will
+        // reject it with a normal (catchable) 401, rather than aborting the
+        // transfer before it even starts.
+        token = null;
+      }
+      client = _clientFactory(task.host, deviceToken: token);
 
       if (task.kind == TransferKind.download) {
-        await _runDownload(id, task, client);
+        await _runDownload(id, task, client, cancelToken);
       } else {
-        await _runUpload(id, task, client);
+        await _runUpload(id, task, client, cancelToken);
       }
-      _updateById(id, (t) => t.copyWith(status: TransferStatus.completed));
+
+      // Only mark completed if nothing paused/removed it while the last
+      // await above was settling.
+      final current = state.firstWhereOrNull((t) => t.id == id);
+      if (current != null && current.status == TransferStatus.running) {
+        _updateById(id, (t) => t.copyWith(status: TransferStatus.completed));
+      }
+    } on _TaskStopped {
+      // pause()/remove() already updated (or removed) the task; nothing
+      // further to do here.
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        // Same as above: pause()/remove() already handled the status.
+      } else {
+        // Defense in depth: AgentClient normally converts non-cancel
+        // DioExceptions to AgentApiException (caught below), but handle a
+        // raw DioException too in case that ever changes.
+        _updateById(
+            id,
+            (t) => t.copyWith(
+                  status: TransferStatus.failed,
+                  error: e.toString(),
+                ));
+      }
     } catch (e) {
       _updateById(
           id,
@@ -180,16 +300,17 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
                 error: e.toString(),
               ));
     } finally {
+      client?.close();
+      _cancelTokens.remove(id);
       _runNext();
     }
   }
 
   // ---- Download ----
 
-  Future<void> _runDownload(
-      String id, TransferTask task, AgentClient client) async {
+  Future<void> _runDownload(String id, TransferTask task, AgentClient client,
+      CancelToken cancelToken) async {
     final localFile = File(task.localPath);
-    final startByte = localFile.existsSync() ? localFile.lengthSync() : 0;
 
     var mimeType = 'application/octet-stream';
     try {
@@ -202,19 +323,31 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       }
     } catch (_) {}
 
-    await client.downloadFile(
-      remotePath: task.remotePath,
-      localFile: localFile,
-      startByte: startByte,
-      onProgress: (received, total) {
-        _updateById(
-            id,
-            (t) => t.copyWith(
-                  transferredBytes: startByte + received,
-                  totalBytes: total > 0 ? total : t.totalBytes,
-                ));
-      },
-    );
+    Future<void> doDownload(int startByte) => client.downloadFile(
+          remotePath: task.remotePath,
+          localFile: localFile,
+          startByte: startByte,
+          cancelToken: cancelToken,
+          onProgress: (received, total) {
+            _updateById(
+                id,
+                (t) => t.copyWith(
+                      transferredBytes: startByte + received,
+                      totalBytes: total > 0 ? total : t.totalBytes,
+                    ));
+          },
+        );
+
+    var startByte = localFile.existsSync() ? localFile.lengthSync() : 0;
+    try {
+      await doDownload(startByte);
+    } on RangeNotSatisfiedException {
+      // The server didn't honor our Range request; agent_client already
+      // deleted the (now-corrupt) partial file. Restart from scratch.
+      startByte = 0;
+      _updateById(id, (t) => t.copyWith(transferredBytes: 0));
+      await doDownload(startByte);
+    }
 
     // The file streamed to app-private storage; move it into the public
     // Downloads collection so it shows up in the phone's Files app.
@@ -225,13 +358,10 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
   // ---- Upload ----
 
-  Future<void> _runUpload(
-      String id, TransferTask task, AgentClient client) async {
+  Future<void> _runUpload(String id, TransferTask task, AgentClient client,
+      CancelToken cancelToken) async {
     final file = File(task.localPath);
-    final fileBytes = await file.readAsBytes();
-    final fileSize = fileBytes.length;
-
-    final wholeHash = sha256.convert(fileBytes).toString();
+    final fileSize = await file.length();
     final plan = planChunks(fileSize);
 
     _updateById(id, (t) => t.copyWith(totalBytes: fileSize));
@@ -247,6 +377,11 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       sessionId = session.id;
       received = session.receivedChunks;
     } else {
+      // Hash the whole file in a background isolate — for large files this
+      // can take seconds and must not block the UI thread.
+      final wholeHash = await compute(hashFileSha256, task.localPath);
+      _checkStillRunning(id);
+
       final session = await client.openUploadSession(
         path: task.remotePath,
         size: fileSize,
@@ -262,39 +397,56 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       final end = (start + plan.chunkSize).clamp(0, fileSize);
       return acc + (end - start);
     });
+    _updateById(id, (t) => t.copyWith(transferredBytes: bytesSent));
 
-    for (int ci = 0; ci < plan.totalChunks; ci++) {
-      // Check if task was paused
-      final current = state.firstWhere(
-        (t) => t.id == id,
-        orElse: () => task.copyWith(status: TransferStatus.paused),
-      );
-      if (current.status == TransferStatus.paused) return;
+    final raf = await file.open();
+    try {
+      for (int ci = 0; ci < plan.totalChunks; ci++) {
+        // Bail out cleanly if paused/removed since the last chunk.
+        _checkStillRunning(id);
 
-      if (received.contains(ci)) continue;
+        if (received.contains(ci)) continue;
 
-      final start = ci * plan.chunkSize;
-      final end = (start + plan.chunkSize).clamp(0, fileSize);
-      final chunkBytes = Uint8List.sublistView(fileBytes, start, end);
-      final chunkHash = sha256.convert(chunkBytes).toString();
-      final contentRange = 'bytes $start-${end - 1}/$fileSize';
+        final start = ci * plan.chunkSize;
+        final end = (start + plan.chunkSize).clamp(0, fileSize);
+        final length = end - start;
 
-      await client.uploadChunk(
-        sessionId: sessionId,
-        chunkIndex: ci,
-        data: chunkBytes,
-        contentRange: contentRange,
-        chunkSha256: chunkHash,
-        onProgress: (sent, _) {
-          _updateById(
-              id, (t) => t.copyWith(transferredBytes: bytesSent + sent));
-        },
-      );
-      bytesSent += chunkBytes.length;
-      _updateById(id, (t) => t.copyWith(transferredBytes: bytesSent));
+        await raf.setPosition(start);
+        final chunkBytes = await raf.read(length);
+        // Chunk-sized (<= a few MB) hash; cheap enough for the UI isolate,
+        // unlike the whole-file hash above.
+        final chunkHash = sha256.convert(chunkBytes).toString();
+        final contentRange = 'bytes $start-${end - 1}/$fileSize';
+
+        await client.uploadChunk(
+          sessionId: sessionId,
+          chunkIndex: ci,
+          data: chunkBytes,
+          contentRange: contentRange,
+          chunkSha256: chunkHash,
+          cancelToken: cancelToken,
+          onProgress: (sent, _) {
+            _updateById(
+                id, (t) => t.copyWith(transferredBytes: bytesSent + sent));
+          },
+        );
+        bytesSent += chunkBytes.length;
+        _updateById(id, (t) => t.copyWith(transferredBytes: bytesSent));
+      }
+    } finally {
+      await raf.close();
     }
 
     await client.completeUpload(sessionId);
+  }
+}
+
+extension _FirstWhereOrNull<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final element in this) {
+      if (test(element)) return element;
+    }
+    return null;
   }
 }
 

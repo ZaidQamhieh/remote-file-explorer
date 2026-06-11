@@ -6,9 +6,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+)
+
+// pairRateLimit caps unauthenticated /v1/pair attempts. The pairing code is
+// only ~40 bits, so without throttling it's brute-forceable; 10/min is ample
+// for legitimate use (a human typing/scanning a code) on a single-user agent.
+const (
+	pairRateLimitAttempts = 10
+	pairRateLimitWindow   = time.Minute
 )
 
 type pairRequest struct {
@@ -30,7 +39,12 @@ type pairResponse struct {
 }
 
 func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc {
+	limiter := newFixedWindowLimiter(pairRateLimitAttempts, pairRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow() {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many pairing attempts, try again later")
+			return
+		}
 		var req pairRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")

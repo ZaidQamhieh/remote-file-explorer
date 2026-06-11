@@ -61,6 +61,30 @@ func TestResolve_BlocksSymlinkEscape(t *testing.T) {
 	}
 }
 
+// TestResolve_BlocksSymlinkEscapeForNewPath verifies that a not-yet-existing
+// path whose parent is a symlink pointing outside the jail is rejected, even
+// though the full path itself doesn't exist (so EvalSymlinks alone can't
+// catch it).
+func TestResolve_BlocksSymlinkEscapeForNewPath(t *testing.T) {
+	ops, root := setupJail(t)
+
+	// Create a target outside the jail.
+	outside := t.TempDir()
+
+	// Create a symlink inside the jail pointing to outside.
+	link := filepath.Join(root, "escape-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	// "newfile" doesn't exist yet, but its parent (escape-link) resolves
+	// outside the jail — must still be rejected.
+	_, err := ops.Resolve(filepath.Join(link, "newfile"))
+	if err == nil {
+		t.Fatal("expected error for symlink escape via non-existent path, got nil")
+	}
+}
+
 // TestResolve_RelativePathRejected verifies relative paths are always rejected.
 func TestResolve_RelativePathRejected(t *testing.T) {
 	ops, _ := setupJail(t)
@@ -117,6 +141,95 @@ func TestCreateAndDelete(t *testing.T) {
 	results := ops.Delete([]string{filePath})
 	if len(results) != 1 || !results[0].OK {
 		t.Fatalf("Delete failed: %+v", results)
+	}
+}
+
+// TestCreateFile_BlocksSymlinkEscapeViaParent verifies that creating a file
+// whose parent directory is a symlink escaping the jail is rejected, even
+// though the file itself doesn't exist yet.
+func TestCreateFile_BlocksSymlinkEscapeViaParent(t *testing.T) {
+	ops, root := setupJail(t)
+
+	// Create a target outside the jail.
+	outside := t.TempDir()
+
+	// Create a symlink inside the jail pointing to outside.
+	link := filepath.Join(root, "escape-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	// Creating "escape-link/newfile" must be rejected, and must not create
+	// anything outside the jail.
+	target := filepath.Join(link, "newfile")
+	if _, err := ops.CreateFile(target); err == nil {
+		t.Fatal("expected error creating file through symlinked parent, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "newfile")); !os.IsNotExist(err) {
+		t.Fatalf("expected no file created outside the jail, stat err: %v", err)
+	}
+}
+
+// TestRename_BlocksSymlinkEscapeViaDestParent verifies that renaming into a
+// destination whose parent directory is a symlink escaping the jail is
+// rejected, even though the destination itself doesn't exist yet.
+func TestRename_BlocksSymlinkEscapeViaDestParent(t *testing.T) {
+	ops, root := setupJail(t)
+
+	// Create a target outside the jail.
+	outside := t.TempDir()
+
+	// Create a symlink inside the jail pointing to outside.
+	link := filepath.Join(root, "escape-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	// A legitimate source file inside the jail.
+	src := filepath.Join(root, "source.txt")
+	if _, err := ops.CreateFile(src); err != nil {
+		t.Fatalf("CreateFile(src): %v", err)
+	}
+
+	// Renaming into "escape-link/moved.txt" must be rejected, and must not
+	// move the file outside the jail.
+	dst := filepath.Join(link, "moved.txt")
+	if _, err := ops.Rename(src, dst); err == nil {
+		t.Fatal("expected error renaming into symlinked parent, got nil")
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("expected source to remain in place, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "moved.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected no file created outside the jail, stat err: %v", err)
+	}
+}
+
+// TestRename_WithinJailWorks verifies a legitimate rename to a new path
+// inside the jail (including a not-yet-existing destination directory)
+// still succeeds.
+func TestRename_WithinJailWorks(t *testing.T) {
+	ops, root := setupJail(t)
+
+	src := filepath.Join(root, "source.txt")
+	if _, err := ops.CreateFile(src); err != nil {
+		t.Fatalf("CreateFile(src): %v", err)
+	}
+
+	// Destination lives in a subdirectory that doesn't exist yet.
+	dst := filepath.Join(root, "subdir", "renamed.txt")
+	entry, err := ops.Rename(src, dst)
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if entry.Name != "renamed.txt" {
+		t.Fatalf("unexpected entry name: %s", entry.Name)
+	}
+	if _, err := os.Stat(dst); err != nil {
+		t.Fatalf("expected destination to exist, stat err: %v", err)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("expected source to be gone, stat err: %v", err)
 	}
 }
 

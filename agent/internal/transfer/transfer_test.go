@@ -189,6 +189,39 @@ func TestHashMismatch(t *testing.T) {
 	}
 }
 
+// TestHashMismatchRemovesTempFile verifies that when Complete's whole-file
+// hash check fails, the leftover <id>.tmp file is removed rather than left
+// behind on disk forever.
+func TestHashMismatchRemovesTempFile(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "bad.bin")
+	content := []byte("real content")
+	wrongHash := sha256hex([]byte("wrong content"))
+	id := uuid.New().String()
+
+	sess, err := tm.OpenSession(id, target, int64(len(content)), 1024, wrongHash, false)
+	if err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatalf("WriteChunk: %v", err)
+	}
+
+	tempPath := sess.TempPath
+	if _, err := os.Stat(tempPath); err != nil {
+		t.Fatalf("expected temp file to exist before Complete: %v", err)
+	}
+
+	_, _, err = tm.Complete(id)
+	if err == nil {
+		t.Fatal("expected hash mismatch error")
+	}
+
+	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
+		t.Fatalf("expected temp file %s to be removed after failed Complete, stat err=%v", tempPath, err)
+	}
+}
+
 // TestChunkHashMismatch verifies WriteChunk rejects bad chunk data.
 func TestChunkHashMismatch(t *testing.T) {
 	tm, _, dataDir := setupManager(t)

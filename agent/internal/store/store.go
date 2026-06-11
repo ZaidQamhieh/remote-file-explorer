@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,10 +25,14 @@ type DB struct {
 
 // Open opens (or creates) agent.db under dir.
 func Open(dir string) (*DB, error) {
-	path := dir + "/agent.db"
+	path := filepath.Join(dir, "agent.db")
 	// busy_timeout lets the daemon and the `rfe-agent` admin CLI write to the
 	// same DB across processes without immediately erroring on a brief lock.
-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+	// modernc.org/sqlite only recognizes `_pragma` (plus `_time_format` and
+	// `_txlock`) DSN params, not the mattn-style `_journal_mode`/`_busy_timeout`
+	// keys — those would be silently ignored.
+	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
@@ -367,14 +373,30 @@ func (s *DB) GetTransfer(id string) (*Transfer, error) {
 }
 
 // MarkChunkReceived atomically records chunk n as received.
+//
+// The read-modify-write of received_chunks must happen inside a single
+// transaction: without one, two concurrent chunk uploads can both read the
+// same JSON array, add their own chunk number, and write back — and one
+// update silently clobbers the other (lost update).
 func (s *DB) MarkChunkReceived(id string, n int) error {
-	t, err := s.GetTransfer(id)
+	tx, err := s.db.Begin()
 	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	var chunksJSON string
+	if err := tx.QueryRow(
+		`SELECT received_chunks FROM transfers WHERE id=?`, id,
+	).Scan(&chunksJSON); err != nil {
 		return err
 	}
+	var received []int
+	_ = json.Unmarshal([]byte(chunksJSON), &received)
+
 	// Add n if not already present.
-	set := make(map[int]struct{}, len(t.ReceivedChunks)+1)
-	for _, c := range t.ReceivedChunks {
+	set := make(map[int]struct{}, len(received)+1)
+	for _, c := range received {
 		set[c] = struct{}{}
 	}
 	set[n] = struct{}{}
@@ -383,10 +405,12 @@ func (s *DB) MarkChunkReceived(id string, n int) error {
 		updated = append(updated, c)
 	}
 	// Sort for determinism.
-	sortInts(updated)
+	slices.Sort(updated)
 	b, _ := json.Marshal(updated)
-	_, err = s.db.Exec(`UPDATE transfers SET received_chunks=? WHERE id=?`, string(b), id)
-	return err
+	if _, err := tx.Exec(`UPDATE transfers SET received_chunks=? WHERE id=?`, string(b), id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // SetTransferStatus updates the status of a transfer.
@@ -410,13 +434,4 @@ func scanTransfer(row *sql.Row) (*Transfer, error) {
 	}
 	_ = json.Unmarshal([]byte(chunksJSON), &t.ReceivedChunks)
 	return &t, nil
-}
-
-func sortInts(a []int) {
-	// Simple insertion sort — chunk lists are tiny.
-	for i := 1; i < len(a); i++ {
-		for j := i; j > 0 && a[j] < a[j-1]; j-- {
-			a[j], a[j-1] = a[j-1], a[j]
-		}
-	}
 }

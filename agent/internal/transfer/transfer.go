@@ -141,7 +141,7 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 
 // Complete verifies the whole-file SHA-256 and atomically renames the temp
 // file to the final destination.
-func (m *Manager) Complete(id string) (*os.FileInfo, string, error) {
+func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 	t, err := m.db.GetTransfer(id)
 	if err != nil {
 		return nil, "", err
@@ -168,6 +168,9 @@ func (m *Manager) Complete(id string) (*os.FileInfo, string, error) {
 	got := hex.EncodeToString(h.Sum(nil))
 	if got != t.SHA256 {
 		_ = m.db.SetTransferStatus(id, "failed")
+		// The temp file is now orphaned (the transfer can't be resumed once
+		// failed) — remove it so it doesn't leak on disk.
+		_ = os.Remove(t.TempPath)
 		return nil, "", fmt.Errorf("%w: got %s want %s", ErrFileMismatch, got, t.SHA256)
 	}
 
@@ -187,5 +190,5 @@ func (m *Manager) Complete(id string) (*os.FileInfo, string, error) {
 	if err != nil {
 		return nil, t.TargetPath, nil
 	}
-	return &info, t.TargetPath, nil
+	return info, t.TargetPath, nil
 }

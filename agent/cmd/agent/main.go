@@ -31,7 +31,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
-const version = "0.1.0"
+const version = "1.0.0"
 
 func main() {
 	args := os.Args[1:]
@@ -55,7 +55,7 @@ func runServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", ":8765", "listen address (host:port)")
 	name := fs.String("name", hostName(), "agent display name shown to the phone")
-	dataDir := fs.String("data", defaultDataDir(), "directory for certs, db, and state")
+	dataDir := fs.String("data", defaultDataDir(), "directory for certs, db, and state (precedence: -data > $RFE_DATA_DIR > ~/.rfe-agent)")
 	readOnly := fs.Bool("read-only", false, "reject all write operations")
 	roots := fs.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
 	_ = fs.Parse(args)
@@ -178,12 +178,27 @@ func hostName() string {
 	return h
 }
 
+// defaultDataDir returns the data directory used when -data is not given:
+// $RFE_DATA_DIR if set, otherwise ~/.rfe-agent (matching the deployed systemd
+// service and release.sh, which publish OTA updates to ~/.rfe-agent/updates/).
+// Falls back to the OS config dir if the home directory can't be resolved.
+//
+// This is the single source of truth for the default data dir, shared by the
+// daemon (runServe) and the admin CLI (adminDataDir in admin.go) so that
+// `rfe-agent` and `rfe-agent devices`/`pair`/etc. always operate on the same
+// database by default. Precedence: -data flag > $RFE_DATA_DIR > ~/.rfe-agent.
 func defaultDataDir() string {
-	dir, err := os.UserConfigDir()
+	if env := os.Getenv("RFE_DATA_DIR"); env != "" {
+		return env
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
+		if dir, cfgErr := os.UserConfigDir(); cfgErr == nil {
+			return filepath.Join(dir, "remote-file-explorer")
+		}
 		return ".rfe-agent"
 	}
-	return filepath.Join(dir, "remote-file-explorer")
+	return filepath.Join(home, ".rfe-agent")
 }
 
 // reachableAddresses turns the listen address into the concrete host:port

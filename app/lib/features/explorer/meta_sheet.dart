@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
+import 'explorer_state.dart' show renameDestination;
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
 /// delete, and download actions.
@@ -18,11 +19,17 @@ class MetaSheet extends ConsumerStatefulWidget {
     required this.entry,
     required this.host,
     required this.client,
+    this.onChanged,
   });
 
   final Entry entry;
   final Host host;
   final AgentClient client;
+
+  /// Called after a successful rename or delete so the caller (the explorer
+  /// screen) can refresh its listing — otherwise the listing + its cache
+  /// keep showing stale data until the user manually refreshes.
+  final VoidCallback? onChanged;
 
   @override
   ConsumerState<MetaSheet> createState() => _MetaSheetState();
@@ -304,10 +311,10 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     );
     if (newName == null || newName == _entry.name || !context.mounted) return;
     try {
-      final parent = _parentPath(_entry.path);
-      final dst = '$parent/$newName';
+      final dst = renameDestination(_entry.path, newName);
       final updated = await widget.client.rename(_entry.path, dst);
       if (mounted) setState(() => _entry = updated);
+      widget.onChanged?.call();
       if (context.mounted) showSuccess(context, 'Renamed to $newName');
     } catch (e) {
       if (context.mounted) showError(context, 'Rename failed: $e');
@@ -318,8 +325,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete?'),
-        content: Text('Delete "${_entry.name}"?'),
+        title: const Text('Delete permanently?'),
+        content: Text(
+            'Permanently delete "${_entry.name}"? This cannot be undone.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -334,17 +342,12 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     try {
       final name = _entry.name;
       await widget.client.delete([_entry.path]);
+      widget.onChanged?.call();
       if (context.mounted) Navigator.pop(context);
       if (context.mounted) showSuccess(context, 'Deleted $name');
     } catch (e) {
       if (context.mounted) showError(context, 'Delete failed: $e');
     }
-  }
-
-  String _parentPath(String path) {
-    final sep = path.contains('/') ? '/' : r'\';
-    final idx = path.lastIndexOf(sep);
-    return idx <= 0 ? sep : path.substring(0, idx);
   }
 }
 

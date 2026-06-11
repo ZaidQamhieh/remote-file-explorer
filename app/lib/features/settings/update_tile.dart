@@ -8,9 +8,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/api/providers.dart';
 import '../../core/models/app_release.dart';
 import '../../core/models/host.dart';
-import '../../core/storage/host_store.dart';
 import '../../core/update/update_service.dart';
 
 /// A Settings tile that checks the host for a newer APK and installs it,
@@ -94,11 +94,8 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       _status = 'Checking for updates…';
       _statusIsError = false;
     });
+    final client = await buildClientForHost(ref.read, widget.host.id);
     try {
-      final store = await ref.read(hostStoreProvider.future);
-      final token = await store.getToken(widget.host.id);
-      final client = AgentClient(widget.host, deviceToken: token);
-
       final AppRelease? rel = await client.latestRelease();
       final info = await PackageInfo.fromPlatform();
       final installed = int.tryParse(info.buildNumber) ?? 0;
@@ -155,6 +152,8 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         _status = 'Update failed: $e';
         _statusIsError = true;
       });
+    } finally {
+      client.close();
     }
   }
 

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/api/providers.dart';
 import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/host.dart';
-import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'update_tile.dart';
@@ -32,15 +32,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _client?.close();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final store = await ref.read(hostStoreProvider.future);
-      final token = await store.getToken(widget.host.id);
-      final client = AgentClient(widget.host, deviceToken: token);
+      // Close any previously-built client before replacing it (e.g. on retry
+      // after an error).
+      _client?.close();
+      final client = await buildClientForHost(ref.read, widget.host.id);
       final settings = await client.getSettings();
       final devices = await client.listDevices();
       setState(() {

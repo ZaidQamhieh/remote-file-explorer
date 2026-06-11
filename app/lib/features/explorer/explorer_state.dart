@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
-import '../../core/models/host.dart';
 import '../../core/storage/listing_cache.dart';
 
 // ---------------------------------------------------------------------------
@@ -22,27 +22,60 @@ class SortOrder {
 }
 
 // ---------------------------------------------------------------------------
+// Sorting helper
+// ---------------------------------------------------------------------------
+
+/// Partitions [entries] into directories-first then files, each sorted by
+/// [sort]. Pure function so it can be memoized at state-construction time
+/// instead of being recomputed by every `itemBuilder` call.
+List<Entry> _sortEntries(List<Entry> entries, SortOrder sort) {
+  final dirs = entries.where((e) => e.isDir).toList();
+  final files = entries.where((e) => !e.isDir).toList();
+  int cmp(Entry a, Entry b) {
+    int r;
+    switch (sort.field) {
+      case SortField.name:
+        r = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case SortField.size:
+        r = (a.size ?? 0).compareTo(b.size ?? 0);
+      case SortField.date:
+        r = (a.modified ?? DateTime(0)).compareTo(b.modified ?? DateTime(0));
+      case SortField.type:
+        r = (a.mimeType ?? '').compareTo(b.mimeType ?? '');
+    }
+    return sort.ascending ? r : -r;
+  }
+
+  dirs.sort(cmp);
+  files.sort(cmp);
+  return [...dirs, ...files];
+}
+
+// ---------------------------------------------------------------------------
 // Explorer state
 // ---------------------------------------------------------------------------
 
 class ExplorerState {
-  const ExplorerState({
-    required this.host,
+  ExplorerState({
     required this.pathStack,
     this.entries = const [],
     this.loading = false,
+    this.loadingMore = false,
     this.error,
     this.sort = const SortOrder(),
     this.gridView = false,
     this.selected = const {},
     this.stale = false,
     this.offline = false,
-  });
+    this.nextCursor,
+  }) : sortedEntries = _sortEntries(entries, sort);
 
-  final Host host;
   final List<String> pathStack;
   final List<Entry> entries;
   final bool loading;
+
+  /// `true` while an additional page is being fetched (pagination).
+  final bool loadingMore;
   final String? error;
   final SortOrder sort;
   final bool gridView;
@@ -50,56 +83,46 @@ class ExplorerState {
   final bool stale;   // showing cached data, refresh in progress or failed
   final bool offline; // last live fetch failed; data is from cache only
 
+  /// Opaque cursor for the next page of [entries]; null when the current
+  /// directory has no more pages to load.
+  final String? nextCursor;
+
+  /// [entries] partitioned (directories first) and sorted per [sort],
+  /// computed once at construction time so list/grid `itemBuilder`s can do
+  /// plain indexed access instead of re-sorting on every item.
+  final List<Entry> sortedEntries;
+
   String get currentPath => pathStack.last;
   bool get atRoot => pathStack.length == 1;
   bool get multiSelect => selected.isNotEmpty;
-
-  List<Entry> get sortedEntries {
-    final dirs = entries.where((e) => e.isDir).toList();
-    final files = entries.where((e) => !e.isDir).toList();
-    int cmp(Entry a, Entry b) {
-      int r;
-      switch (sort.field) {
-        case SortField.name:
-          r = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        case SortField.size:
-          r = (a.size ?? 0).compareTo(b.size ?? 0);
-        case SortField.date:
-          r = (a.modified ?? DateTime(0))
-              .compareTo(b.modified ?? DateTime(0));
-        case SortField.type:
-          r = (a.mimeType ?? '').compareTo(b.mimeType ?? '');
-      }
-      return sort.ascending ? r : -r;
-    }
-
-    dirs.sort(cmp);
-    files.sort(cmp);
-    return [...dirs, ...files];
-  }
+  bool get hasMore => nextCursor != null;
 
   ExplorerState copyWith({
     List<String>? pathStack,
     List<Entry>? entries,
     bool? loading,
+    bool? loadingMore,
     Object? error = _sentinel,
     SortOrder? sort,
     bool? gridView,
     Set<String>? selected,
     bool? stale,
     bool? offline,
+    Object? nextCursor = _sentinel,
   }) =>
       ExplorerState(
-        host: host,
         pathStack: pathStack ?? this.pathStack,
         entries: entries ?? this.entries,
         loading: loading ?? this.loading,
+        loadingMore: loadingMore ?? this.loadingMore,
         error: error == _sentinel ? this.error : error as String?,
         sort: sort ?? this.sort,
         gridView: gridView ?? this.gridView,
         selected: selected ?? this.selected,
         stale: stale ?? this.stale,
         offline: offline ?? this.offline,
+        nextCursor:
+            nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
       );
 }
 
@@ -109,27 +132,43 @@ const _sentinel = Object();
 // Arg type for the explorer family provider
 // ---------------------------------------------------------------------------
 
-typedef ExplorerArg = ({Host host, String rootPath, AgentClient client});
+/// Key for [explorerProvider]. Value type (record) so two pushes of the same
+/// host/path reuse the same provider entry instead of leaking a new one —
+/// unlike the previous key which embedded [Host]/[AgentClient] objects (no
+/// `==`, so identity-keyed and never reused).
+typedef ExplorerArg = ({String hostId, String rootPath});
 
 // ---------------------------------------------------------------------------
 // Notifier
 // ---------------------------------------------------------------------------
 
-class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
+class ExplorerNotifier
+    extends AutoDisposeFamilyNotifier<ExplorerState, ExplorerArg> {
   @override
   ExplorerState build(ExplorerArg arg) {
+    // Keep the underlying client provider alive for as long as this notifier
+    // is alive, without rebuilding (and re-running `_load`/resetting
+    // navigation state) every time `clientProvider`'s async value changes
+    // (e.g. loading -> data on first resolve). `ref.listen` registers a
+    // subscription — enough to keep an autoDispose provider alive — but only
+    // invokes the callback, it doesn't trigger a rebuild of this notifier.
+    ref.listen(clientProvider(arg.hostId), (_, _) {});
+
     // Schedule async load after construction.
     Future.microtask(_load);
-    return ExplorerState(host: arg.host, pathStack: [arg.rootPath]);
+    return ExplorerState(pathStack: [arg.rootPath]);
   }
 
   final ListingCache _cache = ListingCache();
+
+  Future<AgentClient> _client() => ref.read(clientProvider(arg.hostId).future);
 
   Future<void> _load() async {
     final path = state.currentPath;
 
     // 1. Paint cached entries instantly (if any) while we fetch live.
-    final cached = await _cache.get(arg.host.id, path);
+    final cached = await _cache.get(arg.hostId, path);
+    if (state.currentPath != path) return;
     if (cached != null) {
       state = state.copyWith(
         entries: cached.entries,
@@ -138,29 +177,68 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
         offline: false,
         error: null,
         selected: {},
+        nextCursor: null,
       );
     } else {
-      state = state.copyWith(loading: true, error: null, selected: {});
+      state = state.copyWith(
+          loading: true, error: null, selected: {}, nextCursor: null);
     }
 
     // 2. Fetch live; on success replace + cache; on failure fall back to cache.
     try {
-      final listing = await arg.client.list(path);
-      await _cache.put(arg.host.id, path, listing.entries);
+      final client = await _client();
+      if (state.currentPath != path) return;
+      final listing = await client.list(path);
+      if (state.currentPath != path) return;
+      await _cache.put(arg.hostId, path, listing.entries);
+      if (state.currentPath != path) return;
       state = state.copyWith(
         loading: false,
         entries: listing.entries,
         stale: false,
         offline: false,
         error: null,
+        nextCursor: listing.nextCursor,
       );
     } catch (e) {
+      if (state.currentPath != path) return;
       if (cached != null) {
         // Keep cached entries; mark offline rather than erroring out.
         state = state.copyWith(loading: false, stale: true, offline: true);
       } else {
         state = state.copyWith(loading: false, error: e.toString());
       }
+    }
+  }
+
+  /// Loads the next page of entries for the current directory and appends
+  /// them to [ExplorerState.entries]. No-op if a load is already in flight or
+  /// there is no further page ([ExplorerState.hasMore] is false).
+  Future<void> loadMore() async {
+    if (state.loading || state.loadingMore) return;
+    final cursor = state.nextCursor;
+    if (cursor == null) return;
+
+    final path = state.currentPath;
+    state = state.copyWith(loadingMore: true);
+    try {
+      final client = await _client();
+      if (state.currentPath != path) return;
+      final listing = await client.list(path, cursor: cursor);
+      if (state.currentPath != path) return;
+      final merged = [...state.entries, ...listing.entries];
+      await _cache.put(arg.hostId, path, merged);
+      if (state.currentPath != path) return;
+      state = state.copyWith(
+        entries: merged,
+        loadingMore: false,
+        nextCursor: listing.nextCursor,
+      );
+    } catch (e) {
+      if (state.currentPath != path) return;
+      // Leave existing entries as-is; just stop the spinner so the user can
+      // retry by scrolling again.
+      state = state.copyWith(loadingMore: false);
     }
   }
 
@@ -217,41 +295,43 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
   }
 
   Future<void> createFolder(String name) async {
+    final client = await _client();
     final path = '${state.currentPath}/$name';
-    await arg.client.createFolder(path);
+    await client.createFolder(path);
     await _load();
   }
 
   Future<void> createFile(String name) async {
+    final client = await _client();
     final path = '${state.currentPath}/$name';
-    await arg.client.createFile(path);
+    await client.createFile(path);
     await _load();
   }
 
   Future<void> rename(String oldPath, String newName) async {
-    final sep = oldPath.contains('/') ? '/' : r'\';
-    final idx = oldPath.lastIndexOf(sep);
-    final parent = idx <= 0 ? sep : oldPath.substring(0, idx);
-    final dst = '$parent/$newName';
-    await arg.client.rename(oldPath, dst);
+    final client = await _client();
+    final dst = renameDestination(oldPath, newName);
+    await client.rename(oldPath, dst);
     await _load();
   }
 
-  Future<Map<String, dynamic>> deleteSelected({bool permanent = false}) async {
-    final res =
-        await arg.client.delete(state.selected.toList(), permanent: permanent);
+  Future<Map<String, dynamic>> deleteSelected() async {
+    final client = await _client();
+    final res = await client.delete(state.selected.toList());
     await _load();
     return res;
   }
 
   Future<Map<String, dynamic>> moveSelected(String destDir) async {
-    final res = await arg.client.move(state.selected.toList(), destDir);
+    final client = await _client();
+    final res = await client.move(state.selected.toList(), destDir);
     await _load();
     return res;
   }
 
   Future<Map<String, dynamic>> copySelected(String destDir) async {
-    final res = await arg.client.copy(state.selected.toList(), destDir);
+    final client = await _client();
+    final res = await client.copy(state.selected.toList(), destDir);
     await _load();
     return res;
   }
@@ -261,10 +341,22 @@ class ExplorerNotifier extends FamilyNotifier<ExplorerState, ExplorerArg> {
 // Provider family
 // ---------------------------------------------------------------------------
 
-final explorerProvider =
-    NotifierProvider.family<ExplorerNotifier, ExplorerState, ExplorerArg>(
+final explorerProvider = NotifierProvider.autoDispose
+    .family<ExplorerNotifier, ExplorerState, ExplorerArg>(
   ExplorerNotifier.new,
 );
+
+/// Builds the destination path for renaming the entry at [oldPath] to
+/// [newName], preserving whichever path separator [oldPath] uses — `/` for
+/// POSIX hosts, `\` for Windows hosts (so `C:\dir\file` renames to
+/// `C:\dir\newName`, not `C:\dir/newName`).
+String renameDestination(String oldPath, String newName) {
+  final sep = oldPath.contains('\\') ? r'\' : '/';
+  final idx = oldPath.lastIndexOf(sep);
+  final parent = idx <= 0 ? sep : oldPath.substring(0, idx);
+  if (parent == sep) return '$sep$newName';
+  return '$parent$sep$newName';
+}
 
 /// Expands an absolute path into the cumulative stack of ancestor paths,
 /// starting at the filesystem root. Handles both POSIX (`/a/b`) and Windows

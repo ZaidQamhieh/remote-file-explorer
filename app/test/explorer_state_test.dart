@@ -1,0 +1,408 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/api/agent_client.dart';
+import 'package:remote_file_explorer/core/api/providers.dart';
+import 'package:remote_file_explorer/core/models/entry.dart';
+import 'package:remote_file_explorer/core/models/host.dart';
+import 'package:remote_file_explorer/core/models/listing.dart';
+import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
+
+const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
+
+/// Polls [predicate] until it's true or [timeout] elapses, pumping the event
+/// loop between checks so pending async work (cache I/O, network mocks) gets
+/// a chance to complete.
+Future<void> _waitUntil(bool Function() predicate,
+    {Duration timeout = const Duration(seconds: 2)}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!predicate()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('condition not met within $timeout');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
+
+Entry _file(String name, {int? size, DateTime? modified, String? mime}) =>
+    Entry(
+      name: name,
+      path: '/root/$name',
+      isDir: false,
+      size: size,
+      mimeType: mime,
+      modified: modified,
+    );
+
+Entry _dir(String name) => Entry(
+      name: name,
+      path: '/root/$name',
+      isDir: true,
+    );
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // A unique scratch directory for ListingCache's on-disk reads/writes during
+  // this test run, so tests are hermetic and don't pick up (or leave behind)
+  // stale cache files in /tmp.
+  late Directory tmpDir;
+
+  setUpAll(() {
+    tmpDir = Directory.systemTemp.createTempSync('rfe_explorer_state_test_');
+  });
+
+  tearDownAll(() {
+    if (tmpDir.existsSync()) {
+      tmpDir.deleteSync(recursive: true);
+    }
+  });
+
+  // Mock path_provider's platform channel so ListingCache (used internally by
+  // ExplorerNotifier) doesn't throw MissingPluginException when it falls back
+  // to the app documents directory.
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory') {
+          return tmpDir.path;
+        }
+        return null;
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // buildPathStack
+  // ---------------------------------------------------------------------
+  group('buildPathStack', () {
+    test('POSIX root', () {
+      expect(buildPathStack('/'), ['/']);
+    });
+
+    test('POSIX nested path', () {
+      expect(buildPathStack('/home/x/Storage'), [
+        '/',
+        '/home',
+        '/home/x',
+        '/home/x/Storage',
+      ]);
+    });
+
+    test('Windows drive root', () {
+      expect(buildPathStack(r'C:\'), [r'C:\']);
+    });
+
+    test('Windows nested path with backslashes', () {
+      expect(buildPathStack(r'C:\Users\me\Documents'), [
+        r'C:\',
+        r'C:\Users',
+        r'C:\Users\me',
+        r'C:\Users\me\Documents',
+      ]);
+    });
+
+    test('Windows path with forward slashes is normalized', () {
+      expect(buildPathStack('C:/Users/me'), [
+        r'C:\',
+        r'C:\Users',
+        r'C:\Users\me',
+      ]);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // renameDestination
+  // ---------------------------------------------------------------------
+  group('renameDestination', () {
+    test('POSIX nested path keeps forward slashes', () {
+      expect(renameDestination('/home/x/old.txt', 'new.txt'),
+          '/home/x/new.txt');
+    });
+
+    test('POSIX root-level rename', () {
+      expect(renameDestination('/old.txt', 'new.txt'), '/new.txt');
+    });
+
+    test('Windows nested path keeps backslashes', () {
+      expect(renameDestination(r'C:\dir\old.txt', 'new.txt'),
+          r'C:\dir\new.txt');
+    });
+
+    test('Windows drive-root rename keeps backslash separator', () {
+      expect(renameDestination(r'C:\old.txt', 'new.txt'), r'C:\new.txt');
+    });
+
+    test('does not mix separators (no C:\\dir/new.txt)', () {
+      final result = renameDestination(r'C:\dir\old.txt', 'new.txt');
+      expect(result.contains('/'), isFalse);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerState.sortedEntries memoization / correctness
+  // ---------------------------------------------------------------------
+  group('ExplorerState.sortedEntries', () {
+    test('directories are listed before files regardless of name', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [
+          _file('a.txt'),
+          _dir('z_dir'),
+          _file('b.txt'),
+          _dir('a_dir'),
+        ],
+      );
+
+      expect(state.sortedEntries.map((e) => e.name), [
+        'a_dir',
+        'z_dir',
+        'a.txt',
+        'b.txt',
+      ]);
+    });
+
+    test('sorts by name ascending by default, case-insensitively', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('Banana'), _file('apple'), _file('Cherry')],
+      );
+
+      expect(state.sortedEntries.map((e) => e.name),
+          ['apple', 'Banana', 'Cherry']);
+    });
+
+    test('sorts by size descending when configured', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [
+          _file('small', size: 10),
+          _file('large', size: 1000),
+          _file('medium', size: 100),
+        ],
+        sort: const SortOrder(field: SortField.size, ascending: false),
+      );
+
+      expect(state.sortedEntries.map((e) => e.name),
+          ['large', 'medium', 'small']);
+    });
+
+    test('sorts by date ascending, missing dates treated as epoch', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [
+          _file('no_date'),
+          _file('newer', modified: DateTime(2026, 1, 2)),
+          _file('older', modified: DateTime(2026, 1, 1)),
+        ],
+        sort: const SortOrder(field: SortField.date, ascending: true),
+      );
+
+      expect(state.sortedEntries.map((e) => e.name),
+          ['no_date', 'older', 'newer']);
+    });
+
+    test('is recomputed when copyWith changes entries', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('b.txt'), _file('a.txt')],
+      );
+      expect(state.sortedEntries.map((e) => e.name), ['a.txt', 'b.txt']);
+
+      final next = state.copyWith(entries: [_file('z.txt'), _file('y.txt')]);
+      expect(next.sortedEntries.map((e) => e.name), ['y.txt', 'z.txt']);
+    });
+
+    test('is recomputed when copyWith changes sort order', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('a.txt'), _file('b.txt')],
+      );
+      expect(state.sortedEntries.map((e) => e.name), ['a.txt', 'b.txt']);
+
+      final next = state.copyWith(
+        sort: const SortOrder(field: SortField.name, ascending: false),
+      );
+      expect(next.sortedEntries.map((e) => e.name), ['b.txt', 'a.txt']);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerState pagination fields
+  // ---------------------------------------------------------------------
+  group('ExplorerState pagination', () {
+    test('hasMore is false when nextCursor is null', () {
+      final state = ExplorerState(pathStack: const ['/root']);
+      expect(state.hasMore, isFalse);
+    });
+
+    test('hasMore is true when nextCursor is set', () {
+      final state =
+          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
+      expect(state.hasMore, isTrue);
+    });
+
+    test('copyWith can clear nextCursor back to null via sentinel-aware arg',
+        () {
+      final state =
+          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
+      final cleared = state.copyWith(nextCursor: null);
+      expect(cleared.nextCursor, isNull);
+      expect(cleared.hasMore, isFalse);
+    });
+
+    test('copyWith without nextCursor preserves the previous cursor', () {
+      final state =
+          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
+      final next = state.copyWith(loading: true);
+      expect(next.nextCursor, 'cursor-1');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerNotifier pagination via loadMore()
+  // ---------------------------------------------------------------------
+  group('ExplorerNotifier.loadMore', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [
+          clientProvider.overrideWith((ref, hostId) async => client),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('first load fetches page 1 and stores nextCursor', () async {
+      client.pages['/'] = [
+        Listing(
+          path: '/',
+          entries: [_file('a.txt'), _file('b.txt')],
+          nextCursor: 'page2',
+        ),
+      ];
+
+      final arg = (hostId: 'h1', rootPath: '/');
+      // Keep the autoDispose provider alive for the duration of the test —
+      // without an active listener, container.read() alone schedules
+      // disposal at the end of each microtask, which would tear down and
+      // rebuild the notifier (re-triggering _load and resetting state)
+      // between polling iterations below.
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+
+      // Wait for the microtask-scheduled initial _load to complete.
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      final state = container.read(explorerProvider(arg));
+      expect(state.entries.map((e) => e.name), ['a.txt', 'b.txt']);
+      expect(state.nextCursor, 'page2');
+      expect(state.hasMore, isTrue);
+
+      // loadMore appends page 2 and clears the cursor (no further pages).
+      client.cursorPages['page2'] = Listing(
+        path: '/',
+        entries: [_file('c.txt')],
+        nextCursor: null,
+      );
+      await notifier.loadMore();
+
+      final after = container.read(explorerProvider(arg));
+      expect(after.entries.map((e) => e.name), ['a.txt', 'b.txt', 'c.txt']);
+      expect(after.nextCursor, isNull);
+      expect(after.hasMore, isFalse);
+      expect(after.loadingMore, isFalse);
+    });
+
+    test('loadMore is a no-op when there is no next cursor', () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt')], nextCursor: null),
+      ];
+
+      final arg = (hostId: 'h2', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      final before = container.read(explorerProvider(arg));
+      expect(before.hasMore, isFalse);
+
+      await notifier.loadMore();
+
+      final after = container.read(explorerProvider(arg));
+      // Unchanged — still just the one entry from the initial load.
+      expect(after.entries.map((e) => e.name), ['a.txt']);
+    });
+
+    test('navigating to a new path resets pagination state', () async {
+      client.pages['/'] = [
+        Listing(
+          path: '/',
+          entries: [_file('a.txt')],
+          nextCursor: 'page2',
+        ),
+      ];
+      client.pages['/sub'] = [
+        Listing(path: '/sub', entries: [_file('only.txt')], nextCursor: null),
+      ];
+
+      final arg = (hostId: 'h3', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      var state = container.read(explorerProvider(arg));
+      expect(state.nextCursor, 'page2');
+
+      notifier.navigate('/sub');
+      await _waitUntil(() => container
+          .read(explorerProvider(arg))
+          .entries
+          .any((e) => e.name == 'only.txt'));
+
+      state = container.read(explorerProvider(arg));
+      expect(state.entries.map((e) => e.name), ['only.txt']);
+      expect(state.nextCursor, isNull);
+      expect(state.hasMore, isFalse);
+    });
+  });
+}
+
+/// Fake [AgentClient] that serves canned [Listing] pages from in-memory maps
+/// instead of making network calls.
+///
+/// - [pages]: queue of responses for the *first* `list(path)` call (no
+///   cursor) per path — consumed in order.
+/// - [cursorPages]: response for `list(path, cursor: c)` keyed by cursor.
+class _FakeAgentClient extends AgentClient {
+  _FakeAgentClient({required Host host}) : super(host);
+
+  final Map<String, List<Listing>> pages = {};
+  final Map<String, Listing> cursorPages = {};
+
+  @override
+  Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
+    if (cursor != null) {
+      final listing = cursorPages[cursor];
+      if (listing == null) {
+        throw StateError('No fake page registered for cursor "$cursor"');
+      }
+      return listing;
+    }
+    final queue = pages[path];
+    if (queue == null || queue.isEmpty) {
+      throw StateError('No fake page registered for path "$path"');
+    }
+    return queue.removeAt(0);
+  }
+}

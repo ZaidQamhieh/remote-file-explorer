@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
-import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -30,40 +30,21 @@ class ExplorerScreen extends ConsumerStatefulWidget {
 }
 
 class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
-  AgentClient? _client;
-
-  @override
-  void initState() {
-    super.initState();
-    _initClient();
-  }
-
-  Future<void> _initClient() async {
-    final store = await ref.read(hostStoreProvider.future);
-    final token = await store.getToken(widget.host.id);
-    if (mounted) {
-      setState(() {
-        _client = AgentClient(widget.host, deviceToken: token);
-      });
-    }
-  }
-
-  ExplorerArg get _arg => (
-        host: widget.host,
-        rootPath: '/',
-        client: _client!,
-      );
+  ExplorerArg get _arg => (hostId: widget.host.id, rootPath: '/');
 
   ExplorerNotifier get _notifier =>
       ref.read(explorerProvider(_arg).notifier);
 
   @override
   Widget build(BuildContext context) {
-    final client = _client;
+    final clientAsync = ref.watch(clientProvider(widget.host.id));
+    final client = clientAsync.valueOrNull;
     if (client == null) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.host.label)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: clientAsync.hasError
+            ? Center(child: Text('Error: ${clientAsync.error}'))
+            : const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -78,7 +59,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         if (!didPop) _notifier.popDirectory();
       },
       child: Scaffold(
-        appBar: _buildAppBar(context, state, isFav),
+        appBar: _buildAppBar(context, state, isFav, client),
         body: _buildBody(context, state, client),
         floatingActionButton:
             state.multiSelect ? null : _buildFab(context, state, client),
@@ -94,7 +75,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  AppBar _buildAppBar(BuildContext context, ExplorerState state, bool isFav) {
+  AppBar _buildAppBar(
+      BuildContext context, ExplorerState state, bool isFav, AgentClient client) {
     return AppBar(
       leading: state.atRoot
           ? null
@@ -103,13 +85,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         state: state,
         notifier: _notifier,
         onMoveInto: (dragged, dest) =>
-            _moveInto(context, _client!, dragged, dest),
+            _moveInto(context, client, dragged, dest),
       ),
       actions: [
         IconButton(
           icon: const Icon(Icons.search),
           tooltip: 'Search',
-          onPressed: () => _openSearch(context, state),
+          onPressed: () => _openSearch(context, state, client),
         ),
         IconButton(
           icon: Icon(isFav ? Icons.star : Icons.star_border),
@@ -168,9 +150,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  Future<void> _openSearch(BuildContext context, ExplorerState state) async {
-    final client = _client;
-    if (client == null) return;
+  Future<void> _openSearch(
+      BuildContext context, ExplorerState state, AgentClient client) async {
     final parentPath = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => SearchScreen(
@@ -233,10 +214,17 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildList(
       BuildContext context, ExplorerState state, AgentClient client) {
+    final entries = state.sortedEntries;
+    final showLoadMore = state.hasMore;
+    final itemCount = entries.length + (showLoadMore ? 1 : 0);
     return ListView.builder(
-      itemCount: state.sortedEntries.length,
+      itemCount: itemCount,
       itemBuilder: (ctx, i) {
-        final entry = state.sortedEntries[i];
+        if (i >= entries.length) {
+          _notifier.loadMore();
+          return _LoadMoreIndicator(loading: state.loadingMore);
+        }
+        final entry = entries[i];
         return AppearListItem(
           index: i,
           child: _EntryListTile(
@@ -272,6 +260,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildGrid(
       BuildContext context, ExplorerState state, AgentClient client) {
+    final entries = state.sortedEntries;
+    final showLoadMore = state.hasMore;
+    final itemCount = entries.length + (showLoadMore ? 1 : 0);
     return GridView.builder(
       padding: const EdgeInsets.all(Spacing.md),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -280,9 +271,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         crossAxisSpacing: Spacing.md,
         mainAxisSpacing: Spacing.md,
       ),
-      itemCount: state.sortedEntries.length,
+      itemCount: itemCount,
       itemBuilder: (ctx, i) {
-        final entry = state.sortedEntries[i];
+        if (i >= entries.length) {
+          _notifier.loadMore();
+          return _LoadMoreIndicator(loading: state.loadingMore);
+        }
+        final entry = entries[i];
         return AppearListItem(
           index: i,
           child: _EntryGridCell(
@@ -321,6 +316,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         entry: entry,
         host: widget.host,
         client: client,
+        onChanged: _notifier.refresh,
       ),
     );
   }
@@ -856,6 +852,35 @@ class _EntryIcon extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
+// Pagination "load more" trailing item
+// ---------------------------------------------------------------------------
+
+/// Trailing tile shown at the end of the list/grid when a directory has more
+/// pages. Becoming visible triggers [ExplorerNotifier.loadMore]; this just
+/// renders the resulting spinner (or a quiet placeholder while the request
+/// is still being kicked off).
+class _LoadMoreIndicator extends StatelessWidget {
+  const _LoadMoreIndicator({required this.loading});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
+      child: Center(
+        child: loading
+            ? const SizedBox.square(
+                dimension: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const SizedBox.square(dimension: 24),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Multi-select bottom bar
 // ---------------------------------------------------------------------------
 
@@ -1103,9 +1128,10 @@ class _MultiSelectBar extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete items?'),
+        title: const Text('Delete permanently?'),
         content: Text(
-            'Delete ${state.selected.length} item(s)? This cannot be undone.'),
+            'Permanently delete ${state.selected.length} item(s)? '
+            'This cannot be undone.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),

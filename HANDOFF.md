@@ -59,6 +59,21 @@ Repo root: `~/Storage/Projects/remote-file-explorer`
 - **App release: v1.5.0 (build 10)** — UI remodel + native installer + feedback toolkit
   + device dedup + remove-revoked-device button + updater pruning of old cached APKs.
 - **Agent:** admin-CLI build, DB-backed pairing codes, deployed to `~/.local/bin/rfe-agent`.
+  - **Agent version is now `1.0.0`** (was `0.1.0`); `protocol/openapi.yaml` `info.version`
+    bumped to match. No min-version handshake yet (future work).
+  - **Data dir unified**: both the daemon (no-args/`serve`) and the admin CLI now resolve the
+    data dir via the same `defaultDataDir()` (in `cmd/agent/main.go`), precedence
+    `-data` flag > `$RFE_DATA_DIR` > `~/.rfe-agent`. Previously the daemon defaulted to
+    `os.UserConfigDir()/remote-file-explorer` while the CLI defaulted to `~/.rfe-agent` —
+    `rfe-agent devices` (no `-data`) was opening a different, empty DB than the live deployment.
+    `~/.rfe-agent` was kept as the default since it's what the deployed systemd service and
+    `release.sh` already use.
+  - `protocol/openapi.yaml` had a contract-drift pass: removed the never-implemented `permanent`
+    delete flag (deletes are permanent/recursive `os.RemoveAll`, documented as such), removed the
+    promised-but-nonexistent `/v1/events` WebSocket (rephrased as future work), added
+    `address`/`tailscaleAddress` to `Health`/`PairResponse`, made `Content-Range` optional on
+    chunk PUT, documented the full error-code vocabulary + 401/429/413 responses, and added
+    server-side validation rejecting negative `size` on `POST /transfers` (400 BAD_REQUEST).
 - **Phone:** Samsung SM S918B (Android 16 / API 36), adb serial `R5CWB2KDC2K`.
   - adb path: `~/Android/Sdk/platform-tools/adb`
   - ⚠️ Phone was last cable-flashed to **build 6** and its app data was cleared, so it is

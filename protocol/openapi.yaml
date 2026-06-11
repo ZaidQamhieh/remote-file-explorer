@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 0.1.0
+  version: 1.0.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
-    metadata; binary streams for file content; WebSocket (/v1/events) for progress and
-    filesystem change events. All routes except /pair and /health require a bearer device token.
+    metadata; binary streams for file content. All routes except /pair and /health require
+    a bearer device token. A WebSocket channel (/v1/events) for live progress and filesystem
+    change-event push is planned for a future wave but does not exist yet — clients must poll
+    (e.g. GET /transfers/{id}, GET /fs) for now.
 servers:
   - url: https://{host}:{port}/v1
     variables:
@@ -42,7 +44,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PairResponse" }
+        "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "429":
+          description: >
+            Too many pairing attempts (rate-limited at 10/min per agent, since the
+            pairing code is short and brute-forceable). code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /system/drives:
     get:
@@ -69,13 +77,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Listing" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
-      summary: Delete one or more paths
+      summary: Permanently delete one or more paths (recursive, irreversible)
+      description: >
+        Deletes are permanent and recursive (equivalent to `rm -rf`). There is no
+        trash/recycle bin — the agent calls the OS-level recursive remove directly
+        and the data cannot be recovered. Directories are removed along with all
+        of their contents.
       parameters:
         - { in: query, name: path, schema: { type: string }, description: Single path; or use body for batch }
-        - { in: query, name: permanent, schema: { type: boolean, default: false } }
       requestBody:
         required: false
         content:
@@ -84,9 +98,10 @@ paths:
               type: object
               properties:
                 paths: { type: array, items: { type: string } }
-                permanent: { type: boolean, default: false }
       responses:
         "200": { $ref: "#/components/responses/BatchResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
 
   /fs/folder:
@@ -99,6 +114,9 @@ paths:
             schema: { $ref: "#/components/schemas/CreateRequest" }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
   /fs/file:
@@ -111,6 +129,9 @@ paths:
             schema: { $ref: "#/components/schemas/CreateRequest" }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
   /fs/rename:
@@ -128,6 +149,11 @@ paths:
                 dst: { type: string }
       responses:
         "200": { description: Renamed, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /fs/copy:
     post:
@@ -137,6 +163,8 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/TransferOpRequest" } } }
       responses:
         "202": { $ref: "#/components/responses/BatchResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
 
   /fs/move:
     post:
@@ -146,6 +174,8 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/TransferOpRequest" } } }
       responses:
         "202": { $ref: "#/components/responses/BatchResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
 
   /fs/meta:
     get:
@@ -154,6 +184,8 @@ paths:
         - { in: query, name: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Metadata, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
   /content:
@@ -164,6 +196,8 @@ paths:
       responses:
         "200": { description: Full content, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
         "206": { description: Partial content (Range) }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
 
   /transfers:
@@ -186,6 +220,13 @@ paths:
         "201":
           description: Session opened
           content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } }
+        "400":
+          description: >
+            Invalid request — missing path/sha256/chunkSize, negative size, or
+            chunkSize over the 32MiB cap. code=BAD_REQUEST.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /transfers/{id}:
     get:
@@ -193,21 +234,34 @@ paths:
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /transfers/{id}/chunks/{n}:
     put:
-      summary: Upload chunk n (Content-Range header; per-chunk checksum)
+      summary: Upload chunk n (per-chunk checksum)
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
         - { in: path, name: n, required: true, schema: { type: integer } }
-        - { in: header, name: Content-Range, required: true, schema: { type: string } }
+        - in: header
+          name: Content-Range
+          required: false
+          schema: { type: string }
+          description: >
+            Optional/informational only — the agent does not currently read this
+            header. Chunk placement is fully determined by the {n} path segment
+            and the session's chunkSize from POST /transfers.
         - { in: header, name: X-Chunk-Sha256, required: true, schema: { type: string } }
       requestBody:
         required: true
         content: { application/octet-stream: { schema: { type: string, format: binary } } }
       responses:
         "204": { description: Chunk stored }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
 
   /transfers/{id}/complete:
     post:
@@ -215,26 +269,37 @@ paths:
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200": { description: Completed, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
-        "422": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422":
+          description: Whole-file SHA-256 mismatch. code=HASH_MISMATCH.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /thumb:
     get:
-      summary: Server-rendered thumbnail / preview (phase 2)
+      summary: Server-rendered thumbnail / preview
       parameters:
         - { in: query, name: path, required: true, schema: { type: string } }
         - { in: query, name: size, schema: { type: integer, default: 256 } }
       responses:
         "200": { description: Thumbnail, content: { image/jpeg: { schema: { type: string, format: binary } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404":
+          description: No thumbnail available for this file. code=NOT_AVAILABLE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /search:
     get:
-      summary: Search files and folders (phase 2)
+      summary: Search files and folders
       parameters:
         - { in: query, name: q, required: true, schema: { type: string } }
         - { in: query, name: root, schema: { type: string } }
         - { in: query, name: limit, schema: { type: integer, default: 100 } }
       responses:
         "200": { description: Results, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Entry" } } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
 
   /settings:
     get:
@@ -246,6 +311,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentSettings' }
+        '401': { $ref: '#/components/responses/Error' }
     patch:
       summary: Update agent settings (partial)
       security: [{ deviceToken: [] }]
@@ -259,6 +325,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentSettings' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /devices:
     get:
       summary: List paired devices
@@ -271,6 +339,7 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Device' }
+        '401': { $ref: '#/components/responses/Error' }
   /devices/{id}:
     delete:
       summary: Revoke a paired device, or permanently remove it with ?purge=true
@@ -289,7 +358,10 @@ paths:
           description: When true, permanently delete the device instead of revoking it.
       responses:
         '204': { description: Revoked or removed }
-        '409': { description: Cannot target the calling device }
+        '401': { $ref: '#/components/responses/Error' }
+        '409':
+          description: Cannot target the calling device. code=CONFLICT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /app/latest:
     get:
       summary: Latest available Android APK
@@ -301,12 +373,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AppRelease' }
         '204': { description: No update available }
+        '401': { $ref: '#/components/responses/Error' }
   /app/download:
     get:
       summary: Download the latest APK (Range-enabled)
       security: [{ deviceToken: [] }]
       responses:
         '200': { description: APK bytes (application/vnd.android.package-archive) }
+        '401': { $ref: '#/components/responses/Error' }
         '404': { description: No update available }
 
 components:
@@ -367,6 +441,14 @@ components:
         version: { type: string }
         os: { type: string, enum: [windows, linux] }
         readOnly: { type: boolean }
+        address:
+          type: string
+          description: >
+            LAN host:port the agent is reachable at, if detected. Lets an
+            already-paired app learn an address it didn't capture at pairing time.
+        tailscaleAddress:
+          type: string
+          description: Tailscale host:port the agent is reachable at, if detected.
 
     PairRequest:
       type: object
@@ -389,6 +471,12 @@ components:
         deviceId: { type: string }
         agentName: { type: string }
         certFingerprint: { type: string, description: SHA-256 of agent TLS cert, for pinning }
+        address:
+          type: string
+          description: LAN host:port the agent is reachable at, if detected.
+        tailscaleAddress:
+          type: string
+          description: Tailscale host:port the agent is reachable at, if detected.
 
     Drive:
       type: object
@@ -445,7 +533,46 @@ components:
 
     Error:
       type: object
+      description: >
+        Uniform error envelope returned on non-2xx responses. The `code` field is
+        the authoritative machine-readable vocabulary the agent emits (see enum);
+        `message` is a human-readable detail string and may change without notice.
       properties:
-        code: { type: string, example: PATH_NOT_FOUND }
+        code:
+          type: string
+          example: PATH_NOT_FOUND
+          enum:
+            - BAD_REQUEST
+            - UNAUTHORIZED
+            - READ_ONLY
+            - FORBIDDEN
+            - PATH_NOT_FOUND
+            - CONFLICT
+            - CHUNK_HASH_MISMATCH
+            - HASH_MISMATCH
+            - NOT_AVAILABLE
+            - INVALID_CODE
+            - DELETE_FAILED
+            - RATE_LIMITED
+            - PAYLOAD_TOO_LARGE
+            - INTERNAL
+          description: >
+            - `BAD_REQUEST` (400): malformed or missing required fields.
+            - `UNAUTHORIZED` (401): missing/invalid/revoked bearer token.
+            - `READ_ONLY` (403): agent is in read-only mode; write rejected.
+            - `FORBIDDEN` (403): path escapes the configured root jail.
+            - `PATH_NOT_FOUND` (404): path does not exist.
+            - `CONFLICT` (409): destination already exists, or a /devices
+              operation targets the calling device.
+            - `CHUNK_HASH_MISMATCH` (409): per-chunk SHA-256 did not match
+              X-Chunk-Sha256.
+            - `HASH_MISMATCH` (422): whole-file SHA-256 did not match on complete.
+            - `NOT_AVAILABLE` (404): no thumbnail/preview available for this file.
+            - `INVALID_CODE` (401): pairing code invalid or expired.
+            - `DELETE_FAILED`: per-item batch-delete failure (returned inside a
+              BatchResult entry, not as a top-level HTTP error).
+            - `RATE_LIMITED` (429): too many /pair attempts (10/min).
+            - `PAYLOAD_TOO_LARGE` (413): chunk body exceeds the session's chunkSize.
+            - `INTERNAL` (500): unexpected server error.
         message: { type: string }
         details: { type: object, additionalProperties: true }

@@ -77,6 +77,10 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path, sha256, and chunkSize required")
 			return
 		}
+		if req.Size < 0 {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "size must not be negative")
+			return
+		}
 		if req.ChunkSize > maxChunkSize {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "chunkSize exceeds maximum of 32MiB")
 			return

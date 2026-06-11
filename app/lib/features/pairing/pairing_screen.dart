@@ -129,7 +129,10 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
     required String pairingCode,
     String? expectedFingerprint,
   }) async {
-    // Probe host — no fingerprint yet (TOFU)
+    // Probe host — no fingerprint yet (TOFU). This host isn't in the store
+    // yet (pairing hasn't completed), so it can't go through
+    // buildClientForHost/clientProvider — those require a paired host record
+    // to look up a device token. Construct directly and close when done.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
@@ -182,6 +185,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
     } catch (e) {
       if (mounted) setState(() => _error = 'Pairing failed: $e');
     } finally {
+      client.close();
       if (mounted) setState(() => _processing = false);
     }
   }
@@ -273,6 +277,9 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
       _error = null;
     });
 
+    // Probe host — not yet in the store (pairing hasn't completed), so this
+    // can't go through buildClientForHost/clientProvider. Construct directly
+    // and close when done.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
@@ -311,6 +318,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
     } catch (e) {
       if (mounted) setState(() => _error = 'Pairing failed: $e');
     } finally {
+      client.close();
       if (mounted) setState(() => _loading = false);
     }
   }

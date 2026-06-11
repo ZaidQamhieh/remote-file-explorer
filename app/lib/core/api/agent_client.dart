@@ -404,13 +404,12 @@ class AgentClient {
     });
   }
 
-  Future<Map<String, dynamic>> delete(
-    List<String> paths, {
-    bool permanent = false,
-  }) async {
+  /// Permanently and recursively deletes [paths]. There is no "trash" or
+  /// undo — the agent removes the files/directories immediately.
+  Future<Map<String, dynamic>> delete(List<String> paths) async {
     return _delete<Map<String, dynamic>>(
       '/fs',
-      data: {'paths': paths, 'permanent': permanent},
+      data: {'paths': paths},
     );
   }
 

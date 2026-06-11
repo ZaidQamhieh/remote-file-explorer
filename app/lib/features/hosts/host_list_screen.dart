@@ -196,9 +196,9 @@ class _HostCardState extends ConsumerState<_HostCard> {
   /// Swallows all errors so a missing/old agent never blocks the host list.
   Future<void> _maybeOfferUpdate(BuildContext context) async {
     if (!Platform.isAndroid) return;
+    AgentClient? client;
     try {
-      final token = await widget.store.getToken(widget.host.id);
-      final client = AgentClient(widget.host, deviceToken: token);
+      client = await buildClientForHost(ref.read, widget.host.id);
       final rel = await client.latestRelease();
       final info = await PackageInfo.fromPlatform();
       final installed = int.tryParse(info.buildNumber) ?? 0;
@@ -227,13 +227,15 @@ class _HostCardState extends ConsumerState<_HostCard> {
       );
     } catch (_) {
       // best-effort; never block the host list
+    } finally {
+      client?.close();
     }
   }
 
   Future<Health?> _ping() async {
+    AgentClient? client;
     try {
-      final token = await widget.store.getToken(widget.host.id);
-      final client = AgentClient(widget.host, deviceToken: token);
+      client = await buildClientForHost(ref.read, widget.host.id);
       final health = await client.health().timeout(const Duration(seconds: 5));
       await _learnAddresses(health);
       if (mounted) setState(() => _lastChecked = DateTime.now());
@@ -241,6 +243,8 @@ class _HostCardState extends ConsumerState<_HostCard> {
     } catch (_) {
       if (mounted) setState(() => _lastChecked = DateTime.now());
       return null;
+    } finally {
+      client?.close();
     }
   }
 
@@ -258,7 +262,6 @@ class _HostCardState extends ConsumerState<_HostCard> {
   }
 
   Future<void> _openExplorer(BuildContext context) async {
-    ref.read(activeHostProvider.notifier).setHost(widget.host);
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ExplorerScreen(host: widget.host),

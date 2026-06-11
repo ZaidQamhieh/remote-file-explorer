@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"text/tabwriter"
 	"time"
 
@@ -53,20 +52,14 @@ Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
 `)
 }
 
-// adminDataDir resolves the data dir: -data flag > $RFE_DATA_DIR > ~/.rfe-agent
-// (matching the deployed systemd service).
+// adminDataDir resolves the data dir: -data flag > $RFE_DATA_DIR > ~/.rfe-agent.
+// Delegates to defaultDataDir (main.go) so the admin CLI and the daemon always
+// agree on which DB to open by default.
 func adminDataDir(flagVal string) string {
 	if flagVal != "" {
 		return flagVal
 	}
-	if env := os.Getenv("RFE_DATA_DIR"); env != "" {
-		return env
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".rfe-agent"
-	}
-	return filepath.Join(home, ".rfe-agent")
+	return defaultDataDir()
 }
 
 func openAdminStore(dataDir string) (*store.DB, error) {

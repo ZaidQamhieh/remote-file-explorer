@@ -68,6 +68,45 @@ func TestOpenTransferHandler_ChunkSizeOverCapIs400(t *testing.T) {
 	}
 }
 
+// TestOpenTransferHandler_NegativeSizeIs400 verifies the open-session handler
+// rejects a negative size with a 400 BAD_REQUEST. A negative size would break
+// the totalChunks calculation and os.Truncate downstream.
+func TestOpenTransferHandler_NegativeSizeIs400(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+
+	body := `{"path":"file.bin","size":-1,"sha256":"deadbeef","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	openTransferHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var got apiError
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if got.Code != "BAD_REQUEST" {
+		t.Fatalf("unexpected error code: %+v", got)
+	}
+}
+
+// TestOpenTransferHandler_ZeroSizeIsAllowed sanity-checks that a zero-byte
+// file (a legitimate upload) is accepted.
+func TestOpenTransferHandler_ZeroSizeIsAllowed(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+
+	target := filepath.Join(t.TempDir(), "empty.bin")
+	body := `{"path":"` + target + `","size":0,"sha256":"` + sha256hex(nil) + `","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	openTransferHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 // TestOpenTransferHandler_ChunkSizeAtCapIsAllowed sanity-checks the boundary:
 // exactly 32MiB is accepted.
 func TestOpenTransferHandler_ChunkSizeAtCapIsAllowed(t *testing.T) {

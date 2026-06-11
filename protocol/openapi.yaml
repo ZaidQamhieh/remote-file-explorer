@@ -292,13 +292,100 @@ paths:
   /search:
     get:
       summary: Search files and folders
+      description: >
+        Recursively searches under root (or the configured roots / home
+        directory) for entries matching q, optionally narrowed by types,
+        ext, size bounds, and modified-time bounds. All filters are ANDed
+        together. The response body is always a bare JSON array of Entry
+        (unchanged from v1) — truncation/partial-result state is signaled
+        via response headers instead, so existing clients that only read
+        the array continue to work.
       parameters:
-        - { in: query, name: q, required: true, schema: { type: string } }
+        - in: query
+          name: q
+          required: true
+          description: >
+            Case-insensitive match against the entry name. If the value
+            contains `*` or `?`, it is treated as a glob pattern (matched
+            with path.Match against the lowercased name); an invalid glob
+            pattern returns 400 BAD_REQUEST. Otherwise it is a
+            case-insensitive substring match.
+          schema: { type: string }
         - { in: query, name: root, schema: { type: string } }
-        - { in: query, name: limit, schema: { type: integer, default: 100 } }
+        - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }
+        - in: query
+          name: types
+          description: >
+            Comma-separated list of categories to include (AND-ed with the
+            other filters). Unknown values return 400 BAD_REQUEST.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [folder, image, video, audio, document, archive, other]
+          style: form
+          explode: false
+        - in: query
+          name: ext
+          description: >
+            Comma-separated list of file extensions to include, without the
+            leading dot, case-insensitive (e.g. `jpg,png`). Implies
+            non-folder; may be combined with types.
+          schema: { type: string }
+        - in: query
+          name: minSize
+          description: >
+            Minimum file size in bytes (inclusive). When minSize and/or
+            maxSize is set, folders are excluded from results. Invalid
+            (non-integer) values return 400 BAD_REQUEST.
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: maxSize
+          description: >
+            Maximum file size in bytes (inclusive). When minSize and/or
+            maxSize is set, folders are excluded from results. Invalid
+            (non-integer) values return 400 BAD_REQUEST.
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: modifiedAfter
+          description: >
+            Only include entries modified at or after this timestamp
+            (RFC3339). Invalid timestamps return 400 BAD_REQUEST.
+          schema: { type: string, format: date-time }
+        - in: query
+          name: modifiedBefore
+          description: >
+            Only include entries modified at or before this timestamp
+            (RFC3339). Invalid timestamps return 400 BAD_REQUEST.
+          schema: { type: string, format: date-time }
       responses:
-        "200": { description: Results, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Entry" } } } } }
-        "400": { $ref: "#/components/responses/Error" }
+        "200":
+          description: >
+            Results as a bare JSON array of Entry (filters applied;
+            truncation/time-budget state is reported via headers, not the
+            body).
+          headers:
+            X-Search-Truncated:
+              description: >
+                Set to `1` when the walk stopped early because the result
+                limit was reached. Not set if the walk finished naturally
+                or the time budget expired before the limit was hit.
+              schema: { type: string, enum: ["1"] }
+            X-Search-Time-Budget:
+              description: >
+                Set to `1` when the 15s search time budget expired before
+                the result limit was reached, indicating the results are
+                partial. Mutually exclusive with X-Search-Truncated.
+              schema: { type: string, enum: ["1"] }
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Entry" } }
+        "400":
+          description: >
+            BAD_REQUEST — missing q, an invalid glob pattern in q, an
+            unknown types value, a non-integer minSize/maxSize, or an
+            invalid RFC3339 modifiedAfter/modifiedBefore.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401": { $ref: "#/components/responses/Error" }
 
   /settings:

@@ -15,6 +15,7 @@ import '../models/health.dart';
 import '../models/host.dart';
 import '../models/listing.dart';
 import '../models/pair_response.dart';
+import '../models/search_result.dart';
 import '../models/upload_session.dart';
 
 /// Thrown when an agent's TLS certificate does not match the pinned fingerprint.
@@ -298,24 +299,59 @@ class AgentClient {
     return Entry.fromJson(data);
   }
 
-  /// Search for files and folders whose name contains [q] (case-insensitive).
+  /// Search for files and folders whose name contains [q] (case-insensitive),
+  /// or matches it as a case-insensitive glob if [q] contains `*` or `?`.
   ///
   /// If [root] is provided the search is constrained to that subtree;
   /// otherwise the agent searches every allowed root. [limit] caps the
   /// number of results returned (server-side capped too).
-  Future<List<Entry>> search({
+  ///
+  /// Optional AND-combined filters:
+  /// - [types]: entry categories, e.g. `folder`, `image`, `video`, `audio`,
+  ///   `document`, `archive`, `other`.
+  /// - [ext]: file extensions, without the leading dot.
+  /// - [minSize] / [maxSize]: size bounds in bytes.
+  /// - [modifiedAfter] / [modifiedBefore]: modification-time bounds, sent as
+  ///   RFC3339 timestamps.
+  ///
+  /// Pass [cancelToken] to allow canceling an in-flight search (e.g. when the
+  /// user types again or leaves the screen). A cancellation surfaces as a
+  /// [DioException] with [DioExceptionType.cancel] rather than
+  /// [AgentApiException].
+  ///
+  /// The returned [SearchResult] also reports whether the server truncated
+  /// the result list ([SearchResult.truncated]) or hit its walk time budget
+  /// ([SearchResult.timeBudgetHit]).
+  Future<SearchResult> search({
     required String q,
     String? root,
     int limit = 100,
+    List<String>? types,
+    List<String>? ext,
+    int? minSize,
+    int? maxSize,
+    DateTime? modifiedAfter,
+    DateTime? modifiedBefore,
+    CancelToken? cancelToken,
   }) async {
-    final data = await _get<List<dynamic>>('/search', queryParameters: {
-      'q': q,
-      if (root != null) 'root': root,
-      'limit': limit,
-    });
-    return data
-        .map((e) => Entry.fromJson(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final res = await _dio.get<List<dynamic>>('/search', queryParameters: {
+        'q': q,
+        if (root != null) 'root': root,
+        'limit': limit,
+        if (types != null && types.isNotEmpty) 'types': types.join(','),
+        if (ext != null && ext.isNotEmpty) 'ext': ext.join(','),
+        if (minSize != null) 'minSize': minSize,
+        if (maxSize != null) 'maxSize': maxSize,
+        if (modifiedAfter != null)
+          'modifiedAfter': modifiedAfter.toUtc().toIso8601String(),
+        if (modifiedBefore != null)
+          'modifiedBefore': modifiedBefore.toUtc().toIso8601String(),
+      }, cancelToken: cancelToken);
+      return SearchResult.fromResponse(res.data ?? const [], res.headers.map);
+    } on DioException catch (e) {
+      _throwTransferError(e);
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -2,6 +2,8 @@
 
 **Status: PLANNED, NOT STARTED.** Written 2026-06-12 after the search-v2 release
 (app v1.7.0+13, agent v1.1.0). This is the execution brief for a future session.
+Visual direction lives in `docs/ui-design-spec.md` (Expressive M3, approved
+2026-06-12) — spec wins on visuals, this plan wins on scope/sequencing.
 
 **How to run this plan:** the orchestrator (brain) dispatches Sonnet agents per
 wave with disjoint file ownership, verifies `flutter analyze` + `flutter test`

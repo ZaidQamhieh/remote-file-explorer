@@ -14,11 +14,12 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
 
       - name: go vet
         run: go vet ./...
@@ -33,7 +34,7 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # app/pubspec.yaml pins `sdk: ^3.7.0` (Dart 3.7), which ships with
       # Flutter 3.29.x stable.

@@ -10,6 +10,7 @@ import '../models/host.dart';
 const _kHostListKey = 'rfe_hosts_v1';
 String _tokenKey(String hostId) => 'rfe_token_$hostId';
 String _fpKey(String hostId) => 'rfe_fp_$hostId';
+String _lastSeenKey(String hostId) => 'rfe_last_seen_$hostId';
 
 /// Persists [Host] metadata (non-secret) in [SharedPreferences] and
 /// sensitive fields (device token, cert fingerprint) in [FlutterSecureStorage].
@@ -76,6 +77,27 @@ class HostStore {
 
   Future<void> setFingerprint(String hostId, String fingerprint) =>
       _secure.write(key: _fpKey(hostId), value: fingerprint);
+
+  // ---------------------------------------------------------------------------
+  // Last-seen timestamp (non-sensitive, used for the "last seen" label on
+  // offline hosts)
+  // ---------------------------------------------------------------------------
+
+  /// The last time a successful `/health` ping was recorded for [hostId], or
+  /// `null` if the host has never been seen online.
+  DateTime? getLastSeen(String hostId) {
+    final millis = _prefs.getInt(_lastSeenKey(hostId));
+    if (millis == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  /// Records [at] (defaults to now) as the last time [hostId] answered
+  /// `/health` successfully.
+  Future<void> setLastSeen(String hostId, [DateTime? at]) =>
+      _prefs.setInt(
+        _lastSeenKey(hostId),
+        (at ?? DateTime.now()).millisecondsSinceEpoch,
+      );
 }
 
 // ---------------------------------------------------------------------------

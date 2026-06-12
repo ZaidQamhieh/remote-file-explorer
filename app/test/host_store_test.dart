@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
+import 'package:remote_file_explorer/core/storage/host_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // HostStore unit tests — exercises the JSON serialisation logic used by the
@@ -109,6 +110,52 @@ void main() {
 
       expect(remaining.length, 2);
       expect(remaining.map((h) => h.id), isNot(contains('h2')));
+    });
+  });
+
+  group('Last-seen timestamp', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('returns null when never recorded', () async {
+      final store = await HostStore.create();
+      expect(store.getLastSeen('h1'), isNull);
+    });
+
+    test('round-trips a recorded timestamp', () async {
+      final store = await HostStore.create();
+      final now = DateTime.now();
+      await store.setLastSeen('h1', now);
+
+      final got = store.getLastSeen('h1');
+      expect(got, isNotNull);
+      // SharedPreferences stores millisecond precision.
+      expect(got!.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+    });
+
+    test('defaults to now when no timestamp is given', () async {
+      final store = await HostStore.create();
+      final before = DateTime.now();
+      await store.setLastSeen('h1');
+      final after = DateTime.now();
+
+      final got = store.getLastSeen('h1')!;
+      expect(got.isBefore(before.subtract(const Duration(seconds: 1))), isFalse);
+      expect(got.isAfter(after.add(const Duration(seconds: 1))), isFalse);
+    });
+
+    test('timestamps for different hosts are independent', () async {
+      final store = await HostStore.create();
+      final t1 = DateTime(2026, 1, 1);
+      final t2 = DateTime(2026, 6, 1);
+      await store.setLastSeen('h1', t1);
+      await store.setLastSeen('h2', t2);
+
+      expect(store.getLastSeen('h1')!.millisecondsSinceEpoch,
+          t1.millisecondsSinceEpoch);
+      expect(store.getLastSeen('h2')!.millisecondsSinceEpoch,
+          t2.millisecondsSinceEpoch);
     });
   });
 }

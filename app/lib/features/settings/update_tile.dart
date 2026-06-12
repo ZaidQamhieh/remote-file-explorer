@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -217,7 +218,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
 // Progress dialog
 // ---------------------------------------------------------------------------
 
-enum _Stage { downloading, opening, error }
+enum _Stage { downloading, opening, error, cancelled }
 
 /// Modal dialog that downloads the APK (with a live percentage) and hands it to
 /// the installer, surfacing a clear result for every outcome.
@@ -245,13 +246,25 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   int _total = 0;
   String? _errorMsg;
 
+  /// Cancels the in-flight APK download when the user taps Cancel. Replaced
+  /// with a fresh token on each Retry so a cancelled token can't poison a
+  /// later attempt.
+  CancelToken _cancelToken = CancelToken();
+
   @override
   void initState() {
     super.initState();
     _download();
   }
 
+  @override
+  void dispose() {
+    if (!_cancelToken.isCancelled) _cancelToken.cancel();
+    super.dispose();
+  }
+
   Future<void> _download() async {
+    _cancelToken = CancelToken();
     setState(() {
       _stage = _Stage.downloading;
       _progress = null;
@@ -260,6 +273,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
     try {
       await widget.client.downloadApk(
         localFile: widget.apk,
+        cancelToken: _cancelToken,
         onProgress: (received, total) {
           if (!mounted) return;
           setState(() {
@@ -270,6 +284,16 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         },
       );
       await _install();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      if (e.type == DioExceptionType.cancel) {
+        setState(() => _stage = _Stage.cancelled);
+        return;
+      }
+      setState(() {
+        _stage = _Stage.error;
+        _errorMsg = '$e';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -277,6 +301,13 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         _errorMsg = '$e';
       });
     }
+  }
+
+  /// Aborts the in-flight download. The cancellation surfaces back to
+  /// [_download]'s catch block, which moves to [_Stage.cancelled] — closing
+  /// the dialog directly here would race with that and could pop twice.
+  void _cancelDownload() {
+    if (!_cancelToken.isCancelled) _cancelToken.cancel();
   }
 
   Future<void> _install() async {
@@ -341,13 +372,23 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         );
       case _Stage.error:
         return Text(_errorMsg ?? 'Something went wrong.');
+      case _Stage.cancelled:
+        return const Text('Download cancelled.');
     }
   }
 
   List<Widget> _buildActions(BuildContext context) {
     switch (_stage) {
       case _Stage.downloading:
+        return [
+          TextButton(
+            onPressed: _cancelDownload,
+            child: const Text('Cancel'),
+          ),
+        ];
       case _Stage.opening:
+        // The APK is already fully downloaded and handed to the installer —
+        // nothing left to cancel.
         return [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -355,6 +396,17 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
           ),
         ];
       case _Stage.error:
+        return [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: _download,
+            child: const Text('Retry'),
+          ),
+        ];
+      case _Stage.cancelled:
         return [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),

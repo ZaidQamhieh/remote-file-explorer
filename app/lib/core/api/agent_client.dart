@@ -138,6 +138,17 @@ class AgentClient {
   /// Fingerprint observed on the most recent TLS handshake (for TOFU capture).
   String? lastSeenFingerprint;
 
+  /// The address (`host:port`, no scheme) this client is currently talking
+  /// to — initially whichever candidate worked last time, and updated if a
+  /// request falls back to the next candidate (see the retry interceptor in
+  /// the constructor). Used by the UI to show "LAN" vs "Tailscale".
+  String get activeAddress => _addresses[_addrIndex];
+
+  /// Whether [activeAddress] is the host's Tailscale address (as opposed to
+  /// its primary/LAN address).
+  bool get isActiveAddressTailscale =>
+      host.tailscaleAddress != null && activeAddress == host.tailscaleAddress;
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
@@ -643,6 +654,12 @@ class AgentClient {
   }
 
   /// Downloads the latest APK to [localFile], reporting [onProgress].
+  ///
+  /// Pass [cancelToken] to allow aborting an in-flight download (e.g. the
+  /// user taps Cancel on the update progress dialog). A cancellation surfaces
+  /// as a [DioException] with [DioExceptionType.cancel] rather than
+  /// [AgentApiException], matching [search] and [downloadFile] — callers can
+  /// distinguish "user cancelled" from a real download failure.
   Future<void> downloadApk({
     required File localFile,
     void Function(int received, int total)? onProgress,
@@ -658,7 +675,7 @@ class AgentClient {
         onReceiveProgress: onProgress,
       );
     } on DioException catch (e) {
-      throw _apiError(e);
+      _throwTransferError(e);
     }
   }
 }

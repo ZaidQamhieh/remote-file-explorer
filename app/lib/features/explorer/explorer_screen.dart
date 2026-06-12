@@ -7,6 +7,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
+import '../../core/storage/view_prefs.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -22,7 +23,7 @@ import 'widgets/entry_grid_cell.dart';
 import 'widgets/entry_tile.dart';
 import 'widgets/favorites_sheet.dart';
 import 'widgets/selection_bar.dart';
-import 'widgets/sort_button.dart';
+import 'widgets/view_options_sheet.dart';
 
 class ExplorerScreen extends ConsumerStatefulWidget {
   const ExplorerScreen({super.key, required this.host});
@@ -58,9 +59,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         favs.any((f) => f.hostId == widget.host.id && f.path == state.currentPath);
 
     return PopScope(
-      canPop: state.atRoot,
+      canPop: state.atRoot && !state.multiSelect,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _notifier.popDirectory();
+        if (didPop) return;
+        if (state.multiSelect) {
+          _notifier.clearSelection();
+        } else {
+          _notifier.popDirectory();
+        }
       },
       child: Scaffold(
         appBar: _buildAppBar(context, state, isFav, client),
@@ -78,48 +84,148 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  AppBar _buildAppBar(
+  /// App bar that morphs between the normal browsing bar and the selection
+  /// contextual bar via a fadeThrough-style cross-fade (opacity + slight
+  /// scale, [MotionDuration.medium], `easeOutCubic`) — Skia-safe, no blur.
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context, ExplorerState state, bool isFav, AgentClient client) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight + 44),
+      child: AnimatedSwitcher(
+        duration: MotionDuration.medium,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
+            child: child,
+          ),
+        ),
+        child: state.multiSelect
+            ? _buildSelectionAppBar(context, state)
+            : _buildBrowseAppBar(context, state, isFav, client),
+      ),
+    );
+  }
+
+  AppBar _buildBrowseAppBar(
       BuildContext context, ExplorerState state, bool isFav, AgentClient client) {
     return AppBar(
+      key: const ValueKey('browse_app_bar'),
       leading: state.atRoot
           ? null
           : BackButton(onPressed: () => _notifier.popDirectory()),
-      title: BreadcrumbBar(
-        state: state,
-        notifier: _notifier,
-        onMoveInto: (dragged, dest) =>
-            _moveInto(context, client, dragged, dest),
+      title: Text(
+        folderLabel(state.currentPath),
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(44),
+        child: Padding(
+          padding: const EdgeInsets.only(left: Spacing.md, bottom: Spacing.xs),
+          child: BreadcrumbBar(
+            state: state,
+            notifier: _notifier,
+            onMoveInto: (dragged, dest) =>
+                _moveInto(context, client, dragged, dest),
+          ),
+        ),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.search),
+          icon: const Icon(Icons.search_rounded),
           tooltip: 'Search',
           onPressed: () => _openSearch(context, state, client),
         ),
         IconButton(
-          icon: Icon(isFav ? Icons.star : Icons.star_border),
+          icon: Icon(isFav ? Icons.star_rounded : Icons.star_border_rounded),
           color: isFav ? Colors.amber : null,
           tooltip: isFav ? 'Remove favorite' : 'Favorite this folder',
           onPressed: () => _toggleFavorite(context, state, isFav),
         ),
-        IconButton(
-          icon: const Icon(Icons.bookmarks_outlined),
-          tooltip: 'Favorites',
-          onPressed: () => _showFavorites(context),
-        ),
-        IconButton(
-          icon: Icon(state.gridView ? Icons.list : Icons.grid_view),
-          tooltip: state.gridView ? 'List view' : 'Grid view',
-          onPressed: _notifier.toggleView,
-        ),
-        SortButton(sort: state.sort, onSort: _notifier.setSort),
-        IconButton(
-          icon: const Icon(Icons.file_upload_outlined),
-          tooltip: 'Transfers',
-          onPressed: () => _showTransfers(context),
+        PopupMenuButton<_OverflowAction>(
+          icon: const Icon(Icons.more_vert_rounded),
+          tooltip: 'More',
+          onSelected: (action) => _onOverflowAction(context, state, action),
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: _OverflowAction.viewOptions,
+              child: ListTile(
+                leading: Icon(Icons.tune_rounded),
+                title: Text('View options'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _OverflowAction.favorites,
+              child: ListTile(
+                leading: Icon(Icons.bookmarks_outlined),
+                title: Text('Favorites'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _OverflowAction.transfers,
+              child: ListTile(
+                leading: Icon(Icons.file_upload_outlined),
+                title: Text('Transfers'),
+              ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  /// Contextual action bar shown while one or more entries are selected:
+  /// `✕  N selected   ⊞ select-all   ⋮ (invert)`.
+  AppBar _buildSelectionAppBar(BuildContext context, ExplorerState state) {
+    final allSelected = state.selected.length == state.entries.length &&
+        state.entries.isNotEmpty;
+    return AppBar(
+      key: const ValueKey('selection_app_bar'),
+      leading: IconButton(
+        icon: const Icon(Icons.close_rounded),
+        tooltip: 'Clear selection',
+        onPressed: _notifier.clearSelection,
+      ),
+      title: Text(
+        '${state.selected.length} selected',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      // Empty bottom matching the browse bar's breadcrumb row height, so the
+      // fadeThrough cross-fade doesn't jump in size.
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(44),
+        child: SizedBox.shrink(),
+      ),
+      actions: [
+        IconButton(
+          icon: Icon(allSelected
+              ? Icons.deselect_rounded
+              : Icons.select_all_rounded),
+          tooltip: allSelected ? 'Deselect all' : 'Select all',
+          onPressed:
+              allSelected ? _notifier.clearSelection : _notifier.selectAll,
+        ),
+        IconButton(
+          icon: const Icon(Icons.flip_to_back_rounded),
+          tooltip: 'Invert selection',
+          onPressed: _notifier.invertSelection,
+        ),
+      ],
+    );
+  }
+
+  void _onOverflowAction(
+      BuildContext context, ExplorerState state, _OverflowAction action) {
+    switch (action) {
+      case _OverflowAction.viewOptions:
+        ViewOptionsSheet.show(context, state: state, notifier: _notifier);
+      case _OverflowAction.favorites:
+        _showFavorites(context);
+      case _OverflowAction.transfers:
+        _showTransfers(context);
+    }
   }
 
   void _toggleFavorite(
@@ -200,6 +306,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       );
     }
 
+    final density =
+        ref.watch(viewPrefsProvider).valueOrNull?.density ??
+            EntryDensity.comfortable;
+
     return Column(
       children: [
         if (state.offline) const OfflineBanner(),
@@ -208,15 +318,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             onRefresh: _notifier.refresh,
             child: state.gridView
                 ? _buildGrid(context, state, client)
-                : _buildList(context, state, client),
+                : _buildList(context, state, client, density),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildList(
-      BuildContext context, ExplorerState state, AgentClient client) {
+  Widget _buildList(BuildContext context, ExplorerState state,
+      AgentClient client, EntryDensity density) {
     final entries = state.sortedEntries;
     final showLoadMore = state.hasMore;
     final itemCount = entries.length + (showLoadMore ? 1 : 0);
@@ -234,6 +344,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             entry: entry,
             selected: state.selected.contains(entry.path),
             multiSelect: state.multiSelect,
+            density: density,
             onTap: () => _onEntryTap(context, entry, client),
             onLongPress: () => _notifier.toggleSelect(entry.path),
             onSelect: () => _notifier.toggleSelect(entry.path),
@@ -376,6 +487,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 }
+
+/// Actions available from the browse app bar's overflow (⋮) menu.
+enum _OverflowAction { viewOptions, favorites, transfers }
 
 // ---------------------------------------------------------------------------
 // Pagination "load more" trailing item

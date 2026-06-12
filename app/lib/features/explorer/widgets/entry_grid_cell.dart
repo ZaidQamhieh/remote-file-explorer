@@ -51,49 +51,66 @@ class EntryGridCell extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: Radii.cardR,
             border: Border.all(
-              color: selected ? Brand.accent : scheme.outlineVariant,
-              width: selected ? 1.6 : 1,
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? 3 : 1,
             ),
           ),
           padding: const EdgeInsets.all(Spacing.sm),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
             children: [
-              if (isImage)
-                ClipRRect(
-                  borderRadius: Radii.chipR,
-                  child: SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: ThumbnailImage(
-                      entry: entry,
-                      client: client,
-                      fallback:
-                          Center(child: EntryLeading(entry: entry, size: 40)),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isImage)
+                    ClipRRect(
+                      borderRadius: Radii.chipR,
+                      child: SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: ThumbnailImage(
+                          entry: entry,
+                          client: client,
+                          fallback: Center(
+                              child: EntryLeading(entry: entry, size: 40)),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: Radii.chipR,
+                      ),
+                      alignment: Alignment.center,
+                      child: EntryLeading(entry: entry, size: 32),
                     ),
+                  const SizedBox(height: Spacing.sm),
+                  Text(
+                    entry.name,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
-                )
-              else
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
-                    borderRadius: Radii.chipR,
-                  ),
-                  alignment: Alignment.center,
-                  child: EntryLeading(entry: entry, size: 32),
-                ),
-              const SizedBox(height: Spacing.sm),
-              Text(
-                entry.name,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
+                ],
               ),
+              if (selected)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.check_rounded,
+                        size: 16, color: scheme.onPrimary),
+                  ),
+                ),
             ],
           ),
         ),

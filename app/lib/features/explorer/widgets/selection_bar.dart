@@ -9,8 +9,9 @@ import '../../transfers/transfer_state.dart';
 import '../explorer_state.dart';
 import 'destination_dialog.dart';
 
-/// A labelled icon action used in the multi-select bar — tonal icon button
-/// over a small caption, for tidier iconography than bare [IconButton]s.
+/// A labelled icon action used in the bottom contextual action bar — tonal
+/// icon button over a small caption, for tidier iconography than bare
+/// [IconButton]s.
 class BarAction extends StatelessWidget {
   const BarAction({
     super.key,
@@ -65,9 +66,18 @@ class BarAction extends StatelessWidget {
   }
 }
 
-/// Bottom bar shown while one or more entries are selected: a header with
-/// the selection count and select-all/clear toggle, plus copy/move/download/
-/// delete batch actions.
+/// Bottom contextual action bar shown while one or more entries are
+/// selected: `surfaceContainerHigh` surface with r28 top corners, holding
+/// Move / Copy / Download / Delete batch actions (Delete in `error` color).
+///
+/// The selection count + select-all/invert controls live in the app bar
+/// (see `explorer_screen.dart`'s `_SelectionAppBar`), not here — this bar is
+/// actions-only.
+///
+/// Note: the design spec calls for a "Share" action; the app has no share
+/// integration (would require a new package), so "Download" — the existing,
+/// functionally closest action (saves files locally, from where the OS share
+/// sheet can take over) — fills that slot.
 class SelectionBar extends ConsumerWidget {
   const SelectionBar({
     super.key,
@@ -83,81 +93,41 @@ class SelectionBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final allSelected = state.selected.length == state.entries.length &&
-        state.entries.isNotEmpty;
 
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(
-            Spacing.md, 0, Spacing.md, Spacing.md),
         padding: const EdgeInsets.symmetric(
           horizontal: Spacing.md,
           vertical: Spacing.sm,
         ),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: Radii.cardR,
-          boxShadow: [
-            BoxShadow(
-              color: scheme.shadow.withValues(alpha: 0.18),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          borderRadius: Radii.sheetTopR,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Deselect all',
-                  onPressed: notifier.clearSelection,
-                ),
-                Expanded(
-                  child: Text(
-                    '${state.selected.length} selected',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed:
-                      allSelected ? notifier.clearSelection : notifier.selectAll,
-                  icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
-                  label: Text(allSelected ? 'Clear' : 'Select all'),
-                ),
-              ],
+            BarAction(
+              icon: Icons.drive_file_move_rounded,
+              label: 'Move',
+              onPressed: () => _showDestPicker(context, 'move'),
             ),
-            const SizedBox(height: Spacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                BarAction(
-                  icon: Icons.copy_outlined,
-                  label: 'Copy',
-                  onPressed: () => _showDestPicker(context, 'copy'),
-                ),
-                BarAction(
-                  icon: Icons.drive_file_move_outline,
-                  label: 'Move',
-                  onPressed: () => _showDestPicker(context, 'move'),
-                ),
-                BarAction(
-                  icon: Icons.download_outlined,
-                  label: 'Download',
-                  onPressed: () => _downloadSelected(context, ref),
-                ),
-                BarAction(
-                  icon: Icons.delete_outline,
-                  label: 'Delete',
-                  color: scheme.error,
-                  onPressed: () => _confirmDelete(context),
-                ),
-              ],
+            BarAction(
+              icon: Icons.copy_outlined,
+              label: 'Copy',
+              onPressed: () => _showDestPicker(context, 'copy'),
+            ),
+            BarAction(
+              icon: Icons.download_outlined,
+              label: 'Download',
+              onPressed: () => _downloadSelected(context, ref),
+            ),
+            BarAction(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete',
+              color: scheme.error,
+              onPressed: () => _confirmDelete(context),
             ),
           ],
         ),

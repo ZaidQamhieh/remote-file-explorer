@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/entry.dart';
+import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/format.dart';
 import 'entry_drag.dart';
 
 /// A single row in the explorer's list view: leading icon (or checkbox in
-/// multi-select mode), name + size/date subtitle, and a chevron for folders.
+/// multi-select mode), name + size/date metadata, and a chevron for folders.
+///
+/// Renders in two densities (see [EntryDensity]):
+/// - **comfortable** (default, ~72dp): 40dp r12 leading container, name on
+///   its own `titleMedium` line, metadata below as `bodySmall` with `·`
+///   separators.
+/// - **compact** (~52dp): 32dp leading container, single line — name then
+///   metadata inline, separated by `·`.
+///
+/// Selected rows paint an r16 `primaryContainer` behind the tile; otherwise
+/// the tile is borderless on `surface`.
 ///
 /// Supports tap, long-press (selection), and drag-to-move (via
 /// [wrapDraggable]) when [onMoveInto] is provided.
@@ -21,6 +32,7 @@ class EntryTile extends StatelessWidget {
     required this.onLongPress,
     required this.onSelect,
     this.onMoveInto,
+    this.density = EntryDensity.comfortable,
   });
 
   final Entry entry;
@@ -30,64 +42,86 @@ class EntryTile extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onSelect;
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
+  final EntryDensity density;
+
+  /// File metadata (size · date), joined with `·`. Empty for directories.
+  String get _meta {
+    if (entry.isDir) return '';
+    final parts = <String>[];
+    final size = formatSize(entry.size);
+    if (size.isNotEmpty) parts.add(size);
+    if (entry.modified != null) parts.add(formatDate(entry.modified!));
+    return parts.join('  ·  ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final subtitle = entry.isDir
-        ? null
-        : formatSize(entry.size) +
-            (entry.modified != null
-                ? '  ·  ${formatDate(entry.modified!)}'
-                : '');
+    final compact = density == EntryDensity.compact;
+    final meta = _meta;
 
-    Widget leading = multiSelect
+    final Widget leading = multiSelect
         ? Checkbox(value: selected, onChanged: (_) => onSelect())
-        : _IconTile(entry: entry);
+        : _IconTile(entry: entry, compact: compact);
+
+    final nameStyle = Theme.of(context).textTheme.titleMedium;
+    final metaStyle = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: scheme.onSurfaceVariant);
+
+    final Widget content = compact
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  entry.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: nameStyle,
+                ),
+              ),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(width: Spacing.sm),
+                Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
+              ],
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                entry.name,
+                overflow: TextOverflow.ellipsis,
+                style: nameStyle,
+              ),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
+              ],
+            ],
+          );
 
     Widget tile = Material(
-      color: selected ? scheme.secondaryContainer.withValues(alpha: 0.55) : Colors.transparent,
+      color: selected ? scheme.primaryContainer : Colors.transparent,
       borderRadius: Radii.cardR,
       child: InkWell(
         borderRadius: Radii.cardR,
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
+          padding: EdgeInsets.symmetric(
             horizontal: Spacing.md,
-            vertical: Spacing.sm,
+            vertical: compact ? Spacing.xs : Spacing.sm,
           ),
           child: Row(
             children: [
               leading,
               const SizedBox(width: Spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      entry.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    if (subtitle != null && subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              Expanded(child: content),
               if (entry.isDir)
-                Icon(Icons.chevron_right, color: scheme.outline),
+                Icon(Icons.chevron_right_rounded, color: scheme.outline),
             ],
           ),
         ),
@@ -103,27 +137,27 @@ class EntryTile extends StatelessWidget {
   }
 }
 
-/// File-type icon presented inside a tonal rounded square — the roomier,
-/// "distinctive modern" leading element for list rows.
+/// File-type icon presented inside a tonal rounded square — 40dp (r12) in
+/// comfortable density, 32dp in compact.
 class _IconTile extends StatelessWidget {
-  const _IconTile({required this.entry});
-
-  static const double _size = 44;
+  const _IconTile({required this.entry, required this.compact});
 
   final Entry entry;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final size = compact ? 32.0 : 40.0;
     return Container(
-      width: _size,
-      height: _size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: Radii.chipR,
+        borderRadius: Radii.smR,
       ),
       alignment: Alignment.center,
-      child: EntryLeading(entry: entry, size: _size * 0.5),
+      child: EntryLeading(entry: entry, size: size * 0.55),
     );
   }
 }

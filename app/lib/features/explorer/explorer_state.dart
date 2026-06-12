@@ -4,22 +4,9 @@ import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/storage/listing_cache.dart';
+import '../../core/storage/view_prefs.dart';
 
-// ---------------------------------------------------------------------------
-// Sort order
-// ---------------------------------------------------------------------------
-
-enum SortField { name, size, date, type }
-
-class SortOrder {
-  const SortOrder({this.field = SortField.name, this.ascending = true});
-  final SortField field;
-  final bool ascending;
-  SortOrder copyWith({SortField? field, bool? ascending}) =>
-      SortOrder(
-          field: field ?? this.field,
-          ascending: ascending ?? this.ascending);
-}
+export '../../core/storage/view_prefs.dart' show SortField, SortOrder;
 
 // ---------------------------------------------------------------------------
 // Sorting helper
@@ -154,9 +141,30 @@ class ExplorerNotifier
     // invokes the callback, it doesn't trigger a rebuild of this notifier.
     ref.listen(clientProvider(arg.hostId), (_, _) {});
 
+    // View prefs (list/grid per host, sort order) are persisted separately
+    // (`core/storage/view_prefs.dart`) but mirrored into this state so
+    // `sortedEntries`/`gridView` stay the single source widgets read from.
+    // `ref.listen` applies future changes (e.g. from the view-options sheet);
+    // the initial `ref.read` seeds this notifier's first state synchronously
+    // when the prefs have already loaded (otherwise defaults apply until the
+    // listener fires).
+    ref.listen(viewPrefsProvider, (_, next) {
+      final prefs = next.valueOrNull;
+      if (prefs == null) return;
+      state = state.copyWith(
+        gridView: prefs.gridViewFor(arg.hostId),
+        sort: prefs.sort,
+      );
+    });
+    final initialPrefs = ref.read(viewPrefsProvider).valueOrNull;
+
     // Schedule async load after construction.
     Future.microtask(_load);
-    return ExplorerState(pathStack: [arg.rootPath]);
+    return ExplorerState(
+      pathStack: [arg.rootPath],
+      gridView: initialPrefs?.gridViewFor(arg.hostId) ?? false,
+      sort: initialPrefs?.sort ?? const SortOrder(),
+    );
   }
 
   final ListingCache _cache = ListingCache();
@@ -272,9 +280,17 @@ class ExplorerNotifier
     _load();
   }
 
-  void setSort(SortOrder sort) => state = state.copyWith(sort: sort);
+  /// Persists [sort] via [viewPrefsProvider]; the resulting state update is
+  /// mirrored back into this notifier by the `ref.listen` in [build].
+  void setSort(SortOrder sort) =>
+      ref.read(viewPrefsProvider.notifier).setSort(sort);
 
-  void toggleView() => state = state.copyWith(gridView: !state.gridView);
+  /// Persists the list/grid toggle for this host via [viewPrefsProvider]; the
+  /// resulting state update is mirrored back into this notifier by the
+  /// `ref.listen` in [build].
+  void toggleView() => ref
+      .read(viewPrefsProvider.notifier)
+      .setGridView(arg.hostId, !state.gridView);
 
   void toggleSelect(String path) {
     final sel = Set<String>.from(state.selected);
@@ -292,6 +308,13 @@ class ExplorerNotifier
     state = state.copyWith(
       selected: state.entries.map((e) => e.path).toSet(),
     );
+  }
+
+  /// Flips the selection: every currently-unselected entry becomes selected
+  /// and vice versa. Used by the selection app bar's "invert" action.
+  void invertSelection() {
+    final all = state.entries.map((e) => e.path).toSet();
+    state = state.copyWith(selected: all.difference(state.selected));
   }
 
   Future<void> createFolder(String name) async {

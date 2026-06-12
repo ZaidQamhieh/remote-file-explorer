@@ -79,6 +79,16 @@ void main() {
     expect(find.text('main-pc'), findsOneWidget);
     expect(find.textContaining('Offline'), findsWidgets);
 
+    // Per spec, offline cards dim to 60% opacity EXCEPT the host name — the
+    // name `Text` must not sit inside an `Opacity(0.6)` ancestor.
+    final nameFinder = find.text('main-pc');
+    final dimmedAncestor = find.ancestor(
+      of: nameFinder,
+      matching: find.byWidgetPredicate(
+          (w) => w is Opacity && w.opacity == 0.6),
+    );
+    expect(dimmedAncestor, findsNothing);
+
     // No storage gauges for an offline host.
     expect(find.byType(LinearProgressIndicator), findsNothing);
 

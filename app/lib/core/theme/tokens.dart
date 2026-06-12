@@ -24,7 +24,9 @@ class Brand {
 /// Spacing scale (logical pixels). Use these for padding, gaps, and margins.
 ///
 /// Values: 4 / 8 / 16 / 24 / 32. [md2] (12) fills the gap between [sm] and
-/// [md] for callers that need a slightly tighter "medium" spacing.
+/// [md] for callers that need a slightly tighter "medium" spacing. [md3] (20)
+/// sits just above [md] for callers that need a slightly roomier "medium"
+/// spacing (e.g. the dashboard hero/host card's internal padding).
 class Spacing {
   Spacing._();
 
@@ -32,6 +34,7 @@ class Spacing {
   static const double sm = 8;
   static const double md2 = 12;
   static const double md = 16;
+  static const double md3 = 20;
   static const double lg = 24;
   static const double xl = 32;
 }

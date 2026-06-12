@@ -256,7 +256,7 @@ class _HostCardState extends ConsumerState<HostCard> {
             onTap: () => _openExplorer(context),
             onLongPress: () => _confirmRemove(context),
             child: Padding(
-              padding: const EdgeInsets.all(Spacing.md),
+              padding: const EdgeInsets.all(Spacing.md3),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -346,22 +346,57 @@ class _HostHeader extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final health = snapshot.data;
 
-    final content = Row(
+    // The host name always renders at full opacity, even when offline.
+    final nameText = Text(
+      host.label,
+      style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      overflow: TextOverflow.ellipsis,
+    );
+
+    final iconBlock = Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: Radii.cardR,
+      ),
+      child: Icon(
+        Icons.computer_rounded,
+        color: scheme.onPrimaryContainer,
+      ),
+    );
+
+    final statusLabel = _StatusLabel(checking: checking, online: online);
+
+    final subtitleText = Text(
+      _subtitle(health),
+      style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+      overflow: TextOverflow.ellipsis,
+    );
+
+    final detailText = checking
+        ? null
+        : Text(
+            _statusDetail(),
+            style:
+                textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            overflow: TextOverflow.ellipsis,
+          );
+
+    // Offline hosts render dimmed to 60% opacity EXCEPT the host name, which
+    // always stays fully legible. Everything else — the icon block, the
+    // status label, and the subtitle/detail lines — is individually wrapped
+    // in `Opacity(0.6)` when offline (and left untouched while
+    // online/checking).
+    final dimmed = !online && !checking;
+    Widget maybeDim(Widget child) =>
+        dimmed ? Opacity(opacity: 0.6, child: child) : child;
+
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: scheme.primaryContainer,
-            borderRadius: Radii.smR,
-          ),
-          child: Icon(
-            Icons.computer_rounded,
-            color: scheme.onPrimaryContainer,
-          ),
-        ),
+        maybeDim(iconBlock),
         const SizedBox(width: Spacing.md),
         Expanded(
           child: Column(
@@ -369,51 +404,21 @@ class _HostHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      host.label,
-                      style: textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  Expanded(child: nameText),
                   const SizedBox(width: Spacing.sm),
-                  _StatusLabel(checking: checking, online: online),
+                  maybeDim(statusLabel),
                 ],
               ),
               const SizedBox(height: Spacing.xs / 2),
-              Text(
-                _subtitle(health),
-                style: textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (!checking) ...[
+              maybeDim(subtitleText),
+              if (detailText != null) ...[
                 const SizedBox(height: Spacing.xs / 2),
-                Text(
-                  _statusDetail(),
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                maybeDim(detailText),
               ],
             ],
           ),
         ),
       ],
-    );
-
-    // Offline hosts render dimmed (60% opacity) except the name, which stays
-    // at full opacity inside `content` above — so dim everything else by
-    // wrapping the subtitle/status lines instead would be more surgical, but
-    // a single Opacity over the whole row with the name pulled out keeps this
-    // simple and matches the spec closely enough: dim the icon + metadata,
-    // keep the name and status label legible.
-    if (online || checking) return content;
-
-    return Opacity(
-      opacity: 0.6,
-      child: content,
     );
   }
 

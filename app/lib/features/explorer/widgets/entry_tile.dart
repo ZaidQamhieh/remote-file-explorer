@@ -33,6 +33,8 @@ class EntryTile extends StatelessWidget {
     required this.onSelect,
     this.onMoveInto,
     this.density = EntryDensity.comfortable,
+    this.isFavorite = false,
+    this.onShowMeta,
   });
 
   final Entry entry;
@@ -43,6 +45,15 @@ class EntryTile extends StatelessWidget {
   final VoidCallback onSelect;
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
   final EntryDensity density;
+
+  /// Whether [entry] is a favorited folder — shows a small star badge on the
+  /// leading icon container. Has no effect for files.
+  final bool isFavorite;
+
+  /// Opens this entry's detail sheet (e.g. to favorite/unfavorite a folder).
+  /// When set for a directory, the trailing chevron becomes tappable; has no
+  /// effect for files (which already open their sheet via [onTap]).
+  final VoidCallback? onShowMeta;
 
   /// File metadata (size · date), joined with `·`. Empty for directories.
   String get _meta {
@@ -62,7 +73,11 @@ class EntryTile extends StatelessWidget {
 
     final Widget leading = multiSelect
         ? Checkbox(value: selected, onChanged: (_) => onSelect())
-        : _IconTile(entry: entry, compact: compact);
+        : _IconTile(
+            entry: entry,
+            compact: compact,
+            isFavorite: isFavorite && entry.isDir,
+          );
 
     final nameStyle = Theme.of(context).textTheme.titleMedium;
     final metaStyle = Theme.of(context)
@@ -121,7 +136,17 @@ class EntryTile extends StatelessWidget {
               const SizedBox(width: Spacing.md),
               Expanded(child: content),
               if (entry.isDir)
-                Icon(Icons.chevron_right_rounded, color: scheme.outline),
+                onShowMeta != null
+                    ? IconButton(
+                        icon: Icon(Icons.chevron_right_rounded,
+                            color: scheme.outline),
+                        tooltip: 'Folder details',
+                        onPressed: onShowMeta,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      )
+                    : Icon(Icons.chevron_right_rounded, color: scheme.outline),
             ],
           ),
         ),
@@ -138,18 +163,24 @@ class EntryTile extends StatelessWidget {
 }
 
 /// File-type icon presented inside a tonal rounded square — 40dp (r12) in
-/// comfortable density, 32dp in compact.
+/// comfortable density, 32dp in compact. When [isFavorite] is set, overlays a
+/// small star badge on the container's corner.
 class _IconTile extends StatelessWidget {
-  const _IconTile({required this.entry, required this.compact});
+  const _IconTile({
+    required this.entry,
+    required this.compact,
+    this.isFavorite = false,
+  });
 
   final Entry entry;
   final bool compact;
+  final bool isFavorite;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final size = compact ? 32.0 : 40.0;
-    return Container(
+    final container = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -158,6 +189,27 @@ class _IconTile extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: EntryLeading(entry: entry, size: size * 0.55),
+    );
+    if (!isFavorite) return container;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        container,
+        Positioned(
+          right: -4,
+          top: -4,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
+          ),
+        ),
+      ],
     );
   }
 }

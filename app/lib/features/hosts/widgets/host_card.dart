@@ -13,6 +13,7 @@ import '../../../core/models/host.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/update/update_service.dart';
+import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
@@ -23,6 +24,18 @@ import 'storage_gauge.dart';
 /// Maximum number of storage gauges shown before collapsing the rest behind
 /// "+N more".
 const _maxVisibleDrives = 3;
+
+/// Picks the root screen to open when browsing [host], based on its most
+/// recent `/health` response.
+///
+/// Windows hosts (`health.os == 'windows'`, case-insensitive) open the drive
+/// list ([DrivesView]) since `/` isn't a meaningful path there. Any other (or
+/// unknown/offline, `health == null`) OS opens [ExplorerScreen] rooted at `/`
+/// as before.
+Widget explorerRootFor(Health? health, Host host) {
+  final isWindows = health?.os.toLowerCase() == 'windows';
+  return isWindows ? DrivesView(host: host) : ExplorerScreen(host: host);
+}
 
 /// A single host's dashboard card: status, agent version, active-network
 /// chip, storage gauges, an update banner (when applicable), and a quick
@@ -153,10 +166,17 @@ class _HostCardState extends ConsumerState<HostCard> {
     await widget.store.addHost(updated);
   }
 
+  /// Opens the explorer for this host. If the most recent `/health` ping
+  /// reported a Windows host, opens the drive list ([DrivesView]) first
+  /// instead of a `/`-rooted listing, since `/` isn't a meaningful path on
+  /// Windows. Any other (or unknown) OS keeps the existing `/`-rooted
+  /// behaviour.
   Future<void> _openExplorer(BuildContext context) async {
+    final health = await _pingFuture;
+    if (!context.mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ExplorerScreen(host: widget.host),
+        builder: (_) => explorerRootFor(health, widget.host),
       ),
     );
   }

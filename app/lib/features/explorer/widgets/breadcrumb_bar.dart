@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
-import '../explorer_state.dart';
 
 /// Maximum number of crumbs shown before head ancestors collapse into a
 /// `…` menu chip. The root and the tail crumbs (ending with the current
@@ -38,23 +37,34 @@ List<int> collapsedCrumbIndices(int stackLength, {int maxVisible = kMaxVisibleCr
 /// ancestors as outlined chips, separated by chevrons. When the path is deep,
 /// head ancestors collapse into a `…` chip that opens a menu listing them.
 ///
-/// Tapping a chip jumps to that ancestor directory. Long-pressing a chip
-/// copies its absolute path to the clipboard. Dragging an entry onto a chip
-/// (when [onMoveInto] is provided) moves it there.
+/// Tapping a chip jumps to that ancestor directory (via [onNavigateTo]).
+/// Long-pressing a chip copies its absolute path to the clipboard. Dragging
+/// an entry onto a chip (when [onMoveInto] is provided) moves it there.
+///
+/// Only depends on [pathStack] + [onNavigateTo] (not the full
+/// `ExplorerState`/`ExplorerNotifier`) so other navigable listings — e.g. the
+/// destination picker sheet — can reuse it with their own state/notifier.
 class BreadcrumbBar extends StatelessWidget {
   const BreadcrumbBar({
     super.key,
-    required this.state,
-    required this.notifier,
+    required this.pathStack,
+    required this.onNavigateTo,
     this.onMoveInto,
   });
-  final ExplorerState state;
-  final ExplorerNotifier notifier;
+
+  /// Path segments from the filesystem root to the current directory (see
+  /// `buildPathStack`).
+  final List<String> pathStack;
+
+  /// Called with the path-stack index to navigate to when a crumb (or a
+  /// collapsed-menu entry) is tapped.
+  final void Function(int index) onNavigateTo;
+
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
 
   @override
   Widget build(BuildContext context) {
-    final stack = state.pathStack;
+    final stack = pathStack;
     final lastIndex = stack.length - 1;
     // Contiguous range of head-ancestor indices to collapse (e.g. [1, 2]),
     // or empty if the path fits without collapsing.
@@ -69,8 +79,8 @@ class BreadcrumbBar extends StatelessWidget {
         if (i == collapsedRange.first) {
           children.add(_separator(context, show: i > 0));
           children.add(_CollapsedChip(
-            state: state,
-            notifier: notifier,
+            pathStack: stack,
+            onNavigateTo: onNavigateTo,
             indices: collapsedRange,
           ));
         }
@@ -78,8 +88,8 @@ class BreadcrumbBar extends StatelessWidget {
       }
       children.add(_separator(context, show: i > 0));
       children.add(_Crumb(
-        state: state,
-        notifier: notifier,
+        pathStack: stack,
+        onNavigateTo: onNavigateTo,
         index: i,
         isCurrent: i == lastIndex,
         onMoveInto: onMoveInto,
@@ -121,15 +131,15 @@ void copyPathToClipboard(BuildContext context, String path) {
 /// outlined for ancestors. Tap navigates, long-press copies the path.
 class _Crumb extends StatelessWidget {
   const _Crumb({
-    required this.state,
-    required this.notifier,
+    required this.pathStack,
+    required this.onNavigateTo,
     required this.index,
     required this.isCurrent,
     this.onMoveInto,
   });
 
-  final ExplorerState state;
-  final ExplorerNotifier notifier;
+  final List<String> pathStack;
+  final void Function(int index) onNavigateTo;
   final int index;
   final bool isCurrent;
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
@@ -137,7 +147,7 @@ class _Crumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final stack = state.pathStack;
+    final stack = pathStack;
     final label = crumbLabel(stack, index);
     final path = stack[index];
 
@@ -150,7 +160,7 @@ class _Crumb extends StatelessWidget {
       ),
       child: InkWell(
         customBorder: const StadiumBorder(),
-        onTap: () => notifier.navigateTo(index),
+        onTap: () => onNavigateTo(index),
         onLongPress: () => copyPathToClipboard(context, path),
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -211,23 +221,23 @@ class _StadiumClipper extends CustomClipper<Path> {
 /// its own visible chip); selecting one navigates there.
 class _CollapsedChip extends StatelessWidget {
   const _CollapsedChip({
-    required this.state,
-    required this.notifier,
+    required this.pathStack,
+    required this.onNavigateTo,
     required this.indices,
   });
 
-  final ExplorerState state;
-  final ExplorerNotifier notifier;
+  final List<String> pathStack;
+  final void Function(int index) onNavigateTo;
   final List<int> indices;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final stack = state.pathStack;
+    final stack = pathStack;
 
     return PopupMenuButton<int>(
       tooltip: 'Show hidden folders',
-      onSelected: notifier.navigateTo,
+      onSelected: onNavigateTo,
       itemBuilder: (_) => indices
           .map((i) => PopupMenuItem(
                 value: i,

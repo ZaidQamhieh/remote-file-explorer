@@ -22,6 +22,7 @@ class EntryGridCell extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     this.onMoveInto,
+    this.isFavorite = false,
   });
 
   final Entry entry;
@@ -31,6 +32,10 @@ class EntryGridCell extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
+
+  /// Whether [entry] is a favorited folder — shows a small star badge on the
+  /// leading icon/thumbnail container. Has no effect for files.
+  final bool isFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +114,22 @@ class EntryGridCell extends StatelessWidget {
                     ),
                     child: Icon(Icons.check_rounded,
                         size: 16, color: scheme.onPrimary),
+                  ),
+                ),
+              if (isFavorite && entry.isDir)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child:
+                        const Icon(Icons.star_rounded, size: 13, color: Colors.amber),
                   ),
                 ),
             ],

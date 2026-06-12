@@ -7,7 +7,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import '../../transfers/transfer_state.dart';
 import '../explorer_state.dart';
-import 'destination_dialog.dart';
+import 'destination_picker_sheet.dart';
 
 /// A labelled icon action used in the bottom contextual action bar — tonal
 /// icon button over a small caption, for tidier iconography than bare
@@ -136,9 +136,12 @@ class SelectionBar extends ConsumerWidget {
   }
 
   Future<void> _showDestPicker(BuildContext context, String action) async {
-    final dest = await showDialog<String>(
-      context: context,
-      builder: (ctx) => const DestinationDialog(hint: 'Destination path'),
+    final dest = await showDestinationPicker(
+      context,
+      hostId: host.id,
+      originPath: state.currentPath,
+      itemCount: state.selected.length,
+      isCopy: action == 'copy',
     );
     if (dest == null || !context.mounted) return;
     try {

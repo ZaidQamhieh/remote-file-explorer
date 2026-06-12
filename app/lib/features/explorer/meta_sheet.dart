@@ -5,12 +5,13 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/storage/favorites.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
-import 'explorer_state.dart' show renameDestination;
+import 'explorer_state.dart' show folderLabel, renameDestination;
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
 /// delete, and download actions.
@@ -211,10 +212,26 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Widget _buildActions(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isFav = _entry.isDir &&
+        (ref.watch(favoritesProvider).valueOrNull?.any(
+                (f) => f.hostId == widget.host.id && f.path == _entry.path) ??
+            false);
     return Wrap(
       spacing: Spacing.sm,
       runSpacing: Spacing.sm,
       children: [
+        if (_entry.isDir)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: Spacing.sm),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: Icon(isFav ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: isFav ? Colors.amber : null),
+            label: Text(isFav ? 'Unfavorite' : 'Favorite'),
+            onPressed: () => _toggleFavorite(context, isFav),
+          ),
         if (!_entry.isDir && isPreviewable(_entry))
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -261,6 +278,21 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         ),
       ],
     );
+  }
+
+  void _toggleFavorite(BuildContext context, bool wasFavorite) {
+    ref.read(favoritesProvider.notifier).toggle(
+          Favorite(
+            hostId: widget.host.id,
+            path: _entry.path,
+            label: folderLabel(_entry.path),
+          ),
+        );
+    if (wasFavorite) {
+      showInfo(context, 'Removed "${_entry.name}" from favorites');
+    } else {
+      showSuccess(context, 'Added "${_entry.name}" to favorites');
+    }
   }
 
   Future<void> _preview(BuildContext context) async {

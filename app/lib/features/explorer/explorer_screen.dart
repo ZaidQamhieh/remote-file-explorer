@@ -21,24 +21,51 @@ import 'widgets/breadcrumb_bar.dart';
 import 'widgets/create_menu.dart';
 import 'widgets/entry_grid_cell.dart';
 import 'widgets/entry_tile.dart';
+import 'widgets/favorites_pin_row.dart';
 import 'widgets/favorites_sheet.dart';
 import 'widgets/selection_bar.dart';
 import 'widgets/view_options_sheet.dart';
 
 class ExplorerScreen extends ConsumerStatefulWidget {
-  const ExplorerScreen({super.key, required this.host});
+  const ExplorerScreen({
+    super.key,
+    required this.host,
+    this.rootPath = '/',
+    this.initialPath,
+  });
 
   final Host host;
+
+  /// Directory this explorer instance is rooted at — `/` for POSIX hosts, or
+  /// a drive path (e.g. `C:\`) when opened from [DrivesView]. Determines
+  /// [ExplorerState.atRoot], so popping at this directory exits the screen
+  /// (back to the drive list, for Windows hosts).
+  final String rootPath;
+
+  /// If set, the explorer jumps straight to this path (e.g. a favorited
+  /// folder on this drive) instead of showing [rootPath] itself.
+  final String? initialPath;
 
   @override
   ConsumerState<ExplorerScreen> createState() => _ExplorerScreenState();
 }
 
 class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
-  ExplorerArg get _arg => (hostId: widget.host.id, rootPath: '/');
+  ExplorerArg get _arg =>
+      (hostId: widget.host.id, rootPath: widget.rootPath);
 
   ExplorerNotifier get _notifier =>
       ref.read(explorerProvider(_arg).notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    final initialPath = widget.initialPath;
+    if (initialPath != null && initialPath != widget.rootPath) {
+      // Defer until after the provider's initial build/load is scheduled.
+      Future.microtask(() => _notifier.jumpTo(initialPath));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,8 +152,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         child: Padding(
           padding: const EdgeInsets.only(left: Spacing.md, bottom: Spacing.xs),
           child: BreadcrumbBar(
-            state: state,
-            notifier: _notifier,
+            pathStack: state.pathStack,
+            onNavigateTo: _notifier.navigateTo,
             onMoveInto: (dragged, dest) =>
                 _moveInto(context, client, dragged, dest),
           ),
@@ -283,26 +310,71 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
+  /// Pin row of favorited folders, shown above the listing only at the
+  /// filesystem root (`state.atRoot`) when the host has favorites. Returns
+  /// `null` (renders nothing) otherwise.
+  Widget? _buildPinRow(BuildContext context, ExplorerState state) {
+    if (!state.atRoot) return null;
+    final favs = ref
+        .watch(favoritesProvider)
+        .valueOrNull
+        ?.where((f) => f.hostId == widget.host.id)
+        .toList();
+    if (favs == null || favs.isEmpty) return null;
+    return FavoritesPinRow(
+      favorites: favs,
+      onOpen: (fav) => _notifier.jumpTo(fav.path),
+      onRemove: (fav) => _removeFavorite(context, fav),
+    );
+  }
+
+  void _removeFavorite(BuildContext context, Favorite fav) {
+    ref.read(favoritesProvider.notifier).remove(fav.hostId, fav.path);
+    showInfo(context, 'Removed "${fav.label}" from favorites');
+  }
+
   Widget _buildBody(
       BuildContext context, ExplorerState state, AgentClient client) {
+    final pinRow = _buildPinRow(context, state);
+
     // First load with nothing cached yet → lightweight skeleton.
     if (state.loading && state.entries.isEmpty) {
-      return const ListingSkeleton();
+      return Column(
+        children: [
+          if (pinRow != null) pinRow,
+          const Expanded(child: ListingSkeleton()),
+        ],
+      );
     }
     // Hard error with no cached entries to fall back on → retry card.
     if (state.error != null && state.entries.isEmpty) {
-      return ErrorRetryCard(message: state.error!, onRetry: _notifier.refresh);
+      return Column(
+        children: [
+          if (pinRow != null) pinRow,
+          Expanded(
+            child: ErrorRetryCard(
+                message: state.error!, onRetry: _notifier.refresh),
+          ),
+        ],
+      );
     }
     // Empty (non-error) directory → friendly empty view.
     if (!state.loading && state.entries.isEmpty && state.error == null) {
-      return RefreshIndicator(
-        onRefresh: _notifier.refresh,
-        child: ListView(
-          children: const [
-            SizedBox(height: 120),
-            EmptyFolderView(),
-          ],
-        ),
+      return Column(
+        children: [
+          if (pinRow != null) pinRow,
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _notifier.refresh,
+              child: ListView(
+                children: const [
+                  SizedBox(height: 120),
+                  EmptyFolderView(),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -312,6 +384,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
     return Column(
       children: [
+        if (pinRow != null) pinRow,
         if (state.offline) const OfflineBanner(),
         Expanded(
           child: RefreshIndicator(
@@ -325,11 +398,21 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
+  /// Paths of this host's favorited folders, for the tile star badge.
+  Set<String> _favoritePaths() => ref
+      .watch(favoritesProvider)
+      .valueOrNull
+      ?.where((f) => f.hostId == widget.host.id)
+      .map((f) => f.path)
+      .toSet() ??
+      const {};
+
   Widget _buildList(BuildContext context, ExplorerState state,
       AgentClient client, EntryDensity density) {
     final entries = state.sortedEntries;
     final showLoadMore = state.hasMore;
     final itemCount = entries.length + (showLoadMore ? 1 : 0);
+    final favoritePaths = _favoritePaths();
     return ListView.builder(
       itemCount: itemCount,
       itemBuilder: (ctx, i) {
@@ -345,11 +428,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             selected: state.selected.contains(entry.path),
             multiSelect: state.multiSelect,
             density: density,
+            isFavorite: favoritePaths.contains(entry.path),
             onTap: () => _onEntryTap(context, entry, client),
             onLongPress: () => _notifier.toggleSelect(entry.path),
             onSelect: () => _notifier.toggleSelect(entry.path),
             onMoveInto: (dragged, dest) =>
                 _moveInto(context, client, dragged, dest),
+            onShowMeta: entry.isDir
+                ? () => _showMeta(context, entry, client)
+                : null,
           ),
         );
       },
@@ -377,6 +464,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final entries = state.sortedEntries;
     final showLoadMore = state.hasMore;
     final itemCount = entries.length + (showLoadMore ? 1 : 0);
+    final favoritePaths = _favoritePaths();
     return GridView.builder(
       padding: const EdgeInsets.all(Spacing.md),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -399,6 +487,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             client: client,
             selected: state.selected.contains(entry.path),
             multiSelect: state.multiSelect,
+            isFavorite: favoritePaths.contains(entry.path),
             onTap: () => _onEntryTap(context, entry, client),
             onLongPress: () => _notifier.toggleSelect(entry.path),
             onMoveInto: (dragged, dest) =>

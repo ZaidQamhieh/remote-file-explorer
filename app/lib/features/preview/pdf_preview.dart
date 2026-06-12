@@ -5,6 +5,7 @@ import 'package:pdfx/pdfx.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/ui/format.dart';
 import 'preview_common.dart';
 
 /// Paginated PDF preview, fetched through the pinned + authenticated
@@ -73,7 +74,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           if (snapshot.hasError) {
             final err = snapshot.error;
             if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatBytes(err.size));
+              return PreviewTooLarge(sizeLabel: formatSize(err.size));
             }
             return PreviewError(
               message: 'Could not load this PDF.\n$err',

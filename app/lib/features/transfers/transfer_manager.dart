@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/ui/format.dart';
 import 'transfer_state.dart';
 
 /// Bottom sheet listing all active, queued, and recently completed transfers.
@@ -226,7 +227,7 @@ class _TransferTile extends ConsumerWidget {
               ),
               const SizedBox(height: Spacing.xs),
               Text(
-                '${_fmt(task.transferredBytes)} / ${_fmt(task.totalBytes)}',
+                '${formatSize(task.transferredBytes)} / ${formatSize(task.totalBytes)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -289,13 +290,4 @@ class _TransferTile extends ConsumerWidget {
         return null;
     }
   }
-}
-
-String _fmt(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }

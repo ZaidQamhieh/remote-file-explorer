@@ -7,6 +7,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/format.dart';
 import '../preview/preview.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show renameDestination;
@@ -147,7 +148,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     final rows = <Widget>[
       _row(context, Icons.route_outlined, 'Path', _entry.path),
       if (_entry.size != null)
-        _row(context, Icons.straighten_outlined, 'Size', _formatSize(_entry.size)),
+        _row(context, Icons.straighten_outlined, 'Size', formatSize(_entry.size)),
       if (_entry.mimeType != null)
         _row(context, Icons.label_outline, 'Type', _entry.mimeType!),
       if (_entry.mode != null)
@@ -349,14 +350,4 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (context.mounted) showError(context, 'Delete failed: $e');
     }
   }
-}
-
-String _formatSize(int? bytes) {
-  if (bytes == null) return '';
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }

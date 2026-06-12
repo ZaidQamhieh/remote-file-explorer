@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/format.dart';
 import 'preview_common.dart';
 
 /// Plain-text preview: fetches the file's bytes through the pinned +
@@ -77,7 +78,7 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
           if (snapshot.hasError) {
             final err = snapshot.error;
             if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatBytes(err.size));
+              return PreviewTooLarge(sizeLabel: formatSize(err.size));
             }
             if (err is _NotText) {
               return const PreviewError(

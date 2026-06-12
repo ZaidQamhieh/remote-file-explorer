@@ -9,6 +9,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/recent_searches.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import 'search_logic.dart';
@@ -701,8 +702,8 @@ class _SearchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitleParts = <String>[
       entry.path,
-      if (!entry.isDir) _formatSize(entry.size),
-      if (entry.modified != null) _formatDate(entry.modified!),
+      if (!entry.isDir) formatSize(entry.size),
+      if (entry.modified != null) formatDate(entry.modified!),
     ];
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(
@@ -811,21 +812,3 @@ class _CenteredMessage extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Formatting helpers (mirrors explorer_screen's private helpers)
-// ---------------------------------------------------------------------------
-
-String _formatSize(int? bytes) {
-  if (bytes == null) return '';
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-}
-
-String _formatDate(DateTime dt) =>
-    '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-    '${dt.day.toString().padLeft(2, '0')}';

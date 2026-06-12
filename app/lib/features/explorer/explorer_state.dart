@@ -346,6 +346,13 @@ final explorerProvider = NotifierProvider.autoDispose
   ExplorerNotifier.new,
 );
 
+/// Display name for a folder path (basename), or "Root" for the filesystem root.
+String folderLabel(String path) {
+  if (path == '/' || RegExp(r'^[A-Za-z]:\\?$').hasMatch(path)) return 'Root';
+  final name = path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+  return name.isEmpty ? path : name;
+}
+
 /// Builds the destination path for renaming the entry at [oldPath] to
 /// [newName], preserving whichever path separator [oldPath] uses — `/` for
 /// POSIX hosts, `\` for Windows hosts (so `C:\dir\file` renames to

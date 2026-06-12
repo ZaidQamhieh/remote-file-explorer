@@ -5,6 +5,7 @@ import 'package:photo_view/photo_view.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/ui/format.dart';
 import 'preview_common.dart';
 
 /// Full-screen pinch-to-zoom image preview, fetched through the pinned +
@@ -58,7 +59,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
           if (snapshot.hasError) {
             final err = snapshot.error;
             if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatBytes(err.size));
+              return PreviewTooLarge(sizeLabel: formatSize(err.size));
             }
             return PreviewError(
               message: 'Could not load image.\n$err',

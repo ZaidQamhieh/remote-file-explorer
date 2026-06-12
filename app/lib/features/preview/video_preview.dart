@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/ui/format.dart';
 import 'preview_common.dart';
 
 /// Video preview: downloads the file to a temp cache file (showing progress),
@@ -137,7 +138,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
           if (snapshot.hasError) {
             final err = snapshot.error;
             if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatBytes(err.size));
+              return PreviewTooLarge(sizeLabel: formatSize(err.size));
             }
             return PreviewError(
               message: 'Could not load this video.\n$err',

@@ -6,8 +6,9 @@ import 'package:remote_file_explorer/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // FileVisibilitySection widget tests — the global "File visibility" settings
-// card (hide-dotfiles switch, preset chips, hidden-extensions chips, and the
-// add-extension field), backed by visibilityPrefsProvider.
+// card: hide-dotfiles switch, one section per category with a toggle chip per
+// file type, and a "Custom" section (deletable chips + add field) at the end.
+// Backed by visibilityPrefsProvider.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -52,90 +53,102 @@ void main() {
     });
   });
 
-  group('Presets', () {
-    testWidgets('tapping a preset chip adds its extensions and selects it',
-        (tester) async {
-      final container = await pumpSection(tester);
-
-      final chipBefore =
-          tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'));
-      expect(chipBefore.selected, isFalse);
-
-      await tester.tap(find.widgetWithText(FilterChip, 'Logs'));
-      await tester.pumpAndSettle();
-
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, containsAll(logsPreset.extensions));
-      for (final ext in logsPreset.extensions) {
-        expect(find.widgetWithText(InputChip, '.$ext'), findsOneWidget);
+  group('Category sections', () {
+    testWidgets('each category renders as a labeled section', (tester) async {
+      await pumpSection(tester);
+      // Section headers are plain text (not chips), one per preset.
+      for (final preset in visibilityPresets) {
+        expect(find.text(preset.label), findsOneWidget);
       }
-
-      final chipAfter =
-          tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'));
-      expect(chipAfter.selected, isTrue);
     });
 
-    testWidgets('tapping a selected preset chip removes it (toggles off)',
+    testWidgets('tapping a file-type chip toggles just that extension',
         (tester) async {
       final container = await pumpSection(tester);
 
-      // Turn it on…
-      await tester.tap(find.widgetWithText(FilterChip, 'Logs'));
+      // ".log" is the Logs category's first file type.
+      final before =
+          tester.widget<FilterChip>(find.widgetWithText(FilterChip, '.log'));
+      expect(before.selected, isFalse);
+
+      await tester.tap(find.widgetWithText(FilterChip, '.log'));
       await tester.pumpAndSettle();
+
+      var prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      expect(prefs.hiddenExtensions, contains('log'));
+      // Only that one extension is hidden — not the whole category.
+      expect(prefs.hiddenExtensions, isNot(contains('old')));
       expect(
         tester
-            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'))
+            .widget<FilterChip>(find.widgetWithText(FilterChip, '.log'))
             .selected,
         isTrue,
       );
 
-      // …then tap again to turn it off.
-      await tester.tap(find.widgetWithText(FilterChip, 'Logs'));
+      // Tapping again toggles it back off.
+      await tester.tap(find.widgetWithText(FilterChip, '.log'));
+      await tester.pumpAndSettle();
+      prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      expect(prefs.hiddenExtensions, isNot(contains('log')));
+    });
+
+    testWidgets('tapping a name chip toggles an exact name', (tester) async {
+      final container = await pumpSection(tester);
+
+      // System junk includes the exact name "Thumbs.db".
+      await tester.tap(find.widgetWithText(FilterChip, 'Thumbs.db'));
       await tester.pumpAndSettle();
 
-      final chip =
-          tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'));
-      expect(chip.selected, isFalse);
       final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      for (final ext in logsPreset.extensions) {
-        expect(prefs.hiddenExtensions, isNot(contains(ext)));
-      }
+      expect(prefs.hiddenNames, contains('Thumbs.db'));
     });
   });
 
-  group('Custom extensions', () {
-    testWidgets('adding an extension shows a chip and persists',
+  group('Custom section', () {
+    testWidgets('a non-preset extension appears as a deletable custom chip',
         (tester) async {
       final container = await pumpSection(tester);
 
-      expect(find.text('None — add one below or use a preset above.'),
-          findsOneWidget);
+      expect(find.text('None — add an extension below.'), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField), 'tmp');
+      // "xyz" is not part of any preset, so it lands in the Custom section.
+      await tester.enterText(find.byType(TextField), 'xyz');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(InputChip, '.tmp'), findsOneWidget);
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, contains('tmp'));
-    });
-
-    testWidgets('deleting a chip removes the extension', (tester) async {
-      final container = await pumpSection(tester);
-      await container.read(visibilityPrefsProvider.future);
-      await container
-          .read(visibilityPrefsProvider.notifier)
-          .addExtension('tmp');
-      await tester.pumpAndSettle();
-
-      expect(find.widgetWithText(InputChip, '.tmp'), findsOneWidget);
+      expect(find.widgetWithText(InputChip, '.xyz'), findsOneWidget);
+      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+          contains('xyz'));
 
       await tester.tap(find.byIcon(Icons.clear));
       await tester.pumpAndSettle();
 
+      expect(find.widgetWithText(InputChip, '.xyz'), findsNothing);
+      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+          isNot(contains('xyz')));
+    });
+
+    testWidgets('a preset extension stays in its category, not Custom',
+        (tester) async {
+      final container = await pumpSection(tester);
+
+      // "tmp" belongs to System junk, so typing it selects that category's
+      // chip rather than creating a custom chip.
+      await tester.enterText(find.byType(TextField), 'tmp');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+          contains('tmp'));
+      // Rendered as a selected FilterChip (category), not an InputChip (custom).
+      expect(
+        tester
+            .widget<FilterChip>(find.widgetWithText(FilterChip, '.tmp'))
+            .selected,
+        isTrue,
+      );
       expect(find.widgetWithText(InputChip, '.tmp'), findsNothing);
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, isNot(contains('tmp')));
+      expect(find.text('None — add an extension below.'), findsOneWidget);
     });
   });
 }

@@ -396,8 +396,18 @@ class FileVisibilitySection extends ConsumerWidget {
     final prefs =
         ref.watch(visibilityPrefsProvider).valueOrNull ?? const VisibilityPrefs();
     final notifier = ref.read(visibilityPrefsProvider.notifier);
-    final extensions = prefs.hiddenExtensions.toList()..sort();
     final scheme = Theme.of(context).colorScheme;
+
+    // Extensions the user typed by hand are everything in the hidden set that
+    // no preset category already accounts for — they get their own section at
+    // the bottom.
+    final presetExtensions = {
+      for (final preset in visibilityPresets) ...preset.extensions,
+    };
+    final custom = prefs.hiddenExtensions
+        .where((e) => !presetExtensions.contains(e))
+        .toList()
+      ..sort();
 
     return _Section(
       title: 'File visibility',
@@ -410,31 +420,19 @@ class FileVisibilitySection extends ConsumerWidget {
           value: prefs.hideDotfiles,
           onChanged: notifier.setHideDotfiles,
         ),
-        const SizedBox(height: Spacing.sm),
-        Text('Hide by type', style: Theme.of(context).textTheme.labelLarge),
+        const Divider(height: Spacing.lg),
+        // One section per category; tapping a chip toggles that single file
+        // type, so users pick exactly what to hide instead of all-or-nothing.
+        for (final preset in visibilityPresets)
+          _PresetGroup(preset: preset, prefs: prefs, notifier: notifier),
+        const Divider(height: Spacing.lg),
+        Text('Custom', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: Spacing.xs),
-        Wrap(
-          spacing: Spacing.xs,
-          runSpacing: Spacing.xs,
-          children: [
-            for (final preset in visibilityPresets)
-              FilterChip(
-                label: Text(preset.label),
-                selected: _presetApplied(preset, prefs),
-                onSelected: (selected) => selected
-                    ? notifier.applyPreset(preset)
-                    : notifier.removePreset(preset),
-              ),
-          ],
-        ),
-        const SizedBox(height: Spacing.sm),
-        Text('Hidden extensions', style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: Spacing.xs),
-        if (extensions.isEmpty)
+        if (custom.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
             child: Text(
-              'None — add one below or use a preset above.',
+              'None — add an extension below.',
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           )
@@ -443,7 +441,7 @@ class FileVisibilitySection extends ConsumerWidget {
             spacing: Spacing.xs,
             runSpacing: Spacing.xs,
             children: [
-              for (final ext in extensions)
+              for (final ext in custom)
                 InputChip(
                   label: Text('.$ext'),
                   onDeleted: () => notifier.removeExtension(ext),
@@ -457,13 +455,61 @@ class FileVisibilitySection extends ConsumerWidget {
   }
 }
 
-/// `true` if every extension/name in [preset] is already in [prefs] — shown
-/// as the preset chip's selected state. Tapping the chip toggles it: applying
-/// the preset when off, removing it when on.
-bool _presetApplied(VisibilityPreset preset, VisibilityPrefs prefs) {
-  final names = prefs.hiddenNames.map((n) => n.toLowerCase()).toSet();
-  return preset.extensions.every(prefs.hiddenExtensions.contains) &&
-      preset.names.every((n) => names.contains(n.toLowerCase()));
+/// One category section in [FileVisibilitySection]: a header (the preset
+/// label) above a wrap of per-file-type toggle chips. Each chip hides a single
+/// extension (`.ext`) or exact name (e.g. `Thumbs.db`) independently, so the
+/// user picks precisely which types in the category to hide.
+class _PresetGroup extends StatelessWidget {
+  const _PresetGroup({
+    required this.preset,
+    required this.prefs,
+    required this.notifier,
+  });
+
+  final VisibilityPreset preset;
+  final VisibilityPrefs prefs;
+  final VisibilityPrefsNotifier notifier;
+
+  @override
+  Widget build(BuildContext context) {
+    final extensions = preset.extensions.toList()..sort();
+    final names = preset.names.toList()..sort();
+    final lowerHiddenNames =
+        prefs.hiddenNames.map((n) => n.toLowerCase()).toSet();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(preset.label, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: Spacing.xs),
+          Wrap(
+            spacing: Spacing.xs,
+            runSpacing: Spacing.xs,
+            children: [
+              for (final ext in extensions)
+                FilterChip(
+                  label: Text('.$ext'),
+                  selected: prefs.hiddenExtensions.contains(ext),
+                  onSelected: (selected) => selected
+                      ? notifier.addExtension(ext)
+                      : notifier.removeExtension(ext),
+                ),
+              for (final name in names)
+                FilterChip(
+                  label: Text(name),
+                  selected: lowerHiddenNames.contains(name.toLowerCase()),
+                  onSelected: (selected) => selected
+                      ? notifier.addName(name)
+                      : notifier.removeName(name),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Text field for adding a custom hidden extension (e.g. "tmp"), submitted

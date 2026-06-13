@@ -236,6 +236,51 @@ void main() {
     });
   });
 
+  group('Hidden names management', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('addName adds an exact name and is case-insensitively idempotent',
+        () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.addName('Thumbs.db');
+      await notifier.addName('thumbs.db'); // duplicate (different case)
+
+      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      expect(prefs.hiddenNames, {'Thumbs.db'});
+    });
+
+    test('addName is a no-op for blank input', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.addName('   ');
+
+      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenNames,
+          isEmpty);
+    });
+
+    test('removeName removes case-insensitively', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.setHiddenNames({'Thumbs.db'});
+      await notifier.removeName('THUMBS.DB');
+
+      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenNames,
+          isEmpty);
+    });
+  });
+
   group('applyPreset', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});

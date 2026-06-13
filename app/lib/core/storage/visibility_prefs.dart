@@ -224,6 +224,27 @@ class VisibilityPrefsNotifier extends AsyncNotifier<VisibilityPrefs> {
     state = AsyncData(current.copyWith(hiddenNames: names));
   }
 
+  /// Adds a single exact name (e.g. `Thumbs.db`) to the hidden set. No-op for
+  /// blank input or a name already present (case-insensitively).
+  Future<void> addName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final current = state.valueOrNull ?? const VisibilityPrefs();
+    if (current.hiddenNames.any((n) => n.toLowerCase() == trimmed.toLowerCase())) {
+      return;
+    }
+    await setHiddenNames({...current.hiddenNames, trimmed});
+  }
+
+  /// Removes a single exact name from the hidden set (case-insensitive match).
+  Future<void> removeName(String name) async {
+    final current = state.valueOrNull ?? const VisibilityPrefs();
+    final lower = name.toLowerCase();
+    await setHiddenNames(
+      current.hiddenNames.where((n) => n.toLowerCase() != lower).toSet(),
+    );
+  }
+
   /// Adds a single extension (lowercase, without the leading dot — leading
   /// dots and surrounding whitespace are stripped) to the hidden set. No-op
   /// if the result is empty.

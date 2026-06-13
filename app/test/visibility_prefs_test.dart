@@ -271,5 +271,51 @@ void main() {
         containsAll({...systemJunkPreset.extensions, ...logsPreset.extensions}),
       );
     });
+
+    test('removePreset undoes applyPreset (extensions and names)', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.applyPreset(systemJunkPreset);
+      await notifier.removePreset(systemJunkPreset);
+
+      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      for (final ext in systemJunkPreset.extensions) {
+        expect(prefs.hiddenExtensions, isNot(contains(ext)));
+      }
+      // Names (e.g. Thumbs.db) are removed too — these are otherwise
+      // unreachable from the UI, which was the original "can't unchoose" bug.
+      expect(prefs.hiddenNames, isEmpty);
+    });
+
+    test('removePreset removes names case-insensitively', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.setHiddenNames({'thumbs.db'}); // lowercase variant
+      await notifier.removePreset(systemJunkPreset); // names {'Thumbs.db', ...}
+
+      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      expect(prefs.hiddenNames, isEmpty);
+    });
+
+    test('removePreset keeps a user extension that is not in the preset',
+        () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(visibilityPrefsProvider.future);
+
+      final notifier = container.read(visibilityPrefsProvider.notifier);
+      await notifier.addExtension('xyz');
+      await notifier.applyPreset(logsPreset);
+      await notifier.removePreset(logsPreset);
+
+      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      expect(prefs.hiddenExtensions, {'xyz'});
+    });
   });
 }

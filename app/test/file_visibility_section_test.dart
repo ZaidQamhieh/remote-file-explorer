@@ -74,6 +74,33 @@ void main() {
           tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'));
       expect(chipAfter.selected, isTrue);
     });
+
+    testWidgets('tapping a selected preset chip removes it (toggles off)',
+        (tester) async {
+      final container = await pumpSection(tester);
+
+      // Turn it on…
+      await tester.tap(find.widgetWithText(FilterChip, 'Logs'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'))
+            .selected,
+        isTrue,
+      );
+
+      // …then tap again to turn it off.
+      await tester.tap(find.widgetWithText(FilterChip, 'Logs'));
+      await tester.pumpAndSettle();
+
+      final chip =
+          tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Logs'));
+      expect(chip.selected, isFalse);
+      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      for (final ext in logsPreset.extensions) {
+        expect(prefs.hiddenExtensions, isNot(contains(ext)));
+      }
+    });
   });
 
   group('Custom extensions', () {

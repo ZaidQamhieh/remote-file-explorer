@@ -421,7 +421,9 @@ class FileVisibilitySection extends ConsumerWidget {
               FilterChip(
                 label: Text(preset.label),
                 selected: _presetApplied(preset, prefs),
-                onSelected: (_) => notifier.applyPreset(preset),
+                onSelected: (selected) => selected
+                    ? notifier.applyPreset(preset)
+                    : notifier.removePreset(preset),
               ),
           ],
         ),
@@ -456,8 +458,8 @@ class FileVisibilitySection extends ConsumerWidget {
 }
 
 /// `true` if every extension/name in [preset] is already in [prefs] — shown
-/// as the preset chip's selected state. Tapping a chip always (re-)applies
-/// the preset (additive, idempotent) regardless of this value.
+/// as the preset chip's selected state. Tapping the chip toggles it: applying
+/// the preset when off, removing it when on.
 bool _presetApplied(VisibilityPreset preset, VisibilityPrefs prefs) {
   final names = prefs.hiddenNames.map((n) => n.toLowerCase()).toSet();
   return preset.extensions.every(prefs.hiddenExtensions.contains) &&

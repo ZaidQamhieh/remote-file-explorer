@@ -249,6 +249,24 @@ class VisibilityPrefsNotifier extends AsyncNotifier<VisibilityPrefs> {
     await setHiddenExtensions({...current.hiddenExtensions, ...preset.extensions});
     await setHiddenNames({...current.hiddenNames, ...preset.names});
   }
+
+  /// Removes [preset]'s extensions/names from the current sets — the inverse
+  /// of [applyPreset]. Entries not currently present are ignored. Names are
+  /// matched case-insensitively (mirroring [isEntryHidden]). Note: an
+  /// extension/name shared with another applied preset is removed too, which
+  /// will visually de-select that overlapping preset's chip as well.
+  Future<void> removePreset(VisibilityPreset preset) async {
+    final current = state.valueOrNull ?? const VisibilityPrefs();
+    final lowerToRemove = preset.names.map((n) => n.toLowerCase()).toSet();
+    await setHiddenExtensions(
+      current.hiddenExtensions.difference(preset.extensions),
+    );
+    await setHiddenNames(
+      current.hiddenNames
+          .where((n) => !lowerToRemove.contains(n.toLowerCase()))
+          .toSet(),
+    );
+  }
 }
 
 final visibilityPrefsProvider =

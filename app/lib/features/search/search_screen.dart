@@ -125,8 +125,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// [_rawResults] sorted by relevance and (unless [_includeHidden])
   /// filtered through the same file-visibility prefs as the explorer
   /// listing.
+  ///
+  /// Reads [visibilityPrefsProvider] via `ref.watch` (called only from
+  /// [build], directly or through [_buildBody]) so this screen re-filters
+  /// live if the user changes visibility prefs while it's mounted.
   List<Entry> get _results {
-    final prefs = ref.read(visibilityPrefsProvider).valueOrNull ??
+    final prefs = ref.watch(visibilityPrefsProvider).valueOrNull ??
         const VisibilityPrefs();
     return filterSearchResults(_rawResults, prefs,
         includeHidden: _includeHidden);

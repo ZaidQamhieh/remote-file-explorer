@@ -101,12 +101,18 @@ class ExplorerState {
   /// [entries] partitioned (directories first) and sorted per [sort],
   /// computed once at construction time so list/grid `itemBuilder`s can do
   /// plain indexed access instead of re-sorting on every item.
+  ///
+  /// Deliberately the FULL sorted list — visibility filtering is NOT applied
+  /// here. See [displayEntries] for why filtering happens at display time
+  /// instead of before this sort.
   final List<Entry> sortedEntries;
 
   /// Paths within [sortedEntries] that [visibilityPrefs] would hide,
   /// computed once at construction time so `itemBuilder`s can do an O(1)
   /// lookup (for the 55%-opacity treatment) instead of recomputing the
-  /// filter per item.
+  /// filter per item. Used by [displayEntries] to filter at display time and
+  /// by `itemBuilder`s to dim entries that remain visible because
+  /// [showHidden] is true.
   final Set<String> hiddenPaths;
 
   /// Number of [sortedEntries] currently hidden by [visibilityPrefs].
@@ -115,6 +121,21 @@ class ExplorerState {
   /// The entries to actually render: all of [sortedEntries] while
   /// [showHidden] is true (so hidden items can be shown at reduced opacity),
   /// or only the non-hidden ones otherwise.
+  ///
+  /// Filtering is applied HERE, at display time, rather than before
+  /// [sortedEntries] is computed — this is intentional, not a "filter before
+  /// sort" oversight. [sortedEntries] retains hidden entries in their sorted
+  /// position precisely so that, when [showHidden] is true, this getter can
+  /// return the full list and let revealed hidden entries render in place (at
+  /// 55% opacity) instead of being appended/regrouped separately.
+  ///
+  /// The visible order is identical either way: filtering [sortedEntries]
+  /// down to non-hidden paths here produces the same order as filtering
+  /// [entries] first and then sorting, because [_sortEntries] is a stable
+  /// directories-first partition + comparator that depends only on each
+  /// entry's own fields (name/size/date/type), never on whether other entries
+  /// are hidden — removing hidden entries from an already-sorted list can't
+  /// reorder the survivors.
   List<Entry> get displayEntries => showHidden
       ? sortedEntries
       : sortedEntries.where((e) => !hiddenPaths.contains(e.path)).toList();
@@ -368,16 +389,21 @@ class ExplorerNotifier
 
   void clearSelection() => state = state.copyWith(selected: {});
 
+  /// Selects every currently-displayed entry ([ExplorerState.displayEntries]),
+  /// so hidden entries the user can't see never get swept into a bulk
+  /// delete/move/copy.
   void selectAll() {
     state = state.copyWith(
-      selected: state.entries.map((e) => e.path).toSet(),
+      selected: state.displayEntries.map((e) => e.path).toSet(),
     );
   }
 
-  /// Flips the selection: every currently-unselected entry becomes selected
-  /// and vice versa. Used by the selection app bar's "invert" action.
+  /// Flips the selection within the currently-displayed entries
+  /// ([ExplorerState.displayEntries]): every currently-unselected displayed
+  /// entry becomes selected and vice versa. Used by the selection app bar's
+  /// "invert" action.
   void invertSelection() {
-    final all = state.entries.map((e) => e.path).toSet();
+    final all = state.displayEntries.map((e) => e.path).toSet();
     state = state.copyWith(selected: all.difference(state.selected));
   }
 

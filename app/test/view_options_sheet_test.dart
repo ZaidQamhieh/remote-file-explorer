@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/api/providers.dart';
+import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
@@ -21,12 +22,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
+/// Returns [entries] (default empty) for any directory listing — lets tests
+/// seed [ExplorerState.hiddenCount] without a full fake-client setup.
 class _EmptyAgentClient extends AgentClient {
-  _EmptyAgentClient({required Host host}) : super(host);
+  _EmptyAgentClient({required Host host, this.entries = const []})
+      : super(host);
+
+  final List<Entry> entries;
 
   @override
   Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
-    return Listing(path: path, entries: const [], nextCursor: null);
+    return Listing(path: path, entries: entries, nextCursor: null);
   }
 }
 
@@ -68,20 +74,35 @@ void main() {
     );
   });
 
-  Future<ExplorerNotifier> pumpSheet(WidgetTester tester) async {
+  /// Pumps [ViewOptionsSheet] backed by an explorer state whose entries are
+  /// [entries] (default empty — no hidden items). Returns the container so
+  /// callers can re-read [ExplorerState] (e.g. after a toggle) and the
+  /// notifier for the host's "h1" explorer provider.
+  Future<(ProviderContainer, ExplorerNotifier)> pumpSheet(
+    WidgetTester tester, {
+    List<Entry> entries = const [],
+  }) async {
     final container = ProviderContainer(
       overrides: [
-        clientProvider.overrideWith(
-            (ref, hostId) async => _EmptyAgentClient(host: _testHost)),
+        clientProvider.overrideWith((ref, hostId) async =>
+            _EmptyAgentClient(host: _testHost, entries: entries)),
       ],
     );
     addTearDown(container.dispose);
 
     const arg = (hostId: 'h1', rootPath: '/');
-    container.listen(explorerProvider(arg), (_, _) {});
-    final notifier = container.read(explorerProvider(arg).notifier);
-    await _waitUntil(
-        () => !container.read(explorerProvider(arg)).loading);
+    late ExplorerNotifier notifier;
+    // ListingCache does real file I/O, so both creating the notifier (which
+    // schedules its initial _load) and waiting for that load to land need to
+    // run via runAsync to progress inside testWidgets' fake-async zone.
+    await tester.runAsync(() async {
+      container.listen(explorerProvider(arg), (_, _) {});
+      notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => !container.read(explorerProvider(arg)).loading &&
+              container.read(explorerProvider(arg)).entries.length ==
+                  entries.length);
+    });
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -99,12 +120,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    return notifier;
+    return (container, notifier);
   }
 
   group('Layout (list/grid) control', () {
     testWidgets('toggling Grid persists per-host grid view', (tester) async {
-      final notifier = await pumpSheet(tester);
+      final (_, notifier) = await pumpSheet(tester);
 
       await tester.tap(find.text('Grid'));
       await tester.pumpAndSettle();
@@ -170,6 +191,45 @@ void main() {
           find.widgetWithText(ChoiceChip, 'Name'));
       expect(chip.selected, isTrue);
       expect(chip.avatar, isNotNull);
+    });
+  });
+
+  group('Show hidden items tile', () {
+    testWidgets('shows hidden count and toggles showHidden when entries '
+        'include hidden items', (tester) async {
+      // Default VisibilityPrefs hides dotfiles, so the ".env" entry below
+      // makes ExplorerState.hiddenCount == 1.
+      final (container, _) = await pumpSheet(tester, entries: const [
+        Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
+        Entry(name: '.env', path: '/.env', isDir: false),
+      ]);
+
+      const arg = (hostId: 'h1', rootPath: '/');
+      expect(container.read(explorerProvider(arg)).hiddenCount, 1);
+
+      // The tile shows the hidden count via its Badge.
+      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('1 hidden by file visibility settings'), findsOneWidget);
+
+      expect(container.read(explorerProvider(arg)).showHidden, isFalse);
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(container.read(explorerProvider(arg)).showHidden, isTrue);
+    });
+
+    testWidgets('is absent when there are no hidden entries', (tester) async {
+      final (container, _) = await pumpSheet(tester, entries: const [
+        Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
+      ]);
+
+      const arg = (hostId: 'h1', rootPath: '/');
+      expect(container.read(explorerProvider(arg)).hiddenCount, 0);
+
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.byType(Badge), findsNothing);
     });
   });
 }

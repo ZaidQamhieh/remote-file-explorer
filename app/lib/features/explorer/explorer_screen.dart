@@ -6,6 +6,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/motion.dart';
@@ -379,7 +380,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
 
     final density =
-        ref.watch(viewPrefsProvider).valueOrNull?.density ??
+        ref.watch(settingsProvider).valueOrNull?.resolveView(_arg.hostId).density ??
             EntryDensity.comfortable;
 
     return Column(

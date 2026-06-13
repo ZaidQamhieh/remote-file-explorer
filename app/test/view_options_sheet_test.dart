@@ -9,6 +9,7 @@ import 'package:remote_file_explorer/core/api/providers.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
+import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/view_options_sheet.dart';
@@ -127,8 +128,8 @@ void main() {
       await tester.tap(find.text('Grid'));
       await tester.pumpAndSettle();
 
-      final prefs = notifier.ref.read(viewPrefsProvider).valueOrNull!;
-      expect(prefs.gridViewFor('h1'), isTrue);
+      final settings = notifier.ref.read(settingsProvider).valueOrNull!;
+      expect(settings.app.gridView, isTrue);
     });
 
     // Regression (BUGS_REPORTED.md): the sheet must reflect the live explorer
@@ -161,8 +162,8 @@ void main() {
 
       final container = ProviderScope.containerOf(
           tester.element(find.byType(ViewOptionsSheet)));
-      final prefs = container.read(viewPrefsProvider).valueOrNull!;
-      expect(prefs.density, EntryDensity.compact);
+      final settings = container.read(settingsProvider).valueOrNull!;
+      expect(settings.app.density, EntryDensity.compact);
     });
   });
 
@@ -176,9 +177,9 @@ void main() {
 
       final container = ProviderScope.containerOf(
           tester.element(find.byType(ViewOptionsSheet)));
-      final prefs = container.read(viewPrefsProvider).valueOrNull!;
-      expect(prefs.sort.field, SortField.size);
-      expect(prefs.sort.ascending, isTrue);
+      final settings = container.read(settingsProvider).valueOrNull!;
+      expect(settings.app.sort.field, SortField.size);
+      expect(settings.app.sort.ascending, isTrue);
     });
 
     testWidgets('re-selecting the active field flips direction',
@@ -193,9 +194,9 @@ void main() {
 
       final container = ProviderScope.containerOf(
           tester.element(find.byType(ViewOptionsSheet)));
-      final prefs = container.read(viewPrefsProvider).valueOrNull!;
-      expect(prefs.sort.field, SortField.name);
-      expect(prefs.sort.ascending, isFalse);
+      final settings = container.read(settingsProvider).valueOrNull!;
+      expect(settings.app.sort.field, SortField.name);
+      expect(settings.app.sort.ascending, isFalse);
     });
 
     testWidgets('shows an arrow icon on the active sort chip',

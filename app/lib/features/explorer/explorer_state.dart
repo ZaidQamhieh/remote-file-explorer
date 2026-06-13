@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/storage/visibility_prefs.dart';
@@ -206,22 +207,22 @@ class ExplorerNotifier
     // invokes the callback, it doesn't trigger a rebuild of this notifier.
     ref.listen(clientProvider(arg.hostId), (_, _) {});
 
-    // View prefs (list/grid per host, sort order) are persisted separately
-    // (`core/storage/view_prefs.dart`) but mirrored into this state so
-    // `sortedEntries`/`gridView` stay the single source widgets read from.
-    // `ref.listen` applies future changes (e.g. from the view-options sheet);
-    // the initial `ref.read` seeds this notifier's first state synchronously
-    // when the prefs have already loaded (otherwise defaults apply until the
-    // listener fires).
-    ref.listen(viewPrefsProvider, (_, next) {
-      final prefs = next.valueOrNull;
-      if (prefs == null) return;
-      state = state.copyWith(
-        gridView: prefs.gridViewFor(arg.hostId),
-        sort: prefs.sort,
-      );
+    // View settings (list/grid, sort order) are owned by the two-tier settings
+    // model (`core/settings/`) and resolved per host (`deviceOverride ??
+    // appDefault`), then mirrored into this state so `sortedEntries`/`gridView`
+    // stay the single source widgets read from. `ref.listen` applies future
+    // changes (e.g. from the view-options sheet or a per-device override); the
+    // initial `ref.read` seeds this notifier's first state synchronously when
+    // settings have already loaded (otherwise defaults apply until the listener
+    // fires).
+    ref.listen(settingsProvider, (_, next) {
+      final settings = next.valueOrNull;
+      if (settings == null) return;
+      final view = settings.resolveView(arg.hostId);
+      state = state.copyWith(gridView: view.gridView, sort: view.sort);
     });
-    final initialPrefs = ref.read(viewPrefsProvider).valueOrNull;
+    final initialView =
+        ref.read(settingsProvider).valueOrNull?.resolveView(arg.hostId);
 
     // File-visibility prefs (dotfiles/extensions/names to hide) are
     // persisted separately (`core/storage/visibility_prefs.dart`) but
@@ -240,8 +241,8 @@ class ExplorerNotifier
     Future.microtask(_load);
     return ExplorerState(
       pathStack: [arg.rootPath],
-      gridView: initialPrefs?.gridViewFor(arg.hostId) ?? false,
-      sort: initialPrefs?.sort ?? const SortOrder(),
+      gridView: initialView?.gridView ?? false,
+      sort: initialView?.sort ?? const SortOrder(),
       visibilityPrefs: initialVisibilityPrefs ?? const VisibilityPrefs(),
     );
   }
@@ -359,17 +360,19 @@ class ExplorerNotifier
     _load();
   }
 
-  /// Persists [sort] via [viewPrefsProvider]; the resulting state update is
-  /// mirrored back into this notifier by the `ref.listen` in [build].
+  /// Changes the **app-default** sort order (the owner's "one general setting"
+  /// model — the quick controls in the view-options sheet set the global
+  /// default; a per-host divergence is a deliberate override set elsewhere).
+  /// The resulting state update is mirrored back here by the `ref.listen` in
+  /// [build].
   void setSort(SortOrder sort) =>
-      ref.read(viewPrefsProvider.notifier).setSort(sort);
+      ref.read(settingsProvider.notifier).setAppSort(sort);
 
-  /// Persists the list/grid toggle for this host via [viewPrefsProvider]; the
-  /// resulting state update is mirrored back into this notifier by the
-  /// `ref.listen` in [build].
-  void toggleView() => ref
-      .read(viewPrefsProvider.notifier)
-      .setGridView(arg.hostId, !state.gridView);
+  /// Flips the **app-default** list/grid layout. Toggles against the current
+  /// resolved value for this host, then writes the app default; hosts with an
+  /// explicit override keep it. Mirrored back by the `ref.listen` in [build].
+  void toggleView() =>
+      ref.read(settingsProvider.notifier).setAppGridView(!state.gridView);
 
   /// Toggles the session-only "show hidden items" override (see
   /// [ExplorerState.showHidden]). Unlike [toggleView]/[setSort], this is

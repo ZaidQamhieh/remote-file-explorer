@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
@@ -33,8 +34,13 @@ class ViewOptionsSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final prefs = ref.watch(viewPrefsProvider).valueOrNull ?? const ViewPrefs();
     final state = ref.watch(explorerProvider(notifier.arg));
+    final density = ref
+            .watch(settingsProvider)
+            .valueOrNull
+            ?.resolveView(notifier.arg.hostId)
+            .density ??
+        EntryDensity.comfortable;
     final theme = Theme.of(context);
 
     return SafeArea(
@@ -88,9 +94,9 @@ class ViewOptionsSheet extends ConsumerWidget {
                   icon: Icon(Icons.density_small_rounded),
                 ),
               ],
-              selected: {prefs.density},
+              selected: {density},
               onSelectionChanged: (sel) =>
-                  ref.read(viewPrefsProvider.notifier).setDensity(sel.first),
+                  ref.read(settingsProvider.notifier).setAppDensity(sel.first),
             ),
             const SizedBox(height: Spacing.lg),
             Text('Sort by', style: theme.textTheme.labelLarge),

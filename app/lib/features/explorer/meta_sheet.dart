@@ -269,6 +269,16 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             padding: const EdgeInsets.symmetric(
                 horizontal: Spacing.md, vertical: Spacing.sm),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: const Icon(Icons.copy_all_outlined),
+          label: const Text('Duplicate'),
+          onPressed: () => _duplicate(context),
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md, vertical: Spacing.sm),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             foregroundColor: scheme.error,
             side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
           ),
@@ -351,6 +361,34 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (context.mounted) showSuccess(context, 'Renamed to $newName');
     } catch (e) {
       if (context.mounted) showError(context, 'Rename failed: $e');
+    }
+  }
+
+  Future<void> _duplicate(BuildContext context) async {
+    try {
+      final path = _entry.path;
+      // Parent directory of the entry, preserving the path's separator style.
+      final sep = path.contains('\\') ? '\\' : '/';
+      final idx = path.lastIndexOf(sep);
+      final parentDir = idx <= 0 ? sep : path.substring(0, idx);
+      // duplicate:true makes an auto-renamed sibling ("name (1).ext"), so this
+      // never collides with the original.
+      final res = await widget.client.copy([path], parentDir, duplicate: true);
+      final results = (res['results'] as List?) ?? const [];
+      final ok = results.isNotEmpty &&
+          results.first is Map &&
+          (results.first as Map)['ok'] == true;
+      if (!ok) {
+        if (context.mounted) {
+          showError(context, 'Couldn\'t duplicate "${_entry.name}"');
+        }
+        return;
+      }
+      widget.onChanged?.call();
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) showSuccess(context, 'Duplicated "${_entry.name}"');
+    } catch (e) {
+      if (context.mounted) showError(context, 'Duplicate failed: $e');
     }
   }
 

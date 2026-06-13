@@ -494,8 +494,11 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 		}
 		dst := filepath.Join(dstResolved, filepath.Base(resSrc))
 
-		// Same-path guard: copying a path onto itself is a no-op.
-		if resSrc == dst {
+		// Same-path guard: copying a path onto itself is a no-op — UNLESS
+		// duplicate is requested, in which case copying into the source's own
+		// directory means "make a renamed copy" (duplicate-in-place), handled
+		// by the auto-rename below.
+		if resSrc == dst && !duplicate {
 			results[i] = BatchResult{Path: src, OK: true}
 			continue
 		}

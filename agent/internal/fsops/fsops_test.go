@@ -713,6 +713,32 @@ func TestCopy_ConflictWithoutOverwriteOrDuplicate(t *testing.T) {
 	}
 }
 
+// Duplicate-in-place: copying a file into its OWN directory with duplicate=true
+// must make an auto-renamed sibling rather than hitting the same-path no-op.
+func TestCopy_DuplicateInPlace(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcFile := filepath.Join(root, "note.txt")
+	if err := os.WriteFile(srcFile, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+
+	results := ops.Copy([]string{srcFile}, root, true, false)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("expected OK duplicate, got: %+v", results)
+	}
+
+	// Original is untouched.
+	if got, err := os.ReadFile(srcFile); err != nil || string(got) != "hello" {
+		t.Fatalf("original changed: got %q err %v", got, err)
+	}
+	// An auto-renamed sibling now exists with the source's content.
+	dup := filepath.Join(root, "note (1).txt")
+	if got, err := os.ReadFile(dup); err != nil || string(got) != "hello" {
+		t.Fatalf("expected duplicate %q with content 'hello', got %q err %v", dup, got, err)
+	}
+}
+
 // TestMove_ConflictWithoutOverwriteOrDuplicate mirrors
 // TestCopy_ConflictWithoutOverwriteOrDuplicate for Move.
 func TestMove_ConflictWithoutOverwriteOrDuplicate(t *testing.T) {

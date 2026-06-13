@@ -205,6 +205,8 @@ func handleFsError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, "READ_ONLY", err.Error())
 	case errors.Is(err, fsops.ErrConflict):
 		writeError(w, http.StatusConflict, "CONFLICT", err.Error())
+	case errors.Is(err, fsops.ErrStale):
+		writeError(w, http.StatusConflict, "STALE_WRITE", err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 	}

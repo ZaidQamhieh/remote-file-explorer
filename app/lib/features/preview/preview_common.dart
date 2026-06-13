@@ -12,6 +12,12 @@ const int kMaxInMemoryPreviewBytes = 50 * 1024 * 1024; // 50 MB
 /// queue instead of streaming a full local copy just to preview it.
 const int kMaxVideoPreviewBytes = 300 * 1024 * 1024; // 300 MB
 
+/// Maximum size (in bytes) of a file we'll offer to edit in-app, matching
+/// the agent's `PUT /v1/content` body cap. Saves over this limit are
+/// rejected by the agent with `413 PAYLOAD_TOO_LARGE`; we hide the Edit
+/// action below this size so the failure mode is rare rather than the norm.
+const int kMaxEditableBytes = 5 * 1024 * 1024; // 5 MiB
+
 /// A simple `Scaffold` shell shared by all preview viewers: an `AppBar`
 /// with the file name, and a body that reflects [PreviewLoadState].
 class PreviewScaffold extends StatelessWidget {

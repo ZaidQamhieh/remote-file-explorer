@@ -28,6 +28,11 @@ var ErrNotFound = errors.New("path not found")
 // ErrConflict is returned when a destination already exists.
 var ErrConflict = errors.New("destination already exists")
 
+// ErrStale is returned by WriteContent when the on-disk file's mtime no
+// longer matches the baseModified the caller last read, indicating the
+// file changed since then (optimistic-concurrency conflict).
+var ErrStale = errors.New("file changed since last read")
+
 // SettingsView supplies the live read-only flag and jail roots. fsops reads
 // through it on every operation so changes apply without reconstructing Ops.
 type SettingsView interface {
@@ -325,6 +330,87 @@ func (o *Ops) CreateFile(path string) (*Entry, error) {
 		return nil, err
 	}
 	f.Close()
+	return o.Meta(resolved)
+}
+
+// --------- WriteContent ---------
+
+// WriteContent writes (or replaces) the content of a file at path with data,
+// atomically. If baseModified is non-nil, the existing file's mtime
+// (truncated to the second) must match baseModified (also truncated to the
+// second) or ErrStale is returned — this gives the caller optimistic
+// concurrency: a write based on a stale read is rejected instead of silently
+// clobbering newer content.
+//
+// The write is performed by creating a temp file in the same directory as
+// the target, writing+fsyncing it, then renaming it over the target. If the
+// target already exists its file mode is preserved; otherwise the new file
+// is created with mode 0644.
+func (o *Ops) WriteContent(path string, data []byte, baseModified *time.Time) (*Entry, error) {
+	if o.settings.IsReadOnly() {
+		return nil, ErrReadOnly
+	}
+	resolved, err := o.Resolve(path)
+	if err != nil {
+		return nil, err
+	}
+
+	mode := os.FileMode(0o644)
+	if baseModified != nil {
+		info, statErr := os.Stat(resolved)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				return nil, ErrNotFound
+			}
+			return nil, statErr
+		}
+		if !info.ModTime().Truncate(time.Second).Equal(baseModified.Truncate(time.Second)) {
+			return nil, ErrStale
+		}
+		mode = info.Mode()
+	} else if info, statErr := os.Stat(resolved); statErr == nil {
+		mode = info.Mode()
+	} else if !os.IsNotExist(statErr) {
+		return nil, statErr
+	}
+
+	dir := filepath.Dir(resolved)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(resolved)+".rfe-tmp-*")
+	if err != nil {
+		return nil, err
+	}
+	tmpName := tmp.Name()
+	cleanup := func() {
+		_ = os.Remove(tmpName)
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		cleanup()
+		return nil, err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		cleanup()
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return nil, err
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		cleanup()
+		return nil, err
+	}
+	if err := os.Rename(tmpName, resolved); err != nil {
+		cleanup()
+		return nil, err
+	}
+
 	return o.Meta(resolved)
 }
 

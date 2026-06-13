@@ -90,8 +90,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Post("/fs/move", moveHandler(ops))
 			r.Get("/fs/meta", metaHandler(ops))
 
-			// Download
+			// Download / write content
 			r.Get("/content", downloadHandler(ops))
+			r.Put("/content", writeContentHandler(ops))
 
 			// Upload / transfers
 			r.Post("/transfers", openTransferHandler(tm, ops))

@@ -53,6 +53,50 @@ func downloadHandler(ops *fsops.Ops) http.HandlerFunc {
 	}
 }
 
+// MaxContentBytes caps the size of a PUT /v1/content request body.
+const MaxContentBytes int64 = 5 << 20 // 5 MiB
+
+// --------- /content PUT ---------
+
+func writeContentHandler(ops *fsops.Ops) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
+			return
+		}
+
+		var baseModified *time.Time
+		if bm := r.URL.Query().Get("baseModified"); bm != "" {
+			t, err := time.Parse(time.RFC3339Nano, bm)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "baseModified must be RFC3339")
+				return
+			}
+			baseModified = &t
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, MaxContentBytes)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "content exceeds maximum size of 5MiB")
+				return
+			}
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "failed to read request body")
+			return
+		}
+
+		entry, err := ops.WriteContent(path, data, baseModified)
+		if err != nil {
+			handleFsError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, entry)
+	}
+}
+
 // maxChunkSize caps the client-chosen chunkSize for an upload session.
 // Chunks are buffered fully in memory (see uploadChunkHandler), so an
 // unbounded chunkSize would let a client force large allocations.

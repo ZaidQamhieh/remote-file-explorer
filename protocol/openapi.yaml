@@ -199,6 +199,39 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
+    put:
+      summary: Write (replace) a small text file's content, atomically
+      description: >
+        Writes the request body to path, replacing its current content. The
+        write is atomic (temp file + rename) and the existing file's mode is
+        preserved. The body is capped at 5 MiB; larger payloads are rejected
+        with 413. Pass baseModified (the `modified` value last read for this
+        file via /fs/meta or /fs) to get optimistic-concurrency protection —
+        if the file's mtime no longer matches, the write is rejected with 409
+        instead of clobbering newer content.
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+        - in: query
+          name: baseModified
+          required: false
+          schema: { type: string, format: date-time }
+          description: >
+            The `modified` timestamp (RFC3339) last read for this file.
+            Compared (truncated to the second) against the file's current
+            mtime; a mismatch returns 409 STALE_WRITE. Omit for an
+            unconditional write (e.g. creating new content).
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses:
+        "200": { description: Updated metadata, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
 
   /transfers:
     post:

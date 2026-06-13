@@ -38,6 +38,38 @@ class AgentApiException implements Exception {
   String toString() => 'AgentApiException($statusCode): $code — $message';
 }
 
+/// Thrown by [AgentClient.putContent] when the agent is in read-only mode
+/// (`403 READ_ONLY`) and refuses to write the file.
+class ReadOnlyException implements Exception {
+  ReadOnlyException(this.message);
+  final String message;
+  @override
+  String toString() => 'ReadOnlyException: $message';
+}
+
+/// Thrown by [AgentClient.putContent] when the file changed on disk since
+/// the caller's [Entry.modified] was read (`409 STALE_WRITE`) — i.e. the
+/// `baseModified` the caller sent no longer matches the file's current
+/// modification time.
+///
+/// Callers should offer to reload the file's current contents, or to
+/// overwrite by retrying [AgentClient.putContent] with `baseModified: null`.
+class StaleWriteException implements Exception {
+  StaleWriteException(this.message);
+  final String message;
+  @override
+  String toString() => 'StaleWriteException: $message';
+}
+
+/// Thrown by [AgentClient.putContent] when the new content exceeds the
+/// agent's size limit for in-place writes (`413 PAYLOAD_TOO_LARGE`).
+class PayloadTooLargeException implements Exception {
+  PayloadTooLargeException(this.message);
+  final String message;
+  @override
+  String toString() => 'PayloadTooLargeException: $message';
+}
+
 /// Thrown by [AgentClient.downloadFile] when a resumed download (a Range
 /// request with `startByte > 0`) was answered with a full `200 OK` instead
 /// of a `206 Partial Content`.
@@ -563,6 +595,62 @@ class AgentClient {
       return Uint8List.fromList(data ?? const []);
     } on DioException catch (e) {
       throw _apiError(e);
+    }
+  }
+
+  /// Overwrites the file at [remotePath] with [bytes] (max 5 MiB).
+  ///
+  /// Pass [baseModified] — typically the [Entry.modified] timestamp last
+  /// read for this file — for optimistic concurrency: the agent rejects the
+  /// write with [StaleWriteException] if the file changed on disk since
+  /// then. Omit it (or pass `null`) to force an overwrite regardless of
+  /// concurrent changes.
+  ///
+  /// Returns the updated [Entry]; use its `modified` as the new
+  /// [baseModified] for any subsequent save.
+  ///
+  /// Throws:
+  /// - [ReadOnlyException] if the agent is in read-only mode (`403
+  ///   READ_ONLY`).
+  /// - [StaleWriteException] if the file changed on disk since
+  ///   [baseModified] (`409 STALE_WRITE`).
+  /// - [PayloadTooLargeException] if [bytes] is too large to save (`413
+  ///   PAYLOAD_TOO_LARGE`).
+  /// - [AgentApiException] for any other error response.
+  Future<Entry> putContent(
+    String remotePath,
+    Uint8List bytes, {
+    DateTime? baseModified,
+  }) async {
+    try {
+      final res = await _dio.put<Map<String, dynamic>>(
+        '/content',
+        data: Stream.fromIterable([bytes]),
+        queryParameters: {
+          'path': remotePath,
+          if (baseModified != null)
+            'baseModified': baseModified.toUtc().toIso8601String(),
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            Headers.contentLengthHeader: bytes.length,
+          },
+        ),
+      );
+      return Entry.fromJson(res.data ?? const {});
+    } on DioException catch (e) {
+      final err = _apiError(e);
+      switch (err.code) {
+        case 'READ_ONLY':
+          throw ReadOnlyException(err.message);
+        case 'STALE_WRITE':
+          throw StaleWriteException(err.message);
+        case 'PAYLOAD_TOO_LARGE':
+          throw PayloadTooLargeException(err.message);
+        default:
+          throw err;
+      }
     }
   }
 

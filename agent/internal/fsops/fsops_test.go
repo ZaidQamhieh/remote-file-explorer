@@ -1,9 +1,11 @@
 package fsops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // setupJail creates a temp directory as the jail root and returns
@@ -309,6 +311,179 @@ type fakeSettings struct {
 
 func (f *fakeSettings) IsReadOnly() bool { return f.ro }
 func (f *fakeSettings) Roots() []string  { return f.roots }
+
+// noTempFilesLeft verifies the jail root contains only the expected file
+// (i.e. no leftover .rfe-tmp-* temp files from an atomic write).
+func noTempFilesLeft(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != "" && filepath.Base(e.Name())[0] == '.' {
+			t.Fatalf("leftover temp file found: %s", e.Name())
+		}
+	}
+}
+
+// TestWriteContent_Create verifies writing a brand-new file works and the
+// returned Entry reflects the new content, with no leftover temp files.
+func TestWriteContent_Create(t *testing.T) {
+	ops, root := setupJail(t)
+
+	target := filepath.Join(root, "note.txt")
+	entry, err := ops.WriteContent(target, []byte("hello world"), nil)
+	if err != nil {
+		t.Fatalf("WriteContent: %v", err)
+	}
+	if entry.Size != int64(len("hello world")) {
+		t.Fatalf("unexpected size: %d", entry.Size)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "hello world" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+	noTempFilesLeft(t, root)
+}
+
+// TestWriteContent_Overwrite verifies overwriting an existing file replaces
+// its content, preserves its mode, and returns the fresh Entry.
+func TestWriteContent_Overwrite(t *testing.T) {
+	ops, root := setupJail(t)
+
+	target := filepath.Join(root, "note.txt")
+	if err := os.WriteFile(target, []byte("old content"), 0o640); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	entry, err := ops.WriteContent(target, []byte("new content!"), nil)
+	if err != nil {
+		t.Fatalf("WriteContent: %v", err)
+	}
+	if entry.Size != int64(len("new content!")) {
+		t.Fatalf("unexpected size: %d", entry.Size)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "new content!" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("expected mode 0640 preserved, got %v", info.Mode().Perm())
+	}
+	noTempFilesLeft(t, root)
+}
+
+// TestWriteContent_ReadOnly verifies ErrReadOnly is returned in read-only mode.
+func TestWriteContent_ReadOnly(t *testing.T) {
+	root := t.TempDir()
+	ops := New([]string{root}, true)
+
+	_, err := ops.WriteContent(filepath.Join(root, "note.txt"), []byte("x"), nil)
+	if err != ErrReadOnly {
+		t.Fatalf("expected ErrReadOnly, got %v", err)
+	}
+}
+
+// TestWriteContent_OutsideJail verifies ErrForbidden is returned for a path
+// outside the configured jail.
+func TestWriteContent_OutsideJail(t *testing.T) {
+	ops, _ := setupJail(t)
+	outside := t.TempDir()
+
+	_, err := ops.WriteContent(filepath.Join(outside, "note.txt"), []byte("x"), nil)
+	if err == nil {
+		t.Fatal("expected error for path outside jail, got nil")
+	}
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+// TestWriteContent_BaseModifiedMismatch verifies a stale baseModified is
+// rejected with ErrStale and does not modify the file on disk.
+func TestWriteContent_BaseModifiedMismatch(t *testing.T) {
+	ops, root := setupJail(t)
+
+	target := filepath.Join(root, "note.txt")
+	if err := os.WriteFile(target, []byte("original"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	stale := time.Now().Add(-1 * time.Hour)
+	_, err := ops.WriteContent(target, []byte("clobber"), &stale)
+	if !errors.Is(err, ErrStale) {
+		t.Fatalf("expected ErrStale, got %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "original" {
+		t.Fatalf("file should be unchanged, got %q", got)
+	}
+	noTempFilesLeft(t, root)
+}
+
+// TestWriteContent_BaseModifiedMatch verifies a matching baseModified
+// (truncated to the second) allows the write to proceed.
+func TestWriteContent_BaseModifiedMatch(t *testing.T) {
+	ops, root := setupJail(t)
+
+	target := filepath.Join(root, "note.txt")
+	if err := os.WriteFile(target, []byte("original"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	base := info.ModTime()
+
+	entry, err := ops.WriteContent(target, []byte("updated"), &base)
+	if err != nil {
+		t.Fatalf("WriteContent with matching baseModified: %v", err)
+	}
+	if entry.Size != int64(len("updated")) {
+		t.Fatalf("unexpected size: %d", entry.Size)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "updated" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+	noTempFilesLeft(t, root)
+}
+
+// TestWriteContent_BaseModifiedNotFound verifies that supplying baseModified
+// for a file that doesn't exist yet returns ErrNotFound.
+func TestWriteContent_BaseModifiedNotFound(t *testing.T) {
+	ops, root := setupJail(t)
+
+	target := filepath.Join(root, "missing.txt")
+	base := time.Now()
+	_, err := ops.WriteContent(target, []byte("x"), &base)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
 
 func TestOps_LiveReadOnlyToggle(t *testing.T) {
 	root := t.TempDir()

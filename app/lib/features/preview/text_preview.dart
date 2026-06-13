@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
@@ -8,6 +5,7 @@ import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
+import 'text_editor.dart';
 
 /// Plain-text preview: fetches the file's bytes through the pinned +
 /// authenticated [AgentClient], decodes as UTF-8, and shows it in a
@@ -42,78 +40,93 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
       throw _TooLarge(size);
     }
     final bytes = await widget.client.fetchBytes(widget.entry.path);
-    return _decodeAsText(bytes);
-  }
-
-  /// Decodes [bytes] as strict UTF-8. Throws [_NotText] if the content looks
-  /// binary / isn't valid UTF-8, so we can show a friendly message instead
-  /// of garbled output or crashing.
-  String _decodeAsText(Uint8List bytes) {
-    // Heuristic: NUL bytes are a strong signal of binary content.
-    final sampleLen = bytes.length < 8192 ? bytes.length : 8192;
-    for (var i = 0; i < sampleLen; i++) {
-      if (bytes[i] == 0) throw const _NotText();
-    }
-    try {
-      return utf8.decode(bytes, allowMalformed: false);
-    } on FormatException {
-      throw const _NotText();
-    }
+    return decodeAsText(bytes);
   }
 
   void _retry() {
     setState(() => _future = _load());
   }
 
+  Future<void> _edit(BuildContext context, String text) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TextEditorScreen(
+          entry: widget.entry,
+          client: widget.client,
+          initialText: text,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PreviewScaffold(
-      title: widget.entry.name,
-      body: FutureBuilder<String>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const PreviewLoading(message: 'Loading text…');
-          }
-          if (snapshot.hasError) {
-            final err = snapshot.error;
-            if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatSize(err.size));
+    return FutureBuilder<String>(
+      future: _future,
+      builder: (context, snapshot) {
+        // Only offer Edit once the text has loaded successfully and is
+        // small enough for the agent's PUT /content body cap.
+        final loadedText = snapshot.connectionState == ConnectionState.done &&
+                !snapshot.hasError
+            ? snapshot.data
+            : null;
+        final canEdit = loadedText != null &&
+            (widget.entry.size ?? loadedText.length) <= kMaxEditableBytes;
+
+        return PreviewScaffold(
+          title: widget.entry.name,
+          actions: [
+            if (canEdit)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit',
+                onPressed: () => _edit(context, loadedText),
+              ),
+          ],
+          body: () {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const PreviewLoading(message: 'Loading text…');
             }
-            if (err is _NotText) {
-              return const PreviewError(
-                message: "Can't preview this as text — "
-                    "it doesn't look like a valid UTF-8 text file.",
+            if (snapshot.hasError) {
+              final err = snapshot.error;
+              if (err is _TooLarge) {
+                return PreviewTooLarge(sizeLabel: formatSize(err.size));
+              }
+              if (err is NotTextException) {
+                return const PreviewError(
+                  message: "Can't preview this as text — "
+                      "it doesn't look like a valid UTF-8 text file.",
+                );
+              }
+              return PreviewError(
+                message: 'Could not load this file.\n$err',
+                onRetry: _retry,
               );
             }
-            return PreviewError(
-              message: 'Could not load this file.\n$err',
-              onRetry: _retry,
-            );
-          }
-          final text = snapshot.data!;
-          if (text.isEmpty) {
-            return Center(
-              child: Text(
-                '(empty file)',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            final text = snapshot.data!;
+            if (text.isEmpty) {
+              return Center(
+                child: Text(
+                  '(empty file)',
+                  style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                ),
+              );
+            }
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(Spacing.md),
+              child: SelectableText(
+                text,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontFamilyFallback: ['monospace'],
+                  fontSize: 13,
+                  height: 1.4,
+                ),
               ),
             );
-          }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(Spacing.md),
-            child: SelectableText(
-              text,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontFamilyFallback: ['monospace'],
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-          );
-        },
-      ),
+          }(),
+        );
+      },
     );
   }
 }
@@ -121,8 +134,4 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
 class _TooLarge implements Exception {
   _TooLarge(this.size);
   final int size;
-}
-
-class _NotText implements Exception {
-  const _NotText();
 }

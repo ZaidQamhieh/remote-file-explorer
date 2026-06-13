@@ -7,6 +7,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../pairing/pairing_screen.dart';
+import '../settings/app_settings_screen.dart';
 import 'widgets/host_card.dart';
 
 /// Displays all paired hosts as a dashboard of [HostCard]s.
@@ -46,6 +47,15 @@ class HostListScreen extends ConsumerWidget {
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(hostStoreProvider),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'App settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AppSettingsScreen(),
+              ),
+            ),
           ),
           const SizedBox(width: Spacing.xs),
         ],

@@ -10,6 +10,8 @@ import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'update_tile.dart';
+import 'widgets/device_view_overrides_section.dart';
+import 'widgets/settings_section.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -182,7 +184,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         _SecurityWarningCard(scheme: scheme),
         const SizedBox(height: Spacing.lg),
-        _Section(
+        SettingsSection(
           title: 'Agent',
           icon: Icons.dns_outlined,
           children: [
@@ -196,7 +198,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        _Section(
+        SettingsSection(
           title: 'Access',
           icon: Icons.lock_outline,
           children: [
@@ -212,7 +214,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        _Section(
+        SettingsSection(
           title: 'Allowed folders',
           icon: Icons.folder_outlined,
           trailing: IconButton(
@@ -247,9 +249,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
+        DeviceViewOverridesSection(hostId: widget.host.id),
+        const SizedBox(height: Spacing.md),
         const FileVisibilitySection(),
         const SizedBox(height: Spacing.md),
-        _Section(
+        SettingsSection(
           title: 'Paired devices',
           icon: Icons.devices_outlined,
           children: [
@@ -257,7 +261,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        _Section(
+        SettingsSection(
           title: 'Updates',
           icon: Icons.system_update_alt_outlined,
           padded: false,
@@ -266,7 +270,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        _Section(
+        SettingsSection(
           title: 'About',
           icon: Icons.info_outline,
           children: [
@@ -316,69 +320,6 @@ class _SecurityWarningCard extends StatelessWidget {
   }
 }
 
-/// A grouped settings section: a labelled header followed by a card containing
-/// related rows. Keeps visual rhythm consistent across the screen.
-class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.children,
-    this.trailing,
-    this.padded = true,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-  final Widget? trailing;
-
-  /// Whether the card content gets the standard padding. UpdateTile already
-  /// manages its own internal padding, so the Updates section opts out.
-  final bool padded;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Spacing.xs, 0, Spacing.xs, Spacing.sm),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: scheme.primary),
-              const SizedBox(width: Spacing.sm),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
-              ),
-              const Spacer(),
-              if (trailing != null) trailing!,
-            ],
-          ),
-        ),
-        Card(
-          elevation: Elevations.card,
-          color: scheme.surfaceContainerLow,
-          shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
-          clipBehavior: Clip.antiAlias,
-          child: padded
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md, vertical: Spacing.xs),
-                  child: Column(children: children),
-                )
-              : Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // File visibility section
 // ---------------------------------------------------------------------------
@@ -409,7 +350,7 @@ class FileVisibilitySection extends ConsumerWidget {
         .toList()
       ..sort();
 
-    return _Section(
+    return SettingsSection(
       title: 'File visibility',
       icon: Icons.visibility_outlined,
       children: [

@@ -139,6 +139,10 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 		id := uuid.New().String()
 		t, err := tm.OpenSession(id, resolved, req.Size, req.ChunkSize, req.SHA256, req.Overwrite)
 		if err != nil {
+			if errors.Is(err, transfer.ErrDestinationExists) {
+				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}

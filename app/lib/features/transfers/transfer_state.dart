@@ -49,12 +49,18 @@ class TransferTask {
     this.error,
     this.uploadSessionId,
     this.savedLocation,
+    this.overwrite = false,
   });
 
+  /// [overwrite] is forwarded to [AgentClient.openUploadSession] when the
+  /// session is opened — set when the user resolved a pre-flight name
+  /// collision (see `explorer_screen.dart`'s `_pickAndUpload`) with
+  /// "Overwrite".
   factory TransferTask.upload({
     required String localPath,
     required String remotePath,
     required Host host,
+    bool overwrite = false,
   }) =>
       TransferTask._(
         id: _nextTaskId(),
@@ -62,6 +68,7 @@ class TransferTask {
         localPath: localPath,
         remotePath: remotePath,
         host: host,
+        overwrite: overwrite,
       );
 
   factory TransferTask.download({
@@ -94,6 +101,10 @@ class TransferTask {
   /// Where a completed download was saved (e.g. "Downloads/report.pdf").
   final String? savedLocation;
 
+  /// For uploads: whether to overwrite an existing file at [remotePath]
+  /// (passed to [AgentClient.openUploadSession]). Ignored for downloads.
+  final bool overwrite;
+
   double get progress => totalBytes > 0 ? transferredBytes / totalBytes : 0.0;
 
   String get displayName => remotePath.split(RegExp(r'[/\\]')).last;
@@ -120,6 +131,7 @@ class TransferTask {
             ? this.uploadSessionId
             : uploadSessionId as String?,
         savedLocation: savedLocation ?? this.savedLocation,
+        overwrite: overwrite,
       );
 }
 
@@ -292,6 +304,19 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
                   error: e.toString(),
                 ));
       }
+    } on AgentApiException catch (e) {
+      // Safety net: a collision that wasn't caught by the pre-flight check in
+      // `_pickAndUpload` (e.g. another upload landed between pick time and
+      // session-open) surfaces here as 409 CONFLICT — give it a clearer
+      // message than the raw exception's.
+      _updateById(
+          id,
+          (t) => t.copyWith(
+                status: TransferStatus.failed,
+                error: e.code == 'CONFLICT'
+                    ? '${t.displayName} already exists at the destination'
+                    : e.toString(),
+              ));
     } catch (e) {
       _updateById(
           id,
@@ -387,6 +412,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         size: fileSize,
         sha256Hex: wholeHash,
         chunkSize: plan.chunkSize,
+        overwrite: task.overwrite,
       );
       sessionId = session.id;
       _updateById(id, (t) => t.copyWith(uploadSessionId: sessionId));

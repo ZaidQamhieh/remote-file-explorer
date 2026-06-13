@@ -3,6 +3,7 @@ package transfer
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,6 +55,40 @@ func TestOpenSession(t *testing.T) {
 	}
 	if got.ID != id {
 		t.Fatalf("id mismatch")
+	}
+}
+
+// TestOpenSession_DestinationExists verifies that OpenSession returns
+// ErrDestinationExists (not a generic error) when overwrite=false and the
+// target path already exists on disk.
+func TestOpenSession_DestinationExists(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "existing.bin")
+	if err := os.WriteFile(target, []byte("already here"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	content := []byte("hello world")
+	id := uuid.New().String()
+	_, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), false)
+	if !errors.Is(err, ErrDestinationExists) {
+		t.Fatalf("expected ErrDestinationExists, got %v", err)
+	}
+}
+
+// TestOpenSession_OverwriteAllowsExistingDestination verifies that
+// overwrite=true bypasses the destination-exists check.
+func TestOpenSession_OverwriteAllowsExistingDestination(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "existing.bin")
+	if err := os.WriteFile(target, []byte("already here"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	content := []byte("hello world")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), true); err != nil {
+		t.Fatalf("OpenSession with overwrite: %v", err)
 	}
 }
 

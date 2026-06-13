@@ -146,6 +146,52 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
+  // basenameOf
+  // ---------------------------------------------------------------------
+  group('basenameOf', () {
+    test('POSIX nested path', () {
+      expect(basenameOf('/home/x/report.pdf'), 'report.pdf');
+    });
+
+    test('Windows nested path', () {
+      expect(basenameOf(r'C:\Users\me\report.pdf'), 'report.pdf');
+    });
+
+    test('top-level path', () {
+      expect(basenameOf('/report.pdf'), 'report.pdf');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // dedupedName — used by the upload "Keep both" resolution
+  // ---------------------------------------------------------------------
+  group('dedupedName', () {
+    test('returns the name unchanged when it does not collide', () {
+      expect(dedupedName('photo.jpg', {'other.jpg'}), 'photo.jpg');
+    });
+
+    test('appends " (1)" before the extension on first collision', () {
+      expect(dedupedName('photo.jpg', {'photo.jpg'}), 'photo (1).jpg');
+    });
+
+    test('increments until a free name is found', () {
+      expect(
+        dedupedName('photo.jpg', {'photo.jpg', 'photo (1).jpg', 'photo (2).jpg'}),
+        'photo (3).jpg',
+      );
+    });
+
+    test('extensionless names get the suffix appended at the end', () {
+      expect(dedupedName('README', {'README'}), 'README (1)');
+    });
+
+    test('dotfiles (no real extension) get the suffix appended at the end',
+        () {
+      expect(dedupedName('.bashrc', {'.bashrc'}), '.bashrc (1)');
+    });
+  });
+
+  // ---------------------------------------------------------------------
   // ExplorerState.sortedEntries memoization / correctness
   // ---------------------------------------------------------------------
   group('ExplorerState.sortedEntries', () {
@@ -517,6 +563,191 @@ void main() {
       expect(state.hasMore, isFalse);
     });
   });
+
+  // ---------------------------------------------------------------------
+  // ExplorerNotifier.collidingBasenames — pre-flight copy/move collision check
+  // ---------------------------------------------------------------------
+  group('ExplorerNotifier.collidingBasenames', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [
+          clientProvider.overrideWith((ref, hostId) async => client),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('returns basenames of sources that already exist in destDir',
+        () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+      ];
+      client.pages['/dest'] = [
+        Listing(
+          path: '/dest',
+          entries: [_file('a.txt'), _file('other.txt')],
+          nextCursor: null,
+        ),
+      ];
+
+      final arg = (hostId: 'h6', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      final colliding = await notifier
+          .collidingBasenames('/dest', ['/root/a.txt', '/root/b.txt']);
+
+      expect(colliding, {'a.txt'});
+    });
+
+    test('returns an empty set when nothing collides', () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt')]),
+      ];
+      client.pages['/dest'] = [
+        Listing(path: '/dest', entries: [_file('other.txt')], nextCursor: null),
+      ];
+
+      final arg = (hostId: 'h7', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      final colliding =
+          await notifier.collidingBasenames('/dest', ['/root/a.txt']);
+
+      expect(colliding, isEmpty);
+    });
+
+    test('pages through the full destination listing', () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt')]),
+      ];
+      client.pages['/dest'] = [
+        Listing(
+          path: '/dest',
+          entries: [_file('other.txt')],
+          nextCursor: 'page2',
+        ),
+      ];
+      client.cursorPages['page2'] = Listing(
+        path: '/dest',
+        entries: [_file('a.txt')],
+        nextCursor: null,
+      );
+
+      final arg = (hostId: 'h8', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      final colliding =
+          await notifier.collidingBasenames('/dest', ['/root/a.txt']);
+
+      expect(colliding, {'a.txt'});
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerNotifier.copySelected / moveSelected — conflict resolution params
+  // ---------------------------------------------------------------------
+  group('ExplorerNotifier.copySelected/moveSelected', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [
+          clientProvider.overrideWith((ref, hostId) async => client),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    /// Sets up an explorer at '/' with [selected] marked selected, with
+    /// `pages['/']` registered twice — once for the initial load, once for
+    /// the reload that copySelected/moveSelected triggers afterwards.
+    Future<ExplorerNotifier> setUpExplorer(
+        ProviderContainer container, ExplorerArg arg,
+        {required Set<String> selected}) async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+      ];
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      for (final path in selected) {
+        notifier.toggleSelect(path);
+      }
+      return notifier;
+    }
+
+    test('copySelected with no extra args defaults to duplicate/overwrite false',
+        () async {
+      final arg = (hostId: 'h9', rootPath: '/');
+      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+
+      await notifier.copySelected('/dest');
+
+      expect(client.copyMoveCalls, hasLength(1));
+      final call = client.copyMoveCalls.single;
+      expect(call.verb, 'copy');
+      expect(call.sources, ['/root/a.txt']);
+      expect(call.destDir, '/dest');
+      expect(call.duplicate, isFalse);
+      expect(call.overwrite, isFalse);
+    });
+
+    test('copySelected with duplicate:true passes duplicate through (Keep both)',
+        () async {
+      final arg = (hostId: 'h10', rootPath: '/');
+      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+
+      await notifier.copySelected('/dest', duplicate: true);
+
+      expect(client.copyMoveCalls.single.duplicate, isTrue);
+      expect(client.copyMoveCalls.single.overwrite, isFalse);
+    });
+
+    test('moveSelected with overwrite:true passes overwrite through',
+        () async {
+      final arg = (hostId: 'h11', rootPath: '/');
+      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+
+      await notifier.moveSelected('/dest', overwrite: true);
+
+      expect(client.copyMoveCalls, hasLength(1));
+      final call = client.copyMoveCalls.single;
+      expect(call.verb, 'move');
+      expect(call.duplicate, isFalse);
+      expect(call.overwrite, isTrue);
+    });
+
+    test('an explicit sources list overrides state.selected (Skip filtering)',
+        () async {
+      final arg = (hostId: 'h12', rootPath: '/');
+      final notifier = await setUpExplorer(container, arg,
+          selected: {'/root/a.txt', '/root/b.txt'});
+
+      // Simulates the Skip resolution: caller filters out the colliding
+      // source ('/root/a.txt') and passes only the non-colliding one.
+      await notifier.moveSelected('/dest', sources: ['/root/b.txt']);
+
+      expect(client.copyMoveCalls.single.sources, ['/root/b.txt']);
+    });
+  });
 }
 
 /// Fake [AgentClient] that serves canned [Listing] pages from in-memory maps
@@ -530,6 +761,12 @@ class _FakeAgentClient extends AgentClient {
 
   final Map<String, List<Listing>> pages = {};
   final Map<String, Listing> cursorPages = {};
+
+  /// Records every [copy]/[move] call made through this client, in order,
+  /// so tests can assert on the `sources`/`destDir`/`duplicate`/`overwrite`
+  /// arguments that `ExplorerNotifier.copySelected`/`moveSelected` passed
+  /// through.
+  final List<_CopyMoveCall> copyMoveCalls = [];
 
   @override
   Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
@@ -546,4 +783,58 @@ class _FakeAgentClient extends AgentClient {
     }
     return queue.removeAt(0);
   }
+
+  @override
+  Future<Map<String, dynamic>> copy(
+    List<String> sources,
+    String destDir, {
+    bool duplicate = false,
+    bool overwrite = false,
+  }) async {
+    copyMoveCalls.add(_CopyMoveCall(
+      verb: 'copy',
+      sources: sources,
+      destDir: destDir,
+      duplicate: duplicate,
+      overwrite: overwrite,
+    ));
+    return {
+      'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> move(
+    List<String> sources,
+    String destDir, {
+    bool duplicate = false,
+    bool overwrite = false,
+  }) async {
+    copyMoveCalls.add(_CopyMoveCall(
+      verb: 'move',
+      sources: sources,
+      destDir: destDir,
+      duplicate: duplicate,
+      overwrite: overwrite,
+    ));
+    return {
+      'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
+    };
+  }
+}
+
+class _CopyMoveCall {
+  _CopyMoveCall({
+    required this.verb,
+    required this.sources,
+    required this.destDir,
+    required this.duplicate,
+    required this.overwrite,
+  });
+
+  final String verb;
+  final List<String> sources;
+  final String destDir;
+  final bool duplicate;
+  final bool overwrite;
 }

@@ -499,3 +499,469 @@ func TestOps_LiveReadOnlyToggle(t *testing.T) {
 		t.Fatal("expected write to be rejected after read-only toggled on")
 	}
 }
+
+// --------- Copy/Move overwrite ---------
+
+// TestCopy_OverwriteReplacesExistingFile verifies that Copy with
+// overwrite=true replaces an existing destination file with the source's
+// content.
+func TestCopy_OverwriteReplacesExistingFile(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcDir := filepath.Join(root, "src")
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll src: %v", err)
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+
+	srcFile := filepath.Join(srcDir, "note.txt")
+	if err := os.WriteFile(srcFile, []byte("new content"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "note.txt")
+	if err := os.WriteFile(dstFile, []byte("old content"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	results := ops.Copy([]string{srcFile}, dstDir, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Copy with overwrite failed: %+v", results)
+	}
+
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "new content" {
+		t.Fatalf("expected dst to be overwritten, got %q", got)
+	}
+	// Source must be untouched.
+	if _, err := os.Stat(srcFile); err != nil {
+		t.Fatalf("expected source to remain, stat err: %v", err)
+	}
+}
+
+// TestCopy_OverwriteReplacesExistingDir verifies that Copy with
+// overwrite=true replaces an existing destination directory (including its
+// old contents) with a copy of the source directory.
+func TestCopy_OverwriteReplacesExistingDir(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcDir := filepath.Join(root, "srcdir")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll srcdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "new.txt"), []byte("from source"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	destDir := filepath.Join(root, "dest")
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dest: %v", err)
+	}
+	existing := filepath.Join(destDir, "srcdir")
+	if err := os.MkdirAll(existing, 0o755); err != nil {
+		t.Fatalf("MkdirAll existing: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(existing, "old.txt"), []byte("from old dest"), 0o644); err != nil {
+		t.Fatalf("WriteFile old: %v", err)
+	}
+
+	results := ops.Copy([]string{srcDir}, destDir, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Copy with overwrite failed: %+v", results)
+	}
+
+	// The old file from the previous destination dir must be gone.
+	if _, err := os.Stat(filepath.Join(existing, "old.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected old.txt to be gone after overwrite, stat err: %v", err)
+	}
+	// The new file from the source must be present.
+	got, err := os.ReadFile(filepath.Join(existing, "new.txt"))
+	if err != nil {
+		t.Fatalf("ReadFile new.txt: %v", err)
+	}
+	if string(got) != "from source" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+}
+
+// TestMove_OverwriteReplacesExistingFile verifies that Move with
+// overwrite=true replaces an existing destination file and removes the
+// source.
+func TestMove_OverwriteReplacesExistingFile(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcDir := filepath.Join(root, "src")
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll src: %v", err)
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+
+	srcFile := filepath.Join(srcDir, "note.txt")
+	if err := os.WriteFile(srcFile, []byte("new content"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "note.txt")
+	if err := os.WriteFile(dstFile, []byte("old content"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	results := ops.Move([]string{srcFile}, dstDir, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Move with overwrite failed: %+v", results)
+	}
+
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "new content" {
+		t.Fatalf("expected dst to be overwritten, got %q", got)
+	}
+	// Source must be gone.
+	if _, err := os.Stat(srcFile); !os.IsNotExist(err) {
+		t.Fatalf("expected source to be removed, stat err: %v", err)
+	}
+}
+
+// TestMove_OverwriteReplacesExistingDir verifies that Move with
+// overwrite=true replaces an existing destination directory with the source
+// directory.
+func TestMove_OverwriteReplacesExistingDir(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcDir := filepath.Join(root, "srcdir")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll srcdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "new.txt"), []byte("from source"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	destDir := filepath.Join(root, "dest")
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dest: %v", err)
+	}
+	existing := filepath.Join(destDir, "srcdir")
+	if err := os.MkdirAll(existing, 0o755); err != nil {
+		t.Fatalf("MkdirAll existing: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(existing, "old.txt"), []byte("from old dest"), 0o644); err != nil {
+		t.Fatalf("WriteFile old: %v", err)
+	}
+
+	results := ops.Move([]string{srcDir}, destDir, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Move with overwrite failed: %+v", results)
+	}
+
+	// Source must be gone.
+	if _, err := os.Stat(srcDir); !os.IsNotExist(err) {
+		t.Fatalf("expected source dir to be removed, stat err: %v", err)
+	}
+	// The old file from the previous destination dir must be gone.
+	if _, err := os.Stat(filepath.Join(existing, "old.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected old.txt to be gone after overwrite, stat err: %v", err)
+	}
+	// The new file from the source must be present.
+	got, err := os.ReadFile(filepath.Join(existing, "new.txt"))
+	if err != nil {
+		t.Fatalf("ReadFile new.txt: %v", err)
+	}
+	if string(got) != "from source" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+}
+
+// TestCopy_ConflictWithoutOverwriteOrDuplicate is a regression check: when
+// both duplicate and overwrite are false, a destination collision is still
+// reported as a CONFLICT and the existing destination is left untouched.
+func TestCopy_ConflictWithoutOverwriteOrDuplicate(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcFile := filepath.Join(root, "src.txt")
+	if err := os.WriteFile(srcFile, []byte("new"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "src.txt")
+	if err := os.WriteFile(dstFile, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	results := ops.Copy([]string{srcFile}, dstDir, false, false)
+	if len(results) != 1 || results[0].OK || results[0].Error == nil || results[0].Error.Code != "CONFLICT" {
+		t.Fatalf("expected CONFLICT, got: %+v", results)
+	}
+
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("expected dst to remain unchanged, got %q", got)
+	}
+}
+
+// TestMove_ConflictWithoutOverwriteOrDuplicate mirrors
+// TestCopy_ConflictWithoutOverwriteOrDuplicate for Move.
+func TestMove_ConflictWithoutOverwriteOrDuplicate(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcFile := filepath.Join(root, "src.txt")
+	if err := os.WriteFile(srcFile, []byte("new"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "src.txt")
+	if err := os.WriteFile(dstFile, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	results := ops.Move([]string{srcFile}, dstDir, false, false)
+	if len(results) != 1 || results[0].OK || results[0].Error == nil || results[0].Error.Code != "CONFLICT" {
+		t.Fatalf("expected CONFLICT, got: %+v", results)
+	}
+
+	// Both files remain as they were.
+	if _, err := os.Stat(srcFile); err != nil {
+		t.Fatalf("expected source to remain, stat err: %v", err)
+	}
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("expected dst to remain unchanged, got %q", got)
+	}
+}
+
+// TestCopy_DuplicateWinsOverOverwrite verifies that when duplicate=true,
+// Copy auto-renames on collision and overwrite is ignored — the existing
+// destination is left untouched and a new "(1)" sibling is created.
+func TestCopy_DuplicateWinsOverOverwrite(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcFile := filepath.Join(root, "src.txt")
+	if err := os.WriteFile(srcFile, []byte("new"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "src.txt")
+	if err := os.WriteFile(dstFile, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	// duplicate=true AND overwrite=true: duplicate must win.
+	results := ops.Copy([]string{srcFile}, dstDir, true, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Copy with duplicate failed: %+v", results)
+	}
+
+	// Original destination untouched.
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("expected original dst to remain unchanged, got %q", got)
+	}
+
+	// Auto-renamed sibling exists with the source's content.
+	renamed := filepath.Join(dstDir, "src (1).txt")
+	got2, err := os.ReadFile(renamed)
+	if err != nil {
+		t.Fatalf("ReadFile renamed: %v", err)
+	}
+	if string(got2) != "new" {
+		t.Fatalf("unexpected renamed content: %q", got2)
+	}
+}
+
+// TestMove_DuplicateWinsOverOverwrite mirrors
+// TestCopy_DuplicateWinsOverOverwrite for Move.
+func TestMove_DuplicateWinsOverOverwrite(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcFile := filepath.Join(root, "src.txt")
+	if err := os.WriteFile(srcFile, []byte("new"), 0o644); err != nil {
+		t.Fatalf("WriteFile src: %v", err)
+	}
+	dstDir := filepath.Join(root, "dst")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll dst: %v", err)
+	}
+	dstFile := filepath.Join(dstDir, "src.txt")
+	if err := os.WriteFile(dstFile, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile dst: %v", err)
+	}
+
+	results := ops.Move([]string{srcFile}, dstDir, true, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("Move with duplicate failed: %+v", results)
+	}
+
+	// Original destination untouched.
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("ReadFile dst: %v", err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("expected original dst to remain unchanged, got %q", got)
+	}
+
+	// Auto-renamed sibling exists with the source's content.
+	renamed := filepath.Join(dstDir, "src (1).txt")
+	got2, err := os.ReadFile(renamed)
+	if err != nil {
+		t.Fatalf("ReadFile renamed: %v", err)
+	}
+	if string(got2) != "new" {
+		t.Fatalf("unexpected renamed content: %q", got2)
+	}
+
+	// Source must be gone (moved).
+	if _, err := os.Stat(srcFile); !os.IsNotExist(err) {
+		t.Fatalf("expected source to be removed, stat err: %v", err)
+	}
+}
+
+// TestCopy_SamePathIsNoOp verifies that copying a source onto itself (the
+// resolved source equals the computed destination, e.g. copying a file into
+// its own containing directory) is treated as a safe no-op rather than
+// removing-then-copying the file onto itself.
+func TestCopy_SamePathIsNoOp(t *testing.T) {
+	ops, root := setupJail(t)
+
+	file := filepath.Join(root, "self.txt")
+	if err := os.WriteFile(file, []byte("contents"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Copying "self.txt" into root (its own parent) with overwrite=true would
+	// compute dst == resSrc.
+	results := ops.Copy([]string{file}, root, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("expected OK no-op, got: %+v", results)
+	}
+
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "contents" {
+		t.Fatalf("expected file contents preserved, got %q", got)
+	}
+}
+
+// TestMove_SamePathIsNoOp mirrors TestCopy_SamePathIsNoOp for Move.
+func TestMove_SamePathIsNoOp(t *testing.T) {
+	ops, root := setupJail(t)
+
+	file := filepath.Join(root, "self.txt")
+	if err := os.WriteFile(file, []byte("contents"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	results := ops.Move([]string{file}, root, false, true)
+	if len(results) != 1 || !results[0].OK {
+		t.Fatalf("expected OK no-op, got: %+v", results)
+	}
+
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "contents" {
+		t.Fatalf("expected file contents preserved, got %q", got)
+	}
+}
+
+// TestCopy_OverwriteAncestorGuard verifies that Copy never removes a
+// destination that is an ancestor of the source.
+//
+// Setup: root/foo/bar/foo is the source (a directory named "foo" nested
+// inside root/foo/bar/). Copying it into destDir=root computes
+// dst = root/foo — which already exists and is an ancestor of the source
+// (root/foo/bar/foo is inside root/foo). A naive overwrite would
+// os.RemoveAll(dst), destroying the source along with it. The guard must
+// instead report CONFLICT and leave everything in place.
+func TestCopy_OverwriteAncestorGuard(t *testing.T) {
+	ops, root := setupJail(t)
+
+	// root/foo/bar/foo is the source.
+	srcDir := filepath.Join(root, "foo", "bar", "foo")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll srcDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "child.txt"), []byte("child data"), 0o644); err != nil {
+		t.Fatalf("WriteFile child: %v", err)
+	}
+	// Marker file directly under root/foo, to prove root/foo survives.
+	marker := filepath.Join(root, "foo", "marker.txt")
+	if err := os.WriteFile(marker, []byte("marker"), 0o644); err != nil {
+		t.Fatalf("WriteFile marker: %v", err)
+	}
+
+	// dst = root/foo (== filepath.Join(root, filepath.Base(srcDir))), which
+	// is an ancestor of srcDir.
+	results := ops.Copy([]string{srcDir}, root, false, true)
+	if len(results) != 1 || results[0].OK || results[0].Error == nil || results[0].Error.Code != "CONFLICT" {
+		t.Fatalf("expected CONFLICT (ancestor guard), got: %+v", results)
+	}
+
+	// Nothing was destroyed: source, its child, and the marker all survive.
+	if _, err := os.Stat(filepath.Join(srcDir, "child.txt")); err != nil {
+		t.Fatalf("expected source child.txt to survive, stat err: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("expected marker.txt to survive, stat err: %v", err)
+	}
+}
+
+// TestMove_OverwriteAncestorGuard mirrors TestCopy_OverwriteAncestorGuard for
+// Move: the source must not be deleted via os.RemoveAll(dst) when dst is one
+// of its own ancestors.
+func TestMove_OverwriteAncestorGuard(t *testing.T) {
+	ops, root := setupJail(t)
+
+	srcDir := filepath.Join(root, "foo", "bar", "foo")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll srcDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "child.txt"), []byte("child data"), 0o644); err != nil {
+		t.Fatalf("WriteFile child: %v", err)
+	}
+	marker := filepath.Join(root, "foo", "marker.txt")
+	if err := os.WriteFile(marker, []byte("marker"), 0o644); err != nil {
+		t.Fatalf("WriteFile marker: %v", err)
+	}
+
+	results := ops.Move([]string{srcDir}, root, false, true)
+	if len(results) != 1 || results[0].OK || results[0].Error == nil || results[0].Error.Code != "CONFLICT" {
+		t.Fatalf("expected CONFLICT (ancestor guard), got: %+v", results)
+	}
+
+	if _, err := os.Stat(filepath.Join(srcDir, "child.txt")); err != nil {
+		t.Fatalf("expected source child.txt to survive, stat err: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("expected marker.txt to survive, stat err: %v", err)
+	}
+}

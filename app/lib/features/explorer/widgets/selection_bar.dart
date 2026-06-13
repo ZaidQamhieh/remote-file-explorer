@@ -7,6 +7,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import '../../transfers/transfer_state.dart';
 import '../explorer_state.dart';
+import 'conflict_resolution_dialog.dart';
 import 'destination_picker_sheet.dart';
 
 /// A labelled icon action used in the bottom contextual action bar — tonal
@@ -144,10 +145,67 @@ class SelectionBar extends ConsumerWidget {
       isCopy: action == 'copy',
     );
     if (dest == null || !context.mounted) return;
+
+    final sources = state.selected.toList();
+    var duplicate = false;
+    var overwrite = false;
+    var effectiveSources = sources;
+
+    // Pre-flight: does anything we're about to copy/move collide with a name
+    // already in `dest`? Decided here, in widget context, BEFORE the
+    // operation is issued — `_reportBatch` below still handles whatever
+    // per-item failures come back regardless.
+    try {
+      final colliding = await notifier.collidingBasenames(dest, sources);
+      if (colliding.isNotEmpty) {
+        if (!context.mounted) return;
+        final resolution = await showConflictResolutionDialog(
+          context,
+          collidingCount: colliding.length,
+          totalCount: sources.length,
+          destLabel: folderLabel(dest),
+        );
+        switch (resolution) {
+          case ConflictResolution.cancel:
+            return;
+          case ConflictResolution.keepBoth:
+            duplicate = true;
+          case ConflictResolution.overwrite:
+            overwrite = true;
+          case ConflictResolution.skip:
+            effectiveSources = sources
+                .where((p) => !colliding.contains(basenameOf(p)))
+                .toList();
+            if (effectiveSources.isEmpty) {
+              if (context.mounted) {
+                showInfo(context, 'All selected items already exist in '
+                    '${folderLabel(dest)} — nothing to '
+                    '${action == 'copy' ? 'copy' : 'move'}');
+              }
+              return;
+            }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showError(context, 'Could not check ${folderLabel(dest)} for '
+            'existing items: $e',
+            onRetry: () => _showDestPicker(context, action));
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
     try {
       final res = action == 'copy'
-          ? await notifier.copySelected(dest)
-          : await notifier.moveSelected(dest);
+          ? await notifier.copySelected(dest,
+              sources: effectiveSources,
+              duplicate: duplicate,
+              overwrite: overwrite)
+          : await notifier.moveSelected(dest,
+              sources: effectiveSources,
+              duplicate: duplicate,
+              overwrite: overwrite);
       if (context.mounted) {
         await _reportBatch(
             context, res, action == 'copy' ? 'Copied' : 'Moved');

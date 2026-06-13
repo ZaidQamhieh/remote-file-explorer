@@ -442,7 +442,7 @@ func (o *Ops) Rename(src, dst string) (*Entry, error) {
 
 // --------- Copy ---------
 
-// Copy copies each source into destDir, auto-renaming on collision if duplicate=true.
+// BatchResult is the per-source outcome of a batch Copy/Move/Delete.
 type BatchResult struct {
 	Path  string `json:"path"`
 	OK    bool   `json:"ok"`
@@ -456,7 +456,23 @@ type Error struct {
 }
 
 // Copy copies sources into destDir.
-func (o *Ops) Copy(sources []string, destDir string, duplicate bool) []BatchResult {
+//
+// Per-source destination collisions are resolved by precedence:
+//  1. duplicate=true: auto-rename the destination (keep-both); overwrite is
+//     ignored in this case.
+//  2. else overwrite=true: replace the existing destination (remove it, then
+//     copy the source over it).
+//  3. else: a CONFLICT BatchResult for that source (unchanged).
+//
+// Two guards apply regardless of duplicate/overwrite, to avoid destroying
+// data:
+//   - If the resolved source and computed destination are the same path, the
+//     copy is a no-op (reported as OK) rather than removing-then-copying a
+//     path onto itself.
+//   - The destination is never removed if it is an ancestor of (or equal to)
+//     the source, since deleting it would delete the source itself; this
+//     falls back to a CONFLICT result.
+func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) []BatchResult {
 	if o.settings.IsReadOnly() {
 		res := make([]BatchResult, len(sources))
 		for i, s := range sources {
@@ -477,10 +493,29 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate bool) []BatchResu
 			continue
 		}
 		dst := filepath.Join(dstResolved, filepath.Base(resSrc))
+
+		// Same-path guard: copying a path onto itself is a no-op.
+		if resSrc == dst {
+			results[i] = BatchResult{Path: src, OK: true}
+			continue
+		}
+
 		if _, err := os.Stat(dst); err == nil {
-			if duplicate {
+			switch {
+			case duplicate:
 				dst = autoRename(dst)
-			} else {
+			case overwrite:
+				// Ancestor guard: never remove a destination that contains
+				// the source — that would delete the source itself.
+				if isUnder(resSrc, dst) {
+					results[i] = BatchResult{Path: src, Error: apiErr("CONFLICT", "destination already exists")}
+					continue
+				}
+				if err := os.RemoveAll(dst); err != nil {
+					results[i] = BatchResult{Path: src, Error: apiErr("COPY_FAILED", err.Error())}
+					continue
+				}
+			default:
 				results[i] = BatchResult{Path: src, Error: apiErr("CONFLICT", "destination already exists")}
 				continue
 			}
@@ -495,7 +530,12 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate bool) []BatchResu
 }
 
 // Move moves sources into destDir (batch).
-func (o *Ops) Move(sources []string, destDir string, duplicate bool) []BatchResult {
+//
+// Per-source destination collisions follow the same precedence as Copy:
+// duplicate (auto-rename) wins, else overwrite replaces the existing
+// destination (os.RemoveAll then os.Rename), else CONFLICT. The same
+// same-path and ancestor guards apply (see Copy).
+func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) []BatchResult {
 	if o.settings.IsReadOnly() {
 		res := make([]BatchResult, len(sources))
 		for i, s := range sources {
@@ -516,10 +556,29 @@ func (o *Ops) Move(sources []string, destDir string, duplicate bool) []BatchResu
 			continue
 		}
 		dst := filepath.Join(dstResolved, filepath.Base(resSrc))
+
+		// Same-path guard: moving a path onto itself is a no-op.
+		if resSrc == dst {
+			results[i] = BatchResult{Path: src, OK: true}
+			continue
+		}
+
 		if _, err := os.Stat(dst); err == nil {
-			if duplicate {
+			switch {
+			case duplicate:
 				dst = autoRename(dst)
-			} else {
+			case overwrite:
+				// Ancestor guard: never remove a destination that contains
+				// the source — that would delete the source itself.
+				if isUnder(resSrc, dst) {
+					results[i] = BatchResult{Path: src, Error: apiErr("CONFLICT", "destination already exists")}
+					continue
+				}
+				if err := os.RemoveAll(dst); err != nil {
+					results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", err.Error())}
+					continue
+				}
+			default:
 				results[i] = BatchResult{Path: src, Error: apiErr("CONFLICT", "destination already exists")}
 				continue
 			}

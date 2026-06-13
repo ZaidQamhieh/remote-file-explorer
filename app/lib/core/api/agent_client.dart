@@ -461,25 +461,39 @@ class AgentClient {
     return Entry.fromJson(data);
   }
 
+  /// Copies [sources] into [destDir].
+  ///
+  /// Collision precedence (server-side): [duplicate] `true` wins — colliding
+  /// items are auto-renamed ("keep both"); otherwise [overwrite] `true`
+  /// replaces the existing item; otherwise a colliding item comes back as a
+  /// per-item `CONFLICT` result in the response's `results` list.
   Future<Map<String, dynamic>> copy(
     List<String> sources,
     String destDir, {
     bool duplicate = false,
+    bool overwrite = false,
   }) async {
     return _post<Map<String, dynamic>>('/fs/copy', data: {
       'sources': sources,
       'destDir': destDir,
       'duplicate': duplicate,
+      'overwrite': overwrite,
     });
   }
 
+  /// Moves [sources] into [destDir]. See [copy] for the [duplicate] /
+  /// [overwrite] collision precedence.
   Future<Map<String, dynamic>> move(
     List<String> sources,
-    String destDir,
-  ) async {
+    String destDir, {
+    bool duplicate = false,
+    bool overwrite = false,
+  }) async {
     return _post<Map<String, dynamic>>('/fs/move', data: {
       'sources': sources,
       'destDir': destDir,
+      'duplicate': duplicate,
+      'overwrite': overwrite,
     });
   }
 

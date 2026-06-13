@@ -438,18 +438,60 @@ class ExplorerNotifier
     return res;
   }
 
-  Future<Map<String, dynamic>> moveSelected(String destDir) async {
+  Future<Map<String, dynamic>> moveSelected(
+    String destDir, {
+    List<String>? sources,
+    bool duplicate = false,
+    bool overwrite = false,
+  }) async {
     final client = await _client();
-    final res = await client.move(state.selected.toList(), destDir);
+    final res = await client.move(
+      sources ?? state.selected.toList(),
+      destDir,
+      duplicate: duplicate,
+      overwrite: overwrite,
+    );
     await _load();
     return res;
   }
 
-  Future<Map<String, dynamic>> copySelected(String destDir) async {
+  Future<Map<String, dynamic>> copySelected(
+    String destDir, {
+    List<String>? sources,
+    bool duplicate = false,
+    bool overwrite = false,
+  }) async {
     final client = await _client();
-    final res = await client.copy(state.selected.toList(), destDir);
+    final res = await client.copy(
+      sources ?? state.selected.toList(),
+      destDir,
+      duplicate: duplicate,
+      overwrite: overwrite,
+    );
     await _load();
     return res;
+  }
+
+  /// Lists [destDir] and returns the basenames of [sourcePaths] that already
+  /// exist there — used as a pre-flight collision check before a copy/move so
+  /// the user can be offered Keep both / Overwrite / Skip *before* the
+  /// operation is issued.
+  ///
+  /// Pages through the full listing of [destDir] (a directory can have more
+  /// entries than one page) so collisions later in a large destination aren't
+  /// missed.
+  Future<Set<String>> collidingBasenames(
+      String destDir, Iterable<String> sourcePaths) async {
+    final client = await _client();
+    final destNames = <String>{};
+    String? cursor;
+    do {
+      final listing = await client.list(destDir, cursor: cursor);
+      destNames.addAll(listing.entries.map((e) => e.name));
+      cursor = listing.nextCursor;
+    } while (cursor != null);
+
+    return sourcePaths.map(basenameOf).where(destNames.contains).toSet();
   }
 }
 
@@ -461,6 +503,37 @@ final explorerProvider = NotifierProvider.autoDispose
     .family<ExplorerNotifier, ExplorerState, ExplorerArg>(
   ExplorerNotifier.new,
 );
+
+/// Basename (final path component) of [path] — works for both POSIX (`/`)
+/// and Windows (`\`) separators, matching the splitting used elsewhere
+/// (`folderLabel`, `breadcrumb_bar.dart`, `selection_bar.dart`).
+String basenameOf(String path) =>
+    path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+
+/// Returns a name derived from [name] that isn't in [existingNames], by
+/// inserting " (1)", " (2)", … before the extension (or at the end, for an
+/// extensionless name) and incrementing until free.
+///
+/// Used by the upload "Keep both" resolution to pick a free name in the
+/// current directory, e.g. `photo.jpg` -> `photo (1).jpg` -> `photo (2).jpg`.
+String dedupedName(String name, Set<String> existingNames) {
+  if (!existingNames.contains(name)) return name;
+
+  final dot = name.lastIndexOf('.');
+  // No "extension" for a dotfile (`.bashrc`) or a name with no `.` at all —
+  // append the suffix to the whole name in that case.
+  final hasExt = dot > 0 && dot < name.length - 1;
+  final base = hasExt ? name.substring(0, dot) : name;
+  final ext = hasExt ? name.substring(dot) : '';
+
+  var n = 1;
+  String candidate;
+  do {
+    candidate = '$base ($n)$ext';
+    n++;
+  } while (existingNames.contains(candidate));
+  return candidate;
+}
 
 /// Display name for a folder path (basename), or "Root" for the filesystem root.
 String folderLabel(String path) {

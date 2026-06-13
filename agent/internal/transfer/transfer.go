@@ -28,6 +28,10 @@ var ErrChunkMismatch = errors.New("chunk sha256 mismatch")
 // ErrFileMismatch is returned when the whole-file SHA-256 doesn't match.
 var ErrFileMismatch = errors.New("whole-file sha256 mismatch")
 
+// ErrDestinationExists is returned by OpenSession when overwrite=false and
+// the target path already exists.
+var ErrDestinationExists = errors.New("destination already exists")
+
 // Manager coordinates in-progress transfer sessions.
 type Manager struct {
 	db      *store.DB
@@ -46,7 +50,7 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool) (*store.Transfer, error) {
 	if !overwrite {
 		if _, err := os.Stat(targetPath); err == nil {
-			return nil, fmt.Errorf("destination already exists (overwrite=false)")
+			return nil, ErrDestinationExists
 		}
 	}
 	totalChunks := int((size + int64(chunkSize) - 1) / int64(chunkSize))

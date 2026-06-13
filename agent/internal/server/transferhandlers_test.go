@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -98,6 +99,55 @@ func TestOpenTransferHandler_ZeroSizeIsAllowed(t *testing.T) {
 
 	target := filepath.Join(t.TempDir(), "empty.bin")
 	body := `{"path":"` + target + `","size":0,"sha256":"` + sha256hex(nil) + `","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	openTransferHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestOpenTransferHandler_DestinationExistsIs409 verifies that opening an
+// upload session for a target path that already exists, without overwrite,
+// returns 409 CONFLICT rather than 500 INTERNAL.
+func TestOpenTransferHandler_DestinationExistsIs409(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+
+	target := filepath.Join(t.TempDir(), "existing.bin")
+	if err := os.WriteFile(target, []byte("already here"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	body := `{"path":"` + target + `","size":11,"sha256":"` + sha256hex([]byte("hello world")) + `","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	openTransferHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var got apiError
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if got.Code != "CONFLICT" {
+		t.Fatalf("unexpected error code: %+v", got)
+	}
+}
+
+// TestOpenTransferHandler_OverwriteBypassesConflict verifies that
+// overwrite=true allows opening a session for a target path that already
+// exists.
+func TestOpenTransferHandler_OverwriteBypassesConflict(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+
+	target := filepath.Join(t.TempDir(), "existing.bin")
+	if err := os.WriteFile(target, []byte("already here"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	body := `{"path":"` + target + `","size":11,"sha256":"` + sha256hex([]byte("hello world")) + `","chunkSize":1024,"overwrite":true}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
 	openTransferHandler(tm, ops)(rr, req)

@@ -248,7 +248,14 @@ paths:
                 size: { type: integer, format: int64 }
                 sha256: { type: string }
                 chunkSize: { type: integer }
-                overwrite: { type: boolean, default: false }
+                overwrite:
+                  type: boolean
+                  default: false
+                  description: >
+                    When false (default) and path already exists, the
+                    session is rejected with 409 CONFLICT. When true, an
+                    existing file at path is replaced once the upload
+                    completes.
       responses:
         "201":
           description: Session opened
@@ -260,6 +267,10 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+        "409":
+          description: >
+            path already exists and overwrite=false. code=CONFLICT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}:
     get:
@@ -639,6 +650,15 @@ components:
         sources: { type: array, items: { type: string } }
         destDir: { type: string }
         duplicate: { type: boolean, default: false, description: When true, auto-rename on collision }
+        overwrite:
+          type: boolean
+          default: false
+          description: >
+            Per-source collision precedence: if duplicate=true, auto-rename
+            wins and overwrite is ignored. Else if overwrite=true, the
+            existing destination is replaced (removed, then the source is
+            copied/moved in its place). Otherwise the item fails with a
+            CONFLICT entry in the batch result (ok=false, error.code=CONFLICT).
 
     UploadSession:
       type: object

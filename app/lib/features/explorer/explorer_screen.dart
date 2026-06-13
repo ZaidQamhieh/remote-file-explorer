@@ -19,6 +19,7 @@ import '../transfers/transfer_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
 import 'widgets/breadcrumb_bar.dart';
+import 'widgets/conflict_resolution_dialog.dart';
 import 'widgets/create_menu.dart';
 import 'widgets/entry_grid_cell.dart';
 import 'widgets/entry_tile.dart';
@@ -459,10 +460,52 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   /// Moves a dragged [dragged] entry into the [destFolder] directory, then
   /// refreshes the listing and reports the outcome.
+  ///
+  /// Pre-flight: if [destFolder] already has an entry named [dragged.name],
+  /// offer Keep both / Overwrite / Skip / Cancel before issuing the move —
+  /// same prompt as the selection bar's Move action.
   Future<void> _moveInto(BuildContext context, AgentClient client,
       Entry dragged, String destFolder) async {
+    var duplicate = false;
+    var overwrite = false;
     try {
-      await client.move([dragged.path], destFolder);
+      final colliding =
+          await _notifier.collidingBasenames(destFolder, [dragged.path]);
+      if (colliding.isNotEmpty) {
+        if (!context.mounted) return;
+        final resolution = await showConflictResolutionDialog(
+          context,
+          collidingCount: 1,
+          totalCount: 1,
+          destLabel: folderLabel(destFolder),
+        );
+        switch (resolution) {
+          case ConflictResolution.cancel:
+            return;
+          case ConflictResolution.skip:
+            if (context.mounted) {
+              showInfo(context,
+                  '${dragged.name} already exists in ${folderLabel(destFolder)}');
+            }
+            return;
+          case ConflictResolution.keepBoth:
+            duplicate = true;
+          case ConflictResolution.overwrite:
+            overwrite = true;
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showError(context, 'Could not check ${folderLabel(destFolder)} for '
+            'existing items: $e');
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    try {
+      await client.move([dragged.path], destFolder,
+          duplicate: duplicate, overwrite: overwrite);
       await _notifier.refresh();
       if (context.mounted) showSuccess(context, 'Moved ${dragged.name}');
     } catch (e) {
@@ -575,6 +618,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
+  /// Picks a file to upload and, if its name already exists in the current
+  /// directory (checked against the already-loaded listing — no extra
+  /// round-trip), offers Keep both / Overwrite / Skip / Cancel before
+  /// enqueueing the upload.
   Future<void> _pickAndUpload(
       BuildContext context, ExplorerState state) async {
     final result = await FilePicker.pickFiles();
@@ -583,17 +630,45 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final localPath = picked.path;
     if (localPath == null) return;
 
-    final remotePath = '${state.currentPath}/${picked.name}';
+    final existingNames = state.entries.map((e) => e.name).toSet();
+    var name = picked.name;
+    var overwrite = false;
+
+    if (existingNames.contains(name)) {
+      if (!context.mounted) return;
+      final resolution = await showConflictResolutionDialog(
+        context,
+        collidingCount: 1,
+        totalCount: 1,
+        destLabel: folderLabel(state.currentPath),
+      );
+      switch (resolution) {
+        case ConflictResolution.cancel:
+          return;
+        case ConflictResolution.skip:
+          if (context.mounted) {
+            showInfo(context, '$name already exists — skipped');
+          }
+          return;
+        case ConflictResolution.overwrite:
+          overwrite = true;
+        case ConflictResolution.keepBoth:
+          name = dedupedName(name, existingNames);
+      }
+    }
+
+    final remotePath = '${state.currentPath}/$name';
     ref.read(transferQueueProvider.notifier).enqueue(
           TransferTask.upload(
             localPath: localPath,
             remotePath: remotePath,
             host: widget.host,
+            overwrite: overwrite,
           ),
         );
 
     if (context.mounted) {
-      showInfo(context, 'Uploading ${picked.name}…');
+      showInfo(context, 'Uploading $name…');
     }
   }
 

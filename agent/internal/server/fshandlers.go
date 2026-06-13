@@ -144,15 +144,16 @@ func renameHandler(ops *fsops.Ops) http.HandlerFunc {
 func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Sources []string `json:"sources"`
-			DestDir string   `json:"destDir"`
-			Dup     bool     `json:"duplicate"`
+			Sources   []string `json:"sources"`
+			DestDir   string   `json:"destDir"`
+			Dup       bool     `json:"duplicate"`
+			Overwrite bool     `json:"overwrite"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
-		results := ops.Copy(req.Sources, req.DestDir, req.Dup)
+		results := ops.Copy(req.Sources, req.DestDir, req.Dup, req.Overwrite)
 		writeJSON(w, http.StatusAccepted, map[string]any{"results": results})
 	}
 }
@@ -162,15 +163,16 @@ func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Sources []string `json:"sources"`
-			DestDir string   `json:"destDir"`
-			Dup     bool     `json:"duplicate"`
+			Sources   []string `json:"sources"`
+			DestDir   string   `json:"destDir"`
+			Dup       bool     `json:"duplicate"`
+			Overwrite bool     `json:"overwrite"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
-		results := ops.Move(req.Sources, req.DestDir, req.Dup)
+		results := ops.Move(req.Sources, req.DestDir, req.Dup, req.Overwrite)
 		writeJSON(w, http.StatusAccepted, map[string]any{"results": results})
 	}
 }

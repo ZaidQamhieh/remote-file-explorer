@@ -9,32 +9,32 @@ import '../explorer_state.dart';
 /// list/grid mode, entry density, and sort (field + direction). Replaces the
 /// old standalone `SortButton` — all three are persisted via
 /// [viewPrefsProvider] and changes apply immediately.
+///
+/// The sheet **watches** the live [explorerProvider] for layout/sort/hidden
+/// state rather than capturing a snapshot, so the selected Layout segment and
+/// Sort chips move the instant the user taps them (otherwise they'd reflect the
+/// frozen state from when the sheet opened).
 class ViewOptionsSheet extends ConsumerWidget {
-  const ViewOptionsSheet({
-    super.key,
-    required this.state,
-    required this.notifier,
-  });
+  const ViewOptionsSheet({super.key, required this.notifier});
 
-  final ExplorerState state;
   final ExplorerNotifier notifier;
 
-  /// Shows the sheet for the given explorer [state]/[notifier].
+  /// Shows the sheet for the given explorer [notifier].
   static Future<void> show(
     BuildContext context, {
-    required ExplorerState state,
     required ExplorerNotifier notifier,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTopR),
-      builder: (_) => ViewOptionsSheet(state: state, notifier: notifier),
+      builder: (_) => ViewOptionsSheet(notifier: notifier),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(viewPrefsProvider).valueOrNull ?? const ViewPrefs();
+    final state = ref.watch(explorerProvider(notifier.arg));
     final theme = Theme.of(context);
 
     return SafeArea(

@@ -247,7 +247,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       BuildContext context, ExplorerState state, _OverflowAction action) {
     switch (action) {
       case _OverflowAction.viewOptions:
-        ViewOptionsSheet.show(context, state: state, notifier: _notifier);
+        ViewOptionsSheet.show(context, notifier: _notifier);
       case _OverflowAction.favorites:
         _showFavorites(context);
       case _OverflowAction.transfers:

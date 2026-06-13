@@ -110,10 +110,7 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) => ViewOptionsSheet(
-                state: container.read(explorerProvider(arg)),
-                notifier: notifier,
-              ),
+              builder: (context) => ViewOptionsSheet(notifier: notifier),
             ),
           ),
         ),
@@ -132,6 +129,26 @@ void main() {
 
       final prefs = notifier.ref.read(viewPrefsProvider).valueOrNull!;
       expect(prefs.gridViewFor('h1'), isTrue);
+    });
+
+    // Regression (BUGS_REPORTED.md): the sheet must reflect the live explorer
+    // state, not a snapshot captured when it opened. Before the fix the
+    // SegmentedButton kept its open-time selection, so tapping Grid changed the
+    // listing but the selected segment never moved.
+    testWidgets('selected Layout segment updates after tapping Grid',
+        (tester) async {
+      await pumpSheet(tester);
+
+      SegmentedButton<bool> layout() => tester.widget<SegmentedButton<bool>>(
+            find.byType(SegmentedButton<bool>),
+          );
+      expect(layout().selected, {false}, reason: 'starts on List');
+
+      await tester.tap(find.text('Grid'));
+      await tester.pumpAndSettle();
+
+      expect(layout().selected, {true},
+          reason: 'selection must follow the live state, not the snapshot');
     });
   });
 

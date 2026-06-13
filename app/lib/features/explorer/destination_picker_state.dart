@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
+import '../../core/storage/visibility_prefs.dart';
 import 'explorer_state.dart' show buildPathStack;
 
 /// State for the destination picker: navigation stack + the current
@@ -83,6 +84,14 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
     return DestinationPickerState(pathStack: buildPathStack(arg.startPath));
   }
 
+  /// Folders the destination picker should never show: dotfolders are hidden
+  /// here too (per [VisibilityPrefs.hideDotfiles]), but extension/exact-name
+  /// rules don't apply — the picker only ever lists directories.
+  bool _hiddenInPicker(Entry e) {
+    final prefs = ref.read(visibilityPrefsProvider).valueOrNull ?? const VisibilityPrefs();
+    return isEntryHiddenInPicker(e, prefs);
+  }
+
   Future<void> _load() async {
     final path = state.currentPath;
     state = state.copyWith(loading: true, error: null, nextCursor: null);
@@ -93,7 +102,9 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
       if (state.currentPath != path) return;
       state = state.copyWith(
         loading: false,
-        folders: listing.entries.where((e) => e.isDir).toList(),
+        folders: listing.entries
+            .where((e) => e.isDir && !_hiddenInPicker(e))
+            .toList(),
         error: null,
         nextCursor: listing.nextCursor,
       );
@@ -119,7 +130,7 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
       if (state.currentPath != path) return;
       final merged = [
         ...state.folders,
-        ...listing.entries.where((e) => e.isDir),
+        ...listing.entries.where((e) => e.isDir && !_hiddenInPicker(e)),
       ];
       state = state.copyWith(
         folders: merged,

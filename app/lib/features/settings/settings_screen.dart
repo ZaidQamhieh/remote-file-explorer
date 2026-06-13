@@ -6,6 +6,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/host.dart';
+import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'update_tile.dart';
@@ -246,6 +247,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
+        const FileVisibilitySection(),
+        const SizedBox(height: Spacing.md),
         _Section(
           title: 'Paired devices',
           icon: Icons.devices_outlined,
@@ -372,6 +375,139 @@ class _Section extends StatelessWidget {
               : Column(children: children),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// File visibility section
+// ---------------------------------------------------------------------------
+
+/// "File visibility" settings: hide-dotfiles toggle, one-tap presets that add
+/// to the hidden-extensions/-names sets (`core/storage/visibility_prefs.dart`),
+/// and a custom-extension input with deletable chips. Global — applies to
+/// every host's explorer/search listings, unlike the rest of this
+/// per-[Host] screen.
+class FileVisibilitySection extends ConsumerWidget {
+  const FileVisibilitySection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs =
+        ref.watch(visibilityPrefsProvider).valueOrNull ?? const VisibilityPrefs();
+    final notifier = ref.read(visibilityPrefsProvider.notifier);
+    final extensions = prefs.hiddenExtensions.toList()..sort();
+    final scheme = Theme.of(context).colorScheme;
+
+    return _Section(
+      title: 'File visibility',
+      icon: Icons.visibility_outlined,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hide dotfiles'),
+          subtitle: const Text('Hide files and folders starting with "."'),
+          value: prefs.hideDotfiles,
+          onChanged: notifier.setHideDotfiles,
+        ),
+        const SizedBox(height: Spacing.sm),
+        Text('Hide by type', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: Spacing.xs),
+        Wrap(
+          spacing: Spacing.xs,
+          runSpacing: Spacing.xs,
+          children: [
+            for (final preset in visibilityPresets)
+              FilterChip(
+                label: Text(preset.label),
+                selected: _presetApplied(preset, prefs),
+                onSelected: (_) => notifier.applyPreset(preset),
+              ),
+          ],
+        ),
+        const SizedBox(height: Spacing.sm),
+        Text('Hidden extensions', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: Spacing.xs),
+        if (extensions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+            child: Text(
+              'None — add one below or use a preset above.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          )
+        else
+          Wrap(
+            spacing: Spacing.xs,
+            runSpacing: Spacing.xs,
+            children: [
+              for (final ext in extensions)
+                InputChip(
+                  label: Text('.$ext'),
+                  onDeleted: () => notifier.removeExtension(ext),
+                ),
+            ],
+          ),
+        const SizedBox(height: Spacing.xs),
+        _AddExtensionField(onSubmit: notifier.addExtension),
+      ],
+    );
+  }
+}
+
+/// `true` if every extension/name in [preset] is already in [prefs] — shown
+/// as the preset chip's selected state. Tapping a chip always (re-)applies
+/// the preset (additive, idempotent) regardless of this value.
+bool _presetApplied(VisibilityPreset preset, VisibilityPrefs prefs) {
+  final names = prefs.hiddenNames.map((n) => n.toLowerCase()).toSet();
+  return preset.extensions.every(prefs.hiddenExtensions.contains) &&
+      preset.names.every((n) => names.contains(n.toLowerCase()));
+}
+
+/// Text field for adding a custom hidden extension (e.g. "tmp"), submitted
+/// via the keyboard action or the trailing add button. [onSubmit] is
+/// [VisibilityPrefsNotifier.addExtension], which normalizes (strips dots,
+/// lowercases) and persists.
+class _AddExtensionField extends StatefulWidget {
+  const _AddExtensionField({required this.onSubmit});
+
+  final ValueChanged<String> onSubmit;
+
+  @override
+  State<_AddExtensionField> createState() => _AddExtensionFieldState();
+}
+
+class _AddExtensionFieldState extends State<_AddExtensionField> {
+  final _controller = TextEditingController();
+
+  void _submit() {
+    final value = _controller.text;
+    if (value.trim().isEmpty) return;
+    widget.onSubmit(value);
+    _controller.clear();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      decoration: InputDecoration(
+        isDense: true,
+        prefixText: '.',
+        hintText: 'Add extension (e.g. tmp)',
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.add),
+          tooltip: 'Add extension',
+          onPressed: _submit,
+        ),
+      ),
+      onSubmitted: (_) => _submit(),
     );
   }
 }

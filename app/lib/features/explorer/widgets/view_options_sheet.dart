@@ -48,6 +48,10 @@ class ViewOptionsSheet extends ConsumerWidget {
           children: [
             Text('View options', style: theme.textTheme.titleLarge),
             const SizedBox(height: Spacing.md),
+            if (state.hiddenCount > 0) ...[
+              _ShowHiddenTile(state: state, notifier: notifier),
+              const SizedBox(height: Spacing.lg),
+            ],
             Text('Layout', style: theme.textTheme.labelLarge),
             const SizedBox(height: Spacing.sm),
             SegmentedButton<bool>(
@@ -132,3 +136,32 @@ String _sortFieldLabel(SortField field) => switch (field) {
       SortField.date => 'Date modified',
       SortField.type => 'Type',
     };
+
+/// "Show hidden items" eye toggle, with a badge showing how many entries in
+/// the current listing are filtered by file-visibility prefs
+/// (`core/storage/visibility_prefs.dart`). Mirrors
+/// [ExplorerState.showHidden] — same session-only override toggled by the
+/// listing's [HiddenItemsFooter].
+class _ShowHiddenTile extends StatelessWidget {
+  const _ShowHiddenTile({required this.state, required this.notifier});
+
+  final ExplorerState state;
+  final ExplorerNotifier notifier;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      secondary: Badge(
+        label: Text('${state.hiddenCount}'),
+        child: const Icon(Icons.visibility_outlined),
+      ),
+      title: const Text('Show hidden items'),
+      subtitle: Text(
+        '${state.hiddenCount} hidden by file visibility settings',
+      ),
+      value: state.showHidden,
+      onChanged: (_) => notifier.toggleShowHidden(),
+    );
+  }
+}

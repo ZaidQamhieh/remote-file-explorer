@@ -7,6 +7,45 @@ import '../models/entry.dart';
 /// `archive`, `other`) and the search filter's [SearchCategory] values.
 enum EntryCategory { folder, image, video, audio, document, archive, other }
 
+// ---------------------------------------------------------------------------
+// Category extension sets
+// ---------------------------------------------------------------------------
+//
+// File-extension tables (lowercase, without the leading dot) for the
+// categories that have a corresponding file-visibility preset
+// (`core/storage/visibility_prefs.dart`). [categoryOf] above resolves a
+// category from [Entry.isDir]/[Entry.mimeType] for icon selection; these
+// extension sets are a separate, name-based signal used to let users hide
+// entire categories of files regardless of whether the agent reported a
+// MIME type.
+
+/// Image file extensions (e.g. `photo.png`).
+const Set<String> imageExtensions = {
+  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'heif', 'svg', 'tiff',
+  'ico',
+};
+
+/// Video file extensions (e.g. `clip.mp4`).
+const Set<String> videoExtensions = {
+  'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', '3gp', 'flv', 'wmv',
+};
+
+/// Audio file extensions (e.g. `track.mp3`).
+const Set<String> audioExtensions = {
+  'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus',
+};
+
+/// Archive/compressed file extensions (e.g. `bundle.zip`).
+const Set<String> archiveExtensions = {
+  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz',
+};
+
+/// Document file extensions (e.g. `report.pdf`).
+const Set<String> docExtensions = {
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
+  'txt', 'md', 'rtf', 'csv',
+};
+
 /// Resolves the [EntryCategory] for [entry] from [Entry.isDir] and
 /// [Entry.mimeType], using the same MIME-prefix rules used for icon
 /// selection across the explorer and search screens.

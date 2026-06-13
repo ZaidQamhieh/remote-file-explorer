@@ -8,6 +8,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/recent_searches.dart';
+import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
@@ -105,21 +106,39 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   SizePreset _sizePreset = SizePreset.any;
   DatePreset _datePreset = DatePreset.any;
 
+  /// `true` = include entries that file-visibility prefs would otherwise
+  /// hide (`core/storage/visibility_prefs.dart`); `false` (default) =
+  /// filter them out of results, same as the explorer listing.
+  bool _includeHidden = false;
+
   String _query = '';
   bool _loading = false;
   String? _error;
-  List<Entry> _results = const [];
+
+  /// Raw results from the last search, before [_filterAndSort] is applied.
+  List<Entry> _rawResults = const [];
   bool _truncated = false;
   bool _timeBudgetHit = false;
 
   bool get _isGlob => isGlobQuery(_query);
+
+  /// [_rawResults] sorted by relevance and (unless [_includeHidden])
+  /// filtered through the same file-visibility prefs as the explorer
+  /// listing.
+  List<Entry> get _results {
+    final prefs = ref.read(visibilityPrefsProvider).valueOrNull ??
+        const VisibilityPrefs();
+    return filterSearchResults(_rawResults, prefs,
+        includeHidden: _includeHidden);
+  }
 
   /// Number of active (non-default) filters, shown as a badge on the tune
   /// icon. The scope toggle is intentionally excluded — it's always visible.
   int get _activeFilterCount =>
       _selectedCategories.length +
       (_sizePreset != SizePreset.any ? 1 : 0) +
-      (_datePreset != DatePreset.any ? 1 : 0);
+      (_datePreset != DatePreset.any ? 1 : 0) +
+      (_includeHidden ? 1 : 0);
 
   @override
   void dispose() {
@@ -155,7 +174,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (q.isEmpty) {
       setState(() {
         _loading = false;
-        _results = const [];
+        _rawResults = const [];
         _truncated = false;
         _timeBudgetHit = false;
       });
@@ -180,7 +199,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (!mounted || _query != q) return;
       setState(() {
         _loading = false;
-        _results = sortByRelevance(result.entries, q);
+        _rawResults = sortByRelevance(result.entries, q);
         _truncated = result.truncated;
         _timeBudgetHit = result.timeBudgetHit;
       });
@@ -217,11 +236,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     required SizePreset sizePreset,
     required DatePreset datePreset,
     required bool searchFromHere,
+    required bool includeHidden,
   }) {
     setState(() {
       _sizePreset = sizePreset;
       _datePreset = datePreset;
       _searchFromHere = searchFromHere;
+      _includeHidden = includeHidden;
     });
     if (_query.isNotEmpty) _runSearch(_query);
   }
@@ -234,6 +255,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         sizePreset: _sizePreset,
         datePreset: _datePreset,
         searchFromHere: _searchFromHere,
+        includeHidden: _includeHidden,
         currentPath: widget.currentPath,
       ),
     );
@@ -242,6 +264,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sizePreset: result.sizePreset,
       datePreset: result.datePreset,
       searchFromHere: result.searchFromHere,
+      includeHidden: result.includeHidden,
     );
   }
 
@@ -545,11 +568,13 @@ class _FilterSheetResult {
     required this.sizePreset,
     required this.datePreset,
     required this.searchFromHere,
+    required this.includeHidden,
   });
 
   final SizePreset sizePreset;
   final DatePreset datePreset;
   final bool searchFromHere;
+  final bool includeHidden;
 }
 
 class _FilterSheet extends StatefulWidget {
@@ -557,12 +582,14 @@ class _FilterSheet extends StatefulWidget {
     required this.sizePreset,
     required this.datePreset,
     required this.searchFromHere,
+    required this.includeHidden,
     required this.currentPath,
   });
 
   final SizePreset sizePreset;
   final DatePreset datePreset;
   final bool searchFromHere;
+  final bool includeHidden;
   final String currentPath;
 
   @override
@@ -573,12 +600,14 @@ class _FilterSheetState extends State<_FilterSheet> {
   late SizePreset _sizePreset = widget.sizePreset;
   late DatePreset _datePreset = widget.datePreset;
   late bool _searchFromHere = widget.searchFromHere;
+  late bool _includeHidden = widget.includeHidden;
 
   void _apply() {
     Navigator.of(context).pop(_FilterSheetResult(
       sizePreset: _sizePreset,
       datePreset: _datePreset,
       searchFromHere: _searchFromHere,
+      includeHidden: _includeHidden,
     ));
   }
 
@@ -587,6 +616,7 @@ class _FilterSheetState extends State<_FilterSheet> {
       _sizePreset = SizePreset.any;
       _datePreset = DatePreset.any;
       _searchFromHere = true;
+      _includeHidden = false;
     });
   }
 
@@ -663,6 +693,16 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
                 const Text('Everywhere'),
               ],
+            ),
+            const SizedBox(height: Spacing.sm),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Include hidden items'),
+              subtitle: const Text(
+                'Also show results hidden by file visibility settings',
+              ),
+              value: _includeHidden,
+              onChanged: (v) => setState(() => _includeHidden = v),
             ),
             const SizedBox(height: Spacing.md),
             SizedBox(

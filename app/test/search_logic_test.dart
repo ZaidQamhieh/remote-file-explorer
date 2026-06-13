@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
+import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/search/search_logic.dart';
 
 void main() {
@@ -74,6 +75,28 @@ void main() {
       final original = List<Entry>.from(entries);
       sortByRelevance(entries, '');
       expect(entries.map((e) => e.name), original.map((e) => e.name));
+    });
+  });
+
+  group('filterSearchResults', () {
+    final results = [
+      mkEntry('readme.txt'),
+      mkEntry('.env'),
+      mkEntry('app.log'),
+    ];
+
+    test('filters out entries hidden by visibility prefs by default', () {
+      const prefs = VisibilityPrefs(hiddenExtensions: {'log'});
+      final filtered =
+          filterSearchResults(results, prefs, includeHidden: false);
+      expect(filtered.map((e) => e.name), ['readme.txt']);
+    });
+
+    test('includeHidden: true returns results unchanged', () {
+      const prefs = VisibilityPrefs(hiddenExtensions: {'log'});
+      final filtered =
+          filterSearchResults(results, prefs, includeHidden: true);
+      expect(filtered, results);
     });
   });
 

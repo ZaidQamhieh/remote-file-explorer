@@ -5,6 +5,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/storage/listing_cache.dart';
 import '../../core/storage/view_prefs.dart';
+import '../../core/storage/visibility_prefs.dart';
 
 export '../../core/storage/view_prefs.dart' show SortField, SortOrder;
 
@@ -39,6 +40,17 @@ List<Entry> _sortEntries(List<Entry> entries, SortOrder sort) {
 }
 
 // ---------------------------------------------------------------------------
+// Visibility helper
+// ---------------------------------------------------------------------------
+
+/// Returns the paths of [entries] that [prefs] would hide (see
+/// [isEntryHidden]). Pure function so it can be memoized alongside
+/// [_sortEntries] at state-construction time instead of being recomputed by
+/// every `itemBuilder` call.
+Set<String> _hiddenPaths(List<Entry> entries, VisibilityPrefs prefs) =>
+    entries.where((e) => isEntryHidden(e, prefs)).map((e) => e.path).toSet();
+
+// ---------------------------------------------------------------------------
 // Explorer state
 // ---------------------------------------------------------------------------
 
@@ -55,7 +67,10 @@ class ExplorerState {
     this.stale = false,
     this.offline = false,
     this.nextCursor,
-  }) : sortedEntries = _sortEntries(entries, sort);
+    this.visibilityPrefs = const VisibilityPrefs(),
+    this.showHidden = false,
+  })  : sortedEntries = _sortEntries(entries, sort),
+        hiddenPaths = _hiddenPaths(entries, visibilityPrefs);
 
   final List<String> pathStack;
   final List<Entry> entries;
@@ -74,10 +89,35 @@ class ExplorerState {
   /// directory has no more pages to load.
   final String? nextCursor;
 
+  /// Mirrors [visibilityPrefsProvider] — global hide-dotfiles/extensions/
+  /// names settings, applied to [hiddenPaths]/[displayEntries].
+  final VisibilityPrefs visibilityPrefs;
+
+  /// Session-only "show hidden items" override for this explorer screen, set
+  /// via [ExplorerNotifier.toggleShowHidden]. Not persisted: resets the next
+  /// time this provider instance is recreated.
+  final bool showHidden;
+
   /// [entries] partitioned (directories first) and sorted per [sort],
   /// computed once at construction time so list/grid `itemBuilder`s can do
   /// plain indexed access instead of re-sorting on every item.
   final List<Entry> sortedEntries;
+
+  /// Paths within [sortedEntries] that [visibilityPrefs] would hide,
+  /// computed once at construction time so `itemBuilder`s can do an O(1)
+  /// lookup (for the 55%-opacity treatment) instead of recomputing the
+  /// filter per item.
+  final Set<String> hiddenPaths;
+
+  /// Number of [sortedEntries] currently hidden by [visibilityPrefs].
+  int get hiddenCount => hiddenPaths.length;
+
+  /// The entries to actually render: all of [sortedEntries] while
+  /// [showHidden] is true (so hidden items can be shown at reduced opacity),
+  /// or only the non-hidden ones otherwise.
+  List<Entry> get displayEntries => showHidden
+      ? sortedEntries
+      : sortedEntries.where((e) => !hiddenPaths.contains(e.path)).toList();
 
   String get currentPath => pathStack.last;
   bool get atRoot => pathStack.length == 1;
@@ -96,6 +136,8 @@ class ExplorerState {
     bool? stale,
     bool? offline,
     Object? nextCursor = _sentinel,
+    VisibilityPrefs? visibilityPrefs,
+    bool? showHidden,
   }) =>
       ExplorerState(
         pathStack: pathStack ?? this.pathStack,
@@ -110,6 +152,8 @@ class ExplorerState {
         offline: offline ?? this.offline,
         nextCursor:
             nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
+        visibilityPrefs: visibilityPrefs ?? this.visibilityPrefs,
+        showHidden: showHidden ?? this.showHidden,
       );
 }
 
@@ -158,12 +202,26 @@ class ExplorerNotifier
     });
     final initialPrefs = ref.read(viewPrefsProvider).valueOrNull;
 
+    // File-visibility prefs (dotfiles/extensions/names to hide) are
+    // persisted separately (`core/storage/visibility_prefs.dart`) but
+    // mirrored into this state the same way view prefs are above, so
+    // `hiddenPaths`/`displayEntries` stay the single source widgets read
+    // from.
+    ref.listen(visibilityPrefsProvider, (_, next) {
+      final prefs = next.valueOrNull;
+      if (prefs == null) return;
+      state = state.copyWith(visibilityPrefs: prefs);
+    });
+    final initialVisibilityPrefs =
+        ref.read(visibilityPrefsProvider).valueOrNull;
+
     // Schedule async load after construction.
     Future.microtask(_load);
     return ExplorerState(
       pathStack: [arg.rootPath],
       gridView: initialPrefs?.gridViewFor(arg.hostId) ?? false,
       sort: initialPrefs?.sort ?? const SortOrder(),
+      visibilityPrefs: initialVisibilityPrefs ?? const VisibilityPrefs(),
     );
   }
 
@@ -291,6 +349,12 @@ class ExplorerNotifier
   void toggleView() => ref
       .read(viewPrefsProvider.notifier)
       .setGridView(arg.hostId, !state.gridView);
+
+  /// Toggles the session-only "show hidden items" override (see
+  /// [ExplorerState.showHidden]). Unlike [toggleView]/[setSort], this is
+  /// local UI state for this explorer screen only — it is intentionally not
+  /// persisted via [visibilityPrefsProvider].
+  void toggleShowHidden() => state = state.copyWith(showHidden: !state.showHidden);
 
   void toggleSelect(String path) {
     final sel = Set<String>.from(state.selected);

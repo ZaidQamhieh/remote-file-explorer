@@ -409,34 +409,47 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildList(BuildContext context, ExplorerState state,
       AgentClient client, EntryDensity density) {
-    final entries = state.sortedEntries;
+    final entries = state.displayEntries;
     final showLoadMore = state.hasMore;
-    final itemCount = entries.length + (showLoadMore ? 1 : 0);
+    final showHiddenFooter = state.hiddenCount > 0;
+    final itemCount =
+        entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
     return ListView.builder(
       itemCount: itemCount,
       itemBuilder: (ctx, i) {
+        if (i >= entries.length + (showLoadMore ? 1 : 0)) {
+          return HiddenItemsFooter(
+            count: state.hiddenCount,
+            revealed: state.showHidden,
+            onToggle: _notifier.toggleShowHidden,
+          );
+        }
         if (i >= entries.length) {
           _notifier.loadMore();
           return _LoadMoreIndicator(loading: state.loadingMore);
         }
         final entry = entries[i];
+        final hidden = state.hiddenPaths.contains(entry.path);
         return AppearListItem(
           index: i,
-          child: EntryTile(
-            entry: entry,
-            selected: state.selected.contains(entry.path),
-            multiSelect: state.multiSelect,
-            density: density,
-            isFavorite: favoritePaths.contains(entry.path),
-            onTap: () => _onEntryTap(context, entry, client),
-            onLongPress: () => _notifier.toggleSelect(entry.path),
-            onSelect: () => _notifier.toggleSelect(entry.path),
-            onMoveInto: (dragged, dest) =>
-                _moveInto(context, client, dragged, dest),
-            onShowMeta: entry.isDir
-                ? () => _showMeta(context, entry, client)
-                : null,
+          child: Opacity(
+            opacity: hidden ? 0.55 : 1,
+            child: EntryTile(
+              entry: entry,
+              selected: state.selected.contains(entry.path),
+              multiSelect: state.multiSelect,
+              density: density,
+              isFavorite: favoritePaths.contains(entry.path),
+              onTap: () => _onEntryTap(context, entry, client),
+              onLongPress: () => _notifier.toggleSelect(entry.path),
+              onSelect: () => _notifier.toggleSelect(entry.path),
+              onMoveInto: (dragged, dest) =>
+                  _moveInto(context, client, dragged, dest),
+              onShowMeta: entry.isDir
+                  ? () => _showMeta(context, entry, client)
+                  : null,
+            ),
           ),
         );
       },
@@ -461,9 +474,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildGrid(
       BuildContext context, ExplorerState state, AgentClient client) {
-    final entries = state.sortedEntries;
+    final entries = state.displayEntries;
     final showLoadMore = state.hasMore;
-    final itemCount = entries.length + (showLoadMore ? 1 : 0);
+    final showHiddenFooter = state.hiddenCount > 0;
+    final itemCount =
+        entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
     return GridView.builder(
       padding: const EdgeInsets.all(Spacing.md),
@@ -475,23 +490,35 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       ),
       itemCount: itemCount,
       itemBuilder: (ctx, i) {
+        if (i >= entries.length + (showLoadMore ? 1 : 0)) {
+          return HiddenItemsFooter(
+            count: state.hiddenCount,
+            revealed: state.showHidden,
+            onToggle: _notifier.toggleShowHidden,
+            compact: true,
+          );
+        }
         if (i >= entries.length) {
           _notifier.loadMore();
           return _LoadMoreIndicator(loading: state.loadingMore);
         }
         final entry = entries[i];
+        final hidden = state.hiddenPaths.contains(entry.path);
         return AppearListItem(
           index: i,
-          child: EntryGridCell(
-            entry: entry,
-            client: client,
-            selected: state.selected.contains(entry.path),
-            multiSelect: state.multiSelect,
-            isFavorite: favoritePaths.contains(entry.path),
-            onTap: () => _onEntryTap(context, entry, client),
-            onLongPress: () => _notifier.toggleSelect(entry.path),
-            onMoveInto: (dragged, dest) =>
-                _moveInto(context, client, dragged, dest),
+          child: Opacity(
+            opacity: hidden ? 0.55 : 1,
+            child: EntryGridCell(
+              entry: entry,
+              client: client,
+              selected: state.selected.contains(entry.path),
+              multiSelect: state.multiSelect,
+              isFavorite: favoritePaths.contains(entry.path),
+              onTap: () => _onEntryTap(context, entry, client),
+              onLongPress: () => _notifier.toggleSelect(entry.path),
+              onMoveInto: (dragged, dest) =>
+                  _moveInto(context, client, dragged, dest),
+            ),
           ),
         );
       },
@@ -604,6 +631,109 @@ class _LoadMoreIndicator extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const SizedBox.square(dimension: 24),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hidden-items reveal footer
+// ---------------------------------------------------------------------------
+
+/// Trailing tile shown at the end of the list/grid when [count] of the
+/// current listing's entries are filtered by file-visibility prefs
+/// (`core/storage/visibility_prefs.dart`). Tapping it flips the
+/// per-screen [ExplorerState.showHidden] session override via [onToggle] —
+/// this is the listing's primary "never make files silently unreachable"
+/// affordance (see also the eye toggle in [ViewOptionsSheet]).
+///
+/// In [compact] mode (used inside [GridView] cells, which are fixed-size),
+/// the label wraps onto two lines instead of a full-width row.
+class HiddenItemsFooter extends StatelessWidget {
+  const HiddenItemsFooter({
+    super.key,
+    required this.count,
+    required this.revealed,
+    required this.onToggle,
+    this.compact = false,
+  });
+
+  /// Number of entries in the current listing hidden by visibility prefs.
+  final int count;
+
+  /// Whether hidden entries are currently revealed (at reduced opacity) for
+  /// this session.
+  final bool revealed;
+
+  final VoidCallback onToggle;
+
+  /// `true` when rendered as a [GridView] trailing cell instead of a
+  /// full-width list row.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final label = '$count hidden';
+    final action = revealed ? 'Hide' : 'Show';
+    final style = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: scheme.onSurfaceVariant);
+    final actionStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.w600,
+        );
+
+    if (compact) {
+      return Center(
+        child: InkWell(
+          borderRadius: Radii.smR,
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.sm),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  revealed
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: Spacing.xs),
+                Text(label, style: style, textAlign: TextAlign.center),
+                Text(action, style: actionStyle, textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.md,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              revealed
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: Spacing.sm),
+            Text('$label · ', style: style),
+            Text(action, style: actionStyle),
+          ],
+        ),
       ),
     );
   }

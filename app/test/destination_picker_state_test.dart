@@ -72,6 +72,23 @@ void main() {
       expect(state.error, isNull);
     });
 
+    test('initial load hides dotfolders (default visibility prefs)',
+        () async {
+      client.pages['/root'] = Listing(path: '/root', entries: [
+        _dir('/root/Documents'),
+        _dir('/root/.config'),
+        _file('/root/notes.txt'),
+      ]);
+
+      final arg = (hostId: 'h1', startPath: '/root');
+      container.listen(destinationPickerProvider(arg), (_, _) {});
+      await _waitUntil(
+          () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty);
+
+      final state = container.read(destinationPickerProvider(arg));
+      expect(state.folders.map((e) => e.name), ['Documents']);
+    });
+
     test('navigate pushes onto the path stack and loads the new directory',
         () async {
       client.pages['/root'] =

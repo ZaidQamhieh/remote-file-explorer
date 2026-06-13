@@ -8,7 +8,9 @@ import 'package:remote_file_explorer/core/api/providers.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
+import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
@@ -260,6 +262,145 @@ void main() {
           ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
       final next = state.copyWith(loading: true);
       expect(next.nextCursor, 'cursor-1');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerState file visibility (hiddenPaths / displayEntries)
+  // ---------------------------------------------------------------------
+  group('ExplorerState file visibility', () {
+    test('hiddenPaths/hiddenCount reflect entries hidden by visibilityPrefs',
+        () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('readme.txt'), _file('.env'), _dir('.config')],
+      );
+
+      // Default VisibilityPrefs hides dotfiles/dotfolders.
+      expect(state.hiddenCount, 2);
+      expect(state.hiddenPaths, {'/root/.env', '/root/.config'});
+    });
+
+    test('displayEntries excludes hidden entries when showHidden is false',
+        () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('readme.txt'), _file('.env')],
+      );
+
+      expect(state.displayEntries.map((e) => e.name), ['readme.txt']);
+    });
+
+    test('displayEntries includes hidden entries when showHidden is true',
+        () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('readme.txt'), _file('.env')],
+        showHidden: true,
+      );
+
+      expect(state.displayEntries.map((e) => e.name).toSet(),
+          {'readme.txt', '.env'});
+    });
+
+    test('hiddenPaths is recomputed when copyWith changes visibilityPrefs',
+        () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('readme.txt'), _file('app.log')],
+      );
+      expect(state.hiddenCount, 0);
+
+      final next = state.copyWith(
+        visibilityPrefs: const VisibilityPrefs(
+          hideDotfiles: false,
+          hiddenExtensions: {'log'},
+        ),
+      );
+      expect(next.hiddenCount, 1);
+      expect(next.hiddenPaths, {'/root/app.log'});
+    });
+
+    test('copyWith toggling showHidden does not change hiddenPaths', () {
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        entries: [_file('.env')],
+      );
+      final revealed = state.copyWith(showHidden: true);
+      expect(revealed.hiddenPaths, state.hiddenPaths);
+      expect(revealed.displayEntries, isNot(state.displayEntries));
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ExplorerNotifier.toggleShowHidden + visibilityPrefsProvider wiring
+  // ---------------------------------------------------------------------
+  group('ExplorerNotifier.toggleShowHidden', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [
+          clientProvider.overrideWith((ref, hostId) async => client),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('flips state.showHidden and reveals filtered entries', () async {
+      client.pages['/'] = [
+        Listing(
+          path: '/',
+          entries: [_file('readme.txt'), _file('.env')],
+          nextCursor: null,
+        ),
+      ];
+
+      final arg = (hostId: 'h4', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      var state = container.read(explorerProvider(arg));
+      expect(state.showHidden, isFalse);
+      expect(state.hiddenCount, 1);
+      expect(state.displayEntries.map((e) => e.name), ['readme.txt']);
+
+      notifier.toggleShowHidden();
+
+      state = container.read(explorerProvider(arg));
+      expect(state.showHidden, isTrue);
+      expect(state.displayEntries.map((e) => e.name).toSet(),
+          {'readme.txt', '.env'});
+    });
+
+    test('mirrors visibilityPrefsProvider into ExplorerState.visibilityPrefs',
+        () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
+      ];
+
+      final arg = (hostId: 'h5', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      expect(container.read(explorerProvider(arg)).hiddenCount, 0);
+
+      await container.read(visibilityPrefsProvider.future);
+      await container
+          .read(visibilityPrefsProvider.notifier)
+          .setHiddenExtensions({'log'});
+
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).hiddenCount == 1);
+
+      final state = container.read(explorerProvider(arg));
+      expect(state.hiddenPaths, {'/root/app.log'});
     });
   });
 

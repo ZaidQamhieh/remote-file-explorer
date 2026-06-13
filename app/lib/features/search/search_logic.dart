@@ -3,6 +3,7 @@
 library;
 
 import '../../core/models/entry.dart';
+import '../../core/storage/visibility_prefs.dart';
 
 /// Returns `true` if [q] should be treated as a glob pattern (contains `*`
 /// or `?`) rather than a plain substring match.
@@ -56,6 +57,23 @@ class HighlightRange {
 
   @override
   String toString() => 'HighlightRange($start, $end)';
+}
+
+/// Filters search [results] using the same file-visibility prefs as the
+/// explorer listing (`core/storage/visibility_prefs.dart`) — dotfiles,
+/// hidden extensions, and hidden exact names. The search screen's own
+/// category/size/date filters are separate server-side `types`/etc.
+/// parameters and unrelated to this client-side pass.
+///
+/// When [includeHidden] is `true` (the search filter sheet's "Include hidden
+/// items" switch), [results] is returned unchanged.
+List<Entry> filterSearchResults(
+  List<Entry> results,
+  VisibilityPrefs prefs, {
+  required bool includeHidden,
+}) {
+  if (includeHidden) return results;
+  return filterHiddenEntries(results, prefs);
 }
 
 /// Returns the range of [name] that matches [query] (case-insensitive

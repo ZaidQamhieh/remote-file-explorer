@@ -250,6 +250,31 @@ void main() {
       expect(d.lastAddress, '');
       expect(d.lastVersion, '');
     });
+
+    test('parses jailRoot', () {
+      final d = Device.fromJson({
+        'id': 'x',
+        'label': 'phone',
+        'created': 1000,
+        'lastSeen': 2000,
+        'revoked': false,
+        'current': false,
+        'jailRoot': '/home/me/Shared',
+      });
+      expect(d.jailRoot, '/home/me/Shared');
+    });
+
+    test('defaults jailRoot to empty when absent', () {
+      final d = Device.fromJson({
+        'id': 'x',
+        'label': 'phone',
+        'created': 1000,
+        'lastSeen': 2000,
+        'revoked': false,
+        'current': false,
+      });
+      expect(d.jailRoot, '');
+    });
   });
 
   group('AppRelease', () {

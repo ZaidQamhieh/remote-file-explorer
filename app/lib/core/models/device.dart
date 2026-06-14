@@ -9,6 +9,7 @@ class Device {
     required this.current,
     this.lastAddress = '',
     this.lastVersion = '',
+    this.jailRoot = '',
   });
 
   final String id;
@@ -26,6 +27,10 @@ class Device {
   /// with, e.g. `1.10.0+18`. Empty if unknown.
   final String lastVersion;
 
+  /// Absolute path this device is restricted to, if any. Empty = full
+  /// access (within the agent's configured roots).
+  final String jailRoot;
+
   factory Device.fromJson(Map<String, dynamic> json) => Device(
     id: json['id'] as String,
     label: json['label'] as String? ?? '',
@@ -39,5 +44,6 @@ class Device {
     current: json['current'] as bool? ?? false,
     lastAddress: json['lastAddress'] as String? ?? '',
     lastVersion: json['lastVersion'] as String? ?? '',
+    jailRoot: json['jailRoot'] as String? ?? '',
   );
 }

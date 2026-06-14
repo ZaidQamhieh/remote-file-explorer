@@ -127,6 +127,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _setDeviceJail(Device d, String jailRoot) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client.setDeviceJail(d.id, jailRoot);
+      await _load();
+      if (mounted) {
+        showSuccess(
+          context,
+          jailRoot.isEmpty
+              ? 'Cleared restriction for "${d.label}"'
+              : 'Limited "${d.label}" to $jailRoot',
+        );
+      }
+    } catch (e) {
+      if (mounted) showError(context, 'Update failed: $e');
+    }
+  }
+
+  Future<void> _editDeviceJail(Device d) async {
+    final ctrl = TextEditingController(text: d.jailRoot);
+    final path = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Limit to folder'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: '/home/me/Shared'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+    );
+    if (path != null && path.isNotEmpty) {
+      await _setDeviceJail(d, path);
+    }
+  }
+
   Future<void> _addRoot() async {
     final ctrl = TextEditingController();
     final path = await showDialog<String>(
@@ -667,9 +715,38 @@ class _DeviceRow extends StatelessWidget {
           onPressed: () => screen._removeDevice(d),
         );
       } else {
-        trailing = TextButton(
-          onPressed: () => screen._revoke(d),
-          child: const Text('Revoke'),
+        trailing = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PopupMenuButton<String>(
+              tooltip: 'Folder restriction',
+              icon: const Icon(Icons.tune),
+              onSelected: (value) {
+                switch (value) {
+                  case 'limit':
+                    screen._editDeviceJail(d);
+                  case 'clear':
+                    screen._setDeviceJail(d, '');
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'limit',
+                      child: Text('Limit to folder…'),
+                    ),
+                    if (d.jailRoot.isNotEmpty)
+                      const PopupMenuItem(
+                        value: 'clear',
+                        child: Text('Clear restriction'),
+                      ),
+                  ],
+            ),
+            TextButton(
+              onPressed: () => screen._revoke(d),
+              child: const Text('Revoke'),
+            ),
+          ],
         );
       }
     }
@@ -681,7 +758,31 @@ class _DeviceRow extends StatelessWidget {
         color: d.revoked ? scheme.error : scheme.onSurfaceVariant,
       ),
       title: Text(d.label),
-      subtitle: Text(status, style: TextStyle(color: statusColor)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(status, style: TextStyle(color: statusColor)),
+          if (d.jailRoot.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline, size: 14, color: scheme.tertiary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Restricted to: ${d.jailRoot}',
+                      style: TextStyle(color: scheme.tertiary, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
       trailing: trailing,
     );
   }

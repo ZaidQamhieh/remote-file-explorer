@@ -478,6 +478,18 @@ class AgentClient {
     await _delete<void>('/devices/$id', queryParameters: {'purge': 'true'});
   }
 
+  /// Sets (or clears, with an empty string) the path jail restricting which
+  /// subtree of the host this device can access. Returns the updated
+  /// [Device]. An invalid path (not absolute, or outside the agent's roots)
+  /// surfaces as an [AgentApiException] from the agent's 400 response.
+  Future<Device> setDeviceJail(String id, String jailRoot) async {
+    final data = await _patch<Map<String, dynamic>>(
+      '/devices/$id',
+      data: {'jailRoot': jailRoot},
+    );
+    return Device.fromJson(data);
+  }
+
   // ---------------------------------------------------------------------------
   // Filesystem — write
   // ---------------------------------------------------------------------------

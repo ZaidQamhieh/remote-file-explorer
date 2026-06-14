@@ -1,8 +1,39 @@
 # NEXT_SESSION — start here
 
-_Handoff written 2026-06-14 (second overnight autonomous session). Read this, then `CLAUDE.md`._
+_Handoff updated 2026-06-15 (owner-notes session). Read this, then `CLAUDE.md`._
 
-## State: v1.12.0+20 released OTA
+## Latest: owner notes from `Desktop/NEXT WAVE/NOTES_BY_USER.md` (pushed to master, NOT yet released)
+
+Three commits on master (`2250eba`, `86bf1c5`, `68f276a`), all CI/lefthook green. Built by
+three parallel Sonnet workers (agent / updates+host-card / settings+about) under Opus review.
+
+1. **Owner #1 — app-wide updates via GitHub Releases.** Per-PC update UI is gone (the
+   in-card update banner/button + the per-host Settings "Updates" section). A new
+   host-independent `core/update/github_update_source.dart` reads
+   `releases/latest/download/latest.json` (`ZaidQamhieh/remote-file-explorer`, schema
+   `{versionName,versionCode,size,url}`) and downloads the APK from `url` over standard TLS
+   (no agent pinning), mirroring `AgentClient.downloadApk` resilience. One "Check for
+   updates" now lives in the **global App Settings** screen. `AppRelease` gained `url`.
+   ⚠️ **Untested end-to-end:** no HTTP-level test (same gap as the agent downloader) and **no
+   GitHub release exists yet** — push a `v*` tag to cut the first one and validate (owner's
+   call; it's the public-artifact CD trigger `.github/workflows/release.yml`).
+2. **Owner #2 — decluttered per-host settings.** Removed the "Display (this device)"
+   per-device view-override section (Display defaults live only in App Settings now). The
+   "File visibility (this device)" override was **deliberately kept** (owner asked to keep it).
+3. **Owner #3/#4 — About shows storage.** Per-host Settings → About now shows the PC name and,
+   per drive, label + used/total/free, marking the OS drive. Needs the new agent field:
+   - **agent + openapi:** `/system/drives` `Drive` gained `isOS` (Linux `/`, Windows
+     `%SystemDrive%`). ⚠️ **AGENT REDEPLOY NEEDED** for the OS marker to appear — the running
+     `~/.local/bin/rfe-agent` predates this and returns no `isOS` (drives still list; marker
+     just won't show until rebuilt/restarted). Rebuild: `cd agent && go build -o
+     ~/.local/bin/rfe-agent ./cmd/agent` then restart the daemon.
+4. **Bug 2 fixed** — "Browse"/"Search" quick-action labels no longer truncate to "B…"/"S…"
+   (`Flexible`+`Spacer` → `Expanded`).
+
+**Not yet released OTA / no version bump** — these are on master but no `release.sh` run.
+Decide release vehicle: a `v*` tag (GitHub CD, also validates #1) is now the preferred path.
+
+## Previously released: v1.12.0+20 OTA
 
 All on master, all CI-green, bundled into **v1.12.0 (build 20)** by `./release.sh 1.12.0+20`
 (published `~/.rfe-agent/updates/rfe-1.12.0-20.apk`, 78.4 MB). The phone will offer it on

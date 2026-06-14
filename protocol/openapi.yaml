@@ -480,6 +480,48 @@ paths:
                 items: { $ref: '#/components/schemas/Device' }
         '401': { $ref: '#/components/responses/Error' }
   /devices/{id}:
+    patch:
+      summary: Set or clear a device's per-device path jail (H2)
+      description: >
+        Confines the target device to the given absolute path, intersected
+        with the agent's configured global roots. Pass an empty string to
+        clear the per-device restriction (the device then gets the agent's
+        full configured root jail, as before).
+
+
+        Validation: jailRoot must be either "" or an absolute, cleaned path
+        that resolves within the agent's configured roots (if any roots are
+        configured). A jailRoot outside the global roots is rejected with
+        400 (code INVALID) — setting a jail that would widen access (or that
+        is meaningless because it falls entirely outside the agent's reach)
+        is never allowed.
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jailRoot]
+              properties:
+                jailRoot:
+                  type: string
+                  description: Absolute path, or "" to clear the per-device jail.
+      responses:
+        '200':
+          description: Updated device
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        '400':
+          description: Invalid jailRoot. code=INVALID or BAD_REQUEST.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404':
+          description: Device not found. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
       summary: Revoke a paired device, or permanently remove it with ?purge=true
       description: >
@@ -568,6 +610,13 @@ components:
         current: { type: boolean }
         lastAddress: { type: string, description: "Client IP from the last authenticated request (port stripped); empty if never seen." }
         lastVersion: { type: string, description: "Value of the last X-RFE-Client-Version header sent by this device; empty if never reported." }
+        jailRoot:
+          type: string
+          description: >
+            Per-device path jail (H2). Empty means no per-device restriction —
+            the device gets the agent's full configured root jail. When
+            non-empty, an absolute path; the device is confined to that
+            subtree, intersected with the agent's configured roots.
     AppRelease:
       type: object
       properties:

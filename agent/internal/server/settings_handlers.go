@@ -5,7 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 
+	"github.com/go-chi/chi/v5"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -69,6 +73,22 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 	}
 }
 
+// deviceJSON builds the Device JSON shape shared by GET /devices (list) and
+// PATCH /devices/{id} (single updated device).
+func deviceJSON(d store.Device, cur *store.Device) map[string]any {
+	return map[string]any{
+		"id":          d.ID,
+		"label":       d.Label,
+		"created":     d.Created.Unix(),
+		"lastSeen":    d.LastSeen.Unix(),
+		"revoked":     d.Revoked,
+		"current":     cur != nil && cur.ID == d.ID,
+		"lastAddress": d.LastAddress,
+		"lastVersion": d.LastVersion,
+		"jailRoot":    d.JailRoot,
+	}
+}
+
 func listDevicesHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		devices, err := db.ListDevices()
@@ -79,16 +99,7 @@ func listDevicesHandler(db *store.DB) http.HandlerFunc {
 		cur := deviceFromContext(r)
 		out := make([]map[string]any, 0, len(devices))
 		for _, d := range devices {
-			out = append(out, map[string]any{
-				"id":          d.ID,
-				"label":       d.Label,
-				"created":     d.Created.Unix(),
-				"lastSeen":    d.LastSeen.Unix(),
-				"revoked":     d.Revoked,
-				"current":     cur != nil && cur.ID == d.ID,
-				"lastAddress": d.LastAddress,
-				"lastVersion": d.LastVersion,
-			})
+			out = append(out, deviceJSON(d, cur))
 		}
 		writeJSON(w, http.StatusOK, out)
 	}
@@ -126,4 +137,83 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// setDeviceJailHandler implements PATCH /v1/devices/{id} (H2 per-device path
+// jail). Body: {"jailRoot": "<absolute path, or empty string to clear>"}.
+//
+// Validation: jailRoot must be either "" (clear the per-device restriction)
+// or an absolute, cleaned path that resolves within the agent's configured
+// global roots (st.Roots()) — if any roots are configured. A jailRoot
+// outside the global roots would widen access if it were ever honored on its
+// own, so it is rejected outright (400 INVALID) rather than accepted and
+// silently clamped: better to fail loudly than to let an admin believe a
+// jail is in effect when fsops.Ops.Jailed would in fact deny everything.
+//
+// On success, returns the updated Device in the same JSON shape as
+// GET /devices (200).
+func setDeviceJailHandler(db *store.DB, st settingsRootsView) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		var body struct {
+			JailRoot *string `json:"jailRoot"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+			return
+		}
+		if body.JailRoot == nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "jailRoot required")
+			return
+		}
+
+		jailRoot := *body.JailRoot
+		if jailRoot != "" {
+			clean := filepath.Clean(jailRoot)
+			if !filepath.IsAbs(clean) {
+				writeError(w, http.StatusBadRequest, "INVALID", "jailRoot must be an absolute path")
+				return
+			}
+			if roots := st.Roots(); len(roots) > 0 {
+				// Reuse the same jail-resolution logic used for ordinary path
+				// access (cleans + resolves symlinks + checks containment) so
+				// a jailRoot that only "looks" contained via a symlink trick
+				// is rejected the same way an escaping request would be.
+				baseOps := fsops.New(roots, st.IsReadOnly())
+				if _, err := baseOps.Resolve(clean); err != nil {
+					writeError(w, http.StatusBadRequest, "INVALID", "jailRoot must resolve within the agent's configured roots")
+					return
+				}
+			}
+			jailRoot = clean
+		}
+
+		if err := db.SetDeviceJail(id, jailRoot); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+
+		updated, err := db.GetDeviceByID(id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		if updated == nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "device not found")
+			return
+		}
+
+		cur := deviceFromContext(r)
+		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
+	}
+}
+
+// settingsRootsView is the subset of *settings.Store needed to validate a
+// jailRoot against the agent's configured global roots. Defined as an
+// interface so tests can pass a minimal fake instead of a full
+// *settings.Store.
+type settingsRootsView interface {
+	Roots() []string
+	IsReadOnly() bool
 }

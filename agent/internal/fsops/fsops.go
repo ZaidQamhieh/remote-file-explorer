@@ -53,6 +53,12 @@ func (s staticSettings) Roots() []string  { return s.roots }
 // Ops performs filesystem operations with an optional path jail.
 type Ops struct {
 	settings SettingsView
+	// denyAll, when true, makes Resolve reject every path regardless of
+	// settings/roots. Set only by Jailed when a device's jailRoot falls
+	// outside the agent's configured roots — see Jailed for why this can't
+	// simply be represented as an empty roots slice (empty roots means "no
+	// jail" / allow everything).
+	denyAll bool
 }
 
 // New creates an Ops with optional allowedRoots.
@@ -78,10 +84,63 @@ func NewWithSettings(v SettingsView) *Ops {
 // concrete starting point in that case should fall back to something
 // sensible (e.g. the user's home directory or filesystem drives).
 func (o *Ops) Roots() []string {
+	if o.denyAll {
+		return nil
+	}
 	src := o.settings.Roots()
 	roots := make([]string, len(src))
 	copy(roots, src)
 	return roots
+}
+
+// jailedSettings wraps a base SettingsView, overriding Roots() with a fixed
+// set while delegating IsReadOnly() to the base (so live read-only toggles
+// still apply to a jailed Ops).
+type jailedSettings struct {
+	base  SettingsView
+	roots []string
+}
+
+func (s jailedSettings) IsReadOnly() bool { return s.base.IsReadOnly() }
+func (s jailedSettings) Roots() []string  { return s.roots }
+
+// Jailed returns an Ops whose effective roots are the intersection of o's
+// base roots and extraRoot (a per-device path jail, e.g. Device.JailRoot).
+//
+//   - If extraRoot is empty, o is returned unchanged — no per-device
+//     restriction (today's behavior).
+//   - If o has no configured roots (no global jail), the effective roots
+//     become exactly []string{extraRoot}.
+//   - If o has configured roots and extraRoot is within (or equal to) one of
+//     them, the effective roots become exactly []string{extraRoot} — since
+//     extraRoot is already a subset of that root, it IS the intersection.
+//   - If extraRoot is outside every configured root, the returned Ops denies
+//     ALL paths (a misconfigured/widening jailRoot must never grant access
+//     beyond the global roots, so it is treated as "no access" rather than
+//     silently falling back to the global roots).
+//
+// The returned Ops shares the read-only flag (live) with o but has its own
+// fixed root set, so callers can safely use it for the lifetime of a single
+// request.
+func (o *Ops) Jailed(extraRoot string) *Ops {
+	if extraRoot == "" {
+		return o
+	}
+	clean := filepath.Clean(extraRoot)
+
+	baseRoots := o.settings.Roots()
+	if len(baseRoots) == 0 {
+		// No global jail: the device's jailRoot becomes the sole root.
+		return &Ops{settings: jailedSettings{base: o.settings, roots: []string{clean}}}
+	}
+	for _, root := range baseRoots {
+		if isUnder(clean, root) {
+			return &Ops{settings: jailedSettings{base: o.settings, roots: []string{clean}}}
+		}
+	}
+	// extraRoot is outside every global root — deny everything rather than
+	// widen access by falling back to the global roots.
+	return &Ops{settings: jailedSettings{base: o.settings, roots: nil}, denyAll: true}
 }
 
 // --------- path jail ---------
@@ -91,6 +150,9 @@ func (o *Ops) Roots() []string {
 // if the resolved real path is outside every allowed root the request is
 // rejected. When allowedRoots is empty any clean absolute path is accepted.
 func (o *Ops) Resolve(p string) (string, error) {
+	if o.denyAll {
+		return "", fmt.Errorf("%w: %s", ErrForbidden, p)
+	}
 	if !filepath.IsAbs(p) {
 		return "", fmt.Errorf("%w: path must be absolute", ErrForbidden)
 	}

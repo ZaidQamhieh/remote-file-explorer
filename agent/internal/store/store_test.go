@@ -274,6 +274,89 @@ func TestOpenEnablesWAL(t *testing.T) {
 	}
 }
 
+// TestSetDeviceJailRoundTrip verifies SetDeviceJail persists and clears the
+// per-device path jail (H2), that GetDeviceByID and DeviceByToken both
+// reflect it, and that a fresh device defaults to an empty JailRoot
+// (preserving today's behavior for existing rows).
+func TestSetDeviceJailRoundTrip(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Default JailRoot is "".
+	d, err := db.GetDeviceByID("id-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if d == nil || d.JailRoot != "" {
+		t.Fatalf("expected empty default JailRoot, got %+v", d)
+	}
+
+	// Set a jail.
+	if err := db.SetDeviceJail("id-1", "/srv/shared"); err != nil {
+		t.Fatalf("set jail: %v", err)
+	}
+	d, err = db.GetDeviceByID("id-1")
+	if err != nil {
+		t.Fatalf("get after set: %v", err)
+	}
+	if d == nil || d.JailRoot != "/srv/shared" {
+		t.Fatalf("expected JailRoot set, got %+v", d)
+	}
+
+	// DeviceByToken and ListDevices also reflect it.
+	byToken, err := db.DeviceByToken("tok-a")
+	if err != nil {
+		t.Fatalf("by token: %v", err)
+	}
+	if byToken == nil || byToken.JailRoot != "/srv/shared" {
+		t.Fatalf("expected JailRoot via DeviceByToken, got %+v", byToken)
+	}
+	list, err := db.ListDevices()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].JailRoot != "/srv/shared" {
+		t.Fatalf("expected JailRoot in list, got %+v", list)
+	}
+
+	// Clear the jail.
+	if err := db.SetDeviceJail("id-1", ""); err != nil {
+		t.Fatalf("clear jail: %v", err)
+	}
+	d, err = db.GetDeviceByID("id-1")
+	if err != nil {
+		t.Fatalf("get after clear: %v", err)
+	}
+	if d == nil || d.JailRoot != "" {
+		t.Fatalf("expected JailRoot cleared, got %+v", d)
+	}
+}
+
+// TestGetDeviceByIDUnknown verifies GetDeviceByID returns (nil,nil) for an
+// id that doesn't exist (used by setDeviceJailHandler to 404).
+func TestGetDeviceByIDUnknown(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	d, err := db.GetDeviceByID("does-not-exist")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if d != nil {
+		t.Fatalf("expected nil for unknown id, got %+v", d)
+	}
+}
+
 // TestMarkChunkReceivedConcurrent reproduces the lost-update race: many
 // goroutines each mark a distinct chunk received concurrently. Without a
 // transaction around the read-modify-write of received_chunks, concurrent

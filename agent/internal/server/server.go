@@ -51,11 +51,16 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 		// Authenticated sub-router.
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
+			// Narrows the shared ops to the calling device's jailRoot (H2),
+			// if it has one. Must run after authMiddleware (needs the device
+			// in context) and before any handler that resolves paths.
+			r.Use(deviceJailMiddleware(ops))
 
 			// Settings & devices
 			r.Get("/settings", getSettingsHandler(cfg.Settings))
 			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
 			r.Get("/devices", listDevicesHandler(db))
+			r.Patch("/devices/{id}", setDeviceJailHandler(db, cfg.Settings))
 			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
 				id := chi.URLParam(req, "id")
 				// ?purge=true permanently removes the row (used to clear

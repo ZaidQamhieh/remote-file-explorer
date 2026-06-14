@@ -7,12 +7,17 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
 type contextKey string
 
 const deviceCtxKey contextKey = "device"
+
+// opsCtxKey holds the per-request *fsops.Ops (see deviceJailMiddleware),
+// already narrowed to the calling device's jailRoot when it has one.
+const opsCtxKey contextKey = "ops"
 
 // authMiddleware validates the Bearer token against the device store.
 // Returns 401 if missing/invalid/revoked.
@@ -50,4 +55,37 @@ func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// deviceJailMiddleware reads the *store.Device placed in context by
+// authMiddleware and, when it has a non-empty JailRoot (H2 per-device
+// jail), narrows baseOps to that subtree via Ops.Jailed and injects the
+// result into the request context under opsCtxKey. Handlers retrieve it via
+// opsFromContext, which falls back to baseOps for devices with no jailRoot
+// (and for any request that — for whatever reason — has no device in
+// context), preserving today's behavior unchanged.
+//
+// This must run AFTER authMiddleware in the middleware chain (it depends on
+// deviceCtxKey being populated), and BEFORE any handler that resolves paths.
+func deviceJailMiddleware(baseOps *fsops.Ops) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ops := baseOps
+			if device, ok := r.Context().Value(deviceCtxKey).(*store.Device); ok && device != nil && device.JailRoot != "" {
+				ops = baseOps.Jailed(device.JailRoot)
+			}
+			ctx := context.WithValue(r.Context(), opsCtxKey, ops)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// opsFromContext returns the per-request *fsops.Ops injected by
+// deviceJailMiddleware, or baseOps if the context has none (e.g. in unit
+// tests that call handlers directly without the middleware chain).
+func opsFromContext(ctx context.Context, baseOps *fsops.Ops) *fsops.Ops {
+	if ops, ok := ctx.Value(opsCtxKey).(*fsops.Ops); ok && ops != nil {
+		return ops
+	}
+	return baseOps
 }

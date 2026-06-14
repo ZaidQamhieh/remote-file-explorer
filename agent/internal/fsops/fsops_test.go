@@ -991,3 +991,161 @@ func TestMove_OverwriteAncestorGuard(t *testing.T) {
 		t.Fatalf("expected marker.txt to survive, stat err: %v", err)
 	}
 }
+
+// --------- Jailed (H2 per-device path jail) ---------
+
+// TestJailed_EmptyExtraRootIsNoOp verifies that Jailed("") returns the same
+// Ops unchanged — an empty jailRoot must not regress a device's full
+// (global-root) access.
+func TestJailed_EmptyExtraRootIsNoOp(t *testing.T) {
+	ops, root := setupJail(t)
+
+	jailed := ops.Jailed("")
+	if jailed != ops {
+		t.Fatalf("expected Jailed(\"\") to return the same *Ops, got a different instance")
+	}
+
+	// Sanity: full access within the global root still works.
+	if _, err := jailed.Resolve(filepath.Join(root, "anything")); err != nil {
+		t.Fatalf("expected access within global root, got: %v", err)
+	}
+}
+
+// TestJailed_RestrictsToSubtree sets up root/sub as a per-device jail inside
+// a global root and verifies: paths inside root/sub resolve fine, while a
+// sibling path, a parent path, and a "../" traversal out of root/sub are all
+// rejected with ErrForbidden — even though some of those paths are still
+// within the agent's GLOBAL root.
+func TestJailed_RestrictsToSubtree(t *testing.T) {
+	ops, root := setupJail(t)
+
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("MkdirAll sub: %v", err)
+	}
+	sibling := filepath.Join(root, "sibling")
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatalf("MkdirAll sibling: %v", err)
+	}
+
+	jailed := ops.Jailed(sub)
+
+	// Inside the jail: OK.
+	if _, err := jailed.Resolve(filepath.Join(sub, "file.txt")); err != nil {
+		t.Fatalf("expected access inside jail, got: %v", err)
+	}
+
+	// Sibling path (within the global root, but outside the device jail): forbidden.
+	if _, err := jailed.Resolve(filepath.Join(sibling, "file.txt")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for sibling path, got: %v", err)
+	}
+
+	// Parent path (the global root itself): forbidden.
+	if _, err := jailed.Resolve(root); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for parent path, got: %v", err)
+	}
+
+	// "../" traversal out of the jail subtree: forbidden.
+	traversal := filepath.Join(sub, "..", "sibling", "file.txt")
+	if _, err := jailed.Resolve(traversal); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for traversal out of jail, got: %v", err)
+	}
+}
+
+// TestJailed_OutsideGlobalRootsDeniesEverything verifies that requesting a
+// per-device jailRoot OUTSIDE the agent's configured global roots results in
+// an Ops that denies ALL paths — including paths that would otherwise be
+// allowed by the global root. This is the "never widen access" guarantee:
+// fsops itself refuses to honor a jail it can't intersect.
+func TestJailed_OutsideGlobalRootsDeniesEverything(t *testing.T) {
+	ops, root := setupJail(t)
+	outside := t.TempDir()
+
+	jailed := ops.Jailed(outside)
+
+	// The extraRoot itself is denied.
+	if _, err := jailed.Resolve(filepath.Join(outside, "file.txt")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for jailRoot outside global roots, got: %v", err)
+	}
+	// Even paths inside the (now-irrelevant) global root are denied.
+	if _, err := jailed.Resolve(filepath.Join(root, "file.txt")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for global-root path under a deny-all jail, got: %v", err)
+	}
+}
+
+// TestJailed_NoGlobalRootsUsesExtraRootAsSoleRoot verifies that when the base
+// Ops has NO configured roots (no global jail — New(nil, false)), Jailed
+// restricts access to exactly the given extraRoot subtree.
+func TestJailed_NoGlobalRootsUsesExtraRootAsSoleRoot(t *testing.T) {
+	ops := New(nil, false)
+	sub := t.TempDir()
+	outside := t.TempDir()
+
+	jailed := ops.Jailed(sub)
+
+	if _, err := jailed.Resolve(filepath.Join(sub, "file.txt")); err != nil {
+		t.Fatalf("expected access inside jailRoot, got: %v", err)
+	}
+	if _, err := jailed.Resolve(filepath.Join(outside, "file.txt")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden outside jailRoot, got: %v", err)
+	}
+}
+
+// TestJailed_CopyMoveDestOutsideJailForbidden verifies that Copy and Move
+// report FORBIDDEN (not OK) when either the source or the destDir is outside
+// a per-device jail — covering the "copy/move whose destDir is outside the
+// jail" and "source outside the jail" cases required for H2.
+func TestJailed_CopyMoveDestOutsideJailForbidden(t *testing.T) {
+	ops, root := setupJail(t)
+
+	// Jail subtree: root/jailX/sub.
+	jailSub := filepath.Join(root, "jailX", "sub")
+	if err := os.MkdirAll(jailSub, 0o755); err != nil {
+		t.Fatalf("MkdirAll jailSub: %v", err)
+	}
+	// A file inside the jail, to use as a source for the "dest outside jail" case.
+	insideFile := filepath.Join(jailSub, "file.txt")
+	if err := os.WriteFile(insideFile, []byte("data"), 0o644); err != nil {
+		t.Fatalf("WriteFile insideFile: %v", err)
+	}
+	// A directory outside the jail (but inside the global root) — used both
+	// as a forbidden destDir and as a forbidden source.
+	outsideDir := filepath.Join(root, "outside")
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll outsideDir: %v", err)
+	}
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0o644); err != nil {
+		t.Fatalf("WriteFile outsideFile: %v", err)
+	}
+
+	jailed := ops.Jailed(jailSub)
+
+	// Source inside jail, destDir outside jail: FORBIDDEN.
+	copyResults := jailed.Copy([]string{insideFile}, outsideDir, false, false)
+	if len(copyResults) != 1 || copyResults[0].OK || copyResults[0].Error == nil || copyResults[0].Error.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN for copy with destDir outside jail, got: %+v", copyResults)
+	}
+	moveResults := jailed.Move([]string{insideFile}, outsideDir, false, false)
+	if len(moveResults) != 1 || moveResults[0].OK || moveResults[0].Error == nil || moveResults[0].Error.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN for move with destDir outside jail, got: %+v", moveResults)
+	}
+
+	// Source outside jail, destDir inside jail: FORBIDDEN.
+	copyResults2 := jailed.Copy([]string{outsideFile}, jailSub, false, false)
+	if len(copyResults2) != 1 || copyResults2[0].OK || copyResults2[0].Error == nil || copyResults2[0].Error.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN for copy with source outside jail, got: %+v", copyResults2)
+	}
+	moveResults2 := jailed.Move([]string{outsideFile}, jailSub, false, false)
+	if len(moveResults2) != 1 || moveResults2[0].OK || moveResults2[0].Error == nil || moveResults2[0].Error.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN for move with source outside jail, got: %+v", moveResults2)
+	}
+
+	// Sanity: the outside file/dir are untouched.
+	if _, err := os.Stat(outsideFile); err != nil {
+		t.Fatalf("expected outsideFile to survive, stat err: %v", err)
+	}
+	if _, err := os.Stat(insideFile); err != nil {
+		t.Fatalf("expected insideFile to survive, stat err: %v", err)
+	}
+}

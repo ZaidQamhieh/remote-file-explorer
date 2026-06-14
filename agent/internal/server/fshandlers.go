@@ -27,6 +27,7 @@ func drivesHandler() http.HandlerFunc {
 
 func listDirHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
 		if path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path query param required")
@@ -52,6 +53,7 @@ func listDirHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func deleteHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var paths []string
 
 		// Accept either ?path= query param or JSON body with paths array.
@@ -82,6 +84,7 @@ func deleteHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func createFolderHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Path string `json:"path"`
 		}
@@ -102,6 +105,7 @@ func createFolderHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func createFileHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Path string `json:"path"`
 		}
@@ -122,6 +126,7 @@ func createFileHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func renameHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Src string `json:"src"`
 			Dst string `json:"dst"`
@@ -143,6 +148,7 @@ func renameHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Sources   []string `json:"sources"`
 			DestDir   string   `json:"destDir"`
@@ -162,6 +168,7 @@ func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Sources   []string `json:"sources"`
 			DestDir   string   `json:"destDir"`
@@ -181,6 +188,7 @@ func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 
 func metaHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
 		if path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")

@@ -249,6 +249,7 @@ func parseSearchFilters(q url.Values) (*searchFilters, string, string) {
 
 func searchHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()
 
 		q := strings.TrimSpace(query.Get("q"))

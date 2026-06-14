@@ -21,6 +21,7 @@ const maxThumbSize = 1024
 
 func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
 		if path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")

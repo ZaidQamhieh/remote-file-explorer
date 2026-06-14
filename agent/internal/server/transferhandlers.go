@@ -22,6 +22,7 @@ import (
 
 func downloadHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
 		if path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
@@ -60,6 +61,7 @@ const MaxContentBytes int64 = 5 << 20 // 5 MiB
 
 func writeContentHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
 		if path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
@@ -106,6 +108,7 @@ const maxChunkSize = 32 * 1024 * 1024 // 32 MiB
 
 func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		var req struct {
 			Path      string `json:"path"`
 			Size      int64  `json:"size"`
@@ -229,7 +232,22 @@ func uploadChunkHandler(tm *transfer.Manager) http.HandlerFunc {
 
 func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		id := chi.URLParam(r, "id")
+
+		// Re-check the session's target path against the calling device's
+		// jail before completing. The path was already validated against the
+		// jail in effect at /transfers (POST) time, but a transfer session
+		// isn't otherwise scoped to the device that opened it — so a jailed
+		// device must not be able to "complete" (i.e. trigger the final
+		// rename for) a session targeting a path outside its own jail.
+		if t, err := tm.Status(id); err == nil && t != nil {
+			if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
+				handleFsError(w, resolveErr)
+				return
+			}
+		}
+
 		_, targetPath, err := tm.Complete(id)
 		if err != nil {
 			if errors.Is(err, transfer.ErrNotFound) {

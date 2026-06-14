@@ -107,6 +107,14 @@ CREATE TABLE IF NOT EXISTS transfers (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add the per-device path-jail column (H2). Empty means "no per-device
+	// restriction" — the device gets the agent's full configured root jail,
+	// preserving today's behavior for existing rows.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN jail_root TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -122,6 +130,7 @@ type Device struct {
 	Revoked     bool
 	LastAddress string
 	LastVersion string
+	JailRoot    string
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -182,7 +191,7 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices WHERE token_hash=?`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -206,7 +215,7 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion)
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +234,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion); err != nil {
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
@@ -237,7 +246,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +303,26 @@ func (s *DB) RevokeDevice(id string) error {
 // devices so the paired-devices list doesn't accumulate stale entries.
 func (s *DB) DeleteDevice(id string) error {
 	_, err := s.db.Exec(`DELETE FROM devices WHERE id=?`, id)
+	return err
+}
+
+// GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
+func (s *DB) GetDeviceByID(id string) (*Device, error) {
+	row := s.db.QueryRow(
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices WHERE id=?`, id,
+	)
+	d, err := scanDevice(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return d, err
+}
+
+// SetDeviceJail sets (or clears, if jailRoot is "") the per-device path jail
+// for device id (H2). The caller is responsible for validating jailRoot
+// before calling this — see setDeviceJailHandler in the server package.
+func (s *DB) SetDeviceJail(id, jailRoot string) error {
+	_, err := s.db.Exec(`UPDATE devices SET jail_root=? WHERE id=?`, jailRoot, id)
 	return err
 }
 

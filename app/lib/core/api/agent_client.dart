@@ -216,11 +216,27 @@ class AgentClient {
         data['message'] as String? ?? e.message ?? '',
       );
     }
-    return AgentApiException(
-      e.response?.statusCode ?? 0,
-      'UNKNOWN',
-      e.message ?? e.toString(),
-    );
+    // No HTTP response body means the request never completed — a dropped
+    // connection or timeout, not a server error. Surface that as a readable
+    // CONNECTION error instead of the opaque "UNKNOWN" catch-all (this is what
+    // a flaky network during the large APK download used to report).
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return AgentApiException(
+          0,
+          'CONNECTION',
+          'Connection lost — check your network and try again.',
+        );
+      default:
+        return AgentApiException(
+          e.response?.statusCode ?? 0,
+          'UNKNOWN',
+          e.message ?? e.toString(),
+        );
+    }
   }
 
   /// Converts [e] to an [AgentApiException] and throws it — *unless* [e] is
@@ -757,7 +773,21 @@ class AgentClient {
     }
   }
 
-  /// Downloads the latest APK to [localFile], reporting [onProgress].
+  /// Downloads the latest APK to [localFile], reporting [onProgress] as
+  /// *absolute* bytes received / total (i.e. including any [startByte] already
+  /// on disk), so the percentage stays honest across a resume.
+  ///
+  /// Supports HTTP Range resumption — the same mechanism as [downloadFile].
+  /// Pass [startByte] to skip data already present in [localFile] (it must
+  /// already contain exactly [startByte] bytes); 0 (the default) starts a
+  /// fresh download that overwrites/truncates the file. The 77 MB APK over
+  /// cellular/Tailscale is the download most likely to be interrupted, so a
+  /// dropped connection should leave the partial file in place for a resume
+  /// rather than forcing a full re-download — hence `deleteOnError: false`.
+  ///
+  /// If a ranged request (`startByte > 0`) is answered with a full `200 OK`
+  /// instead of `206 Partial Content`, the (now-corrupt) partial is deleted
+  /// and [RangeNotSatisfiedException] is thrown so the caller restarts from 0.
   ///
   /// Pass [cancelToken] to allow aborting an in-flight download (e.g. the
   /// user taps Cancel on the update progress dialog). A cancellation surfaces
@@ -766,18 +796,41 @@ class AgentClient {
   /// distinguish "user cancelled" from a real download failure.
   Future<void> downloadApk({
     required File localFile,
+    int startByte = 0,
     void Function(int received, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
     try {
-      await _dio.download(
+      final headers = <String, dynamic>{};
+      if (startByte > 0) {
+        headers['Range'] = 'bytes=$startByte-';
+      }
+      final response = await _dio.download(
         '/app/download',
         localFile.path,
-        options: Options(responseType: ResponseType.stream),
-        deleteOnError: true,
+        options: Options(headers: headers, responseType: ResponseType.stream),
+        deleteOnError: false,
         cancelToken: cancelToken,
-        onReceiveProgress: onProgress,
+        fileAccessMode:
+            startByte > 0 ? FileAccessMode.append : FileAccessMode.write,
+        // Report absolute progress so a resumed download doesn't restart at 0%.
+        onReceiveProgress: onProgress == null
+            ? null
+            : (received, total) => onProgress(
+                  startByte + received,
+                  total > 0 ? startByte + total : total,
+                ),
       );
+
+      if (startByte > 0 && response.statusCode != 206) {
+        // Server ignored Range and sent the whole file, which we just appended
+        // onto the existing partial — it's now corrupt. Delete and signal the
+        // caller to restart from 0.
+        if (await localFile.exists()) {
+          await localFile.delete();
+        }
+        throw RangeNotSatisfiedException();
+      }
     } on DioException catch (e) {
       _throwTransferError(e);
     }

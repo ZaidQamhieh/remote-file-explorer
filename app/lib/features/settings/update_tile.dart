@@ -271,8 +271,14 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       _errorMsg = null;
     });
     try {
+      // Resume from whatever is already on disk. The APK is named for this
+      // release's versionCode and stale APKs were pruned before the dialog
+      // opened, so any existing bytes belong to exactly this download.
+      final startByte =
+          await widget.apk.exists() ? await widget.apk.length() : 0;
       await widget.client.downloadApk(
         localFile: widget.apk,
+        startByte: startByte,
         cancelToken: _cancelToken,
         onProgress: (received, total) {
           if (!mounted) return;
@@ -284,15 +290,26 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         },
       );
       await _install();
+    } on RangeNotSatisfiedException {
+      // Server couldn't honor the resume (it deleted the corrupt partial);
+      // restart cleanly from the beginning.
+      if (mounted) await _download();
     } on DioException catch (e) {
       if (!mounted) return;
       if (e.type == DioExceptionType.cancel) {
+        // Partial bytes are kept on disk; Retry resumes from here.
         setState(() => _stage = _Stage.cancelled);
         return;
       }
       setState(() {
         _stage = _Stage.error;
         _errorMsg = '$e';
+      });
+    } on AgentApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _stage = _Stage.error;
+        _errorMsg = e.message.isNotEmpty ? e.message : '$e';
       });
     } catch (e) {
       if (!mounted) return;
@@ -373,7 +390,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       case _Stage.error:
         return Text(_errorMsg ?? 'Something went wrong.');
       case _Stage.cancelled:
-        return const Text('Download cancelled.');
+        return const Text('Download paused. Retry to resume where it left off.');
     }
   }
 

@@ -21,6 +21,9 @@ jobs:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
 
+      - name: gofmt check
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo '^ run gofmt -w'; exit 1; }
+
       - name: go vet
         run: go vet ./...
 
@@ -45,6 +48,9 @@ jobs:
 
       - name: flutter pub get
         run: flutter pub get
+
+      - name: dart format check
+        run: dart format --output=none --set-exit-if-changed .
 
       - name: flutter analyze
         run: flutter analyze

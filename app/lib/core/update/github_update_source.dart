@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -31,12 +32,17 @@ class GithubUpdateSource {
   /// empty; network/HTTP errors are rethrown as [DioException] so callers can
   /// distinguish "checked, no release" from "the check itself failed".
   Future<AppRelease?> latestRelease() async {
-    final res = await _dio.get<Map<String, dynamic>>(
+    // GitHub serves release assets with a non-JSON content type
+    // (octet-stream), so Dio does NOT auto-decode the body — it returns a
+    // String. Fetch it as plain text and parse it ourselves; requesting
+    // <Map> here caused a "String is not a subtype of Map" cast crash.
+    final res = await _dio.get<String>(
       githubLatestManifestUrl,
-      options: Options(responseType: ResponseType.json),
+      options: Options(responseType: ResponseType.plain),
     );
-    final data = res.data;
-    if (data == null) return null;
+    final body = res.data;
+    if (body == null || body.trim().isEmpty) return null;
+    final data = jsonDecode(body) as Map<String, dynamic>;
     return AppRelease.fromJson(data);
   }
 

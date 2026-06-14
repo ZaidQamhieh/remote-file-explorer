@@ -80,12 +80,14 @@ func listDevicesHandler(db *store.DB) http.HandlerFunc {
 		out := make([]map[string]any, 0, len(devices))
 		for _, d := range devices {
 			out = append(out, map[string]any{
-				"id":       d.ID,
-				"label":    d.Label,
-				"created":  d.Created.Unix(),
-				"lastSeen": d.LastSeen.Unix(),
-				"revoked":  d.Revoked,
-				"current":  cur != nil && cur.ID == d.ID,
+				"id":          d.ID,
+				"label":       d.Label,
+				"created":     d.Created.Unix(),
+				"lastSeen":    d.LastSeen.Unix(),
+				"revoked":     d.Revoked,
+				"current":     cur != nil && cur.ID == d.ID,
+				"lastAddress": d.LastAddress,
+				"lastVersion": d.LastVersion,
 			})
 		}
 		writeJSON(w, http.StatusOK, out)

@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 
@@ -38,7 +39,12 @@ func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid or revoked token")
 				return
 			}
-			_ = db.TouchDevice(device.ID)
+			addr := r.RemoteAddr
+			if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+				addr = host
+			}
+			ver := r.Header.Get("X-RFE-Client-Version")
+			_ = db.TouchDevice(device.ID, addr, ver)
 
 			ctx := context.WithValue(r.Context(), deviceCtxKey, device)
 			next.ServeHTTP(w, r.WithContext(ctx))

@@ -9,6 +9,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/format.dart';
 import 'update_tile.dart';
 import 'widgets/device_view_overrides_section.dart';
 import 'widgets/settings_section.dart';
@@ -519,12 +520,15 @@ class _DeviceRow extends StatelessWidget {
     if (d.current) {
       status = 'This device';
       statusColor = Brand.online;
-    } else if (d.revoked) {
-      status = 'Revoked';
-      statusColor = scheme.error;
     } else {
-      status = 'Active · last seen ${d.lastSeen.toLocal()}';
-      statusColor = Brand.online;
+      final parts = <String>[
+        d.revoked ? 'Revoked' : 'Active',
+        if (d.lastAddress.isNotEmpty) d.lastAddress,
+        if (d.lastVersion.isNotEmpty) 'v${d.lastVersion}',
+        formatRelative(d.lastSeen.toLocal()),
+      ];
+      status = parts.join(' · ');
+      statusColor = d.revoked ? scheme.error : Brand.online;
     }
 
     Widget? trailing;

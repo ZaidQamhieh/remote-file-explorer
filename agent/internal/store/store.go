@@ -94,6 +94,19 @@ CREATE TABLE IF NOT EXISTS transfers (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add columns recording the client's last-seen network address and
+	// last-reported app version, refreshed on every authenticated request.
+	// Ignored when the columns already exist.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN last_address TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN last_version TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -101,12 +114,14 @@ CREATE TABLE IF NOT EXISTS transfers (
 
 // Device represents a paired device.
 type Device struct {
-	ID        string
-	Label     string
-	TokenHash string
-	Created   time.Time
-	LastSeen  time.Time
-	Revoked   bool
+	ID          string
+	Label       string
+	TokenHash   string
+	Created     time.Time
+	LastSeen    time.Time
+	Revoked     bool
+	LastAddress string
+	LastVersion string
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -167,7 +182,7 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version FROM devices WHERE token_hash=?`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -176,9 +191,14 @@ func (s *DB) DeviceByToken(token string) (*Device, error) {
 	return d, err
 }
 
-// TouchDevice updates last_seen for the given id.
-func (s *DB) TouchDevice(id string) error {
-	_, err := s.db.Exec(`UPDATE devices SET last_seen=? WHERE id=?`, time.Now().Unix(), id)
+// TouchDevice updates last_seen, last_address, and last_version for the given
+// id. Called on every authenticated request to record the caller's most
+// recent network address and reported app version.
+func (s *DB) TouchDevice(id, address, version string) error {
+	_, err := s.db.Exec(
+		`UPDATE devices SET last_seen=?, last_address=?, last_version=? WHERE id=?`,
+		time.Now().Unix(), address, version, id,
+	)
 	return err
 }
 
@@ -186,7 +206,7 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked)
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +225,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked); err != nil {
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
@@ -217,7 +237,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}

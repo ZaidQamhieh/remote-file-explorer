@@ -56,6 +56,7 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	db, _ := newTestDeps(t)
 	_ = db.CreateDevice("id-keep", "keeper", "tok-keep")
 	_ = db.CreateDevice("id-gone", "gone", "tok-gone")
+	_ = db.TouchDevice("id-keep", "192.168.1.42", "1.10.0+18")
 
 	// Current device = the keeper (simulate auth context).
 	cur, _ := db.DeviceByToken("tok-keep")
@@ -69,6 +70,24 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &list)
 	if len(list) != 2 {
 		t.Fatalf("expected 2 devices, got %d", len(list))
+	}
+
+	// The keeper's row reflects its recorded address/version; the untouched
+	// device's row has the empty-string defaults.
+	var keeper, goneRow map[string]any
+	for _, d := range list {
+		switch d["id"] {
+		case "id-keep":
+			keeper = d
+		case "id-gone":
+			goneRow = d
+		}
+	}
+	if keeper == nil || keeper["lastAddress"] != "192.168.1.42" || keeper["lastVersion"] != "1.10.0+18" {
+		t.Fatalf("expected keeper lastAddress/lastVersion recorded, got %v", keeper)
+	}
+	if goneRow == nil || goneRow["lastAddress"] != "" || goneRow["lastVersion"] != "" {
+		t.Fatalf("expected gone device to have empty lastAddress/lastVersion, got %v", goneRow)
 	}
 
 	// Revoking self is rejected (409).

@@ -186,6 +186,66 @@ func TestDeleteDeviceRemovesRow(t *testing.T) {
 	}
 }
 
+// TestTouchDeviceRecordsAddressAndVersion verifies TouchDevice persists the
+// caller's last network address and reported app version, that ListDevices
+// and DeviceByToken round-trip them, and that pre-existing rows (created
+// before these columns existed in spirit) default to "".
+func TestTouchDeviceRecordsAddressAndVersion(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Freshly created row defaults to "" for both new columns.
+	d, err := db.DeviceByToken("tok-a")
+	if err != nil {
+		t.Fatalf("by token: %v", err)
+	}
+	if d == nil || d.LastAddress != "" || d.LastVersion != "" {
+		t.Fatalf("expected empty defaults, got %+v", d)
+	}
+
+	// TouchDevice records address + version.
+	if err := db.TouchDevice("id-1", "192.168.1.42", "1.10.0+18"); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+
+	// Round-trips via DeviceByToken.
+	d, err = db.DeviceByToken("tok-a")
+	if err != nil {
+		t.Fatalf("by token after touch: %v", err)
+	}
+	if d == nil || d.LastAddress != "192.168.1.42" || d.LastVersion != "1.10.0+18" {
+		t.Fatalf("expected address/version recorded, got %+v", d)
+	}
+
+	// Round-trips via ListDevices.
+	list, err := db.ListDevices()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].LastAddress != "192.168.1.42" || list[0].LastVersion != "1.10.0+18" {
+		t.Fatalf("expected address/version in list, got %+v", list)
+	}
+
+	// A subsequent touch with an empty version overwrites the previous one.
+	if err := db.TouchDevice("id-1", "100.64.0.5", ""); err != nil {
+		t.Fatalf("touch 2: %v", err)
+	}
+	d, err = db.DeviceByToken("tok-a")
+	if err != nil {
+		t.Fatalf("by token after touch 2: %v", err)
+	}
+	if d == nil || d.LastAddress != "100.64.0.5" || d.LastVersion != "" {
+		t.Fatalf("expected updated address and cleared version, got %+v", d)
+	}
+}
+
 // TestOpenEnablesWAL verifies the DSN params from Open actually take effect:
 // modernc.org/sqlite only honors `_pragma=...` query params, so the
 // mattn-style `_journal_mode`/`_busy_timeout` keys would otherwise be

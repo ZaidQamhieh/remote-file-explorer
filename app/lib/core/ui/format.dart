@@ -20,3 +20,15 @@ String formatSize(int? bytes) {
 String formatDate(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
     '${dt.day.toString().padLeft(2, '0')}';
+
+/// Compact relative time for [dt] vs. now (e.g. `just now`, `5m ago`,
+/// `3h ago`, `2d ago`), falling back to [formatDate] for anything 7 days or
+/// older.
+String formatRelative(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return formatDate(dt);
+}

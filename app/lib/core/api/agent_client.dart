@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
+import '../app_info.dart';
 import '../models/agent_settings.dart';
 import '../models/app_release.dart';
 import '../models/device.dart';
@@ -120,9 +121,10 @@ class AgentClient {
       BaseOptions(
         baseUrl: _baseUrlFor(_addresses[_addrIndex]),
         connectTimeout: const Duration(seconds: 10),
-        headers: deviceToken == null
-            ? null
-            : {'Authorization': 'Bearer $deviceToken'},
+        headers: {
+          if (deviceToken != null) 'Authorization': 'Bearer $deviceToken',
+          'X-RFE-Client-Version': appClientVersion,
+        },
       ),
     )..httpClientAdapter = adapter;
 

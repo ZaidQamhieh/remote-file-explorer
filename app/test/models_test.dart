@@ -222,6 +222,34 @@ void main() {
       expect(d.current, isTrue);
       expect(d.revoked, isFalse);
     });
+
+    test('parses lastAddress and lastVersion', () {
+      final d = Device.fromJson({
+        'id': 'x',
+        'label': 'phone',
+        'created': 1000,
+        'lastSeen': 2000,
+        'revoked': false,
+        'current': false,
+        'lastAddress': '192.168.1.42:8765',
+        'lastVersion': '1.10.0+18',
+      });
+      expect(d.lastAddress, '192.168.1.42:8765');
+      expect(d.lastVersion, '1.10.0+18');
+    });
+
+    test('defaults lastAddress and lastVersion to empty when absent', () {
+      final d = Device.fromJson({
+        'id': 'x',
+        'label': 'phone',
+        'created': 1000,
+        'lastSeen': 2000,
+        'revoked': false,
+        'current': false,
+      });
+      expect(d.lastAddress, '');
+      expect(d.lastVersion, '');
+    });
   });
 
   group('AppRelease', () {

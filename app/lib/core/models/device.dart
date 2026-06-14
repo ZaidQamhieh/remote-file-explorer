@@ -7,6 +7,8 @@ class Device {
     required this.lastSeen,
     required this.revoked,
     required this.current,
+    this.lastAddress = '',
+    this.lastVersion = '',
   });
 
   final String id;
@@ -15,6 +17,14 @@ class Device {
   final DateTime lastSeen;
   final bool revoked;
   final bool current;
+
+  /// The network address (host:port or IP) the device last connected from.
+  /// Empty if unknown (e.g. not seen since the agent was upgraded).
+  final String lastAddress;
+
+  /// The app version (`versionName+buildNumber`) the device last connected
+  /// with, e.g. `1.10.0+18`. Empty if unknown.
+  final String lastVersion;
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
         id: json['id'] as String,
@@ -25,5 +35,7 @@ class Device {
             ((json['lastSeen'] as num?)?.toInt() ?? 0) * 1000),
         revoked: json['revoked'] as bool? ?? false,
         current: json['current'] as bool? ?? false,
+        lastAddress: json['lastAddress'] as String? ?? '',
+        lastVersion: json['lastVersion'] as String? ?? '',
       );
 }

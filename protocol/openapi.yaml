@@ -7,7 +7,10 @@ info:
     metadata; binary streams for file content. All routes except /pair and /health require
     a bearer device token. A WebSocket channel (/v1/events) for live progress and filesystem
     change-event push is planned for a future wave but does not exist yet — clients must poll
-    (e.g. GET /transfers/{id}, GET /fs) for now.
+    (e.g. GET /transfers/{id}, GET /fs) for now. Clients may send an optional
+    `X-RFE-Client-Version` header (e.g. "1.10.0+18") on every authenticated request; the
+    agent records this plus the caller's network address against the device row and
+    surfaces both via GET /devices (see Device.lastAddress / Device.lastVersion).
 servers:
   - url: https://{host}:{port}/v1
     variables:
@@ -461,6 +464,11 @@ paths:
   /devices:
     get:
       summary: List paired devices
+      description: >
+        Each entry includes lastAddress and lastVersion, captured from the device's most
+        recent authenticated request (client IP and the X-RFE-Client-Version header,
+        respectively). Both are "" if the device has never made an authenticated request
+        with that information.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -558,6 +566,8 @@ components:
         lastSeen: { type: integer, format: int64 }
         revoked: { type: boolean }
         current: { type: boolean }
+        lastAddress: { type: string, description: "Client IP from the last authenticated request (port stripped); empty if never seen." }
+        lastVersion: { type: string, description: "Value of the last X-RFE-Client-Version header sent by this device; empty if never reported." }
     AppRelease:
       type: object
       properties:

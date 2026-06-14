@@ -26,3 +26,6 @@ Thumbs.db
 
 # Agent worktrees (local scratch space, never commit)
 /.claude/worktrees/
+
+# Personal Claude Code settings (per-user, not team config)
+/.claude/settings.local.json

@@ -254,8 +254,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         DeviceViewOverridesSection(hostId: widget.host.id),
         const SizedBox(height: Spacing.md),
-        const FileVisibilitySection(),
-        const SizedBox(height: Spacing.md),
         DeviceVisibilityOverrideSection(hostId: widget.host.id),
         const SizedBox(height: Spacing.md),
         SettingsSection(

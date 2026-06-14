@@ -1,21 +1,17 @@
-import 'dart:convert';
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/entry.dart';
 import '../ui/entry_leading.dart';
 
-/// Global file-visibility preferences: which dotfiles/extensions/exact names
-/// are hidden from listings by default, plus the pure filter logic that
-/// decides whether a given [Entry] should be hidden. Persisted in
-/// [SharedPreferences] (applies to all hosts), following the same
-/// load-then-persist pattern as `core/storage/view_prefs.dart`
-/// ([ViewPrefsNotifier]).
-
-const _kHideDotfilesKey = 'rfe_hide_dotfiles_v1';
-const _kHiddenExtensionsKey = 'rfe_hidden_extensions_v1';
-const _kHiddenNamesKey = 'rfe_hidden_names_v1';
+/// File-visibility preferences: which dotfiles/extensions/exact names are
+/// hidden from listings, plus the pure filter logic that decides whether a
+/// given [Entry] should be hidden, and the one-tap presets.
+///
+/// This file holds only the immutable [VisibilityPrefs] value type, the pure
+/// filters, and the presets — they are reused by both the resolver and the
+/// widgets. *Persistence and resolution* (app default + optional per-device
+/// override) now live in the two-tier settings model (`core/settings/`),
+/// mirroring how `view_prefs.dart` relates to the settings controller. The
+/// mutation API the settings controller exposes (setHideDotfiles, applyPreset,
+/// …) is documented there.
 
 // ---------------------------------------------------------------------------
 // Presets
@@ -109,7 +105,26 @@ class VisibilityPrefs {
         hiddenExtensions: hiddenExtensions ?? this.hiddenExtensions,
         hiddenNames: hiddenNames ?? this.hiddenNames,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VisibilityPrefs &&
+      other.hideDotfiles == hideDotfiles &&
+      _setEquals(other.hiddenExtensions, hiddenExtensions) &&
+      _setEquals(other.hiddenNames, hiddenNames);
+
+  @override
+  int get hashCode => Object.hash(
+        hideDotfiles,
+        Object.hashAllUnordered(hiddenExtensions),
+        Object.hashAllUnordered(hiddenNames),
+      );
 }
+
+/// Order-independent set equality used by [VisibilityPrefs]'s `==` so two
+/// prefs with the same contents (regardless of iteration order) compare equal.
+bool _setEquals(Set<String> a, Set<String> b) =>
+    a.length == b.length && a.containsAll(b);
 
 // ---------------------------------------------------------------------------
 // Pure filter logic
@@ -166,131 +181,3 @@ List<Entry> filterHiddenEntries(List<Entry> entries, VisibilityPrefs prefs) =>
 /// picker has no files to apply them to.
 bool isEntryHiddenInPicker(Entry entry, VisibilityPrefs prefs) =>
     prefs.hideDotfiles && isDotfile(entry.name);
-
-// ---------------------------------------------------------------------------
-// Notifier
-// ---------------------------------------------------------------------------
-
-/// Loads and persists [VisibilityPrefs]. Mutating methods update
-/// [SharedPreferences] immediately and then update [state], following the
-/// same load-then-persist pattern as `ViewPrefsNotifier` in
-/// `view_prefs.dart`.
-class VisibilityPrefsNotifier extends AsyncNotifier<VisibilityPrefs> {
-  SharedPreferences? _prefs;
-
-  @override
-  Future<VisibilityPrefs> build() async {
-    final prefs = await SharedPreferences.getInstance();
-    _prefs = prefs;
-
-    final hideDotfiles = prefs.getBool(_kHideDotfilesKey) ?? true;
-
-    final rawExtensions = prefs.getString(_kHiddenExtensionsKey);
-    final hiddenExtensions = rawExtensions == null
-        ? <String>{}
-        : (jsonDecode(rawExtensions) as List).cast<String>().toSet();
-
-    final rawNames = prefs.getString(_kHiddenNamesKey);
-    final hiddenNames = rawNames == null
-        ? <String>{}
-        : (jsonDecode(rawNames) as List).cast<String>().toSet();
-
-    return VisibilityPrefs(
-      hideDotfiles: hideDotfiles,
-      hiddenExtensions: hiddenExtensions,
-      hiddenNames: hiddenNames,
-    );
-  }
-
-  /// Sets whether dotfiles/dotfolders are hidden, persisting the choice.
-  Future<void> setHideDotfiles(bool hide) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    await _prefs?.setBool(_kHideDotfilesKey, hide);
-    state = AsyncData(current.copyWith(hideDotfiles: hide));
-  }
-
-  /// Replaces the set of hidden extensions, persisting the choice.
-  Future<void> setHiddenExtensions(Set<String> extensions) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    final normalized = extensions.map((e) => e.toLowerCase()).toSet();
-    await _prefs?.setString(_kHiddenExtensionsKey, jsonEncode(normalized.toList()));
-    state = AsyncData(current.copyWith(hiddenExtensions: normalized));
-  }
-
-  /// Replaces the set of hidden exact names, persisting the choice.
-  Future<void> setHiddenNames(Set<String> names) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    await _prefs?.setString(_kHiddenNamesKey, jsonEncode(names.toList()));
-    state = AsyncData(current.copyWith(hiddenNames: names));
-  }
-
-  /// Adds a single exact name (e.g. `Thumbs.db`) to the hidden set. No-op for
-  /// blank input or a name already present (case-insensitively).
-  Future<void> addName(String name) async {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    if (current.hiddenNames.any((n) => n.toLowerCase() == trimmed.toLowerCase())) {
-      return;
-    }
-    await setHiddenNames({...current.hiddenNames, trimmed});
-  }
-
-  /// Removes a single exact name from the hidden set (case-insensitive match).
-  Future<void> removeName(String name) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    final lower = name.toLowerCase();
-    await setHiddenNames(
-      current.hiddenNames.where((n) => n.toLowerCase() != lower).toSet(),
-    );
-  }
-
-  /// Adds a single extension (lowercase, without the leading dot — leading
-  /// dots and surrounding whitespace are stripped) to the hidden set. No-op
-  /// if the result is empty.
-  Future<void> addExtension(String extension) async {
-    final normalized = extension.trim().toLowerCase().replaceFirst(RegExp(r'^\.+'), '');
-    if (normalized.isEmpty) return;
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    await setHiddenExtensions({...current.hiddenExtensions, normalized});
-  }
-
-  /// Removes a single extension from the hidden set.
-  Future<void> removeExtension(String extension) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    final updated = Set<String>.from(current.hiddenExtensions)
-      ..remove(extension.toLowerCase());
-    await setHiddenExtensions(updated);
-  }
-
-  /// Applies [preset], adding its extensions/names to the current sets
-  /// (additive — never removes existing entries).
-  Future<void> applyPreset(VisibilityPreset preset) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    await setHiddenExtensions({...current.hiddenExtensions, ...preset.extensions});
-    await setHiddenNames({...current.hiddenNames, ...preset.names});
-  }
-
-  /// Removes [preset]'s extensions/names from the current sets — the inverse
-  /// of [applyPreset]. Entries not currently present are ignored. Names are
-  /// matched case-insensitively (mirroring [isEntryHidden]). Note: an
-  /// extension/name shared with another applied preset is removed too, which
-  /// will visually de-select that overlapping preset's chip as well.
-  Future<void> removePreset(VisibilityPreset preset) async {
-    final current = state.valueOrNull ?? const VisibilityPrefs();
-    final lowerToRemove = preset.names.map((n) => n.toLowerCase()).toSet();
-    await setHiddenExtensions(
-      current.hiddenExtensions.difference(preset.extensions),
-    );
-    await setHiddenNames(
-      current.hiddenNames
-          .where((n) => !lowerToRemove.contains(n.toLowerCase()))
-          .toSet(),
-    );
-  }
-}
-
-final visibilityPrefsProvider =
-    AsyncNotifierProvider<VisibilityPrefsNotifier, VisibilityPrefs>(
-  VisibilityPrefsNotifier.new,
-);

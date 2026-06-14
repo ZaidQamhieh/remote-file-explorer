@@ -7,8 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/settings/app_settings.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/storage/recent_searches.dart';
-import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
@@ -126,12 +127,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// filtered through the same file-visibility prefs as the explorer
   /// listing.
   ///
-  /// Reads [visibilityPrefsProvider] via `ref.watch` (called only from
-  /// [build], directly or through [_buildBody]) so this screen re-filters
-  /// live if the user changes visibility prefs while it's mounted.
+  /// Reads the resolved per-host file-visibility prefs from the two-tier
+  /// settings model via `ref.watch` (called only from [build], directly or
+  /// through [_buildBody]) so this screen re-filters live if the user changes
+  /// visibility prefs for this host while it's mounted.
   List<Entry> get _results {
-    final prefs = ref.watch(visibilityPrefsProvider).valueOrNull ??
-        const VisibilityPrefs();
+    final settings =
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
+    final prefs = settings.resolveVisibility(widget.host.id);
     return filterSearchResults(_rawResults, prefs,
         includeHidden: _includeHidden);
   }

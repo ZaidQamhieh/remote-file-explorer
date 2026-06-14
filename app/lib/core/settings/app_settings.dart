@@ -1,4 +1,5 @@
 import '../storage/view_prefs.dart';
+import '../storage/visibility_prefs.dart';
 
 /// Two-tier settings model (Wave 0).
 ///
@@ -19,6 +20,7 @@ class AppDefaults {
     this.gridView = false,
     this.density = EntryDensity.comfortable,
     this.sort = const SortOrder(),
+    this.visibility = const VisibilityPrefs(),
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -27,15 +29,23 @@ class AppDefaults {
   final EntryDensity density;
   final SortOrder sort;
 
+  /// Default file-visibility preferences (hide-dotfiles + hidden
+  /// extensions/names). Unlike the view settings this is a small composite
+  /// value, but it resolves the same way: a host either inherits this default
+  /// wholesale or carries its own full [VisibilityPrefs] override.
+  final VisibilityPrefs visibility;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
     SortOrder? sort,
+    VisibilityPrefs? visibility,
   }) =>
       AppDefaults(
         gridView: gridView ?? this.gridView,
         density: density ?? this.density,
         sort: sort ?? this.sort,
+        visibility: visibility ?? this.visibility,
       );
 
   @override
@@ -43,10 +53,11 @@ class AppDefaults {
       other is AppDefaults &&
       other.gridView == gridView &&
       other.density == density &&
-      other.sort == sort;
+      other.sort == sort &&
+      other.visibility == visibility;
 
   @override
-  int get hashCode => Object.hash(gridView, density, sort);
+  int get hashCode => Object.hash(gridView, density, sort, visibility);
 }
 
 /// A single host's overrides. Each field is nullable: `null` = inherit the app
@@ -56,32 +67,46 @@ class AppDefaults {
 /// (nullable) value so callers can clear an override by passing `null` — a
 /// normal `copyWith` can't express "set this back to null".
 class DeviceOverrides {
-  const DeviceOverrides({this.gridView, this.density, this.sort});
+  const DeviceOverrides({
+    this.gridView,
+    this.density,
+    this.sort,
+    this.visibility,
+  });
 
   final bool? gridView;
   final EntryDensity? density;
   final SortOrder? sort;
 
+  /// This host's full file-visibility override, or `null` to inherit the app
+  /// default. Visibility is *wholesale*: when present this is the complete
+  /// [VisibilityPrefs] for the host (no field-level visibility overrides).
+  final VisibilityPrefs? visibility;
+
   /// True when this host overrides nothing — equivalent to having no entry at
   /// all. Such entries are pruned on write so "absent == inherit" stays exact.
-  bool get isEmpty => gridView == null && density == null && sort == null;
+  bool get isEmpty =>
+      gridView == null && density == null && sort == null && visibility == null;
 
-  DeviceOverrides copyWithGridView(bool? value) =>
-      DeviceOverrides(gridView: value, density: density, sort: sort);
-  DeviceOverrides copyWithDensity(EntryDensity? value) =>
-      DeviceOverrides(gridView: gridView, density: value, sort: sort);
-  DeviceOverrides copyWithSort(SortOrder? value) =>
-      DeviceOverrides(gridView: gridView, density: density, sort: value);
+  DeviceOverrides copyWithGridView(bool? value) => DeviceOverrides(
+      gridView: value, density: density, sort: sort, visibility: visibility);
+  DeviceOverrides copyWithDensity(EntryDensity? value) => DeviceOverrides(
+      gridView: gridView, density: value, sort: sort, visibility: visibility);
+  DeviceOverrides copyWithSort(SortOrder? value) => DeviceOverrides(
+      gridView: gridView, density: density, sort: value, visibility: visibility);
+  DeviceOverrides copyWithVisibility(VisibilityPrefs? value) => DeviceOverrides(
+      gridView: gridView, density: density, sort: sort, visibility: value);
 
   @override
   bool operator ==(Object other) =>
       other is DeviceOverrides &&
       other.gridView == gridView &&
       other.density == density &&
-      other.sort == sort;
+      other.sort == sort &&
+      other.visibility == visibility;
 
   @override
-  int get hashCode => Object.hash(gridView, density, sort);
+  int get hashCode => Object.hash(gridView, density, sort, visibility);
 }
 
 /// The effective, resolved view settings for one host — what the explorer
@@ -137,6 +162,12 @@ class SettingsState {
       sort: o.sort ?? app.sort,
     );
   }
+
+  /// Resolves the effective file-visibility prefs for [hostId]:
+  /// `deviceOverride ?? appDefault`. Visibility is wholesale, so this returns
+  /// either the host's full override or the app default unchanged.
+  VisibilityPrefs resolveVisibility(String hostId) =>
+      overridesFor(hostId).visibility ?? app.visibility;
 
   SettingsState copyWith({
     AppDefaults? app,

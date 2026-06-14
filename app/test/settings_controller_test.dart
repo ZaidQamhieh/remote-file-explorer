@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/settings/app_settings.dart';
 import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
+import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Two-tier settings model (Wave 0): app defaults + sparse per-device overrides,
@@ -182,6 +183,199 @@ void main() {
 
       final cleared = withGrid.copyWithGridView(null);
       expect(cleared.isEmpty, isTrue, reason: 'null clears the field');
+    });
+
+    test('copyWithVisibility sets and clears the wholesale override', () {
+      const empty = DeviceOverrides();
+      final withVis =
+          empty.copyWithVisibility(const VisibilityPrefs(hideDotfiles: false));
+      expect(withVis.isEmpty, isFalse);
+      expect(withVis.visibility, const VisibilityPrefs(hideDotfiles: false));
+
+      final cleared = withVis.copyWithVisibility(null);
+      expect(cleared.isEmpty, isTrue, reason: 'null clears the override');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // File-visibility: app default + optional per-device override (wholesale)
+  // ---------------------------------------------------------------------
+  group('visibility resolution precedence', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('default resolves to hideDotfiles-true / empty sets, no override',
+        () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+
+      final v = s.resolveVisibility('any-host');
+      expect(v.hideDotfiles, isTrue);
+      expect(v.hiddenExtensions, isEmpty);
+      expect(v.hiddenNames, isEmpty);
+      expect(s.overridesFor('any-host').visibility, isNull,
+          reason: 'absence == inherit');
+    });
+
+    test('override wins; absence inherits the app default', () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = await load(c);
+
+      // App default hides ".tmp".
+      await n.setHiddenExtensions({'tmp'});
+      // hostA overrides to hide ".log" instead (wholesale).
+      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+
+      final s = c.read(settingsProvider).valueOrNull!;
+      expect(s.resolveVisibility('hostA').hiddenExtensions, {'log'},
+          reason: 'override wins wholesale');
+      expect(s.resolveVisibility('hostB').hiddenExtensions, {'tmp'},
+          reason: 'inherits the app default');
+      expect(s.overridesFor('hostA').visibility, isNotNull);
+      expect(s.overridesFor('hostB').visibility, isNull);
+    });
+
+    test('editing the app default does not affect an overridden host',
+        () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = await load(c);
+
+      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+      await n.setHiddenExtensions({'tmp'}); // app default changes
+
+      final s = c.read(settingsProvider).valueOrNull!;
+      expect(s.resolveVisibility('hostA').hiddenExtensions, {'log'});
+      expect(s.app.visibility.hiddenExtensions, {'tmp'});
+    });
+  });
+
+  group('setDeviceVisibilityOverride seed/clear', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('turning override on seeds from the current resolved value', () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = await load(c);
+
+      // App default: hide dotfiles off + hide ".tmp".
+      await n.setHideDotfiles(false);
+      await n.setHiddenExtensions({'tmp'});
+
+      await n.setDeviceVisibilityOverride('hostA', true);
+      final s = c.read(settingsProvider).valueOrNull!;
+      final vis = s.overridesFor('hostA').visibility;
+      expect(vis, isNotNull);
+      expect(vis!.hideDotfiles, isFalse, reason: 'seeded from app default');
+      expect(vis.hiddenExtensions, {'tmp'});
+    });
+
+    test('turning override off clears it (host falls back to app default)',
+        () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = await load(c);
+
+      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+      expect(
+          c.read(settingsProvider).valueOrNull!.overridesFor('hostA').visibility,
+          isNotNull);
+
+      await n.setDeviceVisibilityOverride('hostA', false);
+      final s = c.read(settingsProvider).valueOrNull!;
+      expect(s.overridesFor('hostA').visibility, isNull);
+      expect(s.hasOverride('hostA'), isFalse, reason: 'host pruned when empty');
+      expect(s.resolveVisibility('hostA').hiddenExtensions, isEmpty,
+          reason: 'back to the app default');
+    });
+
+    test('resetDevice clears a visibility override along with the host entry',
+        () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = await load(c);
+
+      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+      await n.resetDevice('hostA');
+      expect(
+          c.read(settingsProvider).valueOrNull!.overridesFor('hostA').visibility,
+          isNull);
+    });
+
+    test('app-default + per-host overrides survive a fresh container',
+        () async {
+      final c1 = ProviderContainer();
+      final n1 = await load(c1);
+      await n1.setHiddenExtensions({'tmp'}); // app default
+      await n1.setHideDotfiles(false, hostId: 'hostA');
+      await n1.setHiddenNames({'Thumbs.db'}, hostId: 'hostA');
+      c1.dispose();
+
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      final s = await c2.read(settingsProvider.future);
+      expect(s.app.visibility.hiddenExtensions, {'tmp'});
+      final vis = s.resolveVisibility('hostA');
+      expect(vis.hideDotfiles, isFalse);
+      expect(vis.hiddenNames, {'Thumbs.db'});
+      // The override is wholesale: it carries the seeded app-default extension.
+      expect(vis.hiddenExtensions, {'tmp'});
+    });
+  });
+
+  group('visibility migration from legacy global keys', () {
+    test('legacy globals fold into the app default, then are removed',
+        () async {
+      SharedPreferences.setMockInitialValues({
+        'rfe_hide_dotfiles_v1': false,
+        'rfe_hidden_extensions_v1': jsonEncode(['tmp', 'log']),
+        'rfe_hidden_names_v1': jsonEncode(['Thumbs.db']),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+
+      expect(s.app.visibility.hideDotfiles, isFalse);
+      expect(s.app.visibility.hiddenExtensions, {'tmp', 'log'});
+      expect(s.app.visibility.hiddenNames, {'Thumbs.db'});
+
+      // Legacy keys cleaned up; the one-shot flag is set.
+      expect(prefs.containsKey('rfe_hide_dotfiles_v1'), isFalse);
+      expect(prefs.containsKey('rfe_hidden_extensions_v1'), isFalse);
+      expect(prefs.containsKey('rfe_hidden_names_v1'), isFalse);
+      expect(prefs.getBool('settings.visibilityMigrated.v1'), isTrue);
+    });
+
+    test('absent legacy keys yield the defaults', () async {
+      SharedPreferences.setMockInitialValues({});
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+
+      expect(s.app.visibility.hideDotfiles, isTrue);
+      expect(s.app.visibility.hiddenExtensions, isEmpty);
+      expect(s.app.visibility.hiddenNames, isEmpty);
+    });
+
+    test('migration runs once and is not undone by a later edit', () async {
+      SharedPreferences.setMockInitialValues({
+        'rfe_hidden_extensions_v1': jsonEncode(['tmp']),
+      });
+
+      final c1 = ProviderContainer();
+      final n1 = await load(c1);
+      // User later clears the app-default extensions.
+      await n1.setHiddenExtensions(<String>{});
+      c1.dispose();
+
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      final s = await c2.read(settingsProvider.future);
+      expect(s.app.visibility.hiddenExtensions, isEmpty,
+          reason: 'migration is one-shot; it does not resurrect the legacy set');
     });
   });
 }

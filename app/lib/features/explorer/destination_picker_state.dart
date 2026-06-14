@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
+import '../../core/settings/app_settings.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/storage/visibility_prefs.dart';
 import 'explorer_state.dart' show buildPathStack;
 
@@ -88,7 +90,9 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
   /// here too (per [VisibilityPrefs.hideDotfiles]), but extension/exact-name
   /// rules don't apply — the picker only ever lists directories.
   bool _hiddenInPicker(Entry e) {
-    final prefs = ref.read(visibilityPrefsProvider).valueOrNull ?? const VisibilityPrefs();
+    final settings =
+        ref.read(settingsProvider).valueOrNull ?? const SettingsState();
+    final prefs = settings.resolveVisibility(arg.hostId);
     return isEntryHiddenInPicker(e, prefs);
   }
 

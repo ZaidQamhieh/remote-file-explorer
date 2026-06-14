@@ -1,14 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // File-visibility tests: pure filter logic (extensionOf, isDotfile,
-// isEntryHidden, filterHiddenEntries, isEntryHiddenInPicker) plus
-// VisibilityPrefsNotifier persistence/presets, mirroring view_prefs_test.dart
-// (mock SharedPreferences, fresh ProviderContainer per test, restart
-// simulated via a new container/notifier instance).
+// isEntryHidden, filterHiddenEntries, isEntryHiddenInPicker) plus the
+// app-default visibility mutation/persistence/presets — which now live on the
+// two-tier settings controller (the standalone VisibilityPrefsNotifier was
+// folded into it). These exercise the app-default path (`hostId: null`);
+// per-host override precedence is covered in settings_controller_test.dart.
+// Mock SharedPreferences, fresh ProviderContainer per test, restart simulated
+// via a new container/notifier instance.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -134,9 +138,15 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  // VisibilityPrefsNotifier persistence
+  // App-default visibility mutation/persistence (settings controller)
   // ---------------------------------------------------------------------
-  group('VisibilityPrefsNotifier defaults', () {
+
+  // Reads the resolved app-default visibility (hostId-agnostic, since these
+  // exercise the default with no overrides).
+  VisibilityPrefs appVis(ProviderContainer c) =>
+      c.read(settingsProvider).valueOrNull!.app.visibility;
+
+  group('app-default visibility defaults', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
@@ -145,98 +155,92 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      final prefs = await container.read(visibilityPrefsProvider.future);
-      expect(prefs.hideDotfiles, isTrue);
-      expect(prefs.hiddenExtensions, isEmpty);
-      expect(prefs.hiddenNames, isEmpty);
+      final s = await container.read(settingsProvider.future);
+      expect(s.app.visibility.hideDotfiles, isTrue);
+      expect(s.app.visibility.hiddenExtensions, isEmpty);
+      expect(s.app.visibility.hiddenNames, isEmpty);
     });
   });
 
-  group('setHideDotfiles', () {
+  group('setHideDotfiles (app default)', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
 
     test('persists and survives restart', () async {
       final container1 = ProviderContainer();
-      await container1.read(visibilityPrefsProvider.future);
+      await container1.read(settingsProvider.future);
       await container1
-          .read(visibilityPrefsProvider.notifier)
+          .read(settingsProvider.notifier)
           .setHideDotfiles(false);
 
-      final prefs1 = await container1.read(visibilityPrefsProvider.future);
-      expect(prefs1.hideDotfiles, isFalse);
+      expect(appVis(container1).hideDotfiles, isFalse);
       container1.dispose();
 
       final container2 = ProviderContainer();
       addTearDown(container2.dispose);
-      final prefs2 = await container2.read(visibilityPrefsProvider.future);
-      expect(prefs2.hideDotfiles, isFalse);
+      final s2 = await container2.read(settingsProvider.future);
+      expect(s2.app.visibility.hideDotfiles, isFalse);
     });
   });
 
-  group('Hidden extensions management', () {
+  group('Hidden extensions management (app default)', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
 
     test('setHiddenExtensions normalizes to lowercase and persists', () async {
       final container1 = ProviderContainer();
-      await container1.read(visibilityPrefsProvider.future);
+      await container1.read(settingsProvider.future);
       await container1
-          .read(visibilityPrefsProvider.notifier)
+          .read(settingsProvider.notifier)
           .setHiddenExtensions({'TMP', 'Log'});
 
-      final prefs1 = await container1.read(visibilityPrefsProvider.future);
-      expect(prefs1.hiddenExtensions, {'tmp', 'log'});
+      expect(appVis(container1).hiddenExtensions, {'tmp', 'log'});
       container1.dispose();
 
       final container2 = ProviderContainer();
       addTearDown(container2.dispose);
-      final prefs2 = await container2.read(visibilityPrefsProvider.future);
-      expect(prefs2.hiddenExtensions, {'tmp', 'log'});
+      final s2 = await container2.read(settingsProvider.future);
+      expect(s2.app.visibility.hiddenExtensions, {'tmp', 'log'});
     });
 
     test('addExtension strips leading dots, trims, and lowercases', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
-      await notifier.addExtension('  ..TMP  ');
+      await container.read(settingsProvider.notifier).addExtension('  ..TMP  ');
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, {'tmp'});
+      expect(appVis(container).hiddenExtensions, {'tmp'});
     });
 
     test('addExtension is a no-op for blank/dot-only input', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.addExtension('   ');
       await notifier.addExtension('.');
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, isEmpty);
+      expect(appVis(container).hiddenExtensions, isEmpty);
     });
 
     test('removeExtension removes an entry from the set', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.setHiddenExtensions({'tmp', 'log'});
       await notifier.removeExtension('tmp');
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, {'log'});
+      expect(appVis(container).hiddenExtensions, {'log'});
     });
   });
 
-  group('Hidden names management', () {
+  group('Hidden names management (app default)', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
@@ -245,43 +249,39 @@ void main() {
         () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.addName('Thumbs.db');
       await notifier.addName('thumbs.db'); // duplicate (different case)
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenNames, {'Thumbs.db'});
+      expect(appVis(container).hiddenNames, {'Thumbs.db'});
     });
 
     test('addName is a no-op for blank input', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
-      await notifier.addName('   ');
+      await container.read(settingsProvider.notifier).addName('   ');
 
-      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenNames,
-          isEmpty);
+      expect(appVis(container).hiddenNames, isEmpty);
     });
 
     test('removeName removes case-insensitively', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.setHiddenNames({'Thumbs.db'});
       await notifier.removeName('THUMBS.DB');
 
-      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenNames,
-          isEmpty);
+      expect(appVis(container).hiddenNames, isEmpty);
     });
   });
 
-  group('applyPreset', () {
+  group('applyPreset (app default)', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
@@ -289,30 +289,29 @@ void main() {
     test('adds the preset extensions and names additively', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       // Pre-existing custom extension that no preset should remove.
       await notifier.addExtension('xyz');
       await notifier.applyPreset(systemJunkPreset);
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, containsAll({'xyz', ...systemJunkPreset.extensions}));
-      expect(prefs.hiddenNames, systemJunkPreset.names);
+      expect(appVis(container).hiddenExtensions,
+          containsAll({'xyz', ...systemJunkPreset.extensions}));
+      expect(appVis(container).hiddenNames, systemJunkPreset.names);
     });
 
     test('applying two presets unions their extensions', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.applyPreset(systemJunkPreset);
       await notifier.applyPreset(logsPreset);
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
       expect(
-        prefs.hiddenExtensions,
+        appVis(container).hiddenExtensions,
         containsAll({...systemJunkPreset.extensions, ...logsPreset.extensions}),
       );
     });
@@ -320,47 +319,44 @@ void main() {
     test('removePreset undoes applyPreset (extensions and names)', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.applyPreset(systemJunkPreset);
       await notifier.removePreset(systemJunkPreset);
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
       for (final ext in systemJunkPreset.extensions) {
-        expect(prefs.hiddenExtensions, isNot(contains(ext)));
+        expect(appVis(container).hiddenExtensions, isNot(contains(ext)));
       }
       // Names (e.g. Thumbs.db) are removed too — these are otherwise
       // unreachable from the UI, which was the original "can't unchoose" bug.
-      expect(prefs.hiddenNames, isEmpty);
+      expect(appVis(container).hiddenNames, isEmpty);
     });
 
     test('removePreset removes names case-insensitively', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.setHiddenNames({'thumbs.db'}); // lowercase variant
       await notifier.removePreset(systemJunkPreset); // names {'Thumbs.db', ...}
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenNames, isEmpty);
+      expect(appVis(container).hiddenNames, isEmpty);
     });
 
     test('removePreset keeps a user extension that is not in the preset',
         () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await container.read(visibilityPrefsProvider.future);
+      await container.read(settingsProvider.future);
 
-      final notifier = container.read(visibilityPrefsProvider.notifier);
+      final notifier = container.read(settingsProvider.notifier);
       await notifier.addExtension('xyz');
       await notifier.applyPreset(logsPreset);
       await notifier.removePreset(logsPreset);
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
-      expect(prefs.hiddenExtensions, {'xyz'});
+      expect(appVis(container).hiddenExtensions, {'xyz'});
     });
   });
 }

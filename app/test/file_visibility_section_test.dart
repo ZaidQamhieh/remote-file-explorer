@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// FileVisibilitySection widget tests — the global "File visibility" settings
-// card: hide-dotfiles switch, one section per category with a toggle chip per
-// file type, and a "Custom" section (deletable chips + add field) at the end.
-// Backed by visibilityPrefsProvider.
+// FileVisibilitySection widget tests — the App Settings "File visibility" card
+// that edits the app-DEFAULT visibility (hostId null): hide-dotfiles switch,
+// one section per category with a toggle chip per file type, and a "Custom"
+// section (deletable chips + add field) at the end. Backed by the two-tier
+// settings controller (settingsProvider).
+
+VisibilityPrefs _appVis(ProviderContainer c) =>
+    c.read(settingsProvider).valueOrNull!.app.visibility;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +53,7 @@ void main() {
       await tester.tap(find.text('Hide dotfiles'));
       await tester.pumpAndSettle();
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      final prefs = _appVis(container);
       expect(prefs.hideDotfiles, isFalse);
     });
   });
@@ -74,7 +79,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilterChip, '.log'));
       await tester.pumpAndSettle();
 
-      var prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      var prefs = _appVis(container);
       expect(prefs.hiddenExtensions, contains('log'));
       // Only that one extension is hidden — not the whole category.
       expect(prefs.hiddenExtensions, isNot(contains('old')));
@@ -88,7 +93,7 @@ void main() {
       // Tapping again toggles it back off.
       await tester.tap(find.widgetWithText(FilterChip, '.log'));
       await tester.pumpAndSettle();
-      prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      prefs = _appVis(container);
       expect(prefs.hiddenExtensions, isNot(contains('log')));
     });
 
@@ -99,7 +104,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilterChip, 'Thumbs.db'));
       await tester.pumpAndSettle();
 
-      final prefs = container.read(visibilityPrefsProvider).valueOrNull!;
+      final prefs = _appVis(container);
       expect(prefs.hiddenNames, contains('Thumbs.db'));
     });
   });
@@ -117,14 +122,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.widgetWithText(InputChip, '.xyz'), findsOneWidget);
-      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+      expect(_appVis(container).hiddenExtensions,
           contains('xyz'));
 
       await tester.tap(find.byIcon(Icons.clear));
       await tester.pumpAndSettle();
 
       expect(find.widgetWithText(InputChip, '.xyz'), findsNothing);
-      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+      expect(_appVis(container).hiddenExtensions,
           isNot(contains('xyz')));
     });
 
@@ -138,7 +143,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(container.read(visibilityPrefsProvider).valueOrNull!.hiddenExtensions,
+      expect(_appVis(container).hiddenExtensions,
           contains('tmp'));
       // Rendered as a selected FilterChip (category), not an InputChip (custom).
       expect(

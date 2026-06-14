@@ -90,8 +90,9 @@ class ExplorerState {
   /// directory has no more pages to load.
   final String? nextCursor;
 
-  /// Mirrors [visibilityPrefsProvider] — global hide-dotfiles/extensions/
-  /// names settings, applied to [hiddenPaths]/[displayEntries].
+  /// Mirrors the resolved per-host file-visibility prefs from the two-tier
+  /// settings model (`settingsProvider.resolveVisibility(hostId)`) —
+  /// hide-dotfiles/extensions/names, applied to [hiddenPaths]/[displayEntries].
   final VisibilityPrefs visibilityPrefs;
 
   /// Session-only "show hidden items" override for this explorer screen, set
@@ -215,27 +216,29 @@ class ExplorerNotifier
     // initial `ref.read` seeds this notifier's first state synchronously when
     // settings have already loaded (otherwise defaults apply until the listener
     // fires).
+    // View settings AND file-visibility prefs are both owned by the two-tier
+    // settings model (`core/settings/`) and resolved per host
+    // (`deviceOverride ?? appDefault`), then mirrored into this state so
+    // `sortedEntries`/`gridView`/`hiddenPaths`/`displayEntries` stay the single
+    // source widgets read from. `ref.listen` applies future changes (the
+    // view-options sheet, a per-device override, or an app-default visibility
+    // edit); the initial `ref.read` seeds the first state synchronously when
+    // settings have already loaded (otherwise defaults apply until the listener
+    // fires).
     ref.listen(settingsProvider, (_, next) {
       final settings = next.valueOrNull;
       if (settings == null) return;
       final view = settings.resolveView(arg.hostId);
-      state = state.copyWith(gridView: view.gridView, sort: view.sort);
+      state = state.copyWith(
+        gridView: view.gridView,
+        sort: view.sort,
+        visibilityPrefs: settings.resolveVisibility(arg.hostId),
+      );
     });
-    final initialView =
-        ref.read(settingsProvider).valueOrNull?.resolveView(arg.hostId);
-
-    // File-visibility prefs (dotfiles/extensions/names to hide) are
-    // persisted separately (`core/storage/visibility_prefs.dart`) but
-    // mirrored into this state the same way view prefs are above, so
-    // `hiddenPaths`/`displayEntries` stay the single source widgets read
-    // from.
-    ref.listen(visibilityPrefsProvider, (_, next) {
-      final prefs = next.valueOrNull;
-      if (prefs == null) return;
-      state = state.copyWith(visibilityPrefs: prefs);
-    });
+    final initialSettings = ref.read(settingsProvider).valueOrNull;
+    final initialView = initialSettings?.resolveView(arg.hostId);
     final initialVisibilityPrefs =
-        ref.read(visibilityPrefsProvider).valueOrNull;
+        initialSettings?.resolveVisibility(arg.hostId);
 
     // Schedule async load after construction.
     Future.microtask(_load);
@@ -377,7 +380,7 @@ class ExplorerNotifier
   /// Toggles the session-only "show hidden items" override (see
   /// [ExplorerState.showHidden]). Unlike [toggleView]/[setSort], this is
   /// local UI state for this explorer screen only — it is intentionally not
-  /// persisted via [visibilityPrefsProvider].
+  /// persisted to the settings model's file-visibility prefs.
   void toggleShowHidden() => state = state.copyWith(showHidden: !state.showHidden);
 
   void toggleSelect(String path) {

@@ -6,6 +6,8 @@ import '../../core/api/providers.dart';
 import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/host.dart';
+import '../../core/settings/app_settings.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -254,6 +256,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         const FileVisibilitySection(),
         const SizedBox(height: Spacing.md),
+        DeviceVisibilityOverrideSection(hostId: widget.host.id),
+        const SizedBox(height: Spacing.md),
         SettingsSection(
           title: 'Paired devices',
           icon: Icons.devices_outlined,
@@ -325,19 +329,24 @@ class _SecurityWarningCard extends StatelessWidget {
 // File visibility section
 // ---------------------------------------------------------------------------
 
-/// "File visibility" settings: hide-dotfiles toggle, one-tap presets that add
-/// to the hidden-extensions/-names sets (`core/storage/visibility_prefs.dart`),
-/// and a custom-extension input with deletable chips. Global — applies to
-/// every host's explorer/search listings, unlike the rest of this
-/// per-[Host] screen.
-class FileVisibilitySection extends ConsumerWidget {
-  const FileVisibilitySection({super.key});
+/// The file-visibility editor body: hide-dotfiles toggle, one-tap presets that
+/// add to the hidden-extensions/-names sets
+/// (`core/storage/visibility_prefs.dart`), and a custom-extension input with
+/// deletable chips. Pure presentation over a [VisibilityPrefs] value plus
+/// mutation callbacks scoped to a target ([SettingsNotifier] with `hostId`
+/// null for the app default, or a host id for a per-device override) — reused
+/// by both the App Settings surface and the per-device override section.
+class VisibilityEditor extends StatelessWidget {
+  const VisibilityEditor({super.key, required this.prefs, required this.notifier, this.hostId});
+
+  final VisibilityPrefs prefs;
+  final SettingsNotifier notifier;
+
+  /// `null` = edit the app default; non-null = edit this host's override.
+  final String? hostId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final prefs =
-        ref.watch(visibilityPrefsProvider).valueOrNull ?? const VisibilityPrefs();
-    final notifier = ref.read(visibilityPrefsProvider.notifier);
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
     // Extensions the user typed by hand are everything in the hidden set that
@@ -351,22 +360,21 @@ class FileVisibilitySection extends ConsumerWidget {
         .toList()
       ..sort();
 
-    return SettingsSection(
-      title: 'File visibility',
-      icon: Icons.visibility_outlined,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Hide dotfiles'),
           subtitle: const Text('Hide files and folders starting with "."'),
           value: prefs.hideDotfiles,
-          onChanged: notifier.setHideDotfiles,
+          onChanged: (v) => notifier.setHideDotfiles(v, hostId: hostId),
         ),
         const Divider(height: Spacing.lg),
         // One section per category; tapping a chip toggles that single file
         // type, so users pick exactly what to hide instead of all-or-nothing.
         for (final preset in visibilityPresets)
-          _PresetGroup(preset: preset, prefs: prefs, notifier: notifier),
+          _PresetGroup(preset: preset, prefs: prefs, notifier: notifier, hostId: hostId),
         const Divider(height: Spacing.lg),
         Text('Custom', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: Spacing.xs),
@@ -386,31 +394,110 @@ class FileVisibilitySection extends ConsumerWidget {
               for (final ext in custom)
                 InputChip(
                   label: Text('.$ext'),
-                  onDeleted: () => notifier.removeExtension(ext),
+                  onDeleted: () => notifier.removeExtension(ext, hostId: hostId),
                 ),
             ],
           ),
         const SizedBox(height: Spacing.xs),
-        _AddExtensionField(onSubmit: notifier.addExtension),
+        _AddExtensionField(
+            onSubmit: (e) => notifier.addExtension(e, hostId: hostId)),
       ],
     );
   }
 }
 
-/// One category section in [FileVisibilitySection]: a header (the preset
-/// label) above a wrap of per-file-type toggle chips. Each chip hides a single
+/// "File visibility" App Settings card: edits the **app-default**
+/// [VisibilityPrefs] (`hostId: null`) — the global default every host inherits
+/// unless it carries its own override (set per-device in
+/// [DeviceVisibilityOverrideSection]).
+class FileVisibilitySection extends ConsumerWidget {
+  const FileVisibilitySection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings =
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
+    final notifier = ref.read(settingsProvider.notifier);
+
+    return SettingsSection(
+      title: 'File visibility',
+      icon: Icons.visibility_outlined,
+      children: [
+        VisibilityEditor(prefs: settings.app.visibility, notifier: notifier),
+      ],
+    );
+  }
+}
+
+/// Per-device file-visibility override (Wave 0). Defaults to **"Use app
+/// default"** (inherit the global visibility set in App Settings) and can be
+/// flipped to **"Override"** with a host-specific [VisibilityPrefs]. Toggling
+/// the override on seeds it from the host's current effective visibility so
+/// nothing jumps; toggling off clears it. Matches the
+/// [DeviceViewOverridesSection] interaction pattern.
+class DeviceVisibilityOverrideSection extends ConsumerWidget {
+  const DeviceVisibilityOverrideSection({super.key, required this.hostId});
+
+  final String hostId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings =
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
+    final notifier = ref.read(settingsProvider.notifier);
+    final isOverridden = settings.overridesFor(hostId).visibility != null;
+    final resolved = settings.resolveVisibility(hostId);
+    final scheme = Theme.of(context).colorScheme;
+
+    return SettingsSection(
+      title: 'File visibility (this device)',
+      icon: Icons.visibility_outlined,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: Spacing.xs),
+          child: Text(
+            'Follows your app-default file visibility unless you override it '
+            'here.',
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+          ),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Override for this device'),
+          subtitle: Text(isOverridden
+              ? 'Using device-specific visibility'
+              : 'Using app default'),
+          value: isOverridden,
+          onChanged: (on) =>
+              notifier.setDeviceVisibilityOverride(hostId, on),
+        ),
+        if (isOverridden) ...[
+          const Divider(height: Spacing.lg),
+          VisibilityEditor(prefs: resolved, notifier: notifier, hostId: hostId),
+        ],
+      ],
+    );
+  }
+}
+
+/// One category section in [VisibilityEditor]: a header (the preset label)
+/// above a wrap of per-file-type toggle chips. Each chip hides a single
 /// extension (`.ext`) or exact name (e.g. `Thumbs.db`) independently, so the
-/// user picks precisely which types in the category to hide.
+/// user picks precisely which types in the category to hide. Mutations target
+/// the app default ([hostId] null) or a host override.
 class _PresetGroup extends StatelessWidget {
   const _PresetGroup({
     required this.preset,
     required this.prefs,
     required this.notifier,
+    this.hostId,
   });
 
   final VisibilityPreset preset;
   final VisibilityPrefs prefs;
-  final VisibilityPrefsNotifier notifier;
+  final SettingsNotifier notifier;
+  final String? hostId;
 
   @override
   Widget build(BuildContext context) {
@@ -435,16 +522,16 @@ class _PresetGroup extends StatelessWidget {
                   label: Text('.$ext'),
                   selected: prefs.hiddenExtensions.contains(ext),
                   onSelected: (selected) => selected
-                      ? notifier.addExtension(ext)
-                      : notifier.removeExtension(ext),
+                      ? notifier.addExtension(ext, hostId: hostId)
+                      : notifier.removeExtension(ext, hostId: hostId),
                 ),
               for (final name in names)
                 FilterChip(
                   label: Text(name),
                   selected: lowerHiddenNames.contains(name.toLowerCase()),
                   onSelected: (selected) => selected
-                      ? notifier.addName(name)
-                      : notifier.removeName(name),
+                      ? notifier.addName(name, hostId: hostId)
+                      : notifier.removeName(name, hostId: hostId),
                 ),
             ],
           ),
@@ -455,9 +542,8 @@ class _PresetGroup extends StatelessWidget {
 }
 
 /// Text field for adding a custom hidden extension (e.g. "tmp"), submitted
-/// via the keyboard action or the trailing add button. [onSubmit] is
-/// [VisibilityPrefsNotifier.addExtension], which normalizes (strips dots,
-/// lowercases) and persists.
+/// via the keyboard action or the trailing add button. [onSubmit] normalizes
+/// (strips dots, lowercases) and persists via the settings controller.
 class _AddExtensionField extends StatefulWidget {
   const _AddExtensionField({required this.onSubmit});
 

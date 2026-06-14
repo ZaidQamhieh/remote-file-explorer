@@ -8,6 +8,7 @@ import 'package:remote_file_explorer/core/api/providers.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
+import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -379,7 +380,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  // ExplorerNotifier.toggleShowHidden + visibilityPrefsProvider wiring
+  // ExplorerNotifier.toggleShowHidden + resolved-visibility wiring
   // ---------------------------------------------------------------------
   group('ExplorerNotifier.toggleShowHidden', () {
     late ProviderContainer container;
@@ -424,8 +425,9 @@ void main() {
           {'readme.txt', '.env'});
     });
 
-    test('mirrors visibilityPrefsProvider into ExplorerState.visibilityPrefs',
-        () async {
+    test(
+        'mirrors the resolved app-default visibility into '
+        'ExplorerState.visibilityPrefs', () async {
       client.pages['/'] = [
         Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
       ];
@@ -437,9 +439,11 @@ void main() {
 
       expect(container.read(explorerProvider(arg)).hiddenCount, 0);
 
-      await container.read(visibilityPrefsProvider.future);
+      // Editing the app-default visibility (hostId null) flows through the
+      // settings model and is mirrored into this explorer's state.
+      await container.read(settingsProvider.future);
       await container
-          .read(visibilityPrefsProvider.notifier)
+          .read(settingsProvider.notifier)
           .setHiddenExtensions({'log'});
 
       await _waitUntil(
@@ -447,6 +451,29 @@ void main() {
 
       final state = container.read(explorerProvider(arg));
       expect(state.hiddenPaths, {'/root/app.log'});
+    });
+
+    test('a per-device visibility override takes precedence for that host',
+        () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
+      ];
+
+      final arg = (hostId: 'h6', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+
+      // Override just this host to hide ".log"; the app default is untouched.
+      await container.read(settingsProvider.future);
+      await container
+          .read(settingsProvider.notifier)
+          .setHiddenExtensions({'log'}, hostId: 'h6');
+
+      await _waitUntil(
+          () => container.read(explorerProvider(arg)).hiddenCount == 1);
+      expect(
+          container.read(explorerProvider(arg)).hiddenPaths, {'/root/app.log'});
     });
   });
 

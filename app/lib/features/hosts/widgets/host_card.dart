@@ -654,16 +654,22 @@ class _QuickActions extends StatelessWidget {
     return Row(
       children: [
         // Browse stays enabled offline — cached/offline browsing works.
-        FilledButton.icon(
-          onPressed: onBrowse,
-          icon: const Icon(Icons.folder_open_rounded, size: 18),
-          label: const Text('Browse'),
+        // `Flexible` + ellipsis keeps the row from overflowing at large
+        // `MediaQuery.textScaler` values (a11y: 1.3×–2.0×).
+        Flexible(
+          child: FilledButton.icon(
+            onPressed: onBrowse,
+            icon: const Icon(Icons.folder_open_rounded, size: 18),
+            label: const Text('Browse', overflow: TextOverflow.ellipsis),
+          ),
         ),
         const SizedBox(width: Spacing.sm),
-        FilledButton.tonalIcon(
-          onPressed: online ? onSearch : null,
-          icon: const Icon(Icons.search_rounded, size: 18),
-          label: const Text('Search'),
+        Flexible(
+          child: FilledButton.tonalIcon(
+            onPressed: online ? onSearch : null,
+            icon: const Icon(Icons.search_rounded, size: 18),
+            label: const Text('Search', overflow: TextOverflow.ellipsis),
+          ),
         ),
         const Spacer(),
         PopupMenuButton<String>(

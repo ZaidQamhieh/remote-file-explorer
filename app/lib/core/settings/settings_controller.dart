@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,6 +41,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kVisHideDotfiles = 'app.visibility.hideDotfiles';
   static const _kVisHiddenExtensions = 'app.visibility.hiddenExtensions';
   static const _kVisHiddenNames = 'app.visibility.hiddenNames';
+  static const _kThemeMode = 'app.themeMode';
+  static const _kDynamicColor = 'app.dynamicColor';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -85,6 +88,26 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
     await _prefs?.setString(_kSortField, value.field.name);
     await _prefs?.setBool(_kSortAscending, value.ascending);
     _emit((s) => s.copyWith(app: s.app.copyWith(sort: value)));
+  }
+
+  // --- Appearance (Wave F) ------------------------------------------------
+  //
+  // Theme mode and dynamic color are app-global only — no per-device override
+  // (theme follows the whole app). Persisted as the enum name and a bool;
+  // absent keys fall back to the defaults (system / dynamic-on).
+
+  /// Sets the app-wide theme mode (system / light / dark).
+  Future<void> setThemeMode(ThemeMode value) async {
+    await _prefs?.setString(_kThemeMode, value.name);
+    _emit((s) => s.copyWith(app: s.app.copyWith(themeMode: value)));
+  }
+
+  /// Sets whether to derive the color scheme from the platform's wallpaper
+  /// colors (Material You). When off (or unsupported), the [Brand.seed] palette
+  /// is used.
+  Future<void> setDynamicColor(bool value) async {
+    await _prefs?.setBool(_kDynamicColor, value);
+    _emit((s) => s.copyWith(app: s.app.copyWith(dynamicColor: value)));
   }
 
   // --- File visibility (app default + per-device override) ----------------
@@ -314,6 +337,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
         ascending: prefs.getBool(_kSortAscending) ?? true,
       ),
       visibility: _readAppVisibility(prefs),
+      themeMode: _themeModeFrom(prefs.getString(_kThemeMode)),
+      dynamicColor: prefs.getBool(_kDynamicColor) ?? true,
     );
 
     final overrides = <String, DeviceOverrides>{};
@@ -447,6 +472,9 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
 
   static SortField _sortFieldFrom(String? name) => SortField.values
       .firstWhere((f) => f.name == name, orElse: () => SortField.name);
+
+  static ThemeMode _themeModeFrom(String? name) => ThemeMode.values
+      .firstWhere((m) => m.name == name, orElse: () => ThemeMode.system);
 }
 
 final settingsProvider =

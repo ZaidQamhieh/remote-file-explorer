@@ -14,12 +14,24 @@ class AppTheme {
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
-  static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: Brand.seed,
-      brightness: brightness,
-      secondary: Brand.accent,
-    );
+  /// Builds the light theme from an optional [scheme] override (e.g. a
+  /// platform dynamic-color scheme). When `null`, falls back to the seed-based
+  /// [light] theme. All component theming is identical — only the source
+  /// [ColorScheme] differs.
+  static ThemeData lightFrom(ColorScheme? scheme) =>
+      _build(Brightness.light, scheme);
+
+  /// Dark counterpart to [lightFrom].
+  static ThemeData darkFrom(ColorScheme? scheme) =>
+      _build(Brightness.dark, scheme);
+
+  static ThemeData _build(Brightness brightness, [ColorScheme? override]) {
+    final scheme = override ??
+        ColorScheme.fromSeed(
+          seedColor: Brand.seed,
+          brightness: brightness,
+          secondary: Brand.accent,
+        );
 
     final base = ThemeData(
       useMaterial3: true,

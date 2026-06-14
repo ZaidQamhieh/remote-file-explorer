@@ -15,6 +15,13 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   Future<ProviderContainer> pump(WidgetTester tester) async {
+    // A tall surface so the Appearance + Display sections all fit without
+    // scrolling (the sort chips sit near the bottom of the list).
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await container.read(settingsProvider.future);
@@ -71,5 +78,30 @@ void main() {
     final sort = c.read(settingsProvider).valueOrNull!.app.sort;
     expect(sort.field, SortField.name);
     expect(sort.ascending, isFalse);
+  });
+
+  // --- Appearance (Wave F) -------------------------------------------------
+
+  testWidgets('selecting Dark sets the app-wide theme mode', (tester) async {
+    final c = await pump(tester);
+    expect(c.read(settingsProvider).valueOrNull!.app.themeMode,
+        ThemeMode.system);
+
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+
+    expect(
+        c.read(settingsProvider).valueOrNull!.app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets('toggling "Use wallpaper colors" flips dynamicColor',
+      (tester) async {
+    final c = await pump(tester);
+    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
+
+    await tester.tap(find.text('Use wallpaper colors'));
+    await tester.pumpAndSettle();
+
+    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);
   });
 }

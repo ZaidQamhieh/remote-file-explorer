@@ -40,6 +40,48 @@ class AppSettingsScreen extends ConsumerWidget {
             ),
           ),
           SettingsSection(
+            title: 'Appearance',
+            icon: Icons.palette_outlined,
+            children: [
+              _LabeledControl(
+                label: 'Theme',
+                control: SegmentedButton<ThemeMode>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      label: Text('System'),
+                      icon: Icon(Icons.brightness_auto_outlined),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      label: Text('Light'),
+                      icon: Icon(Icons.light_mode_outlined),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      label: Text('Dark'),
+                      icon: Icon(Icons.dark_mode_outlined),
+                    ),
+                  ],
+                  selected: {app.themeMode},
+                  onSelectionChanged: (s) => notifier.setThemeMode(s.first),
+                ),
+              ),
+              const Divider(height: Spacing.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Use wallpaper colors'),
+                subtitle: const Text(
+                    'Material You — derive the palette from your wallpaper '
+                    'where supported'),
+                value: app.dynamicColor,
+                onChanged: notifier.setDynamicColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
             title: 'Display',
             icon: Icons.grid_view_rounded,
             children: [

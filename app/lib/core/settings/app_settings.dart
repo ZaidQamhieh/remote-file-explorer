@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart' show ThemeMode;
+
 import '../storage/view_prefs.dart';
 import '../storage/visibility_prefs.dart';
 
@@ -21,6 +23,8 @@ class AppDefaults {
     this.density = EntryDensity.comfortable,
     this.sort = const SortOrder(),
     this.visibility = const VisibilityPrefs(),
+    this.themeMode = ThemeMode.system,
+    this.dynamicColor = true,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -35,17 +39,33 @@ class AppDefaults {
   /// wholesale or carries its own full [VisibilityPrefs] override.
   final VisibilityPrefs visibility;
 
+  /// App-wide theme mode (Wave F). Unlike the view/visibility settings this is
+  /// **app-global only** — there is no per-device override (theme follows the
+  /// whole app, per `docs/next-waves-addendum.md`). Defaults to
+  /// [ThemeMode.system].
+  final ThemeMode themeMode;
+
+  /// Whether to derive the color scheme from the platform's wallpaper colors
+  /// (Material You / dynamic color), when the platform provides them. Also
+  /// app-global only. Defaults to `true`; falls back to the [Brand.seed]
+  /// palette when off or when the platform has no dynamic scheme.
+  final bool dynamicColor;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
     SortOrder? sort,
     VisibilityPrefs? visibility,
+    ThemeMode? themeMode,
+    bool? dynamicColor,
   }) =>
       AppDefaults(
         gridView: gridView ?? this.gridView,
         density: density ?? this.density,
         sort: sort ?? this.sort,
         visibility: visibility ?? this.visibility,
+        themeMode: themeMode ?? this.themeMode,
+        dynamicColor: dynamicColor ?? this.dynamicColor,
       );
 
   @override
@@ -54,10 +74,13 @@ class AppDefaults {
       other.gridView == gridView &&
       other.density == density &&
       other.sort == sort &&
-      other.visibility == visibility;
+      other.visibility == visibility &&
+      other.themeMode == themeMode &&
+      other.dynamicColor == dynamicColor;
 
   @override
-  int get hashCode => Object.hash(gridView, density, sort, visibility);
+  int get hashCode =>
+      Object.hash(gridView, density, sort, visibility, themeMode, dynamicColor);
 }
 
 /// A single host's overrides. Each field is nullable: `null` = inherit the app

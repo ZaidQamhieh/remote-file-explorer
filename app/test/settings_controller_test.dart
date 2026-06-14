@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/settings/app_settings.dart';
@@ -169,6 +170,50 @@ void main() {
       final s3 = await c3.read(settingsProvider.future);
       expect(s3.hasOverride('hostA'), isFalse,
           reason: 'migration is one-shot; reset is not undone');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Appearance (Wave F): app-global theme mode + dynamic color. No per-device
+  // override — these live on AppDefaults only.
+  // ---------------------------------------------------------------------
+  group('appearance defaults and persistence', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('fresh install defaults to system theme + dynamic color on', () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+
+      expect(s.app.themeMode, ThemeMode.system);
+      expect(s.app.dynamicColor, isTrue);
+    });
+
+    test('setThemeMode / setDynamicColor update state and persist', () async {
+      final c1 = ProviderContainer();
+      final n1 = await load(c1);
+      await n1.setThemeMode(ThemeMode.dark);
+      await n1.setDynamicColor(false);
+
+      final s1 = c1.read(settingsProvider).valueOrNull!;
+      expect(s1.app.themeMode, ThemeMode.dark);
+      expect(s1.app.dynamicColor, isFalse);
+      c1.dispose();
+
+      // Survives a fresh container (persisted as enum name + bool).
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      final s2 = await c2.read(settingsProvider.future);
+      expect(s2.app.themeMode, ThemeMode.dark);
+      expect(s2.app.dynamicColor, isFalse);
+    });
+
+    test('unknown/absent persisted theme mode falls back to system', () async {
+      SharedPreferences.setMockInitialValues({'app.themeMode': 'bogus'});
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+      expect(s.app.themeMode, ThemeMode.system);
     });
   });
 

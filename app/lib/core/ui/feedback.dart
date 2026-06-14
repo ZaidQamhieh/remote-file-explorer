@@ -15,7 +15,11 @@ enum _Kind { success, error, info }
 
 /// Shows a success confirmation (green, check icon) with a light haptic.
 /// Pass [action] to offer an inline button (e.g. Undo).
-void showSuccess(BuildContext context, String message, {SnackBarAction? action}) {
+void showSuccess(
+  BuildContext context,
+  String message, {
+  SnackBarAction? action,
+}) {
   HapticFeedback.lightImpact();
   _show(context, message, _Kind.success, action: action);
 }
@@ -24,9 +28,10 @@ void showSuccess(BuildContext context, String message, {SnackBarAction? action})
 /// [onRetry] to offer a Retry button wired to it.
 void showError(BuildContext context, String message, {VoidCallback? onRetry}) {
   HapticFeedback.heavyImpact();
-  final action = onRetry == null
-      ? null
-      : SnackBarAction(label: 'Retry', onPressed: onRetry);
+  final action =
+      onRetry == null
+          ? null
+          : SnackBarAction(label: 'Retry', onPressed: onRetry);
   _show(context, message, _Kind.error, action: action);
 }
 
@@ -71,8 +76,12 @@ Future<T?> runWithFeedback<T>(
 // Internals
 // ---------------------------------------------------------------------------
 
-void _show(BuildContext context, String message, _Kind kind,
-    {SnackBarAction? action}) {
+void _show(
+  BuildContext context,
+  String message,
+  _Kind kind, {
+  SnackBarAction? action,
+}) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   final theme = Theme.of(context);
@@ -114,13 +123,14 @@ void _show(BuildContext context, String message, _Kind kind,
             Expanded(child: Text(message, style: TextStyle(color: fg))),
           ],
         ),
-        action: action == null
-            ? null
-            : SnackBarAction(
-                label: action.label,
-                textColor: fg,
-                onPressed: action.onPressed,
-              ),
+        action:
+            action == null
+                ? null
+                : SnackBarAction(
+                  label: action.label,
+                  textColor: fg,
+                  onPressed: action.onPressed,
+                ),
       ),
     );
 }
@@ -143,8 +153,10 @@ SnackBar _progressBar(BuildContext context, String message) {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Text(message,
-              style: TextStyle(color: scheme.onInverseSurface)),
+          child: Text(
+            message,
+            style: TextStyle(color: scheme.onInverseSurface),
+          ),
         ),
       ],
     ),

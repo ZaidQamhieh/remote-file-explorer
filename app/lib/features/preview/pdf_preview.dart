@@ -93,12 +93,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             scrollDirection: Axis.horizontal,
             builders: PdfViewBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) =>
-                  const PreviewLoading(message: 'Rendering PDF…'),
+              documentLoaderBuilder:
+                  (_) => const PreviewLoading(message: 'Rendering PDF…'),
               pageLoaderBuilder: (_) => const PreviewLoading(),
-              errorBuilder: (_, error) => PreviewError(
-                message: 'Could not render this PDF.\n$error',
-              ),
+              errorBuilder:
+                  (_, error) => PreviewError(
+                    message: 'Could not render this PDF.\n$error',
+                  ),
             ),
           );
         },

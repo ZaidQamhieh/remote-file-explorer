@@ -21,11 +21,14 @@ class MiniTransferBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final transfers = ref.watch(transferQueueProvider);
-    final active = transfers
-        .where((t) =>
-            t.status == TransferStatus.running ||
-            t.status == TransferStatus.queued)
-        .toList();
+    final active =
+        transfers
+            .where(
+              (t) =>
+                  t.status == TransferStatus.running ||
+                  t.status == TransferStatus.queued,
+            )
+            .toList();
 
     // Aggregate progress: sum bytes across tasks that report a known total.
     var total = 0;
@@ -44,61 +47,72 @@ class MiniTransferBar extends ConsumerWidget {
       duration: MotionDuration.medium,
       curve: Curves.easeOutCubic,
       alignment: Alignment.bottomCenter,
-      child: active.isEmpty
-          ? const SizedBox(width: double.infinity)
-          : Material(
-              color: scheme.surfaceContainerHigh,
-              child: InkWell(
-                onTap: () => _openManager(context),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Spacing.md,
-                    Spacing.sm,
-                    Spacing.md,
-                    Spacing.sm,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.sync_rounded, size: 18, color: scheme.primary),
-                      const SizedBox(width: Spacing.sm),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _label(active),
-                              style: Theme.of(context).textTheme.labelMedium,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: Spacing.xs),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(Radii.chip / 2),
-                              child: LinearProgressIndicator(
-                                value: value,
-                                minHeight: 4,
-                              ),
-                            ),
-                          ],
+      child:
+          active.isEmpty
+              ? const SizedBox(width: double.infinity)
+              : Material(
+                color: scheme.surfaceContainerHigh,
+                child: InkWell(
+                  onTap: () => _openManager(context),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.md,
+                      Spacing.sm,
+                      Spacing.md,
+                      Spacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.sync_rounded,
+                          size: 18,
+                          color: scheme.primary,
                         ),
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      Icon(Icons.chevron_right_rounded,
-                          size: 20, color: scheme.onSurfaceVariant),
-                    ],
+                        const SizedBox(width: Spacing.sm),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _label(active),
+                                style: Theme.of(context).textTheme.labelMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: Spacing.xs),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  Radii.chip / 2,
+                                ),
+                                child: LinearProgressIndicator(
+                                  value: value,
+                                  minHeight: 4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
     );
   }
 
   String _label(List<TransferTask> active) {
     final n = active.length;
     final running = active.where((t) => t.status == TransferStatus.running);
-    final name = running.isNotEmpty
-        ? running.first.displayName
-        : active.first.displayName;
+    final name =
+        running.isNotEmpty
+            ? running.first.displayName
+            : active.first.displayName;
     if (n == 1) return 'Transferring $name';
     return 'Transferring $name (+${n - 1} more)';
   }

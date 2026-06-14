@@ -24,11 +24,24 @@ const Set<String> _textExtensions = {
 };
 
 const Set<String> _imageExtensions = {
-  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'heif',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'bmp',
+  'webp',
+  'heic',
+  'heif',
 };
 
 const Set<String> _videoExtensions = {
-  'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', '3gp',
+  'mp4',
+  'mov',
+  'mkv',
+  'avi',
+  'webm',
+  'm4v',
+  '3gp',
 };
 
 String _extensionOf(String name) {
@@ -112,13 +125,22 @@ Widget? _viewerFor(
       );
     case _PreviewKind.pdf:
       return PdfPreviewScreen(
-          entry: entry, client: client, chromeless: chromeless);
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
     case _PreviewKind.video:
       return VideoPreviewScreen(
-          entry: entry, client: client, chromeless: chromeless);
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
     case _PreviewKind.text:
       return TextPreviewScreen(
-          entry: entry, client: client, chromeless: chromeless);
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
     case _PreviewKind.none:
       return null;
   }
@@ -157,18 +179,21 @@ Future<void> openPreview(
 
   // Try the swipeable pager path when a listing was provided.
   if (siblings != null && siblings.isNotEmpty) {
-    final (entries: filtered, index: start) =
-        previewableSiblings(siblings, entry);
+    final (entries: filtered, index: start) = previewableSiblings(
+      siblings,
+      entry,
+    );
     if (start >= 0 && filtered.length > 1) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => PreviewPager(
-            entries: filtered,
-            initialIndex: start,
-            host: host,
-            client: client,
-            onChanged: onChanged,
-          ),
+          builder:
+              (_) => PreviewPager(
+                entries: filtered,
+                initialIndex: start,
+                host: host,
+                client: client,
+                onChanged: onChanged,
+              ),
         ),
       );
       return;
@@ -181,9 +206,7 @@ Future<void> openPreview(
     showInfo(context, 'No preview available for this file type');
     return;
   }
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => screen),
-  );
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 }
 
 /// A swipeable preview host: a `PageView` over a list of previewable
@@ -268,8 +291,7 @@ class _PreviewPagerState extends State<PreviewPager> {
   @override
   Widget build(BuildContext context) {
     final current = _entries[_index];
-    final onDark = _isImage(current) ||
-        _kindOf(current) == _PreviewKind.video;
+    final onDark = _isImage(current) || _kindOf(current) == _PreviewKind.video;
 
     return Scaffold(
       backgroundColor: onDark ? Colors.black : null,
@@ -294,7 +316,8 @@ class _PreviewPagerState extends State<PreviewPager> {
           final e = _entries[i];
           return KeyedSubtree(
             key: ValueKey(e.path),
-            child: _viewerFor(
+            child:
+                _viewerFor(
                   e,
                   host: widget.host,
                   client: widget.client,

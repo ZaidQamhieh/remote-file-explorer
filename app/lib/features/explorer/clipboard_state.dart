@@ -36,19 +36,28 @@ class ClipboardNotifier extends Notifier<FileClipboard?> {
   /// [paths] is empty (leaves the clipboard untouched/null).
   void copy(List<String> paths, String hostId) {
     if (paths.isEmpty) return;
-    state = FileClipboard(paths: paths, mode: ClipboardMode.copy, hostId: hostId);
+    state = FileClipboard(
+      paths: paths,
+      mode: ClipboardMode.copy,
+      hostId: hostId,
+    );
   }
 
   /// Fills the clipboard with [paths] from [hostId] in cut mode. No-op if
   /// [paths] is empty (leaves the clipboard untouched/null).
   void cut(List<String> paths, String hostId) {
     if (paths.isEmpty) return;
-    state = FileClipboard(paths: paths, mode: ClipboardMode.cut, hostId: hostId);
+    state = FileClipboard(
+      paths: paths,
+      mode: ClipboardMode.cut,
+      hostId: hostId,
+    );
   }
 
   /// Empties the clipboard.
   void clear() => state = null;
 }
 
-final clipboardProvider =
-    NotifierProvider<ClipboardNotifier, FileClipboard?>(ClipboardNotifier.new);
+final clipboardProvider = NotifierProvider<ClipboardNotifier, FileClipboard?>(
+  ClipboardNotifier.new,
+);

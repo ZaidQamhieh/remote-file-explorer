@@ -113,9 +113,10 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       // Prepare the destination file in external cache (covered by the
       // FileProvider paths so the installer can read it).
       final dirs = await getExternalCacheDirectories();
-      final base = (dirs != null && dirs.isNotEmpty)
-          ? dirs.first
-          : await getTemporaryDirectory();
+      final base =
+          (dirs != null && dirs.isNotEmpty)
+              ? dirs.first
+              : await getTemporaryDirectory();
       final apk = File('${base.path}/update-${rel!.versionCode}.apk');
 
       // Remove any previously downloaded APKs so updates don't pile up in the
@@ -128,12 +129,13 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _UpdateProgressDialog(
-          client: client,
-          release: rel,
-          apk: apk,
-          onLaunchInstaller: _launchInstaller,
-        ),
+        builder:
+            (_) => _UpdateProgressDialog(
+              client: client,
+              release: rel,
+              apk: apk,
+              onLaunchInstaller: _launchInstaller,
+            ),
       );
 
       if (!mounted) return;
@@ -169,10 +171,14 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
             e.path.endsWith('.apk')) {
           try {
             await e.delete();
-          } catch (_) {/* ignore individual file errors */}
+          } catch (_) {
+            /* ignore individual file errors */
+          }
         }
       }
-    } catch (_) {/* ignore: cleanup is best effort */}
+    } catch (_) {
+      /* ignore: cleanup is best effort */
+    }
   }
 
   /// Hands the APK to Android's package installer through the native channel.
@@ -195,20 +201,20 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         color: _statusIsError ? scheme.error : null,
       ),
       title: const Text('Check for updates'),
-      subtitle: _status.isEmpty
-          ? null
-          : Text(
-              _status,
-              style: _statusIsError
-                  ? TextStyle(color: scheme.error)
-                  : null,
-            ),
-      trailing: _busy
-          ? const SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.chevron_right),
+      subtitle:
+          _status.isEmpty
+              ? null
+              : Text(
+                _status,
+                style: _statusIsError ? TextStyle(color: scheme.error) : null,
+              ),
+      trailing:
+          _busy
+              ? const SizedBox.square(
+                dimension: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+              : const Icon(Icons.chevron_right),
       onTap: _busy ? null : _checkAndInstall,
     );
   }
@@ -338,9 +344,10 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       if (!mounted) return;
       setState(() {
         _stage = _Stage.error;
-        _errorMsg = e is PlatformException
-            ? (e.message ?? 'Could not open the installer.')
-            : '$e';
+        _errorMsg =
+            e is PlatformException
+                ? (e.message ?? 'Could not open the installer.')
+                : '$e';
       });
     }
   }
@@ -372,17 +379,20 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
           children: [
             LinearProgressIndicator(value: _progress),
             const SizedBox(height: 12),
-            Text(pct == null
-                ? 'Downloading…'
-                : 'Downloading $pct%  ·  ${_fmtBytes(_received)} / ${_fmtBytes(_total)}'),
+            Text(
+              pct == null
+                  ? 'Downloading…'
+                  : 'Downloading $pct%  ·  ${_fmtBytes(_received)} / ${_fmtBytes(_total)}',
+            ),
           ],
         );
       case _Stage.opening:
         return const Row(
           children: [
             SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2)),
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
             SizedBox(width: 16),
             Expanded(child: Text('Opening installer…')),
           ],
@@ -390,7 +400,9 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       case _Stage.error:
         return Text(_errorMsg ?? 'Something went wrong.');
       case _Stage.cancelled:
-        return const Text('Download paused. Retry to resume where it left off.');
+        return const Text(
+          'Download paused. Retry to resume where it left off.',
+        );
     }
   }
 
@@ -398,10 +410,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
     switch (_stage) {
       case _Stage.downloading:
         return [
-          TextButton(
-            onPressed: _cancelDownload,
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: _cancelDownload, child: const Text('Cancel')),
         ];
       case _Stage.opening:
         // The APK is already fully downloaded and handed to the installer —
@@ -418,10 +427,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
           ),
-          FilledButton(
-            onPressed: _download,
-            child: const Text('Retry'),
-          ),
+          FilledButton(onPressed: _download, child: const Text('Retry')),
         ];
       case _Stage.cancelled:
         return [
@@ -429,10 +435,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
           ),
-          FilledButton(
-            onPressed: _download,
-            child: const Text('Retry'),
-          ),
+          FilledButton(onPressed: _download, child: const Text('Retry')),
         ];
     }
   }
@@ -448,11 +451,7 @@ class UpdateScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(host.label)),
-      body: ListView(
-        children: [
-          UpdateTile(host: host),
-        ],
-      ),
+      body: ListView(children: [UpdateTile(host: host)]),
     );
   }
 }

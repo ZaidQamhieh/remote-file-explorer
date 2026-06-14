@@ -25,7 +25,8 @@ class CertPinMismatch implements Exception {
   final String expected;
   final String actual;
   @override
-  String toString() => 'Certificate fingerprint mismatch '
+  String toString() =>
+      'Certificate fingerprint mismatch '
       '(expected $expected, got $actual)';
 }
 
@@ -96,8 +97,7 @@ class RangeNotSatisfiedException implements Exception {
 /// pairing for the first time (trust on first use) and the caller captures the
 /// fingerprint via [lastSeenFingerprint].
 class AgentClient {
-  AgentClient(this.host, {String? deviceToken})
-      : _addresses = host.addresses {
+  AgentClient(this.host, {String? deviceToken}) : _addresses = host.addresses {
     final adapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
@@ -115,7 +115,10 @@ class AgentClient {
 
     // Start from whichever address worked last time for this host (e.g. LAN
     // at home, Tailscale away) so reconnects don't pay the fallback latency.
-    _addrIndex = (_lastGoodAddrIndex[host.id] ?? 0).clamp(0, _addresses.length - 1);
+    _addrIndex = (_lastGoodAddrIndex[host.id] ?? 0).clamp(
+      0,
+      _addresses.length - 1,
+    );
 
     _dio = Dio(
       BaseOptions(
@@ -132,23 +135,30 @@ class AgentClient {
     // LAN address while we're away from home), retry the same request against
     // the next candidate (typically the Tailscale address) and, on success,
     // stick with it for the rest of this client's life.
-    _dio.interceptors.add(InterceptorsWrapper(onError: (e, handler) async {
-      final isConnectionFailure = e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout;
-      if (!isConnectionFailure || _addrIndex + 1 >= _addresses.length) {
-        return handler.next(e);
-      }
-      _addrIndex++;
-      final newBase = _baseUrlFor(_addresses[_addrIndex]);
-      _dio.options.baseUrl = newBase;
-      try {
-        final retried = await _dio.fetch(e.requestOptions..baseUrl = newBase);
-        _lastGoodAddrIndex[host.id] = _addrIndex;
-        return handler.resolve(retried);
-      } on DioException catch (e2) {
-        return handler.next(e2);
-      }
-    }));
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (e, handler) async {
+          final isConnectionFailure =
+              e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout;
+          if (!isConnectionFailure || _addrIndex + 1 >= _addresses.length) {
+            return handler.next(e);
+          }
+          _addrIndex++;
+          final newBase = _baseUrlFor(_addresses[_addrIndex]);
+          _dio.options.baseUrl = newBase;
+          try {
+            final retried = await _dio.fetch(
+              e.requestOptions..baseUrl = newBase,
+            );
+            _lastGoodAddrIndex[host.id] = _addrIndex;
+            return handler.resolve(retried);
+          } on DioException catch (e2) {
+            return handler.next(e2);
+          }
+        },
+      ),
+    );
   }
 
   /// Releases the underlying HTTP client's connections.
@@ -285,11 +295,17 @@ class AgentClient {
     }
   }
 
-  Future<T> _delete<T>(String path,
-      {Map<String, dynamic>? queryParameters, dynamic data}) async {
+  Future<T> _delete<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    dynamic data,
+  }) async {
     try {
-      final res = await _dio.delete<T>(path,
-          queryParameters: queryParameters, data: data);
+      final res = await _dio.delete<T>(
+        path,
+        queryParameters: queryParameters,
+        data: data,
+      );
       return res.data as T;
     } on DioException catch (e) {
       throw _apiError(e);
@@ -302,8 +318,7 @@ class AgentClient {
 
   /// Calls the unauthenticated `/health` endpoint.
   Future<Health> health() async {
-    final data =
-        await _get<Map<String, dynamic>>('/health');
+    final data = await _get<Map<String, dynamic>>('/health');
     return Health.fromJson(data);
   }
 
@@ -318,12 +333,15 @@ class AgentClient {
     required String clientPublicKey,
     String? deviceId,
   }) async {
-    final data = await _post<Map<String, dynamic>>('/pair', data: {
-      'pairingCode': pairingCode,
-      'deviceLabel': deviceLabel,
-      'clientPublicKey': clientPublicKey,
-      if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-    });
+    final data = await _post<Map<String, dynamic>>(
+      '/pair',
+      data: {
+        'pairingCode': pairingCode,
+        'deviceLabel': deviceLabel,
+        'clientPublicKey': clientPublicKey,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+      },
+    );
     return PairResponse.fromJson(data);
   }
 
@@ -334,20 +352,21 @@ class AgentClient {
   /// List available drives / mount points.
   Future<List<Drive>> drives() async {
     final data = await _get<List<dynamic>>('/system/drives');
-    return data
-        .map((e) => Drive.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return data.map((e) => Drive.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   /// List a directory at [path].
   ///
   /// Pass [cursor] to page through large directories.
   Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
-    final data = await _get<Map<String, dynamic>>('/fs', queryParameters: {
-      'path': path,
-      if (cursor != null) 'cursor': cursor,
-      'limit': limit,
-    });
+    final data = await _get<Map<String, dynamic>>(
+      '/fs',
+      queryParameters: {
+        'path': path,
+        if (cursor != null) 'cursor': cursor,
+        'limit': limit,
+      },
+    );
     return Listing.fromJson(data);
   }
 
@@ -396,19 +415,23 @@ class AgentClient {
     CancelToken? cancelToken,
   }) async {
     try {
-      final res = await _dio.get<List<dynamic>>('/search', queryParameters: {
-        'q': q,
-        if (root != null) 'root': root,
-        'limit': limit,
-        if (types != null && types.isNotEmpty) 'types': types.join(','),
-        if (ext != null && ext.isNotEmpty) 'ext': ext.join(','),
-        if (minSize != null) 'minSize': minSize,
-        if (maxSize != null) 'maxSize': maxSize,
-        if (modifiedAfter != null)
-          'modifiedAfter': modifiedAfter.toUtc().toIso8601String(),
-        if (modifiedBefore != null)
-          'modifiedBefore': modifiedBefore.toUtc().toIso8601String(),
-      }, cancelToken: cancelToken);
+      final res = await _dio.get<List<dynamic>>(
+        '/search',
+        queryParameters: {
+          'q': q,
+          if (root != null) 'root': root,
+          'limit': limit,
+          if (types != null && types.isNotEmpty) 'types': types.join(','),
+          if (ext != null && ext.isNotEmpty) 'ext': ext.join(','),
+          if (minSize != null) 'minSize': minSize,
+          if (maxSize != null) 'maxSize': maxSize,
+          if (modifiedAfter != null)
+            'modifiedAfter': modifiedAfter.toUtc().toIso8601String(),
+          if (modifiedBefore != null)
+            'modifiedBefore': modifiedBefore.toUtc().toIso8601String(),
+        },
+        cancelToken: cancelToken,
+      );
       return SearchResult.fromResponse(res.data ?? const [], res.headers.map);
     } on DioException catch (e) {
       _throwTransferError(e);
@@ -429,19 +452,20 @@ class AgentClient {
     List<String>? roots,
     String? agentName,
   }) async {
-    final data = await _patch<Map<String, dynamic>>('/settings', data: {
-      if (readOnly != null) 'readOnly': readOnly,
-      if (roots != null) 'roots': roots,
-      if (agentName != null) 'agentName': agentName,
-    });
+    final data = await _patch<Map<String, dynamic>>(
+      '/settings',
+      data: {
+        if (readOnly != null) 'readOnly': readOnly,
+        if (roots != null) 'roots': roots,
+        if (agentName != null) 'agentName': agentName,
+      },
+    );
     return AgentSettings.fromJson(data);
   }
 
   Future<List<Device>> listDevices() async {
     final data = await _get<List<dynamic>>('/devices');
-    return data
-        .map((e) => Device.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return data.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> revokeDevice(String id) async {
@@ -451,8 +475,7 @@ class AgentClient {
   /// Permanently removes a device row (used to clear revoked devices). The
   /// agent refuses to remove the device making the request.
   Future<void> deleteDevice(String id) async {
-    await _delete<void>('/devices/$id',
-        queryParameters: {'purge': 'true'});
+    await _delete<void>('/devices/$id', queryParameters: {'purge': 'true'});
   }
 
   // ---------------------------------------------------------------------------
@@ -460,14 +483,18 @@ class AgentClient {
   // ---------------------------------------------------------------------------
 
   Future<Entry> createFolder(String path) async {
-    final data =
-        await _post<Map<String, dynamic>>('/fs/folder', data: {'path': path});
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/folder',
+      data: {'path': path},
+    );
     return Entry.fromJson(data);
   }
 
   Future<Entry> createFile(String path) async {
-    final data =
-        await _post<Map<String, dynamic>>('/fs/file', data: {'path': path});
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/file',
+      data: {'path': path},
+    );
     return Entry.fromJson(data);
   }
 
@@ -491,12 +518,15 @@ class AgentClient {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    return _post<Map<String, dynamic>>('/fs/copy', data: {
-      'sources': sources,
-      'destDir': destDir,
-      'duplicate': duplicate,
-      'overwrite': overwrite,
-    });
+    return _post<Map<String, dynamic>>(
+      '/fs/copy',
+      data: {
+        'sources': sources,
+        'destDir': destDir,
+        'duplicate': duplicate,
+        'overwrite': overwrite,
+      },
+    );
   }
 
   /// Moves [sources] into [destDir]. See [copy] for the [duplicate] /
@@ -507,21 +537,21 @@ class AgentClient {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    return _post<Map<String, dynamic>>('/fs/move', data: {
-      'sources': sources,
-      'destDir': destDir,
-      'duplicate': duplicate,
-      'overwrite': overwrite,
-    });
+    return _post<Map<String, dynamic>>(
+      '/fs/move',
+      data: {
+        'sources': sources,
+        'destDir': destDir,
+        'duplicate': duplicate,
+        'overwrite': overwrite,
+      },
+    );
   }
 
   /// Permanently and recursively deletes [paths]. There is no "trash" or
   /// undo — the agent removes the files/directories immediately.
   Future<Map<String, dynamic>> delete(List<String> paths) async {
-    return _delete<Map<String, dynamic>>(
-      '/fs',
-      data: {'paths': paths},
-    );
+    return _delete<Map<String, dynamic>>('/fs', data: {'paths': paths});
   }
 
   // ---------------------------------------------------------------------------
@@ -614,7 +644,10 @@ class AgentClient {
   /// Intended for small-ish files (previews of images/text/PDFs). Callers
   /// should check [Entry.size] via [meta] first and avoid calling this for
   /// very large files — there is no size cap enforced here.
-  Future<Uint8List> fetchBytes(String remotePath, {CancelToken? cancelToken}) async {
+  Future<Uint8List> fetchBytes(
+    String remotePath, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       final res = await _dio.get<List<int>>(
         '/content',
@@ -698,20 +731,22 @@ class AgentClient {
     required int chunkSize,
     bool overwrite = false,
   }) async {
-    final data = await _post<Map<String, dynamic>>('/transfers', data: {
-      'path': path,
-      'size': size,
-      'sha256': sha256Hex,
-      'chunkSize': chunkSize,
-      'overwrite': overwrite,
-    });
+    final data = await _post<Map<String, dynamic>>(
+      '/transfers',
+      data: {
+        'path': path,
+        'size': size,
+        'sha256': sha256Hex,
+        'chunkSize': chunkSize,
+        'overwrite': overwrite,
+      },
+    );
     return UploadSession.fromJson(data);
   }
 
   /// Get the current status of an upload session (for resume).
   Future<UploadSession> getUploadSession(String id) async {
-    final data =
-        await _get<Map<String, dynamic>>('/transfers/$id');
+    final data = await _get<Map<String, dynamic>>('/transfers/$id');
     return UploadSession.fromJson(data);
   }
 
@@ -752,8 +787,9 @@ class AgentClient {
 
   /// Finalise the upload session (verify whole-file hash, atomic rename).
   Future<Entry> completeUpload(String sessionId) async {
-    final data =
-        await _post<Map<String, dynamic>>('/transfers/$sessionId/complete');
+    final data = await _post<Map<String, dynamic>>(
+      '/transfers/$sessionId/complete',
+    );
     return Entry.fromJson(data);
   }
 
@@ -814,9 +850,10 @@ class AgentClient {
         fileAccessMode:
             startByte > 0 ? FileAccessMode.append : FileAccessMode.write,
         // Report absolute progress so a resumed download doesn't restart at 0%.
-        onReceiveProgress: onProgress == null
-            ? null
-            : (received, total) => onProgress(
+        onReceiveProgress:
+            onProgress == null
+                ? null
+                : (received, total) => onProgress(
                   startByte + received,
                   total > 0 ? startByte + total : total,
                 ),

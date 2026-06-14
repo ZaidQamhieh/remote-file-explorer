@@ -33,20 +33,23 @@ void main() {
     return container;
   }
 
-  testWidgets('defaults to inheriting — no overrides, reset disabled',
-      (tester) async {
+  testWidgets('defaults to inheriting — no overrides, reset disabled', (
+    tester,
+  ) async {
     final c = await pump(tester);
 
     expect(c.read(settingsProvider).valueOrNull!.hasOverride('h1'), isFalse);
     expect(find.text('Using app default (List)'), findsOneWidget);
 
     final reset = tester.widget<TextButton>(
-        find.widgetWithText(TextButton, 'Reset to app defaults'));
+      find.widgetWithText(TextButton, 'Reset to app defaults'),
+    );
     expect(reset.onPressed, isNull, reason: 'nothing to reset');
   });
 
-  testWidgets('toggling Layout override creates a device override',
-      (tester) async {
+  testWidgets('toggling Layout override creates a device override', (
+    tester,
+  ) async {
     final c = await pump(tester);
 
     // The Layout row's switch is the first SwitchListTile.

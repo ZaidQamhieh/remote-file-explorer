@@ -71,52 +71,53 @@ class EntryTile extends StatelessWidget {
     final compact = density == EntryDensity.compact;
     final meta = _meta;
 
-    final Widget leading = multiSelect
-        ? Checkbox(value: selected, onChanged: (_) => onSelect())
-        : _IconTile(
-            entry: entry,
-            compact: compact,
-            isFavorite: isFavorite && entry.isDir,
-          );
+    final Widget leading =
+        multiSelect
+            ? Checkbox(value: selected, onChanged: (_) => onSelect())
+            : _IconTile(
+              entry: entry,
+              compact: compact,
+              isFavorite: isFavorite && entry.isDir,
+            );
 
     final nameStyle = Theme.of(context).textTheme.titleMedium;
-    final metaStyle = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: scheme.onSurfaceVariant);
+    final metaStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
 
-    final Widget content = compact
-        ? Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
+    final Widget content =
+        compact
+            ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    entry.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: nameStyle,
+                  ),
+                ),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(width: Spacing.sm),
+                  Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
+                ],
+              ],
+            )
+            : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   entry.name,
                   overflow: TextOverflow.ellipsis,
                   style: nameStyle,
                 ),
-              ),
-              if (meta.isNotEmpty) ...[
-                const SizedBox(width: Spacing.sm),
-                Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
+                ],
               ],
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                entry.name,
-                overflow: TextOverflow.ellipsis,
-                style: nameStyle,
-              ),
-              if (meta.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(meta, overflow: TextOverflow.ellipsis, style: metaStyle),
-              ],
-            ],
-          );
+            );
 
     Widget tile = Material(
       color: selected ? scheme.primaryContainer : Colors.transparent,
@@ -138,14 +139,16 @@ class EntryTile extends StatelessWidget {
               if (entry.isDir)
                 onShowMeta != null
                     ? IconButton(
-                        icon: Icon(Icons.chevron_right_rounded,
-                            color: scheme.outline),
-                        tooltip: 'Folder details',
-                        onPressed: onShowMeta,
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      )
+                      icon: Icon(
+                        Icons.chevron_right_rounded,
+                        color: scheme.outline,
+                      ),
+                      tooltip: 'Folder details',
+                      onPressed: onShowMeta,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    )
                     : Icon(Icons.chevron_right_rounded, color: scheme.outline),
             ],
           ),
@@ -206,7 +209,11 @@ class _IconTile extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
+            child: const Icon(
+              Icons.star_rounded,
+              size: 12,
+              color: Colors.amber,
+            ),
           ),
         ),
       ],

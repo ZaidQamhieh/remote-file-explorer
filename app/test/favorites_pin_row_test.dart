@@ -48,8 +48,7 @@ void main() {
     expect(find.byIcon(Icons.folder_rounded), findsNWidgets(2));
   });
 
-  testWidgets('tapping a card calls onOpen with that favorite',
-      (tester) async {
+  testWidgets('tapping a card calls onOpen with that favorite', (tester) async {
     Favorite? opened;
     await tester.pumpWidget(
       MaterialApp(
@@ -70,8 +69,9 @@ void main() {
     expect(opened!.path, '/root/Photos');
   });
 
-  testWidgets('long-pressing a card calls onRemove with that favorite',
-      (tester) async {
+  testWidgets('long-pressing a card calls onRemove with that favorite', (
+    tester,
+  ) async {
     Favorite? removed;
     await tester.pumpWidget(
       MaterialApp(

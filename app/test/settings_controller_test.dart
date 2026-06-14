@@ -54,8 +54,11 @@ void main() {
 
       final s = c.read(settingsProvider).valueOrNull!;
       expect(s.resolveView('hostA').gridView, isFalse, reason: 'override wins');
-      expect(s.resolveView('hostA').density, EntryDensity.compact,
-          reason: 'un-overridden field still inherits the app default');
+      expect(
+        s.resolveView('hostA').density,
+        EntryDensity.compact,
+        reason: 'un-overridden field still inherits the app default',
+      );
       expect(s.resolveView('hostB').gridView, isTrue, reason: 'inherits');
       expect(s.hasOverride('hostA'), isTrue);
       expect(s.hasOverride('hostB'), isFalse);
@@ -69,12 +72,19 @@ void main() {
 
       await n.setAppGridView(true);
       await n.setDeviceGridView('hostA', false);
-      expect(c.read(settingsProvider).valueOrNull!.hasOverride('hostA'), isTrue);
+      expect(
+        c.read(settingsProvider).valueOrNull!.hasOverride('hostA'),
+        isTrue,
+      );
 
       await n.setDeviceGridView('hostA', null); // clear
       final s = c.read(settingsProvider).valueOrNull!;
       expect(s.hasOverride('hostA'), isFalse, reason: 'pruned when empty');
-      expect(s.resolveView('hostA').gridView, isTrue, reason: 'back to default');
+      expect(
+        s.resolveView('hostA').gridView,
+        isTrue,
+        reason: 'back to default',
+      );
     });
 
     test('resetDevice clears every override for the host', () async {
@@ -85,11 +95,16 @@ void main() {
       await n.setDeviceGridView('hostA', true);
       await n.setDeviceDensity('hostA', EntryDensity.compact);
       await n.setDeviceSort('hostA', const SortOrder(field: SortField.size));
-      expect(c.read(settingsProvider).valueOrNull!.hasOverride('hostA'), isTrue);
+      expect(
+        c.read(settingsProvider).valueOrNull!.hasOverride('hostA'),
+        isTrue,
+      );
 
       await n.resetDevice('hostA');
       expect(
-          c.read(settingsProvider).valueOrNull!.hasOverride('hostA'), isFalse);
+        c.read(settingsProvider).valueOrNull!.hasOverride('hostA'),
+        isFalse,
+      );
     });
   });
 
@@ -99,48 +114,58 @@ void main() {
     test('app defaults and overrides survive a fresh container', () async {
       final c1 = ProviderContainer();
       final n1 = await load(c1);
-      await n1.setAppSort(const SortOrder(field: SortField.date, ascending: false));
+      await n1.setAppSort(
+        const SortOrder(field: SortField.date, ascending: false),
+      );
       await n1.setDeviceGridView('hostA', true);
       c1.dispose();
 
       final c2 = ProviderContainer();
       addTearDown(c2.dispose);
       final s = await c2.read(settingsProvider.future);
-      expect(s.app.sort, const SortOrder(field: SortField.date, ascending: false));
+      expect(
+        s.app.sort,
+        const SortOrder(field: SortField.date, ascending: false),
+      );
       expect(s.resolveView('hostA').gridView, isTrue);
       expect(s.resolveView('other').gridView, isFalse);
     });
   });
 
   group('migration from legacy view_prefs keys', () {
-    test('per-host grid: divergences become overrides, matches collapse',
-        () async {
-      // Legacy state: hostA was grid (diverges from the list default), hostB
-      // was explicitly list (matches the default), plus global density+sort.
-      SharedPreferences.setMockInitialValues({
-        'rfe_grid_view_v1': jsonEncode({'hostA': true, 'hostB': false}),
-        'rfe_density_v1': EntryDensity.compact.name,
-        'rfe_sort_field_v1': SortField.size.name,
-        'rfe_sort_ascending_v1': false,
-      });
+    test(
+      'per-host grid: divergences become overrides, matches collapse',
+      () async {
+        // Legacy state: hostA was grid (diverges from the list default), hostB
+        // was explicitly list (matches the default), plus global density+sort.
+        SharedPreferences.setMockInitialValues({
+          'rfe_grid_view_v1': jsonEncode({'hostA': true, 'hostB': false}),
+          'rfe_density_v1': EntryDensity.compact.name,
+          'rfe_sort_field_v1': SortField.size.name,
+          'rfe_sort_ascending_v1': false,
+        });
 
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final s = await c.read(settingsProvider.future);
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final s = await c.read(settingsProvider.future);
 
-      // Old globals become app defaults.
-      expect(s.app.gridView, isFalse);
-      expect(s.app.density, EntryDensity.compact);
-      expect(s.app.sort, const SortOrder(field: SortField.size, ascending: false));
+        // Old globals become app defaults.
+        expect(s.app.gridView, isFalse);
+        expect(s.app.density, EntryDensity.compact);
+        expect(
+          s.app.sort,
+          const SortOrder(field: SortField.size, ascending: false),
+        );
 
-      // hostA diverged -> explicit override; hostB matched -> no override.
-      expect(s.hasOverride('hostA'), isTrue);
-      expect(s.resolveView('hostA').gridView, isTrue);
-      expect(s.hasOverride('hostB'), isFalse);
+        // hostA diverged -> explicit override; hostB matched -> no override.
+        expect(s.hasOverride('hostA'), isTrue);
+        expect(s.resolveView('hostA').gridView, isTrue);
+        expect(s.hasOverride('hostB'), isFalse);
 
-      // Behavior is preserved either way: both resolve to what they were.
-      expect(s.resolveView('hostB').gridView, isFalse);
-    });
+        // Behavior is preserved either way: both resolve to what they were.
+        expect(s.resolveView('hostB').gridView, isFalse);
+      },
+    );
 
     test('migration runs once and removes legacy keys', () async {
       SharedPreferences.setMockInitialValues({
@@ -152,8 +177,11 @@ void main() {
       await c1.read(settingsProvider.future);
       c1.dispose();
 
-      expect(prefs.containsKey('rfe_grid_view_v1'), isFalse,
-          reason: 'legacy key cleaned up');
+      expect(
+        prefs.containsKey('rfe_grid_view_v1'),
+        isFalse,
+        reason: 'legacy key cleaned up',
+      );
       expect(prefs.getBool('settings.migrated.v1'), isTrue);
 
       // A user later sets the app default to list; re-running build must NOT
@@ -168,8 +196,11 @@ void main() {
       final c3 = ProviderContainer();
       addTearDown(c3.dispose);
       final s3 = await c3.read(settingsProvider.future);
-      expect(s3.hasOverride('hostA'), isFalse,
-          reason: 'migration is one-shot; reset is not undone');
+      expect(
+        s3.hasOverride('hostA'),
+        isFalse,
+        reason: 'migration is one-shot; reset is not undone',
+      );
     });
   });
 
@@ -232,8 +263,9 @@ void main() {
 
     test('copyWithVisibility sets and clears the wholesale override', () {
       const empty = DeviceOverrides();
-      final withVis =
-          empty.copyWithVisibility(const VisibilityPrefs(hideDotfiles: false));
+      final withVis = empty.copyWithVisibility(
+        const VisibilityPrefs(hideDotfiles: false),
+      );
       expect(withVis.isEmpty, isFalse);
       expect(withVis.visibility, const VisibilityPrefs(hideDotfiles: false));
 
@@ -248,19 +280,24 @@ void main() {
   group('visibility resolution precedence', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    test('default resolves to hideDotfiles-true / empty sets, no override',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final s = await c.read(settingsProvider.future);
+    test(
+      'default resolves to hideDotfiles-true / empty sets, no override',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final s = await c.read(settingsProvider.future);
 
-      final v = s.resolveVisibility('any-host');
-      expect(v.hideDotfiles, isTrue);
-      expect(v.hiddenExtensions, isEmpty);
-      expect(v.hiddenNames, isEmpty);
-      expect(s.overridesFor('any-host').visibility, isNull,
-          reason: 'absence == inherit');
-    });
+        final v = s.resolveVisibility('any-host');
+        expect(v.hideDotfiles, isTrue);
+        expect(v.hiddenExtensions, isEmpty);
+        expect(v.hiddenNames, isEmpty);
+        expect(
+          s.overridesFor('any-host').visibility,
+          isNull,
+          reason: 'absence == inherit',
+        );
+      },
+    );
 
     test('override wins; absence inherits the app default', () async {
       final c = ProviderContainer();
@@ -273,27 +310,35 @@ void main() {
       await n.setHiddenExtensions({'log'}, hostId: 'hostA');
 
       final s = c.read(settingsProvider).valueOrNull!;
-      expect(s.resolveVisibility('hostA').hiddenExtensions, {'log'},
-          reason: 'override wins wholesale');
-      expect(s.resolveVisibility('hostB').hiddenExtensions, {'tmp'},
-          reason: 'inherits the app default');
+      expect(
+        s.resolveVisibility('hostA').hiddenExtensions,
+        {'log'},
+        reason: 'override wins wholesale',
+      );
+      expect(
+        s.resolveVisibility('hostB').hiddenExtensions,
+        {'tmp'},
+        reason: 'inherits the app default',
+      );
       expect(s.overridesFor('hostA').visibility, isNotNull);
       expect(s.overridesFor('hostB').visibility, isNull);
     });
 
-    test('editing the app default does not affect an overridden host',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final n = await load(c);
+    test(
+      'editing the app default does not affect an overridden host',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = await load(c);
 
-      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
-      await n.setHiddenExtensions({'tmp'}); // app default changes
+        await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+        await n.setHiddenExtensions({'tmp'}); // app default changes
 
-      final s = c.read(settingsProvider).valueOrNull!;
-      expect(s.resolveVisibility('hostA').hiddenExtensions, {'log'});
-      expect(s.app.visibility.hiddenExtensions, {'tmp'});
-    });
+        final s = c.read(settingsProvider).valueOrNull!;
+        expect(s.resolveVisibility('hostA').hiddenExtensions, {'log'});
+        expect(s.app.visibility.hiddenExtensions, {'tmp'});
+      },
+    );
   });
 
   group('setDeviceVisibilityOverride seed/clear', () {
@@ -316,40 +361,60 @@ void main() {
       expect(vis.hiddenExtensions, {'tmp'});
     });
 
-    test('turning override off clears it (host falls back to app default)',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final n = await load(c);
+    test(
+      'turning override off clears it (host falls back to app default)',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = await load(c);
 
-      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
-      expect(
-          c.read(settingsProvider).valueOrNull!.overridesFor('hostA').visibility,
-          isNotNull);
+        await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+        expect(
+          c
+              .read(settingsProvider)
+              .valueOrNull!
+              .overridesFor('hostA')
+              .visibility,
+          isNotNull,
+        );
 
-      await n.setDeviceVisibilityOverride('hostA', false);
-      final s = c.read(settingsProvider).valueOrNull!;
-      expect(s.overridesFor('hostA').visibility, isNull);
-      expect(s.hasOverride('hostA'), isFalse, reason: 'host pruned when empty');
-      expect(s.resolveVisibility('hostA').hiddenExtensions, isEmpty,
-          reason: 'back to the app default');
-    });
+        await n.setDeviceVisibilityOverride('hostA', false);
+        final s = c.read(settingsProvider).valueOrNull!;
+        expect(s.overridesFor('hostA').visibility, isNull);
+        expect(
+          s.hasOverride('hostA'),
+          isFalse,
+          reason: 'host pruned when empty',
+        );
+        expect(
+          s.resolveVisibility('hostA').hiddenExtensions,
+          isEmpty,
+          reason: 'back to the app default',
+        );
+      },
+    );
 
-    test('resetDevice clears a visibility override along with the host entry',
-        () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final n = await load(c);
+    test(
+      'resetDevice clears a visibility override along with the host entry',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final n = await load(c);
 
-      await n.setHiddenExtensions({'log'}, hostId: 'hostA');
-      await n.resetDevice('hostA');
-      expect(
-          c.read(settingsProvider).valueOrNull!.overridesFor('hostA').visibility,
-          isNull);
-    });
+        await n.setHiddenExtensions({'log'}, hostId: 'hostA');
+        await n.resetDevice('hostA');
+        expect(
+          c
+              .read(settingsProvider)
+              .valueOrNull!
+              .overridesFor('hostA')
+              .visibility,
+          isNull,
+        );
+      },
+    );
 
-    test('app-default + per-host overrides survive a fresh container',
-        () async {
+    test('app-default + per-host overrides survive a fresh container', () async {
       final c1 = ProviderContainer();
       final n1 = await load(c1);
       await n1.setHiddenExtensions({'tmp'}); // app default
@@ -370,29 +435,31 @@ void main() {
   });
 
   group('visibility migration from legacy global keys', () {
-    test('legacy globals fold into the app default, then are removed',
-        () async {
-      SharedPreferences.setMockInitialValues({
-        'rfe_hide_dotfiles_v1': false,
-        'rfe_hidden_extensions_v1': jsonEncode(['tmp', 'log']),
-        'rfe_hidden_names_v1': jsonEncode(['Thumbs.db']),
-      });
-      final prefs = await SharedPreferences.getInstance();
+    test(
+      'legacy globals fold into the app default, then are removed',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'rfe_hide_dotfiles_v1': false,
+          'rfe_hidden_extensions_v1': jsonEncode(['tmp', 'log']),
+          'rfe_hidden_names_v1': jsonEncode(['Thumbs.db']),
+        });
+        final prefs = await SharedPreferences.getInstance();
 
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final s = await c.read(settingsProvider.future);
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final s = await c.read(settingsProvider.future);
 
-      expect(s.app.visibility.hideDotfiles, isFalse);
-      expect(s.app.visibility.hiddenExtensions, {'tmp', 'log'});
-      expect(s.app.visibility.hiddenNames, {'Thumbs.db'});
+        expect(s.app.visibility.hideDotfiles, isFalse);
+        expect(s.app.visibility.hiddenExtensions, {'tmp', 'log'});
+        expect(s.app.visibility.hiddenNames, {'Thumbs.db'});
 
-      // Legacy keys cleaned up; the one-shot flag is set.
-      expect(prefs.containsKey('rfe_hide_dotfiles_v1'), isFalse);
-      expect(prefs.containsKey('rfe_hidden_extensions_v1'), isFalse);
-      expect(prefs.containsKey('rfe_hidden_names_v1'), isFalse);
-      expect(prefs.getBool('settings.visibilityMigrated.v1'), isTrue);
-    });
+        // Legacy keys cleaned up; the one-shot flag is set.
+        expect(prefs.containsKey('rfe_hide_dotfiles_v1'), isFalse);
+        expect(prefs.containsKey('rfe_hidden_extensions_v1'), isFalse);
+        expect(prefs.containsKey('rfe_hidden_names_v1'), isFalse);
+        expect(prefs.getBool('settings.visibilityMigrated.v1'), isTrue);
+      },
+    );
 
     test('absent legacy keys yield the defaults', () async {
       SharedPreferences.setMockInitialValues({});
@@ -419,8 +486,11 @@ void main() {
       final c2 = ProviderContainer();
       addTearDown(c2.dispose);
       final s = await c2.read(settingsProvider.future);
-      expect(s.app.visibility.hiddenExtensions, isEmpty,
-          reason: 'migration is one-shot; it does not resurrect the legacy set');
+      expect(
+        s.app.visibility.hiddenExtensions,
+        isEmpty,
+        reason: 'migration is one-shot; it does not resurrect the legacy set',
+      );
     });
   });
 }

@@ -6,12 +6,8 @@ import 'package:remote_file_explorer/features/preview/preview.dart';
 // that drives whether `openPreview` pushes a swipeable pager and where it
 // starts. No widgets / no host — just the function contract.
 
-Entry _file(String name, {String? mime}) => Entry(
-      name: name,
-      path: '/dir/$name',
-      isDir: false,
-      mimeType: mime,
-    );
+Entry _file(String name, {String? mime}) =>
+    Entry(name: name, path: '/dir/$name', isDir: false, mimeType: mime);
 
 Entry _dir(String name) => Entry(name: name, path: '/dir/$name', isDir: true);
 

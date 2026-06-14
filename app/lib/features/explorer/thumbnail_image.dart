@@ -98,22 +98,25 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
     }
 
     _loading = true;
-    widget.client.thumbnail(widget.entry.path, size: widget.size).then((data) {
-      cache.put(_cacheKey, data);
-      if (!mounted) return;
-      setState(() {
-        _bytes = data;
-        _failed = data == null;
-        _loading = false;
-      });
-    }).catchError((Object _) {
-      cache.put(_cacheKey, null);
-      if (!mounted) return;
-      setState(() {
-        _failed = true;
-        _loading = false;
-      });
-    });
+    widget.client
+        .thumbnail(widget.entry.path, size: widget.size)
+        .then((data) {
+          cache.put(_cacheKey, data);
+          if (!mounted) return;
+          setState(() {
+            _bytes = data;
+            _failed = data == null;
+            _loading = false;
+          });
+        })
+        .catchError((Object _) {
+          cache.put(_cacheKey, null);
+          if (!mounted) return;
+          setState(() {
+            _failed = true;
+            _loading = false;
+          });
+        });
   }
 
   @override

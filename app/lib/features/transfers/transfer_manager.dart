@@ -31,61 +31,67 @@ class TransferManagerSheet extends ConsumerWidget {
       expand: false,
       initialChildSize: 0.5,
       maxChildSize: 0.9,
-      builder: (_, controller) => DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: Radii.sheetTopR,
-        ),
-        child: ClipRRect(
-          borderRadius: Radii.sheetTopR,
-          child: Column(
-            children: [
-              _buildHandle(context),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md,
-                  vertical: Spacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    Text('Transfers',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
-                    if (doneAndFailed.isNotEmpty)
-                      TextButton.icon(
-                        icon: const Icon(Icons.clear_all_rounded, size: 18),
-                        label: const Text('Clear completed'),
-                        onPressed: () {
-                          for (final t in doneAndFailed) {
-                            ref
-                                .read(transferQueueProvider.notifier)
-                                .remove(t.id);
-                          }
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: transfers.isEmpty
-                    ? const Center(child: Text('No transfers'))
-                    : ListView(
-                        controller: controller,
-                        padding: const EdgeInsets.only(bottom: Spacing.md),
-                        children: [
-                          for (final group in TransferGroup.values)
-                            if (groups[group]!.isNotEmpty)
-                              _TransferSection(
-                                group: group,
-                                tasks: groups[group]!,
+      builder:
+          (_, controller) => DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: Radii.sheetTopR,
+            ),
+            child: ClipRRect(
+              borderRadius: Radii.sheetTopR,
+              child: Column(
+                children: [
+                  _buildHandle(context),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md,
+                      vertical: Spacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Transfers',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const Spacer(),
+                        if (doneAndFailed.isNotEmpty)
+                          TextButton.icon(
+                            icon: const Icon(Icons.clear_all_rounded, size: 18),
+                            label: const Text('Clear completed'),
+                            onPressed: () {
+                              for (final t in doneAndFailed) {
+                                ref
+                                    .read(transferQueueProvider.notifier)
+                                    .remove(t.id);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child:
+                        transfers.isEmpty
+                            ? const Center(child: Text('No transfers'))
+                            : ListView(
+                              controller: controller,
+                              padding: const EdgeInsets.only(
+                                bottom: Spacing.md,
                               ),
-                        ],
-                      ),
+                              children: [
+                                for (final group in TransferGroup.values)
+                                  if (groups[group]!.isNotEmpty)
+                                    _TransferSection(
+                                      group: group,
+                                      tasks: groups[group]!,
+                                    ),
+                              ],
+                            ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -116,11 +122,11 @@ enum TransferGroup { active, queued, done, failed }
 
 extension TransferGroupLabel on TransferGroup {
   String get label => switch (this) {
-        TransferGroup.active => 'Active',
-        TransferGroup.queued => 'Queued',
-        TransferGroup.done => 'Done',
-        TransferGroup.failed => 'Failed',
-      };
+    TransferGroup.active => 'Active',
+    TransferGroup.queued => 'Queued',
+    TransferGroup.done => 'Done',
+    TransferGroup.failed => 'Failed',
+  };
 }
 
 /// Buckets [tasks] into the four manager groups by [TransferStatus]:
@@ -128,7 +134,8 @@ extension TransferGroupLabel on TransferGroup {
 /// failed → failed. Always returns an entry for every group (possibly empty),
 /// preserving input order within each bucket.
 Map<TransferGroup, List<TransferTask>> groupTransfers(
-    List<TransferTask> tasks) {
+  List<TransferTask> tasks,
+) {
   final out = {for (final g in TransferGroup.values) g: <TransferTask>[]};
   for (final t in tasks) {
     final group = switch (t.status) {
@@ -215,15 +222,17 @@ class _SectionHeader extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    letterSpacing: 0.6,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: scheme.onSurfaceVariant,
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(width: Spacing.sm),
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.sm, vertical: 1),
+                horizontal: Spacing.sm,
+                vertical: 1,
+              ),
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHighest,
                 borderRadius: Radii.chipR,
@@ -231,8 +240,8 @@ class _SectionHeader extends StatelessWidget {
               child: Text(
                 '$count',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -281,13 +290,13 @@ class _TransferTile extends ConsumerWidget {
       // Swipe-left (endToStart) = pause/resume; swipe-right (startToEnd) =
       // remove. Pause/resume is a non-dismissing action (we veto the dismissal
       // and toggle), remove actually dismisses and offers undo.
-      direction: _canPauseResume
-          ? DismissDirection.horizontal
-          : DismissDirection.startToEnd,
+      direction:
+          _canPauseResume
+              ? DismissDirection.horizontal
+              : DismissDirection.startToEnd,
       background: _swipeBackground(context, removing: true),
-      secondaryBackground: _canPauseResume
-          ? _swipeBackground(context, removing: false)
-          : null,
+      secondaryBackground:
+          _canPauseResume ? _swipeBackground(context, removing: false) : null,
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
           // Pause/resume toggle — never actually dismiss the row.
@@ -330,11 +339,12 @@ class _TransferTile extends ConsumerWidget {
     final color = removing ? scheme.errorContainer : scheme.tertiaryContainer;
     final onColor =
         removing ? scheme.onErrorContainer : scheme.onTertiaryContainer;
-    final icon = removing
-        ? Icons.delete_outline_rounded
-        : (task.status == TransferStatus.paused
-            ? Icons.play_arrow_rounded
-            : Icons.pause_rounded);
+    final icon =
+        removing
+            ? Icons.delete_outline_rounded
+            : (task.status == TransferStatus.paused
+                ? Icons.play_arrow_rounded
+                : Icons.pause_rounded);
     return Container(
       color: color,
       alignment: removing ? Alignment.centerLeft : Alignment.centerRight,
@@ -366,16 +376,17 @@ class _TransferTile extends ConsumerWidget {
   }
 
   Widget? _buildSubtitle(
-      BuildContext context, WidgetRef ref, TransferQueueNotifier notifier) {
+    BuildContext context,
+    WidgetRef ref,
+    TransferQueueNotifier notifier,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     switch (task.status) {
       case TransferStatus.running:
       case TransferStatus.paused:
         final paused = task.status == TransferStatus.paused;
         // Live speed/ETA from the read-only sampler (running tasks only).
-        final eta = paused
-            ? null
-            : ref.watch(transferSamplerProvider)[task.id];
+        final eta = paused ? null : ref.watch(transferSamplerProvider)[task.id];
         final meta = <String>[
           '${formatSize(task.transferredBytes)} / ${formatSize(task.totalBytes)}',
           if (paused) 'Paused',
@@ -409,11 +420,12 @@ class _TransferTile extends ConsumerWidget {
           ),
         );
       case TransferStatus.completed:
-        final label = task.kind == TransferKind.upload
-            ? 'Uploaded'
-            : (task.savedLocation != null
-                ? 'Saved to ${task.savedLocation}'
-                : 'Downloaded');
+        final label =
+            task.kind == TransferKind.upload
+                ? 'Uploaded'
+                : (task.savedLocation != null
+                    ? 'Saved to ${task.savedLocation}'
+                    : 'Downloaded');
         return Text(
           label,
           style: const TextStyle(color: Brand.online),
@@ -483,15 +495,15 @@ class _TransferTile extends ConsumerWidget {
 TransferTask reenqueuableCopy(TransferTask task) {
   return switch (task.kind) {
     TransferKind.upload => TransferTask.upload(
-        localPath: task.localPath,
-        remotePath: task.remotePath,
-        host: task.host,
-        overwrite: task.overwrite,
-      ),
+      localPath: task.localPath,
+      remotePath: task.remotePath,
+      host: task.host,
+      overwrite: task.overwrite,
+    ),
     TransferKind.download => TransferTask.download(
-        remotePath: task.remotePath,
-        localPath: task.localPath,
-        host: task.host,
-      ),
+      remotePath: task.remotePath,
+      localPath: task.localPath,
+      host: task.host,
+    ),
   };
 }

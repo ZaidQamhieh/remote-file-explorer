@@ -53,5 +53,5 @@ class RecentSearchesNotifier extends AsyncNotifier<List<String>> {
 
 final recentSearchesProvider =
     AsyncNotifierProvider<RecentSearchesNotifier, List<String>>(
-  RecentSearchesNotifier.new,
-);
+      RecentSearchesNotifier.new,
+    );

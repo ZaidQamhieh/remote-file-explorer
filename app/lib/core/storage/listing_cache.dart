@@ -61,16 +61,20 @@ class ListingCache {
 
     // Evict oldest beyond capacity.
     if (data.length > maxEntries) {
-      final keys = data.keys.toList()
-        ..sort((a, b) {
-          final fa = DateTime.tryParse(
-                  (data[a] as Map)['fetchedAt'] as String? ?? '') ??
-              DateTime(0);
-          final fb = DateTime.tryParse(
-                  (data[b] as Map)['fetchedAt'] as String? ?? '') ??
-              DateTime(0);
-          return fa.compareTo(fb);
-        });
+      final keys =
+          data.keys.toList()..sort((a, b) {
+            final fa =
+                DateTime.tryParse(
+                  (data[a] as Map)['fetchedAt'] as String? ?? '',
+                ) ??
+                DateTime(0);
+            final fb =
+                DateTime.tryParse(
+                  (data[b] as Map)['fetchedAt'] as String? ?? '',
+                ) ??
+                DateTime(0);
+            return fa.compareTo(fb);
+          });
       for (final k in keys.take(data.length - maxEntries)) {
         data.remove(k);
       }
@@ -84,9 +88,10 @@ class ListingCache {
     if (raw is! Map) return null;
     final fetchedAt =
         DateTime.tryParse(raw['fetchedAt'] as String? ?? '') ?? DateTime(0);
-    final entries = ((raw['entries'] as List?) ?? const [])
-        .map((e) => Entry.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final entries =
+        ((raw['entries'] as List?) ?? const [])
+            .map((e) => Entry.fromJson(e as Map<String, dynamic>))
+            .toList();
     return CachedListing(entries: entries, fetchedAt: fetchedAt);
   }
 }

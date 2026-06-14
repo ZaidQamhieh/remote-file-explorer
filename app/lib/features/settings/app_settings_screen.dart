@@ -29,11 +29,19 @@ class AppSettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('App settings')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
-            Spacing.md, Spacing.md, Spacing.md, Spacing.xl),
+          Spacing.md,
+          Spacing.md,
+          Spacing.md,
+          Spacing.xl,
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
-                Spacing.xs, 0, Spacing.xs, Spacing.md),
+              Spacing.xs,
+              0,
+              Spacing.xs,
+              Spacing.md,
+            ),
             child: Text(
               'These defaults apply to every device. Override any of them for a '
               'single device from that device’s settings.',
@@ -74,8 +82,9 @@ class AppSettingsScreen extends ConsumerWidget {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Use wallpaper colors'),
                 subtitle: const Text(
-                    'Material You — derive the palette from your wallpaper '
-                    'where supported'),
+                  'Material You — derive the palette from your wallpaper '
+                  'where supported',
+                ),
                 value: app.dynamicColor,
                 onChanged: notifier.setDynamicColor,
               ),
@@ -136,18 +145,20 @@ class AppSettingsScreen extends ConsumerWidget {
                       ChoiceChip(
                         label: Text(_sortFieldLabel(field)),
                         selected: app.sort.field == field,
-                        avatar: app.sort.field == field
-                            ? Icon(
-                                app.sort.ascending
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
-                                size: 18,
-                              )
-                            : null,
+                        avatar:
+                            app.sort.field == field
+                                ? Icon(
+                                  app.sort.ascending
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.arrow_downward_rounded,
+                                  size: 18,
+                                )
+                                : null,
                         onSelected: (_) {
                           if (app.sort.field == field) {
-                            notifier.setAppSort(app.sort
-                                .copyWith(ascending: !app.sort.ascending));
+                            notifier.setAppSort(
+                              app.sort.copyWith(ascending: !app.sort.ascending),
+                            );
                           } else {
                             notifier.setAppSort(SortOrder(field: field));
                           }
@@ -193,8 +204,8 @@ class _LabeledControl extends StatelessWidget {
 }
 
 String _sortFieldLabel(SortField field) => switch (field) {
-      SortField.name => 'Name',
-      SortField.size => 'Size',
-      SortField.date => 'Date modified',
-      SortField.type => 'Type',
-    };
+  SortField.name => 'Name',
+  SortField.size => 'Size',
+  SortField.date => 'Date modified',
+  SortField.type => 'Type',
+};

@@ -58,15 +58,14 @@ class AppDefaults {
     VisibilityPrefs? visibility,
     ThemeMode? themeMode,
     bool? dynamicColor,
-  }) =>
-      AppDefaults(
-        gridView: gridView ?? this.gridView,
-        density: density ?? this.density,
-        sort: sort ?? this.sort,
-        visibility: visibility ?? this.visibility,
-        themeMode: themeMode ?? this.themeMode,
-        dynamicColor: dynamicColor ?? this.dynamicColor,
-      );
+  }) => AppDefaults(
+    gridView: gridView ?? this.gridView,
+    density: density ?? this.density,
+    sort: sort ?? this.sort,
+    visibility: visibility ?? this.visibility,
+    themeMode: themeMode ?? this.themeMode,
+    dynamicColor: dynamicColor ?? this.dynamicColor,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -112,13 +111,29 @@ class DeviceOverrides {
       gridView == null && density == null && sort == null && visibility == null;
 
   DeviceOverrides copyWithGridView(bool? value) => DeviceOverrides(
-      gridView: value, density: density, sort: sort, visibility: visibility);
+    gridView: value,
+    density: density,
+    sort: sort,
+    visibility: visibility,
+  );
   DeviceOverrides copyWithDensity(EntryDensity? value) => DeviceOverrides(
-      gridView: gridView, density: value, sort: sort, visibility: visibility);
+    gridView: gridView,
+    density: value,
+    sort: sort,
+    visibility: visibility,
+  );
   DeviceOverrides copyWithSort(SortOrder? value) => DeviceOverrides(
-      gridView: gridView, density: density, sort: value, visibility: visibility);
+    gridView: gridView,
+    density: density,
+    sort: value,
+    visibility: visibility,
+  );
   DeviceOverrides copyWithVisibility(VisibilityPrefs? value) => DeviceOverrides(
-      gridView: gridView, density: density, sort: sort, visibility: value);
+    gridView: gridView,
+    density: density,
+    sort: sort,
+    visibility: value,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -195,9 +210,8 @@ class SettingsState {
   SettingsState copyWith({
     AppDefaults? app,
     Map<String, DeviceOverrides>? overrides,
-  }) =>
-      SettingsState(
-        app: app ?? this.app,
-        overrides: overrides ?? this.overrides,
-      );
+  }) => SettingsState(
+    app: app ?? this.app,
+    overrides: overrides ?? this.overrides,
+  );
 }

@@ -70,8 +70,8 @@ class ExplorerState {
     this.nextCursor,
     this.visibilityPrefs = const VisibilityPrefs(),
     this.showHidden = false,
-  })  : sortedEntries = _sortEntries(entries, sort),
-        hiddenPaths = _hiddenPaths(entries, visibilityPrefs);
+  }) : sortedEntries = _sortEntries(entries, sort),
+       hiddenPaths = _hiddenPaths(entries, visibilityPrefs);
 
   final List<String> pathStack;
   final List<Entry> entries;
@@ -83,7 +83,7 @@ class ExplorerState {
   final SortOrder sort;
   final bool gridView;
   final Set<String> selected;
-  final bool stale;   // showing cached data, refresh in progress or failed
+  final bool stale; // showing cached data, refresh in progress or failed
   final bool offline; // last live fetch failed; data is from cache only
 
   /// Opaque cursor for the next page of [entries]; null when the current
@@ -138,9 +138,10 @@ class ExplorerState {
   /// entry's own fields (name/size/date/type), never on whether other entries
   /// are hidden — removing hidden entries from an already-sorted list can't
   /// reorder the survivors.
-  List<Entry> get displayEntries => showHidden
-      ? sortedEntries
-      : sortedEntries.where((e) => !hiddenPaths.contains(e.path)).toList();
+  List<Entry> get displayEntries =>
+      showHidden
+          ? sortedEntries
+          : sortedEntries.where((e) => !hiddenPaths.contains(e.path)).toList();
 
   String get currentPath => pathStack.last;
   bool get atRoot => pathStack.length == 1;
@@ -161,23 +162,22 @@ class ExplorerState {
     Object? nextCursor = _sentinel,
     VisibilityPrefs? visibilityPrefs,
     bool? showHidden,
-  }) =>
-      ExplorerState(
-        pathStack: pathStack ?? this.pathStack,
-        entries: entries ?? this.entries,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        error: error == _sentinel ? this.error : error as String?,
-        sort: sort ?? this.sort,
-        gridView: gridView ?? this.gridView,
-        selected: selected ?? this.selected,
-        stale: stale ?? this.stale,
-        offline: offline ?? this.offline,
-        nextCursor:
-            nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
-        visibilityPrefs: visibilityPrefs ?? this.visibilityPrefs,
-        showHidden: showHidden ?? this.showHidden,
-      );
+  }) => ExplorerState(
+    pathStack: pathStack ?? this.pathStack,
+    entries: entries ?? this.entries,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    error: error == _sentinel ? this.error : error as String?,
+    sort: sort ?? this.sort,
+    gridView: gridView ?? this.gridView,
+    selected: selected ?? this.selected,
+    stale: stale ?? this.stale,
+    offline: offline ?? this.offline,
+    nextCursor:
+        nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
+    visibilityPrefs: visibilityPrefs ?? this.visibilityPrefs,
+    showHidden: showHidden ?? this.showHidden,
+  );
 }
 
 const _sentinel = Object();
@@ -237,8 +237,9 @@ class ExplorerNotifier
     });
     final initialSettings = ref.read(settingsProvider).valueOrNull;
     final initialView = initialSettings?.resolveView(arg.hostId);
-    final initialVisibilityPrefs =
-        initialSettings?.resolveVisibility(arg.hostId);
+    final initialVisibilityPrefs = initialSettings?.resolveVisibility(
+      arg.hostId,
+    );
 
     // Schedule async load after construction.
     Future.microtask(_load);
@@ -272,7 +273,11 @@ class ExplorerNotifier
       );
     } else {
       state = state.copyWith(
-          loading: true, error: null, selected: {}, nextCursor: null);
+        loading: true,
+        error: null,
+        selected: {},
+        nextCursor: null,
+      );
     }
 
     // 2. Fetch live; on success replace + cache; on failure fall back to cache.
@@ -381,7 +386,8 @@ class ExplorerNotifier
   /// [ExplorerState.showHidden]). Unlike [toggleView]/[setSort], this is
   /// local UI state for this explorer screen only — it is intentionally not
   /// persisted to the settings model's file-visibility prefs.
-  void toggleShowHidden() => state = state.copyWith(showHidden: !state.showHidden);
+  void toggleShowHidden() =>
+      state = state.copyWith(showHidden: !state.showHidden);
 
   void toggleSelect(String path) {
     final sel = Set<String>.from(state.selected);
@@ -484,7 +490,9 @@ class ExplorerNotifier
   /// entries than one page) so collisions later in a large destination aren't
   /// missed.
   Future<Set<String>> collidingBasenames(
-      String destDir, Iterable<String> sourcePaths) async {
+    String destDir,
+    Iterable<String> sourcePaths,
+  ) async {
     final client = await _client();
     final destNames = <String>{};
     String? cursor;
@@ -503,9 +511,7 @@ class ExplorerNotifier
 // ---------------------------------------------------------------------------
 
 final explorerProvider = NotifierProvider.autoDispose
-    .family<ExplorerNotifier, ExplorerState, ExplorerArg>(
-  ExplorerNotifier.new,
-);
+    .family<ExplorerNotifier, ExplorerState, ExplorerArg>(ExplorerNotifier.new);
 
 /// Basename (final path component) of [path] — works for both POSIX (`/`)
 /// and Windows (`\`) separators, matching the splitting used elsewhere
@@ -566,11 +572,12 @@ List<String> buildPathStack(String path) {
   // Windows drive path, e.g. C:\Users\x
   final winDrive = RegExp(r'^[A-Za-z]:').firstMatch(path);
   if (winDrive != null) {
-    final parts = path
-        .replaceAll('/', r'\')
-        .split(r'\')
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final parts =
+        path
+            .replaceAll('/', r'\')
+            .split(r'\')
+            .where((s) => s.isNotEmpty)
+            .toList();
     final stack = <String>['${parts.first}\\']; // "C:\"
     var cur = parts.first;
     for (final p in parts.skip(1)) {

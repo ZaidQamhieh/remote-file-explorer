@@ -22,12 +22,12 @@ const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 final _baseModified = DateTime.utc(2026, 1, 1, 12, 0, 0);
 
 Entry _textEntry({DateTime? modified}) => Entry(
-      name: 'notes.txt',
-      path: '/docs/notes.txt',
-      isDir: false,
-      size: 11,
-      modified: modified ?? _baseModified,
-    );
+  name: 'notes.txt',
+  path: '/docs/notes.txt',
+  isDir: false,
+  size: 11,
+  modified: modified ?? _baseModified,
+);
 
 /// A minimal [AgentClient] subclass that captures [putContent] calls and lets
 /// each test script the outcome (success, or a specific typed exception).
@@ -52,21 +52,35 @@ class _FakeAgentClient extends AgentClient {
     DateTime? baseModified,
   }) async {
     putCalls.add((remotePath, utf8.decode(bytes), baseModified));
-    final result = putResults.isNotEmpty
-        ? putResults.removeAt(0)
-        : Entry(name: 'notes.txt', path: remotePath, isDir: false, modified: baseModified);
+    final result =
+        putResults.isNotEmpty
+            ? putResults.removeAt(0)
+            : Entry(
+              name: 'notes.txt',
+              path: remotePath,
+              isDir: false,
+              modified: baseModified,
+            );
     if (result is Exception) throw result;
     return result as Entry;
   }
 
   @override
-  Future<Uint8List> fetchBytes(String remotePath, {CancelToken? cancelToken}) async {
+  Future<Uint8List> fetchBytes(
+    String remotePath, {
+    CancelToken? cancelToken,
+  }) async {
     return Uint8List.fromList(utf8.encode(reloadedText));
   }
 
   @override
   Future<Entry> meta(String path) async {
-    return Entry(name: 'notes.txt', path: path, isDir: false, modified: reloadedModified);
+    return Entry(
+      name: 'notes.txt',
+      path: path,
+      isDir: false,
+      modified: reloadedModified,
+    );
   }
 }
 
@@ -107,61 +121,84 @@ void main() {
       expect(field.expands, isTrue);
     });
 
-    testWidgets('Save button is disabled until the text is edited', (tester) async {
+    testWidgets('Save button is disabled until the text is edited', (
+      tester,
+    ) async {
       await _pumpEditor(tester, client);
 
-      final saveButton = tester
-          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.save_outlined));
+      final saveButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.save_outlined),
+      );
       expect(saveButton.onPressed, isNull);
     });
   });
 
   group('Save', () {
-    testWidgets('tapping Save calls putContent with path, bytes, and baseModified',
-        (tester) async {
-      final entry = _textEntry(modified: _baseModified);
-      await _pumpEditor(tester, client, initialText: 'hello world', entry: entry);
+    testWidgets(
+      'tapping Save calls putContent with path, bytes, and baseModified',
+      (tester) async {
+        final entry = _textEntry(modified: _baseModified);
+        await _pumpEditor(
+          tester,
+          client,
+          initialText: 'hello world',
+          entry: entry,
+        );
 
-      await tester.enterText(find.byType(TextField), 'hello world!');
-      await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'hello world!');
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.save_outlined));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.pumpAndSettle();
 
-      expect(client.putCalls, hasLength(1));
-      final (path, text, baseModified) = client.putCalls.single;
-      expect(path, '/docs/notes.txt');
-      expect(text, 'hello world!');
-      expect(baseModified, _baseModified);
+        expect(client.putCalls, hasLength(1));
+        final (path, text, baseModified) = client.putCalls.single;
+        expect(path, '/docs/notes.txt');
+        expect(text, 'hello world!');
+        expect(baseModified, _baseModified);
 
-      // Success feedback shown.
-      expect(find.text('Saved "notes.txt"'), findsOneWidget);
-    });
+        // Success feedback shown.
+        expect(find.text('Saved "notes.txt"'), findsOneWidget);
+      },
+    );
 
-    testWidgets('after a successful save, baseModified updates for the next save',
-        (tester) async {
-      final entry = _textEntry(modified: _baseModified);
-      final newModified = DateTime.utc(2026, 1, 1, 13, 0, 0);
-      client.putResults
-          .add(Entry(name: 'notes.txt', path: entry.path, isDir: false, modified: newModified));
+    testWidgets(
+      'after a successful save, baseModified updates for the next save',
+      (tester) async {
+        final entry = _textEntry(modified: _baseModified);
+        final newModified = DateTime.utc(2026, 1, 1, 13, 0, 0);
+        client.putResults.add(
+          Entry(
+            name: 'notes.txt',
+            path: entry.path,
+            isDir: false,
+            modified: newModified,
+          ),
+        );
 
-      await _pumpEditor(tester, client, initialText: 'hello world', entry: entry);
+        await _pumpEditor(
+          tester,
+          client,
+          initialText: 'hello world',
+          entry: entry,
+        );
 
-      await tester.enterText(find.byType(TextField), 'edit one');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
-      await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'edit one');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.pumpAndSettle();
 
-      // Second edit + save should send the *updated* baseModified.
-      await tester.enterText(find.byType(TextField), 'edit two');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
-      await tester.pumpAndSettle();
+        // Second edit + save should send the *updated* baseModified.
+        await tester.enterText(find.byType(TextField), 'edit two');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.pumpAndSettle();
 
-      expect(client.putCalls, hasLength(2));
-      expect(client.putCalls[0].$3, _baseModified);
-      expect(client.putCalls[1].$3, newModified);
-    });
+        expect(client.putCalls, hasLength(2));
+        expect(client.putCalls[0].$3, _baseModified);
+        expect(client.putCalls[1].$3, newModified);
+      },
+    );
   });
 
   group('STALE_WRITE (409)', () {
@@ -179,7 +216,9 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Overwrite'), findsOneWidget);
     });
 
-    testWidgets('Reload re-fetches content and clears the dirty flag', (tester) async {
+    testWidgets('Reload re-fetches content and clears the dirty flag', (
+      tester,
+    ) async {
       client.putResults.add(StaleWriteException('file changed on disk'));
       client.reloadedText = 'fresh from disk';
       final newModified = DateTime.utc(2026, 1, 3, 0, 0, 0);
@@ -198,8 +237,9 @@ void main() {
       expect(field.controller!.text, 'fresh from disk');
 
       // Dirty flag cleared -> Save disabled again.
-      final saveButton = tester
-          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.save_outlined));
+      final saveButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.save_outlined),
+      );
       expect(saveButton.onPressed, isNull);
 
       // A subsequent edit + save should use the reloaded baseModified.
@@ -262,29 +302,34 @@ void main() {
   });
 
   group('Unsaved-changes guard', () {
-    testWidgets('back navigation with unsaved changes prompts to discard',
-        (tester) async {
+    testWidgets('back navigation with unsaved changes prompts to discard', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Navigator(
-            onGenerateRoute: (settings) => MaterialPageRoute(
-              builder: (context) => Scaffold(
-                body: Center(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => TextEditorScreen(
-                          entry: _textEntry(),
-                          client: client,
-                          initialText: 'hello world',
+            onGenerateRoute:
+                (settings) => MaterialPageRoute(
+                  builder:
+                      (context) => Scaffold(
+                        body: Center(
+                          child: ElevatedButton(
+                            onPressed:
+                                () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => TextEditorScreen(
+                                          entry: _textEntry(),
+                                          client: client,
+                                          initialText: 'hello world',
+                                        ),
+                                  ),
+                                ),
+                            child: const Text('Open editor'),
+                          ),
                         ),
                       ),
-                    ),
-                    child: const Text('Open editor'),
-                  ),
                 ),
-              ),
-            ),
           ),
         ),
       );
@@ -318,29 +363,34 @@ void main() {
       expect(find.text('Open editor'), findsOneWidget);
     });
 
-    testWidgets('back navigation with no unsaved changes pops immediately',
-        (tester) async {
+    testWidgets('back navigation with no unsaved changes pops immediately', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Navigator(
-            onGenerateRoute: (settings) => MaterialPageRoute(
-              builder: (context) => Scaffold(
-                body: Center(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => TextEditorScreen(
-                          entry: _textEntry(),
-                          client: client,
-                          initialText: 'hello world',
+            onGenerateRoute:
+                (settings) => MaterialPageRoute(
+                  builder:
+                      (context) => Scaffold(
+                        body: Center(
+                          child: ElevatedButton(
+                            onPressed:
+                                () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => TextEditorScreen(
+                                          entry: _textEntry(),
+                                          client: client,
+                                          initialText: 'hello world',
+                                        ),
+                                  ),
+                                ),
+                            child: const Text('Open editor'),
+                          ),
                         ),
                       ),
-                    ),
-                    child: const Text('Open editor'),
-                  ),
                 ),
-              ),
-            ),
           ),
         ),
       );

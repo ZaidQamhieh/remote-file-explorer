@@ -7,20 +7,23 @@ import 'package:flutter/material.dart';
 /// A fade-through page transition (cross-fade + slight scale), a softer
 /// alternative to the default platform slide. Use in place of [MaterialPageRoute]
 /// where a calmer transition reads better.
-Route<T> fadeThroughPageRoute<T>(WidgetBuilder builder, {RouteSettings? settings}) {
+Route<T> fadeThroughPageRoute<T>(
+  WidgetBuilder builder, {
+  RouteSettings? settings,
+}) {
   return PageRouteBuilder<T>(
     settings: settings,
     transitionDuration: const Duration(milliseconds: 260),
     reverseTransitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (context, animation, secondary) => builder(context),
     transitionsBuilder: (context, animation, secondary, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
       return FadeTransition(
         opacity: curved,
-        child: Transform.scale(
-          scale: 0.98 + 0.02 * curved.value,
-          child: child,
-        ),
+        child: Transform.scale(scale: 0.98 + 0.02 * curved.value, child: child),
       );
     },
   );
@@ -45,8 +48,10 @@ class _AppearListItemState extends State<AppearListItem>
     vsync: this,
     duration: const Duration(milliseconds: 280),
   );
-  late final Animation<double> _fade =
-      CurvedAnimation(parent: _c, curve: Curves.easeOut);
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _c,
+    curve: Curves.easeOut,
+  );
   late final Animation<Offset> _slide = Tween<Offset>(
     begin: const Offset(0, 0.06),
     end: Offset.zero,

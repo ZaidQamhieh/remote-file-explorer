@@ -64,10 +64,13 @@ class PreviewActions {
   /// the same path the meta-sheet's Download action uses, so downloads show up
   /// in the transfers center and survive navigation.
   Future<void> save(BuildContext context, WidgetRef ref) async {
-    final dir = await getDownloadsDirectory() ??
+    final dir =
+        await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
     final localPath = '${dir.path}/${entry.name}';
-    ref.read(transferQueueProvider.notifier).enqueue(
+    ref
+        .read(transferQueueProvider.notifier)
+        .enqueue(
           TransferTask.download(
             remotePath: entry.path,
             localPath: localPath,
@@ -83,19 +86,23 @@ class PreviewActions {
   Future<bool> delete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete permanently?'),
-        content:
-            Text('Permanently delete "${entry.name}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete permanently?'),
+            content: Text(
+              'Permanently delete "${entry.name}"? This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
     );
     if (confirmed != true || !context.mounted) return false;
     try {
@@ -168,19 +175,24 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(entry.name,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: fg,
-                    fontWeight: FontWeight.w600,
-                  )),
+          Text(
+            entry.name,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           if (size.isNotEmpty)
-            Text(size,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: fg?.withValues(alpha: 0.8) ??
-                          Theme.of(context).colorScheme.onSurfaceVariant,
-                    )),
+            Text(
+              size,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color:
+                    fg?.withValues(alpha: 0.8) ??
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
       actions: [
@@ -193,11 +205,12 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
         // Save needs a WidgetRef for the transfer queue — wrap a Consumer so we
         // don't force every host into a ConsumerWidget.
         Consumer(
-          builder: (context, ref, _) => IconButton(
-            icon: const Icon(Icons.download_outlined),
-            tooltip: 'Save to device',
-            onPressed: () => actions.save(context, ref),
-          ),
+          builder:
+              (context, ref, _) => IconButton(
+                icon: const Icon(Icons.download_outlined),
+                tooltip: 'Save to device',
+                onPressed: () => actions.save(context, ref),
+              ),
         ),
         IconButton(
           icon: const Icon(Icons.folder_open_outlined),

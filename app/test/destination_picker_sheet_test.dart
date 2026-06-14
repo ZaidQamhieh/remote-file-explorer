@@ -10,18 +10,11 @@ import 'package:remote_file_explorer/features/explorer/widgets/destination_picke
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
-Entry _dir(String path) => Entry(
-      name: path.split('/').last,
-      path: path,
-      isDir: true,
-    );
+Entry _dir(String path) =>
+    Entry(name: path.split('/').last, path: path, isDir: true);
 
-Entry _file(String path) => Entry(
-      name: path.split('/').last,
-      path: path,
-      isDir: false,
-      size: 5,
-    );
+Entry _file(String path) =>
+    Entry(name: path.split('/').last, path: path, isDir: false, size: 5);
 
 class _FakeAgentClient extends AgentClient {
   _FakeAgentClient({required Host host}) : super(host);
@@ -53,22 +46,22 @@ void main() {
   }) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
         child: MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showDestinationPicker(
-                  context,
-                  hostId: 'h1',
-                  originPath: originPath,
-                  itemCount: 2,
-                  isCopy: false,
-                ),
-                child: const Text('open'),
-              ),
+              builder:
+                  (context) => ElevatedButton(
+                    onPressed:
+                        () => showDestinationPicker(
+                          context,
+                          hostId: 'h1',
+                          originPath: originPath,
+                          itemCount: 2,
+                          isCopy: false,
+                        ),
+                    child: const Text('open'),
+                  ),
             ),
           ),
         ),
@@ -82,13 +75,15 @@ void main() {
     }
   }
 
-  testWidgets('shows only folders from the listing, not files',
-      (tester) async {
-    client.pages['/root'] = Listing(path: '/root', entries: [
-      _dir('/root/Documents'),
-      _file('/root/notes.txt'),
-      _dir('/root/Photos'),
-    ]);
+  testWidgets('shows only folders from the listing, not files', (tester) async {
+    client.pages['/root'] = Listing(
+      path: '/root',
+      entries: [
+        _dir('/root/Documents'),
+        _file('/root/notes.txt'),
+        _dir('/root/Photos'),
+      ],
+    );
 
     await pumpSheet(tester, originPath: '/root');
 
@@ -98,28 +93,43 @@ void main() {
   });
 
   testWidgets('title shows the verb and item count', (tester) async {
-    client.pages['/root'] = Listing(path: '/root', entries: [_dir('/root/Documents')]);
+    client.pages['/root'] = Listing(
+      path: '/root',
+      entries: [_dir('/root/Documents')],
+    );
 
     await pumpSheet(tester, originPath: '/root');
 
     expect(find.textContaining('Move 2 items to'), findsOneWidget);
   });
 
-  testWidgets('confirm button is disabled while showing the origin directory',
-      (tester) async {
-    client.pages['/root'] = Listing(path: '/root', entries: [_dir('/root/Documents')]);
+  testWidgets('confirm button is disabled while showing the origin directory', (
+    tester,
+  ) async {
+    client.pages['/root'] = Listing(
+      path: '/root',
+      entries: [_dir('/root/Documents')],
+    );
 
     await pumpSheet(tester, originPath: '/root');
 
-    final confirm = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Move here'));
+    final confirm = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Move here'),
+    );
     expect(confirm.onPressed, isNull);
   });
 
-  testWidgets('confirm button enables after navigating away from the origin',
-      (tester) async {
-    client.pages['/root'] = Listing(path: '/root', entries: [_dir('/root/Documents')]);
-    client.pages['/root/Documents'] =
-        Listing(path: '/root/Documents', entries: []);
+  testWidgets('confirm button enables after navigating away from the origin', (
+    tester,
+  ) async {
+    client.pages['/root'] = Listing(
+      path: '/root',
+      entries: [_dir('/root/Documents')],
+    );
+    client.pages['/root/Documents'] = Listing(
+      path: '/root/Documents',
+      entries: [],
+    );
 
     await pumpSheet(tester, originPath: '/root');
 
@@ -128,37 +138,44 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    final confirm = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Move here'));
+    final confirm = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Move here'),
+    );
     expect(confirm.onPressed, isNotNull);
   });
 
-  testWidgets('confirming pops the sheet with the current directory path',
-      (tester) async {
-    client.pages['/root'] = Listing(path: '/root', entries: [_dir('/root/Documents')]);
-    client.pages['/root/Documents'] =
-        Listing(path: '/root/Documents', entries: []);
+  testWidgets('confirming pops the sheet with the current directory path', (
+    tester,
+  ) async {
+    client.pages['/root'] = Listing(
+      path: '/root',
+      entries: [_dir('/root/Documents')],
+    );
+    client.pages['/root/Documents'] = Listing(
+      path: '/root/Documents',
+      entries: [],
+    );
 
     String? result;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
         child: MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () async {
-                  result = await showDestinationPicker(
-                    context,
-                    hostId: 'h1',
-                    originPath: '/root',
-                    itemCount: 1,
-                    isCopy: false,
-                  );
-                },
-                child: const Text('open'),
-              ),
+              builder:
+                  (context) => ElevatedButton(
+                    onPressed: () async {
+                      result = await showDestinationPicker(
+                        context,
+                        hostId: 'h1',
+                        originPath: '/root',
+                        itemCount: 1,
+                        isCopy: false,
+                      );
+                    },
+                    child: const Text('open'),
+                  ),
             ),
           ),
         ),

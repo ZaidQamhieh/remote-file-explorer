@@ -136,7 +136,8 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return PreviewLoading(
-              message: 'Downloading video for preview… '
+              message:
+                  'Downloading video for preview… '
                   '${(_progress * 100).toStringAsFixed(0)}%',
               progress: _progress > 0 ? _progress : null,
             );
@@ -153,7 +154,8 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
           }
           return Center(
             child: AspectRatio(
-              aspectRatio: snapshot.data!.videoPlayerController.value.aspectRatio,
+              aspectRatio:
+                  snapshot.data!.videoPlayerController.value.aspectRatio,
               child: Chewie(controller: snapshot.data!),
             ),
           );

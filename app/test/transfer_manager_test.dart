@@ -26,20 +26,22 @@ void main() {
 
     test('steady rate computes speed and ETA', () {
       // 1000 bytes over 1000ms = 1000 B/s; 2000 bytes remain of a 3000 total.
-      final r = computeSpeedEta(
-        const [(0, 0), (500, 500), (1000, 1000)],
-        totalBytes: 3000,
-      );
+      final r = computeSpeedEta(const [
+        (0, 0),
+        (500, 500),
+        (1000, 1000),
+      ], totalBytes: 3000);
       expect(r.bytesPerSecond, closeTo(1000, 0.001));
       expect(r.etaSeconds, closeTo(2.0, 0.001));
     });
 
     test('uses whole-window span, not just the last gap', () {
       // 3000 bytes over 3000ms = 1000 B/s even though the last gap differs.
-      final r = computeSpeedEta(
-        const [(0, 0), (1000, 1000), (3000, 3000)],
-        totalBytes: null,
-      );
+      final r = computeSpeedEta(const [
+        (0, 0),
+        (1000, 1000),
+        (3000, 3000),
+      ], totalBytes: null);
       expect(r.bytesPerSecond, closeTo(1000, 0.001));
       expect(r.etaSeconds, isNull, reason: 'unknown total → no ETA');
     });
@@ -57,32 +59,34 @@ void main() {
     });
 
     test('stalled (flat bytes) → speed 0, no ETA', () {
-      final r = computeSpeedEta(
-        const [(0, 500), (1000, 500), (2000, 500)],
-        totalBytes: 1000,
-      );
+      final r = computeSpeedEta(const [
+        (0, 500),
+        (1000, 500),
+        (2000, 500),
+      ], totalBytes: 1000);
       expect(r.bytesPerSecond, 0);
       expect(r.etaSeconds, isNull);
     });
 
     test('no elapsed time across window → unknown', () {
-      final r =
-          computeSpeedEta(const [(0, 100), (0, 200)], totalBytes: 1000);
+      final r = computeSpeedEta(const [(0, 100), (0, 200)], totalBytes: 1000);
       expect(r.bytesPerSecond, isNull);
       expect(r.etaSeconds, isNull);
     });
 
     test('past-total bytes → ETA clamps to 0', () {
-      final r =
-          computeSpeedEta(const [(0, 900), (1000, 1100)], totalBytes: 1000);
+      final r = computeSpeedEta(const [
+        (0, 900),
+        (1000, 1100),
+      ], totalBytes: 1000);
       expect(r.etaSeconds, 0);
     });
 
     test('labels render correctly', () {
-      final r = computeSpeedEta(
-        const [(0, 0), (1000, 12 * 1024 * 1024)],
-        totalBytes: 12 * 1024 * 1024 + 90 * 12 * 1024 * 1024,
-      );
+      final r = computeSpeedEta(const [
+        (0, 0),
+        (1000, 12 * 1024 * 1024),
+      ], totalBytes: 12 * 1024 * 1024 + 90 * 12 * 1024 * 1024);
       expect(r.speedLabel, '12.0 MB/s');
       // ~90s remaining at 12 MB/s.
       expect(r.etaLabel, '~1m 30s');
@@ -233,9 +237,11 @@ void main() {
       notifier.enqueue(reenqueuableCopy(captured));
       final queue = container.read(transferQueueProvider);
       expect(
-        queue.any((t) =>
-            t.remotePath == captured.remotePath &&
-            t.localPath == captured.localPath),
+        queue.any(
+          (t) =>
+              t.remotePath == captured.remotePath &&
+              t.localPath == captured.localPath,
+        ),
         isTrue,
         reason: 'an equivalent task is back in the queue after undo',
       );

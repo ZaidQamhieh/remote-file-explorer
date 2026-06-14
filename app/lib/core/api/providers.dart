@@ -13,8 +13,10 @@ import 'agent_client.dart';
 /// Returns `null` if no host with that id is paired (e.g. it was just
 /// removed). `autoDispose` so a stale lookup doesn't linger after the screen
 /// that needed it is gone.
-final hostByIdProvider =
-    FutureProvider.family.autoDispose<Host?, String>((ref, hostId) async {
+final hostByIdProvider = FutureProvider.family.autoDispose<Host?, String>((
+  ref,
+  hostId,
+) async {
   final store = await ref.watch(hostStoreProvider.future);
   final hosts = store.listHosts();
   for (final h in hosts) {
@@ -68,8 +70,10 @@ Future<AgentClient> buildClientForHost(RefReader read, String hostId) async {
 /// before the operation finishes. Use [buildClientForHost] for that instead.
 ///
 /// Throws if [hostId] doesn't correspond to a paired host.
-final clientProvider =
-    FutureProvider.family.autoDispose<AgentClient, String>((ref, hostId) async {
+final clientProvider = FutureProvider.family.autoDispose<AgentClient, String>((
+  ref,
+  hostId,
+) async {
   final client = await buildClientForHost(ref.read, hostId);
   ref.onDispose(client.close);
   return client;

@@ -36,44 +36,49 @@ class CreateMenu extends StatelessWidget {
     );
   }
 
-  void _showNameDialog(BuildContext context, String title,
-      {required bool isFolder}) {
+  void _showNameDialog(
+    BuildContext context,
+    String title, {
+    required bool isFolder,
+  }) {
     final ctrl = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Name'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              final name = ctrl.text.trim();
-              if (name.isEmpty) return;
-              Navigator.pop(ctx);
-              try {
-                if (isFolder) {
-                  await notifier.createFolder(name);
-                } else {
-                  await notifier.createFile(name);
-                }
-                if (context.mounted) showSuccess(context, 'Created $name');
-              } catch (e) {
-                if (context.mounted) {
-                  showError(context, 'Couldn\'t create $name: $e');
-                }
-              }
-            },
-            child: const Text('Create'),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(title),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Name'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final name = ctrl.text.trim();
+                  if (name.isEmpty) return;
+                  Navigator.pop(ctx);
+                  try {
+                    if (isFolder) {
+                      await notifier.createFolder(name);
+                    } else {
+                      await notifier.createFile(name);
+                    }
+                    if (context.mounted) showSuccess(context, 'Created $name');
+                  } catch (e) {
+                    if (context.mounted) {
+                      showError(context, 'Couldn\'t create $name: $e');
+                    }
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }

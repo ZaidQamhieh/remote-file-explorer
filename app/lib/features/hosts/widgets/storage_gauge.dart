@@ -36,9 +36,10 @@ class StorageGauge extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final free = drive.freeBytes!;
     final total = drive.totalBytes!;
-    final label = (drive.label != null && drive.label!.isNotEmpty)
-        ? drive.label!
-        : drive.path;
+    final label =
+        (drive.label != null && drive.label!.isNotEmpty)
+            ? drive.label!
+            : drive.path;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: Spacing.sm),
@@ -61,15 +62,18 @@ class StorageGauge extends StatelessWidget {
               const SizedBox(width: Spacing.sm),
               Text(
                 '${formatSize(free)} free of ${formatSize(total)}',
-                style: textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                style: textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
           const SizedBox(height: Spacing.xs / 2),
           Text(
             label,
-            style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ],

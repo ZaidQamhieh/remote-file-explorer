@@ -27,15 +27,17 @@ class Device {
   final String lastVersion;
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
-        id: json['id'] as String,
-        label: json['label'] as String? ?? '',
-        created: DateTime.fromMillisecondsSinceEpoch(
-            ((json['created'] as num?)?.toInt() ?? 0) * 1000),
-        lastSeen: DateTime.fromMillisecondsSinceEpoch(
-            ((json['lastSeen'] as num?)?.toInt() ?? 0) * 1000),
-        revoked: json['revoked'] as bool? ?? false,
-        current: json['current'] as bool? ?? false,
-        lastAddress: json['lastAddress'] as String? ?? '',
-        lastVersion: json['lastVersion'] as String? ?? '',
-      );
+    id: json['id'] as String,
+    label: json['label'] as String? ?? '',
+    created: DateTime.fromMillisecondsSinceEpoch(
+      ((json['created'] as num?)?.toInt() ?? 0) * 1000,
+    ),
+    lastSeen: DateTime.fromMillisecondsSinceEpoch(
+      ((json['lastSeen'] as num?)?.toInt() ?? 0) * 1000,
+    ),
+    revoked: json['revoked'] as bool? ?? false,
+    current: json['current'] as bool? ?? false,
+    lastAddress: json['lastAddress'] as String? ?? '',
+    lastVersion: json['lastVersion'] as String? ?? '',
+  );
 }

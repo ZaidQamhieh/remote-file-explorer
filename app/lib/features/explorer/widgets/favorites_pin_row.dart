@@ -36,7 +36,9 @@ class FavoritesPinRow extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md, vertical: Spacing.sm),
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
         itemCount: favorites.length,
         separatorBuilder: (_, _) => const SizedBox(width: Spacing.sm),
         itemBuilder: (context, i) {
@@ -50,22 +52,26 @@ class FavoritesPinRow extends StatelessWidget {
               onLongPress: () => onRemove(fav),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: Spacing.md, vertical: Spacing.sm),
+                  horizontal: Spacing.md,
+                  vertical: Spacing.sm,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.folder_rounded,
-                        size: 18, color: scheme.onSecondaryContainer),
+                    Icon(
+                      Icons.folder_rounded,
+                      size: 18,
+                      color: scheme.onSecondaryContainer,
+                    ),
                     const SizedBox(width: Spacing.xs),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 120),
                       child: Text(
                         fav.label,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(color: scheme.onSecondaryContainer),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: scheme.onSecondaryContainer,
+                        ),
                       ),
                     ),
                   ],

@@ -21,7 +21,10 @@ const int kMaxVisibleCrumbs = 4;
 ///
 /// Example: `stackLength=6, maxVisible=4` → visible = `[0, 3, 4, 5]`,
 /// collapsed = `[1, 2]`.
-List<int> collapsedCrumbIndices(int stackLength, {int maxVisible = kMaxVisibleCrumbs}) {
+List<int> collapsedCrumbIndices(
+  int stackLength, {
+  int maxVisible = kMaxVisibleCrumbs,
+}) {
   if (stackLength <= maxVisible) return const [];
   // At least the current directory (1) stays visible in the tail, even for
   // degenerate maxVisible <= 1.
@@ -78,22 +81,26 @@ class BreadcrumbBar extends StatelessWidget {
         // index, then skip the rest of the range.
         if (i == collapsedRange.first) {
           children.add(_separator(context, show: i > 0));
-          children.add(_CollapsedChip(
-            pathStack: stack,
-            onNavigateTo: onNavigateTo,
-            indices: collapsedRange,
-          ));
+          children.add(
+            _CollapsedChip(
+              pathStack: stack,
+              onNavigateTo: onNavigateTo,
+              indices: collapsedRange,
+            ),
+          );
         }
         continue;
       }
       children.add(_separator(context, show: i > 0));
-      children.add(_Crumb(
-        pathStack: stack,
-        onNavigateTo: onNavigateTo,
-        index: i,
-        isCurrent: i == lastIndex,
-        onMoveInto: onMoveInto,
-      ));
+      children.add(
+        _Crumb(
+          pathStack: stack,
+          onNavigateTo: onNavigateTo,
+          index: i,
+          isCurrent: i == lastIndex,
+          onMoveInto: onMoveInto,
+        ),
+      );
     }
 
     return SingleChildScrollView(
@@ -154,9 +161,10 @@ class _Crumb extends StatelessWidget {
     final chip = Material(
       color: isCurrent ? scheme.secondaryContainer : Colors.transparent,
       shape: StadiumBorder(
-        side: isCurrent
-            ? BorderSide.none
-            : BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
+        side:
+            isCurrent
+                ? BorderSide.none
+                : BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
       ),
       child: InkWell(
         customBorder: const StadiumBorder(),
@@ -171,11 +179,12 @@ class _Crumb extends StatelessWidget {
             label,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: isCurrent
+              color:
+                  isCurrent
                       ? scheme.onSecondaryContainer
                       : scheme.onSurfaceVariant,
-                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                ),
+              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -188,17 +197,19 @@ class _Crumb extends StatelessWidget {
     return DragTarget<Entry>(
       onWillAcceptWithDetails: (d) => d.data.path != path,
       onAcceptWithDetails: (d) => onMoveInto!(d.data, path),
-      builder: (ctx, cand, rej) => AnimatedContainer(
-        duration: MotionDuration.short,
-        decoration: ShapeDecoration(
-          shape: StadiumBorder(
-            side: cand.isNotEmpty
-                ? BorderSide(color: scheme.primary, width: 2)
-                : const BorderSide(color: Colors.transparent, width: 2),
+      builder:
+          (ctx, cand, rej) => AnimatedContainer(
+            duration: MotionDuration.short,
+            decoration: ShapeDecoration(
+              shape: StadiumBorder(
+                side:
+                    cand.isNotEmpty
+                        ? BorderSide(color: scheme.primary, width: 2)
+                        : const BorderSide(color: Colors.transparent, width: 2),
+              ),
+            ),
+            child: ClipPath(clipper: const _StadiumClipper(), child: chip),
           ),
-        ),
-        child: ClipPath(clipper: const _StadiumClipper(), child: chip),
-      ),
     );
   }
 }
@@ -210,7 +221,12 @@ class _StadiumClipper extends CustomClipper<Path> {
 
   @override
   Path getClip(Size size) =>
-      Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(size.height / 2)));
+      Path()..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          Radius.circular(size.height / 2),
+        ),
+      );
 
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
@@ -238,12 +254,16 @@ class _CollapsedChip extends StatelessWidget {
     return PopupMenuButton<int>(
       tooltip: 'Show hidden folders',
       onSelected: onNavigateTo,
-      itemBuilder: (_) => indices
-          .map((i) => PopupMenuItem(
-                value: i,
-                child: Text(crumbLabel(stack, i)),
-              ))
-          .toList(),
+      itemBuilder:
+          (_) =>
+              indices
+                  .map(
+                    (i) => PopupMenuItem(
+                      value: i,
+                      child: Text(crumbLabel(stack, i)),
+                    ),
+                  )
+                  .toList(),
       child: Material(
         color: Colors.transparent,
         shape: StadiumBorder(
@@ -257,9 +277,9 @@ class _CollapsedChip extends StatelessWidget {
           child: Text(
             '…',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),

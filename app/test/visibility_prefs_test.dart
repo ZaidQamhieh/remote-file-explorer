@@ -17,7 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Entry file(String name) => Entry(name: name, path: '/root/$name', isDir: false);
+  Entry file(String name) =>
+      Entry(name: name, path: '/root/$name', isDir: false);
   Entry dir(String name) => Entry(name: name, path: '/root/$name', isDir: true);
 
   // ---------------------------------------------------------------------
@@ -77,20 +78,28 @@ void main() {
     });
 
     test('hiddenExtensions hides matching files case-insensitively', () {
-      const prefs = VisibilityPrefs(hideDotfiles: false, hiddenExtensions: {'tmp'});
+      const prefs = VisibilityPrefs(
+        hideDotfiles: false,
+        hiddenExtensions: {'tmp'},
+      );
       expect(isEntryHidden(file('a.tmp'), prefs), isTrue);
       expect(isEntryHidden(file('a.TMP'), prefs), isTrue);
       expect(isEntryHidden(file('a.txt'), prefs), isFalse);
     });
 
     test('hiddenExtensions never hides directories', () {
-      const prefs = VisibilityPrefs(hideDotfiles: false, hiddenExtensions: {'tmp'});
+      const prefs = VisibilityPrefs(
+        hideDotfiles: false,
+        hiddenExtensions: {'tmp'},
+      );
       expect(isEntryHidden(dir('folder.tmp'), prefs), isFalse);
     });
 
     test('hiddenNames hides exact (case-insensitive) name matches', () {
-      const prefs =
-          VisibilityPrefs(hideDotfiles: false, hiddenNames: {'Thumbs.db'});
+      const prefs = VisibilityPrefs(
+        hideDotfiles: false,
+        hiddenNames: {'Thumbs.db'},
+      );
       expect(isEntryHidden(file('thumbs.db'), prefs), isTrue);
       expect(isEntryHidden(file('Thumbs.db'), prefs), isTrue);
       expect(isEntryHidden(file('Thumbs.db.bak'), prefs), isFalse);
@@ -170,9 +179,7 @@ void main() {
     test('persists and survives restart', () async {
       final container1 = ProviderContainer();
       await container1.read(settingsProvider.future);
-      await container1
-          .read(settingsProvider.notifier)
-          .setHideDotfiles(false);
+      await container1.read(settingsProvider.notifier).setHideDotfiles(false);
 
       expect(appVis(container1).hideDotfiles, isFalse);
       container1.dispose();
@@ -192,9 +199,10 @@ void main() {
     test('setHiddenExtensions normalizes to lowercase and persists', () async {
       final container1 = ProviderContainer();
       await container1.read(settingsProvider.future);
-      await container1
-          .read(settingsProvider.notifier)
-          .setHiddenExtensions({'TMP', 'Log'});
+      await container1.read(settingsProvider.notifier).setHiddenExtensions({
+        'TMP',
+        'Log',
+      });
 
       expect(appVis(container1).hiddenExtensions, {'tmp', 'log'});
       container1.dispose();
@@ -245,18 +253,20 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('addName adds an exact name and is case-insensitively idempotent',
-        () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await container.read(settingsProvider.future);
+    test(
+      'addName adds an exact name and is case-insensitively idempotent',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(settingsProvider.future);
 
-      final notifier = container.read(settingsProvider.notifier);
-      await notifier.addName('Thumbs.db');
-      await notifier.addName('thumbs.db'); // duplicate (different case)
+        final notifier = container.read(settingsProvider.notifier);
+        await notifier.addName('Thumbs.db');
+        await notifier.addName('thumbs.db'); // duplicate (different case)
 
-      expect(appVis(container).hiddenNames, {'Thumbs.db'});
-    });
+        expect(appVis(container).hiddenNames, {'Thumbs.db'});
+      },
+    );
 
     test('addName is a no-op for blank input', () async {
       final container = ProviderContainer();
@@ -296,8 +306,10 @@ void main() {
       await notifier.addExtension('xyz');
       await notifier.applyPreset(systemJunkPreset);
 
-      expect(appVis(container).hiddenExtensions,
-          containsAll({'xyz', ...systemJunkPreset.extensions}));
+      expect(
+        appVis(container).hiddenExtensions,
+        containsAll({'xyz', ...systemJunkPreset.extensions}),
+      );
       expect(appVis(container).hiddenNames, systemJunkPreset.names);
     });
 
@@ -345,18 +357,20 @@ void main() {
       expect(appVis(container).hiddenNames, isEmpty);
     });
 
-    test('removePreset keeps a user extension that is not in the preset',
-        () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await container.read(settingsProvider.future);
+    test(
+      'removePreset keeps a user extension that is not in the preset',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(settingsProvider.future);
 
-      final notifier = container.read(settingsProvider.notifier);
-      await notifier.addExtension('xyz');
-      await notifier.applyPreset(logsPreset);
-      await notifier.removePreset(logsPreset);
+        final notifier = container.read(settingsProvider.notifier);
+        await notifier.addExtension('xyz');
+        await notifier.applyPreset(logsPreset);
+        await notifier.removePreset(logsPreset);
 
-      expect(appVis(container).hiddenExtensions, {'xyz'});
-    });
+        expect(appVis(container).hiddenExtensions, {'xyz'});
+      },
+    );
   });
 }

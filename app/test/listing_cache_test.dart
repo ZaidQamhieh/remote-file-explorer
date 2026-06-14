@@ -10,16 +10,16 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   Entry mkEntry(String name) => Entry(
-        name: name,
-        path: '/root/$name',
-        isDir: false,
-        size: 1,
-        mimeType: 'text/plain',
-        mode: '-rw-r--r--',
-        modified: DateTime(2026, 1, 1),
-        created: DateTime(2026, 1, 1),
-        isSymlink: false,
-      );
+    name: name,
+    path: '/root/$name',
+    isDir: false,
+    size: 1,
+    mimeType: 'text/plain',
+    mode: '-rw-r--r--',
+    modified: DateTime(2026, 1, 1),
+    created: DateTime(2026, 1, 1),
+    isSymlink: false,
+  );
 
   test('put then get round-trips entries', () async {
     final cache = ListingCache(baseDir: tmp);
@@ -28,7 +28,10 @@ void main() {
     final got = await cache.get('host-1', '/root');
     expect(got, isNotNull);
     expect(got!.entries.map((e) => e.name), ['a.txt', 'b.txt']);
-    expect(got.fetchedAt.isBefore(DateTime.now().add(const Duration(seconds: 1))), isTrue);
+    expect(
+      got.fetchedAt.isBefore(DateTime.now().add(const Duration(seconds: 1))),
+      isTrue,
+    );
   });
 
   test('get returns null for unknown path', () async {

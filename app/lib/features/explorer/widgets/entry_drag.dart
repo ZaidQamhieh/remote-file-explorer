@@ -32,11 +32,14 @@ Widget wrapDraggable({
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.drag_indicator),
-          const SizedBox(width: 4),
-          Text(entry.name),
-        ]),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.drag_indicator),
+            const SizedBox(width: 4),
+            Text(entry.name),
+          ],
+        ),
       ),
     ),
     childWhenDragging: Opacity(opacity: 0.4, child: tile),
@@ -59,14 +62,18 @@ Widget folderDropTarget(
   return DragTarget<Entry>(
     onWillAcceptWithDetails: (d) => d.data.path != entry.path,
     onAcceptWithDetails: (d) => onMoveInto(d.data, entry.path),
-    builder: (ctx, cand, rej) => Container(
-      decoration: cand.isNotEmpty
-          ? BoxDecoration(
-              color: Theme.of(ctx).colorScheme.primaryContainer.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(8),
-            )
-          : null,
-      child: child,
-    ),
+    builder:
+        (ctx, cand, rej) => Container(
+          decoration:
+              cand.isNotEmpty
+                  ? BoxDecoration(
+                    color: Theme.of(
+                      ctx,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(8),
+                  )
+                  : null,
+          child: child,
+        ),
   );
 }

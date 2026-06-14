@@ -63,8 +63,9 @@ class Radii {
   static const BorderRadius sheetTopR = BorderRadius.vertical(
     top: Radius.circular(sheet),
   );
-  static const BorderRadius stadiumR =
-      BorderRadius.all(Radius.circular(stadium));
+  static const BorderRadius stadiumR = BorderRadius.all(
+    Radius.circular(stadium),
+  );
 }
 
 /// Elevation values for tonal surfaces.

@@ -64,11 +64,12 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
   Future<void> _edit(BuildContext context, String text) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => TextEditorScreen(
-          entry: widget.entry,
-          client: widget.client,
-          initialText: text,
-        ),
+        builder:
+            (_) => TextEditorScreen(
+              entry: widget.entry,
+              client: widget.client,
+              initialText: text,
+            ),
       ),
     );
   }
@@ -77,13 +78,16 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
   /// app bar and the chromeless inline strip. [loadedText] is non-null only
   /// once the file loaded and is small enough to edit.
   List<Widget> _controls(BuildContext context, String? loadedText) {
-    final canEdit = loadedText != null &&
+    final canEdit =
+        loadedText != null &&
         (widget.entry.size ?? loadedText.length) <= kMaxEditableBytes;
     return [
       IconButton(
-        icon: Icon(_showLineNumbers
-            ? Icons.format_list_numbered
-            : Icons.format_list_numbered_outlined),
+        icon: Icon(
+          _showLineNumbers
+              ? Icons.format_list_numbered
+              : Icons.format_list_numbered_outlined,
+        ),
         tooltip: _showLineNumbers ? 'Hide line numbers' : 'Show line numbers',
         isSelected: _showLineNumbers,
         onPressed: () => setState(() => _showLineNumbers = !_showLineNumbers),
@@ -104,10 +108,11 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
       builder: (context, snapshot) {
         // Only offer Edit once the text has loaded successfully and is
         // small enough for the agent's PUT /content body cap.
-        final loadedText = snapshot.connectionState == ConnectionState.done &&
-                !snapshot.hasError
-            ? snapshot.data
-            : null;
+        final loadedText =
+            snapshot.connectionState == ConnectionState.done &&
+                    !snapshot.hasError
+                ? snapshot.data
+                : null;
 
         final body = _buildBody(context, snapshot);
 
@@ -115,22 +120,23 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
           title: widget.entry.name,
           chromeless: widget.chromeless,
           actions: _controls(context, loadedText),
-          body: widget.chromeless
-              ? Column(
-                  children: [
-                    // Inline control strip standing in for the app-bar actions
-                    // when the pager owns the (shared) top bar.
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: _controls(context, loadedText),
+          body:
+              widget.chromeless
+                  ? Column(
+                    children: [
+                      // Inline control strip standing in for the app-bar actions
+                      // when the pager owns the (shared) top bar.
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _controls(context, loadedText),
+                        ),
                       ),
-                    ),
-                    Expanded(child: body),
-                  ],
-                )
-              : body,
+                      Expanded(child: body),
+                    ],
+                  )
+                  : body,
         );
       },
     );
@@ -147,7 +153,8 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
       }
       if (err is NotTextException) {
         return const PreviewError(
-          message: "Can't preview this as text — "
+          message:
+              "Can't preview this as text — "
               "it doesn't look like a valid UTF-8 text file.",
         );
       }
@@ -167,12 +174,10 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(Spacing.md),
-      child: _showLineNumbers
-          ? _NumberedText(text: text)
-          : SelectableText(
-              text,
-              style: _kMono,
-            ),
+      child:
+          _showLineNumbers
+              ? _NumberedText(text: text)
+              : SelectableText(text, style: _kMono),
     );
   }
 }
@@ -212,9 +217,7 @@ class _NumberedText extends StatelessWidget {
             style: _kMono.copyWith(color: scheme.outline),
           ),
         ),
-        Expanded(
-          child: SelectableText(text, style: _kMono),
-        ),
+        Expanded(child: SelectableText(text, style: _kMono)),
       ],
     );
   }

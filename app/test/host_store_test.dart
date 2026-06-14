@@ -49,7 +49,8 @@ void main() {
       );
       final encoded = jsonEncode(host.toJson());
       final decoded = Host.fromJson(
-          jsonDecode(encoded) as Map<String, dynamic>);
+        jsonDecode(encoded) as Map<String, dynamic>,
+      );
       expect(decoded.id, host.id);
       expect(decoded.certFingerprint, host.certFingerprint);
     });
@@ -63,8 +64,12 @@ void main() {
     test('encode + decode preserves multiple hosts', () async {
       const hosts = [
         Host(id: 'h1', label: 'PC 1', address: '10.0.0.1:8765'),
-        Host(id: 'h2', label: 'PC 2', address: '10.0.0.2:8765',
-            certFingerprint: 'abc'),
+        Host(
+          id: 'h2',
+          label: 'PC 2',
+          address: '10.0.0.2:8765',
+          certFingerprint: 'abc',
+        ),
       ];
 
       final prefs = await SharedPreferences.getInstance();
@@ -76,10 +81,10 @@ void main() {
       final raw = prefs.getStringList('rfe_hosts_v1')!;
       expect(raw.length, 2);
 
-      final decoded = raw
-          .map((s) =>
-              Host.fromJson(jsonDecode(s) as Map<String, dynamic>))
-          .toList();
+      final decoded =
+          raw
+              .map((s) => Host.fromJson(jsonDecode(s) as Map<String, dynamic>))
+              .toList();
 
       expect(decoded[0].id, 'h1');
       expect(decoded[1].certFingerprint, 'abc');
@@ -97,16 +102,17 @@ void main() {
       await prefs.setStringList('rfe_hosts_v1', stored);
 
       // Simulate removal of h2
-      stored = stored.where((s) {
-        final m = jsonDecode(s) as Map<String, dynamic>;
-        return m['id'] != 'h2';
-      }).toList();
+      stored =
+          stored.where((s) {
+            final m = jsonDecode(s) as Map<String, dynamic>;
+            return m['id'] != 'h2';
+          }).toList();
       await prefs.setStringList('rfe_hosts_v1', stored);
 
-      final remaining = (prefs.getStringList('rfe_hosts_v1') ?? [])
-          .map((s) =>
-              Host.fromJson(jsonDecode(s) as Map<String, dynamic>))
-          .toList();
+      final remaining =
+          (prefs.getStringList('rfe_hosts_v1') ?? [])
+              .map((s) => Host.fromJson(jsonDecode(s) as Map<String, dynamic>))
+              .toList();
 
       expect(remaining.length, 2);
       expect(remaining.map((h) => h.id), isNot(contains('h2')));
@@ -141,7 +147,10 @@ void main() {
       final after = DateTime.now();
 
       final got = store.getLastSeen('h1')!;
-      expect(got.isBefore(before.subtract(const Duration(seconds: 1))), isFalse);
+      expect(
+        got.isBefore(before.subtract(const Duration(seconds: 1))),
+        isFalse,
+      );
       expect(got.isAfter(after.add(const Duration(seconds: 1))), isFalse);
     });
 
@@ -152,10 +161,14 @@ void main() {
       await store.setLastSeen('h1', t1);
       await store.setLastSeen('h2', t2);
 
-      expect(store.getLastSeen('h1')!.millisecondsSinceEpoch,
-          t1.millisecondsSinceEpoch);
-      expect(store.getLastSeen('h2')!.millisecondsSinceEpoch,
-          t2.millisecondsSinceEpoch);
+      expect(
+        store.getLastSeen('h1')!.millisecondsSinceEpoch,
+        t1.millisecondsSinceEpoch,
+      );
+      expect(
+        store.getLastSeen('h2')!.millisecondsSinceEpoch,
+        t2.millisecondsSinceEpoch,
+      );
     });
   });
 }

@@ -61,28 +61,26 @@ class TransferTask {
     required String remotePath,
     required Host host,
     bool overwrite = false,
-  }) =>
-      TransferTask._(
-        id: _nextTaskId(),
-        kind: TransferKind.upload,
-        localPath: localPath,
-        remotePath: remotePath,
-        host: host,
-        overwrite: overwrite,
-      );
+  }) => TransferTask._(
+    id: _nextTaskId(),
+    kind: TransferKind.upload,
+    localPath: localPath,
+    remotePath: remotePath,
+    host: host,
+    overwrite: overwrite,
+  );
 
   factory TransferTask.download({
     required String remotePath,
     required String localPath,
     required Host host,
-  }) =>
-      TransferTask._(
-        id: _nextTaskId(),
-        kind: TransferKind.download,
-        localPath: localPath,
-        remotePath: remotePath,
-        host: host,
-      );
+  }) => TransferTask._(
+    id: _nextTaskId(),
+    kind: TransferKind.download,
+    localPath: localPath,
+    remotePath: remotePath,
+    host: host,
+  );
 
   final String id;
   final TransferKind kind;
@@ -116,23 +114,23 @@ class TransferTask {
     Object? error = _sentinel,
     Object? uploadSessionId = _sentinel,
     String? savedLocation,
-  }) =>
-      TransferTask._(
-        id: id,
-        kind: kind,
-        localPath: localPath,
-        remotePath: remotePath,
-        host: host,
-        totalBytes: totalBytes ?? this.totalBytes,
-        transferredBytes: transferredBytes ?? this.transferredBytes,
-        status: status ?? this.status,
-        error: error == _sentinel ? this.error : error as String?,
-        uploadSessionId: uploadSessionId == _sentinel
+  }) => TransferTask._(
+    id: id,
+    kind: kind,
+    localPath: localPath,
+    remotePath: remotePath,
+    host: host,
+    totalBytes: totalBytes ?? this.totalBytes,
+    transferredBytes: transferredBytes ?? this.transferredBytes,
+    status: status ?? this.status,
+    error: error == _sentinel ? this.error : error as String?,
+    uploadSessionId:
+        uploadSessionId == _sentinel
             ? this.uploadSessionId
             : uploadSessionId as String?,
-        savedLocation: savedLocation ?? this.savedLocation,
-        overwrite: overwrite,
-      );
+    savedLocation: savedLocation ?? this.savedLocation,
+    overwrite: overwrite,
+  );
 }
 
 const _sentinel = Object();
@@ -193,10 +191,10 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   }
 
   Future<void> retry(String id) async {
-    _updateById(id, (t) => t.copyWith(
-          status: TransferStatus.queued,
-          error: null,
-        ));
+    _updateById(
+      id,
+      (t) => t.copyWith(status: TransferStatus.queued, error: null),
+    );
     _runNext();
   }
 
@@ -244,8 +242,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   }
 
   void _runNext() {
-    final running =
-        state.where((t) => t.status == TransferStatus.running);
+    final running = state.where((t) => t.status == TransferStatus.running);
     if (running.isNotEmpty) return; // one at a time (foreground)
     final next =
         state.where((t) => t.status == TransferStatus.queued).firstOrNull;
@@ -298,11 +295,9 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         // DioExceptions to AgentApiException (caught below), but handle a
         // raw DioException too in case that ever changes.
         _updateById(
-            id,
-            (t) => t.copyWith(
-                  status: TransferStatus.failed,
-                  error: e.toString(),
-                ));
+          id,
+          (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+        );
       }
     } on AgentApiException catch (e) {
       // Safety net: a collision that wasn't caught by the pre-flight check in
@@ -310,20 +305,20 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       // session-open) surfaces here as 409 CONFLICT — give it a clearer
       // message than the raw exception's.
       _updateById(
-          id,
-          (t) => t.copyWith(
-                status: TransferStatus.failed,
-                error: e.code == 'CONFLICT'
-                    ? '${t.displayName} already exists at the destination'
-                    : e.toString(),
-              ));
+        id,
+        (t) => t.copyWith(
+          status: TransferStatus.failed,
+          error:
+              e.code == 'CONFLICT'
+                  ? '${t.displayName} already exists at the destination'
+                  : e.toString(),
+        ),
+      );
     } catch (e) {
       _updateById(
-          id,
-          (t) => t.copyWith(
-                status: TransferStatus.failed,
-                error: e.toString(),
-              ));
+        id,
+        (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+      );
     } finally {
       client?.close();
       _cancelTokens.remove(id);
@@ -333,8 +328,12 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
   // ---- Download ----
 
-  Future<void> _runDownload(String id, TransferTask task, AgentClient client,
-      CancelToken cancelToken) async {
+  Future<void> _runDownload(
+    String id,
+    TransferTask task,
+    AgentClient client,
+    CancelToken cancelToken,
+  ) async {
     final localFile = File(task.localPath);
 
     var mimeType = 'application/octet-stream';
@@ -349,19 +348,20 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     } catch (_) {}
 
     Future<void> doDownload(int startByte) => client.downloadFile(
-          remotePath: task.remotePath,
-          localFile: localFile,
-          startByte: startByte,
-          cancelToken: cancelToken,
-          onProgress: (received, total) {
-            _updateById(
-                id,
-                (t) => t.copyWith(
-                      transferredBytes: startByte + received,
-                      totalBytes: total > 0 ? total : t.totalBytes,
-                    ));
-          },
+      remotePath: task.remotePath,
+      localFile: localFile,
+      startByte: startByte,
+      cancelToken: cancelToken,
+      onProgress: (received, total) {
+        _updateById(
+          id,
+          (t) => t.copyWith(
+            transferredBytes: startByte + received,
+            totalBytes: total > 0 ? total : t.totalBytes,
+          ),
         );
+      },
+    );
 
     var startByte = localFile.existsSync() ? localFile.lengthSync() : 0;
     try {
@@ -376,15 +376,22 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
     // The file streamed to app-private storage; move it into the public
     // Downloads collection so it shows up in the phone's Files app.
-    final saved =
-        await DownloadSaver.saveToDownloads(localFile, task.displayName, mimeType);
+    final saved = await DownloadSaver.saveToDownloads(
+      localFile,
+      task.displayName,
+      mimeType,
+    );
     _updateById(id, (t) => t.copyWith(savedLocation: saved));
   }
 
   // ---- Upload ----
 
-  Future<void> _runUpload(String id, TransferTask task, AgentClient client,
-      CancelToken cancelToken) async {
+  Future<void> _runUpload(
+    String id,
+    TransferTask task,
+    AgentClient client,
+    CancelToken cancelToken,
+  ) async {
     final file = File(task.localPath);
     final fileSize = await file.length();
     final plan = planChunks(fileSize);
@@ -453,7 +460,9 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
           cancelToken: cancelToken,
           onProgress: (sent, _) {
             _updateById(
-                id, (t) => t.copyWith(transferredBytes: bytesSent + sent));
+              id,
+              (t) => t.copyWith(transferredBytes: bytesSent + sent),
+            );
           },
         );
         bytesSent += chunkBytes.length;
@@ -478,5 +487,5 @@ extension _FirstWhereOrNull<T> on Iterable<T> {
 
 final transferQueueProvider =
     NotifierProvider<TransferQueueNotifier, List<TransferTask>>(
-  TransferQueueNotifier.new,
-);
+      TransferQueueNotifier.new,
+    );

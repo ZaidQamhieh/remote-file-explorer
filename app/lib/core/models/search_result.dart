@@ -29,9 +29,8 @@ class SearchResult {
     Map<String, List<String>> headers,
   ) {
     return SearchResult(
-      entries: data
-          .map((e) => Entry.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      entries:
+          data.map((e) => Entry.fromJson(e as Map<String, dynamic>)).toList(),
       truncated: _flagSet(headers, 'x-search-truncated'),
       timeBudgetHit: _flagSet(headers, 'x-search-time-budget'),
     );

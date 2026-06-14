@@ -41,8 +41,9 @@ void main() {
   }
 
   group('Hide dotfiles switch', () {
-    testWidgets('defaults to on and toggling persists the choice',
-        (tester) async {
+    testWidgets('defaults to on and toggling persists the choice', (
+      tester,
+    ) async {
       final container = await pumpSection(tester);
 
       expect(
@@ -67,13 +68,15 @@ void main() {
       }
     });
 
-    testWidgets('tapping a file-type chip toggles just that extension',
-        (tester) async {
+    testWidgets('tapping a file-type chip toggles just that extension', (
+      tester,
+    ) async {
       final container = await pumpSection(tester);
 
       // ".log" is the Logs category's first file type.
-      final before =
-          tester.widget<FilterChip>(find.widgetWithText(FilterChip, '.log'));
+      final before = tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, '.log'),
+      );
       expect(before.selected, isFalse);
 
       await tester.tap(find.widgetWithText(FilterChip, '.log'));
@@ -110,8 +113,9 @@ void main() {
   });
 
   group('Custom section', () {
-    testWidgets('a non-preset extension appears as a deletable custom chip',
-        (tester) async {
+    testWidgets('a non-preset extension appears as a deletable custom chip', (
+      tester,
+    ) async {
       final container = await pumpSection(tester);
 
       expect(find.text('None — add an extension below.'), findsOneWidget);
@@ -122,19 +126,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.widgetWithText(InputChip, '.xyz'), findsOneWidget);
-      expect(_appVis(container).hiddenExtensions,
-          contains('xyz'));
+      expect(_appVis(container).hiddenExtensions, contains('xyz'));
 
       await tester.tap(find.byIcon(Icons.clear));
       await tester.pumpAndSettle();
 
       expect(find.widgetWithText(InputChip, '.xyz'), findsNothing);
-      expect(_appVis(container).hiddenExtensions,
-          isNot(contains('xyz')));
+      expect(_appVis(container).hiddenExtensions, isNot(contains('xyz')));
     });
 
-    testWidgets('a preset extension stays in its category, not Custom',
-        (tester) async {
+    testWidgets('a preset extension stays in its category, not Custom', (
+      tester,
+    ) async {
       final container = await pumpSection(tester);
 
       // "tmp" belongs to System junk, so typing it selects that category's
@@ -143,8 +146,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(_appVis(container).hiddenExtensions,
-          contains('tmp'));
+      expect(_appVis(container).hiddenExtensions, contains('tmp'));
       // Rendered as a selected FilterChip (category), not an InputChip (custom).
       expect(
         tester

@@ -26,7 +26,10 @@ class _FakeAgentClient extends AgentClient {
   int fetchCount = 0;
 
   @override
-  Future<Uint8List> fetchBytes(String remotePath, {CancelToken? cancelToken}) async {
+  Future<Uint8List> fetchBytes(
+    String remotePath, {
+    CancelToken? cancelToken,
+  }) async {
     fetchCount++;
     return Uint8List.fromList(utf8.encode(content));
   }
@@ -37,7 +40,12 @@ void main() {
 
   testWidgets('loads and displays fetched text', (tester) async {
     final client = _FakeAgentClient(host: _testHost, content: 'hello world');
-    final entry = Entry(name: 'notes.txt', path: '/docs/notes.txt', isDir: false, size: 11);
+    final entry = Entry(
+      name: 'notes.txt',
+      path: '/docs/notes.txt',
+      isDir: false,
+      size: 11,
+    );
 
     await tester.pumpWidget(
       MaterialApp(home: TextPreviewScreen(entry: entry, client: client)),
@@ -77,7 +85,9 @@ void main() {
     expect(client.fetchCount, 1);
   });
 
-  testWidgets('does not show Edit for files over kMaxEditableBytes', (tester) async {
+  testWidgets('does not show Edit for files over kMaxEditableBytes', (
+    tester,
+  ) async {
     final client = _FakeAgentClient(host: _testHost, content: 'hello world');
     final entry = Entry(
       name: 'notes.txt',

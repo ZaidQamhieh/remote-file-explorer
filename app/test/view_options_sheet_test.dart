@@ -27,7 +27,7 @@ const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 /// seed [ExplorerState.hiddenCount] without a full fake-client setup.
 class _EmptyAgentClient extends AgentClient {
   _EmptyAgentClient({required Host host, this.entries = const []})
-      : super(host);
+    : super(host);
 
   final List<Entry> entries;
 
@@ -37,8 +37,10 @@ class _EmptyAgentClient extends AgentClient {
   }
 }
 
-Future<void> _waitUntil(bool Function() predicate,
-    {Duration timeout = const Duration(seconds: 2)}) async {
+Future<void> _waitUntil(
+  bool Function() predicate, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
     if (DateTime.now().isAfter(deadline)) {
@@ -65,14 +67,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return tmpDir.path;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return tmpDir.path;
+            }
+            return null;
+          },
+        );
   });
 
   /// Pumps [ViewOptionsSheet] backed by an explorer state whose entries are
@@ -85,8 +87,10 @@ void main() {
   }) async {
     final container = ProviderContainer(
       overrides: [
-        clientProvider.overrideWith((ref, hostId) async =>
-            _EmptyAgentClient(host: _testHost, entries: entries)),
+        clientProvider.overrideWith(
+          (ref, hostId) async =>
+              _EmptyAgentClient(host: _testHost, entries: entries),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -100,9 +104,11 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => !container.read(explorerProvider(arg)).loading &&
-              container.read(explorerProvider(arg)).entries.length ==
-                  entries.length);
+        () =>
+            !container.read(explorerProvider(arg)).loading &&
+            container.read(explorerProvider(arg)).entries.length ==
+                entries.length,
+      );
     });
 
     await tester.pumpWidget(
@@ -136,20 +142,24 @@ void main() {
     // state, not a snapshot captured when it opened. Before the fix the
     // SegmentedButton kept its open-time selection, so tapping Grid changed the
     // listing but the selected segment never moved.
-    testWidgets('selected Layout segment updates after tapping Grid',
-        (tester) async {
+    testWidgets('selected Layout segment updates after tapping Grid', (
+      tester,
+    ) async {
       await pumpSheet(tester);
 
       SegmentedButton<bool> layout() => tester.widget<SegmentedButton<bool>>(
-            find.byType(SegmentedButton<bool>),
-          );
+        find.byType(SegmentedButton<bool>),
+      );
       expect(layout().selected, {false}, reason: 'starts on List');
 
       await tester.tap(find.text('Grid'));
       await tester.pumpAndSettle();
 
-      expect(layout().selected, {true},
-          reason: 'selection must follow the live state, not the snapshot');
+      expect(
+        layout().selected,
+        {true},
+        reason: 'selection must follow the live state, not the snapshot',
+      );
     });
   });
 
@@ -161,29 +171,33 @@ void main() {
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(
-          tester.element(find.byType(ViewOptionsSheet)));
+        tester.element(find.byType(ViewOptionsSheet)),
+      );
       final settings = container.read(settingsProvider).valueOrNull!;
       expect(settings.app.density, EntryDensity.compact);
     });
   });
 
   group('Sort control', () {
-    testWidgets('selecting a new field sorts ascending by that field',
-        (tester) async {
+    testWidgets('selecting a new field sorts ascending by that field', (
+      tester,
+    ) async {
       await pumpSheet(tester);
 
       await tester.tap(find.widgetWithText(ChoiceChip, 'Size'));
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(
-          tester.element(find.byType(ViewOptionsSheet)));
+        tester.element(find.byType(ViewOptionsSheet)),
+      );
       final settings = container.read(settingsProvider).valueOrNull!;
       expect(settings.app.sort.field, SortField.size);
       expect(settings.app.sort.ascending, isTrue);
     });
 
-    testWidgets('re-selecting the active field flips direction',
-        (tester) async {
+    testWidgets('re-selecting the active field flips direction', (
+      tester,
+    ) async {
       await pumpSheet(tester);
 
       // First tap selects Name (already the default field) -> still
@@ -193,20 +207,21 @@ void main() {
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(
-          tester.element(find.byType(ViewOptionsSheet)));
+        tester.element(find.byType(ViewOptionsSheet)),
+      );
       final settings = container.read(settingsProvider).valueOrNull!;
       expect(settings.app.sort.field, SortField.name);
       expect(settings.app.sort.ascending, isFalse);
     });
 
-    testWidgets('shows an arrow icon on the active sort chip',
-        (tester) async {
+    testWidgets('shows an arrow icon on the active sort chip', (tester) async {
       await pumpSheet(tester);
 
       // Name is the default active field -> its chip shows a direction
       // arrow as its avatar.
       final chip = tester.widget<ChoiceChip>(
-          find.widgetWithText(ChoiceChip, 'Name'));
+        find.widgetWithText(ChoiceChip, 'Name'),
+      );
       expect(chip.selected, isTrue);
       expect(chip.avatar, isNotNull);
     });
@@ -217,10 +232,13 @@ void main() {
         'include hidden items', (tester) async {
       // Default VisibilityPrefs hides dotfiles, so the ".env" entry below
       // makes ExplorerState.hiddenCount == 1.
-      final (container, _) = await pumpSheet(tester, entries: const [
-        Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
-        Entry(name: '.env', path: '/.env', isDir: false),
-      ]);
+      final (container, _) = await pumpSheet(
+        tester,
+        entries: const [
+          Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
+          Entry(name: '.env', path: '/.env', isDir: false),
+        ],
+      );
 
       const arg = (hostId: 'h1', rootPath: '/');
       expect(container.read(explorerProvider(arg)).hiddenCount, 1);
@@ -239,9 +257,12 @@ void main() {
     });
 
     testWidgets('is absent when there are no hidden entries', (tester) async {
-      final (container, _) = await pumpSheet(tester, entries: const [
-        Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
-      ]);
+      final (container, _) = await pumpSheet(
+        tester,
+        entries: const [
+          Entry(name: 'readme.txt', path: '/readme.txt', isDir: false),
+        ],
+      );
 
       const arg = (hostId: 'h1', rootPath: '/');
       expect(container.read(explorerProvider(arg)).hiddenCount, 0);

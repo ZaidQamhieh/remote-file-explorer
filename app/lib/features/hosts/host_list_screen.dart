@@ -34,9 +34,9 @@ class HostListScreen extends ConsumerWidget {
                   Text(
                     'v$v',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.normal,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
               ],
             );
@@ -51,11 +51,12 @@ class HostListScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'App settings',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const AppSettingsScreen(),
-              ),
-            ),
+            onPressed:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AppSettingsScreen(),
+                  ),
+                ),
           ),
           const SizedBox(width: Spacing.xs),
         ],
@@ -66,7 +67,10 @@ class HostListScreen extends ConsumerWidget {
         data: (store) {
           final hosts = store.listHosts();
           if (hosts.isEmpty) {
-            return _EmptyState(scheme: scheme, onScan: () => _addComputer(context, ref));
+            return _EmptyState(
+              scheme: scheme,
+              onScan: () => _addComputer(context, ref),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.symmetric(
@@ -74,10 +78,15 @@ class HostListScreen extends ConsumerWidget {
               vertical: Spacing.md,
             ),
             itemCount: hosts.length,
-            itemBuilder: (ctx, i) => AppearListItem(
-              index: i,
-              child: HostCard(host: hosts[i], store: store, isFirst: i == 0),
-            ),
+            itemBuilder:
+                (ctx, i) => AppearListItem(
+                  index: i,
+                  child: HostCard(
+                    host: hosts[i],
+                    store: store,
+                    isFirst: i == 0,
+                  ),
+                ),
           );
         },
       ),
@@ -90,9 +99,9 @@ class HostListScreen extends ConsumerWidget {
   }
 
   Future<void> _addComputer(BuildContext context, WidgetRef ref) async {
-    await Navigator.of(context).push<Host>(
-      MaterialPageRoute(builder: (_) => const PairingScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push<Host>(MaterialPageRoute(builder: (_) => const PairingScreen()));
     // Reload the host store after pairing
     ref.invalidate(hostStoreProvider);
   }
@@ -134,16 +143,18 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: Spacing.lg),
             Text(
               'Pair your first PC',
-              style: textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: Spacing.sm),
             Text(
               'Scan the pairing QR code shown by the desktop agent to connect '
               'this phone over your network or Tailscale.',
-              style: textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
+              style: textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: Spacing.lg),

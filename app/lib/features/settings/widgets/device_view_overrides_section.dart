@@ -31,9 +31,10 @@ class DeviceViewOverridesSection extends ConsumerWidget {
       title: 'Display (this device)',
       icon: Icons.tune_rounded,
       trailing: TextButton(
-        onPressed: settings.hasOverride(hostId)
-            ? () => notifier.resetDevice(hostId)
-            : null,
+        onPressed:
+            settings.hasOverride(hostId)
+                ? () => notifier.resetDevice(hostId)
+                : null,
         child: const Text('Reset to app defaults'),
       ),
       children: [
@@ -48,8 +49,11 @@ class DeviceViewOverridesSection extends ConsumerWidget {
           title: 'Layout',
           isOverridden: overrides.gridView != null,
           appDefaultLabel: settings.app.gridView ? 'Grid' : 'List',
-          onChanged: (on) => notifier.setDeviceGridView(
-              hostId, on ? resolved.gridView : null),
+          onChanged:
+              (on) => notifier.setDeviceGridView(
+                hostId,
+                on ? resolved.gridView : null,
+              ),
           control: SegmentedButton<bool>(
             showSelectedIcon: false,
             segments: const [
@@ -57,8 +61,8 @@ class DeviceViewOverridesSection extends ConsumerWidget {
               ButtonSegment(value: true, label: Text('Grid')),
             ],
             selected: {resolved.gridView},
-            onSelectionChanged: (s) =>
-                notifier.setDeviceGridView(hostId, s.first),
+            onSelectionChanged:
+                (s) => notifier.setDeviceGridView(hostId, s.first),
           ),
         ),
         const Divider(height: Spacing.lg),
@@ -66,19 +70,26 @@ class DeviceViewOverridesSection extends ConsumerWidget {
           title: 'Density',
           isOverridden: overrides.density != null,
           appDefaultLabel: _densityLabel(settings.app.density),
-          onChanged: (on) => notifier.setDeviceDensity(
-              hostId, on ? resolved.density : null),
+          onChanged:
+              (on) => notifier.setDeviceDensity(
+                hostId,
+                on ? resolved.density : null,
+              ),
           control: SegmentedButton<EntryDensity>(
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(
-                  value: EntryDensity.comfortable, label: Text('Comfortable')),
+                value: EntryDensity.comfortable,
+                label: Text('Comfortable'),
+              ),
               ButtonSegment(
-                  value: EntryDensity.compact, label: Text('Compact')),
+                value: EntryDensity.compact,
+                label: Text('Compact'),
+              ),
             ],
             selected: {resolved.density},
-            onSelectionChanged: (s) =>
-                notifier.setDeviceDensity(hostId, s.first),
+            onSelectionChanged:
+                (s) => notifier.setDeviceDensity(hostId, s.first),
           ),
         ),
         const Divider(height: Spacing.lg),
@@ -86,8 +97,8 @@ class DeviceViewOverridesSection extends ConsumerWidget {
           title: 'Sort',
           isOverridden: overrides.sort != null,
           appDefaultLabel: _sortLabel(settings.app.sort),
-          onChanged: (on) =>
-              notifier.setDeviceSort(hostId, on ? resolved.sort : null),
+          onChanged:
+              (on) => notifier.setDeviceSort(hostId, on ? resolved.sort : null),
           control: _SortControl(
             value: resolved.sort,
             onChanged: (v) => notifier.setDeviceSort(hostId, v),
@@ -125,9 +136,11 @@ class _OverrideRow extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: Text(title),
-          subtitle: Text(isOverridden
-              ? 'Overridden for this device'
-              : 'Using app default ($appDefaultLabel)'),
+          subtitle: Text(
+            isOverridden
+                ? 'Overridden for this device'
+                : 'Using app default ($appDefaultLabel)',
+          ),
           value: isOverridden,
           onChanged: onChanged,
         ),
@@ -156,8 +169,8 @@ class _SortControl extends StatelessWidget {
       children: [
         DropdownButton<SortField>(
           value: value.field,
-          onChanged: (f) =>
-              f == null ? null : onChanged(value.copyWith(field: f)),
+          onChanged:
+              (f) => f == null ? null : onChanged(value.copyWith(field: f)),
           items: [
             for (final f in SortField.values)
               DropdownMenuItem(value: f, child: Text(_sortFieldLabel(f))),
@@ -166,11 +179,13 @@ class _SortControl extends StatelessWidget {
         const SizedBox(width: Spacing.sm),
         IconButton(
           tooltip: value.ascending ? 'Ascending' : 'Descending',
-          icon: Icon(value.ascending
-              ? Icons.arrow_upward_rounded
-              : Icons.arrow_downward_rounded),
-          onPressed: () =>
-              onChanged(value.copyWith(ascending: !value.ascending)),
+          icon: Icon(
+            value.ascending
+                ? Icons.arrow_upward_rounded
+                : Icons.arrow_downward_rounded,
+          ),
+          onPressed:
+              () => onChanged(value.copyWith(ascending: !value.ascending)),
         ),
       ],
     );
@@ -184,8 +199,8 @@ String _sortLabel(SortOrder s) =>
     '${_sortFieldLabel(s.field)} ${s.ascending ? '↑' : '↓'}';
 
 String _sortFieldLabel(SortField field) => switch (field) {
-      SortField.name => 'Name',
-      SortField.size => 'Size',
-      SortField.date => 'Date modified',
-      SortField.type => 'Type',
-    };
+  SortField.name => 'Name',
+  SortField.size => 'Size',
+  SortField.date => 'Date modified',
+  SortField.type => 'Type',
+};

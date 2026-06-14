@@ -19,14 +19,16 @@ const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
 class _FakeAgentClient extends AgentClient {
   _FakeAgentClient({required Host host, required this.contentByPath})
-      : super(host);
+    : super(host);
 
   /// Canned text content keyed by remote path.
   final Map<String, String> contentByPath;
 
   @override
-  Future<Uint8List> fetchBytes(String remotePath,
-      {CancelToken? cancelToken}) async {
+  Future<Uint8List> fetchBytes(
+    String remotePath, {
+    CancelToken? cancelToken,
+  }) async {
     return Uint8List.fromList(utf8.encode(contentByPath[remotePath] ?? ''));
   }
 }
@@ -39,23 +41,25 @@ Widget _wrap(Widget child) => ProviderScope(child: MaterialApp(home: child));
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('pager renders the shared top bar and the initial page',
-      (tester) async {
+  testWidgets('pager renders the shared top bar and the initial page', (
+    tester,
+  ) async {
     final client = _FakeAgentClient(
       host: _testHost,
-      contentByPath: {
-        '/dir/a.txt': 'alpha file',
-        '/dir/b.txt': 'bravo file',
-      },
+      contentByPath: {'/dir/a.txt': 'alpha file', '/dir/b.txt': 'bravo file'},
     );
     final entries = [_txt('a.txt'), _txt('b.txt')];
 
-    await tester.pumpWidget(_wrap(PreviewPager(
-      entries: entries,
-      initialIndex: 0,
-      host: _testHost,
-      client: client,
-    )));
+    await tester.pumpWidget(
+      _wrap(
+        PreviewPager(
+          entries: entries,
+          initialIndex: 0,
+          host: _testHost,
+          client: client,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // Shared top bar + the first page's content.
@@ -76,9 +80,9 @@ void main() {
       contentByPath: {'/dir/a.txt': 'one\ntwo\nthree'},
     );
 
-    await tester.pumpWidget(_wrap(
-      TextPreviewScreen(entry: _txt('a.txt', size: 13), client: client),
-    ));
+    await tester.pumpWidget(
+      _wrap(TextPreviewScreen(entry: _txt('a.txt', size: 13), client: client)),
+    );
     await tester.pumpAndSettle();
 
     // The text is present; no gutter line-number "1" yet (3-line file would

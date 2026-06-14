@@ -15,12 +15,12 @@ import 'package:remote_file_explorer/features/hosts/widgets/host_card.dart';
 const _host = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
 Health _health(String os) => Health(
-      status: 'ok',
-      name: 'agent',
-      version: '1.0.0',
-      os: os,
-      readOnly: false,
-    );
+  status: 'ok',
+  name: 'agent',
+  version: '1.0.0',
+  os: os,
+  readOnly: false,
+);
 
 void main() {
   group('explorerRootFor', () {
@@ -38,8 +38,7 @@ void main() {
       expect(explorerRootFor(_health('darwin'), _host), isA<ExplorerScreen>());
     });
 
-    test('unknown OS (offline / no health yet) falls back to the explorer',
-        () {
+    test('unknown OS (offline / no health yet) falls back to the explorer', () {
       expect(explorerRootFor(null, _host), isA<ExplorerScreen>());
       expect(explorerRootFor(_health(''), _host), isA<ExplorerScreen>());
     });

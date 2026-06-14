@@ -11,8 +11,8 @@ class AppRelease {
   final int size;
 
   factory AppRelease.fromJson(Map<String, dynamic> json) => AppRelease(
-        versionName: json['versionName'] as String? ?? '',
-        versionCode: (json['versionCode'] as num?)?.toInt() ?? 0,
-        size: (json['size'] as num?)?.toInt() ?? 0,
-      );
+    versionName: json['versionName'] as String? ?? '',
+    versionCode: (json['versionCode'] as num?)?.toInt() ?? 0,
+    size: (json['size'] as num?)?.toInt() ?? 0,
+  );
 }

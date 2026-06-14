@@ -34,12 +34,13 @@ Future<String?> showDestinationPicker(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTopR),
-    builder: (_) => DestinationPickerSheet(
-      hostId: hostId,
-      originPath: originPath,
-      itemCount: itemCount,
-      isCopy: isCopy,
-    ),
+    builder:
+        (_) => DestinationPickerSheet(
+          hostId: hostId,
+          originPath: originPath,
+          itemCount: itemCount,
+          isCopy: isCopy,
+        ),
   );
 }
 
@@ -79,37 +80,51 @@ class DestinationPickerSheet extends ConsumerWidget {
       initialChildSize: 0.9,
       maxChildSize: 0.9,
       minChildSize: 0.5,
-      builder: (_, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: Radii.sheetTopR,
-        ),
-        child: Column(
-          children: [
-            _buildHeader(context, verb),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: BreadcrumbBar(
-                  pathStack: state.pathStack,
-                  onNavigateTo: notifier.navigateTo,
-                ),
-              ),
+      builder:
+          (_, scrollController) => Container(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: Radii.sheetTopR,
             ),
-            const Divider(height: 1),
-            Expanded(child: _buildBody(context, state, notifier, scrollController)),
-            _buildFooter(context, ref, state, notifier, confirmLabel, atOrigin),
-          ],
-        ),
-      ),
+            child: Column(
+              children: [
+                _buildHeader(context, verb),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: BreadcrumbBar(
+                      pathStack: state.pathStack,
+                      onNavigateTo: notifier.navigateTo,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: _buildBody(context, state, notifier, scrollController),
+                ),
+                _buildFooter(
+                  context,
+                  ref,
+                  state,
+                  notifier,
+                  confirmLabel,
+                  atOrigin,
+                ),
+              ],
+            ),
+          ),
     );
   }
 
   Widget _buildHeader(BuildContext context, String verb) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          Spacing.lg, Spacing.md, Spacing.sm, Spacing.sm),
+        Spacing.lg,
+        Spacing.md,
+        Spacing.sm,
+        Spacing.sm,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -129,8 +144,12 @@ class DestinationPickerSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(BuildContext context, DestinationPickerState state,
-      DestinationPickerNotifier notifier, ScrollController scrollController) {
+  Widget _buildBody(
+    BuildContext context,
+    DestinationPickerState state,
+    DestinationPickerNotifier notifier,
+    ScrollController scrollController,
+  ) {
     if (state.loading && state.folders.isEmpty) {
       return const ListingSkeleton();
     }
@@ -140,10 +159,7 @@ class DestinationPickerSheet extends ConsumerWidget {
     if (state.folders.isEmpty) {
       return ListView(
         controller: scrollController,
-        children: const [
-          SizedBox(height: 120),
-          EmptyFolderView(),
-        ],
+        children: const [SizedBox(height: 120), EmptyFolderView()],
       );
     }
 
@@ -160,12 +176,13 @@ class DestinationPickerSheet extends ConsumerWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
             child: Center(
-              child: state.loadingMore
-                  ? const SizedBox.square(
-                      dimension: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const SizedBox.square(dimension: 24),
+              child:
+                  state.loadingMore
+                      ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const SizedBox.square(dimension: 24),
             ),
           );
         }
@@ -201,7 +218,11 @@ class DestinationPickerSheet extends ConsumerWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-            Spacing.md, Spacing.sm, Spacing.md, Spacing.sm),
+          Spacing.md,
+          Spacing.sm,
+          Spacing.md,
+          Spacing.sm,
+        ),
         child: Row(
           children: [
             TextButton.icon(
@@ -212,7 +233,9 @@ class DestinationPickerSheet extends ConsumerWidget {
             const Spacer(),
             FilledButton(
               onPressed:
-                  atOrigin ? null : () => Navigator.pop(context, state.currentPath),
+                  atOrigin
+                      ? null
+                      : () => Navigator.pop(context, state.currentPath),
               child: Text(confirmLabel),
             ),
           ],
@@ -221,28 +244,33 @@ class DestinationPickerSheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _newFolder(BuildContext context, WidgetRef ref,
-      DestinationPickerNotifier notifier) async {
+  Future<void> _newFolder(
+    BuildContext context,
+    WidgetRef ref,
+    DestinationPickerNotifier notifier,
+  ) async {
     final ctrl = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New folder'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Name'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Create'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('New folder'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Name'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Create'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (name == null || name.isEmpty || !context.mounted) return;
     try {

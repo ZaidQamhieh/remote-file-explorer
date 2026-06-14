@@ -26,9 +26,9 @@ class SortOrder {
   final bool ascending;
 
   SortOrder copyWith({SortField? field, bool? ascending}) => SortOrder(
-        field: field ?? this.field,
-        ascending: ascending ?? this.ascending,
-      );
+    field: field ?? this.field,
+    ascending: ascending ?? this.ascending,
+  );
 
   @override
   bool operator ==(Object other) =>

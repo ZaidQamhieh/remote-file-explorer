@@ -93,11 +93,13 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
             backgroundDecoration: const BoxDecoration(color: Colors.black),
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 4,
-            loadingBuilder: (context, event) =>
-                const PreviewLoading(message: 'Decoding image…'),
-            errorBuilder: (context, error, stackTrace) => PreviewError(
-              message: 'Could not decode this image.\n$error',
-            ),
+            loadingBuilder:
+                (context, event) =>
+                    const PreviewLoading(message: 'Decoding image…'),
+            errorBuilder:
+                (context, error, stackTrace) => PreviewError(
+                  message: 'Could not decode this image.\n$error',
+                ),
           );
           if (widget.heroTag != null) {
             // A cheap Hero (no shaders) — Skia handles the transform/opacity

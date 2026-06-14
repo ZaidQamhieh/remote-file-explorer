@@ -135,8 +135,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final settings =
         ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
     final prefs = settings.resolveVisibility(widget.host.id);
-    return filterSearchResults(_rawResults, prefs,
-        includeHidden: _includeHidden);
+    return filterSearchResults(
+      _rawResults,
+      prefs,
+      includeHidden: _includeHidden,
+    );
   }
 
   /// Number of active (non-default) filters, shown as a badge on the tune
@@ -157,7 +160,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _onChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 450), () => _runSearch(value));
+    _debounce = Timer(
+      const Duration(milliseconds: 450),
+      () => _runSearch(value),
+    );
     // Refresh recent-searches visibility immediately when the field becomes
     // empty/non-empty.
     setState(() {});
@@ -196,9 +202,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       final result = await widget.client.search(
         q: q,
         root: _searchFromHere ? widget.currentPath : null,
-        types: _selectedCategories.isEmpty
-            ? null
-            : _selectedCategories.map((c) => c.apiValue).toList(),
+        types:
+            _selectedCategories.isEmpty
+                ? null
+                : _selectedCategories.map((c) => c.apiValue).toList(),
         minSize: _sizePreset.minBytes,
         modifiedAfter: _datePreset.resolve(DateTime.now()),
         cancelToken: token,
@@ -258,13 +265,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final result = await showModalBottomSheet<_FilterSheetResult>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FilterSheet(
-        sizePreset: _sizePreset,
-        datePreset: _datePreset,
-        searchFromHere: _searchFromHere,
-        includeHidden: _includeHidden,
-        currentPath: widget.currentPath,
-      ),
+      builder:
+          (_) => _FilterSheet(
+            sizePreset: _sizePreset,
+            datePreset: _datePreset,
+            searchFromHere: _searchFromHere,
+            includeHidden: _includeHidden,
+            currentPath: widget.currentPath,
+          ),
     );
     if (result == null) return;
     _applyFilters(
@@ -327,11 +335,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             onToggle: _toggleCategory,
           ),
           if (_isGlob) const _GlobIndicator(),
-          if (_truncated || _timeBudgetHit) _TruncationBanner(
-            truncated: _truncated,
-            timeBudgetHit: _timeBudgetHit,
-            limit: _results.length,
-          ),
+          if (_truncated || _timeBudgetHit)
+            _TruncationBanner(
+              truncated: _truncated,
+              timeBudgetHit: _timeBudgetHit,
+              limit: _results.length,
+            ),
           const Divider(height: 1),
           Expanded(child: _buildBody(context)),
         ],
@@ -394,9 +403,10 @@ class _FilterButton extends StatelessWidget {
     return IconButton(
       tooltip: 'Search filters',
       onPressed: onPressed,
-      icon: activeCount > 0
-          ? Badge(label: Text('$activeCount'), child: icon)
-          : icon,
+      icon:
+          activeCount > 0
+              ? Badge(label: Text('$activeCount'), child: icon)
+              : icon,
     );
   }
 }
@@ -480,9 +490,10 @@ class _TruncationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final message = truncated
-        ? 'Showing first $limit results — refine your search.'
-        : 'Search timed out — showing partial results.';
+    final message =
+        truncated
+            ? 'Showing first $limit results — refine your search.'
+            : 'Search timed out — showing partial results.';
     return Material(
       color: c.tertiaryContainer,
       child: Padding(
@@ -531,7 +542,10 @@ class _RecentSearchesView extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            Spacing.md, Spacing.md, Spacing.sm, Spacing.xs,
+            Spacing.md,
+            Spacing.md,
+            Spacing.sm,
+            Spacing.xs,
           ),
           child: Row(
             children: [
@@ -542,8 +556,8 @@ class _RecentSearchesView extends ConsumerWidget {
                 ),
               ),
               TextButton(
-                onPressed: () =>
-                    ref.read(recentSearchesProvider.notifier).clear(),
+                onPressed:
+                    () => ref.read(recentSearchesProvider.notifier).clear(),
                 child: const Text('Clear all'),
               ),
             ],
@@ -556,8 +570,8 @@ class _RecentSearchesView extends ConsumerWidget {
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18),
               tooltip: 'Remove',
-              onPressed: () =>
-                  ref.read(recentSearchesProvider.notifier).remove(query),
+              onPressed:
+                  () => ref.read(recentSearchesProvider.notifier).remove(query),
             ),
             onTap: () => onSelect(query),
           ),
@@ -610,12 +624,14 @@ class _FilterSheetState extends State<_FilterSheet> {
   late bool _includeHidden = widget.includeHidden;
 
   void _apply() {
-    Navigator.of(context).pop(_FilterSheetResult(
-      sizePreset: _sizePreset,
-      datePreset: _datePreset,
-      searchFromHere: _searchFromHere,
-      includeHidden: _includeHidden,
-    ));
+    Navigator.of(context).pop(
+      _FilterSheetResult(
+        sizePreset: _sizePreset,
+        datePreset: _datePreset,
+        searchFromHere: _searchFromHere,
+        includeHidden: _includeHidden,
+      ),
+    );
   }
 
   void _reset() {
@@ -632,7 +648,10 @@ class _FilterSheetState extends State<_FilterSheet> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-          Spacing.md, Spacing.md, Spacing.md, Spacing.lg,
+          Spacing.md,
+          Spacing.md,
+          Spacing.md,
+          Spacing.lg,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -664,7 +683,10 @@ class _FilterSheetState extends State<_FilterSheet> {
               ],
             ),
             const SizedBox(height: Spacing.md),
-            Text('Date modified', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              'Date modified',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: Spacing.xs),
             Wrap(
               spacing: Spacing.xs,
@@ -695,8 +717,9 @@ class _FilterSheetState extends State<_FilterSheet> {
                 const Text('From here'),
                 Switch(
                   value: !_searchFromHere,
-                  onChanged: (everywhere) =>
-                      setState(() => _searchFromHere = !everywhere),
+                  onChanged:
+                      (everywhere) =>
+                          setState(() => _searchFromHere = !everywhere),
                 ),
                 const Text('Everywhere'),
               ],

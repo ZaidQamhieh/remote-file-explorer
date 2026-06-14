@@ -51,12 +51,15 @@ void main() {
     await tester.tap(find.text('Compact'));
     await tester.pumpAndSettle();
 
-    expect(c.read(settingsProvider).valueOrNull!.app.density,
-        EntryDensity.compact);
+    expect(
+      c.read(settingsProvider).valueOrNull!.app.density,
+      EntryDensity.compact,
+    );
   });
 
-  testWidgets('selecting a sort field sets the app default ascending',
-      (tester) async {
+  testWidgets('selecting a sort field sets the app default ascending', (
+    tester,
+  ) async {
     final c = await pump(tester);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Size'));
@@ -67,8 +70,9 @@ void main() {
     expect(sort.ascending, isTrue);
   });
 
-  testWidgets('re-tapping the active sort field flips direction',
-      (tester) async {
+  testWidgets('re-tapping the active sort field flips direction', (
+    tester,
+  ) async {
     final c = await pump(tester);
 
     // Name is the default active field; tapping it flips to descending.
@@ -84,18 +88,20 @@ void main() {
 
   testWidgets('selecting Dark sets the app-wide theme mode', (tester) async {
     final c = await pump(tester);
-    expect(c.read(settingsProvider).valueOrNull!.app.themeMode,
-        ThemeMode.system);
+    expect(
+      c.read(settingsProvider).valueOrNull!.app.themeMode,
+      ThemeMode.system,
+    );
 
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
 
-    expect(
-        c.read(settingsProvider).valueOrNull!.app.themeMode, ThemeMode.dark);
+    expect(c.read(settingsProvider).valueOrNull!.app.themeMode, ThemeMode.dark);
   });
 
-  testWidgets('toggling "Use wallpaper colors" flips dynamicColor',
-      (tester) async {
+  testWidgets('toggling "Use wallpaper colors" flips dynamicColor', (
+    tester,
+  ) async {
     final c = await pump(tester);
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
 

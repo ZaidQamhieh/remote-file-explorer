@@ -31,8 +31,9 @@ void main() {
     );
   }
 
-  testWidgets('shows the hidden count and "Show" when not revealed',
-      (tester) async {
+  testWidgets('shows the hidden count and "Show" when not revealed', (
+    tester,
+  ) async {
     await pumpFooter(tester, count: 3, revealed: false, onToggle: () {});
 
     expect(find.text('3 hidden · '), findsOneWidget);
@@ -50,8 +51,12 @@ void main() {
 
   testWidgets('tapping the footer invokes onToggle', (tester) async {
     var toggled = false;
-    await pumpFooter(tester, count: 1, revealed: false,
-        onToggle: () => toggled = true);
+    await pumpFooter(
+      tester,
+      count: 1,
+      revealed: false,
+      onToggle: () => toggled = true,
+    );
 
     await tester.tap(find.byType(InkWell));
     await tester.pump();
@@ -59,8 +64,9 @@ void main() {
     expect(toggled, isTrue);
   });
 
-  testWidgets('compact mode lays the label out in a column for grid cells',
-      (tester) async {
+  testWidgets('compact mode lays the label out in a column for grid cells', (
+    tester,
+  ) async {
     var toggled = false;
     await pumpFooter(
       tester,
@@ -75,10 +81,7 @@ void main() {
     // Compact mode wraps the label in a Column instead of the full-width Row
     // used by the non-compact layout.
     expect(
-      find.descendant(
-        of: find.byType(InkWell),
-        matching: find.byType(Column),
-      ),
+      find.descendant(of: find.byType(InkWell), matching: find.byType(Column)),
       findsOneWidget,
     );
 

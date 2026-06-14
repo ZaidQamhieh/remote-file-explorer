@@ -77,8 +77,9 @@ void main() {
       expect(find.text(r'C:\'), findsNothing);
     });
 
-    testWidgets('renders nothing when usage cannot be determined',
-        (tester) async {
+    testWidgets('renders nothing when usage cannot be determined', (
+      tester,
+    ) async {
       const drive = Drive(path: '/mnt/data');
       await tester.pumpWidget(_wrap(const StorageGauge(drive: drive)));
 

@@ -26,7 +26,8 @@ class AppTheme {
       _build(Brightness.dark, scheme);
 
   static ThemeData _build(Brightness brightness, [ColorScheme? override]) {
-    final scheme = override ??
+    final scheme =
+        override ??
         ColorScheme.fromSeed(
           seedColor: Brand.seed,
           brightness: brightness,

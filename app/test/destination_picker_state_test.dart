@@ -12,8 +12,10 @@ const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 /// Polls [predicate] until it's true or [timeout] elapses, pumping the event
 /// loop between checks so the microtask-scheduled initial load gets a chance
 /// to complete.
-Future<void> _waitUntil(bool Function() predicate,
-    {Duration timeout = const Duration(seconds: 2)}) async {
+Future<void> _waitUntil(
+  bool Function() predicate, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
     if (DateTime.now().isAfter(deadline)) {
@@ -23,18 +25,11 @@ Future<void> _waitUntil(bool Function() predicate,
   }
 }
 
-Entry _dir(String path) => Entry(
-      name: path.split('/').last,
-      path: path,
-      isDir: true,
-    );
+Entry _dir(String path) =>
+    Entry(name: path.split('/').last, path: path, isDir: true);
 
-Entry _file(String path) => Entry(
-      name: path.split('/').last,
-      path: path,
-      isDir: false,
-      size: 10,
-    );
+Entry _file(String path) =>
+    Entry(name: path.split('/').last, path: path, isDir: false, size: 10);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -45,26 +40,27 @@ void main() {
   setUp(() {
     client = _FakeAgentClient(host: _testHost);
     container = ProviderContainer(
-      overrides: [
-        clientProvider.overrideWith((ref, hostId) async => client),
-      ],
+      overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
     );
     addTearDown(container.dispose);
   });
 
   group('DestinationPickerNotifier', () {
-    test('initial load filters out files, keeping only directories',
-        () async {
-      client.pages['/root'] = Listing(path: '/root', entries: [
-        _dir('/root/Documents'),
-        _file('/root/notes.txt'),
-        _dir('/root/Photos'),
-      ]);
+    test('initial load filters out files, keeping only directories', () async {
+      client.pages['/root'] = Listing(
+        path: '/root',
+        entries: [
+          _dir('/root/Documents'),
+          _file('/root/notes.txt'),
+          _dir('/root/Photos'),
+        ],
+      );
 
       final arg = (hostId: 'h1', startPath: '/root');
       container.listen(destinationPickerProvider(arg), (_, _) {});
       await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty);
+        () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty,
+      );
 
       final state = container.read(destinationPickerProvider(arg));
       expect(state.folders.map((e) => e.name), ['Documents', 'Photos']);
@@ -72,90 +68,114 @@ void main() {
       expect(state.error, isNull);
     });
 
-    test('initial load hides dotfolders (default visibility prefs)',
-        () async {
-      client.pages['/root'] = Listing(path: '/root', entries: [
-        _dir('/root/Documents'),
-        _dir('/root/.config'),
-        _file('/root/notes.txt'),
-      ]);
+    test('initial load hides dotfolders (default visibility prefs)', () async {
+      client.pages['/root'] = Listing(
+        path: '/root',
+        entries: [
+          _dir('/root/Documents'),
+          _dir('/root/.config'),
+          _file('/root/notes.txt'),
+        ],
+      );
 
       final arg = (hostId: 'h1', startPath: '/root');
       container.listen(destinationPickerProvider(arg), (_, _) {});
       await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty);
+        () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty,
+      );
 
       final state = container.read(destinationPickerProvider(arg));
       expect(state.folders.map((e) => e.name), ['Documents']);
     });
 
-    test('navigate pushes onto the path stack and loads the new directory',
-        () async {
-      client.pages['/root'] =
-          Listing(path: '/root', entries: [_dir('/root/Documents')]);
-      client.pages['/root/Documents'] = Listing(
-          path: '/root/Documents', entries: [_dir('/root/Documents/Sub')]);
+    test(
+      'navigate pushes onto the path stack and loads the new directory',
+      () async {
+        client.pages['/root'] = Listing(
+          path: '/root',
+          entries: [_dir('/root/Documents')],
+        );
+        client.pages['/root/Documents'] = Listing(
+          path: '/root/Documents',
+          entries: [_dir('/root/Documents/Sub')],
+        );
 
-      final arg = (hostId: 'h1', startPath: '/root');
-      container.listen(destinationPickerProvider(arg), (_, _) {});
-      final notifier = container.read(destinationPickerProvider(arg).notifier);
-      await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty);
+        final arg = (hostId: 'h1', startPath: '/root');
+        container.listen(destinationPickerProvider(arg), (_, _) {});
+        final notifier = container.read(
+          destinationPickerProvider(arg).notifier,
+        );
+        await _waitUntil(
+          () =>
+              container.read(destinationPickerProvider(arg)).folders.isNotEmpty,
+        );
 
-      notifier.navigate('/root/Documents');
-      await _waitUntil(() => container
-          .read(destinationPickerProvider(arg))
-          .folders
-          .any((e) => e.name == 'Sub'));
+        notifier.navigate('/root/Documents');
+        await _waitUntil(
+          () => container
+              .read(destinationPickerProvider(arg))
+              .folders
+              .any((e) => e.name == 'Sub'),
+        );
 
-      final state = container.read(destinationPickerProvider(arg));
-      expect(state.pathStack, ['/', '/root', '/root/Documents']);
-      expect(state.currentPath, '/root/Documents');
-    });
+        final state = container.read(destinationPickerProvider(arg));
+        expect(state.pathStack, ['/', '/root', '/root/Documents']);
+        expect(state.currentPath, '/root/Documents');
+      },
+    );
 
     test('navigateTo truncates the path stack and reloads', () async {
-      client.pages['/root'] =
-          Listing(path: '/root', entries: [_dir('/root/Documents')]);
+      client.pages['/root'] = Listing(
+        path: '/root',
+        entries: [_dir('/root/Documents')],
+      );
       client.pages['/root/Documents'] = Listing(
-          path: '/root/Documents', entries: [_dir('/root/Documents/Sub')]);
+        path: '/root/Documents',
+        entries: [_dir('/root/Documents/Sub')],
+      );
 
       final arg = (hostId: 'h1', startPath: '/root');
       container.listen(destinationPickerProvider(arg), (_, _) {});
       final notifier = container.read(destinationPickerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty);
+        () => container.read(destinationPickerProvider(arg)).folders.isNotEmpty,
+      );
 
       notifier.navigate('/root/Documents');
-      await _waitUntil(() => container
-          .read(destinationPickerProvider(arg))
-          .pathStack
-          .length == 3);
+      await _waitUntil(
+        () =>
+            container.read(destinationPickerProvider(arg)).pathStack.length ==
+            3,
+      );
 
       notifier.navigateTo(1);
-      await _waitUntil(() => container
-          .read(destinationPickerProvider(arg))
-          .pathStack
-          .length == 2);
+      await _waitUntil(
+        () =>
+            container.read(destinationPickerProvider(arg)).pathStack.length ==
+            2,
+      );
 
       final state = container.read(destinationPickerProvider(arg));
       expect(state.pathStack, ['/', '/root']);
       expect(state.currentPath, '/root');
     });
 
-    test('createFolder posts a separator-joined path then refreshes',
-        () async {
+    test('createFolder posts a separator-joined path then refreshes', () async {
       client.pages['/root'] = Listing(path: '/root', entries: []);
 
       final arg = (hostId: 'h1', startPath: '/root');
       container.listen(destinationPickerProvider(arg), (_, _) {});
       final notifier = container.read(destinationPickerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).loading == false);
+        () => container.read(destinationPickerProvider(arg)).loading == false,
+      );
 
       // Refresh after createFolder will re-list '/root' and should now
       // include the new folder.
-      client.pages['/root'] =
-          Listing(path: '/root', entries: [_dir('/root/New folder')]);
+      client.pages['/root'] = Listing(
+        path: '/root',
+        entries: [_dir('/root/New folder')],
+      );
 
       await notifier.createFolder('New folder');
 
@@ -169,7 +189,8 @@ void main() {
       final arg = (hostId: 'h1', startPath: '/root');
       container.listen(destinationPickerProvider(arg), (_, _) {});
       await _waitUntil(
-          () => container.read(destinationPickerProvider(arg)).error != null);
+        () => container.read(destinationPickerProvider(arg)).error != null,
+      );
 
       final state = container.read(destinationPickerProvider(arg));
       expect(state.error, isNotNull);

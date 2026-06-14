@@ -31,8 +31,12 @@ class SettingsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding:
-              const EdgeInsets.fromLTRB(Spacing.xs, 0, Spacing.xs, Spacing.sm),
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.xs,
+            0,
+            Spacing.xs,
+            Spacing.sm,
+          ),
           child: Row(
             children: [
               Icon(icon, size: 18, color: scheme.primary),
@@ -40,10 +44,10 @@ class SettingsSection extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
               ),
               const Spacer(),
               if (trailing != null) trailing!,
@@ -55,13 +59,16 @@ class SettingsSection extends StatelessWidget {
           color: scheme.surfaceContainerLow,
           shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
           clipBehavior: Clip.antiAlias,
-          child: padded
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md, vertical: Spacing.xs),
-                  child: Column(children: children),
-                )
-              : Column(children: children),
+          child:
+              padded
+                  ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md,
+                      vertical: Spacing.xs,
+                    ),
+                    child: Column(children: children),
+                  )
+                  : Column(children: children),
         ),
       ],
     );

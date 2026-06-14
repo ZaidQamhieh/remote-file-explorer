@@ -70,42 +70,51 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       expand: false,
       initialChildSize: 0.55,
       maxChildSize: 0.9,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: Radii.sheetTopR,
-        ),
-        child: CustomScrollView(
-          controller: controller,
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildGrabber(context),
-                    const SizedBox(height: Spacing.md),
-                    _buildHeader(context),
-                  ],
+      builder:
+          (_, controller) => Container(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: Radii.sheetTopR,
+            ),
+            child: CustomScrollView(
+              controller: controller,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.lg,
+                      Spacing.md,
+                      Spacing.lg,
+                      Spacing.sm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildGrabber(context),
+                        const SizedBox(height: Spacing.md),
+                        _buildHeader(context),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg,
+                    0,
+                    Spacing.lg,
+                    Spacing.xl,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildMetaSection(context),
+                      const SizedBox(height: Spacing.lg),
+                      _buildActions(context),
+                    ]),
+                  ),
+                ),
+              ],
             ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg, 0, Spacing.lg, Spacing.xl),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _buildMetaSection(context),
-                  const SizedBox(height: Spacing.lg),
-                  _buildActions(context),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -140,12 +149,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         ),
         const SizedBox(width: Spacing.md),
         Expanded(
-          child: Text(_entry.name,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-              overflow: TextOverflow.ellipsis),
+          child: Text(
+            _entry.name,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -156,18 +166,36 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     final rows = <Widget>[
       _row(context, Icons.route_outlined, 'Path', _entry.path),
       if (_entry.size != null)
-        _row(context, Icons.straighten_outlined, 'Size', formatSize(_entry.size)),
+        _row(
+          context,
+          Icons.straighten_outlined,
+          'Size',
+          formatSize(_entry.size),
+        ),
       if (_entry.mimeType != null)
         _row(context, Icons.label_outline, 'Type', _entry.mimeType!),
       if (_entry.mode != null)
         _row(context, Icons.lock_outline, 'Permissions', _entry.mode!),
       if (_entry.modified != null)
-        _row(context, Icons.edit_calendar_outlined, 'Modified',
-            _entry.modified!.toLocal().toString()),
+        _row(
+          context,
+          Icons.edit_calendar_outlined,
+          'Modified',
+          _entry.modified!.toLocal().toString(),
+        ),
       if (_entry.created != null)
-        _row(context, Icons.event_outlined, 'Created',
-            _entry.created!.toLocal().toString()),
-      _row(context, Icons.link_outlined, 'Symlink', _entry.isSymlink ? 'Yes' : 'No'),
+        _row(
+          context,
+          Icons.event_outlined,
+          'Created',
+          _entry.created!.toLocal().toString(),
+        ),
+      _row(
+        context,
+        Icons.link_outlined,
+        'Symlink',
+        _entry.isSymlink ? 'Yes' : 'No',
+      ),
     ];
 
     return Container(
@@ -177,7 +205,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         border: Border.all(color: scheme.outlineVariant),
       ),
       padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md, vertical: Spacing.xs),
+        horizontal: Spacing.md,
+        vertical: Spacing.xs,
+      ),
       child: Column(
         children: [
           for (var i = 0; i < rows.length; i++) ...[
@@ -189,7 +219,12 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     );
   }
 
-  Widget _row(BuildContext context, IconData icon, String label, String? value) {
+  Widget _row(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String? value,
+  ) {
     if (value == null) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Padding(
@@ -201,16 +236,20 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           const SizedBox(width: Spacing.sm),
           SizedBox(
             width: 100,
-            child: Text(label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    )),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              value,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
         ],
       ),
@@ -219,9 +258,14 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Widget _buildActions(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isFav = _entry.isDir &&
-        (ref.watch(favoritesProvider).valueOrNull?.any(
-                (f) => f.hostId == widget.host.id && f.path == _entry.path) ??
+    final isFav =
+        _entry.isDir &&
+        (ref
+                .watch(favoritesProvider)
+                .valueOrNull
+                ?.any(
+                  (f) => f.hostId == widget.host.id && f.path == _entry.path,
+                ) ??
             false);
     return Wrap(
       spacing: Spacing.sm,
@@ -231,11 +275,15 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md, vertical: Spacing.sm),
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: Icon(isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-                color: isFav ? Colors.amber : null),
+            icon: Icon(
+              isFav ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: isFav ? Colors.amber : null,
+            ),
             label: Text(isFav ? 'Unfavorite' : 'Favorite'),
             onPressed: () => _toggleFavorite(context, isFav),
           ),
@@ -243,7 +291,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md, vertical: Spacing.sm),
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
             icon: const Icon(Icons.visibility_outlined),
@@ -254,7 +304,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           FilledButton.tonalIcon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md, vertical: Spacing.sm),
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
             icon: const Icon(Icons.download_outlined),
@@ -264,7 +316,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md, vertical: Spacing.sm),
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
           icon: const Icon(Icons.drive_file_rename_outline),
@@ -274,7 +328,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md, vertical: Spacing.sm),
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
           icon: const Icon(Icons.copy_all_outlined),
@@ -284,7 +340,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md, vertical: Spacing.sm),
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             foregroundColor: scheme.error,
             side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
@@ -298,7 +356,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   }
 
   void _toggleFavorite(BuildContext context, bool wasFavorite) {
-    ref.read(favoritesProvider.notifier).toggle(
+    ref
+        .read(favoritesProvider.notifier)
+        .toggle(
           Favorite(
             hostId: widget.host.id,
             path: _entry.path,
@@ -324,10 +384,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   }
 
   Future<void> _download(BuildContext context) async {
-    final dir = await getDownloadsDirectory() ??
+    final dir =
+        await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
     final localPath = '${dir.path}/${_entry.name}';
-    ref.read(transferQueueProvider.notifier).enqueue(
+    ref
+        .read(transferQueueProvider.notifier)
+        .enqueue(
           TransferTask.download(
             remotePath: _entry.path,
             localPath: localPath,
@@ -344,22 +407,25 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     final ctrl = TextEditingController(text: _entry.name);
     final newName = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'New name'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Rename')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Rename'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'New name'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Rename'),
+              ),
+            ],
+          ),
     );
     if (newName == null || newName == _entry.name || !context.mounted) return;
     try {
@@ -384,7 +450,8 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       // never collides with the original.
       final res = await widget.client.copy([path], parentDir, duplicate: true);
       final results = (res['results'] as List?) ?? const [];
-      final ok = results.isNotEmpty &&
+      final ok =
+          results.isNotEmpty &&
           results.first is Map &&
           (results.first as Map)['ok'] == true;
       if (!ok) {
@@ -404,19 +471,23 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   Future<void> _delete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete permanently?'),
-        content: Text(
-            'Permanently delete "${_entry.name}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete permanently?'),
+            content: Text(
+              'Permanently delete "${_entry.name}"? This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
     );
     if (confirmed != true || !context.mounted) return;
     try {

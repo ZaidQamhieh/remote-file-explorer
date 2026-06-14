@@ -35,7 +35,8 @@ class ViewOptionsSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(explorerProvider(notifier.arg));
-    final density = ref
+    final density =
+        ref
             .watch(settingsProvider)
             .valueOrNull
             ?.resolveView(notifier.arg.hostId)
@@ -47,7 +48,11 @@ class ViewOptionsSheet extends ConsumerWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-            Spacing.md, Spacing.md, Spacing.md, Spacing.lg),
+          Spacing.md,
+          Spacing.md,
+          Spacing.md,
+          Spacing.lg,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,8 +100,10 @@ class ViewOptionsSheet extends ConsumerWidget {
                 ),
               ],
               selected: {density},
-              onSelectionChanged: (sel) =>
-                  ref.read(settingsProvider.notifier).setAppDensity(sel.first),
+              onSelectionChanged:
+                  (sel) => ref
+                      .read(settingsProvider.notifier)
+                      .setAppDensity(sel.first),
             ),
             const SizedBox(height: Spacing.lg),
             Text('Sort by', style: theme.textTheme.labelLarge),
@@ -104,29 +111,34 @@ class ViewOptionsSheet extends ConsumerWidget {
             Wrap(
               spacing: Spacing.sm,
               runSpacing: Spacing.sm,
-              children: SortField.values.map((field) {
-                final selected = state.sort.field == field;
-                return ChoiceChip(
-                  label: Text(_sortFieldLabel(field)),
-                  selected: selected,
-                  onSelected: (_) {
-                    if (selected) {
-                      notifier.setSort(
-                          state.sort.copyWith(ascending: !state.sort.ascending));
-                    } else {
-                      notifier.setSort(SortOrder(field: field));
-                    }
-                  },
-                  avatar: selected
-                      ? Icon(
-                          state.sort.ascending
-                              ? Icons.arrow_upward_rounded
-                              : Icons.arrow_downward_rounded,
-                          size: 18,
-                        )
-                      : null,
-                );
-              }).toList(),
+              children:
+                  SortField.values.map((field) {
+                    final selected = state.sort.field == field;
+                    return ChoiceChip(
+                      label: Text(_sortFieldLabel(field)),
+                      selected: selected,
+                      onSelected: (_) {
+                        if (selected) {
+                          notifier.setSort(
+                            state.sort.copyWith(
+                              ascending: !state.sort.ascending,
+                            ),
+                          );
+                        } else {
+                          notifier.setSort(SortOrder(field: field));
+                        }
+                      },
+                      avatar:
+                          selected
+                              ? Icon(
+                                state.sort.ascending
+                                    ? Icons.arrow_upward_rounded
+                                    : Icons.arrow_downward_rounded,
+                                size: 18,
+                              )
+                              : null,
+                    );
+                  }).toList(),
             ),
           ],
         ),
@@ -137,11 +149,11 @@ class ViewOptionsSheet extends ConsumerWidget {
 
 /// Sentence-case label for [field] (e.g. "Date modified" for [SortField.date]).
 String _sortFieldLabel(SortField field) => switch (field) {
-      SortField.name => 'Name',
-      SortField.size => 'Size',
-      SortField.date => 'Date modified',
-      SortField.type => 'Type',
-    };
+  SortField.name => 'Name',
+  SortField.size => 'Size',
+  SortField.date => 'Date modified',
+  SortField.type => 'Type',
+};
 
 /// "Show hidden items" eye toggle, with a badge showing how many entries in
 /// the current listing are filtered by file-visibility prefs
@@ -163,9 +175,7 @@ class _ShowHiddenTile extends StatelessWidget {
         child: const Icon(Icons.visibility_outlined),
       ),
       title: const Text('Show hidden items'),
-      subtitle: Text(
-        '${state.hiddenCount} hidden by file visibility settings',
-      ),
+      subtitle: Text('${state.hiddenCount} hidden by file visibility settings'),
       value: state.showHidden,
       onChanged: (_) => notifier.toggleShowHidden(),
     );

@@ -128,7 +128,9 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> setHiddenExtensions(Set<String> extensions, {String? hostId}) {
     final normalized = extensions.map((e) => e.toLowerCase()).toSet();
     return _updateVisibility(
-        hostId, (v) => v.copyWith(hiddenExtensions: normalized));
+      hostId,
+      (v) => v.copyWith(hiddenExtensions: normalized),
+    );
   }
 
   /// Replaces the set of hidden exact names.
@@ -152,53 +154,63 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> removeName(String name, {String? hostId}) {
     final lower = name.toLowerCase();
     return _updateVisibility(
-        hostId,
-        (v) => v.copyWith(
-            hiddenNames:
-                v.hiddenNames.where((n) => n.toLowerCase() != lower).toSet()));
+      hostId,
+      (v) => v.copyWith(
+        hiddenNames:
+            v.hiddenNames.where((n) => n.toLowerCase() != lower).toSet(),
+      ),
+    );
   }
 
   /// Adds a single extension (lowercase, leading dots/whitespace stripped).
   /// No-op if the result is empty.
   Future<void> addExtension(String extension, {String? hostId}) {
-    final normalized =
-        extension.trim().toLowerCase().replaceFirst(RegExp(r'^\.+'), '');
+    final normalized = extension.trim().toLowerCase().replaceFirst(
+      RegExp(r'^\.+'),
+      '',
+    );
     if (normalized.isEmpty) return Future.value();
-    return _updateVisibility(hostId,
-        (v) => v.copyWith(hiddenExtensions: {...v.hiddenExtensions, normalized}));
+    return _updateVisibility(
+      hostId,
+      (v) => v.copyWith(hiddenExtensions: {...v.hiddenExtensions, normalized}),
+    );
   }
 
   /// Removes a single extension.
   Future<void> removeExtension(String extension, {String? hostId}) {
     final lower = extension.toLowerCase();
     return _updateVisibility(
-        hostId,
-        (v) => v.copyWith(
-            hiddenExtensions: Set<String>.from(v.hiddenExtensions)
-              ..remove(lower)));
+      hostId,
+      (v) => v.copyWith(
+        hiddenExtensions: Set<String>.from(v.hiddenExtensions)..remove(lower),
+      ),
+    );
   }
 
   /// Applies [preset], adding its extensions/names additively.
   Future<void> applyPreset(VisibilityPreset preset, {String? hostId}) =>
       _updateVisibility(
-          hostId,
-          (v) => v.copyWith(
-                hiddenExtensions: {...v.hiddenExtensions, ...preset.extensions},
-                hiddenNames: {...v.hiddenNames, ...preset.names},
-              ));
+        hostId,
+        (v) => v.copyWith(
+          hiddenExtensions: {...v.hiddenExtensions, ...preset.extensions},
+          hiddenNames: {...v.hiddenNames, ...preset.names},
+        ),
+      );
 
   /// Removes [preset]'s extensions/names — the inverse of [applyPreset]. Names
   /// are matched case-insensitively (mirroring [isEntryHidden]).
   Future<void> removePreset(VisibilityPreset preset, {String? hostId}) {
     final lowerToRemove = preset.names.map((n) => n.toLowerCase()).toSet();
     return _updateVisibility(
-        hostId,
-        (v) => v.copyWith(
-              hiddenExtensions: v.hiddenExtensions.difference(preset.extensions),
-              hiddenNames: v.hiddenNames
-                  .where((n) => !lowerToRemove.contains(n.toLowerCase()))
-                  .toSet(),
-            ));
+      hostId,
+      (v) => v.copyWith(
+        hiddenExtensions: v.hiddenExtensions.difference(preset.extensions),
+        hiddenNames:
+            v.hiddenNames
+                .where((n) => !lowerToRemove.contains(n.toLowerCase()))
+                .toSet(),
+      ),
+    );
   }
 
   /// Turns this host's file-visibility override on or off. Turning it **on**
@@ -229,8 +241,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       // Base = the host's existing override, or (when first overriding) its
       // currently-resolved visibility so the new override starts from what the
       // user already sees.
-      final base = cur.overridesFor(hostId).visibility ??
-          cur.resolveVisibility(hostId);
+      final base =
+          cur.overridesFor(hostId).visibility ?? cur.resolveVisibility(hostId);
       await _setOverrideVisibility(hostId, mutate(base));
     }
   }
@@ -239,16 +251,22 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> _setAppVisibility(VisibilityPrefs vis) async {
     await _prefs?.setBool(_kVisHideDotfiles, vis.hideDotfiles);
     await _prefs?.setString(
-        _kVisHiddenExtensions, jsonEncode(vis.hiddenExtensions.toList()));
+      _kVisHiddenExtensions,
+      jsonEncode(vis.hiddenExtensions.toList()),
+    );
     await _prefs?.setString(
-        _kVisHiddenNames, jsonEncode(vis.hiddenNames.toList()));
+      _kVisHiddenNames,
+      jsonEncode(vis.hiddenNames.toList()),
+    );
     _emit((s) => s.copyWith(app: s.app.copyWith(visibility: vis)));
   }
 
   /// Sets (or clears, when [vis] is null) the wholesale visibility override for
   /// [hostId], pruning the host entry if it ends up overriding nothing.
   Future<void> _setOverrideVisibility(
-      String hostId, VisibilityPrefs? vis) async {
+    String hostId,
+    VisibilityPrefs? vis,
+  ) async {
     final cur = state.valueOrNull ?? const SettingsState();
     final updated = cur.overridesFor(hostId).copyWithVisibility(vis);
     final next = Map<String, DeviceOverrides>.from(cur.overrides);
@@ -322,7 +340,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
         if (o.density != null) 'density': o.density!.name,
         if (o.sort != null) 'sortField': o.sort!.field.name,
         if (o.sort != null) 'sortAscending': o.sort!.ascending,
-        if (o.visibility != null) 'visibility': _visibilityToJson(o.visibility!),
+        if (o.visibility != null)
+          'visibility': _visibilityToJson(o.visibility!),
       };
     }
     await _prefs?.setString(_kOverrides, jsonEncode(map));
@@ -350,18 +369,21 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
         final hasSort = m.containsKey('sortField');
         final o = DeviceOverrides(
           gridView: m['gridView'] as bool?,
-          density: m.containsKey('density')
-              ? _densityFrom(m['density'] as String?)
-              : null,
-          sort: hasSort
-              ? SortOrder(
-                  field: _sortFieldFrom(m['sortField'] as String?),
-                  ascending: m['sortAscending'] as bool? ?? true,
-                )
-              : null,
-          visibility: m.containsKey('visibility')
-              ? _visibilityFromJson(m['visibility'] as Map<String, dynamic>)
-              : null,
+          density:
+              m.containsKey('density')
+                  ? _densityFrom(m['density'] as String?)
+                  : null,
+          sort:
+              hasSort
+                  ? SortOrder(
+                    field: _sortFieldFrom(m['sortField'] as String?),
+                    ascending: m['sortAscending'] as bool? ?? true,
+                  )
+                  : null,
+          visibility:
+              m.containsKey('visibility')
+                  ? _visibilityFromJson(m['visibility'] as Map<String, dynamic>)
+                  : null,
         );
         if (!o.isEmpty) overrides[entry.key] = o;
       }
@@ -371,9 +393,12 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
 
   /// Reads the app-default visibility from its flat keys. Missing keys fall
   /// back to [VisibilityPrefs]'s defaults (`hideDotfiles: true`, empty sets).
-  VisibilityPrefs _readAppVisibility(SharedPreferences prefs) => VisibilityPrefs(
+  VisibilityPrefs _readAppVisibility(SharedPreferences prefs) =>
+      VisibilityPrefs(
         hideDotfiles: prefs.getBool(_kVisHideDotfiles) ?? true,
-        hiddenExtensions: _decodeStringSet(prefs.getString(_kVisHiddenExtensions)),
+        hiddenExtensions: _decodeStringSet(
+          prefs.getString(_kVisHiddenExtensions),
+        ),
         hiddenNames: _decodeStringSet(prefs.getString(_kVisHiddenNames)),
       );
 
@@ -448,10 +473,10 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   /// The per-host override visibility blob: `{ hideDotfiles, hiddenExtensions:
   /// [...], hiddenNames: [...] }`.
   static Map<String, dynamic> _visibilityToJson(VisibilityPrefs v) => {
-        'hideDotfiles': v.hideDotfiles,
-        'hiddenExtensions': v.hiddenExtensions.toList(),
-        'hiddenNames': v.hiddenNames.toList(),
-      };
+    'hideDotfiles': v.hideDotfiles,
+    'hiddenExtensions': v.hiddenExtensions.toList(),
+    'hiddenNames': v.hiddenNames.toList(),
+  };
 
   static VisibilityPrefs _visibilityFromJson(Map<String, dynamic> m) =>
       VisibilityPrefs(
@@ -463,19 +488,28 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
 
   /// Decodes a JSON list string (as written by [_setAppVisibility]) into a set,
   /// or an empty set when [raw] is null.
-  static Set<String> _decodeStringSet(String? raw) => raw == null
-      ? <String>{}
-      : (jsonDecode(raw) as List).cast<String>().toSet();
+  static Set<String> _decodeStringSet(String? raw) =>
+      raw == null
+          ? <String>{}
+          : (jsonDecode(raw) as List).cast<String>().toSet();
 
-  static EntryDensity _densityFrom(String? name) => EntryDensity.values
-      .firstWhere((d) => d.name == name, orElse: () => EntryDensity.comfortable);
+  static EntryDensity _densityFrom(String? name) =>
+      EntryDensity.values.firstWhere(
+        (d) => d.name == name,
+        orElse: () => EntryDensity.comfortable,
+      );
 
-  static SortField _sortFieldFrom(String? name) => SortField.values
-      .firstWhere((f) => f.name == name, orElse: () => SortField.name);
+  static SortField _sortFieldFrom(String? name) => SortField.values.firstWhere(
+    (f) => f.name == name,
+    orElse: () => SortField.name,
+  );
 
-  static ThemeMode _themeModeFrom(String? name) => ThemeMode.values
-      .firstWhere((m) => m.name == name, orElse: () => ThemeMode.system);
+  static ThemeMode _themeModeFrom(String? name) => ThemeMode.values.firstWhere(
+    (m) => m.name == name,
+    orElse: () => ThemeMode.system,
+  );
 }
 
-final settingsProvider =
-    AsyncNotifierProvider<SettingsNotifier, SettingsState>(SettingsNotifier.new);
+final settingsProvider = AsyncNotifierProvider<SettingsNotifier, SettingsState>(
+  SettingsNotifier.new,
+);

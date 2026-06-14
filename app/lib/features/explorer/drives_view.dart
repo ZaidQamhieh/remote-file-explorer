@@ -23,8 +23,10 @@ import 'widgets/favorites_pin_row.dart';
 
 /// Fetches the drive list for [hostId] via the shared [clientProvider].
 /// `autoDispose` so it's refetched each time the drives screen is opened.
-final drivesProvider = FutureProvider.autoDispose
-    .family<List<Drive>, String>((ref, hostId) async {
+final drivesProvider = FutureProvider.autoDispose.family<List<Drive>, String>((
+  ref,
+  hostId,
+) async {
   final client = await ref.watch(clientProvider(hostId).future);
   return client.drives();
 });
@@ -37,7 +39,8 @@ class DrivesView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final drivesAsync = ref.watch(drivesProvider(host.id));
-    final favs = ref
+    final favs =
+        ref
             .watch(favoritesProvider)
             .valueOrNull
             ?.where((f) => f.hostId == host.id)
@@ -48,10 +51,11 @@ class DrivesView extends ConsumerWidget {
       appBar: AppBar(title: Text(host.label)),
       body: drivesAsync.when(
         loading: () => const ListingSkeleton(),
-        error: (e, _) => ErrorRetryCard(
-          message: 'Could not load drives: $e',
-          onRetry: () => ref.invalidate(drivesProvider(host.id)),
-        ),
+        error:
+            (e, _) => ErrorRetryCard(
+              message: 'Could not load drives: $e',
+              onRetry: () => ref.invalidate(drivesProvider(host.id)),
+            ),
         data: (drives) {
           if (drives.isEmpty) {
             return const EmptyFolderView();
@@ -68,8 +72,8 @@ class DrivesView extends ConsumerWidget {
                 child: ListView.builder(
                   padding: const EdgeInsets.all(Spacing.md),
                   itemCount: drives.length,
-                  itemBuilder: (context, i) =>
-                      _DriveTile(drive: drives[i], host: host),
+                  itemBuilder:
+                      (context, i) => _DriveTile(drive: drives[i], host: host),
                 ),
               ),
             ],
@@ -85,11 +89,12 @@ class DrivesView extends ConsumerWidget {
     final driveRoot = buildPathStack(fav.path).first;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ExplorerScreen(
-          host: host,
-          rootPath: driveRoot,
-          initialPath: fav.path,
-        ),
+        builder:
+            (_) => ExplorerScreen(
+              host: host,
+              rootPath: driveRoot,
+              initialPath: fav.path,
+            ),
       ),
     );
   }
@@ -109,9 +114,10 @@ class _DriveTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final label = (drive.label != null && drive.label!.isNotEmpty)
-        ? drive.label!
-        : folderLabel(drive.path);
+    final label =
+        (drive.label != null && drive.label!.isNotEmpty)
+            ? drive.label!
+            : folderLabel(drive.path);
     final total = drive.totalBytes;
     final free = drive.freeBytes;
     final hasCapacity = total != null && free != null;
@@ -140,11 +146,13 @@ class _DriveTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ExplorerScreen(host: host, rootPath: drive.path),
-          ),
-        ),
+        onTap:
+            () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder:
+                    (_) => ExplorerScreen(host: host, rootPath: drive.path),
+              ),
+            ),
       ),
     );
   }

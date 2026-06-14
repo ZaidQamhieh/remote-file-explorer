@@ -18,7 +18,8 @@ class PreviewImageCache {
   static const int _maxEntries = 8;
 
   final Map<String, Uint8List> _bytes = <String, Uint8List>{};
-  final Map<String, Future<Uint8List>> _inflight = <String, Future<Uint8List>>{};
+  final Map<String, Future<Uint8List>> _inflight =
+      <String, Future<Uint8List>>{};
 
   Uint8List? peek(String path) => _bytes[path];
 
@@ -31,14 +32,17 @@ class PreviewImageCache {
     final pending = _inflight[path];
     if (pending != null) return pending;
 
-    final future = client.fetchBytes(path).then((data) {
-      _put(path, data);
-      _inflight.remove(path);
-      return data;
-    }).catchError((Object e) {
-      _inflight.remove(path);
-      throw e;
-    });
+    final future = client
+        .fetchBytes(path)
+        .then((data) {
+          _put(path, data);
+          _inflight.remove(path);
+          return data;
+        })
+        .catchError((Object e) {
+          _inflight.remove(path);
+          throw e;
+        });
     _inflight[path] = future;
     return future;
   }

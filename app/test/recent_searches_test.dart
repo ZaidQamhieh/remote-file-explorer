@@ -24,8 +24,7 @@ void main() {
 
   Future<void> ready() async {
     container.listen(recentSearchesProvider, (_, _) {});
-    await _waitUntil(
-        () => container.read(recentSearchesProvider).hasValue);
+    await _waitUntil(() => container.read(recentSearchesProvider).hasValue);
   }
 
   test('starts empty', () async {
@@ -40,8 +39,7 @@ void main() {
     await notifier.record('foo');
     await notifier.record('bar');
 
-    expect(
-        container.read(recentSearchesProvider).valueOrNull, ['bar', 'foo']);
+    expect(container.read(recentSearchesProvider).valueOrNull, ['bar', 'foo']);
   });
 
   test('recording an existing query moves it to the front (dedup)', () async {
@@ -52,8 +50,7 @@ void main() {
     await notifier.record('bar');
     await notifier.record('foo');
 
-    expect(
-        container.read(recentSearchesProvider).valueOrNull, ['foo', 'bar']);
+    expect(container.read(recentSearchesProvider).valueOrNull, ['foo', 'bar']);
   });
 
   test('empty/whitespace queries are not recorded', () async {
@@ -120,8 +117,7 @@ void main() {
     final container2 = ProviderContainer();
     addTearDown(container2.dispose);
     container2.listen(recentSearchesProvider, (_, _) {});
-    await _waitUntil(
-        () => container2.read(recentSearchesProvider).hasValue);
+    await _waitUntil(() => container2.read(recentSearchesProvider).hasValue);
 
     expect(container2.read(recentSearchesProvider).valueOrNull, ['foo']);
   });

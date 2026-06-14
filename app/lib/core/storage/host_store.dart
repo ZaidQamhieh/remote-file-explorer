@@ -93,15 +93,16 @@ class HostStore {
 
   /// Records [at] (defaults to now) as the last time [hostId] answered
   /// `/health` successfully.
-  Future<void> setLastSeen(String hostId, [DateTime? at]) =>
-      _prefs.setInt(
-        _lastSeenKey(hostId),
-        (at ?? DateTime.now()).millisecondsSinceEpoch,
-      );
+  Future<void> setLastSeen(String hostId, [DateTime? at]) => _prefs.setInt(
+    _lastSeenKey(hostId),
+    (at ?? DateTime.now()).millisecondsSinceEpoch,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Riverpod provider
 // ---------------------------------------------------------------------------
 
-final hostStoreProvider = FutureProvider<HostStore>((ref) => HostStore.create());
+final hostStoreProvider = FutureProvider<HostStore>(
+  (ref) => HostStore.create(),
+);

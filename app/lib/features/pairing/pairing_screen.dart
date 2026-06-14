@@ -18,8 +18,9 @@ import '../../core/ui/feedback.dart';
 Future<String?> _deviceId() async {
   if (!Platform.isAndroid) return null;
   try {
-    return await const MethodChannel('rfe/downloads')
-        .invokeMethod<String>('getDeviceId');
+    return await const MethodChannel(
+      'rfe/downloads',
+    ).invokeMethod<String>('getDeviceId');
   } catch (_) {
     return null;
   }
@@ -65,10 +66,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
       ),
       body: TabBarView(
         controller: _tabs,
-        children: const [
-          _QrPairingTab(),
-          _ManualPairingTab(),
-        ],
+        children: const [_QrPairingTab(), _ManualPairingTab()],
       ),
     );
   }
@@ -195,8 +193,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
     return Stack(
       children: [
         MobileScanner(onDetect: _onBarcodeDetected),
-        if (_processing)
-          const Center(child: CircularProgressIndicator()),
+        if (_processing) const Center(child: CircularProgressIndicator()),
         if (_error != null)
           Positioned(
             bottom: Spacing.xl,
@@ -341,8 +338,8 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.computer),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              validator:
+                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: Spacing.md),
             TextFormField(
@@ -353,8 +350,8 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.lock),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              validator:
+                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: Spacing.lg),
             if (_error != null) ...[
@@ -363,12 +360,13 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
             ],
             FilledButton.icon(
               onPressed: _loading ? null : _submit,
-              icon: _loading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.link),
+              icon:
+                  _loading
+                      ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.link),
               label: const Text('Pair'),
             ),
           ],

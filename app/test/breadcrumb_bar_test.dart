@@ -52,8 +52,7 @@ void main() {
       }
     });
 
-    test('custom maxVisible of 1 still always shows the current directory',
-        () {
+    test('custom maxVisible of 1 still always shows the current directory', () {
       // With maxVisible=1, visibleTailCount=0, firstVisibleTail=length ->
       // collapsed = 1..length-1 (root + everything up to but excluding the
       // current dir collapse... last index stays visible regardless).
@@ -81,17 +80,22 @@ void main() {
   });
 
   group('copyPathToClipboard', () {
-    testWidgets('copies the path and shows a confirmation snackbar',
-        (tester) async {
+    testWidgets('copies the path and shows a confirmation snackbar', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () =>
-                    copyPathToClipboard(context, '/home/zaid/Documents'),
-                child: const Text('copy'),
-              ),
+              builder:
+                  (context) => ElevatedButton(
+                    onPressed:
+                        () => copyPathToClipboard(
+                          context,
+                          '/home/zaid/Documents',
+                        ),
+                    child: const Text('copy'),
+                  ),
             ),
           ),
         ),

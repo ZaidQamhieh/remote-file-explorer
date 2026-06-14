@@ -14,11 +14,12 @@ class FavoritesSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final favs = ref
-        .watch(favoritesProvider)
-        .valueOrNull
-        ?.where((f) => f.hostId == host.id)
-        .toList() ??
+    final favs =
+        ref
+            .watch(favoritesProvider)
+            .valueOrNull
+            ?.where((f) => f.hostId == host.id)
+            .toList() ??
         const [];
 
     return SafeArea(
@@ -51,15 +52,19 @@ class FavoritesSheet extends ConsumerWidget {
                 itemBuilder: (ctx, i) {
                   final f = favs[i];
                   return ListTile(
-                    leading: const Icon(Icons.folder_special, color: Colors.amber),
+                    leading: const Icon(
+                      Icons.folder_special,
+                      color: Colors.amber,
+                    ),
                     title: Text(f.label),
                     subtitle: Text(f.path, overflow: TextOverflow.ellipsis),
                     trailing: IconButton(
                       icon: const Icon(Icons.star, color: Colors.amber),
                       tooltip: 'Remove',
-                      onPressed: () => ref
-                          .read(favoritesProvider.notifier)
-                          .remove(f.hostId, f.path),
+                      onPressed:
+                          () => ref
+                              .read(favoritesProvider.notifier)
+                              .remove(f.hostId, f.path),
                     ),
                     onTap: () => onOpen(f.path),
                   );

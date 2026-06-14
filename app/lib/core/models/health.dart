@@ -23,14 +23,14 @@ class Health {
   final String? tailscaleAddress;
 
   factory Health.fromJson(Map<String, dynamic> json) => Health(
-        status: json['status'] as String? ?? 'unknown',
-        name: json['name'] as String? ?? '',
-        version: json['version'] as String? ?? '',
-        os: json['os'] as String? ?? '',
-        readOnly: json['readOnly'] as bool? ?? false,
-        address: _nonEmpty(json['address'] as String?),
-        tailscaleAddress: _nonEmpty(json['tailscaleAddress'] as String?),
-      );
+    status: json['status'] as String? ?? 'unknown',
+    name: json['name'] as String? ?? '',
+    version: json['version'] as String? ?? '',
+    os: json['os'] as String? ?? '',
+    readOnly: json['readOnly'] as bool? ?? false,
+    address: _nonEmpty(json['address'] as String?),
+    tailscaleAddress: _nonEmpty(json['tailscaleAddress'] as String?),
+  );
 }
 
 String? _nonEmpty(String? s) => (s == null || s.isEmpty) ? null : s;

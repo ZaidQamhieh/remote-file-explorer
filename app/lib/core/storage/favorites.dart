@@ -18,13 +18,16 @@ class Favorite {
   final String label;
 
   factory Favorite.fromJson(Map<String, dynamic> j) => Favorite(
-        hostId: j['hostId'] as String,
-        path: j['path'] as String,
-        label: j['label'] as String,
-      );
+    hostId: j['hostId'] as String,
+    path: j['path'] as String,
+    label: j['label'] as String,
+  );
 
-  Map<String, dynamic> toJson() =>
-      {'hostId': hostId, 'path': path, 'label': label};
+  Map<String, dynamic> toJson() => {
+    'hostId': hostId,
+    'path': path,
+    'label': label,
+  };
 }
 
 /// Reactive store of favorites, persisted in SharedPreferences.
@@ -50,9 +53,9 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
     state = AsyncData(favs);
   }
 
-  bool isFavorite(String hostId, String path) =>
-      (state.valueOrNull ?? [])
-          .any((f) => f.hostId == hostId && f.path == path);
+  bool isFavorite(String hostId, String path) => (state.valueOrNull ?? []).any(
+    (f) => f.hostId == hostId && f.path == path,
+  );
 
   /// Favorites for a single host, in saved order.
   List<Favorite> forHost(String hostId) =>
@@ -66,8 +69,8 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
   }
 
   Future<void> remove(String hostId, String path) async {
-    final favs = _current
-      ..removeWhere((f) => f.hostId == hostId && f.path == path);
+    final favs =
+        _current..removeWhere((f) => f.hostId == hostId && f.path == path);
     await _persist(favs);
   }
 
@@ -82,5 +85,5 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
 
 final favoritesProvider =
     AsyncNotifierProvider<FavoritesNotifier, List<Favorite>>(
-  FavoritesNotifier.new,
-);
+      FavoritesNotifier.new,
+    );

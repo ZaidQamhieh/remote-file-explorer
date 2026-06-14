@@ -21,29 +21,72 @@ enum EntryCategory { folder, image, video, audio, document, archive, other }
 
 /// Image file extensions (e.g. `photo.png`).
 const Set<String> imageExtensions = {
-  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'heif', 'svg', 'tiff',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'bmp',
+  'webp',
+  'heic',
+  'heif',
+  'svg',
+  'tiff',
   'ico',
 };
 
 /// Video file extensions (e.g. `clip.mp4`).
 const Set<String> videoExtensions = {
-  'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', '3gp', 'flv', 'wmv',
+  'mp4',
+  'mov',
+  'mkv',
+  'avi',
+  'webm',
+  'm4v',
+  '3gp',
+  'flv',
+  'wmv',
 };
 
 /// Audio file extensions (e.g. `track.mp3`).
 const Set<String> audioExtensions = {
-  'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus',
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'ogg',
+  'm4a',
+  'wma',
+  'opus',
 };
 
 /// Archive/compressed file extensions (e.g. `bundle.zip`).
 const Set<String> archiveExtensions = {
-  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz',
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  'tgz',
 };
 
 /// Document file extensions (e.g. `report.pdf`).
 const Set<String> docExtensions = {
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
-  'txt', 'md', 'rtf', 'csv',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+  'txt',
+  'md',
+  'rtf',
+  'csv',
 };
 
 /// Resolves the [EntryCategory] for [entry] from [Entry.isDir] and

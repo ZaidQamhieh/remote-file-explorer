@@ -100,7 +100,8 @@ SpeedEta computeSpeedEta(List<(int ms, int bytes)> samples, {int? totalBytes}) {
   final deltaBytes = last.$2 - first.$2;
   // A regressing byte count (shouldn't happen, but a resumed-from-0 restart
   // could momentarily produce one) is treated as a stall, not negative speed.
-  final bytesPerSecond = deltaBytes <= 0 ? 0.0 : deltaBytes / (elapsedMs / 1000);
+  final bytesPerSecond =
+      deltaBytes <= 0 ? 0.0 : deltaBytes / (elapsedMs / 1000);
 
   double? etaSeconds;
   if (totalBytes != null && totalBytes > 0 && bytesPerSecond > 0) {
@@ -137,7 +138,7 @@ typedef _Sample = (int ms, int bytes);
 /// leaks across screens.
 class TransferSamplerNotifier extends Notifier<Map<String, SpeedEta>> {
   TransferSamplerNotifier({DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now;
+    : _clock = clock ?? DateTime.now;
 
   final DateTime Function() _clock;
 
@@ -163,10 +164,11 @@ class TransferSamplerNotifier extends Notifier<Map<String, SpeedEta>> {
   }
 
   void _onQueueChanged(List<TransferTask> tasks) {
-    final activeIds = tasks
-        .where((t) => t.status == TransferStatus.running)
-        .map((t) => t.id)
-        .toSet();
+    final activeIds =
+        tasks
+            .where((t) => t.status == TransferStatus.running)
+            .map((t) => t.id)
+            .toSet();
 
     // Drop sample history + derived readings for tasks that are no longer
     // running (completed/failed/paused/removed) so the maps don't grow.
@@ -230,5 +232,5 @@ class TransferSamplerNotifier extends Notifier<Map<String, SpeedEta>> {
 /// Live speed/ETA per task id, keyed by [TransferTask.id]. Empty while idle.
 final transferSamplerProvider =
     NotifierProvider<TransferSamplerNotifier, Map<String, SpeedEta>>(
-  TransferSamplerNotifier.new,
-);
+      TransferSamplerNotifier.new,
+    );

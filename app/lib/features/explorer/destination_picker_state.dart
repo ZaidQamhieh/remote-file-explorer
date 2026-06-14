@@ -55,16 +55,15 @@ class DestinationPickerState {
     bool? loadingMore,
     Object? error = _sentinel,
     Object? nextCursor = _sentinel,
-  }) =>
-      DestinationPickerState(
-        pathStack: pathStack ?? this.pathStack,
-        folders: folders ?? this.folders,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        error: error == _sentinel ? this.error : error as String?,
-        nextCursor:
-            nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
-      );
+  }) => DestinationPickerState(
+    pathStack: pathStack ?? this.pathStack,
+    folders: folders ?? this.folders,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    error: error == _sentinel ? this.error : error as String?,
+    nextCursor:
+        nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
+  );
 }
 
 const _sentinel = Object();
@@ -73,8 +72,12 @@ const _sentinel = Object();
 /// directory the picker should start in (the explorer's current directory).
 typedef DestinationPickerArg = ({String hostId, String startPath});
 
-class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
-    DestinationPickerState, DestinationPickerArg> {
+class DestinationPickerNotifier
+    extends
+        AutoDisposeFamilyNotifier<
+          DestinationPickerState,
+          DestinationPickerArg
+        > {
   @override
   DestinationPickerState build(DestinationPickerArg arg) {
     // Keep the underlying client provider alive for this notifier's lifetime
@@ -106,9 +109,10 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
       if (state.currentPath != path) return;
       state = state.copyWith(
         loading: false,
-        folders: listing.entries
-            .where((e) => e.isDir && !_hiddenInPicker(e))
-            .toList(),
+        folders:
+            listing.entries
+                .where((e) => e.isDir && !_hiddenInPicker(e))
+                .toList(),
         error: null,
         nextCursor: listing.nextCursor,
       );
@@ -177,8 +181,8 @@ class DestinationPickerNotifier extends AutoDisposeFamilyNotifier<
   }
 }
 
-final destinationPickerProvider = NotifierProvider.autoDispose
-    .family<DestinationPickerNotifier, DestinationPickerState,
-        DestinationPickerArg>(
-  DestinationPickerNotifier.new,
-);
+final destinationPickerProvider = NotifierProvider.autoDispose.family<
+  DestinationPickerNotifier,
+  DestinationPickerState,
+  DestinationPickerArg
+>(DestinationPickerNotifier.new);

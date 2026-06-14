@@ -16,8 +16,10 @@ import 'package:remote_file_explorer/features/transfers/transfer_state.dart';
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
 /// Polls [predicate] until it's true or [timeout] elapses.
-Future<void> _waitUntil(bool Function() predicate,
-    {Duration timeout = const Duration(seconds: 2)}) async {
+Future<void> _waitUntil(
+  bool Function() predicate, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
     if (DateTime.now().isAfter(deadline)) {
@@ -37,11 +39,13 @@ void main() {
     test('rapid creation in a tight loop yields unique ids', () {
       final ids = <String>{};
       for (var i = 0; i < 200; i++) {
-        ids.add(TransferTask.upload(
-          localPath: '/tmp/f$i',
-          remotePath: '/remote/f$i',
-          host: _testHost,
-        ).id);
+        ids.add(
+          TransferTask.upload(
+            localPath: '/tmp/f$i',
+            remotePath: '/remote/f$i',
+            host: _testHost,
+          ).id,
+        );
       }
       expect(ids.length, 200, reason: 'all ids must be unique');
     });
@@ -65,14 +69,14 @@ void main() {
   // Bug 2 — streaming whole-file SHA-256
   // ---------------------------------------------------------------------
   group('hashFileSha256', () {
-    test('matches sha256.convert on the full bytes for a small file',
-        () async {
+    test('matches sha256.convert on the full bytes for a small file', () async {
       final dir = await Directory.systemTemp.createTemp('hash_small_');
       addTearDown(() => dir.delete(recursive: true));
 
       final file = File('${dir.path}/small.bin');
-      final bytes =
-          Uint8List.fromList(List<int>.generate(1000, (i) => i % 256));
+      final bytes = Uint8List.fromList(
+        List<int>.generate(1000, (i) => i % 256),
+      );
       await file.writeAsBytes(bytes);
 
       final streamed = await hashFileSha256(file.path);
@@ -88,7 +92,8 @@ void main() {
       final file = File('${dir.path}/large.bin');
       // A few MB so the streaming reader sees multiple internal chunks.
       final bytes = Uint8List.fromList(
-          List<int>.generate(3 * 1024 * 1024 + 17, (i) => i % 256));
+        List<int>.generate(3 * 1024 * 1024 + 17, (i) => i % 256),
+      );
       await file.writeAsBytes(bytes);
 
       final streamed = await hashFileSha256(file.path);
@@ -115,15 +120,15 @@ void main() {
   // Bug 2 — chunk read planning via RandomAccessFile (no full-file buffer)
   // ---------------------------------------------------------------------
   group('chunk read planning', () {
-    test(
-        'reading chunks via RandomAccessFile reconstructs the file and '
+    test('reading chunks via RandomAccessFile reconstructs the file and '
         'matches per-chunk hashes', () async {
       final dir = await Directory.systemTemp.createTemp('chunks_');
       addTearDown(() => dir.delete(recursive: true));
 
       final file = File('${dir.path}/data.bin');
-      final bytes =
-          Uint8List.fromList(List<int>.generate(100, (i) => i)); // 100 bytes
+      final bytes = Uint8List.fromList(
+        List<int>.generate(100, (i) => i),
+      ); // 100 bytes
       await file.writeAsBytes(bytes);
 
       const chunkSize = 30; // forces 4 chunks: 30,30,30,10
@@ -142,8 +147,10 @@ void main() {
           final chunk = await raf.read(length);
 
           expect(chunk.length, length);
-          expect(sha256.convert(chunk).toString(),
-              sha256.convert(bytes.sublist(start, end)).toString());
+          expect(
+            sha256.convert(chunk).toString(),
+            sha256.convert(bytes.sublist(start, end)).toString(),
+          );
           reconstructed.add(chunk);
         }
       } finally {
@@ -181,132 +188,145 @@ void main() {
   // while the paused one is still "in flight".
   // ---------------------------------------------------------------------
   group('pause semantics', () {
-    test('pausing a running download leaves status paused, not completed',
-        () async {
-      final dir = await Directory.systemTemp.createTemp('pause_dl_');
-      addTearDown(() => dir.delete(recursive: true));
-      final localPath = '${dir.path}/out.bin';
+    test(
+      'pausing a running download leaves status paused, not completed',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('pause_dl_');
+        addTearDown(() => dir.delete(recursive: true));
+        final localPath = '${dir.path}/out.bin';
 
-      final downloadStarted = Completer<void>();
-      final client = _FakeAgentClient(
-        host: _testHost,
-        onDownload: (cancelToken) async {
-          downloadStarted.complete();
-          // Block until canceled, like a real in-flight HTTP stream.
-          await cancelToken.whenCancel;
-          throw DioException(
-            requestOptions: RequestOptions(path: '/content'),
-            type: DioExceptionType.cancel,
-          );
-        },
-      );
+        final downloadStarted = Completer<void>();
+        final client = _FakeAgentClient(
+          host: _testHost,
+          onDownload: (cancelToken) async {
+            downloadStarted.complete();
+            // Block until canceled, like a real in-flight HTTP stream.
+            await cancelToken.whenCancel;
+            throw DioException(
+              requestOptions: RequestOptions(path: '/content'),
+              type: DioExceptionType.cancel,
+            );
+          },
+        );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => client),
-        ),
-      ]);
-      addTearDown(container.dispose);
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => client,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      final notifier = container.read(transferQueueProvider.notifier);
-      final task = TransferTask.download(
-        remotePath: '/remote/file.bin',
-        localPath: localPath,
-        host: _testHost,
-      );
-      notifier.enqueue(task);
+        final notifier = container.read(transferQueueProvider.notifier);
+        final task = TransferTask.download(
+          remotePath: '/remote/file.bin',
+          localPath: localPath,
+          host: _testHost,
+        );
+        notifier.enqueue(task);
 
-      await downloadStarted.future;
-      // Task should now be running.
-      expect(
-        container
-            .read(transferQueueProvider)
-            .firstWhere((t) => t.id == task.id)
-            .status,
-        TransferStatus.running,
-      );
-
-      notifier.pause(task.id);
-
-      await _waitUntil(() =>
+        await downloadStarted.future;
+        // Task should now be running.
+        expect(
           container
               .read(transferQueueProvider)
               .firstWhere((t) => t.id == task.id)
-              .status !=
-          TransferStatus.running);
+              .status,
+          TransferStatus.running,
+        );
 
-      final finalTask = container
-          .read(transferQueueProvider)
-          .firstWhere((t) => t.id == task.id);
-      expect(finalTask.status, TransferStatus.paused);
-    });
+        notifier.pause(task.id);
 
-    test('pausing a still-queued task marks it paused without ever running',
-        () async {
-      final blocking = Completer<void>();
-      final blockingClient = _FakeAgentClient(
-        host: _testHost,
-        onDownload: (cancelToken) async {
-          await blocking.future; // never completes in this test
-        },
-      );
-      // The "first" task below blocks forever, so _execute never reaches its
-      // `finally` block to close this client itself — close it explicitly so
-      // its underlying HttpClient doesn't linger past the test.
-      addTearDown(blockingClient.close);
+        await _waitUntil(
+          () =>
+              container
+                  .read(transferQueueProvider)
+                  .firstWhere((t) => t.id == task.id)
+                  .status !=
+              TransferStatus.running,
+        );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => blockingClient),
-        ),
-      ]);
-      addTearDown(container.dispose);
-      final notifier = container.read(transferQueueProvider.notifier);
+        final finalTask = container
+            .read(transferQueueProvider)
+            .firstWhere((t) => t.id == task.id);
+        expect(finalTask.status, TransferStatus.paused);
+      },
+    );
 
-      final first = TransferTask.download(
-        remotePath: '/remote/a.bin',
-        localPath: '/tmp/a.bin',
-        host: _testHost,
-      );
-      final second = TransferTask.download(
-        remotePath: '/remote/b.bin',
-        localPath: '/tmp/b.bin',
-        host: _testHost,
-      );
-      // Enqueueing `first` immediately starts it (and it blocks forever),
-      // so `second` stays queued — exactly the "one at a time" queue.
-      notifier.enqueue(first);
-      notifier.enqueue(second);
+    test(
+      'pausing a still-queued task marks it paused without ever running',
+      () async {
+        final blocking = Completer<void>();
+        final blockingClient = _FakeAgentClient(
+          host: _testHost,
+          onDownload: (cancelToken) async {
+            await blocking.future; // never completes in this test
+          },
+        );
+        // The "first" task below blocks forever, so _execute never reaches its
+        // `finally` block to close this client itself — close it explicitly so
+        // its underlying HttpClient doesn't linger past the test.
+        addTearDown(blockingClient.close);
 
-      await _waitUntil(() =>
-          container
-              .read(transferQueueProvider)
-              .firstWhere((t) => t.id == first.id)
-              .status ==
-          TransferStatus.running);
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => blockingClient,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final notifier = container.read(transferQueueProvider.notifier);
 
-      final secondBefore = container
-          .read(transferQueueProvider)
-          .firstWhere((t) => t.id == second.id);
-      expect(secondBefore.status, TransferStatus.queued);
+        final first = TransferTask.download(
+          remotePath: '/remote/a.bin',
+          localPath: '/tmp/a.bin',
+          host: _testHost,
+        );
+        final second = TransferTask.download(
+          remotePath: '/remote/b.bin',
+          localPath: '/tmp/b.bin',
+          host: _testHost,
+        );
+        // Enqueueing `first` immediately starts it (and it blocks forever),
+        // so `second` stays queued — exactly the "one at a time" queue.
+        notifier.enqueue(first);
+        notifier.enqueue(second);
 
-      notifier.pause(second.id);
+        await _waitUntil(
+          () =>
+              container
+                  .read(transferQueueProvider)
+                  .firstWhere((t) => t.id == first.id)
+                  .status ==
+              TransferStatus.running,
+        );
 
-      final secondAfter = container
-          .read(transferQueueProvider)
-          .firstWhere((t) => t.id == second.id);
-      expect(secondAfter.status, TransferStatus.paused);
-    });
+        final secondBefore = container
+            .read(transferQueueProvider)
+            .firstWhere((t) => t.id == second.id);
+        expect(secondBefore.status, TransferStatus.queued);
+
+        notifier.pause(second.id);
+
+        final secondAfter = container
+            .read(transferQueueProvider)
+            .firstWhere((t) => t.id == second.id);
+        expect(secondAfter.status, TransferStatus.paused);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------
   // Bug 1/5 — resumed download: RangeNotSatisfiedException restarts from 0
   // ---------------------------------------------------------------------
   group('download resume fallback', () {
-    test('RangeNotSatisfiedException causes a restart from byte 0',
-        () async {
+    test('RangeNotSatisfiedException causes a restart from byte 0', () async {
       final dir = await Directory.systemTemp.createTemp('resume_');
       addTearDown(() => dir.delete(recursive: true));
       final localPath = '${dir.path}/out.bin';
@@ -328,12 +348,15 @@ void main() {
         },
       );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => client),
-        ),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          transferQueueProvider.overrideWith(
+            () => TransferQueueNotifier(
+              clientFactory: (host, {deviceToken}) => client,
+            ),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(transferQueueProvider.notifier);
@@ -356,10 +379,16 @@ void main() {
           .read(transferQueueProvider)
           .firstWhere((t) => t.id == task.id);
 
-      expect(startBytesSeen.first, 50,
-          reason: 'first attempt should resume from the existing partial');
-      expect(startBytesSeen.last, 0,
-          reason: 'after RangeNotSatisfiedException it must restart from 0');
+      expect(
+        startBytesSeen.first,
+        50,
+        reason: 'first attempt should resume from the existing partial',
+      );
+      expect(
+        startBytesSeen.last,
+        0,
+        reason: 'after RangeNotSatisfiedException it must restart from 0',
+      );
       expect(finalTask.status, TransferStatus.completed);
     });
   });
@@ -368,8 +397,7 @@ void main() {
   // retry() state transitions
   // ---------------------------------------------------------------------
   group('retry()', () {
-    test('retrying a failed task clears the error before re-running',
-        () async {
+    test('retrying a failed task clears the error before re-running', () async {
       var attempt = 0;
       final client = _FakeAgentClient(
         host: _testHost,
@@ -379,12 +407,15 @@ void main() {
         },
       );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => client),
-        ),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          transferQueueProvider.overrideWith(
+            () => TransferQueueNotifier(
+              clientFactory: (host, {deviceToken}) => client,
+            ),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(transferQueueProvider.notifier);
@@ -395,12 +426,14 @@ void main() {
       );
       notifier.enqueue(task);
 
-      await _waitUntil(() =>
-          container
-              .read(transferQueueProvider)
-              .firstWhere((x) => x.id == task.id)
-              .status ==
-          TransferStatus.failed);
+      await _waitUntil(
+        () =>
+            container
+                .read(transferQueueProvider)
+                .firstWhere((x) => x.id == task.id)
+                .status ==
+            TransferStatus.failed,
+      );
 
       var current = container
           .read(transferQueueProvider)
@@ -413,12 +446,14 @@ void main() {
       // It must run again (attempt 2) and fail again with a *new* error,
       // never getting stuck `queued` or wrongly marked `completed`.
       await _waitUntil(() => attempt >= 2);
-      await _waitUntil(() =>
-          container
-              .read(transferQueueProvider)
-              .firstWhere((x) => x.id == task.id)
-              .status ==
-          TransferStatus.failed);
+      await _waitUntil(
+        () =>
+            container
+                .read(transferQueueProvider)
+                .firstWhere((x) => x.id == task.id)
+                .status ==
+            TransferStatus.failed,
+      );
 
       current = container
           .read(transferQueueProvider)
@@ -427,81 +462,88 @@ void main() {
       expect(current.error, contains('attempt 2'));
     });
 
-    test('retrying a paused download resumes from the existing partial',
-        () async {
-      final dir = await Directory.systemTemp.createTemp('retry_resume_');
-      addTearDown(() => dir.delete(recursive: true));
-      final localPath = '${dir.path}/out.bin';
-      await File(localPath).writeAsBytes(List<int>.filled(40, 1));
+    test(
+      'retrying a paused download resumes from the existing partial',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('retry_resume_');
+        addTearDown(() => dir.delete(recursive: true));
+        final localPath = '${dir.path}/out.bin';
+        await File(localPath).writeAsBytes(List<int>.filled(40, 1));
 
-      final startBytesSeen = <int>[];
-      final downloadStarted = Completer<void>();
-      var firstCall = true;
-      final client = _FakeAgentClient(
-        host: _testHost,
-        onDownload: (cancelToken) async {
-          if (firstCall) {
-            firstCall = false;
-            downloadStarted.complete();
-            await cancelToken.whenCancel;
-            throw DioException(
-              requestOptions: RequestOptions(path: '/content'),
-              type: DioExceptionType.cancel,
-            );
-          }
-        },
-        onDownloadWithStart: (startByte) async {
-          startBytesSeen.add(startByte);
-          if (!firstCall) {
-            await File(localPath).writeAsBytes(List<int>.filled(100, 2));
-          }
-        },
-      );
+        final startBytesSeen = <int>[];
+        final downloadStarted = Completer<void>();
+        var firstCall = true;
+        final client = _FakeAgentClient(
+          host: _testHost,
+          onDownload: (cancelToken) async {
+            if (firstCall) {
+              firstCall = false;
+              downloadStarted.complete();
+              await cancelToken.whenCancel;
+              throw DioException(
+                requestOptions: RequestOptions(path: '/content'),
+                type: DioExceptionType.cancel,
+              );
+            }
+          },
+          onDownloadWithStart: (startByte) async {
+            startBytesSeen.add(startByte);
+            if (!firstCall) {
+              await File(localPath).writeAsBytes(List<int>.filled(100, 2));
+            }
+          },
+        );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => client),
-        ),
-      ]);
-      addTearDown(container.dispose);
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => client,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      final notifier = container.read(transferQueueProvider.notifier);
-      final task = TransferTask.download(
-        remotePath: '/remote/file.bin',
-        localPath: localPath,
-        host: _testHost,
-      );
-      notifier.enqueue(task);
+        final notifier = container.read(transferQueueProvider.notifier);
+        final task = TransferTask.download(
+          remotePath: '/remote/file.bin',
+          localPath: localPath,
+          host: _testHost,
+        );
+        notifier.enqueue(task);
 
-      await downloadStarted.future;
-      notifier.pause(task.id);
+        await downloadStarted.future;
+        notifier.pause(task.id);
 
-      await _waitUntil(() =>
-          container
+        await _waitUntil(
+          () =>
+              container
+                  .read(transferQueueProvider)
+                  .firstWhere((x) => x.id == task.id)
+                  .status ==
+              TransferStatus.paused,
+        );
+
+        await notifier.retry(task.id);
+
+        await _waitUntil(() {
+          final t = container
               .read(transferQueueProvider)
-              .firstWhere((x) => x.id == task.id)
-              .status ==
-          TransferStatus.paused);
+              .firstWhere((x) => x.id == task.id);
+          return t.status == TransferStatus.completed ||
+              t.status == TransferStatus.failed;
+        });
 
-      await notifier.retry(task.id);
-
-      await _waitUntil(() {
-        final t = container
+        final finalTask = container
             .read(transferQueueProvider)
-            .firstWhere((x) => x.id == task.id);
-        return t.status == TransferStatus.completed ||
-            t.status == TransferStatus.failed;
-      });
-
-      final finalTask = container
-          .read(transferQueueProvider)
-          .firstWhere((t) => t.id == task.id);
-      expect(finalTask.status, TransferStatus.completed);
-      // Both the original attempt and the retry should resume from byte 40
-      // (the length of the partial file written before either attempt).
-      expect(startBytesSeen, everyElement(40));
-    });
+            .firstWhere((t) => t.id == task.id);
+        expect(finalTask.status, TransferStatus.completed);
+        // Both the original attempt and the retry should resume from byte 40
+        // (the length of the partial file written before either attempt).
+        expect(startBytesSeen, everyElement(40));
+      },
+    );
   });
 
   // ---------------------------------------------------------------------
@@ -514,8 +556,9 @@ void main() {
       addTearDown(() => dir.delete(recursive: true));
 
       final file = File('${dir.path}/upload.bin');
-      final bytes =
-          Uint8List.fromList(List<int>.generate(250 * 1024, (i) => i % 256));
+      final bytes = Uint8List.fromList(
+        List<int>.generate(250 * 1024, (i) => i % 256),
+      );
       await file.writeAsBytes(bytes);
 
       final receivedChunks = <Uint8List>[];
@@ -526,12 +569,15 @@ void main() {
         },
       );
 
-      final container = ProviderContainer(overrides: [
-        transferQueueProvider.overrideWith(
-          () => TransferQueueNotifier(
-              clientFactory: (host, {deviceToken}) => client),
-        ),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          transferQueueProvider.overrideWith(
+            () => TransferQueueNotifier(
+              clientFactory: (host, {deviceToken}) => client,
+            ),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(transferQueueProvider.notifier);

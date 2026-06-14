@@ -16,17 +16,18 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await showConflictResolutionDialog(
-                  context,
-                  collidingCount: collidingCount,
-                  totalCount: totalCount,
-                  destLabel: destLabel,
-                );
-              },
-              child: const Text('open'),
-            ),
+            builder:
+                (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showConflictResolutionDialog(
+                      context,
+                      collidingCount: collidingCount,
+                      totalCount: totalCount,
+                      destLabel: destLabel,
+                    );
+                  },
+                  child: const Text('open'),
+                ),
           ),
         ),
       ),
@@ -36,23 +37,33 @@ void main() {
     return result;
   }
 
-  testWidgets('shows the collision count and destination label',
-      (tester) async {
-    await pumpAndOpen(tester,
-        collidingCount: 2, totalCount: 5, destLabel: 'Documents');
+  testWidgets('shows the collision count and destination label', (
+    tester,
+  ) async {
+    await pumpAndOpen(
+      tester,
+      collidingCount: 2,
+      totalCount: 5,
+      destLabel: 'Documents',
+    );
 
     expect(find.text('2 of 5 items already exist in Documents.'), findsOne);
   });
 
   testWidgets('uses singular "item" when totalCount is 1', (tester) async {
-    await pumpAndOpen(tester,
-        collidingCount: 1, totalCount: 1, destLabel: 'Documents');
+    await pumpAndOpen(
+      tester,
+      collidingCount: 1,
+      totalCount: 1,
+      destLabel: 'Documents',
+    );
 
     expect(find.text('1 of 1 item already exist in Documents.'), findsOne);
   });
 
-  testWidgets('offers Cancel, Skip these, Keep both, and Overwrite',
-      (tester) async {
+  testWidgets('offers Cancel, Skip these, Keep both, and Overwrite', (
+    tester,
+  ) async {
     await pumpAndOpen(tester);
 
     expect(find.text('Cancel'), findsOne);
@@ -61,20 +72,26 @@ void main() {
     expect(find.text('Overwrite'), findsOne);
   });
 
-  testWidgets('tapping Keep both returns ConflictResolution.keepBoth',
-      (tester) async {
+  testWidgets('tapping Keep both returns ConflictResolution.keepBoth', (
+    tester,
+  ) async {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await showConflictResolutionDialog(context,
-                    collidingCount: 1, totalCount: 2, destLabel: 'dest');
-              },
-              child: const Text('open'),
-            ),
+            builder:
+                (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showConflictResolutionDialog(
+                      context,
+                      collidingCount: 1,
+                      totalCount: 2,
+                      destLabel: 'dest',
+                    );
+                  },
+                  child: const Text('open'),
+                ),
           ),
         ),
       ),
@@ -88,20 +105,26 @@ void main() {
     expect(result, ConflictResolution.keepBoth);
   });
 
-  testWidgets('tapping Overwrite returns ConflictResolution.overwrite',
-      (tester) async {
+  testWidgets('tapping Overwrite returns ConflictResolution.overwrite', (
+    tester,
+  ) async {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await showConflictResolutionDialog(context,
-                    collidingCount: 1, totalCount: 2, destLabel: 'dest');
-              },
-              child: const Text('open'),
-            ),
+            builder:
+                (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showConflictResolutionDialog(
+                      context,
+                      collidingCount: 1,
+                      totalCount: 2,
+                      destLabel: 'dest',
+                    );
+                  },
+                  child: const Text('open'),
+                ),
           ),
         ),
       ),
@@ -115,20 +138,26 @@ void main() {
     expect(result, ConflictResolution.overwrite);
   });
 
-  testWidgets('tapping Skip these returns ConflictResolution.skip',
-      (tester) async {
+  testWidgets('tapping Skip these returns ConflictResolution.skip', (
+    tester,
+  ) async {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await showConflictResolutionDialog(context,
-                    collidingCount: 1, totalCount: 2, destLabel: 'dest');
-              },
-              child: const Text('open'),
-            ),
+            builder:
+                (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showConflictResolutionDialog(
+                      context,
+                      collidingCount: 1,
+                      totalCount: 2,
+                      destLabel: 'dest',
+                    );
+                  },
+                  child: const Text('open'),
+                ),
           ),
         ),
       ),
@@ -142,20 +171,26 @@ void main() {
     expect(result, ConflictResolution.skip);
   });
 
-  testWidgets('tapping Cancel returns ConflictResolution.cancel',
-      (tester) async {
+  testWidgets('tapping Cancel returns ConflictResolution.cancel', (
+    tester,
+  ) async {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await showConflictResolutionDialog(context,
-                    collidingCount: 1, totalCount: 2, destLabel: 'dest');
-              },
-              child: const Text('open'),
-            ),
+            builder:
+                (context) => ElevatedButton(
+                  onPressed: () async {
+                    result = await showConflictResolutionDialog(
+                      context,
+                      collidingCount: 1,
+                      totalCount: 2,
+                      destLabel: 'dest',
+                    );
+                  },
+                  child: const Text('open'),
+                ),
           ),
         ),
       ),

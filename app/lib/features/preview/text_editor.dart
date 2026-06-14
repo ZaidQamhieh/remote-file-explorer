@@ -112,7 +112,10 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
     } on ReadOnlyException {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(context, 'This host is in read-only mode — changes can\'t be saved.');
+      showError(
+        context,
+        'This host is in read-only mode — changes can\'t be saved.',
+      );
     } on StaleWriteException {
       if (!mounted) return;
       // Clear the saving flag *before* awaiting the conflict dialog — the
@@ -137,28 +140,30 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
   Future<void> _resolveStaleWrite() async {
     final choice = await showDialog<_StaleWriteChoice>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('File changed on disk'),
-        content: const Text(
-          'This file was modified on the host since you opened it. '
-          'You can reload the current version (your edits here will be '
-          'lost) or overwrite it with your edits.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.cancel),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('File changed on disk'),
+            content: const Text(
+              'This file was modified on the host since you opened it. '
+              'You can reload the current version (your edits here will be '
+              'lost) or overwrite it with your edits.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.cancel),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.reload),
+                child: const Text('Reload'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.pop(ctx, _StaleWriteChoice.overwrite),
+                child: const Text('Overwrite'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.reload),
-            child: const Text('Reload'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.overwrite),
-            child: const Text('Overwrite'),
-          ),
-        ],
-      ),
     );
 
     switch (choice) {
@@ -196,20 +201,21 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
     if (!_dirty) return true;
     final discard = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard changes?'),
-        content: const Text('You have unsaved changes that will be lost.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep editing'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text('You have unsaved changes that will be lost.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep editing'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Discard'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
     );
     return discard ?? false;
   }
@@ -260,9 +266,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
               fontSize: 13,
               height: 1.4,
             ),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-            ),
+            decoration: const InputDecoration(border: InputBorder.none),
           ),
         ),
       ),

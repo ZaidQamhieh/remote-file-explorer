@@ -57,12 +57,14 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     // against the wallpaper-derived primary.
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
-        final light = lightDynamic != null
-            ? AppTheme.lightFrom(lightDynamic.harmonized())
-            : AppTheme.light;
-        final dark = darkDynamic != null
-            ? AppTheme.darkFrom(darkDynamic.harmonized())
-            : AppTheme.dark;
+        final light =
+            lightDynamic != null
+                ? AppTheme.lightFrom(lightDynamic.harmonized())
+                : AppTheme.light;
+        final dark =
+            darkDynamic != null
+                ? AppTheme.darkFrom(darkDynamic.harmonized())
+                : AppTheme.dark;
         return _app(light: light, dark: dark, mode: app.themeMode);
       },
     );

@@ -40,31 +40,32 @@ Future<ConflictResolution> showConflictResolutionDialog(
 }) async {
   final result = await showDialog<ConflictResolution>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Name conflict'),
-      content: Text(
-        '$collidingCount of $totalCount item${totalCount == 1 ? '' : 's'} '
-        'already exist in $destLabel.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, ConflictResolution.cancel),
-          child: const Text('Cancel'),
+    builder:
+        (ctx) => AlertDialog(
+          title: const Text('Name conflict'),
+          content: Text(
+            '$collidingCount of $totalCount item${totalCount == 1 ? '' : 's'} '
+            'already exist in $destLabel.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ConflictResolution.cancel),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ConflictResolution.skip),
+              child: const Text('Skip these'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ConflictResolution.keepBoth),
+              child: const Text('Keep both'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ConflictResolution.overwrite),
+              child: const Text('Overwrite'),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, ConflictResolution.skip),
-          child: const Text('Skip these'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, ConflictResolution.keepBoth),
-          child: const Text('Keep both'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, ConflictResolution.overwrite),
-          child: const Text('Overwrite'),
-        ),
-      ],
-    ),
   );
   return result ?? ConflictResolution.cancel;
 }

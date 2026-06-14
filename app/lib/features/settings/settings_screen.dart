@@ -70,8 +70,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _patch(
-      {bool? readOnly, List<String>? roots, String? name, String? successMsg}) async {
+  Future<void> _patch({
+    bool? readOnly,
+    List<String>? roots,
+    String? name,
+    String? successMsg,
+  }) async {
     final client = _client;
     if (client == null) return;
     final prev = _settings;
@@ -125,20 +129,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final ctrl = TextEditingController();
     final path = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add allowed folder'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '/home/me/Documents'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Add')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Add allowed folder'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: '/home/me/Documents'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Add'),
+              ),
+            ],
+          ),
     );
     if (path != null && path.isNotEmpty) {
       final roots = [...?_settings?.roots, path];
@@ -150,16 +159,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final ctrl = TextEditingController(text: _settings?.agentName ?? '');
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename agent'),
-        content: TextField(controller: ctrl, autofocus: true),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Save')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Rename agent'),
+            content: TextField(controller: ctrl, autofocus: true),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
     );
     if (name != null && name.isNotEmpty) {
       await _patch(name: name, successMsg: 'Renamed to $name');
@@ -170,9 +184,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
               ? Center(child: Text('Error: $_error'))
               : _buildBody(context),
     );
@@ -183,7 +198,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-          Spacing.md, Spacing.md, Spacing.md, Spacing.xl),
+        Spacing.md,
+        Spacing.md,
+        Spacing.md,
+        Spacing.xl,
+      ),
       children: [
         _SecurityWarningCard(scheme: scheme),
         const SizedBox(height: Spacing.lg),
@@ -208,9 +227,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Read-only mode'),
-              subtitle: Text(s.readOnly
-                  ? 'Writes are rejected'
-                  : 'This phone can modify files'),
+              subtitle: Text(
+                s.readOnly
+                    ? 'Writes are rejected'
+                    : 'This phone can modify files',
+              ),
               value: s.readOnly,
               onChanged: (v) => _patch(readOnly: v),
             ),
@@ -235,20 +256,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               )
             else
-              ...s.roots.map((r) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: const Icon(Icons.folder_outlined),
-                    title: Text(r),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      tooltip: 'Remove folder',
-                      onPressed: () => _patch(
-                        roots: s.roots.where((x) => x != r).toList(),
-                        successMsg: 'Removed $r',
-                      ),
-                    ),
-                  )),
+              ...s.roots.map(
+                (r) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(r),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    tooltip: 'Remove folder',
+                    onPressed:
+                        () => _patch(
+                          roots: s.roots.where((x) => x != r).toList(),
+                          successMsg: 'Removed $r',
+                        ),
+                  ),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: Spacing.md),
@@ -268,9 +292,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: 'Updates',
           icon: Icons.system_update_alt_outlined,
           padded: false,
-          children: [
-            UpdateTile(host: widget.host),
-          ],
+          children: [UpdateTile(host: widget.host)],
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
@@ -280,9 +302,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Host'),
-              subtitle: Text(widget.host.label.isNotEmpty
-                  ? widget.host.label
-                  : widget.host.address),
+              subtitle: Text(
+                widget.host.label.isNotEmpty
+                    ? widget.host.label
+                    : widget.host.address,
+              ),
             ),
           ],
         ),
@@ -335,7 +359,12 @@ class _SecurityWarningCard extends StatelessWidget {
 /// null for the app default, or a host id for a per-device override) — reused
 /// by both the App Settings surface and the per-device override section.
 class VisibilityEditor extends StatelessWidget {
-  const VisibilityEditor({super.key, required this.prefs, required this.notifier, this.hostId});
+  const VisibilityEditor({
+    super.key,
+    required this.prefs,
+    required this.notifier,
+    this.hostId,
+  });
 
   final VisibilityPrefs prefs;
   final SettingsNotifier notifier;
@@ -353,10 +382,11 @@ class VisibilityEditor extends StatelessWidget {
     final presetExtensions = {
       for (final preset in visibilityPresets) ...preset.extensions,
     };
-    final custom = prefs.hiddenExtensions
-        .where((e) => !presetExtensions.contains(e))
-        .toList()
-      ..sort();
+    final custom =
+        prefs.hiddenExtensions
+            .where((e) => !presetExtensions.contains(e))
+            .toList()
+          ..sort();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +402,12 @@ class VisibilityEditor extends StatelessWidget {
         // One section per category; tapping a chip toggles that single file
         // type, so users pick exactly what to hide instead of all-or-nothing.
         for (final preset in visibilityPresets)
-          _PresetGroup(preset: preset, prefs: prefs, notifier: notifier, hostId: hostId),
+          _PresetGroup(
+            preset: preset,
+            prefs: prefs,
+            notifier: notifier,
+            hostId: hostId,
+          ),
         const Divider(height: Spacing.lg),
         Text('Custom', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: Spacing.xs),
@@ -392,13 +427,15 @@ class VisibilityEditor extends StatelessWidget {
               for (final ext in custom)
                 InputChip(
                   label: Text('.$ext'),
-                  onDeleted: () => notifier.removeExtension(ext, hostId: hostId),
+                  onDeleted:
+                      () => notifier.removeExtension(ext, hostId: hostId),
                 ),
             ],
           ),
         const SizedBox(height: Spacing.xs),
         _AddExtensionField(
-            onSubmit: (e) => notifier.addExtension(e, hostId: hostId)),
+          onSubmit: (e) => notifier.addExtension(e, hostId: hostId),
+        ),
       ],
     );
   }
@@ -463,12 +500,13 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('Override for this device'),
-          subtitle: Text(isOverridden
-              ? 'Using device-specific visibility'
-              : 'Using app default'),
+          subtitle: Text(
+            isOverridden
+                ? 'Using device-specific visibility'
+                : 'Using app default',
+          ),
           value: isOverridden,
-          onChanged: (on) =>
-              notifier.setDeviceVisibilityOverride(hostId, on),
+          onChanged: (on) => notifier.setDeviceVisibilityOverride(hostId, on),
         ),
         if (isOverridden) ...[
           const Divider(height: Spacing.lg),
@@ -519,17 +557,21 @@ class _PresetGroup extends StatelessWidget {
                 FilterChip(
                   label: Text('.$ext'),
                   selected: prefs.hiddenExtensions.contains(ext),
-                  onSelected: (selected) => selected
-                      ? notifier.addExtension(ext, hostId: hostId)
-                      : notifier.removeExtension(ext, hostId: hostId),
+                  onSelected:
+                      (selected) =>
+                          selected
+                              ? notifier.addExtension(ext, hostId: hostId)
+                              : notifier.removeExtension(ext, hostId: hostId),
                 ),
               for (final name in names)
                 FilterChip(
                   label: Text(name),
                   selected: lowerHiddenNames.contains(name.toLowerCase()),
-                  onSelected: (selected) => selected
-                      ? notifier.addName(name, hostId: hostId)
-                      : notifier.removeName(name, hostId: hostId),
+                  onSelected:
+                      (selected) =>
+                          selected
+                              ? notifier.addName(name, hostId: hostId)
+                              : notifier.removeName(name, hostId: hostId),
                 ),
             ],
           ),
@@ -639,10 +681,7 @@ class _DeviceRow extends StatelessWidget {
         color: d.revoked ? scheme.error : scheme.onSurfaceVariant,
       ),
       title: Text(d.label),
-      subtitle: Text(
-        status,
-        style: TextStyle(color: statusColor),
-      ),
+      subtitle: Text(status, style: TextStyle(color: statusColor)),
       trailing: trailing,
     );
   }

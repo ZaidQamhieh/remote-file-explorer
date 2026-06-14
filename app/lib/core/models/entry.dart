@@ -26,30 +26,32 @@ class Entry {
   final bool isSymlink;
 
   factory Entry.fromJson(Map<String, dynamic> json) => Entry(
-        name: json['name'] as String? ?? '',
-        path: json['path'] as String? ?? '',
-        isDir: json['isDir'] as bool? ?? false,
-        size: json['size'] as int?,
-        mimeType: json['mimeType'] as String?,
-        mode: json['mode'] as String?,
-        modified: json['modified'] == null
+    name: json['name'] as String? ?? '',
+    path: json['path'] as String? ?? '',
+    isDir: json['isDir'] as bool? ?? false,
+    size: json['size'] as int?,
+    mimeType: json['mimeType'] as String?,
+    mode: json['mode'] as String?,
+    modified:
+        json['modified'] == null
             ? null
             : DateTime.parse(json['modified'] as String),
-        created: json['created'] == null
+    created:
+        json['created'] == null
             ? null
             : DateTime.parse(json['created'] as String),
-        isSymlink: json['isSymlink'] as bool? ?? false,
-      );
+    isSymlink: json['isSymlink'] as bool? ?? false,
+  );
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'path': path,
-        'isDir': isDir,
-        if (size != null) 'size': size,
-        if (mimeType != null) 'mimeType': mimeType,
-        if (mode != null) 'mode': mode,
-        if (modified != null) 'modified': modified!.toIso8601String(),
-        if (created != null) 'created': created!.toIso8601String(),
-        'isSymlink': isSymlink,
-      };
+    'name': name,
+    'path': path,
+    'isDir': isDir,
+    if (size != null) 'size': size,
+    if (mimeType != null) 'mimeType': mimeType,
+    if (mode != null) 'mode': mode,
+    if (modified != null) 'modified': modified!.toIso8601String(),
+    if (created != null) 'created': created!.toIso8601String(),
+    'isSymlink': isSymlink,
+  };
 }

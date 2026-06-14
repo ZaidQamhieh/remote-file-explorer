@@ -175,9 +175,7 @@ class _HostCardState extends ConsumerState<HostCard> {
     final health = await _pingFuture;
     if (!context.mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => explorerRootFor(health, widget.host),
-      ),
+      MaterialPageRoute(builder: (_) => explorerRootFor(health, widget.host)),
     );
   }
 
@@ -190,11 +188,12 @@ class _HostCardState extends ConsumerState<HostCard> {
       if (!context.mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => SearchScreen(
-            host: widget.host,
-            client: client!,
-            currentPath: '/',
-          ),
+          builder:
+              (_) => SearchScreen(
+                host: widget.host,
+                client: client!,
+                currentPath: '/',
+              ),
         ),
       );
     } catch (_) {
@@ -217,33 +216,37 @@ class _HostCardState extends ConsumerState<HostCard> {
   }
 
   void _openSettings(BuildContext context) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SettingsScreen(host: widget.host),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SettingsScreen(host: widget.host)),
+    );
   }
 
   void _openUpdate(BuildContext context) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => UpdateScreen(host: widget.host),
-    ));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => UpdateScreen(host: widget.host)));
   }
 
   Future<void> _confirmRemove(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Forget this computer?'),
-        content: Text(
-            'Remove "${widget.host.label}"? You can re-add it later.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Forget')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Forget this computer?'),
+            content: Text(
+              'Remove "${widget.host.label}"? You can re-add it later.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Forget'),
+              ),
+            ],
+          ),
     );
     if (confirmed == true && context.mounted) {
       await widget.store.removeHost(widget.host.id);
@@ -294,8 +297,7 @@ class _HostCardState extends ConsumerState<HostCard> {
                     _UpdateBanner(
                       release: _updateAvailable!,
                       onUpdate: () => _openUpdate(context),
-                      onDismiss: () =>
-                          setState(() => _bannerDismissed = true),
+                      onDismiss: () => setState(() => _bannerDismissed = true),
                     ),
                   const SizedBox(height: Spacing.md),
                   _QuickActions(
@@ -381,10 +383,7 @@ class _HostHeader extends StatelessWidget {
         color: scheme.primaryContainer,
         borderRadius: Radii.cardR,
       ),
-      child: Icon(
-        Icons.computer_rounded,
-        color: scheme.onPrimaryContainer,
-      ),
+      child: Icon(Icons.computer_rounded, color: scheme.onPrimaryContainer),
     );
 
     final statusLabel = _StatusLabel(checking: checking, online: online);
@@ -395,14 +394,16 @@ class _HostHeader extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
     );
 
-    final detailText = checking
-        ? null
-        : Text(
-            _statusDetail(),
-            style:
-                textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            overflow: TextOverflow.ellipsis,
-          );
+    final detailText =
+        checking
+            ? null
+            : Text(
+              _statusDetail(),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+              overflow: TextOverflow.ellipsis,
+            );
 
     // Offline hosts render dimmed to 60% opacity EXCEPT the host name, which
     // always stays fully legible. Everything else — the icon block, the
@@ -557,9 +558,9 @@ class _DriveGaugesState extends State<_DriveGauges> {
                 child: Text(
                   '+$remaining more',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -601,21 +602,22 @@ class _UpdateBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.system_update_rounded,
-              color: scheme.onSecondaryContainer, size: 20),
+          Icon(
+            Icons.system_update_rounded,
+            color: scheme.onSecondaryContainer,
+            size: 20,
+          ),
           const SizedBox(width: Spacing.sm),
           Expanded(
             child: Text(
               'v${release.versionName} available',
-              style: textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSecondaryContainer),
+              style: textTheme.bodyMedium?.copyWith(
+                color: scheme.onSecondaryContainer,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          TextButton(
-            onPressed: onUpdate,
-            child: const Text('Update'),
-          ),
+          TextButton(onPressed: onUpdate, child: const Text('Update')),
           IconButton(
             icon: const Icon(Icons.close_rounded, size: 18),
             tooltip: 'Dismiss',
@@ -685,20 +687,18 @@ class _QuickActions extends StatelessWidget {
                 onForget();
             }
           },
-          itemBuilder: (_) => [
-            const PopupMenuItem(
-              value: 'transfers',
-              child: Text('Transfers'),
-            ),
-            const PopupMenuItem(
-              value: 'settings',
-              child: Text('Settings'),
-            ),
-            const PopupMenuItem(
-              value: 'forget',
-              child: Text('Forget this computer'),
-            ),
-          ],
+          itemBuilder:
+              (_) => [
+                const PopupMenuItem(
+                  value: 'transfers',
+                  child: Text('Transfers'),
+                ),
+                const PopupMenuItem(value: 'settings', child: Text('Settings')),
+                const PopupMenuItem(
+                  value: 'forget',
+                  child: Text('Forget this computer'),
+                ),
+              ],
         ),
       ],
     );

@@ -59,24 +59,22 @@ class PreviewScaffold extends StatelessWidget {
     if (chromeless) {
       // No app bar — the pager owns a single shared top bar across all pages.
       // Keep the body transparent so the pager's canvas shows through.
-      return Scaffold(
-        backgroundColor: backgroundColor,
-        body: body,
-      );
+      return Scaffold(backgroundColor: backgroundColor, body: body);
     }
 
-    final appBar = onDark
-        ? AppBar(
-            backgroundColor: Colors.black.withValues(alpha: 0.45),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            title: Text(title, overflow: TextOverflow.ellipsis),
-            actions: actions,
-          )
-        : AppBar(
-            title: Text(title, overflow: TextOverflow.ellipsis),
-            actions: actions,
-          );
+    final appBar =
+        onDark
+            ? AppBar(
+              backgroundColor: Colors.black.withValues(alpha: 0.45),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              title: Text(title, overflow: TextOverflow.ellipsis),
+              actions: actions,
+            )
+            : AppBar(
+              title: Text(title, overflow: TextOverflow.ellipsis),
+              actions: actions,
+            );
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -130,8 +128,11 @@ class PreviewError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline,
-                size: 48, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: Spacing.md),
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
@@ -163,8 +164,11 @@ class PreviewTooLarge extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.file_present,
-                size: 48, color: Theme.of(context).colorScheme.outline),
+            Icon(
+              Icons.file_present,
+              size: 48,
+              color: Theme.of(context).colorScheme.outline,
+            ),
             const SizedBox(height: Spacing.md),
             Text(
               'This file is too large to preview ($sizeLabel).\n'

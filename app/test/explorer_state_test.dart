@@ -18,8 +18,10 @@ const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 /// Polls [predicate] until it's true or [timeout] elapses, pumping the event
 /// loop between checks so pending async work (cache I/O, network mocks) gets
 /// a chance to complete.
-Future<void> _waitUntil(bool Function() predicate,
-    {Duration timeout = const Duration(seconds: 2)}) async {
+Future<void> _waitUntil(
+  bool Function() predicate, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
     if (DateTime.now().isAfter(deadline)) {
@@ -39,11 +41,7 @@ Entry _file(String name, {int? size, DateTime? modified, String? mime}) =>
       modified: modified,
     );
 
-Entry _dir(String name) => Entry(
-      name: name,
-      path: '/root/$name',
-      isDir: true,
-    );
+Entry _dir(String name) => Entry(name: name, path: '/root/$name', isDir: true);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,14 +67,14 @@ void main() {
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return tmpDir.path;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return tmpDir.path;
+            }
+            return null;
+          },
+        );
   });
 
   // ---------------------------------------------------------------------
@@ -123,8 +121,10 @@ void main() {
   // ---------------------------------------------------------------------
   group('renameDestination', () {
     test('POSIX nested path keeps forward slashes', () {
-      expect(renameDestination('/home/x/old.txt', 'new.txt'),
-          '/home/x/new.txt');
+      expect(
+        renameDestination('/home/x/old.txt', 'new.txt'),
+        '/home/x/new.txt',
+      );
     });
 
     test('POSIX root-level rename', () {
@@ -132,8 +132,10 @@ void main() {
     });
 
     test('Windows nested path keeps backslashes', () {
-      expect(renameDestination(r'C:\dir\old.txt', 'new.txt'),
-          r'C:\dir\new.txt');
+      expect(
+        renameDestination(r'C:\dir\old.txt', 'new.txt'),
+        r'C:\dir\new.txt',
+      );
     });
 
     test('Windows drive-root rename keeps backslash separator', () {
@@ -177,7 +179,11 @@ void main() {
 
     test('increments until a free name is found', () {
       expect(
-        dedupedName('photo.jpg', {'photo.jpg', 'photo (1).jpg', 'photo (2).jpg'}),
+        dedupedName('photo.jpg', {
+          'photo.jpg',
+          'photo (1).jpg',
+          'photo (2).jpg',
+        }),
         'photo (3).jpg',
       );
     });
@@ -186,8 +192,7 @@ void main() {
       expect(dedupedName('README', {'README'}), 'README (1)');
     });
 
-    test('dotfiles (no real extension) get the suffix appended at the end',
-        () {
+    test('dotfiles (no real extension) get the suffix appended at the end', () {
       expect(dedupedName('.bashrc', {'.bashrc'}), '.bashrc (1)');
     });
   });
@@ -199,12 +204,7 @@ void main() {
     test('directories are listed before files regardless of name', () {
       final state = ExplorerState(
         pathStack: const ['/root'],
-        entries: [
-          _file('a.txt'),
-          _dir('z_dir'),
-          _file('b.txt'),
-          _dir('a_dir'),
-        ],
+        entries: [_file('a.txt'), _dir('z_dir'), _file('b.txt'), _dir('a_dir')],
       );
 
       expect(state.sortedEntries.map((e) => e.name), [
@@ -221,8 +221,11 @@ void main() {
         entries: [_file('Banana'), _file('apple'), _file('Cherry')],
       );
 
-      expect(state.sortedEntries.map((e) => e.name),
-          ['apple', 'Banana', 'Cherry']);
+      expect(state.sortedEntries.map((e) => e.name), [
+        'apple',
+        'Banana',
+        'Cherry',
+      ]);
     });
 
     test('sorts by size descending when configured', () {
@@ -236,8 +239,11 @@ void main() {
         sort: const SortOrder(field: SortField.size, ascending: false),
       );
 
-      expect(state.sortedEntries.map((e) => e.name),
-          ['large', 'medium', 'small']);
+      expect(state.sortedEntries.map((e) => e.name), [
+        'large',
+        'medium',
+        'small',
+      ]);
     });
 
     test('sorts by date ascending, missing dates treated as epoch', () {
@@ -251,8 +257,11 @@ void main() {
         sort: const SortOrder(field: SortField.date, ascending: true),
       );
 
-      expect(state.sortedEntries.map((e) => e.name),
-          ['no_date', 'older', 'newer']);
+      expect(state.sortedEntries.map((e) => e.name), [
+        'no_date',
+        'older',
+        'newer',
+      ]);
     });
 
     test('is recomputed when copyWith changes entries', () {
@@ -290,23 +299,31 @@ void main() {
     });
 
     test('hasMore is true when nextCursor is set', () {
-      final state =
-          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        nextCursor: 'cursor-1',
+      );
       expect(state.hasMore, isTrue);
     });
 
-    test('copyWith can clear nextCursor back to null via sentinel-aware arg',
-        () {
-      final state =
-          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
-      final cleared = state.copyWith(nextCursor: null);
-      expect(cleared.nextCursor, isNull);
-      expect(cleared.hasMore, isFalse);
-    });
+    test(
+      'copyWith can clear nextCursor back to null via sentinel-aware arg',
+      () {
+        final state = ExplorerState(
+          pathStack: const ['/root'],
+          nextCursor: 'cursor-1',
+        );
+        final cleared = state.copyWith(nextCursor: null);
+        expect(cleared.nextCursor, isNull);
+        expect(cleared.hasMore, isFalse);
+      },
+    );
 
     test('copyWith without nextCursor preserves the previous cursor', () {
-      final state =
-          ExplorerState(pathStack: const ['/root'], nextCursor: 'cursor-1');
+      final state = ExplorerState(
+        pathStack: const ['/root'],
+        nextCursor: 'cursor-1',
+      );
       final next = state.copyWith(loading: true);
       expect(next.nextCursor, 'cursor-1');
     });
@@ -316,20 +333,21 @@ void main() {
   // ExplorerState file visibility (hiddenPaths / displayEntries)
   // ---------------------------------------------------------------------
   group('ExplorerState file visibility', () {
-    test('hiddenPaths/hiddenCount reflect entries hidden by visibilityPrefs',
-        () {
-      final state = ExplorerState(
-        pathStack: const ['/root'],
-        entries: [_file('readme.txt'), _file('.env'), _dir('.config')],
-      );
+    test(
+      'hiddenPaths/hiddenCount reflect entries hidden by visibilityPrefs',
+      () {
+        final state = ExplorerState(
+          pathStack: const ['/root'],
+          entries: [_file('readme.txt'), _file('.env'), _dir('.config')],
+        );
 
-      // Default VisibilityPrefs hides dotfiles/dotfolders.
-      expect(state.hiddenCount, 2);
-      expect(state.hiddenPaths, {'/root/.env', '/root/.config'});
-    });
+        // Default VisibilityPrefs hides dotfiles/dotfolders.
+        expect(state.hiddenCount, 2);
+        expect(state.hiddenPaths, {'/root/.env', '/root/.config'});
+      },
+    );
 
-    test('displayEntries excludes hidden entries when showHidden is false',
-        () {
+    test('displayEntries excludes hidden entries when showHidden is false', () {
       final state = ExplorerState(
         pathStack: const ['/root'],
         entries: [_file('readme.txt'), _file('.env')],
@@ -338,20 +356,20 @@ void main() {
       expect(state.displayEntries.map((e) => e.name), ['readme.txt']);
     });
 
-    test('displayEntries includes hidden entries when showHidden is true',
-        () {
+    test('displayEntries includes hidden entries when showHidden is true', () {
       final state = ExplorerState(
         pathStack: const ['/root'],
         entries: [_file('readme.txt'), _file('.env')],
         showHidden: true,
       );
 
-      expect(state.displayEntries.map((e) => e.name).toSet(),
-          {'readme.txt', '.env'});
+      expect(state.displayEntries.map((e) => e.name).toSet(), {
+        'readme.txt',
+        '.env',
+      });
     });
 
-    test('hiddenPaths is recomputed when copyWith changes visibilityPrefs',
-        () {
+    test('hiddenPaths is recomputed when copyWith changes visibilityPrefs', () {
       final state = ExplorerState(
         pathStack: const ['/root'],
         entries: [_file('readme.txt'), _file('app.log')],
@@ -390,9 +408,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       client = _FakeAgentClient(host: _testHost);
       container = ProviderContainer(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
       );
       addTearDown(container.dispose);
     });
@@ -410,7 +426,8 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       var state = container.read(explorerProvider(arg));
       expect(state.showHidden, isFalse);
@@ -421,12 +438,13 @@ void main() {
 
       state = container.read(explorerProvider(arg));
       expect(state.showHidden, isTrue);
-      expect(state.displayEntries.map((e) => e.name).toSet(),
-          {'readme.txt', '.env'});
+      expect(state.displayEntries.map((e) => e.name).toSet(), {
+        'readme.txt',
+        '.env',
+      });
     });
 
-    test(
-        'mirrors the resolved app-default visibility into '
+    test('mirrors the resolved app-default visibility into '
         'ExplorerState.visibilityPrefs', () async {
       client.pages['/'] = [
         Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
@@ -435,46 +453,53 @@ void main() {
       final arg = (hostId: 'h5', rootPath: '/');
       container.listen(explorerProvider(arg), (_, _) {});
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       expect(container.read(explorerProvider(arg)).hiddenCount, 0);
 
       // Editing the app-default visibility (hostId null) flows through the
       // settings model and is mirrored into this explorer's state.
       await container.read(settingsProvider.future);
-      await container
-          .read(settingsProvider.notifier)
-          .setHiddenExtensions({'log'});
+      await container.read(settingsProvider.notifier).setHiddenExtensions({
+        'log',
+      });
 
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).hiddenCount == 1);
+        () => container.read(explorerProvider(arg)).hiddenCount == 1,
+      );
 
       final state = container.read(explorerProvider(arg));
       expect(state.hiddenPaths, {'/root/app.log'});
     });
 
-    test('a per-device visibility override takes precedence for that host',
-        () async {
-      client.pages['/'] = [
-        Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
-      ];
+    test(
+      'a per-device visibility override takes precedence for that host',
+      () async {
+        client.pages['/'] = [
+          Listing(path: '/', entries: [_file('app.log')], nextCursor: null),
+        ];
 
-      final arg = (hostId: 'h6', rootPath: '/');
-      container.listen(explorerProvider(arg), (_, _) {});
-      await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        final arg = (hostId: 'h6', rootPath: '/');
+        container.listen(explorerProvider(arg), (_, _) {});
+        await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+        );
 
-      // Override just this host to hide ".log"; the app default is untouched.
-      await container.read(settingsProvider.future);
-      await container
-          .read(settingsProvider.notifier)
-          .setHiddenExtensions({'log'}, hostId: 'h6');
+        // Override just this host to hide ".log"; the app default is untouched.
+        await container.read(settingsProvider.future);
+        await container.read(settingsProvider.notifier).setHiddenExtensions({
+          'log',
+        }, hostId: 'h6');
 
-      await _waitUntil(
-          () => container.read(explorerProvider(arg)).hiddenCount == 1);
-      expect(
-          container.read(explorerProvider(arg)).hiddenPaths, {'/root/app.log'});
-    });
+        await _waitUntil(
+          () => container.read(explorerProvider(arg)).hiddenCount == 1,
+        );
+        expect(container.read(explorerProvider(arg)).hiddenPaths, {
+          '/root/app.log',
+        });
+      },
+    );
   });
 
   // ---------------------------------------------------------------------
@@ -487,9 +512,7 @@ void main() {
     setUp(() {
       client = _FakeAgentClient(host: _testHost);
       container = ProviderContainer(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
       );
       addTearDown(container.dispose);
     });
@@ -514,7 +537,8 @@ void main() {
 
       // Wait for the microtask-scheduled initial _load to complete.
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       final state = container.read(explorerProvider(arg));
       expect(state.entries.map((e) => e.name), ['a.txt', 'b.txt']);
@@ -545,7 +569,8 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       final before = container.read(explorerProvider(arg));
       expect(before.hasMore, isFalse);
@@ -559,11 +584,7 @@ void main() {
 
     test('navigating to a new path resets pagination state', () async {
       client.pages['/'] = [
-        Listing(
-          path: '/',
-          entries: [_file('a.txt')],
-          nextCursor: 'page2',
-        ),
+        Listing(path: '/', entries: [_file('a.txt')], nextCursor: 'page2'),
       ];
       client.pages['/sub'] = [
         Listing(path: '/sub', entries: [_file('only.txt')], nextCursor: null),
@@ -573,16 +594,19 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       var state = container.read(explorerProvider(arg));
       expect(state.nextCursor, 'page2');
 
       notifier.navigate('/sub');
-      await _waitUntil(() => container
-          .read(explorerProvider(arg))
-          .entries
-          .any((e) => e.name == 'only.txt'));
+      await _waitUntil(
+        () => container
+            .read(explorerProvider(arg))
+            .entries
+            .any((e) => e.name == 'only.txt'),
+      );
 
       state = container.read(explorerProvider(arg));
       expect(state.entries.map((e) => e.name), ['only.txt']);
@@ -601,37 +625,40 @@ void main() {
     setUp(() {
       client = _FakeAgentClient(host: _testHost);
       container = ProviderContainer(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
       );
       addTearDown(container.dispose);
     });
 
-    test('returns basenames of sources that already exist in destDir',
-        () async {
-      client.pages['/'] = [
-        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
-      ];
-      client.pages['/dest'] = [
-        Listing(
-          path: '/dest',
-          entries: [_file('a.txt'), _file('other.txt')],
-          nextCursor: null,
-        ),
-      ];
+    test(
+      'returns basenames of sources that already exist in destDir',
+      () async {
+        client.pages['/'] = [
+          Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+        ];
+        client.pages['/dest'] = [
+          Listing(
+            path: '/dest',
+            entries: [_file('a.txt'), _file('other.txt')],
+            nextCursor: null,
+          ),
+        ];
 
-      final arg = (hostId: 'h6', rootPath: '/');
-      container.listen(explorerProvider(arg), (_, _) {});
-      final notifier = container.read(explorerProvider(arg).notifier);
-      await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        final arg = (hostId: 'h6', rootPath: '/');
+        container.listen(explorerProvider(arg), (_, _) {});
+        final notifier = container.read(explorerProvider(arg).notifier);
+        await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+        );
 
-      final colliding = await notifier
-          .collidingBasenames('/dest', ['/root/a.txt', '/root/b.txt']);
+        final colliding = await notifier.collidingBasenames('/dest', [
+          '/root/a.txt',
+          '/root/b.txt',
+        ]);
 
-      expect(colliding, {'a.txt'});
-    });
+        expect(colliding, {'a.txt'});
+      },
+    );
 
     test('returns an empty set when nothing collides', () async {
       client.pages['/'] = [
@@ -645,10 +672,12 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
-      final colliding =
-          await notifier.collidingBasenames('/dest', ['/root/a.txt']);
+      final colliding = await notifier.collidingBasenames('/dest', [
+        '/root/a.txt',
+      ]);
 
       expect(colliding, isEmpty);
     });
@@ -674,10 +703,12 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
-      final colliding =
-          await notifier.collidingBasenames('/dest', ['/root/a.txt']);
+      final colliding = await notifier.collidingBasenames('/dest', [
+        '/root/a.txt',
+      ]);
 
       expect(colliding, {'a.txt'});
     });
@@ -693,9 +724,7 @@ void main() {
     setUp(() {
       client = _FakeAgentClient(host: _testHost);
       container = ProviderContainer(
-        overrides: [
-          clientProvider.overrideWith((ref, hostId) async => client),
-        ],
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
       );
       addTearDown(container.dispose);
     });
@@ -704,8 +733,10 @@ void main() {
     /// `pages['/']` registered twice — once for the initial load, once for
     /// the reload that copySelected/moveSelected triggers afterwards.
     Future<ExplorerNotifier> setUpExplorer(
-        ProviderContainer container, ExplorerArg arg,
-        {required Set<String> selected}) async {
+      ProviderContainer container,
+      ExplorerArg arg, {
+      required Set<String> selected,
+    }) async {
       client.pages['/'] = [
         Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
         Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
@@ -713,7 +744,8 @@ void main() {
       container.listen(explorerProvider(arg), (_, _) {});
       final notifier = container.read(explorerProvider(arg).notifier);
       await _waitUntil(
-          () => container.read(explorerProvider(arg)).entries.isNotEmpty);
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
 
       for (final path in selected) {
         notifier.toggleSelect(path);
@@ -721,37 +753,52 @@ void main() {
       return notifier;
     }
 
-    test('copySelected with no extra args defaults to duplicate/overwrite false',
-        () async {
-      final arg = (hostId: 'h9', rootPath: '/');
-      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+    test(
+      'copySelected with no extra args defaults to duplicate/overwrite false',
+      () async {
+        final arg = (hostId: 'h9', rootPath: '/');
+        final notifier = await setUpExplorer(
+          container,
+          arg,
+          selected: {'/root/a.txt'},
+        );
 
-      await notifier.copySelected('/dest');
+        await notifier.copySelected('/dest');
 
-      expect(client.copyMoveCalls, hasLength(1));
-      final call = client.copyMoveCalls.single;
-      expect(call.verb, 'copy');
-      expect(call.sources, ['/root/a.txt']);
-      expect(call.destDir, '/dest');
-      expect(call.duplicate, isFalse);
-      expect(call.overwrite, isFalse);
-    });
+        expect(client.copyMoveCalls, hasLength(1));
+        final call = client.copyMoveCalls.single;
+        expect(call.verb, 'copy');
+        expect(call.sources, ['/root/a.txt']);
+        expect(call.destDir, '/dest');
+        expect(call.duplicate, isFalse);
+        expect(call.overwrite, isFalse);
+      },
+    );
 
-    test('copySelected with duplicate:true passes duplicate through (Keep both)',
-        () async {
-      final arg = (hostId: 'h10', rootPath: '/');
-      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+    test(
+      'copySelected with duplicate:true passes duplicate through (Keep both)',
+      () async {
+        final arg = (hostId: 'h10', rootPath: '/');
+        final notifier = await setUpExplorer(
+          container,
+          arg,
+          selected: {'/root/a.txt'},
+        );
 
-      await notifier.copySelected('/dest', duplicate: true);
+        await notifier.copySelected('/dest', duplicate: true);
 
-      expect(client.copyMoveCalls.single.duplicate, isTrue);
-      expect(client.copyMoveCalls.single.overwrite, isFalse);
-    });
+        expect(client.copyMoveCalls.single.duplicate, isTrue);
+        expect(client.copyMoveCalls.single.overwrite, isFalse);
+      },
+    );
 
-    test('moveSelected with overwrite:true passes overwrite through',
-        () async {
+    test('moveSelected with overwrite:true passes overwrite through', () async {
       final arg = (hostId: 'h11', rootPath: '/');
-      final notifier = await setUpExplorer(container, arg, selected: {'/root/a.txt'});
+      final notifier = await setUpExplorer(
+        container,
+        arg,
+        selected: {'/root/a.txt'},
+      );
 
       await notifier.moveSelected('/dest', overwrite: true);
 
@@ -762,18 +809,23 @@ void main() {
       expect(call.overwrite, isTrue);
     });
 
-    test('an explicit sources list overrides state.selected (Skip filtering)',
-        () async {
-      final arg = (hostId: 'h12', rootPath: '/');
-      final notifier = await setUpExplorer(container, arg,
-          selected: {'/root/a.txt', '/root/b.txt'});
+    test(
+      'an explicit sources list overrides state.selected (Skip filtering)',
+      () async {
+        final arg = (hostId: 'h12', rootPath: '/');
+        final notifier = await setUpExplorer(
+          container,
+          arg,
+          selected: {'/root/a.txt', '/root/b.txt'},
+        );
 
-      // Simulates the Skip resolution: caller filters out the colliding
-      // source ('/root/a.txt') and passes only the non-colliding one.
-      await notifier.moveSelected('/dest', sources: ['/root/b.txt']);
+        // Simulates the Skip resolution: caller filters out the colliding
+        // source ('/root/a.txt') and passes only the non-colliding one.
+        await notifier.moveSelected('/dest', sources: ['/root/b.txt']);
 
-      expect(client.copyMoveCalls.single.sources, ['/root/b.txt']);
-    });
+        expect(client.copyMoveCalls.single.sources, ['/root/b.txt']);
+      },
+    );
   });
 }
 
@@ -818,13 +870,15 @@ class _FakeAgentClient extends AgentClient {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    copyMoveCalls.add(_CopyMoveCall(
-      verb: 'copy',
-      sources: sources,
-      destDir: destDir,
-      duplicate: duplicate,
-      overwrite: overwrite,
-    ));
+    copyMoveCalls.add(
+      _CopyMoveCall(
+        verb: 'copy',
+        sources: sources,
+        destDir: destDir,
+        duplicate: duplicate,
+        overwrite: overwrite,
+      ),
+    );
     return {
       'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
     };
@@ -837,13 +891,15 @@ class _FakeAgentClient extends AgentClient {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    copyMoveCalls.add(_CopyMoveCall(
-      verb: 'move',
-      sources: sources,
-      destDir: destDir,
-      duplicate: duplicate,
-      overwrite: overwrite,
-    ));
+    copyMoveCalls.add(
+      _CopyMoveCall(
+        verb: 'move',
+        sources: sources,
+        destDir: destDir,
+        duplicate: duplicate,
+        overwrite: overwrite,
+      ),
+    );
     return {
       'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
     };

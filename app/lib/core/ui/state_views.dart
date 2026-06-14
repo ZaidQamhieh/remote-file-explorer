@@ -13,8 +13,10 @@ class EmptyFolderView extends StatelessWidget {
         children: [
           Icon(Icons.folder_open, size: 64, color: c.outline),
           const SizedBox(height: 12),
-          Text('This folder is empty',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'This folder is empty',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
         ],
       ),
     );
@@ -23,7 +25,11 @@ class EmptyFolderView extends StatelessWidget {
 
 /// Error card with a retry action.
 class ErrorRetryCard extends StatelessWidget {
-  const ErrorRetryCard({super.key, required this.message, required this.onRetry});
+  const ErrorRetryCard({
+    super.key,
+    required this.message,
+    required this.onRetry,
+  });
   final String message;
   final VoidCallback onRetry;
 
@@ -68,8 +74,10 @@ class OfflineBanner extends StatelessWidget {
             Icon(Icons.cloud_off, size: 16, color: c.onTertiaryContainer),
             const SizedBox(width: 8),
             Expanded(
-              child: Text('Offline — showing cached files',
-                  style: TextStyle(color: c.onTertiaryContainer, fontSize: 13)),
+              child: Text(
+                'Offline — showing cached files',
+                style: TextStyle(color: c.onTertiaryContainer, fontSize: 13),
+              ),
             ),
           ],
         ),
@@ -87,23 +95,24 @@ class ListingSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
     Widget bar(double w) => Container(
-          height: 12,
-          width: w,
-          decoration: BoxDecoration(
-            color: c.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(6),
-          ),
-        );
+      height: 12,
+      width: w,
+      decoration: BoxDecoration(
+        color: c.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
     return ListView.builder(
       itemCount: rows,
-      itemBuilder: (_, __) => ListTile(
-        leading: CircleAvatar(backgroundColor: c.surfaceContainerHighest),
-        title: bar(160),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: bar(90),
-        ),
-      ),
+      itemBuilder:
+          (_, __) => ListTile(
+            leading: CircleAvatar(backgroundColor: c.surfaceContainerHighest),
+            title: bar(160),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: bar(90),
+            ),
+          ),
     );
   }
 }

@@ -56,11 +56,9 @@ class ExplorerScreen extends ConsumerStatefulWidget {
 }
 
 class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
-  ExplorerArg get _arg =>
-      (hostId: widget.host.id, rootPath: widget.rootPath);
+  ExplorerArg get _arg => (hostId: widget.host.id, rootPath: widget.rootPath);
 
-  ExplorerNotifier get _notifier =>
-      ref.read(explorerProvider(_arg).notifier);
+  ExplorerNotifier get _notifier => ref.read(explorerProvider(_arg).notifier);
 
   @override
   void initState() {
@@ -79,16 +77,18 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     if (client == null) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.host.label)),
-        body: clientAsync.hasError
-            ? Center(child: Text('Error: ${clientAsync.error}'))
-            : const Center(child: CircularProgressIndicator()),
+        body:
+            clientAsync.hasError
+                ? Center(child: Text('Error: ${clientAsync.error}'))
+                : const Center(child: CircularProgressIndicator()),
       );
     }
 
     final state = ref.watch(explorerProvider(_arg));
     final favs = ref.watch(favoritesProvider).valueOrNull ?? const [];
-    final isFav =
-        favs.any((f) => f.hostId == widget.host.id && f.path == state.currentPath);
+    final isFav = favs.any(
+      (f) => f.hostId == widget.host.id && f.path == state.currentPath,
+    );
 
     return PopScope(
       canPop: state.atRoot && !state.multiSelect,
@@ -111,13 +111,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ),
         floatingActionButton:
             state.multiSelect ? null : _buildFab(context, state, client),
-        bottomNavigationBar: state.multiSelect
-            ? SelectionBar(
-                state: state,
-                notifier: _notifier,
-                host: widget.host,
-              )
-            : null,
+        bottomNavigationBar:
+            state.multiSelect
+                ? SelectionBar(
+                  state: state,
+                  notifier: _notifier,
+                  host: widget.host,
+                )
+                : null,
       ),
     );
   }
@@ -126,34 +127,45 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// contextual bar via a fadeThrough-style cross-fade (opacity + slight
   /// scale, [MotionDuration.medium], `easeOutCubic`) — Skia-safe, no blur.
   PreferredSizeWidget _buildAppBar(
-      BuildContext context, ExplorerState state, bool isFav, AgentClient client) {
+    BuildContext context,
+    ExplorerState state,
+    bool isFav,
+    AgentClient client,
+  ) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(kToolbarHeight + 44),
       child: AnimatedSwitcher(
         duration: MotionDuration.medium,
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeOutCubic,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
-            child: child,
-          ),
-        ),
-        child: state.multiSelect
-            ? _buildSelectionAppBar(context, state)
-            : _buildBrowseAppBar(context, state, isFav, client),
+        transitionBuilder:
+            (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
+                child: child,
+              ),
+            ),
+        child:
+            state.multiSelect
+                ? _buildSelectionAppBar(context, state)
+                : _buildBrowseAppBar(context, state, isFav, client),
       ),
     );
   }
 
   AppBar _buildBrowseAppBar(
-      BuildContext context, ExplorerState state, bool isFav, AgentClient client) {
+    BuildContext context,
+    ExplorerState state,
+    bool isFav,
+    AgentClient client,
+  ) {
     return AppBar(
       key: const ValueKey('browse_app_bar'),
-      leading: state.atRoot
-          ? null
-          : BackButton(onPressed: () => _notifier.popDirectory()),
+      leading:
+          state.atRoot
+              ? null
+              : BackButton(onPressed: () => _notifier.popDirectory()),
       title: Text(
         folderLabel(state.currentPath),
         style: Theme.of(context).textTheme.titleLarge,
@@ -165,8 +177,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           child: BreadcrumbBar(
             pathStack: state.pathStack,
             onNavigateTo: _notifier.navigateTo,
-            onMoveInto: (dragged, dest) =>
-                _moveInto(context, client, dragged, dest),
+            onMoveInto:
+                (dragged, dest) => _moveInto(context, client, dragged, dest),
           ),
         ),
       ),
@@ -186,29 +198,30 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           icon: const Icon(Icons.more_vert_rounded),
           tooltip: 'More',
           onSelected: (action) => _onOverflowAction(context, state, action),
-          itemBuilder: (_) => const [
-            PopupMenuItem(
-              value: _OverflowAction.viewOptions,
-              child: ListTile(
-                leading: Icon(Icons.tune_rounded),
-                title: Text('View options'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _OverflowAction.favorites,
-              child: ListTile(
-                leading: Icon(Icons.bookmarks_outlined),
-                title: Text('Favorites'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _OverflowAction.transfers,
-              child: ListTile(
-                leading: Icon(Icons.file_upload_outlined),
-                title: Text('Transfers'),
-              ),
-            ),
-          ],
+          itemBuilder:
+              (_) => const [
+                PopupMenuItem(
+                  value: _OverflowAction.viewOptions,
+                  child: ListTile(
+                    leading: Icon(Icons.tune_rounded),
+                    title: Text('View options'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _OverflowAction.favorites,
+                  child: ListTile(
+                    leading: Icon(Icons.bookmarks_outlined),
+                    title: Text('Favorites'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _OverflowAction.transfers,
+                  child: ListTile(
+                    leading: Icon(Icons.file_upload_outlined),
+                    title: Text('Transfers'),
+                  ),
+                ),
+              ],
         ),
       ],
     );
@@ -217,7 +230,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// Contextual action bar shown while one or more entries are selected:
   /// `✕  N selected   ⊞ select-all   ⋮ (invert)`.
   AppBar _buildSelectionAppBar(BuildContext context, ExplorerState state) {
-    final allSelected = state.selected.length == state.entries.length &&
+    final allSelected =
+        state.selected.length == state.entries.length &&
         state.entries.isNotEmpty;
     return AppBar(
       key: const ValueKey('selection_app_bar'),
@@ -238,9 +252,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       ),
       actions: [
         IconButton(
-          icon: Icon(allSelected
-              ? Icons.deselect_rounded
-              : Icons.select_all_rounded),
+          icon: Icon(
+            allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+          ),
           tooltip: allSelected ? 'Deselect all' : 'Select all',
           onPressed:
               allSelected ? _notifier.clearSelection : _notifier.selectAll,
@@ -255,7 +269,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   void _onOverflowAction(
-      BuildContext context, ExplorerState state, _OverflowAction action) {
+    BuildContext context,
+    ExplorerState state,
+    _OverflowAction action,
+  ) {
     switch (action) {
       case _OverflowAction.viewOptions:
         ViewOptionsSheet.show(context, notifier: _notifier);
@@ -266,9 +283,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
   }
 
-  void _toggleFavorite(
-      BuildContext context, ExplorerState state, bool isFav) {
-    ref.read(favoritesProvider.notifier).toggle(
+  void _toggleFavorite(BuildContext context, ExplorerState state, bool isFav) {
+    ref
+        .read(favoritesProvider.notifier)
+        .toggle(
           Favorite(
             hostId: widget.host.id,
             path: state.currentPath,
@@ -279,7 +297,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       showInfo(context, 'Removed from favorites');
     } else {
       showSuccess(
-          context, 'Added "${folderLabel(state.currentPath)}" to favorites');
+        context,
+        'Added "${folderLabel(state.currentPath)}" to favorites',
+      );
     }
   }
 
@@ -287,25 +307,30 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => FavoritesSheet(
-        host: widget.host,
-        onOpen: (path) {
-          Navigator.pop(context);
-          _notifier.jumpTo(path);
-        },
-      ),
+      builder:
+          (_) => FavoritesSheet(
+            host: widget.host,
+            onOpen: (path) {
+              Navigator.pop(context);
+              _notifier.jumpTo(path);
+            },
+          ),
     );
   }
 
   Future<void> _openSearch(
-      BuildContext context, ExplorerState state, AgentClient client) async {
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+  ) async {
     final parentPath = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => SearchScreen(
-          host: widget.host,
-          client: client,
-          currentPath: state.currentPath,
-        ),
+        builder:
+            (_) => SearchScreen(
+              host: widget.host,
+              client: client,
+              currentPath: state.currentPath,
+            ),
       ),
     );
     if (parentPath != null) {
@@ -326,11 +351,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// `null` (renders nothing) otherwise.
   Widget? _buildPinRow(BuildContext context, ExplorerState state) {
     if (!state.atRoot) return null;
-    final favs = ref
-        .watch(favoritesProvider)
-        .valueOrNull
-        ?.where((f) => f.hostId == widget.host.id)
-        .toList();
+    final favs =
+        ref
+            .watch(favoritesProvider)
+            .valueOrNull
+            ?.where((f) => f.hostId == widget.host.id)
+            .toList();
     if (favs == null || favs.isEmpty) return null;
     return FavoritesPinRow(
       favorites: favs,
@@ -345,7 +371,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   Widget _buildBody(
-      BuildContext context, ExplorerState state, AgentClient client) {
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+  ) {
     final pinRow = _buildPinRow(context, state);
 
     // First load with nothing cached yet → lightweight skeleton.
@@ -364,7 +393,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           if (pinRow != null) pinRow,
           Expanded(
             child: ErrorRetryCard(
-                message: state.error!, onRetry: _notifier.refresh),
+              message: state.error!,
+              onRetry: _notifier.refresh,
+            ),
           ),
         ],
       );
@@ -378,10 +409,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             child: RefreshIndicator(
               onRefresh: _notifier.refresh,
               child: ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  EmptyFolderView(),
-                ],
+                children: const [SizedBox(height: 120), EmptyFolderView()],
               ),
             ),
           ),
@@ -390,8 +418,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
 
     final density =
-        ref.watch(settingsProvider).valueOrNull?.resolveView(_arg.hostId).density ??
-            EntryDensity.comfortable;
+        ref
+            .watch(settingsProvider)
+            .valueOrNull
+            ?.resolveView(_arg.hostId)
+            .density ??
+        EntryDensity.comfortable;
 
     return Column(
       children: [
@@ -400,9 +432,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _notifier.refresh,
-            child: state.gridView
-                ? _buildGrid(context, state, client)
-                : _buildList(context, state, client, density),
+            child:
+                state.gridView
+                    ? _buildGrid(context, state, client)
+                    : _buildList(context, state, client, density),
           ),
         ),
       ],
@@ -410,16 +443,21 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   /// Paths of this host's favorited folders, for the tile star badge.
-  Set<String> _favoritePaths() => ref
-      .watch(favoritesProvider)
-      .valueOrNull
-      ?.where((f) => f.hostId == widget.host.id)
-      .map((f) => f.path)
-      .toSet() ??
+  Set<String> _favoritePaths() =>
+      ref
+          .watch(favoritesProvider)
+          .valueOrNull
+          ?.where((f) => f.hostId == widget.host.id)
+          .map((f) => f.path)
+          .toSet() ??
       const {};
 
-  Widget _buildList(BuildContext context, ExplorerState state,
-      AgentClient client, EntryDensity density) {
+  Widget _buildList(
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+    EntryDensity density,
+  ) {
     final entries = state.displayEntries;
     final showLoadMore = state.hasMore;
     final showHiddenFooter = state.hiddenCount > 0;
@@ -455,11 +493,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               onTap: () => _onEntryTap(context, entry, client),
               onLongPress: () => _notifier.toggleSelect(entry.path),
               onSelect: () => _notifier.toggleSelect(entry.path),
-              onMoveInto: (dragged, dest) =>
-                  _moveInto(context, client, dragged, dest),
-              onShowMeta: entry.isDir
-                  ? () => _showMeta(context, entry, client)
-                  : null,
+              onMoveInto:
+                  (dragged, dest) => _moveInto(context, client, dragged, dest),
+              onShowMeta:
+                  entry.isDir ? () => _showMeta(context, entry, client) : null,
             ),
           ),
         );
@@ -473,13 +510,18 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// Pre-flight: if [destFolder] already has an entry named [dragged.name],
   /// offer Keep both / Overwrite / Skip / Cancel before issuing the move —
   /// same prompt as the selection bar's Move action.
-  Future<void> _moveInto(BuildContext context, AgentClient client,
-      Entry dragged, String destFolder) async {
+  Future<void> _moveInto(
+    BuildContext context,
+    AgentClient client,
+    Entry dragged,
+    String destFolder,
+  ) async {
     var duplicate = false;
     var overwrite = false;
     try {
-      final colliding =
-          await _notifier.collidingBasenames(destFolder, [dragged.path]);
+      final colliding = await _notifier.collidingBasenames(destFolder, [
+        dragged.path,
+      ]);
       if (colliding.isNotEmpty) {
         if (!context.mounted) return;
         final resolution = await showConflictResolutionDialog(
@@ -493,8 +535,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             return;
           case ConflictResolution.skip:
             if (context.mounted) {
-              showInfo(context,
-                  '${dragged.name} already exists in ${folderLabel(destFolder)}');
+              showInfo(
+                context,
+                '${dragged.name} already exists in ${folderLabel(destFolder)}',
+              );
             }
             return;
           case ConflictResolution.keepBoth:
@@ -505,28 +549,41 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, 'Could not check ${folderLabel(destFolder)} for '
-            'existing items: $e');
+        showError(
+          context,
+          'Could not check ${folderLabel(destFolder)} for '
+          'existing items: $e',
+        );
       }
       return;
     }
 
     if (!context.mounted) return;
     try {
-      await client.move([dragged.path], destFolder,
-          duplicate: duplicate, overwrite: overwrite);
+      await client.move(
+        [dragged.path],
+        destFolder,
+        duplicate: duplicate,
+        overwrite: overwrite,
+      );
       await _notifier.refresh();
       if (context.mounted) showSuccess(context, 'Moved ${dragged.name}');
     } catch (e) {
       if (context.mounted) {
-        showError(context, 'Move failed: $e',
-            onRetry: () => _moveInto(context, client, dragged, destFolder));
+        showError(
+          context,
+          'Move failed: $e',
+          onRetry: () => _moveInto(context, client, dragged, destFolder),
+        );
       }
     }
   }
 
   Widget _buildGrid(
-      BuildContext context, ExplorerState state, AgentClient client) {
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+  ) {
     final entries = state.displayEntries;
     final showLoadMore = state.hasMore;
     final showHiddenFooter = state.hiddenCount > 0;
@@ -570,8 +627,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               isFavorite: favoritePaths.contains(entry.path),
               onTap: () => _onEntryTap(context, entry, client),
               onLongPress: () => _notifier.toggleSelect(entry.path),
-              onMoveInto: (dragged, dest) =>
-                  _moveInto(context, client, dragged, dest),
+              onMoveInto:
+                  (dragged, dest) => _moveInto(context, client, dragged, dest),
             ),
           ),
         );
@@ -579,8 +636,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  void _onEntryTap(
-      BuildContext context, Entry entry, AgentClient client) {
+  void _onEntryTap(BuildContext context, Entry entry, AgentClient client) {
     if (ref.read(explorerProvider(_arg)).multiSelect) {
       _notifier.toggleSelect(entry.path);
       return;
@@ -599,20 +655,25 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => MetaSheet(
-        entry: entry,
-        host: widget.host,
-        client: client,
-        onChanged: _notifier.refresh,
-        siblings: siblings,
-      ),
+      builder:
+          (_) => MetaSheet(
+            entry: entry,
+            host: widget.host,
+            client: client,
+            onChanged: _notifier.refresh,
+            siblings: siblings,
+          ),
     );
   }
 
   Widget _buildFab(
-      BuildContext context, ExplorerState state, AgentClient client) {
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+  ) {
     final clipboard = ref.watch(clipboardProvider);
-    final showPaste = clipboard != null &&
+    final showPaste =
+        clipboard != null &&
         !clipboard.isEmpty &&
         clipboard.hostId == widget.host.id &&
         !state.multiSelect;
@@ -624,7 +685,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         if (showPaste) ...[
           FloatingActionButton.small(
             heroTag: 'fab_paste',
-            tooltip: 'Paste ${clipboard.paths.length} item'
+            tooltip:
+                'Paste ${clipboard.paths.length} item'
                 '${clipboard.paths.length == 1 ? '' : 's'}',
             onPressed: () => _paste(context, state, clipboard),
             child: const Icon(Icons.content_paste),
@@ -659,7 +721,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// it); copy pastes keep it so the same clipboard can be pasted again
   /// elsewhere.
   Future<void> _paste(
-      BuildContext context, ExplorerState state, FileClipboard clipboard) async {
+    BuildContext context,
+    ExplorerState state,
+    FileClipboard clipboard,
+  ) async {
     final dest = state.currentPath;
     final sources = clipboard.paths;
     final isCut = clipboard.mode == ClipboardMode.cut;
@@ -693,14 +758,18 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           case ConflictResolution.overwrite:
             overwrite = true;
           case ConflictResolution.skip:
-            effectiveSources = sources
-                .where((p) => !colliding.contains(basenameOf(p)))
-                .toList();
+            effectiveSources =
+                sources
+                    .where((p) => !colliding.contains(basenameOf(p)))
+                    .toList();
             if (effectiveSources.isEmpty) {
               if (context.mounted) {
-                showInfo(context, 'All clipboard items already exist in '
-                    '${folderLabel(dest)} — nothing to '
-                    '${isCut ? 'move' : 'copy'}');
+                showInfo(
+                  context,
+                  'All clipboard items already exist in '
+                  '${folderLabel(dest)} — nothing to '
+                  '${isCut ? 'move' : 'copy'}',
+                );
               }
               return;
             }
@@ -708,24 +777,32 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, 'Could not check ${folderLabel(dest)} for '
-            'existing items: $e',
-            onRetry: () => _paste(context, state, clipboard));
+        showError(
+          context,
+          'Could not check ${folderLabel(dest)} for '
+          'existing items: $e',
+          onRetry: () => _paste(context, state, clipboard),
+        );
       }
       return;
     }
 
     if (!context.mounted) return;
     try {
-      final res = isCut
-          ? await _notifier.moveSelected(dest,
-              sources: effectiveSources,
-              duplicate: duplicate,
-              overwrite: overwrite)
-          : await _notifier.copySelected(dest,
-              sources: effectiveSources,
-              duplicate: duplicate,
-              overwrite: overwrite);
+      final res =
+          isCut
+              ? await _notifier.moveSelected(
+                dest,
+                sources: effectiveSources,
+                duplicate: duplicate,
+                overwrite: overwrite,
+              )
+              : await _notifier.copySelected(
+                dest,
+                sources: effectiveSources,
+                duplicate: duplicate,
+                overwrite: overwrite,
+              );
       if (isCut) {
         ref.read(clipboardProvider.notifier).clear();
       }
@@ -734,8 +811,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, '${isCut ? 'Move' : 'Copy'} failed: $e',
-            onRetry: () => _paste(context, state, clipboard));
+        showError(
+          context,
+          '${isCut ? 'Move' : 'Copy'} failed: $e',
+          onRetry: () => _paste(context, state, clipboard),
+        );
       }
     }
   }
@@ -744,8 +824,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   /// directory (checked against the already-loaded listing — no extra
   /// round-trip), offers Keep both / Overwrite / Skip / Cancel before
   /// enqueueing the upload.
-  Future<void> _pickAndUpload(
-      BuildContext context, ExplorerState state) async {
+  Future<void> _pickAndUpload(BuildContext context, ExplorerState state) async {
     final result = await FilePicker.pickFiles();
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
@@ -780,7 +859,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
 
     final remotePath = '${state.currentPath}/$name';
-    ref.read(transferQueueProvider.notifier).enqueue(
+    ref
+        .read(transferQueueProvider.notifier)
+        .enqueue(
           TransferTask.upload(
             localPath: localPath,
             remotePath: remotePath,
@@ -832,12 +913,13 @@ class _LoadMoreIndicator extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
       child: Center(
-        child: loading
-            ? const SizedBox.square(
-                dimension: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const SizedBox.square(dimension: 24),
+        child:
+            loading
+                ? const SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const SizedBox.square(dimension: 24),
       ),
     );
   }
@@ -883,14 +965,13 @@ class HiddenItemsFooter extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final label = '$count hidden';
     final action = revealed ? 'Hide' : 'Show';
-    final style = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: scheme.onSurfaceVariant);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
     final actionStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: scheme.primary,
-          fontWeight: FontWeight.w600,
-        );
+      color: scheme.primary,
+      fontWeight: FontWeight.w600,
+    );
 
     if (compact) {
       return Center(

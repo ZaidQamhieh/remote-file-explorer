@@ -4,11 +4,8 @@ import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/search/search_logic.dart';
 
 void main() {
-  Entry mkEntry(String name, {bool isDir = false}) => Entry(
-        name: name,
-        path: '/root/$name',
-        isDir: isDir,
-      );
+  Entry mkEntry(String name, {bool isDir = false}) =>
+      Entry(name: name, path: '/root/$name', isDir: isDir);
 
   group('isGlobQuery', () {
     test('detects * and ? as glob markers', () {
@@ -87,15 +84,17 @@ void main() {
 
     test('filters out entries hidden by visibility prefs by default', () {
       const prefs = VisibilityPrefs(hiddenExtensions: {'log'});
-      final filtered =
-          filterSearchResults(results, prefs, includeHidden: false);
+      final filtered = filterSearchResults(
+        results,
+        prefs,
+        includeHidden: false,
+      );
       expect(filtered.map((e) => e.name), ['readme.txt']);
     });
 
     test('includeHidden: true returns results unchanged', () {
       const prefs = VisibilityPrefs(hiddenExtensions: {'log'});
-      final filtered =
-          filterSearchResults(results, prefs, includeHidden: true);
+      final filtered = filterSearchResults(results, prefs, includeHidden: true);
       expect(filtered, results);
     });
   });

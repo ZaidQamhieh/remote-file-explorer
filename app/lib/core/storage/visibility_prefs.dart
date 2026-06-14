@@ -21,7 +21,11 @@ import '../ui/entry_leading.dart';
 /// [VisibilityPrefs] sets (additive — applying a preset never removes
 /// anything the user already configured).
 class VisibilityPreset {
-  const VisibilityPreset(this.label, {this.extensions = const {}, this.names = const {}});
+  const VisibilityPreset(
+    this.label, {
+    this.extensions = const {},
+    this.names = const {},
+  });
 
   /// Chip label shown in the settings UI.
   final String label;
@@ -46,8 +50,10 @@ const systemJunkPreset = VisibilityPreset(
 const logsPreset = VisibilityPreset('Logs', extensions: {'log', 'old'});
 
 /// "Archives": archive/compressed files, reusing [archiveExtensions].
-const archivesPreset =
-    VisibilityPreset('Archives', extensions: archiveExtensions);
+const archivesPreset = VisibilityPreset(
+  'Archives',
+  extensions: archiveExtensions,
+);
 
 /// "Audio": audio files, reusing [audioExtensions].
 const audioPreset = VisibilityPreset('Audio', extensions: audioExtensions);
@@ -99,12 +105,11 @@ class VisibilityPrefs {
     bool? hideDotfiles,
     Set<String>? hiddenExtensions,
     Set<String>? hiddenNames,
-  }) =>
-      VisibilityPrefs(
-        hideDotfiles: hideDotfiles ?? this.hideDotfiles,
-        hiddenExtensions: hiddenExtensions ?? this.hiddenExtensions,
-        hiddenNames: hiddenNames ?? this.hiddenNames,
-      );
+  }) => VisibilityPrefs(
+    hideDotfiles: hideDotfiles ?? this.hideDotfiles,
+    hiddenExtensions: hiddenExtensions ?? this.hiddenExtensions,
+    hiddenNames: hiddenNames ?? this.hiddenNames,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -115,10 +120,10 @@ class VisibilityPrefs {
 
   @override
   int get hashCode => Object.hash(
-        hideDotfiles,
-        Object.hashAllUnordered(hiddenExtensions),
-        Object.hashAllUnordered(hiddenNames),
-      );
+    hideDotfiles,
+    Object.hashAllUnordered(hiddenExtensions),
+    Object.hashAllUnordered(hiddenNames),
+  );
 }
 
 /// Order-independent set equality used by [VisibilityPrefs]'s `==` so two

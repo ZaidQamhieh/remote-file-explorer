@@ -63,9 +63,10 @@ class EntryGridCell extends StatelessWidget {
     final isImage = !entry.isDir && mime.startsWith('image/');
 
     final cell = Material(
-      color: selected
-          ? scheme.secondaryContainer.withValues(alpha: 0.65)
-          : scheme.surfaceContainerLow,
+      color:
+          selected
+              ? scheme.secondaryContainer.withValues(alpha: 0.65)
+              : scheme.surfaceContainerLow,
       borderRadius: Radii.cardR,
       child: InkWell(
         borderRadius: Radii.cardR,
@@ -96,7 +97,8 @@ class EntryGridCell extends StatelessWidget {
                             entry: entry,
                             client: client,
                             fallback: Center(
-                                child: EntryLeading(entry: entry, size: 40)),
+                              child: EntryLeading(entry: entry, size: 40),
+                            ),
                           ),
                         ),
                       ),
@@ -133,8 +135,11 @@ class EntryGridCell extends StatelessWidget {
                       color: scheme.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.check_rounded,
-                        size: 16, color: scheme.onPrimary),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                      color: scheme.onPrimary,
+                    ),
                   ),
                 ),
               if (isFavorite && entry.isDir)
@@ -149,8 +154,11 @@ class EntryGridCell extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child:
-                        const Icon(Icons.star_rounded, size: 13, color: Colors.amber),
+                    child: const Icon(
+                      Icons.star_rounded,
+                      size: 13,
+                      color: Colors.amber,
+                    ),
                   ),
                 ),
             ],

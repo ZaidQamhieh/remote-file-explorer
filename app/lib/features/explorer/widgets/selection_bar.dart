@@ -55,10 +55,10 @@ class BarAction extends StatelessWidget {
             const SizedBox(height: Spacing.xs),
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: fg, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -149,8 +149,10 @@ class SelectionBar extends ConsumerWidget {
     final count = paths.length;
     ref.read(clipboardProvider.notifier).copy(paths, host.id);
     notifier.clearSelection();
-    showSuccess(context,
-        '$count item${count == 1 ? '' : 's'} copied — open a folder and tap Paste');
+    showSuccess(
+      context,
+      '$count item${count == 1 ? '' : 's'} copied — open a folder and tap Paste',
+    );
   }
 
   /// Fills the clipboard (cut mode) with the current selection and clears
@@ -161,17 +163,21 @@ class SelectionBar extends ConsumerWidget {
     final count = paths.length;
     ref.read(clipboardProvider.notifier).cut(paths, host.id);
     notifier.clearSelection();
-    showSuccess(context,
-        '$count item${count == 1 ? '' : 's'} cut — open a folder and tap Paste');
+    showSuccess(
+      context,
+      '$count item${count == 1 ? '' : 's'} cut — open a folder and tap Paste',
+    );
   }
 
-  Future<void> _downloadSelected(
-      BuildContext context, WidgetRef ref) async {
-    final downloadsDir = await getDownloadsDirectory() ??
+  Future<void> _downloadSelected(BuildContext context, WidgetRef ref) async {
+    final downloadsDir =
+        await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
     for (final path in state.selected) {
       final name = path.split(RegExp(r'[/\\]')).last;
-      ref.read(transferQueueProvider.notifier).enqueue(
+      ref
+          .read(transferQueueProvider.notifier)
+          .enqueue(
             TransferTask.download(
               remotePath: path,
               localPath: '${downloadsDir.path}/$name',
@@ -189,20 +195,24 @@ class SelectionBar extends ConsumerWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete permanently?'),
-        content: Text(
-            'Permanently delete ${state.selected.length} item(s)? '
-            'This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete permanently?'),
+            content: Text(
+              'Permanently delete ${state.selected.length} item(s)? '
+              'This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
     );
     if (confirmed == true) {
       try {

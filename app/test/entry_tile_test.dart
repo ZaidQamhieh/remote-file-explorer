@@ -16,22 +16,23 @@ void main() {
     modified: DateTime(2024, 3, 5),
   );
 
-  final folder = Entry(
-    name: 'Documents',
-    path: '/root/Documents',
-    isDir: true,
-  );
+  final folder = Entry(name: 'Documents', path: '/root/Documents', isDir: true);
 
-  testWidgets('file entry shows name, size/date subtitle, and no chevron',
-      (tester) async {
-    await tester.pumpWidget(_wrap(EntryTile(
-      entry: file,
-      selected: false,
-      multiSelect: false,
-      onTap: () {},
-      onLongPress: () {},
-      onSelect: () {},
-    )));
+  testWidgets('file entry shows name, size/date subtitle, and no chevron', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EntryTile(
+          entry: file,
+          selected: false,
+          multiSelect: false,
+          onTap: () {},
+          onLongPress: () {},
+          onSelect: () {},
+        ),
+      ),
+    );
 
     expect(find.text('report.pdf'), findsOneWidget);
     // formatSize(2048) == '2.0 KB', formatDate(2024-03-05) == '2024-03-05'.
@@ -43,16 +44,21 @@ void main() {
     expect(find.byIcon(Icons.picture_as_pdf), findsOneWidget);
   });
 
-  testWidgets('folder entry shows name, chevron, and no subtitle',
-      (tester) async {
-    await tester.pumpWidget(_wrap(EntryTile(
-      entry: folder,
-      selected: false,
-      multiSelect: false,
-      onTap: () {},
-      onLongPress: () {},
-      onSelect: () {},
-    )));
+  testWidgets('folder entry shows name, chevron, and no subtitle', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EntryTile(
+          entry: folder,
+          selected: false,
+          multiSelect: false,
+          onTap: () {},
+          onLongPress: () {},
+          onSelect: () {},
+        ),
+      ),
+    );
 
     expect(find.text('Documents'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
@@ -61,17 +67,22 @@ void main() {
     expect(find.textContaining('KB'), findsNothing);
   });
 
-  testWidgets('multiSelect mode shows a checkbox reflecting selected state',
-      (tester) async {
+  testWidgets('multiSelect mode shows a checkbox reflecting selected state', (
+    tester,
+  ) async {
     var selectCalls = 0;
-    await tester.pumpWidget(_wrap(EntryTile(
-      entry: file,
-      selected: true,
-      multiSelect: true,
-      onTap: () {},
-      onLongPress: () {},
-      onSelect: () => selectCalls++,
-    )));
+    await tester.pumpWidget(
+      _wrap(
+        EntryTile(
+          entry: file,
+          selected: true,
+          multiSelect: true,
+          onTap: () {},
+          onLongPress: () {},
+          onSelect: () => selectCalls++,
+        ),
+      ),
+    );
 
     final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
     expect(checkbox.value, isTrue);
@@ -82,14 +93,18 @@ void main() {
 
   testWidgets('tapping the tile invokes onTap', (tester) async {
     var tapped = false;
-    await tester.pumpWidget(_wrap(EntryTile(
-      entry: folder,
-      selected: false,
-      multiSelect: false,
-      onTap: () => tapped = true,
-      onLongPress: () {},
-      onSelect: () {},
-    )));
+    await tester.pumpWidget(
+      _wrap(
+        EntryTile(
+          entry: folder,
+          selected: false,
+          multiSelect: false,
+          onTap: () => tapped = true,
+          onLongPress: () {},
+          onSelect: () {},
+        ),
+      ),
+    );
 
     await tester.tap(find.byType(EntryTile));
     expect(tapped, isTrue);
@@ -98,15 +113,19 @@ void main() {
   group('density variants', () {
     testWidgets('comfortable density shows name and meta on separate lines '
         'with a 40dp leading container', (tester) async {
-      await tester.pumpWidget(_wrap(EntryTile(
-        entry: file,
-        selected: false,
-        multiSelect: false,
-        density: EntryDensity.comfortable,
-        onTap: () {},
-        onLongPress: () {},
-        onSelect: () {},
-      )));
+      await tester.pumpWidget(
+        _wrap(
+          EntryTile(
+            entry: file,
+            selected: false,
+            multiSelect: false,
+            density: EntryDensity.comfortable,
+            onTap: () {},
+            onLongPress: () {},
+            onSelect: () {},
+          ),
+        ),
+      );
 
       // Name and meta render as two separate Text widgets, stacked in a
       // Column (comfortable = two-line row).
@@ -114,59 +133,75 @@ void main() {
       expect(find.textContaining('2.0 KB'), findsOneWidget);
 
       // Leading icon container sized 40dp in comfortable density.
-      final size = tester.getSize(find
-          .descendant(of: find.byType(EntryTile), matching: find.byType(Container))
-          .first);
+      final size = tester.getSize(
+        find
+            .descendant(
+              of: find.byType(EntryTile),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
       expect(size.width, 40);
       expect(size.height, 40);
     });
 
-    testWidgets('compact density shows name and meta inline on one row',
-        (tester) async {
-      await tester.pumpWidget(_wrap(EntryTile(
-        entry: file,
-        selected: false,
-        multiSelect: false,
-        density: EntryDensity.compact,
-        onTap: () {},
-        onLongPress: () {},
-        onSelect: () {},
-      )));
+    testWidgets('compact density shows name and meta inline on one row', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          EntryTile(
+            entry: file,
+            selected: false,
+            multiSelect: false,
+            density: EntryDensity.compact,
+            onTap: () {},
+            onLongPress: () {},
+            onSelect: () {},
+          ),
+        ),
+      );
 
       expect(find.text('report.pdf'), findsOneWidget);
       expect(find.textContaining('2.0 KB'), findsOneWidget);
       // Compact density lays name + meta out in a Row rather than a Column.
       final rowFinder = find.descendant(
         of: find.byType(EntryTile),
-        matching: find.byWidgetPredicate((w) =>
-            w is Row &&
-            w.children.length == 3 &&
-            w.children.any((c) => c is Expanded)),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Row &&
+              w.children.length == 3 &&
+              w.children.any((c) => c is Expanded),
+        ),
       );
       expect(rowFinder, findsWidgets);
     });
 
-    testWidgets('selected tile paints primaryContainer behind it',
-        (tester) async {
-      await tester.pumpWidget(_wrap(EntryTile(
-        entry: folder,
-        selected: true,
-        multiSelect: false,
-        onTap: () {},
-        onLongPress: () {},
-        onSelect: () {},
-      )));
-
-      final materials = tester.widgetList<Material>(find.descendant(
-        of: find.byType(EntryTile),
-        matching: find.byType(Material),
-      ));
-      final scheme = Theme.of(tester.element(find.byType(EntryTile)))
-          .colorScheme;
-      expect(
-        materials.any((m) => m.color == scheme.primaryContainer),
-        isTrue,
+    testWidgets('selected tile paints primaryContainer behind it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          EntryTile(
+            entry: folder,
+            selected: true,
+            multiSelect: false,
+            onTap: () {},
+            onLongPress: () {},
+            onSelect: () {},
+          ),
+        ),
       );
+
+      final materials = tester.widgetList<Material>(
+        find.descendant(
+          of: find.byType(EntryTile),
+          matching: find.byType(Material),
+        ),
+      );
+      final scheme =
+          Theme.of(tester.element(find.byType(EntryTile))).colorScheme;
+      expect(materials.any((m) => m.color == scheme.primaryContainer), isTrue);
     });
   });
 }

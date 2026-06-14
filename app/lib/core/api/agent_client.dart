@@ -89,6 +89,34 @@ class RangeNotSatisfiedException implements Exception {
       'ranged request; partial file deleted, restart from 0';
 }
 
+/// Response from [AgentClient.completeUpload]: the finalized [Entry] plus
+/// the whole-file integrity-check result.
+///
+/// [verified] is `true` only when the agent confirmed the whole-file
+/// SHA-256 matches (and reported `verified: true`); older agents that don't
+/// send `verified`/`sha256` parse as `verified: false` / `sha256: null`
+/// rather than throwing.
+class UploadCompleteResult {
+  const UploadCompleteResult({
+    required this.entry,
+    this.verified = false,
+    this.sha256,
+  });
+
+  final Entry entry;
+  final bool verified;
+
+  /// Verified whole-file SHA-256 (hex), present when [verified] is `true`.
+  final String? sha256;
+
+  factory UploadCompleteResult.fromJson(Map<String, dynamic> json) =>
+      UploadCompleteResult(
+        entry: Entry.fromJson(json),
+        verified: json['verified'] as bool? ?? false,
+        sha256: json['sha256'] as String?,
+      );
+}
+
 /// HTTPS client for a single host agent.
 ///
 /// The agent uses a self-signed certificate, so standard CA validation is
@@ -798,11 +826,17 @@ class AgentClient {
   }
 
   /// Finalise the upload session (verify whole-file hash, atomic rename).
-  Future<Entry> completeUpload(String sessionId) async {
+  ///
+  /// The agent's 200 response includes the usual [Entry] fields plus
+  /// `sha256` (the verified whole-file SHA-256) and `verified: true`. Older
+  /// agents that predate integrity verification won't send those two fields
+  /// — [UploadCompleteResult.fromJson] treats their absence as "not
+  /// verified" rather than crashing.
+  Future<UploadCompleteResult> completeUpload(String sessionId) async {
     final data = await _post<Map<String, dynamic>>(
       '/transfers/$sessionId/complete',
     );
-    return Entry.fromJson(data);
+    return UploadCompleteResult.fromJson(data);
   }
 
   // ---------------------------------------------------------------------------

@@ -50,6 +50,8 @@ class TransferTask {
     this.uploadSessionId,
     this.savedLocation,
     this.overwrite = false,
+    this.verified = false,
+    this.sha256,
   });
 
   /// [overwrite] is forwarded to [AgentClient.openUploadSession] when the
@@ -103,6 +105,16 @@ class TransferTask {
   /// (passed to [AgentClient.openUploadSession]). Ignored for downloads.
   final bool overwrite;
 
+  /// For completed uploads: whether the agent confirmed the whole-file
+  /// SHA-256 matches on `POST /transfers/{id}/complete`
+  /// ([AgentClient.completeUpload]'s `verified` field). Always `false` for
+  /// downloads and for non-completed tasks.
+  final bool verified;
+
+  /// For completed, [verified] uploads: the verified whole-file SHA-256
+  /// (hex), as reported by the agent's complete response. `null` otherwise.
+  final String? sha256;
+
   double get progress => totalBytes > 0 ? transferredBytes / totalBytes : 0.0;
 
   String get displayName => remotePath.split(RegExp(r'[/\\]')).last;
@@ -114,6 +126,8 @@ class TransferTask {
     Object? error = _sentinel,
     Object? uploadSessionId = _sentinel,
     String? savedLocation,
+    bool? verified,
+    String? sha256,
   }) => TransferTask._(
     id: id,
     kind: kind,
@@ -130,6 +144,8 @@ class TransferTask {
             : uploadSessionId as String?,
     savedLocation: savedLocation ?? this.savedLocation,
     overwrite: overwrite,
+    verified: verified ?? this.verified,
+    sha256: sha256 ?? this.sha256,
   );
 }
 
@@ -472,7 +488,14 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       await raf.close();
     }
 
-    await client.completeUpload(sessionId);
+    // The agent verifies the whole-file SHA-256 on complete and reports the
+    // result via `verified`/`sha256` (older agents omit both — parsed as
+    // verified: false, sha256: null — see UploadCompleteResult.fromJson).
+    final result = await client.completeUpload(sessionId);
+    _updateById(
+      id,
+      (t) => t.copyWith(verified: result.verified, sha256: result.sha256),
+    );
   }
 }
 

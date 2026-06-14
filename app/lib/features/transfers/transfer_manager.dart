@@ -426,10 +426,29 @@ class _TransferTile extends ConsumerWidget {
                 : (task.savedLocation != null
                     ? 'Saved to ${task.savedLocation}'
                     : 'Downloaded');
-        return Text(
-          label,
-          style: const TextStyle(color: Brand.online),
-          overflow: TextOverflow.ellipsis,
+        final showVerified = task.kind == TransferKind.upload && task.verified;
+        if (!showVerified) {
+          return Text(
+            label,
+            style: const TextStyle(color: Brand.online),
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: Spacing.xs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Brand.online),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: Spacing.xs),
+              _VerifiedBadge(sha256: task.sha256),
+            ],
+          ),
         );
       case TransferStatus.queued:
         return const Text('Queued');
@@ -479,6 +498,56 @@ class _TransferTile extends ConsumerWidget {
           onPressed: () => notifier.remove(task.id),
         );
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Verified badge — shown on completed uploads whose whole-file SHA-256 was
+// confirmed by the agent on `POST /transfers/{id}/complete`.
+// ---------------------------------------------------------------------------
+
+/// Small M3 tonal chip reading "Verified" with a check-shield icon.
+///
+/// If [sha256] is available, a tooltip shows its first 10 hex characters so
+/// the user can spot-check it against the source file if they want.
+class _VerifiedBadge extends StatelessWidget {
+  const _VerifiedBadge({this.sha256});
+
+  final String? sha256;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 2),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: Radii.chipR,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.verified_outlined,
+            size: 14,
+            color: scheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: Spacing.xs),
+          Text(
+            'Verified',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.onTertiaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (sha256 == null || sha256!.isEmpty) return chip;
+
+    final short = sha256!.length > 10 ? sha256!.substring(0, 10) : sha256!;
+    return Tooltip(message: 'SHA-256 $short…', child: chip);
   }
 }
 

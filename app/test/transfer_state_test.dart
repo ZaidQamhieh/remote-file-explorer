@@ -602,11 +602,63 @@ void main() {
       expect(finalTask.status, TransferStatus.completed);
       expect(finalTask.transferredBytes, bytes.length);
 
+      // The agent's complete response reports the verified whole-file
+      // SHA-256 (Wave H3); the fake client returns verified: true.
+      expect(finalTask.verified, isTrue);
+      expect(finalTask.sha256, '0' * 64);
+
       final reconstructed = BytesBuilder();
       for (final chunk in receivedChunks) {
         reconstructed.add(chunk);
       }
       expect(reconstructed.toBytes(), bytes);
+    });
+
+    test('a download never sets verified/sha256', () async {
+      final dir = await Directory.systemTemp.createTemp('download_unverified_');
+      addTearDown(() => dir.delete(recursive: true));
+      final localPath = '${dir.path}/out.bin';
+
+      final client = _FakeAgentClient(
+        host: _testHost,
+        onDownloadWithStart: (startByte) async {
+          await File(localPath).writeAsBytes(List<int>.filled(10, 7));
+        },
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          transferQueueProvider.overrideWith(
+            () => TransferQueueNotifier(
+              clientFactory: (host, {deviceToken}) => client,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(transferQueueProvider.notifier);
+      final task = TransferTask.download(
+        remotePath: '/remote/file.bin',
+        localPath: localPath,
+        host: _testHost,
+      );
+      notifier.enqueue(task);
+
+      await _waitUntil(() {
+        final t = container
+            .read(transferQueueProvider)
+            .firstWhere((x) => x.id == task.id);
+        return t.status == TransferStatus.completed ||
+            t.status == TransferStatus.failed;
+      });
+
+      final finalTask = container
+          .read(transferQueueProvider)
+          .firstWhere((t) => t.id == task.id);
+      expect(finalTask.status, TransferStatus.completed);
+      expect(finalTask.verified, isFalse);
+      expect(finalTask.sha256, isNull);
     });
   });
 }
@@ -703,7 +755,11 @@ class _FakeAgentClient extends AgentClient {
   }
 
   @override
-  Future<Entry> completeUpload(String sessionId) async {
-    return Entry(name: 'file.bin', path: '/remote/file.bin', isDir: false);
+  Future<UploadCompleteResult> completeUpload(String sessionId) async {
+    return UploadCompleteResult(
+      entry: Entry(name: 'file.bin', path: '/remote/file.bin', isDir: false),
+      verified: true,
+      sha256: '0' * 64,
+    );
   }
 }

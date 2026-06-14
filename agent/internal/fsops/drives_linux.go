@@ -12,8 +12,10 @@ import (
 func platformDrives() ([]Drive, error) {
 	drives := []Drive{}
 
-	// Always include root.
-	drives = append(drives, statDrive("/", "/"))
+	// Always include root. The root mount point is the OS drive on Linux.
+	root := statDrive("/", "/")
+	root.IsOS = true
+	drives = append(drives, root)
 
 	// Parse /proc/mounts for additional interesting mount points.
 	f, err := os.Open("/proc/mounts")

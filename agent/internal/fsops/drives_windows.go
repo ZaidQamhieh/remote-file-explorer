@@ -3,6 +3,8 @@
 package fsops
 
 import (
+	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -14,6 +16,13 @@ func platformDrives() ([]Drive, error) {
 
 	ret, _, _ := getLogicalDrives.Call()
 	mask := uint32(ret)
+
+	// The OS drive is %SystemDrive% (e.g. "C:"). Fall back to "C:" if unset.
+	systemDrive := os.Getenv("SystemDrive")
+	if systemDrive == "" {
+		systemDrive = "C:"
+	}
+	systemDrive = strings.ToUpper(systemDrive)
 
 	var drives []Drive
 	for i := 0; i < 26; i++ {
@@ -32,6 +41,9 @@ func platformDrives() ([]Drive, error) {
 			)
 			d.TotalBytes = int64(lpTotalNumberOfBytes)
 			d.FreeBytes = int64(lpTotalNumberOfFreeBytes)
+			if strings.ToUpper(string(rune('A'+i))+":") == systemDrive {
+				d.IsOS = true
+			}
 			drives = append(drives, d)
 		}
 	}

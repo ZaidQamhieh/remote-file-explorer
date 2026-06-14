@@ -626,6 +626,7 @@ components:
         label: { type: string }
         totalBytes: { type: integer, format: int64 }
         freeBytes: { type: integer, format: int64 }
+        isOS: { type: boolean, description: "True for the drive that contains the operating system." }
 
     Entry:
       type: object

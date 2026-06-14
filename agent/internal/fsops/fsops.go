@@ -204,6 +204,7 @@ type Drive struct {
 	Label      string `json:"label"`
 	TotalBytes int64  `json:"totalBytes"`
 	FreeBytes  int64  `json:"freeBytes"`
+	IsOS       bool   `json:"isOS"`
 }
 
 // --------- ListDir ---------

@@ -2,10 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import 'transfer_speed.dart';
 import 'transfer_state.dart';
 
-/// Bottom sheet listing all active, queued, and recently completed transfers.
+/// Bottom sheet listing all transfers, grouped into collapsible
+/// Active / Queued / Done / Failed sections with live per-task speed + ETA,
+/// swipe-to-pause/resume and swipe-to-remove (with undo), and inline retry on
+/// failures.
+///
+/// All engine interaction goes through [TransferQueueNotifier]; this screen is
+/// pure presentation plus the read-only [transferSamplerProvider] for speed.
 class TransferManagerSheet extends ConsumerWidget {
   const TransferManagerSheet({super.key});
 
@@ -13,17 +21,11 @@ class TransferManagerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final transfers = ref.watch(transferQueueProvider);
 
-    final active = transfers
-        .where((t) =>
-            t.status == TransferStatus.running ||
-            t.status == TransferStatus.queued ||
-            t.status == TransferStatus.paused)
-        .toList();
-    final done = transfers
-        .where((t) =>
-            t.status == TransferStatus.completed ||
-            t.status == TransferStatus.failed)
-        .toList();
+    final groups = groupTransfers(transfers);
+    final doneAndFailed = [
+      ...groups[TransferGroup.done]!,
+      ...groups[TransferGroup.failed]!,
+    ];
 
     return DraggableScrollableSheet(
       expand: false,
@@ -49,16 +51,17 @@ class TransferManagerSheet extends ConsumerWidget {
                     Text('Transfers',
                         style: Theme.of(context).textTheme.titleMedium),
                     const Spacer(),
-                    if (done.isNotEmpty)
-                      TextButton(
+                    if (doneAndFailed.isNotEmpty)
+                      TextButton.icon(
+                        icon: const Icon(Icons.clear_all_rounded, size: 18),
+                        label: const Text('Clear completed'),
                         onPressed: () {
-                          for (final t in done) {
+                          for (final t in doneAndFailed) {
                             ref
                                 .read(transferQueueProvider.notifier)
                                 .remove(t.id);
                           }
                         },
-                        child: const Text('Clear done'),
                       ),
                   ],
                 ),
@@ -70,20 +73,12 @@ class TransferManagerSheet extends ConsumerWidget {
                         controller: controller,
                         padding: const EdgeInsets.only(bottom: Spacing.md),
                         children: [
-                          if (active.isNotEmpty) ...[
-                            _SectionHeader(
-                              label: 'Active',
-                              count: active.length,
-                            ),
-                            for (final t in active) _TransferTile(task: t),
-                          ],
-                          if (done.isNotEmpty) ...[
-                            _SectionHeader(
-                              label: 'Completed',
-                              count: done.length,
-                            ),
-                            for (final t in done) _TransferTile(task: t),
-                          ],
+                          for (final group in TransferGroup.values)
+                            if (groups[group]!.isNotEmpty)
+                              _TransferSection(
+                                group: group,
+                                tasks: groups[group]!,
+                              ),
                         ],
                       ),
               ),
@@ -110,68 +105,163 @@ class TransferManagerSheet extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Section header — groups active vs. completed transfers
+// Grouping
 // ---------------------------------------------------------------------------
 
+/// The collapsible buckets the manager presents.
+///
+/// Note paused tasks fold into [active] (they're in-progress work the user can
+/// resume), shown with a paused indicator — keeping the section list short.
+enum TransferGroup { active, queued, done, failed }
+
+extension TransferGroupLabel on TransferGroup {
+  String get label => switch (this) {
+        TransferGroup.active => 'Active',
+        TransferGroup.queued => 'Queued',
+        TransferGroup.done => 'Done',
+        TransferGroup.failed => 'Failed',
+      };
+}
+
+/// Buckets [tasks] into the four manager groups by [TransferStatus]:
+/// running + paused → active, queued → queued, completed → done,
+/// failed → failed. Always returns an entry for every group (possibly empty),
+/// preserving input order within each bucket.
+Map<TransferGroup, List<TransferTask>> groupTransfers(
+    List<TransferTask> tasks) {
+  final out = {for (final g in TransferGroup.values) g: <TransferTask>[]};
+  for (final t in tasks) {
+    final group = switch (t.status) {
+      TransferStatus.running || TransferStatus.paused => TransferGroup.active,
+      TransferStatus.queued => TransferGroup.queued,
+      TransferStatus.completed => TransferGroup.done,
+      TransferStatus.failed => TransferGroup.failed,
+    };
+    out[group]!.add(t);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Section (collapsible) — header + its tiles
+// ---------------------------------------------------------------------------
+
+class _TransferSection extends StatefulWidget {
+  const _TransferSection({required this.group, required this.tasks});
+
+  final TransferGroup group;
+  final List<TransferTask> tasks;
+
+  @override
+  State<_TransferSection> createState() => _TransferSectionState();
+}
+
+class _TransferSectionState extends State<_TransferSection> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeader(
+          label: widget.group.label,
+          count: widget.tasks.length,
+          expanded: _expanded,
+          onToggle: () => setState(() => _expanded = !_expanded),
+        ),
+        if (_expanded)
+          for (final t in widget.tasks) _TransferTile(task: t),
+      ],
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.count});
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   final String label;
   final int count;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Spacing.md,
-        Spacing.md,
-        Spacing.md,
-        Spacing.xs,
-      ),
-      child: Row(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(width: Spacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 1),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: Radii.chipR,
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.md,
+          Spacing.md,
+          Spacing.md,
+          Spacing.xs,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              expanded
+                  ? Icons.keyboard_arrow_down_rounded
+                  : Icons.keyboard_arrow_right_rounded,
+              size: 18,
+              color: scheme.onSurfaceVariant,
             ),
-            child: Text(
-              '$count',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            const SizedBox(width: Spacing.xs),
+            Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w600,
                   ),
             ),
-          ),
-        ],
+            const SizedBox(width: Spacing.sm),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.sm, vertical: 1),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: Radii.chipR,
+              ),
+              child: Text(
+                '$count',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Transfer tile
+// Transfer tile — swipeable, with live speed/ETA and inline retry
 // ---------------------------------------------------------------------------
 
 class _TransferTile extends ConsumerWidget {
   const _TransferTile({required this.task});
   final TransferTask task;
 
+  /// Whether this task can be paused/resumed (i.e. it's active or queued).
+  bool get _canPauseResume =>
+      task.status == TransferStatus.running ||
+      task.status == TransferStatus.queued ||
+      task.status == TransferStatus.paused;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(transferQueueProvider.notifier);
 
-    return ListTile(
+    final tile = ListTile(
+      key: ValueKey('tile-${task.id}'),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: Spacing.md,
         vertical: Spacing.xs,
@@ -182,8 +272,74 @@ class _TransferTile extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodyLarge,
       ),
-      subtitle: _buildSubtitle(context),
+      subtitle: _buildSubtitle(context, ref, notifier),
       trailing: _buildActions(context, notifier),
+    );
+
+    return Dismissible(
+      key: ValueKey('dismiss-${task.id}'),
+      // Swipe-left (endToStart) = pause/resume; swipe-right (startToEnd) =
+      // remove. Pause/resume is a non-dismissing action (we veto the dismissal
+      // and toggle), remove actually dismisses and offers undo.
+      direction: _canPauseResume
+          ? DismissDirection.horizontal
+          : DismissDirection.startToEnd,
+      background: _swipeBackground(context, removing: true),
+      secondaryBackground: _canPauseResume
+          ? _swipeBackground(context, removing: false)
+          : null,
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.endToStart) {
+          // Pause/resume toggle — never actually dismiss the row.
+          _togglePauseResume(notifier);
+          return false;
+        }
+        // startToEnd → remove with undo.
+        _removeWithUndo(context, ref);
+        return true;
+      },
+      child: tile,
+    );
+  }
+
+  void _togglePauseResume(TransferQueueNotifier notifier) {
+    if (task.status == TransferStatus.paused) {
+      notifier.retry(task.id);
+    } else {
+      notifier.pause(task.id);
+    }
+  }
+
+  void _removeWithUndo(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(transferQueueProvider.notifier);
+    // Capture the task before removal so Undo can re-enqueue an equivalent one.
+    final removed = task;
+    notifier.remove(removed.id);
+    showSuccess(
+      context,
+      'Removed ${removed.displayName}',
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () => notifier.enqueue(reenqueuableCopy(removed)),
+      ),
+    );
+  }
+
+  Widget _swipeBackground(BuildContext context, {required bool removing}) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = removing ? scheme.errorContainer : scheme.tertiaryContainer;
+    final onColor =
+        removing ? scheme.onErrorContainer : scheme.onTertiaryContainer;
+    final icon = removing
+        ? Icons.delete_outline_rounded
+        : (task.status == TransferStatus.paused
+            ? Icons.play_arrow_rounded
+            : Icons.pause_rounded);
+    return Container(
+      color: color,
+      alignment: removing ? Alignment.centerLeft : Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+      child: Icon(icon, color: onColor),
     );
   }
 
@@ -209,10 +365,23 @@ class _TransferTile extends ConsumerWidget {
     }
   }
 
-  Widget? _buildSubtitle(BuildContext context) {
+  Widget? _buildSubtitle(
+      BuildContext context, WidgetRef ref, TransferQueueNotifier notifier) {
     final scheme = Theme.of(context).colorScheme;
     switch (task.status) {
       case TransferStatus.running:
+      case TransferStatus.paused:
+        final paused = task.status == TransferStatus.paused;
+        // Live speed/ETA from the read-only sampler (running tasks only).
+        final eta = paused
+            ? null
+            : ref.watch(transferSamplerProvider)[task.id];
+        final meta = <String>[
+          '${formatSize(task.transferredBytes)} / ${formatSize(task.totalBytes)}',
+          if (paused) 'Paused',
+          if (eta?.speedLabel != null) eta!.speedLabel!,
+          if (eta?.etaLabel != null) eta!.etaLabel!,
+        ].join(' · ');
         return Padding(
           padding: const EdgeInsets.only(top: Spacing.xs),
           child: Column(
@@ -226,18 +395,18 @@ class _TransferTile extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: Spacing.xs),
-              Text(
-                '${formatSize(task.transferredBytes)} / ${formatSize(task.totalBytes)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(meta, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         );
       case TransferStatus.failed:
-        return Text(
-          task.error ?? 'Unknown error',
-          style: TextStyle(color: scheme.error),
-          overflow: TextOverflow.ellipsis,
+        // Inline error text with a Retry button (button lives in trailing).
+        return Padding(
+          padding: const EdgeInsets.only(top: Spacing.xs),
+          child: Text(
+            task.error ?? 'Unknown error',
+            style: TextStyle(color: scheme.error),
+          ),
         );
       case TransferStatus.completed:
         final label = task.kind == TransferKind.upload
@@ -250,8 +419,8 @@ class _TransferTile extends ConsumerWidget {
           style: const TextStyle(color: Brand.online),
           overflow: TextOverflow.ellipsis,
         );
-      default:
-        return Text(task.status.name);
+      case TransferStatus.queued:
+        return const Text('Queued');
     }
   }
 
@@ -260,11 +429,13 @@ class _TransferTile extends ConsumerWidget {
       case TransferStatus.running:
         return IconButton(
           icon: const Icon(Icons.pause),
+          tooltip: 'Pause',
           onPressed: () => notifier.pause(task.id),
         );
       case TransferStatus.paused:
         return IconButton(
           icon: const Icon(Icons.play_arrow),
+          tooltip: 'Resume',
           onPressed: () => notifier.retry(task.id),
         );
       case TransferStatus.failed:
@@ -273,10 +444,12 @@ class _TransferTile extends ConsumerWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.refresh),
+              tooltip: 'Retry',
               onPressed: () => notifier.retry(task.id),
             ),
             IconButton(
               icon: const Icon(Icons.close),
+              tooltip: 'Remove',
               onPressed: () => notifier.remove(task.id),
             ),
           ],
@@ -284,10 +457,41 @@ class _TransferTile extends ConsumerWidget {
       case TransferStatus.completed:
         return IconButton(
           icon: const Icon(Icons.close),
+          tooltip: 'Remove',
           onPressed: () => notifier.remove(task.id),
         );
-      default:
-        return null;
+      case TransferStatus.queued:
+        return IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Remove',
+          onPressed: () => notifier.remove(task.id),
+        );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Re-enqueue helper (undo)
+// ---------------------------------------------------------------------------
+
+/// Builds a fresh [TransferTask] equivalent to [task] so a removed transfer can
+/// be re-queued by the Undo action.
+///
+/// The engine's task factories mint a new id and reset progress/status to a
+/// clean `queued` state, which is exactly what re-enqueueing needs — a removed
+/// task restarts rather than trying to resume an id the queue no longer holds.
+TransferTask reenqueuableCopy(TransferTask task) {
+  return switch (task.kind) {
+    TransferKind.upload => TransferTask.upload(
+        localPath: task.localPath,
+        remotePath: task.remotePath,
+        host: task.host,
+        overwrite: task.overwrite,
+      ),
+    TransferKind.download => TransferTask.download(
+        remotePath: task.remotePath,
+        localPath: task.localPath,
+        host: task.host,
+      ),
+  };
 }

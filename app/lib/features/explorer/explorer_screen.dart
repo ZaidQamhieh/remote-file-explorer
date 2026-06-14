@@ -16,6 +16,7 @@ import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
+import '../transfers/widgets/mini_transfer_bar.dart';
 import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
@@ -101,7 +102,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       },
       child: Scaffold(
         appBar: _buildAppBar(context, state, isFav, client),
-        body: _buildBody(context, state, client),
+        body: Column(
+          children: [
+            Expanded(child: _buildBody(context, state, client)),
+            // Thin live-progress strip; collapses to nothing when idle.
+            const MiniTransferBar(),
+          ],
+        ),
         floatingActionButton:
             state.multiSelect ? null : _buildFab(context, state, client),
         bottomNavigationBar: state.multiSelect

@@ -218,6 +218,59 @@ func TestUploadChunkHandler_OversizedBodyIs413(t *testing.T) {
 	}
 }
 
+// TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256 verifies that a
+// successful POST /transfers/{id}/complete response includes verified=true
+// and the expected whole-file sha256 (H3 — post-transfer integrity check).
+func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+
+	content := []byte("hello world, this is the uploaded file content")
+	wantSHA256 := sha256hex(content)
+	target := filepath.Join(t.TempDir(), "out.bin")
+
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, wantSHA256, false); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	// Write the single chunk.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content)))
+	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
+	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
+	uploadChunkHandler(tm)(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("upload chunk: expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// Complete the transfer.
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/transfers/"+id+"/complete", nil)
+	req = withURLParam(req, map[string]string{"id": id})
+	completeTransferHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	verified, ok := got["verified"].(bool)
+	if !ok || !verified {
+		t.Fatalf("expected verified=true, got %+v", got["verified"])
+	}
+	if got["sha256"] != wantSHA256 {
+		t.Fatalf("expected sha256=%s, got %v", wantSHA256, got["sha256"])
+	}
+	// Sanity: the usual Entry fields are still present.
+	if got["path"] == nil || got["size"] == nil {
+		t.Fatalf("expected Entry fields in response, got %+v", got)
+	}
+}
+
 // TestUploadChunkHandler_ExactSizeIsAccepted sanity-checks that a body
 // exactly matching chunkSize still succeeds.
 func TestUploadChunkHandler_ExactSizeIsAccepted(t *testing.T) {

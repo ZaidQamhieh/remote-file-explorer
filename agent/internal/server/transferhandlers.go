@@ -241,7 +241,9 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		// isn't otherwise scoped to the device that opened it — so a jailed
 		// device must not be able to "complete" (i.e. trigger the final
 		// rename for) a session targeting a path outside its own jail.
+		var verifiedSHA256 string
 		if t, err := tm.Status(id); err == nil && t != nil {
+			verifiedSHA256 = t.SHA256
 			if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
 				handleFsError(w, resolveErr)
 				return
@@ -261,16 +263,30 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+		// Complete() only returns successfully once the whole-file SHA-256 has
+		// been verified against t.SHA256 (captured above), so it's safe to
+		// report that hash back to the client as the verified checksum.
 		entry, err := ops.Meta(targetPath)
 		if err != nil {
 			// Transfer succeeded but meta failed — return a minimal entry.
 			writeJSON(w, http.StatusOK, map[string]any{
 				"path":     targetPath,
 				"modified": time.Now(),
+				"sha256":   verifiedSHA256,
+				"verified": true,
 			})
 			return
 		}
-		writeJSON(w, http.StatusOK, entry)
+		// Marshal the Entry and merge in the verification fields, so the
+		// response keeps all Entry fields (including omitempty behavior)
+		// plus sha256/verified.
+		resp := map[string]any{}
+		if b, marshalErr := json.Marshal(entry); marshalErr == nil {
+			_ = json.Unmarshal(b, &resp)
+		}
+		resp["sha256"] = verifiedSHA256
+		resp["verified"] = true
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

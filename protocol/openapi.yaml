@@ -313,9 +313,31 @@ paths:
   /transfers/{id}/complete:
     post:
       summary: Finalize upload (verify whole-file hash, atomic rename)
+      description: >
+        Verifies the whole-file SHA-256 against the hash supplied at session
+        open, then atomically renames the temp file to its final destination.
+        A 200 response means the file is integrity-verified: it includes
+        sha256 (the verified whole-file hash) and verified=true alongside the
+        usual Entry fields.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
-        "200": { description: Completed, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "200":
+          description: >
+            Completed and integrity-verified. Returns the Entry fields plus
+            sha256 (the verified whole-file SHA-256) and verified=true.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Entry"
+                  - type: object
+                    properties:
+                      sha256:
+                        type: string
+                        description: Verified whole-file SHA-256 hash (hex-encoded).
+                      verified:
+                        type: boolean
+                        description: Always true on a successful complete.
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422":

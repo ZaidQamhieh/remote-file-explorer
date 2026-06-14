@@ -6,6 +6,7 @@ import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import 'settings_screen.dart' show FileVisibilitySection;
+import 'update_tile.dart';
 import 'widgets/settings_section.dart';
 
 /// Global **App Settings** — the single "general settings" surface (Wave 0).
@@ -168,6 +169,13 @@ class AppSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Updates',
+            icon: Icons.system_update_alt_outlined,
+            padded: false,
+            children: const [UpdateTile()],
           ),
           const SizedBox(height: Spacing.md),
           // App-default file visibility (per-device overrides live on each

@@ -8,14 +8,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../core/api/agent_client.dart';
-import '../../core/api/providers.dart';
+import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/models/app_release.dart';
-import '../../core/models/host.dart';
+import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
 
-/// A Settings tile that checks the host for a newer APK and installs it,
-/// with clear feedback at every stage. Hidden on non-Android platforms.
+/// A Settings tile that checks GitHub Releases for a newer APK and installs
+/// it, with clear feedback at every stage. Hidden on non-Android platforms.
+///
+/// This is app-wide and host-independent — it lives once in App Settings,
+/// not per paired device.
 ///
 /// Flow: tap → check → (if newer) a progress dialog downloads the APK with a
 /// live percentage, then hands it to Android's package installer via a native
@@ -24,8 +26,7 @@ import '../../core/update/update_service.dart';
 /// completion is confirmed when the app resumes by re-reading the installed
 /// build number.
 class UpdateTile extends ConsumerStatefulWidget {
-  const UpdateTile({super.key, required this.host});
-  final Host host;
+  const UpdateTile({super.key});
 
   @override
   ConsumerState<UpdateTile> createState() => _UpdateTileState();
@@ -95,9 +96,9 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       _status = 'Checking for updates…';
       _statusIsError = false;
     });
-    final client = await buildClientForHost(ref.read, widget.host.id);
+    final source = GithubUpdateSource();
     try {
-      final AppRelease? rel = await client.latestRelease();
+      final AppRelease? rel = await source.latestRelease();
       final info = await PackageInfo.fromPlatform();
       final installed = int.tryParse(info.buildNumber) ?? 0;
 
@@ -131,7 +132,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         barrierDismissible: false,
         builder:
             (_) => _UpdateProgressDialog(
-              client: client,
+              source: source,
               release: rel,
               apk: apk,
               onLaunchInstaller: _launchInstaller,
@@ -155,8 +156,6 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         _status = 'Update failed: $e';
         _statusIsError = true;
       });
-    } finally {
-      client.close();
     }
   }
 
@@ -230,13 +229,13 @@ enum _Stage { downloading, opening, error, cancelled }
 /// the installer, surfacing a clear result for every outcome.
 class _UpdateProgressDialog extends StatefulWidget {
   const _UpdateProgressDialog({
-    required this.client,
+    required this.source,
     required this.release,
     required this.apk,
     required this.onLaunchInstaller,
   });
 
-  final AgentClient client;
+  final GithubUpdateSource source;
   final AppRelease release;
   final File apk;
   final Future<void> Function(File apk) onLaunchInstaller;
@@ -282,7 +281,8 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       // opened, so any existing bytes belong to exactly this download.
       final startByte =
           await widget.apk.exists() ? await widget.apk.length() : 0;
-      await widget.client.downloadApk(
+      await widget.source.downloadApk(
+        release: widget.release,
         localFile: widget.apk,
         startByte: startByte,
         cancelToken: _cancelToken,
@@ -310,12 +310,6 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       setState(() {
         _stage = _Stage.error;
         _errorMsg = '$e';
-      });
-    } on AgentApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _stage = _Stage.error;
-        _errorMsg = e.message.isNotEmpty ? e.message : '$e';
       });
     } catch (e) {
       if (!mounted) return;
@@ -438,20 +432,5 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
           FilledButton(onPressed: _download, child: const Text('Retry')),
         ];
     }
-  }
-}
-
-/// Standalone screen hosting [UpdateTile], reachable from the host card menu
-/// and the launch-time "Update available" banner.
-class UpdateScreen extends StatelessWidget {
-  const UpdateScreen({super.key, required this.host});
-  final Host host;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(host.label)),
-      body: ListView(children: [UpdateTile(host: host)]),
-    );
   }
 }

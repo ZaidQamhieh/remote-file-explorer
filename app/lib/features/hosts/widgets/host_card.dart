@@ -1,23 +1,17 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
-import '../../../core/models/app_release.dart';
 import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
-import '../../../core/update/update_service.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
-import '../../settings/update_tile.dart';
 import '../../transfers/transfer_manager.dart';
 import 'storage_gauge.dart';
 
@@ -38,8 +32,8 @@ Widget explorerRootFor(Health? health, Host host) {
 }
 
 /// A single host's dashboard card: status, agent version, active-network
-/// chip, storage gauges, an update banner (when applicable), and a quick
-/// actions row (Browse / Search / Transfers / ⋯).
+/// chip, storage gauges, and a quick actions row (Browse / Search /
+/// Transfers / ⋯).
 ///
 /// Pings the host's `/health` on mount to determine online/offline state and,
 /// when online, fetches `AgentClient.drives()` for the storage gauges
@@ -55,8 +49,9 @@ class HostCard extends ConsumerStatefulWidget {
   final Host host;
   final HostStore store;
 
-  /// Whether this is the first (most-recently-used) host — only that card
-  /// kicks off the best-effort launch-time update check.
+  /// Whether this is the first (most-recently-used) host in the list.
+  /// Currently unused by the card itself — kept so callers (the host list)
+  /// don't need to change — but reserved for future first-card-only behavior.
   final bool isFirst;
 
   @override
@@ -79,42 +74,11 @@ class _HostCardState extends ConsumerState<HostCard> {
   /// Last-seen timestamp loaded from the store, shown when offline.
   DateTime? _lastSeen;
 
-  /// A newer release discovered by the best-effort launch-time check, shown
-  /// as an in-card M3 banner. `null` until a check completes and finds one.
-  AppRelease? _updateAvailable;
-  bool _bannerDismissed = false;
-
   @override
   void initState() {
     super.initState();
     _lastSeen = widget.store.getLastSeen(widget.host.id);
     _pingFuture = _ping();
-    if (widget.isFirst && Platform.isAndroid) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _maybeOfferUpdate();
-      });
-    }
-  }
-
-  /// Best-effort: check the host for a newer APK and surface the in-card
-  /// banner. Swallows all errors so a missing/old agent never blocks the
-  /// host list.
-  Future<void> _maybeOfferUpdate() async {
-    if (!Platform.isAndroid) return;
-    AgentClient? client;
-    try {
-      client = await buildClientForHost(ref.read, widget.host.id);
-      final rel = await client.latestRelease();
-      final info = await PackageInfo.fromPlatform();
-      final installed = int.tryParse(info.buildNumber) ?? 0;
-      if (!isUpdateAvailable(installedBuild: installed, release: rel)) return;
-      if (!mounted) return;
-      setState(() => _updateAvailable = rel);
-    } catch (_) {
-      // best-effort; never block the host list
-    } finally {
-      client?.close();
-    }
   }
 
   Future<Health?> _ping() async {
@@ -221,12 +185,6 @@ class _HostCardState extends ConsumerState<HostCard> {
     );
   }
 
-  void _openUpdate(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => UpdateScreen(host: widget.host)));
-  }
-
   Future<void> _confirmRemove(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -293,12 +251,6 @@ class _HostCardState extends ConsumerState<HostCard> {
                     lastSeen: _lastSeen,
                   ),
                   if (online) ..._buildGauges(context),
-                  if (_updateAvailable != null && !_bannerDismissed)
-                    _UpdateBanner(
-                      release: _updateAvailable!,
-                      onUpdate: () => _openUpdate(context),
-                      onDismiss: () => setState(() => _bannerDismissed = true),
-                    ),
                   const SizedBox(height: Spacing.md),
                   _QuickActions(
                     online: online,
@@ -571,66 +523,6 @@ class _DriveGaugesState extends State<_DriveGauges> {
 }
 
 // ---------------------------------------------------------------------------
-// Update-available banner (M3 style, inline inside the card)
-// ---------------------------------------------------------------------------
-
-class _UpdateBanner extends StatelessWidget {
-  const _UpdateBanner({
-    required this.release,
-    required this.onUpdate,
-    required this.onDismiss,
-  });
-
-  final AppRelease release;
-  final VoidCallback onUpdate;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      margin: const EdgeInsets.only(top: Spacing.sm),
-      padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.md,
-        vertical: Spacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: Radii.smR,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.system_update_rounded,
-            color: scheme.onSecondaryContainer,
-            size: 20,
-          ),
-          const SizedBox(width: Spacing.sm),
-          Expanded(
-            child: Text(
-              'v${release.versionName} available',
-              style: textTheme.bodyMedium?.copyWith(
-                color: scheme.onSecondaryContainer,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          TextButton(onPressed: onUpdate, child: const Text('Update')),
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 18),
-            tooltip: 'Dismiss',
-            color: scheme.onSecondaryContainer,
-            onPressed: onDismiss,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Quick actions row: Browse (filled), Search (tonal), ⋯ menu
 // ---------------------------------------------------------------------------
 
@@ -656,9 +548,10 @@ class _QuickActions extends StatelessWidget {
     return Row(
       children: [
         // Browse stays enabled offline — cached/offline browsing works.
-        // `Flexible` + ellipsis keeps the row from overflowing at large
-        // `MediaQuery.textScaler` values (a11y: 1.3×–2.0×).
-        Flexible(
+        // `Expanded` splits the row evenly between Browse and Search (the ⋯
+        // menu keeps its intrinsic width); ellipsis is kept as a fallback for
+        // extreme a11y text-scale values (1.3×–2.0×).
+        Expanded(
           child: FilledButton.icon(
             onPressed: onBrowse,
             icon: const Icon(Icons.folder_open_rounded, size: 18),
@@ -666,14 +559,14 @@ class _QuickActions extends StatelessWidget {
           ),
         ),
         const SizedBox(width: Spacing.sm),
-        Flexible(
+        Expanded(
           child: FilledButton.tonalIcon(
             onPressed: online ? onSearch : null,
             icon: const Icon(Icons.search_rounded, size: 18),
             label: const Text('Search', overflow: TextOverflow.ellipsis),
           ),
         ),
-        const Spacer(),
+        const SizedBox(width: Spacing.sm),
         PopupMenuButton<String>(
           tooltip: 'More',
           shape: const RoundedRectangleBorder(borderRadius: Radii.smR),

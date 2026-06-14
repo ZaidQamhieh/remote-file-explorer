@@ -564,6 +564,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             child: EntryGridCell(
               entry: entry,
               client: client,
+              hostId: widget.host.id,
               selected: state.selected.contains(entry.path),
               multiSelect: state.multiSelect,
               isFavorite: favoritePaths.contains(entry.path),
@@ -592,6 +593,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   void _showMeta(BuildContext context, Entry entry, AgentClient client) {
+    // Pass the visible listing so the preview can swipe between previewable
+    // siblings. Captured at open time — good enough for paging the current view.
+    final siblings = ref.read(explorerProvider(_arg)).displayEntries;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -600,6 +604,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         host: widget.host,
         client: client,
         onChanged: _notifier.refresh,
+        siblings: siblings,
       ),
     );
   }

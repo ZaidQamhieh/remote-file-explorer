@@ -20,6 +20,16 @@ const int kMaxEditableBytes = 5 * 1024 * 1024; // 5 MiB
 
 /// A simple `Scaffold` shell shared by all preview viewers: an `AppBar`
 /// with the file name, and a body that reflects [PreviewLoadState].
+///
+/// Two roles:
+/// - **Standalone** (default) — used when a viewer is shown on its own (the
+///   single-entry preview path, or a viewer's own internal screen): it builds
+///   its own [AppBar] from [title]/[actions].
+/// - **Chromeless** — when [chromeless] is `true`, the scaffold renders only
+///   the [body] with no app bar. The host (the [PreviewPager]) then overlays a
+///   single shared top bar across all pages so the action row stays identical
+///   as the user swipes between sibling files. [title]/[actions] are ignored
+///   in this mode.
 class PreviewScaffold extends StatelessWidget {
   const PreviewScaffold({
     super.key,
@@ -27,6 +37,7 @@ class PreviewScaffold extends StatelessWidget {
     required this.body,
     this.backgroundColor,
     this.actions,
+    this.chromeless = false,
   });
 
   final String title;
@@ -34,12 +45,26 @@ class PreviewScaffold extends StatelessWidget {
   final Color? backgroundColor;
   final List<Widget>? actions;
 
+  /// When `true`, render only [body] (no app bar) so a host can supply shared
+  /// chrome. Defaults to `false` (standalone, builds its own app bar).
+  final bool chromeless;
+
   @override
   Widget build(BuildContext context) {
     // Image/video previews sit on a black canvas — render the chrome as a
     // translucent overlay with light foreground so it reads on dark media
     // without fighting the surrounding theme.
     final onDark = backgroundColor == Colors.black;
+
+    if (chromeless) {
+      // No app bar — the pager owns a single shared top bar across all pages.
+      // Keep the body transparent so the pager's canvas shows through.
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: body,
+      );
+    }
+
     final appBar = onDark
         ? AppBar(
             backgroundColor: Colors.black.withValues(alpha: 0.45),

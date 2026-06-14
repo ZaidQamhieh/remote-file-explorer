@@ -22,11 +22,18 @@ class MetaSheet extends ConsumerStatefulWidget {
     required this.host,
     required this.client,
     this.onChanged,
+    this.siblings,
   });
 
   final Entry entry;
   final Host host;
   final AgentClient client;
+
+  /// The visible listing this entry belongs to (the explorer's
+  /// `displayEntries`). When provided, the in-app preview becomes swipeable
+  /// between previewable siblings. Null for callers without a listing (the
+  /// single-entry preview behaviour is preserved).
+  final List<Entry>? siblings;
 
   /// Called after a successful rename or delete so the caller (the explorer
   /// screen) can refresh its listing — otherwise the listing + its cache
@@ -311,6 +318,8 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       entry: _entry,
       host: widget.host,
       client: widget.client,
+      siblings: widget.siblings,
+      onChanged: widget.onChanged,
     );
   }
 

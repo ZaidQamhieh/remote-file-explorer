@@ -4,6 +4,7 @@ import '../../../core/api/agent_client.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
+import '../../preview/image_preview.dart';
 import '../thumbnail_image.dart';
 import 'entry_drag.dart';
 
@@ -21,12 +22,18 @@ class EntryGridCell extends StatelessWidget {
     required this.multiSelect,
     required this.onTap,
     required this.onLongPress,
+    this.hostId,
     this.onMoveInto,
     this.isFavorite = false,
   });
 
   final Entry entry;
   final AgentClient client;
+
+  /// The host this entry lives on — used to build a stable, host-scoped
+  /// [Hero] tag so an image thumbnail flies into its full-screen preview.
+  /// When null, the thumbnail is not wrapped in a [Hero].
+  final String? hostId;
   final bool selected;
   final bool multiSelect;
   final VoidCallback onTap;
@@ -36,6 +43,18 @@ class EntryGridCell extends StatelessWidget {
   /// Whether [entry] is a favorited folder — shows a small star badge on the
   /// leading icon/thumbnail container. Has no effect for files.
   final bool isFavorite;
+
+  /// Wraps [child] in a [Hero] when [hostId] is set so the thumbnail animates
+  /// into the full-screen image preview (matching tag). A cheap flight on Skia
+  /// (transform/opacity only — no shaders).
+  Widget _maybeHero(Widget child) {
+    if (hostId == null) return child;
+    return Hero(
+      tag: imagePreviewHeroTag(hostId!, entry.path),
+      // Keep the rounded thumbnail shape through the flight.
+      child: child,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,16 +86,18 @@ class EntryGridCell extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (isImage)
-                    ClipRRect(
-                      borderRadius: Radii.chipR,
-                      child: SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: ThumbnailImage(
-                          entry: entry,
-                          client: client,
-                          fallback: Center(
-                              child: EntryLeading(entry: entry, size: 40)),
+                    _maybeHero(
+                      ClipRRect(
+                        borderRadius: Radii.chipR,
+                        child: SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: ThumbnailImage(
+                            entry: entry,
+                            client: client,
+                            fallback: Center(
+                                child: EntryLeading(entry: entry, size: 40)),
+                          ),
                         ),
                       ),
                     )

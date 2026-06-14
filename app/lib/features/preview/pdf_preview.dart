@@ -15,10 +15,15 @@ class PdfPreviewScreen extends StatefulWidget {
     super.key,
     required this.entry,
     required this.client,
+    this.chromeless = false,
   });
 
   final Entry entry;
   final AgentClient client;
+
+  /// When `true`, omit the app bar so a host ([PreviewPager]) can overlay one
+  /// shared top bar across sibling pages.
+  final bool chromeless;
 
   @override
   State<PdfPreviewScreen> createState() => _PdfPreviewScreenState();
@@ -65,6 +70,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   Widget build(BuildContext context) {
     return PreviewScaffold(
       title: widget.entry.name,
+      chromeless: widget.chromeless,
       body: FutureBuilder<PdfController>(
         future: _future,
         builder: (context, snapshot) {

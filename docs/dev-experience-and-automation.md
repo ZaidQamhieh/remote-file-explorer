@@ -1,7 +1,20 @@
 # Developer Experience & Automation Plan — Remote File Explorer
 
-**Status: PLANNED, NOT STARTED.** Written 2026-06-13. Companion to
+**Status: IN PROGRESS.** Written 2026-06-13. Companion to
 `next-waves-addendum.md`, `feature-roadmap.md`, and `FUTURE_FEATURES.md`.
+
+**Done (2026-06-14):** Track 1.1 (repo `CLAUDE.md`) + Track 6 (token-discipline
+policy in it) — earlier. Then: Track 1.2 (`architecture.md` living code map),
+Track 1.3 (`WAVE_RUNBOOK.md` + sub-agent brief), Track 3.1 + Track 4.1 (Lefthook
+pre-commit format/analyze/vet + pre-push affected tests, via `lefthook.yml`), and
+CI format gates (gofmt + `dart format`). Track 5.1 (CD job) shipped separately.
+
+**Next un-started (highest value first):** Track 2 (codegen — `freezed`/
+`json_serializable` for models + `openapi-generator`). This is the biggest
+*structural* win but a token-heavy, behavior-sensitive refactor (touches all 11
+models + call sites) — do it as its own focused, tested wave, ideally when a
+contract change is already due, not as a drive-by. Then Track 3.2 (stricter
+lints), Track 4.2 (fake in-memory agent), Track 5.3 (structured agent logging).
 
 This doc is **not features.** It's the meta-work that makes the app cheaper and
 faster for an AI agent (Claude) to develop — less token spend, more automation,

@@ -5,6 +5,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
+import '../../core/models/drive.dart';
 import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
@@ -12,8 +13,6 @@ import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
-import 'update_tile.dart';
-import 'widgets/device_view_overrides_section.dart';
 import 'widgets/settings_section.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
@@ -29,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   AgentClient? _client;
   AgentSettings? _settings;
   List<Device> _devices = const [];
+  List<Drive> _drives = const [];
   bool _loading = true;
   String? _error;
 
@@ -56,10 +56,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final client = await buildClientForHost(ref.read, widget.host.id);
       final settings = await client.getSettings();
       final devices = await client.listDevices();
+      final drives = await client.drives();
       setState(() {
         _client = client;
         _settings = settings;
         _devices = devices;
+        _drives = drives;
         _loading = false;
       });
     } catch (e) {
@@ -196,6 +198,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildBody(BuildContext context) {
     final s = _settings!;
     final scheme = Theme.of(context).colorScheme;
+    final drivesWithCapacity =
+        _drives.where((d) => (d.totalBytes ?? 0) > 0).toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         Spacing.md,
@@ -276,8 +280,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        DeviceViewOverridesSection(hostId: widget.host.id),
-        const SizedBox(height: Spacing.md),
         DeviceVisibilityOverrideSection(hostId: widget.host.id),
         const SizedBox(height: Spacing.md),
         SettingsSection(
@@ -289,25 +291,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
-          title: 'Updates',
-          icon: Icons.system_update_alt_outlined,
-          padded: false,
-          children: [UpdateTile(host: widget.host)],
-        ),
-        const SizedBox(height: Spacing.md),
-        SettingsSection(
           title: 'About',
           icon: Icons.info_outline,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Host'),
+              title: const Text('PC name'),
               subtitle: Text(
-                widget.host.label.isNotEmpty
-                    ? widget.host.label
-                    : widget.host.address,
+                s.agentName.isNotEmpty
+                    ? s.agentName
+                    : (widget.host.label.isNotEmpty
+                        ? widget.host.label
+                        : widget.host.address),
               ),
             ),
+            if (drivesWithCapacity.isNotEmpty) ...[
+              const Divider(height: Spacing.lg),
+              for (final drive in drivesWithCapacity) _DriveRow(drive: drive),
+            ],
           ],
         ),
       ],
@@ -468,8 +469,7 @@ class FileVisibilitySection extends ConsumerWidget {
 /// default"** (inherit the global visibility set in App Settings) and can be
 /// flipped to **"Override"** with a host-specific [VisibilityPrefs]. Toggling
 /// the override on seeds it from the host's current effective visibility so
-/// nothing jumps; toggling off clears it. Matches the
-/// [DeviceViewOverridesSection] interaction pattern.
+/// nothing jumps; toggling off clears it.
 class DeviceVisibilityOverrideSection extends ConsumerWidget {
   const DeviceVisibilityOverrideSection({super.key, required this.hostId});
 
@@ -683,6 +683,69 @@ class _DeviceRow extends StatelessWidget {
       title: Text(d.label),
       subtitle: Text(status, style: TextStyle(color: statusColor)),
       trailing: trailing,
+    );
+  }
+}
+
+/// One drive/mount point in the About section: its label (or path) as the
+/// header, with used/total capacity and free space beneath. The drive
+/// containing the OS gets a distinct icon and a note in the subtitle. Drives
+/// with no known capacity (`totalBytes` null or 0) are skipped by the caller.
+class _DriveRow extends StatelessWidget {
+  const _DriveRow({required this.drive});
+
+  final Drive drive;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final total = drive.totalBytes ?? 0;
+    final free = drive.freeBytes ?? 0;
+    final used = total - free;
+    final name =
+        (drive.label != null && drive.label!.isNotEmpty)
+            ? drive.label!
+            : drive.path;
+
+    final capacityLine =
+        'Used ${formatSize(used)} of ${formatSize(total)} · '
+        '${formatSize(free)} free';
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        drive.isOS ? Icons.memory : Icons.storage_outlined,
+        color: drive.isOS ? scheme.primary : scheme.onSurfaceVariant,
+      ),
+      title: Row(
+        children: [
+          Expanded(child: Text(name)),
+          if (drive.isOS) ...[
+            const SizedBox(width: Spacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.xs,
+                vertical: 1,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'OS',
+                style: TextStyle(
+                  color: scheme.onPrimaryContainer,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      subtitle: Text(
+        drive.isOS ? '$capacityLine · contains the OS' : capacityLine,
+      ),
     );
   }
 }

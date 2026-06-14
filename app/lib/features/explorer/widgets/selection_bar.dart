@@ -6,9 +6,9 @@ import '../../../core/models/host.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import '../../transfers/transfer_state.dart';
+import '../clipboard_state.dart';
 import '../explorer_state.dart';
-import 'conflict_resolution_dialog.dart';
-import 'destination_picker_sheet.dart';
+import 'batch_report.dart';
 
 /// A labelled icon action used in the bottom contextual action bar — tonal
 /// icon button over a small caption, for tidier iconography than bare
@@ -69,7 +69,12 @@ class BarAction extends StatelessWidget {
 
 /// Bottom contextual action bar shown while one or more entries are
 /// selected: `surfaceContainerHigh` surface with r28 top corners, holding
-/// Move / Copy / Download / Delete batch actions (Delete in `error` color).
+/// Cut / Copy / Download / Delete batch actions (Delete in `error` color).
+///
+/// Cut and Copy fill the app-scoped [clipboardProvider] (see
+/// `clipboard_state.dart`) instead of moving/copying immediately — the user
+/// then navigates to a destination folder and taps the Paste FAB (see
+/// `explorer_screen.dart`'s `_buildFab`/`_paste`).
 ///
 /// The selection count + select-all/invert controls live in the app bar
 /// (see `explorer_screen.dart`'s `_SelectionAppBar`), not here — this bar is
@@ -110,14 +115,14 @@ class SelectionBar extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             BarAction(
-              icon: Icons.drive_file_move_rounded,
-              label: 'Move',
-              onPressed: () => _showDestPicker(context, 'move'),
+              icon: Icons.content_cut,
+              label: 'Cut',
+              onPressed: () => _cutSelected(context, ref),
             ),
             BarAction(
               icon: Icons.copy_outlined,
               label: 'Copy',
-              onPressed: () => _showDestPicker(context, 'copy'),
+              onPressed: () => _copySelected(context, ref),
             ),
             BarAction(
               icon: Icons.download_outlined,
@@ -136,130 +141,28 @@ class SelectionBar extends ConsumerWidget {
     );
   }
 
-  Future<void> _showDestPicker(BuildContext context, String action) async {
-    final dest = await showDestinationPicker(
-      context,
-      hostId: host.id,
-      originPath: state.currentPath,
-      itemCount: state.selected.length,
-      isCopy: action == 'copy',
-    );
-    if (dest == null || !context.mounted) return;
-
-    final sources = state.selected.toList();
-    var duplicate = false;
-    var overwrite = false;
-    var effectiveSources = sources;
-
-    // Pre-flight: does anything we're about to copy/move collide with a name
-    // already in `dest`? Decided here, in widget context, BEFORE the
-    // operation is issued — `_reportBatch` below still handles whatever
-    // per-item failures come back regardless.
-    try {
-      final colliding = await notifier.collidingBasenames(dest, sources);
-      if (colliding.isNotEmpty) {
-        if (!context.mounted) return;
-        final resolution = await showConflictResolutionDialog(
-          context,
-          collidingCount: colliding.length,
-          totalCount: sources.length,
-          destLabel: folderLabel(dest),
-        );
-        switch (resolution) {
-          case ConflictResolution.cancel:
-            return;
-          case ConflictResolution.keepBoth:
-            duplicate = true;
-          case ConflictResolution.overwrite:
-            overwrite = true;
-          case ConflictResolution.skip:
-            effectiveSources = sources
-                .where((p) => !colliding.contains(basenameOf(p)))
-                .toList();
-            if (effectiveSources.isEmpty) {
-              if (context.mounted) {
-                showInfo(context, 'All selected items already exist in '
-                    '${folderLabel(dest)} — nothing to '
-                    '${action == 'copy' ? 'copy' : 'move'}');
-              }
-              return;
-            }
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showError(context, 'Could not check ${folderLabel(dest)} for '
-            'existing items: $e',
-            onRetry: () => _showDestPicker(context, action));
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    try {
-      final res = action == 'copy'
-          ? await notifier.copySelected(dest,
-              sources: effectiveSources,
-              duplicate: duplicate,
-              overwrite: overwrite)
-          : await notifier.moveSelected(dest,
-              sources: effectiveSources,
-              duplicate: duplicate,
-              overwrite: overwrite);
-      if (context.mounted) {
-        await _reportBatch(
-            context, res, action == 'copy' ? 'Copied' : 'Moved');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showError(context, '${action == 'copy' ? 'Copy' : 'Move'} failed: $e',
-            onRetry: () => _showDestPicker(context, action));
-      }
-    }
+  /// Fills the clipboard (copy mode) with the current selection and clears
+  /// it — paste happens later, from any folder on this host (see
+  /// `explorer_screen.dart`'s `_paste`).
+  void _copySelected(BuildContext context, WidgetRef ref) {
+    final paths = state.selected.toList();
+    final count = paths.length;
+    ref.read(clipboardProvider.notifier).copy(paths, host.id);
+    notifier.clearSelection();
+    showSuccess(context,
+        '$count item${count == 1 ? '' : 's'} copied — open a folder and tap Paste');
   }
 
-  /// Inspects a batch operation [res] for per-item failures and either shows a
-  /// success snackbar or a dialog listing the failed items.
-  Future<void> _reportBatch(BuildContext context, Map<String, dynamic> res,
-      String successVerb) async {
-    final results = (res['results'] as List?) ?? const [];
-    final failed = results
-        .whereType<Map>()
-        .where((r) => r['ok'] == false)
-        .toList();
-    if (!context.mounted) return;
-    if (failed.isEmpty) {
-      final n = results.length;
-      showSuccess(context, '$successVerb $n item${n == 1 ? '' : 's'}');
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('$successVerb with ${failed.length} error(s)'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: failed.map((f) {
-              final err = f['error'];
-              final msg = err is Map
-                  ? (err['message'] ?? err['code'] ?? 'failed')
-                  : 'failed';
-              return ListTile(
-                dense: true,
-                title: Text('${f['path'] ?? '?'}'),
-                subtitle: Text('$msg'),
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-        ],
-      ),
-    );
+  /// Fills the clipboard (cut mode) with the current selection and clears
+  /// it — paste happens later, from any folder on this host (see
+  /// `explorer_screen.dart`'s `_paste`).
+  void _cutSelected(BuildContext context, WidgetRef ref) {
+    final paths = state.selected.toList();
+    final count = paths.length;
+    ref.read(clipboardProvider.notifier).cut(paths, host.id);
+    notifier.clearSelection();
+    showSuccess(context,
+        '$count item${count == 1 ? '' : 's'} cut — open a folder and tap Paste');
   }
 
   Future<void> _downloadSelected(
@@ -305,7 +208,7 @@ class SelectionBar extends ConsumerWidget {
       try {
         final res = await notifier.deleteSelected();
         if (context.mounted) {
-          await _reportBatch(context, res, 'Deleted');
+          await reportBatchResult(context, res, 'Deleted');
         }
       } catch (e) {
         if (context.mounted) showError(context, 'Delete failed: $e');

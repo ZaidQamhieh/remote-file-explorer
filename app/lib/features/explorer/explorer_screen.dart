@@ -16,8 +16,10 @@ import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
+import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
+import 'widgets/batch_report.dart';
 import 'widgets/breadcrumb_bar.dart';
 import 'widgets/conflict_resolution_dialog.dart';
 import 'widgets/create_menu.dart';
@@ -597,10 +599,26 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   Widget _buildFab(
       BuildContext context, ExplorerState state, AgentClient client) {
+    final clipboard = ref.watch(clipboardProvider);
+    final showPaste = clipboard != null &&
+        !clipboard.isEmpty &&
+        clipboard.hostId == widget.host.id &&
+        !state.multiSelect;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        if (showPaste) ...[
+          FloatingActionButton.small(
+            heroTag: 'fab_paste',
+            tooltip: 'Paste ${clipboard.paths.length} item'
+                '${clipboard.paths.length == 1 ? '' : 's'}',
+            onPressed: () => _paste(context, state, clipboard),
+            child: const Icon(Icons.content_paste),
+          ),
+          const SizedBox(height: 8),
+        ],
         FloatingActionButton.small(
           heroTag: 'fab_upload',
           tooltip: 'Upload file',
@@ -616,6 +634,98 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ),
       ],
     );
+  }
+
+  /// Pastes [clipboard]'s paths into [state.currentPath], reusing the same
+  /// pre-flight collision-check flow as the old destination-picker (Move/Copy
+  /// from the selection bar): list [state.currentPath], offer Keep
+  /// both/Overwrite/Skip/Cancel if anything collides, then issue
+  /// [ExplorerNotifier.moveSelected] (cut) or [ExplorerNotifier.copySelected]
+  /// (copy) and report the result via [reportBatchResult].
+  ///
+  /// Cut pastes clear the clipboard on success (the items "moved away" from
+  /// it); copy pastes keep it so the same clipboard can be pasted again
+  /// elsewhere.
+  Future<void> _paste(
+      BuildContext context, ExplorerState state, FileClipboard clipboard) async {
+    final dest = state.currentPath;
+    final sources = clipboard.paths;
+    final isCut = clipboard.mode == ClipboardMode.cut;
+
+    // Guard: cutting into the folder the items already live in is a no-op —
+    // bail out before touching the agent.
+    if (isCut && sources.every((p) => _parentDirOf(p) == dest)) {
+      showInfo(context, 'Already in this folder');
+      return;
+    }
+
+    var duplicate = false;
+    var overwrite = false;
+    var effectiveSources = sources;
+
+    try {
+      final colliding = await _notifier.collidingBasenames(dest, sources);
+      if (colliding.isNotEmpty) {
+        if (!context.mounted) return;
+        final resolution = await showConflictResolutionDialog(
+          context,
+          collidingCount: colliding.length,
+          totalCount: sources.length,
+          destLabel: folderLabel(dest),
+        );
+        switch (resolution) {
+          case ConflictResolution.cancel:
+            return;
+          case ConflictResolution.keepBoth:
+            duplicate = true;
+          case ConflictResolution.overwrite:
+            overwrite = true;
+          case ConflictResolution.skip:
+            effectiveSources = sources
+                .where((p) => !colliding.contains(basenameOf(p)))
+                .toList();
+            if (effectiveSources.isEmpty) {
+              if (context.mounted) {
+                showInfo(context, 'All clipboard items already exist in '
+                    '${folderLabel(dest)} — nothing to '
+                    '${isCut ? 'move' : 'copy'}');
+              }
+              return;
+            }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showError(context, 'Could not check ${folderLabel(dest)} for '
+            'existing items: $e',
+            onRetry: () => _paste(context, state, clipboard));
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    try {
+      final res = isCut
+          ? await _notifier.moveSelected(dest,
+              sources: effectiveSources,
+              duplicate: duplicate,
+              overwrite: overwrite)
+          : await _notifier.copySelected(dest,
+              sources: effectiveSources,
+              duplicate: duplicate,
+              overwrite: overwrite);
+      if (isCut) {
+        ref.read(clipboardProvider.notifier).clear();
+      }
+      if (context.mounted) {
+        await reportBatchResult(context, res, isCut ? 'Moved' : 'Copied');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showError(context, '${isCut ? 'Move' : 'Copy'} failed: $e',
+            onRetry: () => _paste(context, state, clipboard));
+      }
+    }
   }
 
   /// Picks a file to upload and, if its name already exists in the current
@@ -682,6 +792,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
 /// Actions available from the browse app bar's overflow (⋮) menu.
 enum _OverflowAction { viewOptions, favorites, transfers }
+
+/// Parent directory of [path] — works for both POSIX (`/`) and Windows (`\`)
+/// separators, mirroring the split used by [renameDestination]. Used by the
+/// paste handler's "already in this folder" guard.
+String _parentDirOf(String path) {
+  final sep = path.contains('\\') ? r'\' : '/';
+  final idx = path.lastIndexOf(sep);
+  return idx <= 0 ? sep : path.substring(0, idx);
+}
 
 // ---------------------------------------------------------------------------
 // Pagination "load more" trailing item

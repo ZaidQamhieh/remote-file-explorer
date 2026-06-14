@@ -1,0 +1,4 @@
+# Sourced by lefthook before running hooks (see `rc:` in lefthook.yml).
+# Puts the Go and Flutter toolchains on PATH for hooks launched from IDEs /
+# non-login shells. Adjust paths if your toolchains live elsewhere.
+export PATH="$HOME/.local/go/bin:$HOME/flutter/bin:$HOME/go/bin:$PATH"

@@ -119,8 +119,18 @@ analyze` + `flutter test`) free in the cloud on every push to master/main. There
   sub-agents for large waves with disjoint file ownership (they re-read context cold).
 - Don't re-read a file you just edited to verify — the edit tooling already confirmed it.
 
+## Local hooks (Lefthook — runs the checks so I don't have to)
+
+One-time after clone: `go install github.com/evilmartians/lefthook@latest && lefthook install`.
+- **pre-commit** (staged files, fast): `dart format` check, `flutter analyze`, `gofmt` check, `go vet`.
+- **pre-push** (changed side only): `go test` / `flutter test`. CI is the full-suite backstop.
+Config: `lefthook.yml` (+ `.lefthook-rc` puts go/flutter on PATH for IDE-launched hooks).
+Bypass once if needed: `LEFTHOOK=0 git commit …`.
+
 ## Pointers
 
+- `docs/architecture.md` — **living code map** (file→responsibility). Read it instead of grepping.
+- `docs/WAVE_RUNBOOK.md` — wave dispatch loop + the **sub-agent brief template**.
 - `docs/architecture.md`, `docs/development.md` — deeper architecture + dev setup.
 - `HANDOFF.md` — deployment runbook.
 - `docs/feature-roadmap.md`, `docs/next-waves-addendum.md` — planned features (waves).

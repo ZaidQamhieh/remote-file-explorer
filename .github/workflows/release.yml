@@ -1,0 +1,85 @@
+name: Release
+
+# Continuous delivery: build the Android release APK on a GitHub runner and
+# publish it (plus a `latest.json` manifest) as a GitHub Release asset, so
+# releases no longer go through the local `release.sh` Gradle build.
+#
+# **How to cut a release:** bump `app/pubspec.yaml`'s `version:` to `X.Y.Z+N`
+# (the build number N MUST increase — OTA detection compares versionCode),
+# commit, then push a matching tag:
+#
+#     git tag v1.12.0 && git push origin v1.12.0
+#
+# This is the ONLY step that publishes a public artifact; nothing here runs
+# until such a tag is pushed. The agent's local update channel (`release.sh` →
+# `~/.rfe-agent/updates/`) keeps working unchanged as a fallback source.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish APK
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Mirrors ci.yml: pubspec pins Dart 3.7 → Flutter 3.29.x stable.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.0"
+          channel: "stable"
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: app
+        run: flutter build apk --release
+
+      - name: Stage artifact + manifest
+        id: stage
+        run: |
+          set -euo pipefail
+          line="$(grep -E '^version:' app/pubspec.yaml | head -1 | awk '{print $2}')"
+          name="${line%%+*}"
+          code="${line##*+}"
+          if [ "$name" = "$line" ] || [ -z "$code" ]; then
+            echo "::error::pubspec version '$line' must be X.Y.Z+N (build number drives OTA detection)"
+            exit 1
+          fi
+          # The tag should match the pubspec versionName (tag v1.2.0 ↔ 1.2.0).
+          tag_ver="${GITHUB_REF_NAME#v}"
+          if [ "$tag_ver" != "$name" ]; then
+            echo "::error::tag '$GITHUB_REF_NAME' does not match pubspec versionName '$name' — bump pubspec before tagging"
+            exit 1
+          fi
+          apk="rfe-${name}-${code}.apk"
+          cp app/build/app/outputs/flutter-apk/app-release.apk "$apk"
+          size="$(stat -c%s "$apk")"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${apk}"
+          # Same shape as the agent's GET /v1/app/latest (versionName/versionCode/
+          # size) plus the download `url` the off-Tailscale client needs.
+          printf '{"versionName":"%s","versionCode":%s,"size":%s,"url":"%s"}\n' \
+            "$name" "$code" "$size" "$url" > latest.json
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Built $apk ($size bytes)"
+          cat latest.json
+
+      - name: Publish GitHub Release
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.stage.outputs.apk }}" \
+            latest.json \
+            --title "v${{ steps.stage.outputs.name }} (build ${{ steps.stage.outputs.code }})" \
+            --generate-notes

@@ -125,6 +125,11 @@ class SelectionBar extends ConsumerWidget {
               onPressed: () => _copySelected(context, ref),
             ),
             BarAction(
+              icon: Icons.folder_zip_outlined,
+              label: 'Compress',
+              onPressed: () => _compressSelected(context, ref),
+            ),
+            BarAction(
               icon: Icons.download_outlined,
               label: 'Download',
               onPressed: () => _downloadSelected(context, ref),
@@ -167,6 +172,31 @@ class SelectionBar extends ConsumerWidget {
       context,
       '$count item${count == 1 ? '' : 's'} cut — open a folder and tap Paste',
     );
+  }
+
+  /// Zips the current selection into a new archive in the current folder. The
+  /// name is derived from the selection (the single item's name, or the
+  /// folder's name for a multi-select); the agent auto-renames on collision so
+  /// this never clobbers an existing file.
+  Future<void> _compressSelected(BuildContext context, WidgetRef ref) async {
+    final paths = state.selected.toList();
+    final dirPath = state.currentPath;
+    final sep = dirPath.contains('\\') ? '\\' : '/';
+    final stem =
+        paths.length == 1
+            ? basenameOf(paths.first)
+            : (folderLabel(dirPath) == 'Root'
+                ? 'Archive'
+                : folderLabel(dirPath));
+    final dest =
+        dirPath.endsWith(sep) ? '$dirPath$stem.zip' : '$dirPath$sep$stem.zip';
+    try {
+      final entry = await notifier.compressSelected(dest, sources: paths);
+      notifier.clearSelection();
+      if (context.mounted) showSuccess(context, 'Compressed to ${entry.name}');
+    } catch (e) {
+      if (context.mounted) showError(context, 'Compress failed: $e');
+    }
   }
 
   Future<void> _downloadSelected(BuildContext context, WidgetRef ref) async {

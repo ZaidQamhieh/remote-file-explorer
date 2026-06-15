@@ -28,6 +28,10 @@ var ErrNotFound = errors.New("path not found")
 // ErrConflict is returned when a destination already exists.
 var ErrConflict = errors.New("destination already exists")
 
+// ErrUnsupported is returned by Extract for an archive whose extension is
+// not a supported format (.zip/.tar.gz/.tgz).
+var ErrUnsupported = errors.New("unsupported archive format")
+
 // ErrStale is returned by WriteContent when the on-disk file's mtime no
 // longer matches the baseModified the caller last read, indicating the
 // file changed since then (optimistic-concurrency conflict).

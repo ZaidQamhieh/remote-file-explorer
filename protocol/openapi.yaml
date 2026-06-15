@@ -180,6 +180,57 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /fs/compress:
+    post:
+      summary: Compress entries into a new zip archive
+      description: >
+        Creates a zip archive at `dest` containing each of `sources` (files or
+        directories, recursively). Every source and the destination are
+        jail-checked. If `dest` already exists it is auto-renamed ("keep both",
+        e.g. `archive (1).zip`) so the call never clobbers an existing file —
+        the created archive's actual path is returned in the Entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sources, dest]
+              properties:
+                sources: { type: array, items: { type: string }, description: "Absolute paths to include." }
+                dest: { type: string, description: "Absolute path of the .zip to create." }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /fs/extract:
+    post:
+      summary: Extract an archive into a directory
+      description: >
+        Unpacks `archive` into `destDir` (created if absent). Supports `.zip`,
+        `.tar.gz` and `.tgz`. Each archive entry's target is validated to stay
+        within `destDir` (zip-slip guard); entries that would escape, and
+        non-regular entries (symlinks, devices), are rejected/skipped. Both
+        paths are jail-checked. Returns the destination directory's Entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archive, destDir]
+              properties:
+                archive: { type: string, description: "Absolute path to a .zip/.tar.gz/.tgz file." }
+                destDir: { type: string, description: "Absolute directory to extract into." }
+      responses:
+        "200": { description: Extracted, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /fs/meta:
     get:
       summary: Detailed metadata for a single entry

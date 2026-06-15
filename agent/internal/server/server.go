@@ -93,6 +93,8 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Patch("/fs/rename", renameHandler(ops))
 			r.Post("/fs/copy", copyHandler(ops))
 			r.Post("/fs/move", moveHandler(ops))
+			r.Post("/fs/compress", compressHandler(ops))
+			r.Post("/fs/extract", extractHandler(ops))
 			r.Get("/fs/meta", metaHandler(ops))
 
 			// Download / write content

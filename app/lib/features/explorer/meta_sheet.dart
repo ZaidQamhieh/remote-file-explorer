@@ -313,6 +313,19 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             label: const Text('Download'),
             onPressed: () => _download(context),
           ),
+        if (!_entry.isDir && isExtractableArchive(_entry.name))
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.folder_zip_outlined),
+            label: const Text('Extract here'),
+            onPressed: () => _extract(context),
+          ),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(
@@ -468,6 +481,23 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     }
   }
 
+  /// Extracts this archive into its own parent directory, then refreshes the
+  /// listing so the unpacked items appear alongside it.
+  Future<void> _extract(BuildContext context) async {
+    try {
+      final path = _entry.path;
+      final sep = path.contains('\\') ? '\\' : '/';
+      final idx = path.lastIndexOf(sep);
+      final parentDir = idx <= 0 ? sep : path.substring(0, idx);
+      await widget.client.extract(path, parentDir);
+      widget.onChanged?.call();
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) showSuccess(context, 'Extracted "${_entry.name}"');
+    } catch (e) {
+      if (context.mounted) showError(context, 'Extract failed: $e');
+    }
+  }
+
   Future<void> _delete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -500,4 +530,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (context.mounted) showError(context, 'Delete failed: $e');
     }
   }
+}
+
+/// Whether [name] looks like an archive the agent can extract — matches the
+/// formats `/fs/extract` supports (`.zip`, `.tar.gz`, `.tgz`). Case-insensitive.
+bool isExtractableArchive(String name) {
+  final lower = name.toLowerCase();
+  return lower.endsWith('.zip') ||
+      lower.endsWith('.tar.gz') ||
+      lower.endsWith('.tgz');
 }

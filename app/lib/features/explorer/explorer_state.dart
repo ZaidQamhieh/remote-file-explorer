@@ -481,6 +481,30 @@ class ExplorerNotifier
     return res;
   }
 
+  /// Compresses [sources] (defaulting to the current selection) into a new
+  /// zip at [dest], then reloads the listing so the archive appears. Returns
+  /// the created archive's [Entry] (its `path`/`name` reflect any server-side
+  /// auto-rename when [dest] already existed).
+  Future<Entry> compressSelected(String dest, {List<String>? sources}) async {
+    final client = await _client();
+    final entry = await client.compress(
+      sources ?? state.selected.toList(),
+      dest,
+    );
+    await _load();
+    return entry;
+  }
+
+  /// Extracts [archive] into [destDir] (defaulting to the current directory),
+  /// then reloads the listing so the unpacked items appear. Returns the
+  /// destination directory's [Entry].
+  Future<Entry> extractArchive(String archive, {String? destDir}) async {
+    final client = await _client();
+    final entry = await client.extract(archive, destDir ?? state.currentPath);
+    await _load();
+    return entry;
+  }
+
   /// Lists [destDir] and returns the basenames of [sourcePaths] that already
   /// exist there — used as a pre-flight collision check before a copy/move so
   /// the user can be offered Keep both / Overwrite / Skip *before* the

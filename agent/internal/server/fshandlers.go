@@ -184,6 +184,50 @@ func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 	}
 }
 
+// --------- /fs/compress POST ---------
+
+func compressHandler(ops *fsops.Ops) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
+		var req struct {
+			Sources []string `json:"sources"`
+			Dest    string   `json:"dest"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.Dest == "" {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and dest required")
+			return
+		}
+		entry, err := ops.Compress(req.Sources, req.Dest)
+		if err != nil {
+			handleFsError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, entry)
+	}
+}
+
+// --------- /fs/extract POST ---------
+
+func extractHandler(ops *fsops.Ops) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
+		var req struct {
+			Archive string `json:"archive"`
+			DestDir string `json:"destDir"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Archive == "" || req.DestDir == "" {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "archive and destDir required")
+			return
+		}
+		entry, err := ops.Extract(req.Archive, req.DestDir)
+		if err != nil {
+			handleFsError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, entry)
+	}
+}
+
 // --------- /fs/meta GET ---------
 
 func metaHandler(ops *fsops.Ops) http.HandlerFunc {
@@ -213,6 +257,8 @@ func handleFsError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "PATH_NOT_FOUND", err.Error())
 	case errors.Is(err, fsops.ErrReadOnly):
 		writeError(w, http.StatusForbidden, "READ_ONLY", err.Error())
+	case errors.Is(err, fsops.ErrUnsupported):
+		writeError(w, http.StatusBadRequest, "UNSUPPORTED_FORMAT", err.Error())
 	case errors.Is(err, fsops.ErrConflict):
 		writeError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, fsops.ErrStale):

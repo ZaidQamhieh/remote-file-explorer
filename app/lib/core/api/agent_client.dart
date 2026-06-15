@@ -582,6 +582,30 @@ class AgentClient {
     return _delete<Map<String, dynamic>>('/fs', data: {'paths': paths});
   }
 
+  /// Compresses [sources] into a new zip archive at [dest].
+  ///
+  /// If [dest] already exists the agent auto-renames it ("keep both"), so this
+  /// never clobbers an existing file. Returns the created archive's [Entry] —
+  /// whose `path`/`name` reflect the actual (possibly auto-renamed) file.
+  Future<Entry> compress(List<String> sources, String dest) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/compress',
+      data: {'sources': sources, 'dest': dest},
+    );
+    return Entry.fromJson(data);
+  }
+
+  /// Extracts [archive] (a `.zip`, `.tar.gz` or `.tgz`) into [destDir],
+  /// which is created if absent. The agent guards every entry against
+  /// zip-slip. Returns the destination directory's [Entry].
+  Future<Entry> extract(String archive, String destDir) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/extract',
+      data: {'archive': archive, 'destDir': destDir},
+    );
+    return Entry.fromJson(data);
+  }
+
   // ---------------------------------------------------------------------------
   // Thumbnails
   // ---------------------------------------------------------------------------

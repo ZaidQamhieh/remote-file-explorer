@@ -510,6 +510,51 @@ class ExplorerNotifier
     return entry;
   }
 
+  /// Batch-renames entries. [renames] maps each existing absolute path to its
+  /// new basename. Done in two phases (each source first to a unique temp name,
+  /// then to its final name) so a new name colliding with another source in the
+  /// same batch can't clobber it. Returns a `{results: [...]}` map compatible
+  /// with `reportBatchResult`.
+  Future<Map<String, dynamic>> batchRename(
+    List<({String path, String newName})> renames,
+  ) async {
+    final client = await _client();
+    final results = <Map<String, dynamic>>[];
+    final pending = <String, String>{}; // finalPath -> tempPath
+
+    Map<String, dynamic> fail(String path, Object e) => {
+      'path': path,
+      'ok': false,
+      'error': {'code': 'RENAME_FAILED', 'message': e.toString()},
+    };
+
+    for (var i = 0; i < renames.length; i++) {
+      final r = renames[i];
+      final dst = renameDestination(r.path, r.newName);
+      if (dst == r.path) {
+        results.add({'path': r.path, 'ok': true});
+        continue;
+      }
+      final tmp = renameDestination(r.path, '.rfe-rn-$i-${r.newName}');
+      try {
+        await client.rename(r.path, tmp);
+        pending[dst] = tmp;
+      } catch (e) {
+        results.add(fail(r.path, e));
+      }
+    }
+    for (final e in pending.entries) {
+      try {
+        await client.rename(e.value, e.key);
+        results.add({'path': e.key, 'ok': true});
+      } catch (err) {
+        results.add(fail(e.value, err));
+      }
+    }
+    await _load();
+    return {'results': results};
+  }
+
   /// Lists [destDir] and returns the basenames of [sourcePaths] that already
   /// exist there — used as a pre-flight collision check before a copy/move so
   /// the user can be offered Keep both / Overwrite / Skip *before* the

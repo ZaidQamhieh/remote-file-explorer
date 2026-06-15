@@ -21,6 +21,7 @@ import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
 import 'trash_screen.dart';
+import 'widgets/batch_rename_sheet.dart';
 import 'widgets/batch_report.dart';
 import 'widgets/breadcrumb_bar.dart';
 import 'widgets/conflict_resolution_dialog.dart';
@@ -260,6 +261,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       ),
       actions: [
         IconButton(
+          icon: const Icon(Icons.drive_file_rename_outline),
+          tooltip: 'Batch rename',
+          onPressed: () => _batchRename(context, state),
+        ),
+        IconButton(
           icon: Icon(
             allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
           ),
@@ -274,6 +280,27 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ),
       ],
     );
+  }
+
+  /// Batch-renames the current selection via [BatchRenameSheet], then reports
+  /// the per-item outcome.
+  Future<void> _batchRename(BuildContext context, ExplorerState state) async {
+    final paths = state.selected.toList();
+    if (paths.isEmpty) return;
+    final names = paths.map(basenameOf).toList();
+    final newNames = await BatchRenameSheet.show(context, names);
+    if (newNames == null || !context.mounted) return;
+    final renames = [
+      for (var i = 0; i < paths.length; i++)
+        (path: paths[i], newName: newNames[i]),
+    ];
+    try {
+      final res = await _notifier.batchRename(renames);
+      _notifier.clearSelection();
+      if (context.mounted) await reportBatchResult(context, res, 'Renamed');
+    } catch (e) {
+      if (context.mounted) showError(context, 'Rename failed: $e');
+    }
   }
 
   void _onOverflowAction(

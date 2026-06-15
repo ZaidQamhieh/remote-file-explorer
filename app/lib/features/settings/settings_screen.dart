@@ -9,6 +9,7 @@ import '../../core/models/drive.dart';
 import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
+import '../../core/storage/host_store.dart';
 import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -103,76 +104,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _revoke(Device d) async {
+  /// Un-pairs THIS phone from this host.
+  ///
+  /// A phone may now only manage itself: this calls `DELETE
+  /// /v1/devices/{id}` on the caller's own device id with `?purge=true`
+  /// (via [AgentClient.deleteDevice]), which permanently removes this
+  /// device's row and immediately invalidates its bearer token. Because the
+  /// session is dead the instant that call succeeds, we don't make any
+  /// further authenticated requests — instead we clear this host's stored
+  /// credentials locally (same cleanup as "Forget this computer") and
+  /// navigate back to the hosts list.
+  Future<void> _disconnectThisDevice(Device self) async {
     final client = _client;
     if (client == null) return;
-    try {
-      await client.revokeDevice(d.id);
-      await _load();
-      if (mounted) showSuccess(context, 'Revoked "${d.label}"');
-    } catch (e) {
-      if (mounted) showError(context, 'Revoke failed: $e');
-    }
-  }
 
-  Future<void> _removeDevice(Device d) async {
-    final client = _client;
-    if (client == null) return;
-    try {
-      await client.deleteDevice(d.id);
-      await _load();
-      if (mounted) showSuccess(context, 'Removed "${d.label}"');
-    } catch (e) {
-      if (mounted) showError(context, 'Remove failed: $e');
-    }
-  }
+    final pcName =
+        _settings?.agentName.isNotEmpty == true
+            ? _settings!.agentName
+            : (widget.host.label.isNotEmpty
+                ? widget.host.label
+                : widget.host.address);
 
-  Future<void> _setDeviceJail(Device d, String jailRoot) async {
-    final client = _client;
-    if (client == null) return;
-    try {
-      await client.setDeviceJail(d.id, jailRoot);
-      await _load();
-      if (mounted) {
-        showSuccess(
-          context,
-          jailRoot.isEmpty
-              ? 'Cleared restriction for "${d.label}"'
-              : 'Limited "${d.label}" to $jailRoot',
-        );
-      }
-    } catch (e) {
-      if (mounted) showError(context, 'Update failed: $e');
-    }
-  }
-
-  Future<void> _editDeviceJail(Device d) async {
-    final ctrl = TextEditingController(text: d.jailRoot);
-    final path = await showDialog<String>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Limit to folder'),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '/home/me/Shared'),
+            title: const Text('Disconnect this device?'),
+            content: Text(
+              'Disconnect this device from $pcName? You\'ll need a new '
+              'pairing code to reconnect.',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('Save'),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Disconnect'),
               ),
             ],
           ),
     );
-    if (path != null && path.isNotEmpty) {
-      await _setDeviceJail(d, path);
+    if (confirmed != true) return;
+
+    try {
+      await client.deleteDevice(self.id);
+    } catch (e) {
+      if (mounted) showError(context, 'Disconnect failed: $e');
+      return;
     }
+
+    // The token is now invalid — don't make any further authenticated
+    // calls. Clear local credentials/host entry and head back to the hosts
+    // list, mirroring HostCard's "Forget this computer" cleanup.
+    final store = await ref.read(hostStoreProvider.future);
+    await store.removeHost(widget.host.id);
+    if (!mounted) return;
+    ref.invalidate(hostStoreProvider);
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _addRoot() async {
@@ -676,8 +666,14 @@ class _AddExtensionFieldState extends State<_AddExtensionField> {
   }
 }
 
-/// A single paired-device row showing its identity, status, and the relevant
-/// trailing action (revoke for active devices, remove for revoked ones).
+/// A single paired-device row showing its identity, status, and a read-only
+/// jail badge if the PC has restricted that device to a folder.
+///
+/// A phone may only manage ITSELF: the current-device row gets a single
+/// "Disconnect" action that un-pairs this phone (see
+/// [_SettingsScreenState._disconnectThisDevice]); every other row is purely
+/// informational, with a "Managed on the PC" caption in place of any
+/// revoke/remove/jail-edit controls — those are now PC-only.
 class _DeviceRow extends StatelessWidget {
   const _DeviceRow({required this.device, required this.screen});
 
@@ -705,51 +701,14 @@ class _DeviceRow extends StatelessWidget {
       statusColor = d.revoked ? scheme.error : Brand.online;
     }
 
-    Widget? trailing;
-    if (!d.current) {
-      if (d.revoked) {
-        trailing = IconButton(
-          icon: const Icon(Icons.delete_outline),
-          tooltip: 'Remove device',
-          color: scheme.error,
-          onPressed: () => screen._removeDevice(d),
-        );
-      } else {
-        trailing = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PopupMenuButton<String>(
-              tooltip: 'Folder restriction',
-              icon: const Icon(Icons.tune),
-              onSelected: (value) {
-                switch (value) {
-                  case 'limit':
-                    screen._editDeviceJail(d);
-                  case 'clear':
-                    screen._setDeviceJail(d, '');
-                }
-              },
-              itemBuilder:
-                  (context) => [
-                    const PopupMenuItem(
-                      value: 'limit',
-                      child: Text('Limit to folder…'),
-                    ),
-                    if (d.jailRoot.isNotEmpty)
-                      const PopupMenuItem(
-                        value: 'clear',
-                        child: Text('Clear restriction'),
-                      ),
-                  ],
-            ),
-            TextButton(
-              onPressed: () => screen._revoke(d),
-              child: const Text('Revoke'),
-            ),
-          ],
-        );
-      }
-    }
+    final trailing =
+        d.current
+            ? TextButton(
+              onPressed: () => screen._disconnectThisDevice(d),
+              style: TextButton.styleFrom(foregroundColor: scheme.error),
+              child: const Text('Disconnect'),
+            )
+            : null;
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -773,12 +732,20 @@ class _DeviceRow extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      'Restricted to: ${d.jailRoot}',
+                      'Limited to: ${d.jailRoot}',
                       style: TextStyle(color: scheme.tertiary, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
+              ),
+            ),
+          if (!d.current)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Managed on the PC',
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
             ),
         ],

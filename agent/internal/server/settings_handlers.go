@@ -4,10 +4,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
@@ -107,11 +106,15 @@ func listDevicesHandler(db *store.DB) http.HandlerFunc {
 
 // revokeDeviceHandler revokes device `id`. The third arg is the URL path param
 // (the route wrapper passes chi.URLParam so this stays unit-testable).
+//
+// A paired device may only manage ITSELF: targeting any other device id is
+// rejected with 403 FORBIDDEN. Managing other devices is a PC-side operation
+// (the `rfe-agent revoke`/`remove` admin CLI).
 func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, string) {
 	return func(w http.ResponseWriter, r *http.Request, id string) {
 		cur := deviceFromContext(r)
-		if cur != nil && cur.ID == id {
-			writeError(w, http.StatusConflict, "CONFLICT", "cannot revoke the device you are using")
+		if cur == nil || cur.ID != id {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices must be done on the PC")
 			return
 		}
 		if err := db.RevokeDevice(id); err != nil {
@@ -123,12 +126,16 @@ func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 }
 
 // deleteDeviceHandler permanently removes device `id` (used to clear revoked
-// devices from the list). Refuses to delete the device making the request.
+// devices from the list; reached via DELETE /v1/devices/{id}?purge=true).
+//
+// A paired device may only manage ITSELF: targeting any other device id is
+// rejected with 403 FORBIDDEN. Managing other devices is a PC-side operation
+// (the `rfe-agent remove` admin CLI).
 func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, string) {
 	return func(w http.ResponseWriter, r *http.Request, id string) {
 		cur := deviceFromContext(r)
-		if cur != nil && cur.ID == id {
-			writeError(w, http.StatusConflict, "CONFLICT", "cannot remove the device you are using")
+		if cur == nil || cur.ID != id {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices must be done on the PC")
 			return
 		}
 		if err := db.DeleteDevice(id); err != nil {
@@ -139,81 +146,70 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 	}
 }
 
-// setDeviceJailHandler implements PATCH /v1/devices/{id} (H2 per-device path
-// jail). Body: {"jailRoot": "<absolute path, or empty string to clear>"}.
+// setDeviceJailHandler implements PATCH /v1/devices/{id}.
 //
-// Validation: jailRoot must be either "" (clear the per-device restriction)
-// or an absolute, cleaned path that resolves within the agent's configured
-// global roots (st.Roots()) — if any roots are configured. A jailRoot
-// outside the global roots would widen access if it were ever honored on its
-// own, so it is rejected outright (400 INVALID) rather than accepted and
-// silently clamped: better to fail loudly than to let an admin believe a
-// jail is in effect when fsops.Ops.Jailed would in fact deny everything.
-//
-// On success, returns the updated Device in the same JSON shape as
-// GET /devices (200).
-func setDeviceJailHandler(db *store.DB, st settingsRootsView) http.HandlerFunc {
+// Per-device path jails are a PC-side configuration concern (see
+// `rfe-agent jail <device-id> <path>`): every authenticated app caller gets
+// 403 FORBIDDEN, regardless of which device — including itself — it targets.
+// The route stays registered (403, not 405) so the app can detect the
+// capability is unavailable rather than getting a generic "no such route".
+func setDeviceJailHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-
-		var body struct {
-			JailRoot *string `json:"jailRoot"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
-			return
-		}
-		if body.JailRoot == nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "jailRoot required")
-			return
-		}
-
-		jailRoot := *body.JailRoot
-		if jailRoot != "" {
-			clean := filepath.Clean(jailRoot)
-			if !filepath.IsAbs(clean) {
-				writeError(w, http.StatusBadRequest, "INVALID", "jailRoot must be an absolute path")
-				return
-			}
-			if roots := st.Roots(); len(roots) > 0 {
-				// Reuse the same jail-resolution logic used for ordinary path
-				// access (cleans + resolves symlinks + checks containment) so
-				// a jailRoot that only "looks" contained via a symlink trick
-				// is rejected the same way an escaping request would be.
-				baseOps := fsops.New(roots, st.IsReadOnly())
-				if _, err := baseOps.Resolve(clean); err != nil {
-					writeError(w, http.StatusBadRequest, "INVALID", "jailRoot must resolve within the agent's configured roots")
-					return
-				}
-			}
-			jailRoot = clean
-		}
-
-		if err := db.SetDeviceJail(id, jailRoot); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-
-		updated, err := db.GetDeviceByID(id)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		if updated == nil {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "device not found")
-			return
-		}
-
-		cur := deviceFromContext(r)
-		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "device access limits are configured on the PC")
 	}
 }
 
-// settingsRootsView is the subset of *settings.Store needed to validate a
-// jailRoot against the agent's configured global roots. Defined as an
-// interface so tests can pass a minimal fake instead of a full
-// *settings.Store.
-type settingsRootsView interface {
-	Roots() []string
-	IsReadOnly() bool
+// ValidateJailRoot validates a candidate per-device jailRoot against the
+// agent's configured global roots, returning the cleaned path to persist (or
+// "" to clear the per-device restriction).
+//
+// jailRoot must be either "" (clear the per-device restriction) or an
+// absolute, cleaned path that resolves within the agent's configured global
+// roots (roots) — if any roots are configured. A jailRoot outside the global
+// roots would widen access if it were ever honored on its own, so it is
+// rejected outright rather than accepted and silently clamped: better to fail
+// loudly than to let an admin believe a jail is in effect when
+// fsops.Ops.Jailed would in fact deny everything.
+//
+// Shared by setDeviceJailHandler's predecessor and the `rfe-agent jail` admin
+// CLI command, so both enforce the same containment rule.
+func ValidateJailRoot(jailRoot string, roots []string, readOnly bool) (string, error) {
+	if jailRoot == "" {
+		return "", nil
+	}
+	clean := filepath.Clean(jailRoot)
+	if !filepath.IsAbs(clean) {
+		return "", fmt.Errorf("jailRoot must be an absolute path")
+	}
+	if len(roots) > 0 {
+		// Reuse the same jail-resolution logic used for ordinary path access
+		// (cleans + resolves symlinks + checks containment) so a jailRoot
+		// that only "looks" contained via a symlink trick is rejected the
+		// same way an escaping request would be.
+		baseOps := fsops.New(roots, readOnly)
+		if _, err := baseOps.Resolve(clean); err != nil {
+			return "", fmt.Errorf("jailRoot must resolve within the agent's configured roots")
+		}
+	}
+	return clean, nil
+}
+
+// SetDeviceJail validates jailRoot against the agent's configured global
+// roots (via ValidateJailRoot) and, if valid, persists it as device id's
+// per-device path jail (db.SetDeviceJail). Returns the cleaned jailRoot that
+// was stored.
+//
+// This is the reusable core that previously lived in setDeviceJailHandler
+// (PATCH /v1/devices/{id}, now PC-only/403); it is exported so the
+// `rfe-agent jail <device-id> <path>` admin CLI command can reuse the same
+// validation and persistence logic.
+func SetDeviceJail(db *store.DB, id, jailRoot string, roots []string, readOnly bool) (string, error) {
+	clean, err := ValidateJailRoot(jailRoot, roots, readOnly)
+	if err != nil {
+		return "", err
+	}
+	if err := db.SetDeviceJail(id, clean); err != nil {
+		return "", err
+	}
+	return clean, nil
 }

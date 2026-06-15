@@ -60,7 +60,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Get("/settings", getSettingsHandler(cfg.Settings))
 			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
 			r.Get("/devices", listDevicesHandler(db))
-			r.Patch("/devices/{id}", setDeviceJailHandler(db, cfg.Settings))
+			r.Patch("/devices/{id}", setDeviceJailHandler())
 			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
 				id := chi.URLParam(req, "id")
 				// ?purge=true permanently removes the row (used to clear

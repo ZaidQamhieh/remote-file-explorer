@@ -11,6 +11,8 @@ import (
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/server"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
@@ -26,6 +28,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdRevokeOrRemove(args, false)
 	case "remove":
 		return cmdRevokeOrRemove(args, true)
+	case "jail":
+		return cmdJail(args)
 	case "status":
 		return cmdStatus(args)
 	case "help", "-h", "--help":
@@ -46,6 +50,7 @@ Usage:
   rfe-agent devices              list paired devices
   rfe-agent revoke <id>          block a device (accepts a unique id prefix)
   rfe-agent remove <id>          permanently delete a device
+  rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
   rfe-agent status               show name, addresses, fingerprint, devices
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
@@ -177,6 +182,62 @@ func cmdRevokeOrRemove(args []string, remove bool) error {
 			return err
 		}
 		fmt.Printf("Revoked %q (%s)\n", label, shortID(id))
+	}
+	return nil
+}
+
+// cmdJail sets (or clears) a device's per-device path jail (H2). This used to
+// be reachable via PATCH /v1/devices/{id} from the app; that route now
+// returns 403 for all app callers (device access limits are a PC-side
+// concern), so this CLI command is the only way to configure it.
+//
+// Pass an empty string ("") as <path> to clear a device's per-device jail
+// (it then falls back to the agent's configured global roots, as before).
+// A non-empty <path> must be an absolute path that resolves within the
+// agent's configured global roots — the same containment rule the daemon
+// enforces, via server.ValidateJailRoot/server.SetDeviceJail.
+func cmdJail(args []string) error {
+	fs := flag.NewFlagSet("jail", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage: rfe-agent jail <device-id> <path>  (pass \"\" for <path> to clear)")
+	}
+
+	dir := adminDataDir(*data)
+	db, err := openAdminStore(dir)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	id, err := db.ResolveDeviceID(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	label := deviceLabel(db, id)
+
+	// Load the agent's configured global roots the same way the daemon
+	// does (settings.Load reads the persisted "roots" config key once it
+	// exists; passing nil seed roots here is a no-op against an existing
+	// DB — it only seeds on a brand-new store, which the daemon's first
+	// run would already have done).
+	st, err := settings.Load(db, false, nil, "")
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+
+	jailRoot := fs.Arg(1)
+	clean, err := server.SetDeviceJail(db, id, jailRoot, st.Roots(), st.IsReadOnly())
+	if err != nil {
+		return err
+	}
+
+	if clean == "" {
+		fmt.Printf("Cleared jail for %q (%s)\n", label, shortID(id))
+	} else {
+		fmt.Printf("Jailed %q (%s) to %s\n", label, shortID(id), clean)
 	}
 	return nil
 }

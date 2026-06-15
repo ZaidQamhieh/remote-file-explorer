@@ -503,20 +503,15 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
   /devices/{id}:
     patch:
-      summary: Set or clear a device's per-device path jail (H2)
+      summary: Set or clear a device's per-device path jail (H2) — PC-only
       description: >
-        Confines the target device to the given absolute path, intersected
-        with the agent's configured global roots. Pass an empty string to
-        clear the per-device restriction (the device then gets the agent's
-        full configured root jail, as before).
-
-
-        Validation: jailRoot must be either "" or an absolute, cleaned path
-        that resolves within the agent's configured roots (if any roots are
-        configured). A jailRoot outside the global roots is rejected with
-        400 (code INVALID) — setting a jail that would widen access (or that
-        is meaningless because it falls entirely outside the agent's reach)
-        is never allowed.
+        Per-device path jails are configured on the PC via the
+        `rfe-agent jail <device-id> <path>` admin CLI command, not from the
+        app. This route remains registered so the app can detect the
+        capability is unavailable (403), but it always rejects every
+        authenticated app caller — including a device targeting itself —
+        with 403 FORBIDDEN, code=FORBIDDEN, message "device access limits are
+        configured on the PC".
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -532,25 +527,27 @@ paths:
                   type: string
                   description: Absolute path, or "" to clear the per-device jail.
       responses:
-        '200':
-          description: Updated device
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Device' }
-        '400':
-          description: Invalid jailRoot. code=INVALID or BAD_REQUEST.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
-        '404':
-          description: Device not found. code=NOT_FOUND.
+        '403':
+          description: >
+            Always returned. Device access limits are configured on the PC.
+            code=FORBIDDEN.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
-      summary: Revoke a paired device, or permanently remove it with ?purge=true
+      summary: Revoke or permanently remove the CALLER'S OWN device, with ?purge=true for the latter
       description: >
-        By default revokes the device (its token is rejected thereafter). With
-        purge=true the device row is permanently deleted — used to clear revoked
-        devices from the list. Either way, the calling device cannot target
-        itself.
+        A paired device may only manage ITSELF: `{id}` must equal the calling
+        device's own id (from its bearer token). By default this revokes the
+        caller's device (its token is rejected thereafter, 204). With
+        purge=true the caller's device row is permanently deleted instead
+        (204) — used by a device to remove itself from the paired-devices
+        list.
+
+
+        Targeting any OTHER device id — to revoke, remove, or otherwise
+        manage it — is rejected with 403 FORBIDDEN, code=FORBIDDEN, message
+        "managing other devices must be done on the PC". Use the
+        `rfe-agent revoke`/`remove` admin CLI on the PC for that.
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -558,12 +555,14 @@ paths:
           in: query
           required: false
           schema: { type: boolean }
-          description: When true, permanently delete the device instead of revoking it.
+          description: When true, permanently delete the caller's device instead of revoking it.
       responses:
-        '204': { description: Revoked or removed }
+        '204': { description: Caller's own device revoked or removed }
         '401': { $ref: '#/components/responses/Error' }
-        '409':
-          description: Cannot target the calling device. code=CONFLICT.
+        '403':
+          description: >
+            `{id}` is not the calling device's own id. code=FORBIDDEN,
+            message "managing other devices must be done on the PC".
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /app/latest:
     get:
@@ -782,10 +781,13 @@ components:
             - `BAD_REQUEST` (400): malformed or missing required fields.
             - `UNAUTHORIZED` (401): missing/invalid/revoked bearer token.
             - `READ_ONLY` (403): agent is in read-only mode; write rejected.
-            - `FORBIDDEN` (403): path escapes the configured root jail.
+            - `FORBIDDEN` (403): path escapes the configured root jail; or a
+              /devices/{id} DELETE targets a device other than the caller's
+              own ("managing other devices must be done on the PC"); or any
+              /devices/{id} PATCH ("device access limits are configured on
+              the PC").
             - `PATH_NOT_FOUND` (404): path does not exist.
-            - `CONFLICT` (409): destination already exists, or a /devices
-              operation targets the calling device.
+            - `CONFLICT` (409): destination already exists.
             - `CHUNK_HASH_MISMATCH` (409): per-chunk SHA-256 did not match
               X-Chunk-Sha256.
             - `HASH_MISMATCH` (422): whole-file SHA-256 did not match on complete.

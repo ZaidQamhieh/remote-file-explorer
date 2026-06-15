@@ -31,6 +31,7 @@ go run ./cmd/agent pair          # mint a one-time pairing code + print QR
 go run ./cmd/agent devices       # list paired devices
 go run ./cmd/agent revoke <id>   # block a device
 go run ./cmd/agent remove <id>   # delete a device row
+go run ./cmd/agent jail <id> <path>  # confine a device to <path> ("" clears it)
 go run ./cmd/agent status        # name, addresses, fingerprint, counts
 ```
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`

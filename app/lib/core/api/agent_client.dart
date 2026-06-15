@@ -496,26 +496,14 @@ class AgentClient {
     return data.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<void> revokeDevice(String id) async {
-    await _delete<void>('/devices/$id');
-  }
-
-  /// Permanently removes a device row (used to clear revoked devices). The
-  /// agent refuses to remove the device making the request.
+  /// Permanently removes a device row.
+  ///
+  /// As of the tightened trust model, the agent only accepts this for the
+  /// CALLER'S OWN device (`?purge=true`) — targeting any other device
+  /// returns 403 FORBIDDEN. Used by [SettingsScreen]'s "Disconnect this
+  /// device" action to un-pair the current phone.
   Future<void> deleteDevice(String id) async {
     await _delete<void>('/devices/$id', queryParameters: {'purge': 'true'});
-  }
-
-  /// Sets (or clears, with an empty string) the path jail restricting which
-  /// subtree of the host this device can access. Returns the updated
-  /// [Device]. An invalid path (not absolute, or outside the agent's roots)
-  /// surfaces as an [AgentApiException] from the agent's 400 response.
-  Future<Device> setDeviceJail(String id, String jailRoot) async {
-    final data = await _patch<Map<String, dynamic>>(
-      '/devices/$id',
-      data: {'jailRoot': jailRoot},
-    );
-    return Device.fromJson(data);
   }
 
   // ---------------------------------------------------------------------------

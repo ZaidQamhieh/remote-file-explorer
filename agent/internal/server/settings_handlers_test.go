@@ -109,54 +109,190 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 		t.Fatalf("expected gone device to have empty lastAddress/lastVersion, got %v", goneRow)
 	}
 
-	// Revoking self is rejected (409).
+	// Revoking SELF succeeds (204) — a device managing itself is the only
+	// permitted target.
 	rrSelf := httptest.NewRecorder()
 	reqSelf := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-keep", nil)
 	reqSelf = reqSelf.WithContext(withDevice(reqSelf.Context(), cur))
 	revokeDeviceHandler(db)(rrSelf, reqSelf, "id-keep")
-	if rrSelf.Code != http.StatusConflict {
-		t.Fatalf("expected 409 on self-revoke, got %d", rrSelf.Code)
+	if rrSelf.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on self-revoke, got %d: %s", rrSelf.Code, rrSelf.Body.String())
+	}
+	keptDev, _ := db.GetDeviceByID("id-keep")
+	if keptDev == nil || !keptDev.Revoked {
+		t.Fatal("expected id-keep to be revoked")
 	}
 
-	// Revoking another succeeds.
+	// Revoking ANOTHER device is rejected (403 FORBIDDEN) — managing other
+	// devices must be done on the PC.
 	rrOther := httptest.NewRecorder()
 	reqOther := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-gone", nil)
 	reqOther = reqOther.WithContext(withDevice(reqOther.Context(), cur))
 	revokeDeviceHandler(db)(rrOther, reqOther, "id-gone")
-	if rrOther.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 revoking other, got %d", rrOther.Code)
+	if rrOther.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 revoking other, got %d: %s", rrOther.Code, rrOther.Body.String())
+	}
+	var gotErr apiError
+	_ = json.Unmarshal(rrOther.Body.Bytes(), &gotErr)
+	if gotErr.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN error code, got %+v", gotErr)
 	}
 	gone, _ := db.DeviceByToken("tok-gone")
-	if gone == nil || !gone.Revoked {
-		t.Fatal("expected id-gone to be revoked")
+	if gone == nil || gone.Revoked {
+		t.Fatal("expected id-gone to remain unrevoked")
 	}
 }
 
-// patchDeviceJail builds and executes a PATCH /v1/devices/{id} request
-// against setDeviceJailHandler directly, returning the recorder.
-func patchDeviceJail(t *testing.T, db *store.DB, st settingsRootsView, id string, jailRoot *string) *httptest.ResponseRecorder {
-	t.Helper()
-	var body string
-	if jailRoot == nil {
-		body = `{}`
-	} else {
-		b, _ := json.Marshal(map[string]string{"jailRoot": *jailRoot})
-		body = string(b)
+// TestDeleteDeviceHandler_SelfOnly verifies DELETE /v1/devices/{id}?purge=true
+// (deleteDeviceHandler): the caller's own device id is the only permitted
+// target — self succeeds with 204 and the row is gone, any other id is
+// rejected with 403 FORBIDDEN and the row is left untouched.
+func TestDeleteDeviceHandler_SelfOnly(t *testing.T) {
+	db, _ := newTestDeps(t)
+	_ = db.CreateDevice("id-self", "self", "tok-self")
+	_ = db.CreateDevice("id-other", "other", "tok-other")
+	cur, _ := db.DeviceByToken("tok-self")
+
+	// Purging another device is forbidden.
+	rrOther := httptest.NewRecorder()
+	reqOther := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-other?purge=true", nil)
+	reqOther = reqOther.WithContext(withDevice(reqOther.Context(), cur))
+	deleteDeviceHandler(db)(rrOther, reqOther, "id-other")
+	if rrOther.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 purging other, got %d: %s", rrOther.Code, rrOther.Body.String())
 	}
-	req := httptest.NewRequest(http.MethodPatch, "/v1/devices/"+id, strings.NewReader(body))
-	req = withURLParam(req, map[string]string{"id": id})
-	rr := httptest.NewRecorder()
-	setDeviceJailHandler(db, st)(rr, req)
-	return rr
+	var gotErr apiError
+	_ = json.Unmarshal(rrOther.Body.Bytes(), &gotErr)
+	if gotErr.Code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN error code, got %+v", gotErr)
+	}
+	if other, _ := db.GetDeviceByID("id-other"); other == nil {
+		t.Fatal("expected id-other to remain")
+	}
+
+	// Purging self succeeds and the row is gone.
+	rrSelf := httptest.NewRecorder()
+	reqSelf := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-self?purge=true", nil)
+	reqSelf = reqSelf.WithContext(withDevice(reqSelf.Context(), cur))
+	deleteDeviceHandler(db)(rrSelf, reqSelf, "id-self")
+	if rrSelf.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on self-purge, got %d: %s", rrSelf.Code, rrSelf.Body.String())
+	}
+	if self, _ := db.GetDeviceByID("id-self"); self != nil {
+		t.Fatal("expected id-self to be deleted")
+	}
 }
 
-// TestSetDeviceJailHandler_SetAndClear verifies PATCH /v1/devices/{id} sets a
-// jailRoot that resolves within the agent's configured global roots, returns
-// the updated Device JSON (with jailRoot populated), persists it (visible via
-// GetDeviceByID), and that an empty jailRoot clears it again.
-func TestSetDeviceJailHandler_SetAndClear(t *testing.T) {
+// TestSetDeviceJailHandler_AlwaysForbidden verifies PATCH /v1/devices/{id}
+// returns 403 FORBIDDEN for every authenticated app caller — including a
+// device targeting itself — and leaves the device's jailRoot untouched.
+// Per-device jails are now configured exclusively via the `rfe-agent jail`
+// admin CLI (see TestValidateJailRoot* and TestSetDeviceJail below for the
+// validation/persistence logic it shares with the old handler).
+func TestSetDeviceJailHandler_AlwaysForbidden(t *testing.T) {
+	db, _ := newTestDeps(t)
+	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	cur, _ := db.DeviceByToken("tok-a")
+
+	for _, tc := range []struct {
+		name string
+		id   string
+		body string
+	}{
+		{"self with jailRoot", "id-1", `{"jailRoot":"/tmp/whatever"}`},
+		{"self clearing jailRoot", "id-1", `{"jailRoot":""}`},
+		{"other device", "id-other", `{"jailRoot":"/tmp/whatever"}`},
+		{"missing body", "id-1", `{}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPatch, "/v1/devices/"+tc.id, strings.NewReader(tc.body))
+			req = req.WithContext(withDevice(req.Context(), cur))
+			req = withURLParam(req, map[string]string{"id": tc.id})
+			rr := httptest.NewRecorder()
+			setDeviceJailHandler()(rr, req)
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+			}
+			var got apiError
+			_ = json.Unmarshal(rr.Body.Bytes(), &got)
+			if got.Code != "FORBIDDEN" {
+				t.Fatalf("expected FORBIDDEN error code, got %+v", got)
+			}
+		})
+	}
+
+	// jailRoot must remain unset on the device that exists.
+	d, err := db.GetDeviceByID("id-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if d == nil || d.JailRoot != "" {
+		t.Fatalf("expected jailRoot to remain empty, got %+v", d)
+	}
+}
+
+// TestValidateJailRoot covers the validation rules extracted from the old
+// setDeviceJailHandler, now shared with the `rfe-agent jail` admin CLI
+// command via ValidateJailRoot/SetDeviceJail.
+func TestValidateJailRoot(t *testing.T) {
+	t.Run("empty clears", func(t *testing.T) {
+		got, err := ValidateJailRoot("", []string{"/some/root"}, false)
+		if err != nil || got != "" {
+			t.Fatalf("expected (\"\", nil), got (%q, %v)", got, err)
+		}
+	})
+
+	t.Run("relative path rejected", func(t *testing.T) {
+		_, err := ValidateJailRoot("relative/path", nil, false)
+		if err == nil {
+			t.Fatal("expected error for relative path")
+		}
+	})
+
+	t.Run("outside global roots rejected", func(t *testing.T) {
+		root := t.TempDir()
+		outside := t.TempDir()
+		_, err := ValidateJailRoot(outside, []string{root}, false)
+		if err == nil {
+			t.Fatal("expected error for jailRoot outside global roots")
+		}
+	})
+
+	t.Run("inside global roots accepted and cleaned", func(t *testing.T) {
+		root := t.TempDir()
+		sub := filepath.Join(root, "shared")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatalf("mkdir sub: %v", err)
+		}
+		got, err := ValidateJailRoot(sub, []string{root}, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != filepath.Clean(sub) {
+			t.Fatalf("expected %q, got %q", filepath.Clean(sub), got)
+		}
+	})
+
+	t.Run("no global roots allows any absolute path", func(t *testing.T) {
+		anyAbs := t.TempDir()
+		got, err := ValidateJailRoot(anyAbs, nil, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != filepath.Clean(anyAbs) {
+			t.Fatalf("expected %q, got %q", filepath.Clean(anyAbs), got)
+		}
+	})
+}
+
+// TestSetDeviceJail verifies SetDeviceJail validates via ValidateJailRoot and
+// persists the cleaned jailRoot (or rejects without persisting on invalid
+// input) — the logic the `rfe-agent jail` admin CLI command calls.
+func TestSetDeviceJail(t *testing.T) {
 	root := t.TempDir()
-	db, st := newTestDepsWithRoots(t, []string{root})
+	db, _ := newTestDepsWithRoots(t, []string{root})
 	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -167,39 +303,28 @@ func TestSetDeviceJailHandler_SetAndClear(t *testing.T) {
 	}
 
 	// Set a valid jail within the global root.
-	rr := patchDeviceJail(t, db, st, "id-1", &sub)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	got, err := SetDeviceJail(db, "id-1", sub, []string{root}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	var got map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decode: %v", err)
+	if got != filepath.Clean(sub) {
+		t.Fatalf("expected %q, got %q", filepath.Clean(sub), got)
 	}
-	if got["jailRoot"] != sub {
-		t.Fatalf("expected jailRoot %q in response, got %v", sub, got["jailRoot"])
-	}
-
-	// Persisted.
 	d, err := db.GetDeviceByID("id-1")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if d == nil || d.JailRoot != sub {
+	if d == nil || d.JailRoot != filepath.Clean(sub) {
 		t.Fatalf("expected persisted JailRoot %q, got %+v", sub, d)
 	}
 
 	// Clear it.
-	empty := ""
-	rr2 := patchDeviceJail(t, db, st, "id-1", &empty)
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("expected 200 clearing jail, got %d: %s", rr2.Code, rr2.Body.String())
+	got2, err := SetDeviceJail(db, "id-1", "", []string{root}, false)
+	if err != nil {
+		t.Fatalf("unexpected error clearing: %v", err)
 	}
-	var got2 map[string]any
-	if err := json.Unmarshal(rr2.Body.Bytes(), &got2); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if got2["jailRoot"] != "" {
-		t.Fatalf("expected jailRoot cleared in response, got %v", got2["jailRoot"])
+	if got2 != "" {
+		t.Fatalf("expected cleared jailRoot, got %q", got2)
 	}
 	d2, err := db.GetDeviceByID("id-1")
 	if err != nil {
@@ -208,96 +333,18 @@ func TestSetDeviceJailHandler_SetAndClear(t *testing.T) {
 	if d2 == nil || d2.JailRoot != "" {
 		t.Fatalf("expected persisted JailRoot cleared, got %+v", d2)
 	}
-}
 
-// TestSetDeviceJailHandler_OutsideGlobalRootsRejected verifies that an admin
-// cannot widen a device's access by setting a jailRoot outside the agent's
-// configured global roots: the handler must reject it with 400 (code
-// INVALID) and leave the device's jailRoot unchanged.
-func TestSetDeviceJailHandler_OutsideGlobalRootsRejected(t *testing.T) {
-	root := t.TempDir()
+	// Invalid (outside roots) is rejected without persisting.
 	outside := t.TempDir()
-	db, st := newTestDepsWithRoots(t, []string{root})
-	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
-		t.Fatalf("create: %v", err)
+	if _, err := SetDeviceJail(db, "id-1", outside, []string{root}, false); err == nil {
+		t.Fatal("expected error for jailRoot outside global roots")
 	}
-
-	rr := patchDeviceJail(t, db, st, "id-1", &outside)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
-	}
-	var got apiError
-	_ = json.Unmarshal(rr.Body.Bytes(), &got)
-	if got.Code != "INVALID" {
-		t.Fatalf("expected INVALID error code, got %+v", got)
-	}
-
-	// jailRoot must remain unset.
-	d, err := db.GetDeviceByID("id-1")
+	d3, err := db.GetDeviceByID("id-1")
 	if err != nil {
-		t.Fatalf("get: %v", err)
+		t.Fatalf("get after rejected set: %v", err)
 	}
-	if d == nil || d.JailRoot != "" {
-		t.Fatalf("expected jailRoot to remain empty after rejection, got %+v", d)
-	}
-}
-
-// TestSetDeviceJailHandler_NonAbsoluteRejected verifies a relative jailRoot
-// is rejected with 400 INVALID.
-func TestSetDeviceJailHandler_NonAbsoluteRejected(t *testing.T) {
-	db, st := newTestDepsWithRoots(t, nil)
-	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	rel := "relative/path"
-	rr := patchDeviceJail(t, db, st, "id-1", &rel)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
-	}
-	var got apiError
-	_ = json.Unmarshal(rr.Body.Bytes(), &got)
-	if got.Code != "INVALID" {
-		t.Fatalf("expected INVALID error code, got %+v", got)
-	}
-}
-
-// TestSetDeviceJailHandler_NoGlobalRootsAllowsAnyAbsolutePath verifies that
-// when the agent has NO configured global roots (open access), any absolute
-// jailRoot is accepted — there is nothing to validate containment against,
-// and a per-device jail in this case can only narrow access.
-func TestSetDeviceJailHandler_NoGlobalRootsAllowsAnyAbsolutePath(t *testing.T) {
-	db, st := newTestDepsWithRoots(t, nil)
-	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	anyAbs := t.TempDir()
-	rr := patchDeviceJail(t, db, st, "id-1", &anyAbs)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-	}
-	d, err := db.GetDeviceByID("id-1")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if d == nil || d.JailRoot != filepath.Clean(anyAbs) {
-		t.Fatalf("expected JailRoot set to %q, got %+v", anyAbs, d)
-	}
-}
-
-// TestSetDeviceJailHandler_MissingBodyRejected verifies a request with no
-// jailRoot field is rejected with 400 BAD_REQUEST (not silently treated as
-// "clear").
-func TestSetDeviceJailHandler_MissingBodyRejected(t *testing.T) {
-	db, st := newTestDepsWithRoots(t, nil)
-	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	rr := patchDeviceJail(t, db, st, "id-1", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	if d3 == nil || d3.JailRoot != "" {
+		t.Fatalf("expected jailRoot to remain empty after rejection, got %+v", d3)
 	}
 }
 

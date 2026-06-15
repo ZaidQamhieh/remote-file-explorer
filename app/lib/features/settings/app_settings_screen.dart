@@ -7,6 +7,7 @@ import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import 'settings_screen.dart' show FileVisibilitySection;
 import 'update_tile.dart';
+import 'widgets/backup_restore_section.dart';
 import 'widgets/settings_section.dart';
 
 /// Global **App Settings** — the single "general settings" surface (Wave 0).
@@ -182,6 +183,8 @@ class AppSettingsScreen extends ConsumerWidget {
           // host's settings screen). Self-contained card; reused from
           // settings_screen.dart where the editor + override section are defined.
           const FileVisibilitySection(),
+          const SizedBox(height: Spacing.md),
+          const BackupRestoreSection(),
         ],
       ),
     );

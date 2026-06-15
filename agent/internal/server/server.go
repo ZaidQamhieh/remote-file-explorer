@@ -27,6 +27,7 @@ type Config struct {
 	ThumbCacheDir    string // directory for on-disk thumbnail cache
 	Settings         *settings.Store
 	UpdatesDir       string // directory of downloadable APKs for in-app update
+	TrashDir         string // trash store root (XDG Trash on Linux; managed dir elsewhere)
 }
 
 // New builds the v1 router and wires all routes.
@@ -87,7 +88,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 			// Filesystem
 			r.Get("/fs", listDirHandler(ops))
-			r.Delete("/fs", deleteHandler(ops))
+			r.Delete("/fs", deleteHandler(ops, cfg.TrashDir))
 			r.Post("/fs/folder", createFolderHandler(ops))
 			r.Post("/fs/file", createFileHandler(ops))
 			r.Patch("/fs/rename", renameHandler(ops))
@@ -96,6 +97,11 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Post("/fs/compress", compressHandler(ops))
 			r.Post("/fs/extract", extractHandler(ops))
 			r.Get("/fs/meta", metaHandler(ops))
+
+			// Trash
+			r.Get("/trash", listTrashHandler(cfg.TrashDir))
+			r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
+			r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
 
 			// Download / write content
 			r.Get("/content", downloadHandler(ops))

@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -96,6 +97,11 @@ func runServe(args []string) {
 		log.Fatalf("updates dir: %v", err)
 	}
 
+	trashDir := defaultTrashDir(*dataDir)
+	if err := os.MkdirAll(trashDir, 0o700); err != nil {
+		log.Fatalf("trash dir: %v", err)
+	}
+
 	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
 	log.Printf("run `rfe-agent pair` to add a device")
 
@@ -123,6 +129,7 @@ func runServe(args []string) {
 		ThumbCacheDir:    thumbCacheDir,
 		Settings:         st,
 		UpdatesDir:       updatesDir,
+		TrashDir:         trashDir,
 	}, db, pm, tm)
 	if err != nil {
 		log.Fatalf("server: %v", err)
@@ -199,6 +206,25 @@ func defaultDataDir() string {
 		return ".rfe-agent"
 	}
 	return filepath.Join(home, ".rfe-agent")
+}
+
+// defaultTrashDir returns the trash store root. On Linux it is the user's real
+// desktop trash ($XDG_DATA_HOME/Trash, else ~/.local/share/Trash) so app-side
+// deletes also appear in the desktop's Trash; on other platforms (and when the
+// home dir can't be resolved) it falls back to a managed dir under dataDir.
+func defaultTrashDir(dataDir string) string {
+	if runtime.GOOS == "linux" {
+		base := os.Getenv("XDG_DATA_HOME")
+		if base == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				base = filepath.Join(home, ".local", "share")
+			}
+		}
+		if base != "" {
+			return filepath.Join(base, "Trash")
+		}
+	}
+	return filepath.Join(dataDir, "trash")
 }
 
 // reachableAddresses turns the listen address into the concrete host:port

@@ -17,6 +17,7 @@ import '../models/host.dart';
 import '../models/listing.dart';
 import '../models/pair_response.dart';
 import '../models/search_result.dart';
+import '../models/trash_entry.dart';
 import '../models/upload_session.dart';
 
 /// Thrown when an agent's TLS certificate does not match the pinned fingerprint.
@@ -576,10 +577,42 @@ class AgentClient {
     );
   }
 
-  /// Permanently and recursively deletes [paths]. There is no "trash" or
-  /// undo — the agent removes the files/directories immediately.
-  Future<Map<String, dynamic>> delete(List<String> paths) async {
-    return _delete<Map<String, dynamic>>('/fs', data: {'paths': paths});
+  /// Deletes [paths]. By default this is **reversible** — the agent moves them
+  /// to the trash (recoverable via [listTrash] / [restoreTrash]). Pass
+  /// [permanent] `true` to hard-delete (recursive, irreversible).
+  Future<Map<String, dynamic>> delete(
+    List<String> paths, {
+    bool permanent = false,
+  }) async {
+    return _delete<Map<String, dynamic>>(
+      '/fs',
+      queryParameters: permanent ? {'permanent': 'true'} : null,
+      data: {'paths': paths},
+    );
+  }
+
+  /// Lists items currently in the trash, newest first.
+  Future<List<TrashEntry>> listTrash() async {
+    final data = await _get<Map<String, dynamic>>('/trash');
+    final items = (data['items'] as List?) ?? const [];
+    return items
+        .map((e) => TrashEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Restores trashed items (by [ids]) to their original locations. Returns the
+  /// batch-result map (`results`: per-id `{path, ok, error}`).
+  Future<Map<String, dynamic>> restoreTrash(List<String> ids) async {
+    return _post<Map<String, dynamic>>('/trash/restore', data: {'ids': ids});
+  }
+
+  /// Permanently empties the trash. With [ids] only those items are purged;
+  /// otherwise the whole trash is emptied.
+  Future<Map<String, dynamic>> emptyTrash({List<String>? ids}) async {
+    return _delete<Map<String, dynamic>>(
+      '/trash',
+      data: ids == null ? null : {'ids': ids},
+    );
   }
 
   /// Compresses [sources] into a new zip archive at [dest].

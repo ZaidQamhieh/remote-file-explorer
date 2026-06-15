@@ -499,33 +499,46 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   }
 
   Future<void> _delete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    // null = cancel, false = trash (default), true = permanent.
+    final permanent = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete permanently?'),
+            title: const Text('Delete?'),
             content: Text(
-              'Permanently delete "${_entry.name}"? This cannot be undone.',
+              'Move "${_entry.name}" to Trash? You can restore it later.',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: const Text('Delete forever'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Move to Trash'),
               ),
             ],
           ),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (permanent == null || !context.mounted) return;
     try {
       final name = _entry.name;
-      await widget.client.delete([_entry.path]);
+      await widget.client.delete([_entry.path], permanent: permanent);
       widget.onChanged?.call();
       if (context.mounted) Navigator.pop(context);
-      if (context.mounted) showSuccess(context, 'Deleted $name');
+      if (context.mounted) {
+        showSuccess(
+          context,
+          permanent ? 'Deleted $name' : 'Moved $name to Trash',
+        );
+      }
     } catch (e) {
       if (context.mounted) showError(context, 'Delete failed: $e');
     }

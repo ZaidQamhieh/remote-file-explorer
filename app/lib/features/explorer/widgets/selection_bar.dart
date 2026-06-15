@@ -223,36 +223,49 @@ class SelectionBar extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final count = state.selected.length;
+    // Three-way: Cancel / Delete forever / Move to Trash. `null` = cancel,
+    // false = trash (default, reversible), true = permanent.
+    final permanent = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete permanently?'),
+            title: const Text('Delete?'),
             content: Text(
-              'Permanently delete ${state.selected.length} item(s)? '
-              'This cannot be undone.',
+              'Move $count item${count == 1 ? '' : 's'} to Trash? '
+              'You can restore ${count == 1 ? 'it' : 'them'} later from Trash.',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: const Text('Delete forever'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Move to Trash'),
               ),
             ],
           ),
     );
-    if (confirmed == true) {
-      try {
-        final res = await notifier.deleteSelected();
-        if (context.mounted) {
-          await reportBatchResult(context, res, 'Deleted');
-        }
-      } catch (e) {
-        if (context.mounted) showError(context, 'Delete failed: $e');
+    if (permanent == null) return;
+    try {
+      final res = await notifier.deleteSelected(permanent: permanent);
+      if (context.mounted) {
+        await reportBatchResult(
+          context,
+          res,
+          permanent ? 'Deleted' : 'Moved to Trash',
+        );
       }
+    } catch (e) {
+      if (context.mounted) showError(context, 'Delete failed: $e');
     }
   }
 }

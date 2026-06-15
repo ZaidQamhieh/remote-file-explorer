@@ -20,6 +20,7 @@ import '../transfers/widgets/mini_transfer_bar.dart';
 import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
+import 'trash_screen.dart';
 import 'widgets/batch_report.dart';
 import 'widgets/breadcrumb_bar.dart';
 import 'widgets/conflict_resolution_dialog.dart';
@@ -221,6 +222,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                     title: Text('Transfers'),
                   ),
                 ),
+                PopupMenuItem(
+                  value: _OverflowAction.trash,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline_rounded),
+                    title: Text('Trash'),
+                  ),
+                ),
               ],
         ),
       ],
@@ -280,7 +288,21 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _showFavorites(context);
       case _OverflowAction.transfers:
         _showTransfers(context);
+      case _OverflowAction.trash:
+        _openTrash(context);
     }
+  }
+
+  Future<void> _openTrash(BuildContext context) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TrashScreen(host: widget.host, client: client),
+      ),
+    );
+    // A restore may have dropped an item back into the current folder.
+    if (changed == true) _notifier.refresh();
   }
 
   void _toggleFavorite(BuildContext context, ExplorerState state, bool isFav) {
@@ -884,7 +906,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 }
 
 /// Actions available from the browse app bar's overflow (⋮) menu.
-enum _OverflowAction { viewOptions, favorites, transfers }
+enum _OverflowAction { viewOptions, favorites, transfers, trash }
 
 /// Parent directory of [path] — works for both POSIX (`/`) and Windows (`\`)
 /// separators, mirroring the split used by [renameDestination]. Used by the

@@ -440,9 +440,14 @@ class ExplorerNotifier
     await _load();
   }
 
-  Future<Map<String, dynamic>> deleteSelected() async {
+  /// Deletes the current selection. Reversible (to trash) by default; pass
+  /// [permanent] `true` to hard-delete.
+  Future<Map<String, dynamic>> deleteSelected({bool permanent = false}) async {
     final client = await _client();
-    final res = await client.delete(state.selected.toList());
+    final res = await client.delete(
+      state.selected.toList(),
+      permanent: permanent,
+    );
     await _load();
     return res;
   }

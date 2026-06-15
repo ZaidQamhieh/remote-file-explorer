@@ -51,7 +51,7 @@ func listDirHandler(ops *fsops.Ops) http.HandlerFunc {
 
 // --------- /fs DELETE (batch delete) ---------
 
-func deleteHandler(ops *fsops.Ops) http.HandlerFunc {
+func deleteHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		var paths []string
@@ -75,8 +75,59 @@ func deleteHandler(ops *fsops.Ops) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "no paths specified")
 			return
 		}
-		results := ops.Delete(paths)
+		// Default is reversible (move to trash); ?permanent=true hard-deletes.
+		var results []fsops.BatchResult
+		if r.URL.Query().Get("permanent") == "true" {
+			results = ops.Delete(paths)
+		} else {
+			results = ops.MoveToTrash(paths, trashDir)
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"results": results})
+	}
+}
+
+// --------- /trash ---------
+
+func listTrashHandler(trashDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		items, err := fsops.ListTrash(trashDir)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	}
+}
+
+func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.IDs) == 0 {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "ids required")
+			return
+		}
+		results := ops.RestoreFromTrash(body.IDs, trashDir)
+		writeJSON(w, http.StatusOK, map[string]any{"results": results})
+	}
+}
+
+func emptyTrashHandler(trashDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Optional body {ids:[...]} deletes specific items; empty body empties all.
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if r.ContentLength > 0 {
+			_ = json.NewDecoder(r.Body).Decode(&body)
+		}
+		if err := fsops.EmptyTrash(trashDir, body.IDs); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
 

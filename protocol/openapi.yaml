@@ -85,14 +85,20 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
-      summary: Permanently delete one or more paths (recursive, irreversible)
+      summary: Delete one or more paths (to trash by default, recursive)
       description: >
-        Deletes are permanent and recursive (equivalent to `rm -rf`). There is no
-        trash/recycle bin — the agent calls the OS-level recursive remove directly
-        and the data cannot be recovered. Directories are removed along with all
-        of their contents.
+        By default deletes are **reversible**: each path is moved to the trash
+        store (XDG `~/.local/share/Trash` on Linux, a managed dir elsewhere) and
+        can be listed/restored via `/trash`. Pass `permanent=true` to bypass the
+        trash and remove recursively and irreversibly (equivalent to `rm -rf`).
+        Directories are removed along with all of their contents.
       parameters:
         - { in: query, name: path, schema: { type: string }, description: Single path; or use body for batch }
+        - in: query
+          name: permanent
+          required: false
+          schema: { type: boolean, default: false }
+          description: When true, hard-delete (no trash); otherwise move to trash.
       requestBody:
         required: false
         content:
@@ -241,6 +247,57 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+
+  /trash:
+    get:
+      summary: List items currently in the trash (newest first)
+      responses:
+        "200":
+          description: Trash items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashEntry" }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Empty the trash (all items, or only the given ids)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids: { type: array, items: { type: string }, description: "Specific trash ids to purge; omit to empty all." }
+      responses:
+        "200": { description: Emptied, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /trash/restore:
+    post:
+      summary: Restore trashed items to their original locations
+      description: >
+        Moves each id back to the original path recorded in its trashinfo. The
+        destination is jail-checked; if it is now occupied the restore is
+        auto-renamed ("keep both") rather than clobbering. Returns a per-id
+        BatchResult whose `path` is the restored location on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/BatchResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
 
   /content:
     get:
@@ -768,6 +825,16 @@ components:
         path: { type: string }
         entries: { type: array, items: { $ref: "#/components/schemas/Entry" } }
         nextCursor: { type: string, nullable: true }
+
+    TrashEntry:
+      type: object
+      properties:
+        id: { type: string, description: Opaque trash id (used by /trash/restore and DELETE /trash). }
+        name: { type: string }
+        originalPath: { type: string, description: Where the item will be restored to. }
+        deletedAt: { type: string, format: date-time }
+        size: { type: integer, format: int64 }
+        isDir: { type: boolean }
 
     CreateRequest:
       type: object

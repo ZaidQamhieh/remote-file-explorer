@@ -245,10 +245,24 @@ func uniqueTrashName(trashDir, base string) string {
 func writeTrashInfo(trashDir, id, originalPath string) error {
 	content := fmt.Sprintf(
 		"[Trash Info]\nPath=%s\nDeletionDate=%s\n",
-		url.PathEscape(originalPath),
+		encodeTrashPath(originalPath),
 		time.Now().Format(xdgDeletionDate),
 	)
 	return os.WriteFile(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt), []byte(content), 0o600)
+}
+
+// encodeTrashPath percent-encodes an absolute path the XDG-spec way: each path
+// segment is escaped (spaces, unicode, reserved chars) but the '/' separators
+// are kept literal, so a desktop file manager can also parse + restore items
+// the app trashed (the store is the user's real ~/.local/share/Trash). The
+// inverse is plain url.PathUnescape (used by readTrashInfo), which leaves the
+// literal '/' untouched and decodes the %xx within each segment.
+func encodeTrashPath(p string) string {
+	parts := strings.Split(p, "/")
+	for i, seg := range parts {
+		parts[i] = url.PathEscape(seg)
+	}
+	return strings.Join(parts, "/")
 }
 
 func readTrashInfo(path string) (originalPath string, deletedAt time.Time, err error) {

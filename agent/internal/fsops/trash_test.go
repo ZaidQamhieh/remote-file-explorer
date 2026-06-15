@@ -3,6 +3,7 @@ package fsops
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,6 +116,44 @@ func TestTrash_ReadOnly(t *testing.T) {
 	res := ro.MoveToTrash([]string{src}, filepath.Join(t.TempDir(), "Trash"))
 	if res[0].OK || res[0].Error == nil || res[0].Error.Code != "READ_ONLY" {
 		t.Fatalf("expected READ_ONLY, got %+v", res[0])
+	}
+}
+
+// TestTrash_PathWithSpacesRoundTrips trashes a file whose original path
+// contains a space, then checks the listing reports the exact original path
+// (the .trashinfo encoding round-trips) and restore puts it back there.
+func TestTrash_PathWithSpacesRoundTrips(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	dir := filepath.Join(root, "My Photos")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(dir, "a b.txt")
+	if err := os.WriteFile(src, []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if res := ops.MoveToTrash([]string{src}, trashDir); !res[0].OK {
+		t.Fatalf("trash: %+v", res[0])
+	}
+	items, _ := ListTrash(trashDir)
+	if len(items) != 1 || items[0].OriginalPath != src {
+		t.Fatalf("OriginalPath = %q, want %q", items[0].OriginalPath, src)
+	}
+	// The on-disk .trashinfo should keep '/' literal (XDG-compatible).
+	infoBytes, _ := os.ReadFile(
+		filepath.Join(trashInfoDir(trashDir), items[0].ID+trashInfoExt),
+	)
+	if !strings.Contains(string(infoBytes), "Path=/") ||
+		strings.Contains(string(infoBytes), "%2F") {
+		t.Fatalf("trashinfo should keep '/' literal:\n%s", infoBytes)
+	}
+
+	if res := ops.RestoreFromTrash([]string{items[0].ID}, trashDir); !res[0].OK {
+		t.Fatalf("restore: %+v", res[0])
+	}
+	if got, _ := os.ReadFile(src); string(got) != "hi" {
+		t.Fatalf("restored content = %q, want hi", got)
 	}
 }
 

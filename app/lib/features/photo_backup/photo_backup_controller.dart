@@ -41,6 +41,10 @@ class PhotoBackupController {
   /// transfer-task id → photo asset id, for the tasks this controller created.
   final Map<String, String> _taskToAsset = {};
 
+  /// Serializes the read-modify-write of the backed-up record so concurrent
+  /// completions can't lose each other's updates.
+  Future<void> _persistChain = Future<void>.value();
+
   /// Called (via the provider's ref.listen) whenever the transfer queue
   /// changes; records completed uploads into the dedupe set.
   Future<void> onTasks(List<TransferTask> tasks) async {
@@ -57,8 +61,11 @@ class PhotoBackupController {
       }
     }
     if (completed.isNotEmpty) {
-      final store = await PhotoBackupStore.open();
-      await store.markDone(completed);
+      _persistChain = _persistChain.then((_) async {
+        final store = await PhotoBackupStore.open();
+        await store.markDone(completed);
+      });
+      await _persistChain;
     }
   }
 
@@ -118,24 +125,30 @@ class PhotoBackupController {
     final queue = _ref.read(transferQueueProvider.notifier);
     var enqueued = 0;
     for (final a in pending) {
-      final file = await a.originFile ?? await a.file;
-      if (file == null) continue;
-      final title = await a.titleAsync;
-      final name = title.isNotEmpty ? title : '${a.id}.jpg';
-      final remote = backupRemotePath(
-        destRoot: prefs.destRoot!,
-        created: a.createDateTime,
-        name: name,
-      );
-      final task = TransferTask.upload(
-        localPath: file.path,
-        remotePath: remote,
-        host: host,
-        overwrite: false,
-      );
-      _taskToAsset[task.id] = a.id;
-      queue.enqueue(task);
-      enqueued++;
+      try {
+        final file = await a.originFile ?? await a.file;
+        if (file == null) continue;
+        final title = await a.titleAsync;
+        final name = title.isNotEmpty ? title : '${a.id}.jpg';
+        final remote = backupRemotePath(
+          destRoot: prefs.destRoot!,
+          created: a.createDateTime,
+          name: name,
+        );
+        final task = TransferTask.upload(
+          localPath: file.path,
+          remotePath: remote,
+          host: host,
+          overwrite: false,
+        );
+        _taskToAsset[task.id] = a.id;
+        queue.enqueue(task);
+        enqueued++;
+      } catch (_) {
+        // Skip an asset we can't materialize (limited access, deleted under
+        // us, unsupported) rather than aborting the whole backup run.
+        continue;
+      }
     }
     return PhotoBackupRunResult(
       PhotoBackupOutcome.enqueued,

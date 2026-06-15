@@ -84,32 +84,45 @@ class PreviewActions {
   /// flow), then pops the preview and notifies [onDeleted]. Returns `true` if
   /// the file was deleted (so the pager can drop it from its page list).
   Future<bool> delete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    // null = cancel, false = trash (default, reversible), true = permanent.
+    final permanent = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete permanently?'),
+            title: const Text('Delete?'),
             content: Text(
-              'Permanently delete "${entry.name}"? This cannot be undone.',
+              'Move "${entry.name}" to Trash? You can restore it later.',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: const Text('Delete forever'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Move to Trash'),
               ),
             ],
           ),
     );
-    if (confirmed != true || !context.mounted) return false;
+    if (permanent == null || !context.mounted) return false;
     try {
       final name = entry.name;
-      await client.delete([entry.path]);
+      await client.delete([entry.path], permanent: permanent);
       onDeleted?.call();
-      if (context.mounted) showSuccess(context, 'Deleted $name');
+      if (context.mounted) {
+        showSuccess(
+          context,
+          permanent ? 'Deleted $name' : 'Moved $name to Trash',
+        );
+      }
       return true;
     } catch (e) {
       if (context.mounted) showError(context, 'Delete failed: $e');

@@ -7,6 +7,7 @@ import 'core/app_info.dart';
 import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/hosts/host_list_screen.dart';
+import 'features/share/share_intake.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,11 @@ void main() async {
 /// unaffected.
 class RemoteFileExplorerApp extends ConsumerWidget {
   const RemoteFileExplorerApp({super.key});
+
+  /// App-wide navigator key so [ShareIntakeListener] can push routes and show
+  /// sheets/snackbars from outside the widget tree (e.g. right at cold start,
+  /// in response to a "Share to…" intent).
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -77,10 +83,14 @@ class RemoteFileExplorerApp extends ConsumerWidget {
   }) {
     return MaterialApp(
       title: 'Remote File Explorer',
+      navigatorKey: navigatorKey,
       theme: light,
       darkTheme: dark,
       themeMode: mode,
-      home: const HostListScreen(),
+      home: ShareIntakeListener(
+        navigatorKey: navigatorKey,
+        child: const HostListScreen(),
+      ),
     );
   }
 }

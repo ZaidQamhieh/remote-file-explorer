@@ -5,6 +5,7 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
+import '../photo_backup/photo_backup_screen.dart';
 import 'settings_screen.dart' show FileVisibilitySection;
 import 'update_tile.dart';
 import 'widgets/backup_restore_section.dart';
@@ -183,6 +184,26 @@ class AppSettingsScreen extends ConsumerWidget {
           // host's settings screen). Self-contained card; reused from
           // settings_screen.dart where the editor + override section are defined.
           const FileVisibilitySection(),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Photo backup',
+            icon: Icons.photo_library_outlined,
+            padded: false,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.backup_outlined),
+                title: const Text('Photo backup'),
+                subtitle: const Text('Copy phone photos to a PC'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PhotoBackupScreen(),
+                      ),
+                    ),
+              ),
+            ],
+          ),
           const SizedBox(height: Spacing.md),
           const BackupRestoreSection(),
         ],

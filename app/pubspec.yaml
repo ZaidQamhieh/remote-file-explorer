@@ -26,6 +26,9 @@ dependencies:
   package_info_plus: ^9.0.1
   share_plus: ^10.1.4
   receive_sharing_intent: ^1.8.1
+  photo_manager: ^3.6.1
+  connectivity_plus: ^6.1.0
+  battery_plus: ^6.2.0
 
 dev_dependencies:
   flutter_test:

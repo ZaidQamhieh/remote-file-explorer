@@ -1,12 +1,20 @@
 package com.zqamhieh.remote_file_explorer
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,9 +23,53 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val channelName = "rfe/downloads"
+    private val transfersChannelName = "rfe/transfers"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // POST_NOTIFICATIONS (API 33+) gates whether the transfer progress /
+        // completion notifications are visible. The foreground service still
+        // runs without it; this just makes its notification show.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0x504E)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, transfersChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        val intent = Intent(this, TransferService::class.java).apply {
+                            action = TransferService.ACTION_UPDATE
+                            putExtra(TransferService.EXTRA_TITLE, call.argument<String>("title"))
+                            putExtra(TransferService.EXTRA_TEXT, call.argument<String>("text"))
+                            putExtra(
+                                TransferService.EXTRA_PROGRESS,
+                                call.argument<Int>("progress") ?: 0,
+                            )
+                        }
+                        ContextCompat.startForegroundService(this, intent)
+                        result.success(true)
+                    }
+                    "stop" -> {
+                        val intent = Intent(this, TransferService::class.java).apply {
+                            action = TransferService.ACTION_STOP
+                        }
+                        startService(intent)
+                        result.success(true)
+                    }
+                    "complete" -> {
+                        postCompletion(call.argument<String>("text") ?: "Transfers finished")
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -69,6 +121,34 @@ class MainActivity : FlutterActivity() {
      * we don't pre-check the permission ourselves (that check is unreliable on
      * Android 16 and was wrongly reporting "denied" even when granted).
      */
+    /**
+     * Posts a one-off, auto-dismissing notification summarising a finished
+     * transfer batch (e.g. "3 done · 1 failed"), on its own channel separate
+     * from the ongoing foreground-service notification.
+     */
+    private fun postCompletion(text: String) {
+        val channelId = "transfers_done"
+        val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            mgr.getNotificationChannel(channelId) == null
+        ) {
+            mgr.createNotificationChannel(
+                NotificationChannel(
+                    channelId,
+                    "Transfer results",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply { description = "Completed file transfers" },
+            )
+        }
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Transfers complete")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setAutoCancel(true)
+            .build()
+        mgr.notify(0x5255, notification)
+    }
+
     private fun installApk(path: String) {
         val file = File(path)
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)

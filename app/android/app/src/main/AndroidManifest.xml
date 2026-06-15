@@ -8,6 +8,11 @@
          The system installer manages the "install unknown apps" permission
          natively, which is reliable on Android 16 (unlike a Dart-side check). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Keep transfers running while the app is backgrounded, via a foreground
+         service, and show their progress/result notifications. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Remote File Explorer"
         android:name="${applicationName}"
@@ -58,6 +63,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
+        <!-- Foreground service that keeps file transfers alive while the app is
+             backgrounded (see TransferService.kt). -->
+        <service
+            android:name=".TransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- Skia fallback: Impeller 3.29 glyph-atlas corruption on Samsung Mali/Xclipse GPUs -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

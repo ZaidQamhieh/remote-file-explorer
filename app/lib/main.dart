@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'core/app_info.dart';
+import 'core/platform/transfer_notifications.dart';
 import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/hosts/host_list_screen.dart';
@@ -37,6 +38,10 @@ class RemoteFileExplorerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keep the transfer foreground-service/notification bridge alive for the
+    // whole app lifetime so backgrounded transfers stay running + visible.
+    ref.watch(transferNotificationsProvider);
+
     final settings = ref.watch(settingsProvider).valueOrNull;
 
     // First frame (settings still loading): seed-based themes + system mode.

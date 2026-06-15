@@ -40,6 +40,32 @@ jobs:
         working-directory: app
         run: flutter pub get
 
+      # Recreate the release signing material from secrets so the CI-built APK
+      # is signed with the SAME upload key as local builds — without this the
+      # OTA updater can detect a new version but Android refuses to install it
+      # (signature mismatch). The keystore lands in $RUNNER_TEMP (absolute path)
+      # and key.properties at app/android/ where build.gradle.kts reads it.
+      - name: Configure release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot sign release"
+            exit 1
+          fi
+          ks="$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+          {
+            echo "storeFile=$ks"
+            echo "storePassword=$STORE_PW"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PW"
+          } > app/android/key.properties
+
       - name: Build release APK
         working-directory: app
         run: flutter build apk --release

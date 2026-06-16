@@ -1,7 +1,7 @@
 name: remote_file_explorer
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.14.1+27
+version: 1.15.0+28
 
 environment:
   sdk: ^3.7.0

@@ -108,6 +108,23 @@ type jailedSettings struct {
 func (s jailedSettings) IsReadOnly() bool { return s.base.IsReadOnly() }
 func (s jailedSettings) Roots() []string  { return s.roots }
 
+// roSettings forces IsReadOnly() to true while delegating Roots() to the base
+// view, so a per-device read-only request reuses every existing fsops write
+// guard (CreateFolder/WriteContent/Rename/Delete/…) without changing the live
+// global read-only flag.
+type roSettings struct{ base SettingsView }
+
+func (s roSettings) IsReadOnly() bool { return true }
+func (s roSettings) Roots() []string  { return s.base.Roots() }
+
+// ReadOnly returns a view of o that rejects all write operations regardless of
+// the live global read-only flag — used to enforce a per-device read-only flag
+// (Device.ReadOnly, #8). Reads (ListDir, Meta, downloads) are unaffected. The
+// returned Ops keeps o's roots and denyAll, so it composes after Jailed.
+func (o *Ops) ReadOnly() *Ops {
+	return &Ops{settings: roSettings{base: o.settings}, denyAll: o.denyAll}
+}
+
 // Jailed returns an Ops whose effective roots are the intersection of o's
 // base roots and extraRoot (a per-device path jail, e.g. Device.JailRoot).
 //

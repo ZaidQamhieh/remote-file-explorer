@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -30,6 +31,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdRevokeOrRemove(args, true)
 	case "jail":
 		return cmdJail(args)
+	case "readonly":
+		return cmdReadonly(args)
 	case "status":
 		return cmdStatus(args)
 	case "help", "-h", "--help":
@@ -51,6 +54,7 @@ Usage:
   rfe-agent revoke <id>          block a device (accepts a unique id prefix)
   rfe-agent remove <id>          permanently delete a device
   rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
+  rfe-agent readonly <id> <on|off>  allow browse/download but block all writes
   rfe-agent status               show name, addresses, fingerprint, devices
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
@@ -137,14 +141,18 @@ func cmdDevices(args []string) error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tLABEL\tSTATUS\tLAST SEEN")
+	fmt.Fprintln(tw, "ID\tLABEL\tSTATUS\tACCESS\tLAST SEEN")
 	for _, d := range devices {
 		status := "active"
 		if d.Revoked {
 			status = "revoked"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
-			shortID(d.ID), d.Label, status, humanizeSince(d.LastSeen))
+		access := "read-write"
+		if d.ReadOnly {
+			access = "read-only"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+			shortID(d.ID), d.Label, status, access, humanizeSince(d.LastSeen))
 	}
 	return tw.Flush()
 }
@@ -240,6 +248,56 @@ func cmdJail(args []string) error {
 		fmt.Printf("Jailed %q (%s) to %s\n", label, shortID(id), clean)
 	}
 	return nil
+}
+
+// cmdReadonly sets or clears a device's per-device read-only flag (#8). Like
+// jail, this is a PC-side concern with no app-facing route. A read-only device
+// can browse and download but every filesystem write is rejected.
+func cmdReadonly(args []string) error {
+	fs := flag.NewFlagSet("readonly", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage: rfe-agent readonly <device-id> <on|off>")
+	}
+
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	id, err := db.ResolveDeviceID(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	ro, err := parseOnOff(fs.Arg(1))
+	if err != nil {
+		return err
+	}
+	if err := db.SetDeviceReadOnly(id, ro); err != nil {
+		return err
+	}
+	label := deviceLabel(db, id)
+	if ro {
+		fmt.Printf("Set %q (%s) to read-only\n", label, shortID(id))
+	} else {
+		fmt.Printf("Set %q (%s) to read-write\n", label, shortID(id))
+	}
+	return nil
+}
+
+// parseOnOff accepts on/off (and true/false, 1/0, yes/no, case-insensitive).
+func parseOnOff(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "on", "true", "1", "yes":
+		return true, nil
+	case "off", "false", "0", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid value %q: use on or off", s)
+	}
 }
 
 // cmdStatus prints a one-glance summary of the agent.

@@ -85,6 +85,7 @@ func deviceJSON(d store.Device, cur *store.Device) map[string]any {
 		"lastAddress": d.LastAddress,
 		"lastVersion": d.LastVersion,
 		"jailRoot":    d.JailRoot,
+		"readOnly":    d.ReadOnly,
 	}
 }
 

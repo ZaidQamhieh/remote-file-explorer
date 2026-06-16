@@ -41,6 +41,53 @@ func TestListAndRevokeDevices(t *testing.T) {
 	}
 }
 
+func TestSetDeviceReadOnly(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateDevice("id-ro", "phone", "tok-ro"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// New devices default to read-write.
+	d, err := db.DeviceByToken("tok-ro")
+	if err != nil || d == nil {
+		t.Fatalf("by token: %v (d=%+v)", err, d)
+	}
+	if d.ReadOnly {
+		t.Fatal("new device should default to read-write")
+	}
+
+	// Flip to read-only and confirm it round-trips through every read path.
+	if err := db.SetDeviceReadOnly("id-ro", true); err != nil {
+		t.Fatalf("set read-only: %v", err)
+	}
+	d, _ = db.DeviceByToken("tok-ro")
+	if !d.ReadOnly {
+		t.Fatal("DeviceByToken: expected read-only")
+	}
+	d, _ = db.GetDeviceByID("id-ro")
+	if !d.ReadOnly {
+		t.Fatal("GetDeviceByID: expected read-only")
+	}
+	list, _ := db.ListDevices()
+	if len(list) != 1 || !list[0].ReadOnly {
+		t.Fatalf("ListDevices: expected one read-only device, got %+v", list)
+	}
+
+	// Clearing it returns to read-write.
+	if err := db.SetDeviceReadOnly("id-ro", false); err != nil {
+		t.Fatalf("clear read-only: %v", err)
+	}
+	d, _ = db.DeviceByToken("tok-ro")
+	if d.ReadOnly {
+		t.Fatal("expected read-write after clearing")
+	}
+}
+
 func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	db, err := Open(t.TempDir())
 	if err != nil {

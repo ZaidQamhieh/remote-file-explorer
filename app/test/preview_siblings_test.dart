@@ -54,4 +54,25 @@ void main() {
       expect(r.index, -1);
     });
   });
+
+  group('isPreviewable — audio', () {
+    test('common audio extensions are previewable', () {
+      for (final name in ['song.mp3', 'voice.m4a', 'track.flac', 'clip.ogg']) {
+        expect(isPreviewable(_file(name)), isTrue, reason: name);
+      }
+    });
+
+    test('audio/* mime type is previewable even with an odd extension', () {
+      expect(isPreviewable(_file('recording.dat', mime: 'audio/mpeg')), isTrue);
+    });
+
+    test('audio entries count among previewable siblings', () {
+      final mp3 = _file('a.mp3');
+      final txt = _file('b.txt');
+      final blob = _file('c.bin');
+      final r = previewableSiblings([mp3, txt, blob], mp3);
+      expect(r.entries.map((e) => e.name), ['a.mp3', 'b.txt']);
+      expect(r.index, 0);
+    });
+  });
 }

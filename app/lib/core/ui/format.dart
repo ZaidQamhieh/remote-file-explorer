@@ -16,6 +16,24 @@ String formatSize(int? bytes) {
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }
 
+/// Clock-style duration string for [d] (e.g. `0:07`, `3:42`, `1:05:09`).
+///
+/// Minutes and seconds are always two digits; the hours field is only shown
+/// when the duration reaches an hour. Negative or null values render `0:00`,
+/// so it's safe to pass a media player's position before it's known.
+String formatDuration(Duration? d) {
+  final total = (d?.inSeconds ?? 0).clamp(0, 1 << 31);
+  final hours = total ~/ 3600;
+  final minutes = (total % 3600) ~/ 60;
+  final seconds = total % 60;
+  final ss = seconds.toString().padLeft(2, '0');
+  if (hours > 0) {
+    final mm = minutes.toString().padLeft(2, '0');
+    return '$hours:$mm:$ss';
+  }
+  return '$minutes:$ss';
+}
+
 /// Short `YYYY-MM-DD` date string for [dt] (local calendar date).
 String formatDate(DateTime dt) =>
     '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'

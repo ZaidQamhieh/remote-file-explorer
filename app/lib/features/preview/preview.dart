@@ -4,6 +4,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/ui/feedback.dart';
+import 'audio_preview.dart';
 import 'image_preview.dart';
 import 'pdf_preview.dart';
 import 'preview_actions.dart';
@@ -11,7 +12,7 @@ import 'preview_image_cache.dart';
 import 'text_preview.dart';
 import 'video_preview.dart';
 
-enum _PreviewKind { image, pdf, video, text, none }
+enum _PreviewKind { image, pdf, video, audio, text, none }
 
 const Set<String> _textExtensions = {
   'txt', 'md', 'markdown', 'json', 'yaml', 'yml', 'xml', 'csv', 'tsv', 'log',
@@ -44,6 +45,20 @@ const Set<String> _videoExtensions = {
   '3gp',
 };
 
+const Set<String> _audioExtensions = {
+  'mp3',
+  'm4a',
+  'aac',
+  'wav',
+  'flac',
+  'ogg',
+  'oga',
+  'opus',
+  'wma',
+  'aiff',
+  'aif',
+};
+
 String _extensionOf(String name) {
   final dot = name.lastIndexOf('.');
   if (dot < 0 || dot == name.length - 1) return '';
@@ -58,6 +73,7 @@ _PreviewKind _kindOf(Entry entry) {
     if (mime.startsWith('image/')) return _PreviewKind.image;
     if (mime == 'application/pdf') return _PreviewKind.pdf;
     if (mime.startsWith('video/')) return _PreviewKind.video;
+    if (mime.startsWith('audio/')) return _PreviewKind.audio;
     if (mime.startsWith('text/')) return _PreviewKind.text;
     if (mime == 'application/json' ||
         mime == 'application/xml' ||
@@ -72,6 +88,7 @@ _PreviewKind _kindOf(Entry entry) {
   if (_imageExtensions.contains(ext)) return _PreviewKind.image;
   if (ext == 'pdf') return _PreviewKind.pdf;
   if (_videoExtensions.contains(ext)) return _PreviewKind.video;
+  if (_audioExtensions.contains(ext)) return _PreviewKind.audio;
   if (_textExtensions.contains(ext)) return _PreviewKind.text;
 
   return _PreviewKind.none;
@@ -131,6 +148,12 @@ Widget? _viewerFor(
       );
     case _PreviewKind.video:
       return VideoPreviewScreen(
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
+    case _PreviewKind.audio:
+      return AudioPreviewScreen(
         entry: entry,
         client: client,
         chromeless: chromeless,

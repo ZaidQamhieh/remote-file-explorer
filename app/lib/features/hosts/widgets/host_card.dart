@@ -13,6 +13,7 @@ import '../../explorer/explorer_screen.dart';
 import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../../transfers/transfer_manager.dart';
+import '../storage_insights_screen.dart';
 import 'storage_gauge.dart';
 
 /// Maximum number of storage gauges shown before collapsing the rest behind
@@ -185,6 +186,14 @@ class _HostCardState extends ConsumerState<HostCard> {
     );
   }
 
+  void _openStorage(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StorageInsightsScreen(host: widget.host),
+      ),
+    );
+  }
+
   Future<void> _confirmRemove(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -256,6 +265,7 @@ class _HostCardState extends ConsumerState<HostCard> {
                     online: online,
                     onBrowse: () => _openExplorer(context),
                     onSearch: () => _openSearch(context),
+                    onStorage: () => _openStorage(context),
                     onTransfers: () => _openTransfers(context),
                     onSettings: () => _openSettings(context),
                     onForget: () => _confirmRemove(context),
@@ -531,6 +541,7 @@ class _QuickActions extends StatelessWidget {
     required this.online,
     required this.onBrowse,
     required this.onSearch,
+    required this.onStorage,
     required this.onTransfers,
     required this.onSettings,
     required this.onForget,
@@ -539,6 +550,7 @@ class _QuickActions extends StatelessWidget {
   final bool online;
   final VoidCallback onBrowse;
   final VoidCallback onSearch;
+  final VoidCallback onStorage;
   final VoidCallback onTransfers;
   final VoidCallback onSettings;
   final VoidCallback onForget;
@@ -572,6 +584,8 @@ class _QuickActions extends StatelessWidget {
           shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
           onSelected: (v) {
             switch (v) {
+              case 'storage':
+                onStorage();
               case 'transfers':
                 onTransfers();
               case 'settings':
@@ -582,6 +596,8 @@ class _QuickActions extends StatelessWidget {
           },
           itemBuilder:
               (_) => [
+                if (online)
+                  const PopupMenuItem(value: 'storage', child: Text('Storage')),
                 const PopupMenuItem(
                   value: 'transfers',
                   child: Text('Transfers'),

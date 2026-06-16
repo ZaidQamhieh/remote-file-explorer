@@ -12,6 +12,11 @@ const int kMaxInMemoryPreviewBytes = 50 * 1024 * 1024; // 50 MB
 /// queue instead of streaming a full local copy just to preview it.
 const int kMaxVideoPreviewBytes = 300 * 1024 * 1024; // 300 MB
 
+/// Maximum size (in bytes) we'll download to a temp cache file for audio
+/// preview playback. Audio files are far smaller than video, so the cap is
+/// lower; beyond it we suggest downloading via the transfer queue instead.
+const int kMaxAudioPreviewBytes = 100 * 1024 * 1024; // 100 MB
+
 /// Maximum size (in bytes) of a file we'll offer to edit in-app, matching
 /// the agent's `PUT /v1/content` body cap. Saves over this limit are
 /// rejected by the agent with `413 PAYLOAD_TOO_LARGE`; we hide the Edit

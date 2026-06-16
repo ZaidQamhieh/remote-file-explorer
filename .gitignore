@@ -29,3 +29,6 @@ Thumbs.db
 
 # Personal Claude Code settings (per-user, not team config)
 /.claude/settings.local.json
+
+# Generated knowledge-graph artifact (regenerate with tools/rebuild-graph.sh)
+/graphify-out/

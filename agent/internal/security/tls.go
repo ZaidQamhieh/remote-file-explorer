@@ -48,8 +48,11 @@ func LoadOrCreateCert(dir string) (tls.Certificate, error) {
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		// The cert is pinned by fingerprint, so the SANs are permissive: the agent
-		// is reachable by LAN IP, localhost, and its Tailscale name/IP.
+		// The cert is pinned by fingerprint (trust-on-first-use), so hostname
+		// verification is bypassed and the SAN list is only a courtesy: it
+		// covers localhost plus every non-loopback interface IP — which on a
+		// Tailscale host includes the 100.x Tailscale IP. The Tailscale DNS
+		// name is intentionally not listed; pinning makes it unnecessary.
 		DNSNames:    []string{"localhost"},
 		IPAddresses: localIPs(),
 	}

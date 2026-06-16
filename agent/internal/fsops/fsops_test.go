@@ -256,6 +256,38 @@ func TestReadOnly(t *testing.T) {
 	}
 }
 
+// TestReadOnlyView verifies Ops.ReadOnly() rejects writes on an otherwise
+// writable Ops while still allowing reads (per-device read-only, #8).
+func TestReadOnlyView(t *testing.T) {
+	root := t.TempDir()
+	rw := New([]string{root}, false)
+
+	// A folder created via the writable ops...
+	if _, err := rw.CreateFolder(filepath.Join(root, "sub")); err != nil {
+		t.Fatalf("setup CreateFolder: %v", err)
+	}
+
+	ro := rw.ReadOnly()
+
+	// Reads still work through the read-only view.
+	if _, err := ro.ListDir(root, "", 100); err != nil {
+		t.Fatalf("ListDir should work read-only: %v", err)
+	}
+
+	// Writes are rejected.
+	if _, err := ro.CreateFolder(filepath.Join(root, "nope")); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("CreateFolder: expected ErrReadOnly, got %v", err)
+	}
+	if _, err := ro.CreateFile(filepath.Join(root, "nope.txt")); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("CreateFile: expected ErrReadOnly, got %v", err)
+	}
+
+	// The original writable ops is unaffected by deriving a read-only view.
+	if _, err := rw.CreateFolder(filepath.Join(root, "sub2")); err != nil {
+		t.Fatalf("original ops should still be writable: %v", err)
+	}
+}
+
 // TestListDir_Pagination verifies cursor-based pagination.
 func TestListDir_Pagination(t *testing.T) {
 	ops, root := setupJail(t)

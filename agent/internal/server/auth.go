@@ -71,8 +71,16 @@ func deviceJailMiddleware(baseOps *fsops.Ops) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ops := baseOps
-			if device, ok := r.Context().Value(deviceCtxKey).(*store.Device); ok && device != nil && device.JailRoot != "" {
-				ops = baseOps.Jailed(device.JailRoot)
+			if device, ok := r.Context().Value(deviceCtxKey).(*store.Device); ok && device != nil {
+				if device.JailRoot != "" {
+					ops = ops.Jailed(device.JailRoot)
+				}
+				// Per-device read-only (#8): force the request's ops read-only
+				// so every fs write returns ErrReadOnly (→ 403 READ_ONLY),
+				// while reads/downloads still work. Composes after Jailed.
+				if device.ReadOnly {
+					ops = ops.ReadOnly()
+				}
 			}
 			ctx := context.WithValue(r.Context(), opsCtxKey, ops)
 			next.ServeHTTP(w, r.WithContext(ctx))

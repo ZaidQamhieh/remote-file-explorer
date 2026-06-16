@@ -746,6 +746,14 @@ components:
             the device gets the agent's full configured root jail. When
             non-empty, an absolute path; the device is confined to that
             subtree, intersected with the agent's configured roots.
+        readOnly:
+          type: boolean
+          description: >
+            Per-device read-only flag (#8). When true, the device may browse and
+            download but every filesystem write (create/upload/rename/move/
+            delete/compress/extract/write-content) is rejected with 403
+            READ_ONLY, independent of the agent's global read-only mode. Set from
+            the PC only via `rfe-agent readonly <id> <on|off>` (no app route).
     AppRelease:
       type: object
       properties:
@@ -898,7 +906,9 @@ components:
           description: >
             - `BAD_REQUEST` (400): malformed or missing required fields.
             - `UNAUTHORIZED` (401): missing/invalid/revoked bearer token.
-            - `READ_ONLY` (403): agent is in read-only mode; write rejected.
+            - `READ_ONLY` (403): write rejected — the agent is in global
+              read-only mode OR the calling device has the per-device read-only
+              flag set (#8).
             - `FORBIDDEN` (403): path escapes the configured root jail; or a
               /devices/{id} DELETE targets a device other than the caller's
               own ("managing other devices must be done on the PC"); or any

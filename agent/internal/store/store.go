@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS transfers (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add the per-device read-only column (#8). 0 means no restriction;
+	// existing rows default to read-write, preserving today's behavior. When
+	// set, the device may browse/download but every filesystem write is
+	// rejected with READ_ONLY.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -131,6 +140,7 @@ type Device struct {
 	LastAddress string
 	LastVersion string
 	JailRoot    string
+	ReadOnly    bool
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -191,7 +201,7 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices WHERE token_hash=?`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -214,14 +224,15 @@ func (s *DB) TouchDevice(id, address, version string) error {
 func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot)
+	var revoked, readOnly int
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly)
 	if err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
 	d.LastSeen = time.Unix(lastSeen, 0)
 	d.Revoked = revoked != 0
+	d.ReadOnly = readOnly != 0
 	return &d, nil
 }
 
@@ -233,20 +244,21 @@ type rowScanner interface {
 func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot); err != nil {
+	var revoked, readOnly int
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
 	d.LastSeen = time.Unix(lastSeen, 0)
 	d.Revoked = revoked != 0
+	d.ReadOnly = readOnly != 0
 	return &d, nil
 }
 
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +321,7 @@ func (s *DB) DeleteDevice(id string) error {
 // GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
 func (s *DB) GetDeviceByID(id string) (*Device, error) {
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root FROM devices WHERE id=?`, id,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices WHERE id=?`, id,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -323,6 +335,18 @@ func (s *DB) GetDeviceByID(id string) (*Device, error) {
 // before calling this — see setDeviceJailHandler in the server package.
 func (s *DB) SetDeviceJail(id, jailRoot string) error {
 	_, err := s.db.Exec(`UPDATE devices SET jail_root=? WHERE id=?`, jailRoot, id)
+	return err
+}
+
+// SetDeviceReadOnly sets (true) or clears (false) the per-device read-only
+// flag for device id (#8). A read-only device may browse/download but every
+// filesystem write is rejected with READ_ONLY.
+func (s *DB) SetDeviceReadOnly(id string, ro bool) error {
+	v := 0
+	if ro {
+		v = 1
+	}
+	_, err := s.db.Exec(`UPDATE devices SET read_only=? WHERE id=?`, v, id)
 	return err
 }
 

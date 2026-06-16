@@ -17,6 +17,37 @@ double? usedFraction(Drive drive) {
   return (used / total).clamp(0.0, 1.0);
 }
 
+/// Aggregate used/free/total across every drive in [drives] that reports real
+/// capacity (`totalBytes != null && totalBytes > 0 && freeBytes != null`).
+///
+/// Returns `null` when no drive has usable capacity, so callers can render an
+/// empty state instead of a meaningless zero bar. A per-drive `freeBytes` that
+/// exceeds its `totalBytes` (bad agent data) is capped to the total so it can't
+/// inflate the aggregate free beyond capacity — mirroring [usedFraction]'s
+/// clamping contract.
+({int totalBytes, int freeBytes, double usedFraction})? aggregateUsage(
+  List<Drive> drives,
+) {
+  var sumTotal = 0;
+  var sumFree = 0;
+  var any = false;
+  for (final drive in drives) {
+    final total = drive.totalBytes;
+    final free = drive.freeBytes;
+    if (total == null || total <= 0 || free == null) continue;
+    any = true;
+    sumTotal += total;
+    sumFree += free > total ? total : free;
+  }
+  if (!any || sumTotal <= 0) return null;
+  final used = sumTotal - sumFree;
+  return (
+    totalBytes: sumTotal,
+    freeBytes: sumFree,
+    usedFraction: (used / sumTotal).clamp(0.0, 1.0),
+  );
+}
+
 /// A single-drive storage gauge: a thin rounded progress track plus a
 /// "`<free>` free of `<total>`" label and the mount path/label underneath.
 ///

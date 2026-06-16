@@ -8,6 +8,7 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../pairing/pairing_screen.dart';
 import '../settings/app_settings_screen.dart';
+import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
 
 /// Displays all paired hosts as a dashboard of [HostCard]s.
@@ -61,34 +62,41 @@ class HostListScreen extends ConsumerWidget {
           const SizedBox(width: Spacing.xs),
         ],
       ),
-      body: storeAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (store) {
-          final hosts = store.listHosts();
-          if (hosts.isEmpty) {
-            return _EmptyState(
-              scheme: scheme,
-              onScan: () => _addComputer(context, ref),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.sm,
-              vertical: Spacing.md,
-            ),
-            itemCount: hosts.length,
-            itemBuilder:
-                (ctx, i) => AppearListItem(
-                  index: i,
-                  child: HostCard(
-                    host: hosts[i],
-                    store: store,
-                    isFirst: i == 0,
+      body: Column(
+        children: [
+          const UpdateBanner(),
+          Expanded(
+            child: storeAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
+              data: (store) {
+                final hosts = store.listHosts();
+                if (hosts.isEmpty) {
+                  return _EmptyState(
+                    scheme: scheme,
+                    onScan: () => _addComputer(context, ref),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.sm,
+                    vertical: Spacing.md,
                   ),
-                ),
-          );
-        },
+                  itemCount: hosts.length,
+                  itemBuilder:
+                      (ctx, i) => AppearListItem(
+                        index: i,
+                        child: HostCard(
+                          host: hosts[i],
+                          store: store,
+                          isFirst: i == 0,
+                        ),
+                      ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add_rounded),

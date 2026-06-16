@@ -9,3 +9,19 @@ bool isUpdateAvailable({
   if (release == null) return false;
   return release.versionCode > installedBuild;
 }
+
+/// Whether [release] should be surfaced in the passive auto-update banner,
+/// given the highest version code the user has already dismissed
+/// ([dismissedCode]).
+///
+/// Returns false for a null release or one at/below the dismissed code, so a
+/// dismissal sticks until an even-newer build appears. Pure (no plugins) so it
+/// is unit-testable. Note this does NOT re-check "newer than installed" — the
+/// caller passes a [release] already filtered by [isUpdateAvailable].
+bool shouldSurfaceUpdate({
+  required AppRelease? release,
+  required int dismissedCode,
+}) {
+  if (release == null) return false;
+  return release.versionCode > dismissedCode;
+}

@@ -32,4 +32,24 @@ void main() {
       expect(isUpdateAvailable(installedBuild: 5, release: null), isFalse);
     });
   });
+
+  group('shouldSurfaceUpdate', () {
+    const rel = AppRelease(versionName: '1.2.0', versionCode: 12, size: 1);
+
+    test('false when release is null', () {
+      expect(shouldSurfaceUpdate(release: null, dismissedCode: 0), isFalse);
+    });
+    test('true when nothing dismissed yet', () {
+      expect(shouldSurfaceUpdate(release: rel, dismissedCode: 0), isTrue);
+    });
+    test('false when this exact version was dismissed', () {
+      expect(shouldSurfaceUpdate(release: rel, dismissedCode: 12), isFalse);
+    });
+    test('false when a newer version was already dismissed', () {
+      expect(shouldSurfaceUpdate(release: rel, dismissedCode: 13), isFalse);
+    });
+    test('true when only an older version was dismissed', () {
+      expect(shouldSurfaceUpdate(release: rel, dismissedCode: 11), isTrue);
+    });
+  });
 }

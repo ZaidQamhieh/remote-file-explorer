@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/agent_client.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/format.dart';
+import '../thumbnail_image.dart';
 import 'entry_drag.dart';
 
 /// A single row in the explorer's list view: leading icon (or checkbox in
@@ -35,9 +37,15 @@ class EntryTile extends StatelessWidget {
     this.density = EntryDensity.comfortable,
     this.isFavorite = false,
     this.onShowMeta,
+    this.client,
   });
 
   final Entry entry;
+
+  /// When provided, image rows show a server-rendered thumbnail in the leading
+  /// square (with the category icon as the fallback). When null, the row keeps
+  /// the plain category icon — so the tile degrades gracefully without a client.
+  final AgentClient? client;
   final bool selected;
   final bool multiSelect;
   final VoidCallback onTap;
@@ -78,6 +86,7 @@ class EntryTile extends StatelessWidget {
               entry: entry,
               compact: compact,
               isFavorite: isFavorite && entry.isDir,
+              client: client,
             );
 
     final nameStyle = Theme.of(context).textTheme.titleMedium;
@@ -173,11 +182,13 @@ class _IconTile extends StatelessWidget {
     required this.entry,
     required this.compact,
     this.isFavorite = false,
+    this.client,
   });
 
   final Entry entry;
   final bool compact;
   final bool isFavorite;
+  final AgentClient? client;
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +204,28 @@ class _IconTile extends StatelessWidget {
       alignment: Alignment.center,
       child: EntryLeading(entry: entry, size: size * 0.55),
     );
+
+    // Image files: show the server thumbnail inside the same tonal square,
+    // falling back to the category icon while loading / when unavailable.
+    // Only when a client is available; images are never favorited folders, so
+    // this returns before the star-badge path below.
+    final isImage = !entry.isDir && (entry.mimeType ?? '').startsWith('image/');
+    if (client != null && isImage) {
+      return ClipRRect(
+        borderRadius: Radii.smR,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: ThumbnailImage(
+            entry: entry,
+            client: client!,
+            size: 128,
+            fallback: container,
+          ),
+        ),
+      );
+    }
+
     if (!isFavorite) return container;
     return Stack(
       clipBehavior: Clip.none,

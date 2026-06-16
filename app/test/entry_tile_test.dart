@@ -1,10 +1,26 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
+import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
+import 'package:remote_file_explorer/features/explorer/thumbnail_image.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/entry_tile.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+/// Returns no thumbnail bytes, so the row falls back to the category icon —
+/// enough to assert the [ThumbnailImage] is wired in without hitting a host.
+class _FakeAgentClient extends AgentClient {
+  _FakeAgentClient()
+    : super(const Host(id: 'h1', label: 'PC', address: '127.0.0.1:1'));
+
+  @override
+  Future<Uint8List?> thumbnail(String remotePath, {int size = 256}) async =>
+      null;
+}
 
 void main() {
   final file = Entry(
@@ -14,6 +30,15 @@ void main() {
     size: 2048,
     mimeType: 'application/pdf',
     modified: DateTime(2024, 3, 5),
+  );
+
+  final image = Entry(
+    name: 'photo.jpg',
+    path: '/root/photo.jpg',
+    isDir: false,
+    size: 4096,
+    mimeType: 'image/jpeg',
+    modified: DateTime(2024, 3, 6),
   );
 
   final folder = Entry(name: 'Documents', path: '/root/Documents', isDir: true);
@@ -43,6 +68,67 @@ void main() {
     expect(find.byType(Checkbox), findsNothing);
     expect(find.byIcon(Icons.picture_as_pdf), findsOneWidget);
   });
+
+  testWidgets('image entry with a client renders a ThumbnailImage in the row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EntryTile(
+          entry: image,
+          client: _FakeAgentClient(),
+          selected: false,
+          multiSelect: false,
+          onTap: () {},
+          onLongPress: () {},
+          onSelect: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(ThumbnailImage), findsOneWidget);
+  });
+
+  testWidgets(
+    'image entry without a client keeps the plain icon (no thumbnail)',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          EntryTile(
+            entry: image,
+            selected: false,
+            multiSelect: false,
+            onTap: () {},
+            onLongPress: () {},
+            onSelect: () {},
+          ),
+        ),
+      );
+
+      expect(find.byType(ThumbnailImage), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'non-image entry with a client does not render a ThumbnailImage',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          EntryTile(
+            entry: file,
+            client: _FakeAgentClient(),
+            selected: false,
+            multiSelect: false,
+            onTap: () {},
+            onLongPress: () {},
+            onSelect: () {},
+          ),
+        ),
+      );
+
+      expect(find.byType(ThumbnailImage), findsNothing);
+    },
+  );
 
   testWidgets('folder entry shows name, chevron, and no subtitle', (
     tester,

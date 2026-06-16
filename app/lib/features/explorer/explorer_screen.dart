@@ -535,6 +535,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             opacity: hidden ? 0.55 : 1,
             child: EntryTile(
               entry: entry,
+              client: client,
               selected: state.selected.contains(entry.path),
               multiSelect: state.multiSelect,
               density: density,

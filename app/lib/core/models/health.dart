@@ -8,6 +8,7 @@ class Health {
     required this.readOnly,
     this.address,
     this.tailscaleAddress,
+    this.macAddress,
   });
 
   final String status;
@@ -22,6 +23,11 @@ class Health {
   final String? address;
   final String? tailscaleAddress;
 
+  /// MAC address of the host's LAN interface (e.g. "aa:bb:cc:dd:ee:ff").
+  /// Cached by the app for Wake-on-LAN when the host is asleep. Absent on
+  /// older agents that predate WOL support.
+  final String? macAddress;
+
   factory Health.fromJson(Map<String, dynamic> json) => Health(
     status: json['status'] as String? ?? 'unknown',
     name: json['name'] as String? ?? '',
@@ -30,6 +36,7 @@ class Health {
     readOnly: json['readOnly'] as bool? ?? false,
     address: _nonEmpty(json['address'] as String?),
     tailscaleAddress: _nonEmpty(json['tailscaleAddress'] as String?),
+    macAddress: _nonEmpty(json['macAddress'] as String?),
   );
 }
 

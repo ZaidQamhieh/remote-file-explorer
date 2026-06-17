@@ -72,8 +72,8 @@ func runServe(args []string) {
 	fingerprint := security.Fingerprint(cert)
 	log.Printf("agent %q  cert-fingerprint=%s", *name, fingerprint)
 
-	lanAddr, tsAddr := reachableAddresses(*addr)
-	log.Printf("reachable at  lan=%s  tailscale=%s", orNone(lanAddr), orNone(tsAddr))
+	lanAddr, tsAddr, macAddr := reachableAddresses(*addr)
+	log.Printf("reachable at  lan=%s  tailscale=%s  mac=%s", orNone(lanAddr), orNone(tsAddr), orNone(macAddr))
 
 	db, err := store.Open(*dataDir)
 	if err != nil {
@@ -126,6 +126,7 @@ func runServe(args []string) {
 		CertFingerprint:  fingerprint,
 		Address:          lanAddr,
 		TailscaleAddress: tsAddr,
+		MACAddress:       macAddr,
 		ThumbCacheDir:    thumbCacheDir,
 		Settings:         st,
 		UpdatesDir:       updatesDir,
@@ -231,23 +232,24 @@ func defaultTrashDir(dataDir string) string {
 // pairs the phone can actually dial. If the user bound to a specific host
 // (e.g. "192.168.1.5:8765") that's trusted as-is and treated as the LAN
 // address; a wildcard bind ("0.0.0.0:8765", ":8765") is resolved to the
-// machine's real LAN and Tailscale IPs via netinfo.
-func reachableAddresses(listenAddr string) (lan, tailscale string) {
+// machine's real LAN and Tailscale IPs via netinfo. Also returns the MAC
+// address of the LAN interface (for Wake-on-LAN support).
+func reachableAddresses(listenAddr string) (lan, tailscale, mac string) {
 	host, port, err := net.SplitHostPort(listenAddr)
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	if host != "" && host != "0.0.0.0" && host != "::" {
-		return listenAddr, ""
+		return listenAddr, "", ""
 	}
-	lanIP, tsIP := netinfo.LocalAddresses()
-	if lanIP != "" {
-		lan = net.JoinHostPort(lanIP, port)
+	info := netinfo.Detect()
+	if info.LAN != "" {
+		lan = net.JoinHostPort(info.LAN, port)
 	}
-	if tsIP != "" {
-		tailscale = net.JoinHostPort(tsIP, port)
+	if info.Tailscale != "" {
+		tailscale = net.JoinHostPort(info.Tailscale, port)
 	}
-	return lan, tailscale
+	return lan, tailscale, info.MAC
 }
 
 func orNone(s string) string {

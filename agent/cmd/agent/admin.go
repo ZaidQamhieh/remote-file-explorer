@@ -92,7 +92,7 @@ func cmdPair(args []string) error {
 		return fmt.Errorf("cert: %w", err)
 	}
 	fingerprint := security.Fingerprint(cert)
-	lan, ts := reachableAddresses(*addr)
+	lan, ts, _ := reachableAddresses(*addr)
 
 	db, err := openAdminStore(dir)
 	if err != nil {
@@ -318,7 +318,7 @@ func cmdStatus(args []string) error {
 	if name == "" {
 		name = hostName()
 	}
-	lan, ts := reachableAddresses(*addr)
+	lan, ts, _ := reachableAddresses(*addr)
 	devices, _ := db.ListDevices()
 	active := 0
 	for _, d := range devices {

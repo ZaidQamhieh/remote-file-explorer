@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair and /health require
@@ -776,6 +776,13 @@ components:
         tailscaleAddress:
           type: string
           description: Tailscale host:port the agent is reachable at, if detected.
+        macAddress:
+          type: string
+          description: >
+            MAC address of the LAN network interface (e.g. "aa:bb:cc:dd:ee:ff").
+            The app caches this so it can send a Wake-on-LAN magic packet when
+            the host is asleep and the agent is unreachable. Empty/absent when
+            the LAN interface has no hardware address.
 
     PairRequest:
       type: object

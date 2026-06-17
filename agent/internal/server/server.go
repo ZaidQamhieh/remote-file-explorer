@@ -24,6 +24,7 @@ type Config struct {
 	CertFingerprint  string
 	Address          string // LAN address used in QR payload / health response
 	TailscaleAddress string // Tailscale address, if detected
+	MACAddress       string // MAC address of the LAN interface (for Wake-on-LAN)
 	ThumbCacheDir    string // directory for on-disk thumbnail cache
 	Settings         *settings.Store
 	UpdatesDir       string // directory of downloadable APKs for in-app update
@@ -142,7 +143,9 @@ func healthHandler(cfg Config) http.HandlerFunc {
 		// Surfacing the agent's known addresses lets an already-paired app
 		// learn the Tailscale (or LAN) address it didn't capture at pairing
 		// time, simply by reaching the agent successfully via either one.
-		writeJSON(w, http.StatusOK, map[string]any{
+		// macAddress is included so the app can cache it for Wake-on-LAN
+		// when the host is asleep (and thus unreachable).
+		resp := map[string]any{
 			"status":           "ok",
 			"name":             cfg.Settings.AgentName(),
 			"version":          cfg.Version,
@@ -150,6 +153,10 @@ func healthHandler(cfg Config) http.HandlerFunc {
 			"readOnly":         cfg.Settings.IsReadOnly(),
 			"address":          cfg.Address,
 			"tailscaleAddress": cfg.TailscaleAddress,
-		})
+		}
+		if cfg.MACAddress != "" {
+			resp["macAddress"] = cfg.MACAddress
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }

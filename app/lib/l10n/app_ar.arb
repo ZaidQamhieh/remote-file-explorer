@@ -485,5 +485,13 @@
   "datePresetLast24h": "آخر 24 ساعة",
   "datePresetLast7d": "آخر 7 أيام",
   "datePresetLast30d": "آخر 30 يومًا",
-  "datePresetThisYear": "هذا العام"
+  "datePresetThisYear": "هذا العام",
+
+  "previewPageIndicator": "{current} من {total}",
+  "@previewPageIndicator": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  }
 }

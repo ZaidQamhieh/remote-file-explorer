@@ -171,8 +171,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyStatePairTitle => 'اقترن بأول حاسوب';
 
   @override
-  String get emptyStatePairBody =>
-      'امسح رمز QR الذي يعرضه وكيل سطح المكتب لتوصيل هذا الهاتف عبر شبكتك أو Tailscale.';
+  String get emptyStatePairBody => 'امسح رمز QR الذي يعرضه وكيل سطح المكتب لتوصيل هذا الهاتف عبر شبكتك أو Tailscale.';
 
   @override
   String errorLabel(String error) {
@@ -384,8 +383,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get favoritesTitle => 'المفضلة';
 
   @override
-  String get noFavoritesYet =>
-      'لا مفضلات بعد. افتح مجلداً والمس النجمة لإضافته.';
+  String get noFavoritesYet => 'لا مفضلات بعد. افتح مجلداً والمس النجمة لإضافته.';
 
   @override
   String get cancelTooltip => 'إلغاء';
@@ -961,8 +959,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get hideDotfiles => 'إخفاء ملفات النقطة';
 
   @override
-  String get hideDotfilesSubtitle =>
-      'إخفاء الملفات والمجلدات التي تبدأ بـ \".\"';
+  String get hideDotfilesSubtitle => 'إخفاء الملفات والمجلدات التي تبدأ بـ \".\"';
 
   @override
   String get customLabel => 'مخصص';
@@ -994,8 +991,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get resetToAppDefaults => 'إعادة تعيين للإعدادات الافتراضية';
 
   @override
-  String get displayFollowsDefaults =>
-      'تتبع الإعدادات الافتراضية للتطبيق ما لم تقم بتخصيصها هنا.';
+  String get displayFollowsDefaults => 'تتبع الإعدادات الافتراضية للتطبيق ما لم تقم بتخصيصها هنا.';
 
   @override
   String get sortLabel => 'الترتيب';
@@ -1057,11 +1053,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get downloadingStatus => 'جارٍ التنزيل…';
 
   @override
-  String downloadingProgress(
-    String percent,
-    String received,
-    String totalSize,
-  ) {
+  String downloadingProgress(String percent, String received, String totalSize) {
     return 'جارٍ التنزيل $percent%  ·  $received / $totalSize';
   }
 
@@ -1226,15 +1218,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get offlineBannerText => 'غير متصل — عرض الملفات المخزنة مؤقتاً';
 
   @override
-  String get defaultsApplyHint =>
-      'تُطبَّق هذه الإعدادات الافتراضية على كل جهاز. يمكنك تجاوز أيٍّ منها لجهاز معيّن من إعدادات ذلك الجهاز.';
+  String get defaultsApplyHint => 'تُطبَّق هذه الإعدادات الافتراضية على كل جهاز. يمكنك تجاوز أيٍّ منها لجهاز معيّن من إعدادات ذلك الجهاز.';
 
   @override
   String get themeLabel => 'المظهر';
 
   @override
-  String get wallpaperSubtitle =>
-      'Material You — اشتق لوحة الألوان من خلفية شاشتك حيثما أمكن';
+  String get wallpaperSubtitle => 'Material You — اشتق لوحة الألوان من خلفية شاشتك حيثما أمكن';
 
   @override
   String get languageLabel => 'اللغة';
@@ -1275,8 +1265,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pickPcFirst => 'اختر حاسوباً ومجلد وجهة أولاً';
 
   @override
-  String get photoAccessDenied =>
-      'تم رفض الوصول للصور — امنح الإذن من إعدادات النظام';
+  String get photoAccessDenied => 'تم رفض الوصول للصور — امنح الإذن من إعدادات النظام';
 
   @override
   String backupFailed(String error) {
@@ -1319,15 +1308,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get readOnlyModeSaveError =>
-      'هذا المضيف في وضع القراءة فقط — لا يمكن حفظ التغييرات.';
+  String get readOnlyModeSaveError => 'هذا المضيف في وضع القراءة فقط — لا يمكن حفظ التغييرات.';
 
   @override
   String get fileTooLargeToSave => 'هذا الملف كبير جداً للحفظ.';
 
   @override
-  String get staleWriteMessage =>
-      'تم تعديل هذا الملف على المضيف منذ فتحته. يمكنك إعادة تحميل النسخة الحالية (ستُفقد تعديلاتك هنا) أو الكتابة فوقها بتعديلاتك.';
+  String get staleWriteMessage => 'تم تعديل هذا الملف على المضيف منذ فتحته. يمكنك إعادة تحميل النسخة الحالية (ستُفقد تعديلاتك هنا) أو الكتابة فوقها بتعديلاتك.';
 
   @override
   String get reloadedFromHost => 'أُعيد تحميل النسخة الحالية من المضيف';
@@ -1336,8 +1323,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get recentSearches => 'عمليات البحث الأخيرة';
 
   @override
-  String get includeHiddenSubtitle =>
-      'عرض النتائج المخفية أيضاً بواسطة إعدادات رؤية الملفات';
+  String get includeHiddenSubtitle => 'عرض النتائج المخفية أيضاً بواسطة إعدادات رؤية الملفات';
 
   @override
   String get writesRejected => 'الكتابة مرفوضة';
@@ -1349,8 +1335,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get allFoldersAllowed => 'جميع المجلدات مسموح بها';
 
   @override
-  String get securityWarning =>
-      'هذا الهاتف يتحكم بالكامل في المضيف. أي شخص يمكنه الوصول إليه يستطيع تغيير هذه الإعدادات والوصول إلى المجلدات المسموح بها.';
+  String get securityWarning => 'هذا الهاتف يتحكم بالكامل في المضيف. أي شخص يمكنه الوصول إليه يستطيع تغيير هذه الإعدادات والوصول إلى المجلدات المسموح بها.';
 
   @override
   String get thisDevice => 'هذا الجهاز';
@@ -1418,8 +1403,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get usingAppDefault => 'يستخدم الإعداد الافتراضي';
 
   @override
-  String get followsAppDefaultVisibility =>
-      'يتبع إعدادات رؤية الملفات الافتراضية للتطبيق ما لم تتجاوزها هنا.';
+  String get followsAppDefaultVisibility => 'يتبع إعدادات رؤية الملفات الافتراضية للتطبيق ما لم تتجاوزها هنا.';
 
   @override
   String get overriddenForDevice => 'مُتجاوَز لهذا الجهاز';
@@ -1436,20 +1420,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get updateNotCompleted => 'لم يكتمل التحديث — انقر لإعادة المحاولة.';
 
   @override
-  String get openingInstallerConfirm =>
-      'جارٍ فتح المثبّت — أكّد في Android ثم عُد إلى هنا.';
+  String get openingInstallerConfirm => 'جارٍ فتح المثبّت — أكّد في Android ثم عُد إلى هنا.';
 
   @override
-  String get downloadPaused =>
-      'توقف التنزيل. أعد المحاولة للاستئناف من حيث توقف.';
+  String get downloadPaused => 'توقف التنزيل. أعد المحاولة للاستئناف من حيث توقف.';
 
   @override
-  String get exportConfigSubtitle =>
-      'حفظ الأجهزة المقترنة والرموز والمفضلة والإعدادات في ملف مشفّر';
+  String get exportConfigSubtitle => 'حفظ الأجهزة المقترنة والرموز والمفضلة والإعدادات في ملف مشفّر';
 
   @override
-  String get backupEncryptionWarning =>
-      'النسخ الاحتياطية مشفّرة بعبارة المرور الخاصة بك. إذا فقدتها لا يمكن استعادة النسخة الاحتياطية.';
+  String get backupEncryptionWarning => 'النسخ الاحتياطية مشفّرة بعبارة المرور الخاصة بك. إذا فقدتها لا يمكن استعادة النسخة الاحتياطية.';
 
   @override
   String get preparingBackup => 'جارٍ إعداد النسخة الاحتياطية…';
@@ -1466,15 +1446,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get importWarningMessage =>
-      'الاستيراد يستبدل جميع الأجهزة والرموز والإعدادات الحالية على هذا الجهاز. هل تريد المتابعة؟';
+  String get importWarningMessage => 'الاستيراد يستبدل جميع الأجهزة والرموز والإعدادات الحالية على هذا الجهاز. هل تريد المتابعة؟';
 
   @override
   String get restoringConfig => 'جارٍ استعادة الإعدادات…';
 
   @override
-  String get configRestored =>
-      'تمت استعادة الإعدادات. للحصول على أفضل النتائج، أغلق التطبيق وأعد فتحه بالكامل.';
+  String get configRestored => 'تمت استعادة الإعدادات. للحصول على أفضل النتائج، أغلق التطبيق وأعد فتحه بالكامل.';
 
   @override
   String get importFailed => 'فشل الاستيراد';
@@ -1615,12 +1593,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get transferGroupFailed => 'فاشلة';
 
   @override
-  String get followsDefaultsOverrideHint =>
-      'تتبع إعدادات التطبيق الافتراضية ما لم تُغيّرها هنا.';
+  String get followsDefaultsOverrideHint => 'تتبع إعدادات التطبيق الافتراضية ما لم تُغيّرها هنا.';
 
   @override
-  String get importReplacesBody =>
-      'الاستيراد يستبدل جميع الأجهزة المقترنة والرموز والإعدادات على هذا الجهاز. متابعة؟';
+  String get importReplacesBody => 'الاستيراد يستبدل جميع الأجهزة المقترنة والرموز والإعدادات على هذا الجهاز. متابعة؟';
 
   @override
   String get searchCategoryFolders => 'مجلدات';
@@ -1672,4 +1648,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'هذا العام';
+
+  @override
+  String previewPageIndicator(int current, int total) {
+    return '$current من $total';
+  }
 }

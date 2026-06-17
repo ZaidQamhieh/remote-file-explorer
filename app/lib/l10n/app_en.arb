@@ -905,5 +905,13 @@
   "datePresetLast24h": "Last 24 hours",
   "datePresetLast7d": "Last 7 days",
   "datePresetLast30d": "Last 30 days",
-  "datePresetThisYear": "This year"
+  "datePresetThisYear": "This year",
+
+  "previewPageIndicator": "{current} of {total}",
+  "@previewPageIndicator": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  }
 }

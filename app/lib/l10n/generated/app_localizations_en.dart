@@ -171,8 +171,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emptyStatePairTitle => 'Pair your first PC';
 
   @override
-  String get emptyStatePairBody =>
-      'Scan the pairing QR code shown by the desktop agent to connect this phone over your network or Tailscale.';
+  String get emptyStatePairBody => 'Scan the pairing QR code shown by the desktop agent to connect this phone over your network or Tailscale.';
 
   @override
   String errorLabel(String error) {
@@ -382,8 +381,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get favoritesTitle => 'Favorites';
 
   @override
-  String get noFavoritesYet =>
-      'No favorites yet. Open a folder and tap the star to bookmark it.';
+  String get noFavoritesYet => 'No favorites yet. Open a folder and tap the star to bookmark it.';
 
   @override
   String get cancelTooltip => 'Cancel';
@@ -567,8 +565,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get baseNameHelperText =>
-      'Place the number with the n token; else it\'\'s appended.';
+  String get baseNameHelperText => 'Place the number with the n token; else it\'\'s appended.';
 
   @override
   String andNMore(int count) {
@@ -843,8 +840,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discardChangesTitle => 'Discard changes?';
 
   @override
-  String get unsavedChangesMessage =>
-      'You have unsaved changes that will be lost.';
+  String get unsavedChangesMessage => 'You have unsaved changes that will be lost.';
 
   @override
   String get keepEditingButton => 'Keep editing';
@@ -955,8 +951,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hideDotfiles => 'Hide dotfiles';
 
   @override
-  String get hideDotfilesSubtitle =>
-      'Hide files and folders starting with \".\"';
+  String get hideDotfilesSubtitle => 'Hide files and folders starting with \".\"';
 
   @override
   String get customLabel => 'Custom';
@@ -988,8 +983,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetToAppDefaults => 'Reset to app defaults';
 
   @override
-  String get displayFollowsDefaults =>
-      'These follow your app defaults unless you override them here.';
+  String get displayFollowsDefaults => 'These follow your app defaults unless you override them here.';
 
   @override
   String get sortLabel => 'Sort';
@@ -1051,11 +1045,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadingStatus => 'Downloading…';
 
   @override
-  String downloadingProgress(
-    String percent,
-    String received,
-    String totalSize,
-  ) {
+  String downloadingProgress(String percent, String received, String totalSize) {
     return 'Downloading $percent%  ·  $received / $totalSize';
   }
 
@@ -1190,8 +1180,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get connectionLost =>
-      'Connection lost — check your network and try again.';
+  String get connectionLost => 'Connection lost — check your network and try again.';
 
   @override
   String couldNotLoadDrives(String error) {
@@ -1221,15 +1210,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get offlineBannerText => 'Offline — showing cached files';
 
   @override
-  String get defaultsApplyHint =>
-      'These defaults apply to every device. Override any of them for a single device from that device’s settings.';
+  String get defaultsApplyHint => 'These defaults apply to every device. Override any of them for a single device from that device’s settings.';
 
   @override
   String get themeLabel => 'Theme';
 
   @override
-  String get wallpaperSubtitle =>
-      'Material You — derive the palette from your wallpaper where supported';
+  String get wallpaperSubtitle => 'Material You — derive the palette from your wallpaper where supported';
 
   @override
   String get languageLabel => 'Language';
@@ -1270,8 +1257,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pickPcFirst => 'Pick a PC and destination folder first';
 
   @override
-  String get photoAccessDenied =>
-      'Photo access denied — grant it in system settings';
+  String get photoAccessDenied => 'Photo access denied — grant it in system settings';
 
   @override
   String backupFailed(String error) {
@@ -1288,8 +1274,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backupRecordCleared => 'Backup record cleared';
 
   @override
-  String get resetBackupHint =>
-      'Tap to forget the record (re-backs-up everything)';
+  String get resetBackupHint => 'Tap to forget the record (re-backs-up everything)';
 
   @override
   String get destinationFolderHelper => 'Photos land in <folder>/YYYY/YYYY-MM/';
@@ -1315,15 +1300,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readOnlyModeSaveError =>
-      'This host is in read-only mode — changes can’t be saved.';
+  String get readOnlyModeSaveError => 'This host is in read-only mode — changes can’t be saved.';
 
   @override
   String get fileTooLargeToSave => 'This file is too large to save.';
 
   @override
-  String get staleWriteMessage =>
-      'This file was modified on the host since you opened it. You can reload the current version (your edits here will be lost) or overwrite it with your edits.';
+  String get staleWriteMessage => 'This file was modified on the host since you opened it. You can reload the current version (your edits here will be lost) or overwrite it with your edits.';
 
   @override
   String get reloadedFromHost => 'Reloaded the current version from the host';
@@ -1332,8 +1315,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recentSearches => 'Recent searches';
 
   @override
-  String get includeHiddenSubtitle =>
-      'Also show results hidden by file visibility settings';
+  String get includeHiddenSubtitle => 'Also show results hidden by file visibility settings';
 
   @override
   String get writesRejected => 'Writes are rejected';
@@ -1345,8 +1327,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get allFoldersAllowed => 'All folders allowed';
 
   @override
-  String get securityWarning =>
-      'This phone has full control of the host. Anyone with access to it can change these settings and reach allowed folders.';
+  String get securityWarning => 'This phone has full control of the host. Anyone with access to it can change these settings and reach allowed folders.';
 
   @override
   String get thisDevice => 'This device';
@@ -1414,8 +1395,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usingAppDefault => 'Using app default';
 
   @override
-  String get followsAppDefaultVisibility =>
-      'Follows your app-default file visibility unless you override it here.';
+  String get followsAppDefaultVisibility => 'Follows your app-default file visibility unless you override it here.';
 
   @override
   String get overriddenForDevice => 'Overridden for this device';
@@ -1432,20 +1412,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateNotCompleted => 'Update not completed — tap to retry.';
 
   @override
-  String get openingInstallerConfirm =>
-      'Opening installer — confirm in Android, then return here.';
+  String get openingInstallerConfirm => 'Opening installer — confirm in Android, then return here.';
 
   @override
-  String get downloadPaused =>
-      'Download paused. Retry to resume where it left off.';
+  String get downloadPaused => 'Download paused. Retry to resume where it left off.';
 
   @override
-  String get exportConfigSubtitle =>
-      'Save paired hosts, tokens, favorites, and settings to an encrypted file';
+  String get exportConfigSubtitle => 'Save paired hosts, tokens, favorites, and settings to an encrypted file';
 
   @override
-  String get backupEncryptionWarning =>
-      'Backups are encrypted with your passphrase. If you lose it, the backup cannot be recovered.';
+  String get backupEncryptionWarning => 'Backups are encrypted with your passphrase. If you lose it, the backup cannot be recovered.';
 
   @override
   String get preparingBackup => 'Preparing backup…';
@@ -1462,15 +1438,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get importWarningMessage =>
-      'Importing replaces all current hosts, tokens, and settings on this device. Continue?';
+  String get importWarningMessage => 'Importing replaces all current hosts, tokens, and settings on this device. Continue?';
 
   @override
   String get restoringConfig => 'Restoring config…';
 
   @override
-  String get configRestored =>
-      'Config restored. For best results, fully close and reopen the app.';
+  String get configRestored => 'Config restored. For best results, fully close and reopen the app.';
 
   @override
   String get importFailed => 'Import failed';
@@ -1553,8 +1527,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trashIsEmpty => 'Trash is empty';
 
   @override
-  String get trashEmptySubtitle =>
-      'Deleted items appear here and can be restored.';
+  String get trashEmptySubtitle => 'Deleted items appear here and can be restored.';
 
   @override
   String deletedRelative(String relative) {
@@ -1608,12 +1581,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get transferGroupFailed => 'Failed';
 
   @override
-  String get followsDefaultsOverrideHint =>
-      'These follow your app defaults unless you override them here.';
+  String get followsDefaultsOverrideHint => 'These follow your app defaults unless you override them here.';
 
   @override
-  String get importReplacesBody =>
-      'Importing replaces all current hosts, tokens, and settings on this device. Continue?';
+  String get importReplacesBody => 'Importing replaces all current hosts, tokens, and settings on this device. Continue?';
 
   @override
   String get searchCategoryFolders => 'Folders';
@@ -1665,4 +1636,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'This year';
+
+  @override
+  String previewPageIndicator(int current, int total) {
+    return '$current of $total';
+  }
 }

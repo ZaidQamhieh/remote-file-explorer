@@ -11,6 +11,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../preview/preview.dart';
+import '../preview/preview_actions.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show folderLabel, renameDestination;
 
@@ -319,6 +320,32 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             label: Text(context.l10n.downloadButton),
             onPressed: () => _download(context),
           ),
+        if (!_entry.isDir)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.open_in_new_outlined),
+            label: Text(context.l10n.openWithButton),
+            onPressed: () => _openWith(context),
+          ),
+        if (!_entry.isDir)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.ios_share_outlined),
+            label: Text(context.l10n.shareTooltip),
+            onPressed: () => _share(context),
+          ),
         if (!_entry.isDir && isExtractableArchive(_entry.name))
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
@@ -420,6 +447,24 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       Navigator.pop(context);
       showInfo(context, context.l10n.downloadingFile(_entry.name));
     }
+  }
+
+  Future<void> _openWith(BuildContext context) async {
+    final actions = PreviewActions(
+      entry: _entry,
+      host: widget.host,
+      client: widget.client,
+    );
+    await actions.openWith(context);
+  }
+
+  Future<void> _share(BuildContext context) async {
+    final actions = PreviewActions(
+      entry: _entry,
+      host: widget.host,
+      client: widget.client,
+    );
+    await actions.share(context);
   }
 
   Future<void> _rename(BuildContext context) async {

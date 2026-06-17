@@ -109,6 +109,21 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "openFile" -> {
+                        val path = call.argument<String>("path")
+                        val mimeType = call.argument<String>("mimeType")
+                            ?: "application/octet-stream"
+                        if (path == null) {
+                            result.error("ARGS", "path is required", null)
+                        } else {
+                            try {
+                                openFile(path, mimeType)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("OPEN_FAILED", e.message, null)
+                            }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -158,6 +173,23 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)
+    }
+
+    /**
+     * Opens a file with the system's default handler via ACTION_VIEW. Uses
+     * FileProvider so the receiving app gets read permission to our app-private
+     * cache directory.
+     */
+    private fun openFile(path: String, mimeType: String) {
+        val file = File(path)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        // Let the user choose an app if multiple handlers exist.
+        startActivity(Intent.createChooser(intent, null))
     }
 
     /**

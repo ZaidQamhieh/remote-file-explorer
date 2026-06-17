@@ -2156,6 +2156,30 @@ abstract class AppLocalizations {
   /// **'Could not share {name}'**
   String couldNotShare(String name);
 
+  /// No description provided for @openWithTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open with…'**
+  String get openWithTooltip;
+
+  /// No description provided for @openWithButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Open with…'**
+  String get openWithButton;
+
+  /// No description provided for @preparingToOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing {name}…'**
+  String preparingToOpen(String name);
+
+  /// No description provided for @couldNotOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {name}'**
+  String couldNotOpen(String name);
+
   /// No description provided for @savingFile.
   ///
   /// In en, this message translates to:

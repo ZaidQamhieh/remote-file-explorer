@@ -1665,4 +1665,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'This year';
+
+  @override
+  String get bandwidthSection => 'Bandwidth';
+
+  @override
+  String get bandwidthUploadLimit => 'Upload limit';
+
+  @override
+  String get bandwidthDownloadLimit => 'Download limit';
+
+  @override
+  String get bandwidthUnlimited => 'Unlimited';
 }

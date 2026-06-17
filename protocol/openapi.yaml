@@ -591,6 +591,35 @@ paths:
               schema: { $ref: '#/components/schemas/AgentSettings' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+
+  /settings/bandwidth:
+    get:
+      summary: Get bandwidth limits
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Current bandwidth limits
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BandwidthSettings' }
+        '401': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Set bandwidth limits
+      security: [{ deviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BandwidthSettings' }
+      responses:
+        '200':
+          description: Updated bandwidth limits
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BandwidthSettings' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
   /devices:
     get:
       summary: List paired devices
@@ -728,6 +757,21 @@ components:
           type: array
           items: { type: string }
         agentName: { type: string }
+    BandwidthSettings:
+      type: object
+      properties:
+        maxUploadBytesPerSec:
+          type: integer
+          format: int64
+          description: >
+            Maximum upload (phone→PC) throughput in bytes per second.
+            0 means unlimited.
+        maxDownloadBytesPerSec:
+          type: integer
+          format: int64
+          description: >
+            Maximum download (PC→phone) throughput in bytes per second.
+            0 means unlimited.
     Device:
       type: object
       properties:

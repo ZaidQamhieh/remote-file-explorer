@@ -2743,6 +2743,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This year'**
   String get datePresetThisYear;
+
+  /// No description provided for @bandwidthSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Bandwidth'**
+  String get bandwidthSection;
+
+  /// No description provided for @bandwidthUploadLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload limit'**
+  String get bandwidthUploadLimit;
+
+  /// No description provided for @bandwidthDownloadLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Download limit'**
+  String get bandwidthDownloadLimit;
+
+  /// No description provided for @bandwidthUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get bandwidthUnlimited;
 }
 
 class _AppLocalizationsDelegate

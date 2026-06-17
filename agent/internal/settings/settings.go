@@ -5,6 +5,7 @@ package settings
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -12,18 +13,22 @@ import (
 )
 
 const (
-	keyReadOnly  = "readOnly"
-	keyRoots     = "roots"
-	keyAgentName = "agentName"
+	keyReadOnly       = "readOnly"
+	keyRoots          = "roots"
+	keyAgentName      = "agentName"
+	keyMaxUploadBPS   = "maxUploadBytesPerSec"
+	keyMaxDownloadBPS = "maxDownloadBytesPerSec"
 )
 
 // Store is a concurrency-safe view over the agent's settings.
 type Store struct {
-	db        *store.DB
-	mu        sync.RWMutex
-	readOnly  bool
-	roots     []string
-	agentName string
+	db                  *store.DB
+	mu                  sync.RWMutex
+	readOnly            bool
+	roots               []string
+	agentName           string
+	maxUploadBytesPS    int64 // 0 = unlimited
+	maxDownloadBytesPS  int64 // 0 = unlimited
 }
 
 // Load builds a Store. Any config key that is unset is seeded from the
@@ -69,6 +74,19 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 		}
 	} else {
 		s.agentName = nm
+	}
+
+	// Bandwidth limits default to 0 (unlimited) and are only written on
+	// first explicit set — no seed needed.
+	if v, err := db.GetConfig(keyMaxUploadBPS); err != nil {
+		return nil, err
+	} else if v != "" {
+		s.maxUploadBytesPS, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, err := db.GetConfig(keyMaxDownloadBPS); err != nil {
+		return nil, err
+	} else if v != "" {
+		s.maxDownloadBytesPS, _ = strconv.ParseInt(v, 10, 64)
 	}
 
 	return s, nil
@@ -128,6 +146,48 @@ func (s *Store) SetAgentName(name string) error {
 		return err
 	}
 	s.agentName = name
+	return nil
+}
+
+// MaxUploadBytesPerSec returns the upload throttle (0 = unlimited).
+func (s *Store) MaxUploadBytesPerSec() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.maxUploadBytesPS
+}
+
+// MaxDownloadBytesPerSec returns the download throttle (0 = unlimited).
+func (s *Store) MaxDownloadBytesPerSec() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.maxDownloadBytesPS
+}
+
+// SetMaxUploadBytesPerSec persists and applies the upload throttle.
+func (s *Store) SetMaxUploadBytesPerSec(v int64) error {
+	if v < 0 {
+		v = 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyMaxUploadBPS, strconv.FormatInt(v, 10)); err != nil {
+		return err
+	}
+	s.maxUploadBytesPS = v
+	return nil
+}
+
+// SetMaxDownloadBytesPerSec persists and applies the download throttle.
+func (s *Store) SetMaxDownloadBytesPerSec(v int64) error {
+	if v < 0 {
+		v = 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyMaxDownloadBPS, strconv.FormatInt(v, 10)); err != nil {
+		return err
+	}
+	s.maxDownloadBytesPS = v
 	return nil
 }
 

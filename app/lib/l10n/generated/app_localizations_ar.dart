@@ -1672,4 +1672,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'هذا العام';
+
+  @override
+  String get bandwidthSection => 'عرض النطاق';
+
+  @override
+  String get bandwidthUploadLimit => 'حد الرفع';
+
+  @override
+  String get bandwidthDownloadLimit => 'حد التنزيل';
+
+  @override
+  String get bandwidthUnlimited => 'بلا حدود';
 }

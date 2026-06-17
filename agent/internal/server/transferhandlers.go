@@ -14,13 +14,18 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
 // --------- /content GET ---------
 
-func downloadHandler(ops *fsops.Ops) http.HandlerFunc {
+func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
+	var ss *settings.Store
+	if len(st) > 0 {
+		ss = st[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
@@ -49,8 +54,17 @@ func downloadHandler(ops *fsops.Ops) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+
+		// Apply download bandwidth throttle if configured.
+		var content io.ReadSeeker = f
+		if ss != nil {
+			if limit := ss.MaxDownloadBytesPerSec(); limit > 0 {
+				content = transfer.NewThrottledReadSeeker(f, limit)
+			}
+		}
+
 		// http.ServeContent handles Range, 206, 416, Content-Type, ETag, etc.
-		http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+		http.ServeContent(w, r, info.Name(), info.ModTime(), content)
 	}
 }
 
@@ -173,7 +187,11 @@ func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 
 // --------- PUT /transfers/{id}/chunks/{n} ---------
 
-func uploadChunkHandler(tm *transfer.Manager) http.HandlerFunc {
+func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.HandlerFunc {
+	var ss *settings.Store
+	if len(st) > 0 {
+		ss = st[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		nStr := chi.URLParam(r, "n")
@@ -201,7 +219,16 @@ func uploadChunkHandler(tm *transfer.Manager) http.HandlerFunc {
 		// Cap the request body to the session's chunk size. The final chunk
 		// may be smaller, which is fine since this is just an upper bound.
 		r.Body = http.MaxBytesReader(w, r.Body, int64(t.ChunkSize))
-		data, err := io.ReadAll(r.Body)
+
+		// Apply upload bandwidth throttle if configured.
+		var bodyReader io.Reader = r.Body
+		if ss != nil {
+			if limit := ss.MaxUploadBytesPerSec(); limit > 0 {
+				bodyReader = transfer.NewThrottledReader(bodyReader, limit)
+			}
+		}
+
+		data, err := io.ReadAll(bodyReader)
 		if err != nil {
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {

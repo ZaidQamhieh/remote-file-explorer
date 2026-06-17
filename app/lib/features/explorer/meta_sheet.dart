@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
@@ -163,38 +164,39 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Widget _buildMetaSection(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l = context.l10n;
     final rows = <Widget>[
-      _row(context, Icons.route_outlined, 'Path', _entry.path),
+      _row(context, Icons.route_outlined, l.metaPath, _entry.path),
       if (_entry.size != null)
         _row(
           context,
           Icons.straighten_outlined,
-          'Size',
+          l.metaSize,
           formatSize(_entry.size),
         ),
       if (_entry.mimeType != null)
-        _row(context, Icons.label_outline, 'Type', _entry.mimeType!),
+        _row(context, Icons.label_outline, l.metaType, _entry.mimeType!),
       if (_entry.mode != null)
-        _row(context, Icons.lock_outline, 'Permissions', _entry.mode!),
+        _row(context, Icons.lock_outline, l.metaPermissions, _entry.mode!),
       if (_entry.modified != null)
         _row(
           context,
           Icons.edit_calendar_outlined,
-          'Modified',
+          l.metaModified,
           _entry.modified!.toLocal().toString(),
         ),
       if (_entry.created != null)
         _row(
           context,
           Icons.event_outlined,
-          'Created',
+          l.metaCreated,
           _entry.created!.toLocal().toString(),
         ),
       _row(
         context,
         Icons.link_outlined,
-        'Symlink',
-        _entry.isSymlink ? 'Yes' : 'No',
+        l.metaSymlink,
+        _entry.isSymlink ? l.yesLabel : l.noLabel,
       ),
     ];
 
@@ -284,7 +286,11 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               isFav ? Icons.star_rounded : Icons.star_outline_rounded,
               color: isFav ? Colors.amber : null,
             ),
-            label: Text(isFav ? 'Unfavorite' : 'Favorite'),
+            label: Text(
+              isFav
+                  ? context.l10n.unfavoriteButton
+                  : context.l10n.favoriteButton,
+            ),
             onPressed: () => _toggleFavorite(context, isFav),
           ),
         if (!_entry.isDir && isPreviewable(_entry))
@@ -297,7 +303,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
             icon: const Icon(Icons.visibility_outlined),
-            label: const Text('Preview'),
+            label: Text(context.l10n.previewButton),
             onPressed: () => _preview(context),
           ),
         if (!_entry.isDir)
@@ -310,7 +316,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
             icon: const Icon(Icons.download_outlined),
-            label: const Text('Download'),
+            label: Text(context.l10n.downloadButton),
             onPressed: () => _download(context),
           ),
         if (!_entry.isDir && isExtractableArchive(_entry.name))
@@ -323,7 +329,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
             icon: const Icon(Icons.folder_zip_outlined),
-            label: const Text('Extract here'),
+            label: Text(context.l10n.extractHereButton),
             onPressed: () => _extract(context),
           ),
         OutlinedButton.icon(
@@ -335,7 +341,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
           icon: const Icon(Icons.drive_file_rename_outline),
-          label: const Text('Rename'),
+          label: Text(context.l10n.renameButton),
           onPressed: () => _rename(context),
         ),
         OutlinedButton.icon(
@@ -347,7 +353,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
           icon: const Icon(Icons.copy_all_outlined),
-          label: const Text('Duplicate'),
+          label: Text(context.l10n.duplicateButton),
           onPressed: () => _duplicate(context),
         ),
         OutlinedButton.icon(
@@ -361,7 +367,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
           ),
           icon: const Icon(Icons.delete_outline),
-          label: const Text('Delete'),
+          label: Text(context.l10n.deleteButton),
           onPressed: () => _delete(context),
         ),
       ],
@@ -379,9 +385,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           ),
         );
     if (wasFavorite) {
-      showInfo(context, 'Removed "${_entry.name}" from favorites');
+      showInfo(context, context.l10n.removedFavorite(_entry.name));
     } else {
-      showSuccess(context, 'Added "${_entry.name}" to favorites');
+      showSuccess(context, context.l10n.addedFavorite(_entry.name));
     }
   }
 
@@ -412,7 +418,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         );
     if (context.mounted) {
       Navigator.pop(context);
-      showInfo(context, 'Downloading ${_entry.name}…');
+      showInfo(context, context.l10n.downloadingFile(_entry.name));
     }
   }
 
@@ -422,20 +428,20 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Rename'),
+            title: Text(ctx.l10n.renameButton),
             content: TextField(
               controller: ctrl,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'New name'),
+              decoration: InputDecoration(labelText: ctx.l10n.newNameLabel),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('Rename'),
+                child: Text(ctx.l10n.renameButton),
               ),
             ],
           ),
@@ -446,9 +452,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       final updated = await widget.client.rename(_entry.path, dst);
       if (mounted) setState(() => _entry = updated);
       widget.onChanged?.call();
-      if (context.mounted) showSuccess(context, 'Renamed to $newName');
+      if (context.mounted) {
+        showSuccess(context, context.l10n.renamedTo(newName));
+      }
     } catch (e) {
-      if (context.mounted) showError(context, 'Rename failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.renameFailed(e.toString()));
+      }
     }
   }
 
@@ -469,15 +479,19 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           (results.first as Map)['ok'] == true;
       if (!ok) {
         if (context.mounted) {
-          showError(context, 'Couldn\'t duplicate "${_entry.name}"');
+          showError(context, context.l10n.couldNotDuplicate(_entry.name));
         }
         return;
       }
       widget.onChanged?.call();
       if (context.mounted) Navigator.pop(context);
-      if (context.mounted) showSuccess(context, 'Duplicated "${_entry.name}"');
+      if (context.mounted) {
+        showSuccess(context, context.l10n.duplicatedFile(_entry.name));
+      }
     } catch (e) {
-      if (context.mounted) showError(context, 'Duplicate failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.duplicateFailed(e.toString()));
+      }
     }
   }
 
@@ -492,9 +506,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       await widget.client.extract(path, parentDir);
       widget.onChanged?.call();
       if (context.mounted) Navigator.pop(context);
-      if (context.mounted) showSuccess(context, 'Extracted "${_entry.name}"');
+      if (context.mounted) {
+        showSuccess(context, context.l10n.extractedFile(_entry.name));
+      }
     } catch (e) {
-      if (context.mounted) showError(context, 'Extract failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.extractFailed(e.toString()));
+      }
     }
   }
 
@@ -504,25 +522,23 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete?'),
-            content: Text(
-              'Move "${_entry.name}" to Trash? You can restore it later.',
-            ),
+            title: Text(ctx.l10n.deleteTitle),
+            content: Text(ctx.l10n.moveToTrashConfirm(_entry.name)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Delete forever'),
+                child: Text(ctx.l10n.deleteForeverButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Move to Trash'),
+                child: Text(ctx.l10n.moveToTrashButton),
               ),
             ],
           ),
@@ -536,11 +552,15 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (context.mounted) {
         showSuccess(
           context,
-          permanent ? 'Deleted $name' : 'Moved $name to Trash',
+          permanent
+              ? context.l10n.deletedName(name)
+              : context.l10n.movedToTrashName(name),
         );
       }
     } catch (e) {
-      if (context.mounted) showError(context, 'Delete failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.deleteFailed(e.toString()));
+      }
     }
   }
 }

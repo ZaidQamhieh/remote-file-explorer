@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
+import '../../../core/l10n_ext.dart';
 import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
@@ -14,6 +15,7 @@ import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../../transfers/transfer_manager.dart';
 import '../storage_insights_screen.dart';
+import 'connection_diagnostics_sheet.dart';
 import 'storage_gauge.dart';
 
 /// Maximum number of storage gauges shown before collapsing the rest behind
@@ -85,8 +87,12 @@ class _HostCardState extends ConsumerState<HostCard> {
   Future<Health?> _ping() async {
     AgentClient? client;
     try {
-      client = await buildClientForHost(ref.read, widget.host.id);
-      final health = await client.health().timeout(const Duration(seconds: 5));
+      client = await buildClientForHost(
+        ref.read,
+        widget.host.id,
+        probeLanFirst: true,
+      );
+      final health = await client.health().timeout(const Duration(seconds: 8));
       await _learnAddresses(health);
       final now = DateTime.now();
       await widget.store.setLastSeen(widget.host.id, now);
@@ -164,7 +170,7 @@ class _HostCardState extends ConsumerState<HostCard> {
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not reach this computer.')),
+          SnackBar(content: Text(context.l10n.couldNotReachComputer)),
         );
       }
     } finally {
@@ -194,23 +200,34 @@ class _HostCardState extends ConsumerState<HostCard> {
     );
   }
 
+  Future<void> _openDiagnostics(BuildContext context) async {
+    final store = await ref.read(hostStoreProvider.future);
+    final token = await store.getToken(widget.host.id);
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (_) =>
+              ConnectionDiagnosticsSheet(host: widget.host, deviceToken: token),
+    );
+  }
+
   Future<void> _confirmRemove(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Forget this computer?'),
-            content: Text(
-              'Remove "${widget.host.label}"? You can re-add it later.',
-            ),
+            title: Text(ctx.l10n.forgetComputerTitle),
+            content: Text(ctx.l10n.forgetComputerConfirm(widget.host.label)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Forget'),
+                child: Text(ctx.l10n.forgetButton),
               ),
             ],
           ),
@@ -267,6 +284,7 @@ class _HostCardState extends ConsumerState<HostCard> {
                     onSearch: () => _openSearch(context),
                     onStorage: () => _openStorage(context),
                     onTransfers: () => _openTransfers(context),
+                    onDiagnostics: () => _openDiagnostics(context),
                     onSettings: () => _openSettings(context),
                     onForget: () => _confirmRemove(context),
                   ),
@@ -351,7 +369,7 @@ class _HostHeader extends StatelessWidget {
     final statusLabel = _StatusLabel(checking: checking, online: online);
 
     final subtitleText = Text(
-      _subtitle(health),
+      _subtitle(context, health),
       style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
       overflow: TextOverflow.ellipsis,
     );
@@ -360,7 +378,7 @@ class _HostHeader extends StatelessWidget {
         checking
             ? null
             : Text(
-              _statusDetail(),
+              _statusDetail(context),
               style: textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -408,33 +426,40 @@ class _HostHeader extends StatelessWidget {
   /// "v1.1.0 · Tailscale" / "v1.1.0 · LAN" when online and we know which
   /// address is active; falls back to the raw address when offline or
   /// unknown.
-  String _subtitle(Health? health) {
+  String _subtitle(BuildContext context, Health? health) {
+    final l = context.l10n;
     if (health != null) {
-      final network = isTailscaleActive == true ? 'Tailscale' : 'LAN';
-      final version = health.version.isNotEmpty ? 'v${health.version}' : '';
-      if (version.isEmpty) return network;
-      return '$version · $network';
+      final network =
+          isTailscaleActive == true ? l.networkTailscale : l.networkLan;
+      if (health.version.isEmpty) return network;
+      return l.hostSubtitleVersionNetwork(health.version, network);
     }
     return host.address;
   }
 
-  String _statusDetail() {
+  String _statusDetail(BuildContext context) {
+    final l = context.l10n;
     if (online) {
-      final relative = _relative(lastChecked);
-      return relative == null ? 'Online' : 'Checked $relative';
+      final relative = _relative(context, lastChecked);
+      return relative == null
+          ? l.onlineStatus
+          : l.statusCheckedRelative(relative);
     }
-    final relative = _relative(lastSeen);
-    return relative == null ? 'Offline' : 'Offline · last seen $relative';
+    final relative = _relative(context, lastSeen);
+    return relative == null
+        ? l.offlineStatus
+        : l.statusOfflineLastSeen(relative);
   }
 
-  String? _relative(DateTime? at) {
+  String? _relative(BuildContext context, DateTime? at) {
     if (at == null) return null;
+    final l = context.l10n;
     final diff = DateTime.now().difference(at);
-    if (diff.inSeconds < 5) return 'just now';
-    if (diff.inMinutes < 1) return '${diff.inSeconds}s ago';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inSeconds < 5) return l.relativeJustNow;
+    if (diff.inMinutes < 1) return l.relativeSecondsAgo(diff.inSeconds);
+    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
+    return l.relativeDaysAgo(diff.inDays);
   }
 }
 
@@ -452,7 +477,7 @@ class _StatusLabel extends StatelessWidget {
 
     if (checking) {
       return Text(
-        'Checking…',
+        context.l10n.checkingStatus,
         style: textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
       );
     }
@@ -468,7 +493,7 @@ class _StatusLabel extends StatelessWidget {
         ),
         const SizedBox(width: Spacing.xs),
         Text(
-          online ? 'Online' : 'Offline',
+          online ? context.l10n.onlineStatus : context.l10n.offlineStatus,
           style: textTheme.labelLarge?.copyWith(
             color: online ? scheme.onSurface : scheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -518,7 +543,7 @@ class _DriveGaugesState extends State<_DriveGauges> {
                   horizontal: Spacing.xs,
                 ),
                 child: Text(
-                  '+$remaining more',
+                  context.l10n.nMoreDrives(remaining),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -543,6 +568,7 @@ class _QuickActions extends StatelessWidget {
     required this.onSearch,
     required this.onStorage,
     required this.onTransfers,
+    required this.onDiagnostics,
     required this.onSettings,
     required this.onForget,
   });
@@ -552,6 +578,7 @@ class _QuickActions extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onStorage;
   final VoidCallback onTransfers;
+  final VoidCallback onDiagnostics;
   final VoidCallback onSettings;
   final VoidCallback onForget;
 
@@ -567,7 +594,10 @@ class _QuickActions extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: onBrowse,
             icon: const Icon(Icons.folder_open_rounded, size: 18),
-            label: const Text('Browse', overflow: TextOverflow.ellipsis),
+            label: Text(
+              context.l10n.browseButton,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         const SizedBox(width: Spacing.sm),
@@ -575,12 +605,15 @@ class _QuickActions extends StatelessWidget {
           child: FilledButton.tonalIcon(
             onPressed: online ? onSearch : null,
             icon: const Icon(Icons.search_rounded, size: 18),
-            label: const Text('Search', overflow: TextOverflow.ellipsis),
+            label: Text(
+              context.l10n.searchButton,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         const SizedBox(width: Spacing.sm),
         PopupMenuButton<String>(
-          tooltip: 'More',
+          tooltip: context.l10n.moreTooltip,
           shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
           onSelected: (v) {
             switch (v) {
@@ -588,6 +621,8 @@ class _QuickActions extends StatelessWidget {
                 onStorage();
               case 'transfers':
                 onTransfers();
+              case 'diagnostics':
+                onDiagnostics();
               case 'settings':
                 onSettings();
               case 'forget':
@@ -595,17 +630,27 @@ class _QuickActions extends StatelessWidget {
             }
           },
           itemBuilder:
-              (_) => [
+              (ctx) => [
                 if (online)
-                  const PopupMenuItem(value: 'storage', child: Text('Storage')),
-                const PopupMenuItem(
+                  PopupMenuItem(
+                    value: 'storage',
+                    child: Text(ctx.l10n.storageMenuItem),
+                  ),
+                PopupMenuItem(
                   value: 'transfers',
-                  child: Text('Transfers'),
+                  child: Text(ctx.l10n.transfersMenuItem),
                 ),
-                const PopupMenuItem(value: 'settings', child: Text('Settings')),
-                const PopupMenuItem(
+                PopupMenuItem(
+                  value: 'diagnostics',
+                  child: Text(ctx.l10n.diagnosticsMenuItem),
+                ),
+                PopupMenuItem(
+                  value: 'settings',
+                  child: Text(ctx.l10n.settingsMenuItem),
+                ),
+                PopupMenuItem(
                   value: 'forget',
-                  child: Text('Forget this computer'),
+                  child: Text(ctx.l10n.forgetComputerMenuItem),
                 ),
               ],
         ),

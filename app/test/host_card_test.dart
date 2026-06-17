@@ -9,6 +9,8 @@ import 'package:remote_file_explorer/core/storage/host_store.dart';
 import 'package:remote_file_explorer/features/hosts/widgets/host_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // HostCard widget tests. The card pings the host's `/health` on mount; to
 // keep this fast and offline-friendly we point the host at a port nothing is
 // listening on (127.0.0.1:1), which fails fast with "connection refused"
@@ -63,6 +65,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
+              localizationsDelegates: l10nDelegates,
               home: Scaffold(body: HostCard(host: host, store: store)),
             ),
           ),
@@ -117,6 +120,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
+            localizationsDelegates: l10nDelegates,
             home: Scaffold(body: HostCard(host: host, store: store)),
           ),
         ),

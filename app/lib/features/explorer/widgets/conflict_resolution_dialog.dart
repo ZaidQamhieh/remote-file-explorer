@@ -10,6 +10,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n_ext.dart';
+
 /// The user's choice for resolving one or more name collisions.
 enum ConflictResolution {
   /// Auto-rename the colliding item(s) so both copies are kept.
@@ -42,27 +44,26 @@ Future<ConflictResolution> showConflictResolutionDialog(
     context: context,
     builder:
         (ctx) => AlertDialog(
-          title: const Text('Name conflict'),
+          title: Text(ctx.l10n.nameConflictTitle),
           content: Text(
-            '$collidingCount of $totalCount item${totalCount == 1 ? '' : 's'} '
-            'already exist in $destLabel.',
+            ctx.l10n.nameConflictBody(collidingCount, totalCount, destLabel),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, ConflictResolution.cancel),
-              child: const Text('Cancel'),
+              child: Text(ctx.l10n.cancelButton),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, ConflictResolution.skip),
-              child: const Text('Skip these'),
+              child: Text(ctx.l10n.skipTheseButton),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, ConflictResolution.keepBoth),
-              child: const Text('Keep both'),
+              child: Text(ctx.l10n.keepBothButton),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, ConflictResolution.overwrite),
-              child: const Text('Overwrite'),
+              child: Text(ctx.l10n.overwriteButton),
             ),
           ],
         ),

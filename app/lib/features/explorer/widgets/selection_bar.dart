@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/models/host.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
@@ -116,27 +117,27 @@ class SelectionBar extends ConsumerWidget {
           children: [
             BarAction(
               icon: Icons.content_cut,
-              label: 'Cut',
+              label: context.l10n.cutButton,
               onPressed: () => _cutSelected(context, ref),
             ),
             BarAction(
               icon: Icons.copy_outlined,
-              label: 'Copy',
+              label: context.l10n.copyButton,
               onPressed: () => _copySelected(context, ref),
             ),
             BarAction(
               icon: Icons.folder_zip_outlined,
-              label: 'Compress',
+              label: context.l10n.compressButton,
               onPressed: () => _compressSelected(context, ref),
             ),
             BarAction(
               icon: Icons.download_outlined,
-              label: 'Download',
+              label: context.l10n.downloadButton,
               onPressed: () => _downloadSelected(context, ref),
             ),
             BarAction(
               icon: Icons.delete_outline_rounded,
-              label: 'Delete',
+              label: context.l10n.deleteButton,
               color: scheme.error,
               onPressed: () => _confirmDelete(context),
             ),
@@ -154,10 +155,7 @@ class SelectionBar extends ConsumerWidget {
     final count = paths.length;
     ref.read(clipboardProvider.notifier).copy(paths, host.id);
     notifier.clearSelection();
-    showSuccess(
-      context,
-      '$count item${count == 1 ? '' : 's'} copied — open a folder and tap Paste',
-    );
+    showSuccess(context, context.l10n.clipboardCopiedHint(count));
   }
 
   /// Fills the clipboard (cut mode) with the current selection and clears
@@ -168,10 +166,7 @@ class SelectionBar extends ConsumerWidget {
     final count = paths.length;
     ref.read(clipboardProvider.notifier).cut(paths, host.id);
     notifier.clearSelection();
-    showSuccess(
-      context,
-      '$count item${count == 1 ? '' : 's'} cut — open a folder and tap Paste',
-    );
+    showSuccess(context, context.l10n.clipboardCutHint(count));
   }
 
   /// Zips the current selection into a new archive in the current folder. The
@@ -193,9 +188,13 @@ class SelectionBar extends ConsumerWidget {
     try {
       final entry = await notifier.compressSelected(dest, sources: paths);
       notifier.clearSelection();
-      if (context.mounted) showSuccess(context, 'Compressed to ${entry.name}');
+      if (context.mounted) {
+        showSuccess(context, context.l10n.compressedTo(entry.name));
+      }
     } catch (e) {
-      if (context.mounted) showError(context, 'Compress failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.compressFailed('$e'));
+      }
     }
   }
 
@@ -218,7 +217,7 @@ class SelectionBar extends ConsumerWidget {
     final count = state.selected.length;
     notifier.clearSelection();
     if (context.mounted) {
-      showSuccess(context, 'Queued $count download${count == 1 ? '' : 's'}');
+      showSuccess(context, context.l10n.queuedNDownloads(count));
     }
   }
 
@@ -230,26 +229,26 @@ class SelectionBar extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete?'),
+            title: Text(ctx.l10n.deleteTitle),
             content: Text(
-              'Move $count item${count == 1 ? '' : 's'} to Trash? '
-              'You can restore ${count == 1 ? 'it' : 'them'} later from Trash.',
+              '${ctx.l10n.moveNItemsToTrash(count)} '
+              '${ctx.l10n.canRestoreFromTrash(count)}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Delete forever'),
+                child: Text(ctx.l10n.deleteForeverButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Move to Trash'),
+                child: Text(ctx.l10n.moveToTrashButton),
               ),
             ],
           ),
@@ -261,11 +260,13 @@ class SelectionBar extends ConsumerWidget {
         await reportBatchResult(
           context,
           res,
-          permanent ? 'Deleted' : 'Moved to Trash',
+          permanent
+              ? context.l10n.deletedLabel
+              : context.l10n.movedToTrashLabel,
         );
       }
     } catch (e) {
-      if (context.mounted) showError(context, 'Delete failed: $e');
+      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
     }
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_screen.dart';
 
+import 'l10n_helpers.dart';
+
 // HiddenItemsFooter widget tests — the "N hidden · Show/Hide" footer rendered
 // at the end of the list/grid when some entries are filtered by file-
 // visibility prefs. Unlike _ShowHiddenTile (view_options_sheet_test.dart),
@@ -19,6 +21,7 @@ void main() {
   }) {
     return tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: HiddenItemsFooter(
             count: count,

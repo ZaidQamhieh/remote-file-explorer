@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
@@ -26,13 +27,16 @@ class StorageInsightsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${host.label} · Storage', overflow: TextOverflow.ellipsis),
+        title: Text(
+          context.l10n.hostStorageTitle(host.label),
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
       body: drivesAsync.when(
         loading: () => const ListingSkeleton(),
         error:
             (e, _) => ErrorRetryCard(
-              message: 'Could not load storage: $e',
+              message: context.l10n.couldNotLoadStorage('$e'),
               onRetry: () => ref.invalidate(drivesProvider(host.id)),
             ),
         data: (drives) {
@@ -66,7 +70,7 @@ class _TotalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final drivesLabel = driveCount == 1 ? '1 drive' : '$driveCount drives';
+    final l10n = context.l10n;
 
     return Card(
       color: scheme.surfaceContainerLow,
@@ -76,7 +80,7 @@ class _TotalCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('All drives', style: textTheme.titleMedium),
+            Text(l10n.allDrives, style: textTheme.titleMedium),
             const SizedBox(height: Spacing.sm),
             ClipRRect(
               borderRadius: Radii.stadiumR,
@@ -89,8 +93,11 @@ class _TotalCard extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.xs),
             Text(
-              '${formatSize(usage.freeBytes)} free of '
-              '${formatSize(usage.totalBytes)} · $drivesLabel',
+              l10n.freeOfTotalDrives(
+                formatSize(usage.freeBytes),
+                formatSize(usage.totalBytes),
+                driveCount,
+              ),
               style: textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

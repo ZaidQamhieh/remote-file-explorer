@@ -126,7 +126,8 @@ class UploadCompleteResult {
 /// pairing for the first time (trust on first use) and the caller captures the
 /// fingerprint via [lastSeenFingerprint].
 class AgentClient {
-  AgentClient(this.host, {String? deviceToken}) : _addresses = host.addresses {
+  AgentClient(this.host, {String? deviceToken, bool probeLanFirst = false})
+    : _addresses = host.addresses {
     final adapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
@@ -142,17 +143,21 @@ class AgentClient {
       },
     );
 
-    // Start from whichever address worked last time for this host (e.g. LAN
-    // at home, Tailscale away) so reconnects don't pay the fallback latency.
-    _addrIndex = (_lastGoodAddrIndex[host.id] ?? 0).clamp(
-      0,
-      _addresses.length - 1,
-    );
+    // When probing (health checks), always start from LAN (index 0) so we
+    // re-discover it after coming home. Otherwise start from whichever
+    // address worked last time so requests don't pay fallback latency.
+    _addrIndex =
+        probeLanFirst
+            ? 0
+            : (_lastGoodAddrIndex[host.id] ?? 0).clamp(
+              0,
+              _addresses.length - 1,
+            );
 
     _dio = Dio(
       BaseOptions(
         baseUrl: _baseUrlFor(_addresses[_addrIndex]),
-        connectTimeout: const Duration(seconds: 10),
+        connectTimeout: Duration(seconds: probeLanFirst ? 3 : 10),
         headers: {
           if (deviceToken != null) 'Authorization': 'Bearer $deviceToken',
           'X-RFE-Client-Version': appClientVersion,
@@ -176,6 +181,7 @@ class AgentClient {
           _addrIndex++;
           final newBase = _baseUrlFor(_addresses[_addrIndex]);
           _dio.options.baseUrl = newBase;
+          _dio.options.connectTimeout = const Duration(seconds: 10);
           try {
             final retried = await _dio.fetch(
               e.requestOptions..baseUrl = newBase,

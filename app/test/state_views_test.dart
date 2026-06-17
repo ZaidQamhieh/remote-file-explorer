@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/ui/state_views.dart';
 
+import 'l10n_helpers.dart';
+
 void main() {
   testWidgets('EmptyFolderView shows message', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: EmptyFolderView())),
+      const MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: Scaffold(body: EmptyFolderView()),
+      ),
     );
     expect(find.textContaining('empty'), findsOneWidget);
   });
@@ -14,6 +19,7 @@ void main() {
     var tapped = false;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: ErrorRetryCard(message: 'boom', onRetry: () => tapped = true),
         ),
@@ -26,7 +32,10 @@ void main() {
 
   testWidgets('OfflineBanner shows offline text', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: OfflineBanner())),
+      const MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: Scaffold(body: OfflineBanner()),
+      ),
     );
     expect(find.textContaining('Offline'), findsOneWidget);
   });

@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/feedback.dart';
@@ -71,8 +72,12 @@ class DestinationPickerSheet extends ConsumerWidget {
     final state = ref.watch(destinationPickerProvider(_arg));
     final notifier = ref.read(destinationPickerProvider(_arg).notifier);
 
-    final verb = isCopy ? 'Copy' : 'Move';
-    final confirmLabel = isCopy ? 'Copy here' : 'Move here';
+    final headerText =
+        isCopy
+            ? context.l10n.copyItemsTo(itemCount)
+            : context.l10n.moveItemsTo(itemCount);
+    final confirmLabel =
+        isCopy ? context.l10n.copyHereButton : context.l10n.moveHereButton;
     final atOrigin = state.currentPath == originPath;
 
     return DraggableScrollableSheet(
@@ -88,11 +93,11 @@ class DestinationPickerSheet extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                _buildHeader(context, verb),
+                _buildHeader(context, headerText),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
                   child: Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: BreadcrumbBar(
                       pathStack: state.pathStack,
                       onNavigateTo: notifier.navigateTo,
@@ -117,7 +122,7 @@ class DestinationPickerSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, String verb) {
+  Widget _buildHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         Spacing.lg,
@@ -129,14 +134,14 @@ class DestinationPickerSheet extends ConsumerWidget {
         children: [
           Expanded(
             child: Text(
-              '$verb $itemCount item${itemCount == 1 ? '' : 's'} to…',
+              title,
               style: Theme.of(context).textTheme.headlineSmall,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.close_rounded),
-            tooltip: 'Cancel',
+            tooltip: context.l10n.cancelTooltip,
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -228,7 +233,7 @@ class DestinationPickerSheet extends ConsumerWidget {
             TextButton.icon(
               onPressed: () => _newFolder(context, ref, notifier),
               icon: const Icon(Icons.create_new_folder_outlined),
-              label: const Text('New folder'),
+              label: Text(context.l10n.newFolderButton),
             ),
             const Spacer(),
             FilledButton(
@@ -254,20 +259,20 @@ class DestinationPickerSheet extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('New folder'),
+            title: Text(ctx.l10n.newFolderButton),
             content: TextField(
               controller: ctrl,
               autofocus: true,
-              decoration: const InputDecoration(hintText: 'Name'),
+              decoration: InputDecoration(hintText: ctx.l10n.nameHint),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('Create'),
+                child: Text(ctx.l10n.createButton),
               ),
             ],
           ),
@@ -275,9 +280,11 @@ class DestinationPickerSheet extends ConsumerWidget {
     if (name == null || name.isEmpty || !context.mounted) return;
     try {
       await notifier.createFolder(name);
-      if (context.mounted) showSuccess(context, 'Created $name');
+      if (context.mounted) showSuccess(context, context.l10n.createdName(name));
     } catch (e) {
-      if (context.mounted) showError(context, "Couldn't create $name: $e");
+      if (context.mounted) {
+        showError(context, context.l10n.createFailed(name, '$e'));
+      }
     }
   }
 }

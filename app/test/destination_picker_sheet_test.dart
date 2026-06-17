@@ -8,6 +8,8 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/destination_picker_sheet.dart';
 
+import 'l10n_helpers.dart';
+
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
 Entry _dir(String path) =>
@@ -48,6 +50,7 @@ void main() {
       ProviderScope(
         overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
         child: MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: Builder(
               builder:
@@ -161,6 +164,7 @@ void main() {
       ProviderScope(
         overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
         child: MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: Builder(
               builder:

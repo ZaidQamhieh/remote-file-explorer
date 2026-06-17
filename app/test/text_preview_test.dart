@@ -11,6 +11,8 @@ import 'package:remote_file_explorer/features/preview/preview_common.dart';
 import 'package:remote_file_explorer/features/preview/text_editor.dart';
 import 'package:remote_file_explorer/features/preview/text_preview.dart';
 
+import 'l10n_helpers.dart';
+
 // TextPreviewScreen widget tests — headless (fake AgentClient, no real host).
 //
 // Covers: the preview loads and displays fetched text, and the Edit
@@ -48,7 +50,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TextPreviewScreen(entry: entry, client: client)),
+      MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: TextPreviewScreen(entry: entry, client: client),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -68,7 +73,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TextPreviewScreen(entry: entry, client: client)),
+      MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: TextPreviewScreen(entry: entry, client: client),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -97,7 +105,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TextPreviewScreen(entry: entry, client: client)),
+      MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: TextPreviewScreen(entry: entry, client: client),
+      ),
     );
     await tester.pumpAndSettle();
 

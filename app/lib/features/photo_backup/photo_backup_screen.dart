@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
@@ -63,16 +64,13 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       if (!mounted) return;
       switch (result.outcome) {
         case PhotoBackupOutcome.enqueued:
-          showSuccess(context, 'Backing up ${result.enqueued} photo(s)');
+          showSuccess(context, context.l10n.backingUpPhotos(result.enqueued));
         case PhotoBackupOutcome.upToDate:
-          showInfo(context, 'Already up to date');
+          showInfo(context, context.l10n.alreadyUpToDate);
         case PhotoBackupOutcome.notConfigured:
-          showError(context, 'Pick a PC and destination folder first');
+          showError(context, context.l10n.pickPcFirst);
         case PhotoBackupOutcome.permissionDenied:
-          showError(
-            context,
-            'Photo access denied — grant it in system settings',
-          );
+          showError(context, context.l10n.photoAccessDenied);
         case PhotoBackupOutcome.skipped:
           showInfo(context, result.message ?? 'Skipped');
       }
@@ -80,7 +78,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       final store = await PhotoBackupStore.open();
       if (mounted) setState(() => _doneCount = store.doneIds().length);
     } catch (e) {
-      if (mounted) showError(context, 'Backup failed: $e');
+      if (mounted) showError(context, context.l10n.backupFailed('$e'));
     } finally {
       if (mounted) setState(() => _running = false);
     }
@@ -89,7 +87,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Photo backup')),
+      appBar: AppBar(title: Text(context.l10n.photoBackupTitle)),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
@@ -103,16 +101,16 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
   List<Widget> _buildItems(BuildContext context) {
     return [
       SwitchListTile(
-        title: const Text('Enable photo backup'),
-        subtitle: const Text('One-way: copies new photos to your PC'),
+        title: Text(context.l10n.enablePhotoBackup),
+        subtitle: Text(context.l10n.photoBackupSubtitle),
         value: _prefs.enabled,
         onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
       ),
       const Divider(),
       ListTile(
         leading: const Icon(Icons.computer_outlined),
-        title: const Text('Back up to'),
-        subtitle: Text(_hostLabel()),
+        title: Text(context.l10n.backUpTo),
+        subtitle: Text(_hostLabel(context)),
         trailing: const Icon(Icons.chevron_right),
         onTap: _hosts.isEmpty ? null : _pickHost,
       ),
@@ -125,32 +123,30 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
         ),
         child: TextField(
           controller: _destCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Destination folder on PC',
-            hintText: '/home/you/PhoneBackup',
-            helperText: 'Photos land in <folder>/YYYY/YYYY-MM/',
+          decoration: InputDecoration(
+            labelText: context.l10n.destinationFolderLabel,
+            hintText: context.l10n.destinationFolderHint,
+            helperText: context.l10n.destinationFolderHelper,
           ),
           onChanged: (v) => _update(_prefs.copyWith(destRoot: v.trim())),
         ),
       ),
       const Divider(),
       SwitchListTile(
-        title: const Text('Only on Wi-Fi'),
+        title: Text(context.l10n.onlyOnWifi),
         value: _prefs.wifiOnly,
         onChanged: (v) => _update(_prefs.copyWith(wifiOnly: v)),
       ),
       SwitchListTile(
-        title: const Text('Only while charging'),
+        title: Text(context.l10n.onlyWhileCharging),
         value: _prefs.chargingOnly,
         onChanged: (v) => _update(_prefs.copyWith(chargingOnly: v)),
       ),
       const Divider(),
       ListTile(
         leading: const Icon(Icons.cloud_done_outlined),
-        title: Text('$_doneCount photo(s) backed up'),
-        subtitle: const Text(
-          'Tap to forget the record (re-backs-up everything)',
-        ),
+        title: Text(context.l10n.photosBackedUp(_doneCount)),
+        subtitle: Text(context.l10n.resetBackupHint),
         onTap: _doneCount == 0 ? null : _resetRecord,
       ),
       Padding(
@@ -165,18 +161,20 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : const Icon(Icons.backup_outlined),
-          label: Text(_running ? 'Scanning…' : 'Back up now'),
+          label: Text(
+            _running ? context.l10n.scanningStatus : context.l10n.backUpNow,
+          ),
         ),
       ),
     ];
   }
 
-  String _hostLabel() {
-    if (_hosts.isEmpty) return 'No paired PCs — pair one first';
+  String _hostLabel(BuildContext context) {
+    if (_hosts.isEmpty) return context.l10n.noPairedPcs;
     for (final h in _hosts) {
       if (h.id == _prefs.hostId) return h.label;
     }
-    return 'Choose a PC';
+    return context.l10n.choosePc;
   }
 
   Future<void> _pickHost() async {
@@ -205,6 +203,6 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
   Future<void> _resetRecord() async {
     await _store?.resetDone();
     if (mounted) setState(() => _doneCount = 0);
-    if (mounted) showInfo(context, 'Backup record cleared');
+    if (mounted) showInfo(context, context.l10n.backupRecordCleared);
   }
 }

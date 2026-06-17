@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../batch_rename.dart';
 
@@ -65,21 +66,21 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Rename ${widget.names.length} items',
+            context.l10n.renameNItemsTitle(widget.names.length),
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: Spacing.md),
           SegmentedButton<BatchRenameMode>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: BatchRenameMode.pattern,
-                label: Text('Pattern'),
-                icon: Icon(Icons.format_list_numbered),
+                label: Text(context.l10n.patternLabel),
+                icon: const Icon(Icons.format_list_numbered),
               ),
               ButtonSegment(
                 value: BatchRenameMode.findReplace,
-                label: Text('Find & replace'),
-                icon: Icon(Icons.find_replace),
+                label: Text(context.l10n.findAndReplaceLabel),
+                icon: const Icon(Icons.find_replace),
               ),
             ],
             selected: {_mode},
@@ -89,9 +90,9 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
           if (_mode == BatchRenameMode.pattern) ...[
             TextField(
               controller: _base,
-              decoration: const InputDecoration(
-                labelText: 'Base name',
-                helperText: 'Use {n} to place the number; else it’s appended.',
+              decoration: InputDecoration(
+                labelText: context.l10n.baseNameLabel,
+                helperText: context.l10n.baseNameHelperText,
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -99,19 +100,23 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
             TextField(
               controller: _start,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Start number'),
+              decoration: InputDecoration(
+                labelText: context.l10n.startNumberLabel,
+              ),
               onChanged: (_) => setState(() {}),
             ),
           ] else ...[
             TextField(
               controller: _find,
-              decoration: const InputDecoration(labelText: 'Find'),
+              decoration: InputDecoration(labelText: context.l10n.findLabel),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: Spacing.sm),
             TextField(
               controller: _replace,
-              decoration: const InputDecoration(labelText: 'Replace with'),
+              decoration: InputDecoration(
+                labelText: context.l10n.replaceWithLabel,
+              ),
               onChanged: (_) => setState(() {}),
             ),
           ],
@@ -123,12 +128,12 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.cancelButton),
               ),
               const SizedBox(width: Spacing.sm),
               FilledButton(
                 onPressed: () => Navigator.pop(context, preview),
-                child: Text('Rename ${widget.names.length}'),
+                child: Text(context.l10n.renameNItems(widget.names.length)),
               ),
             ],
           ),
@@ -172,7 +177,7 @@ class _PreviewList extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                '… and ${count - shown} more',
+                context.l10n.andNMore(count - shown),
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),

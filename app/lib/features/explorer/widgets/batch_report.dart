@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/ui/feedback.dart';
 
 /// Inspects a batch operation result [res] (the JSON body returned by
@@ -20,14 +21,16 @@ Future<void> reportBatchResult(
   if (!context.mounted) return;
   if (failed.isEmpty) {
     final n = results.length;
-    showSuccess(context, '$successVerb $n item${n == 1 ? '' : 's'}');
+    showSuccess(context, context.l10n.batchSuccessNItems(successVerb, n));
     return;
   }
   await showDialog<void>(
     context: context,
     builder:
         (ctx) => AlertDialog(
-          title: Text('$successVerb with ${failed.length} error(s)'),
+          title: Text(
+            ctx.l10n.batchResultWithErrors(successVerb, failed.length),
+          ),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView(
@@ -50,7 +53,7 @@ Future<void> reportBatchResult(
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text(ctx.l10n.okButton),
             ),
           ],
         ),

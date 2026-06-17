@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
@@ -29,7 +30,7 @@ class AppSettingsScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('App settings')),
+      appBar: AppBar(title: Text(context.l10n.appSettingsTitle)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
@@ -46,34 +47,33 @@ class AppSettingsScreen extends ConsumerWidget {
               Spacing.md,
             ),
             child: Text(
-              'These defaults apply to every device. Override any of them for a '
-              'single device from that device’s settings.',
+              context.l10n.defaultsApplyHint,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           ),
           SettingsSection(
-            title: 'Appearance',
+            title: context.l10n.appearanceSection,
             icon: Icons.palette_outlined,
             children: [
               _LabeledControl(
-                label: 'Theme',
+                label: context.l10n.themeLabel,
                 control: SegmentedButton<ThemeMode>(
                   showSelectedIcon: false,
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: ThemeMode.system,
-                      label: Text('System'),
-                      icon: Icon(Icons.brightness_auto_outlined),
+                      label: Text(context.l10n.systemTheme),
+                      icon: const Icon(Icons.brightness_auto_outlined),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
-                      label: Text('Light'),
-                      icon: Icon(Icons.light_mode_outlined),
+                      label: Text(context.l10n.lightTheme),
+                      icon: const Icon(Icons.light_mode_outlined),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
-                      label: Text('Dark'),
-                      icon: Icon(Icons.dark_mode_outlined),
+                      label: Text(context.l10n.darkTheme),
+                      icon: const Icon(Icons.dark_mode_outlined),
                     ),
                   ],
                   selected: {app.themeMode},
@@ -83,35 +83,55 @@ class AppSettingsScreen extends ConsumerWidget {
               const Divider(height: Spacing.lg),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Use wallpaper colors'),
-                subtitle: const Text(
-                  'Material You — derive the palette from your wallpaper '
-                  'where supported',
-                ),
+                title: Text(context.l10n.useWallpaperColors),
+                subtitle: Text(context.l10n.wallpaperSubtitle),
                 value: app.dynamicColor,
                 onChanged: notifier.setDynamicColor,
+              ),
+              const Divider(height: Spacing.lg),
+              _LabeledControl(
+                label: context.l10n.languageLabel,
+                control: SegmentedButton<Locale?>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: null,
+                      label: Text(context.l10n.systemTheme),
+                    ),
+                    const ButtonSegment(
+                      value: Locale('en'),
+                      label: Text('English'),
+                    ),
+                    const ButtonSegment(
+                      value: Locale('ar'),
+                      label: Text('العربية'),
+                    ),
+                  ],
+                  selected: {app.locale},
+                  onSelectionChanged: (s) => notifier.setLocale(s.first),
+                ),
               ),
             ],
           ),
           const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Display',
+            title: context.l10n.displaySection,
             icon: Icons.grid_view_rounded,
             children: [
               _LabeledControl(
-                label: 'Layout',
+                label: context.l10n.layoutLabel,
                 control: SegmentedButton<bool>(
                   showSelectedIcon: false,
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: false,
-                      label: Text('List'),
-                      icon: Icon(Icons.view_list_rounded),
+                      label: Text(context.l10n.listLabel),
+                      icon: const Icon(Icons.view_list_rounded),
                     ),
                     ButtonSegment(
                       value: true,
-                      label: Text('Grid'),
-                      icon: Icon(Icons.grid_view_rounded),
+                      label: Text(context.l10n.gridLabel),
+                      icon: const Icon(Icons.grid_view_rounded),
                     ),
                   ],
                   selected: {app.gridView},
@@ -120,17 +140,17 @@ class AppSettingsScreen extends ConsumerWidget {
               ),
               const Divider(height: Spacing.lg),
               _LabeledControl(
-                label: 'Density',
+                label: context.l10n.densityLabel,
                 control: SegmentedButton<EntryDensity>(
                   showSelectedIcon: false,
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: EntryDensity.comfortable,
-                      label: Text('Comfortable'),
+                      label: Text(context.l10n.comfortableLabel),
                     ),
                     ButtonSegment(
                       value: EntryDensity.compact,
-                      label: Text('Compact'),
+                      label: Text(context.l10n.compactLabel),
                     ),
                   ],
                   selected: {app.density},
@@ -139,14 +159,14 @@ class AppSettingsScreen extends ConsumerWidget {
               ),
               const Divider(height: Spacing.lg),
               _LabeledControl(
-                label: 'Sort by',
+                label: context.l10n.sortByLabel,
                 control: Wrap(
                   spacing: Spacing.sm,
                   runSpacing: Spacing.sm,
                   children: [
                     for (final field in SortField.values)
                       ChoiceChip(
-                        label: Text(_sortFieldLabel(field)),
+                        label: Text(_sortFieldLabel(context, field)),
                         selected: app.sort.field == field,
                         avatar:
                             app.sort.field == field
@@ -174,7 +194,7 @@ class AppSettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Updates',
+            title: context.l10n.updatesSection,
             icon: Icons.system_update_alt_outlined,
             padded: false,
             children: const [UpdateTile()],
@@ -186,14 +206,14 @@ class AppSettingsScreen extends ConsumerWidget {
           const FileVisibilitySection(),
           const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Photo backup',
+            title: context.l10n.photoBackupSection,
             icon: Icons.photo_library_outlined,
             padded: false,
             children: [
               ListTile(
                 leading: const Icon(Icons.backup_outlined),
-                title: const Text('Photo backup'),
-                subtitle: const Text('Copy phone photos to a PC'),
+                title: Text(context.l10n.photoBackupTitle),
+                subtitle: Text(context.l10n.copyPhonePhotos),
                 trailing: const Icon(Icons.chevron_right),
                 onTap:
                     () => Navigator.of(context).push(
@@ -228,16 +248,17 @@ class _LabeledControl extends StatelessWidget {
         children: [
           Text(label, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: Spacing.sm),
-          Align(alignment: Alignment.centerLeft, child: control),
+          Align(alignment: AlignmentDirectional.centerStart, child: control),
         ],
       ),
     );
   }
 }
 
-String _sortFieldLabel(SortField field) => switch (field) {
-  SortField.name => 'Name',
-  SortField.size => 'Size',
-  SortField.date => 'Date modified',
-  SortField.type => 'Type',
-};
+String _sortFieldLabel(BuildContext context, SortField field) =>
+    switch (field) {
+      SortField.name => context.l10n.sortFieldName,
+      SortField.size => context.l10n.sortFieldSize,
+      SortField.date => context.l10n.sortFieldDate,
+      SortField.type => context.l10n.sortFieldType,
+    };

@@ -15,6 +15,8 @@ import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/view_options_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // ViewOptionsSheet widget tests — exercises the popover that folds list/grid,
 // density, and sort into one persisted set of controls.
 //
@@ -115,6 +117,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: Builder(
               builder: (context) => ViewOptionsSheet(notifier: notifier),

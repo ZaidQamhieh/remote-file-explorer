@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/agent_client.dart';
+import '../../../core/l10n_ext.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
@@ -152,7 +153,7 @@ class EntryTile extends StatelessWidget {
                         Icons.chevron_right_rounded,
                         color: scheme.outline,
                       ),
-                      tooltip: 'Folder details',
+                      tooltip: context.l10n.folderDetailsTooltip,
                       onPressed: onShowMeta,
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,

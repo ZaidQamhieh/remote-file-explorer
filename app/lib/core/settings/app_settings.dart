@@ -1,3 +1,5 @@
+import 'dart:ui' show Locale;
+
 import 'package:flutter/material.dart' show ThemeMode;
 
 import '../storage/view_prefs.dart';
@@ -25,6 +27,7 @@ class AppDefaults {
     this.visibility = const VisibilityPrefs(),
     this.themeMode = ThemeMode.system,
     this.dynamicColor = true,
+    this.locale,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -51,6 +54,9 @@ class AppDefaults {
   /// palette when off or when the platform has no dynamic scheme.
   final bool dynamicColor;
 
+  /// Explicit locale override, or `null` to follow the system locale.
+  final Locale? locale;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -65,6 +71,17 @@ class AppDefaults {
     visibility: visibility ?? this.visibility,
     themeMode: themeMode ?? this.themeMode,
     dynamicColor: dynamicColor ?? this.dynamicColor,
+    locale: locale,
+  );
+
+  AppDefaults copyWithLocale(Locale? value) => AppDefaults(
+    gridView: gridView,
+    density: density,
+    sort: sort,
+    visibility: visibility,
+    themeMode: themeMode,
+    dynamicColor: dynamicColor,
+    locale: value,
   );
 
   @override
@@ -75,11 +92,19 @@ class AppDefaults {
       other.sort == sort &&
       other.visibility == visibility &&
       other.themeMode == themeMode &&
-      other.dynamicColor == dynamicColor;
+      other.dynamicColor == dynamicColor &&
+      other.locale == locale;
 
   @override
-  int get hashCode =>
-      Object.hash(gridView, density, sort, visibility, themeMode, dynamicColor);
+  int get hashCode => Object.hash(
+    gridView,
+    density,
+    sort,
+    visibility,
+    themeMode,
+    dynamicColor,
+    locale,
+  );
 }
 
 /// A single host's overrides. Each field is nullable: `null` = inherit the app

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
@@ -30,7 +31,7 @@ class HostListScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Remote File Explorer'),
+                Text(context.l10n.appTitle),
                 if (v != null)
                   Text(
                     'v$v',
@@ -46,12 +47,12 @@ class HostListScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
+            tooltip: context.l10n.refreshTooltip,
             onPressed: () => ref.invalidate(hostStoreProvider),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'App settings',
+            tooltip: context.l10n.appSettingsTooltip,
             onPressed:
                 () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -68,7 +69,8 @@ class HostListScreen extends ConsumerWidget {
           Expanded(
             child: storeAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error:
+                  (e, _) => Center(child: Text(context.l10n.errorLabel('$e'))),
               data: (store) {
                 final hosts = store.listHosts();
                 if (hosts.isEmpty) {
@@ -100,7 +102,7 @@ class HostListScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add computer'),
+        label: Text(context.l10n.addComputerButton),
         onPressed: () => _addComputer(context, ref),
       ),
     );
@@ -150,7 +152,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.lg),
             Text(
-              'Pair your first PC',
+              context.l10n.emptyStatePairTitle,
               style: textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -158,8 +160,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.sm),
             Text(
-              'Scan the pairing QR code shown by the desktop agent to connect '
-              'this phone over your network or Tailscale.',
+              context.l10n.emptyStatePairBody,
               style: textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -169,7 +170,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onScan,
               icon: const Icon(Icons.qr_code_scanner_rounded),
-              label: const Text('Scan QR code'),
+              label: Text(context.l10n.scanQrCodeButton),
             ),
           ],
         ),

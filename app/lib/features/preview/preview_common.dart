@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 
 /// Maximum size (in bytes) we'll happily load fully into memory for an
@@ -144,7 +145,7 @@ class PreviewError extends StatelessWidget {
               const SizedBox(height: Spacing.md),
               OutlinedButton.icon(
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(context.l10n.retryButton),
                 onPressed: onRetry,
               ),
             ],
@@ -176,8 +177,7 @@ class PreviewTooLarge extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.md),
             Text(
-              'This file is too large to preview ($sizeLabel).\n'
-              'Download it to view it instead.',
+              context.l10n.fileTooLargeToPreview(sizeLabel),
               textAlign: TextAlign.center,
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
@@ -28,27 +29,30 @@ class DeviceViewOverridesSection extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return SettingsSection(
-      title: 'Display (this device)',
+      title: context.l10n.displayDeviceSection,
       icon: Icons.tune_rounded,
       trailing: TextButton(
         onPressed:
             settings.hasOverride(hostId)
                 ? () => notifier.resetDevice(hostId)
                 : null,
-        child: const Text('Reset to app defaults'),
+        child: Text(context.l10n.resetToAppDefaults),
       ),
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: Spacing.xs),
           child: Text(
-            'These follow your app defaults unless you override them here.',
+            context.l10n.displayFollowsDefaults,
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
         _OverrideRow(
-          title: 'Layout',
+          title: context.l10n.layoutLabel,
           isOverridden: overrides.gridView != null,
-          appDefaultLabel: settings.app.gridView ? 'Grid' : 'List',
+          appDefaultLabel:
+              settings.app.gridView
+                  ? context.l10n.gridLabel
+                  : context.l10n.listLabel,
           onChanged:
               (on) => notifier.setDeviceGridView(
                 hostId,
@@ -56,9 +60,9 @@ class DeviceViewOverridesSection extends ConsumerWidget {
               ),
           control: SegmentedButton<bool>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, label: Text('List')),
-              ButtonSegment(value: true, label: Text('Grid')),
+            segments: [
+              ButtonSegment(value: false, label: Text(context.l10n.listLabel)),
+              ButtonSegment(value: true, label: Text(context.l10n.gridLabel)),
             ],
             selected: {resolved.gridView},
             onSelectionChanged:
@@ -67,9 +71,9 @@ class DeviceViewOverridesSection extends ConsumerWidget {
         ),
         const Divider(height: Spacing.lg),
         _OverrideRow(
-          title: 'Density',
+          title: context.l10n.densityLabel,
           isOverridden: overrides.density != null,
-          appDefaultLabel: _densityLabel(settings.app.density),
+          appDefaultLabel: _densityLabel(context, settings.app.density),
           onChanged:
               (on) => notifier.setDeviceDensity(
                 hostId,
@@ -77,14 +81,14 @@ class DeviceViewOverridesSection extends ConsumerWidget {
               ),
           control: SegmentedButton<EntryDensity>(
             showSelectedIcon: false,
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: EntryDensity.comfortable,
-                label: Text('Comfortable'),
+                label: Text(context.l10n.comfortableLabel),
               ),
               ButtonSegment(
                 value: EntryDensity.compact,
-                label: Text('Compact'),
+                label: Text(context.l10n.compactLabel),
               ),
             ],
             selected: {resolved.density},
@@ -94,9 +98,9 @@ class DeviceViewOverridesSection extends ConsumerWidget {
         ),
         const Divider(height: Spacing.lg),
         _OverrideRow(
-          title: 'Sort',
+          title: context.l10n.sortLabel,
           isOverridden: overrides.sort != null,
-          appDefaultLabel: _sortLabel(settings.app.sort),
+          appDefaultLabel: _sortLabel(context, settings.app.sort),
           onChanged:
               (on) => notifier.setDeviceSort(hostId, on ? resolved.sort : null),
           control: _SortControl(
@@ -138,8 +142,8 @@ class _OverrideRow extends StatelessWidget {
           title: Text(title),
           subtitle: Text(
             isOverridden
-                ? 'Overridden for this device'
-                : 'Using app default ($appDefaultLabel)',
+                ? context.l10n.overriddenForDevice
+                : context.l10n.usingAppDefaultLabel(appDefaultLabel),
           ),
           value: isOverridden,
           onChanged: onChanged,
@@ -147,7 +151,10 @@ class _OverrideRow extends StatelessWidget {
         if (isOverridden)
           Padding(
             padding: const EdgeInsets.only(bottom: Spacing.sm),
-            child: Align(alignment: Alignment.centerLeft, child: control),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: control,
+            ),
           ),
       ],
     );
@@ -173,12 +180,18 @@ class _SortControl extends StatelessWidget {
               (f) => f == null ? null : onChanged(value.copyWith(field: f)),
           items: [
             for (final f in SortField.values)
-              DropdownMenuItem(value: f, child: Text(_sortFieldLabel(f))),
+              DropdownMenuItem(
+                value: f,
+                child: Text(_sortFieldLabel(context, f)),
+              ),
           ],
         ),
         const SizedBox(width: Spacing.sm),
         IconButton(
-          tooltip: value.ascending ? 'Ascending' : 'Descending',
+          tooltip:
+              value.ascending
+                  ? context.l10n.ascendingTooltip
+                  : context.l10n.descendingTooltip,
           icon: Icon(
             value.ascending
                 ? Icons.arrow_upward_rounded
@@ -192,15 +205,18 @@ class _SortControl extends StatelessWidget {
   }
 }
 
-String _densityLabel(EntryDensity d) =>
-    d == EntryDensity.compact ? 'Compact' : 'Comfortable';
+String _densityLabel(BuildContext context, EntryDensity d) =>
+    d == EntryDensity.compact
+        ? context.l10n.compactLabel
+        : context.l10n.comfortableLabel;
 
-String _sortLabel(SortOrder s) =>
-    '${_sortFieldLabel(s.field)} ${s.ascending ? '↑' : '↓'}';
+String _sortLabel(BuildContext context, SortOrder s) =>
+    '${_sortFieldLabel(context, s.field)} ${s.ascending ? '↑' : '↓'}';
 
-String _sortFieldLabel(SortField field) => switch (field) {
-  SortField.name => 'Name',
-  SortField.size => 'Size',
-  SortField.date => 'Date modified',
-  SortField.type => 'Type',
-};
+String _sortFieldLabel(BuildContext context, SortField field) =>
+    switch (field) {
+      SortField.name => context.l10n.sortFieldName,
+      SortField.size => context.l10n.sortFieldSize,
+      SortField.date => context.l10n.sortFieldDate,
+      SortField.type => context.l10n.sortFieldType,
+    };

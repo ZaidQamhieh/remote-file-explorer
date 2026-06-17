@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/ui/feedback.dart';
 import '../explorer_state.dart';
 
@@ -17,18 +18,26 @@ class CreateMenu extends StatelessWidget {
         children: [
           ListTile(
             leading: const Icon(Icons.create_new_folder_outlined),
-            title: const Text('New folder'),
+            title: Text(context.l10n.newFolderButton),
             onTap: () {
               Navigator.pop(context);
-              _showNameDialog(context, 'New folder', isFolder: true);
+              _showNameDialog(
+                context,
+                context.l10n.newFolderButton,
+                isFolder: true,
+              );
             },
           ),
           ListTile(
             leading: const Icon(Icons.note_add_outlined),
-            title: const Text('New file'),
+            title: Text(context.l10n.newFileButton),
             onTap: () {
               Navigator.pop(context);
-              _showNameDialog(context, 'New file', isFolder: false);
+              _showNameDialog(
+                context,
+                context.l10n.newFileButton,
+                isFolder: false,
+              );
             },
           ),
         ],
@@ -50,12 +59,12 @@ class CreateMenu extends StatelessWidget {
             content: TextField(
               controller: ctrl,
               autofocus: true,
-              decoration: const InputDecoration(hintText: 'Name'),
+              decoration: InputDecoration(hintText: ctx.l10n.nameHint),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () async {
@@ -68,14 +77,16 @@ class CreateMenu extends StatelessWidget {
                     } else {
                       await notifier.createFile(name);
                     }
-                    if (context.mounted) showSuccess(context, 'Created $name');
+                    if (context.mounted) {
+                      showSuccess(context, context.l10n.createdName(name));
+                    }
                   } catch (e) {
                     if (context.mounted) {
-                      showError(context, 'Couldn\'t create $name: $e');
+                      showError(context, context.l10n.createFailed(name, '$e'));
                     }
                   }
                 },
-                child: const Text('Create'),
+                child: Text(ctx.l10n.createButton),
               ),
             ],
           ),

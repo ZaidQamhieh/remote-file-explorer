@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -108,14 +109,11 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
         _dirty = false;
         _saving = false;
       });
-      showSuccess(context, 'Saved "${widget.entry.name}"');
+      showSuccess(context, context.l10n.savedFile(widget.entry.name));
     } on ReadOnlyException {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(
-        context,
-        'This host is in read-only mode — changes can\'t be saved.',
-      );
+      showError(context, context.l10n.readOnlyModeSaveError);
     } on StaleWriteException {
       if (!mounted) return;
       // Clear the saving flag *before* awaiting the conflict dialog — the
@@ -126,11 +124,11 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
     } on PayloadTooLargeException {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(context, 'This file is too large to save.');
+      showError(context, context.l10n.fileTooLargeToSave);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(context, 'Could not save this file.\n$e', onRetry: _save);
+      showError(context, context.l10n.couldNotSaveFile('$e'), onRetry: _save);
     }
   }
 
@@ -142,25 +140,21 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('File changed on disk'),
-            content: const Text(
-              'This file was modified on the host since you opened it. '
-              'You can reload the current version (your edits here will be '
-              'lost) or overwrite it with your edits.',
-            ),
+            title: Text(ctx.l10n.fileChangedOnDisk),
+            content: Text(ctx.l10n.staleWriteMessage),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.cancel),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.reload),
-                child: const Text('Reload'),
+                child: Text(ctx.l10n.reloadButton),
               ),
               FilledButton(
                 onPressed:
                     () => Navigator.pop(ctx, _StaleWriteChoice.overwrite),
-                child: const Text('Overwrite'),
+                child: Text(ctx.l10n.overwriteButton),
               ),
             ],
           ),
@@ -190,10 +184,14 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
         _baseModified = entry.modified;
         _dirty = false;
       });
-      showInfo(context, 'Reloaded the current version from the host');
+      showInfo(context, context.l10n.reloadedFromHost);
     } catch (e) {
       if (!mounted) return;
-      showError(context, 'Could not reload this file.\n$e', onRetry: _reload);
+      showError(
+        context,
+        context.l10n.couldNotReloadFile('$e'),
+        onRetry: _reload,
+      );
     }
   }
 
@@ -203,16 +201,16 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Discard changes?'),
-            content: const Text('You have unsaved changes that will be lost.'),
+            title: Text(ctx.l10n.discardChangesTitle),
+            content: Text(ctx.l10n.unsavedChangesMessage),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Keep editing'),
+                child: Text(ctx.l10n.keepEditingButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Discard'),
+                child: Text(ctx.l10n.discardButton),
               ),
             ],
           ),
@@ -247,7 +245,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
             else
               IconButton(
                 icon: const Icon(Icons.save_outlined),
-                tooltip: 'Save',
+                tooltip: context.l10n.saveTooltip,
                 onPressed: _dirty ? () => _save() : null,
               ),
           ],

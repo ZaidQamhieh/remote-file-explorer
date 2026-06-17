@@ -1,6 +1,7 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'core/app_info.dart';
@@ -60,6 +61,7 @@ class RemoteFileExplorerApp extends ConsumerWidget {
         light: AppTheme.light,
         dark: AppTheme.dark,
         mode: app.themeMode,
+        locale: app.locale,
       );
     }
 
@@ -76,7 +78,12 @@ class RemoteFileExplorerApp extends ConsumerWidget {
             darkDynamic != null
                 ? AppTheme.darkFrom(darkDynamic.harmonized())
                 : AppTheme.dark;
-        return _app(light: light, dark: dark, mode: app.themeMode);
+        return _app(
+          light: light,
+          dark: dark,
+          mode: app.themeMode,
+          locale: app.locale,
+        );
       },
     );
   }
@@ -85,6 +92,7 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     required ThemeData light,
     required ThemeData dark,
     required ThemeMode mode,
+    Locale? locale,
   }) {
     return MaterialApp(
       title: 'Remote File Explorer',
@@ -92,6 +100,9 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       theme: light,
       darkTheme: dark,
       themeMode: mode,
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(
         navigatorKey: navigatorKey,
         child: const HostListScreen(),

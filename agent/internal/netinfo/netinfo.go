@@ -18,14 +18,31 @@ func mustCIDR(s string) *net.IPNet {
 	return n
 }
 
+// NetworkInfo holds the host's detected network addresses and the MAC address
+// of the LAN interface (for Wake-on-LAN).
+type NetworkInfo struct {
+	LAN       string // LAN IPv4 address, e.g. "192.168.1.20"
+	Tailscale string // Tailscale IPv4 address, e.g. "100.x.y.z"
+	MAC       string // hardware address of the LAN interface, e.g. "aa:bb:cc:dd:ee:ff"
+}
+
 // LocalAddresses inspects the machine's network interfaces and returns the
 // best-guess LAN IPv4 address and Tailscale IPv4 address. Either may be empty
 // if no matching interface is up. When multiple candidates exist the first one
 // found wins — good enough for display/pairing purposes.
 func LocalAddresses() (lan string, tailscale string) {
+	info := Detect()
+	return info.LAN, info.Tailscale
+}
+
+// Detect inspects the machine's network interfaces and returns addresses plus
+// the MAC of the LAN interface (needed by the app for Wake-on-LAN when the
+// host is asleep). Either address may be empty if no matching interface is up.
+func Detect() NetworkInfo {
+	var info NetworkInfo
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", ""
+		return info
 	}
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
@@ -46,15 +63,18 @@ func LocalAddresses() (lan string, tailscale string) {
 			}
 			switch {
 			case tailscaleRange.Contains(ip4):
-				if tailscale == "" {
-					tailscale = ip4.String()
+				if info.Tailscale == "" {
+					info.Tailscale = ip4.String()
 				}
 			case ip4.IsPrivate():
-				if lan == "" {
-					lan = ip4.String()
+				if info.LAN == "" {
+					info.LAN = ip4.String()
+					if len(iface.HardwareAddr) > 0 {
+						info.MAC = iface.HardwareAddr.String()
+					}
 				}
 			}
 		}
 	}
-	return lan, tailscale
+	return info
 }

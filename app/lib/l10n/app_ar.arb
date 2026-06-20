@@ -485,5 +485,12 @@
   "datePresetLast24h": "آخر 24 ساعة",
   "datePresetLast7d": "آخر 7 أيام",
   "datePresetLast30d": "آخر 30 يومًا",
-  "datePresetThisYear": "هذا العام"
+  "datePresetThisYear": "هذا العام",
+
+  "wakeButton": "إيقاظ",
+  "wolPacketSent": "تم إرسال حزمة الإيقاظ إلى {hostname}",
+  "@wolPacketSent": {
+    "placeholders": { "hostname": {"type": "String"} }
+  },
+  "wolPacketFailed": "فشل إرسال حزمة الإيقاظ"
 }

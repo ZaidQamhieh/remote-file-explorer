@@ -905,5 +905,12 @@
   "datePresetLast24h": "Last 24 hours",
   "datePresetLast7d": "Last 7 days",
   "datePresetLast30d": "Last 30 days",
-  "datePresetThisYear": "This year"
+  "datePresetThisYear": "This year",
+
+  "wakeButton": "Wake",
+  "wolPacketSent": "Magic packet sent to {hostname}",
+  "@wolPacketSent": {
+    "placeholders": { "hostname": {"type": "String"} }
+  },
+  "wolPacketFailed": "Failed to send magic packet"
 }

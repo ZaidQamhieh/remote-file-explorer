@@ -7,6 +7,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
+import '../../../core/platform/wol.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../explorer/drives_view.dart';
@@ -124,16 +125,29 @@ class _HostCardState extends ConsumerState<HostCard> {
     }
   }
 
-  /// Adopts any LAN/Tailscale address the agent reports that we don't already
-  /// know, so a host paired before Wave 2 (or paired only via one network)
-  /// gradually learns to be reachable both at home and away.
+  /// Adopts any LAN/Tailscale address or MAC the agent reports that we don't
+  /// already know, so a host paired before Wave 2 (or paired only via one
+  /// network) gradually learns to be reachable both at home and away — and
+  /// the app caches the MAC for Wake-on-LAN when the host is asleep.
   Future<void> _learnAddresses(Health health) async {
-    final learnedTailscale = health.tailscaleAddress;
-    if (learnedTailscale == null) return;
-    if (learnedTailscale == widget.host.tailscaleAddress) return;
-    if (learnedTailscale == widget.host.address) return;
+    final newTailscale = health.tailscaleAddress;
+    final newMac = health.macAddress;
 
-    final updated = widget.host.copyWith(tailscaleAddress: learnedTailscale);
+    final tailscaleChanged = newTailscale != null &&
+        newTailscale != widget.host.tailscaleAddress &&
+        newTailscale != widget.host.address;
+    final macChanged =
+        newMac != null && newMac != widget.host.macAddress;
+
+    if (!tailscaleChanged && !macChanged) return;
+
+    var updated = widget.host;
+    if (tailscaleChanged) {
+      updated = updated.copyWith(tailscaleAddress: newTailscale);
+    }
+    if (macChanged) {
+      updated = updated.copyWith(macAddress: newMac);
+    }
     await widget.store.addHost(updated);
   }
 
@@ -213,6 +227,22 @@ class _HostCardState extends ConsumerState<HostCard> {
     );
   }
 
+  Future<void> _sendWol(BuildContext context) async {
+    final mac = widget.host.macAddress;
+    if (mac == null) return;
+    final sent = await sendWakeOnLan(mac);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? context.l10n.wolPacketSent(widget.host.label)
+              : context.l10n.wolPacketFailed,
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmRemove(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -280,8 +310,13 @@ class _HostCardState extends ConsumerState<HostCard> {
                   const SizedBox(height: Spacing.md),
                   _QuickActions(
                     online: online,
+                    canWake:
+                        !online &&
+                        !checking &&
+                        widget.host.macAddress != null,
                     onBrowse: () => _openExplorer(context),
                     onSearch: () => _openSearch(context),
+                    onWake: () => _sendWol(context),
                     onStorage: () => _openStorage(context),
                     onTransfers: () => _openTransfers(context),
                     onDiagnostics: () => _openDiagnostics(context),
@@ -564,8 +599,10 @@ class _DriveGaugesState extends State<_DriveGauges> {
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.online,
+    required this.canWake,
     required this.onBrowse,
     required this.onSearch,
+    required this.onWake,
     required this.onStorage,
     required this.onTransfers,
     required this.onDiagnostics,
@@ -574,8 +611,10 @@ class _QuickActions extends StatelessWidget {
   });
 
   final bool online;
+  final bool canWake;
   final VoidCallback onBrowse;
   final VoidCallback onSearch;
+  final VoidCallback onWake;
   final VoidCallback onStorage;
   final VoidCallback onTransfers;
   final VoidCallback onDiagnostics;
@@ -601,22 +640,37 @@ class _QuickActions extends StatelessWidget {
           ),
         ),
         const SizedBox(width: Spacing.sm),
-        Expanded(
-          child: FilledButton.tonalIcon(
-            onPressed: online ? onSearch : null,
-            icon: const Icon(Icons.search_rounded, size: 18),
-            label: Text(
-              context.l10n.searchButton,
-              overflow: TextOverflow.ellipsis,
+        if (canWake) ...[
+          Expanded(
+            child: FilledButton.tonalIcon(
+              onPressed: onWake,
+              icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+              label: Text(
+                context.l10n.wakeButton,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-        ),
+        ] else ...[
+          Expanded(
+            child: FilledButton.tonalIcon(
+              onPressed: online ? onSearch : null,
+              icon: const Icon(Icons.search_rounded, size: 18),
+              label: Text(
+                context.l10n.searchButton,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(width: Spacing.sm),
         PopupMenuButton<String>(
           tooltip: context.l10n.moreTooltip,
           shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
           onSelected: (v) {
             switch (v) {
+              case 'wake':
+                onWake();
               case 'storage':
                 onStorage();
               case 'transfers':

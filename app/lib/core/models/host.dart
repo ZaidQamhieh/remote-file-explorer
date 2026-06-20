@@ -7,6 +7,7 @@ class Host {
     this.certFingerprint,
     this.tailscaleName,
     this.tailscaleAddress,
+    this.macAddress,
   });
 
   final String id;
@@ -28,6 +29,11 @@ class Host {
   /// (Tailscale) without the user managing two separate entries.
   final String? tailscaleAddress;
 
+  /// MAC address of the host's LAN interface, cached from `/health` for
+  /// Wake-on-LAN when the host is asleep. Absent until the first successful
+  /// health ping from an agent that reports it.
+  final String? macAddress;
+
   /// Candidate addresses in connection-attempt order: primary first, then
   /// the Tailscale fallback (deduplicated).
   List<String> get addresses => [
@@ -45,6 +51,7 @@ class Host {
     certFingerprint: json['certFingerprint'] as String?,
     tailscaleName: json['tailscaleName'] as String?,
     tailscaleAddress: json['tailscaleAddress'] as String?,
+    macAddress: json['macAddress'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -54,6 +61,7 @@ class Host {
     if (certFingerprint != null) 'certFingerprint': certFingerprint,
     if (tailscaleName != null) 'tailscaleName': tailscaleName,
     if (tailscaleAddress != null) 'tailscaleAddress': tailscaleAddress,
+    if (macAddress != null) 'macAddress': macAddress,
   };
 
   Host copyWith({
@@ -63,6 +71,7 @@ class Host {
     String? certFingerprint,
     String? tailscaleName,
     String? tailscaleAddress,
+    String? macAddress,
   }) => Host(
     id: id ?? this.id,
     label: label ?? this.label,
@@ -70,5 +79,6 @@ class Host {
     certFingerprint: certFingerprint ?? this.certFingerprint,
     tailscaleName: tailscaleName ?? this.tailscaleName,
     tailscaleAddress: tailscaleAddress ?? this.tailscaleAddress,
+    macAddress: macAddress ?? this.macAddress,
   );
 }

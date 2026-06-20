@@ -9,6 +9,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/platform/file_opener.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../transfers/transfer_state.dart';
@@ -58,6 +59,29 @@ class PreviewActions {
       },
       running: context.l10n.preparingToShare(entry.name),
       error: context.l10n.couldNotShare(entry.name),
+    );
+  }
+
+  /// Opens the file in an external app via the system's "Open with" chooser.
+  /// Like [share], this fetches the file to a temp cache first because the
+  /// agent serves content only over a pinned TLS connection with bearer auth.
+  Future<void> openWith(BuildContext context) async {
+    await runWithFeedback<void>(
+      context,
+      () async {
+        final dir = await getTemporaryDirectory();
+        final openDir = Directory('${dir.path}/open_cache');
+        if (!await openDir.exists()) {
+          await openDir.create(recursive: true);
+        }
+        final safeName = entry.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
+        final file = File('${openDir.path}/$safeName');
+        await client.downloadFile(remotePath: entry.path, localFile: file);
+        final mimeType = entry.mimeType ?? _mimeFromExtension(entry.name);
+        await FileOpener.open(file, mimeType);
+      },
+      running: context.l10n.preparingToOpen(entry.name),
+      error: context.l10n.couldNotOpen(entry.name),
     );
   }
 
@@ -212,6 +236,11 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         ...leadingActions,
         IconButton(
+          icon: const Icon(Icons.open_in_new_outlined),
+          tooltip: context.l10n.openWithTooltip,
+          onPressed: () => actions.openWith(context),
+        ),
+        IconButton(
           icon: const Icon(Icons.ios_share_outlined),
           tooltip: context.l10n.shareTooltip,
           onPressed: () => actions.share(context),
@@ -244,5 +273,94 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ],
     );
+  }
+}
+
+/// Fallback MIME type lookup from file extension, used when the agent's
+/// [Entry.mimeType] is null. Covers the common types users are likely to
+/// open externally; anything unrecognised falls back to octet-stream so
+/// Android still offers a chooser.
+String _mimeFromExtension(String fileName) {
+  final dot = fileName.lastIndexOf('.');
+  if (dot < 0 || dot == fileName.length - 1) return 'application/octet-stream';
+  switch (fileName.substring(dot + 1).toLowerCase()) {
+    // Images
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'heic':
+    case 'heif':
+      return 'image/heif';
+    // Video
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'mkv':
+      return 'video/x-matroska';
+    case 'avi':
+      return 'video/x-msvideo';
+    case 'webm':
+      return 'video/webm';
+    // Audio
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'aac':
+    case 'm4a':
+      return 'audio/mp4';
+    case 'wav':
+      return 'audio/wav';
+    case 'flac':
+      return 'audio/flac';
+    case 'ogg':
+    case 'oga':
+      return 'audio/ogg';
+    // Documents
+    case 'pdf':
+      return 'application/pdf';
+    case 'doc':
+      return 'application/msword';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls':
+      return 'application/vnd.ms-excel';
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'ppt':
+      return 'application/vnd.ms-powerpoint';
+    case 'pptx':
+      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    // Archives
+    case 'zip':
+      return 'application/zip';
+    case 'gz':
+    case 'tgz':
+      return 'application/gzip';
+    // Text
+    case 'txt':
+    case 'log':
+    case 'md':
+    case 'csv':
+      return 'text/plain';
+    case 'html':
+    case 'htm':
+      return 'text/html';
+    case 'json':
+      return 'application/json';
+    case 'xml':
+      return 'text/xml';
+    // APK
+    case 'apk':
+      return 'application/vnd.android.package-archive';
+    default:
+      return 'application/octet-stream';
   }
 }

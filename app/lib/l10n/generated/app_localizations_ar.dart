@@ -1309,6 +1309,22 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get openWithTooltip => 'فتح بواسطة…';
+
+  @override
+  String get openWithButton => 'فتح بواسطة…';
+
+  @override
+  String preparingToOpen(String name) {
+    return 'جارٍ تجهيز $name…';
+  }
+
+  @override
+  String couldNotOpen(String name) {
+    return 'تعذّر فتح $name';
+  }
+
+  @override
   String savingFile(String name) {
     return 'جارٍ حفظ $name…';
   }

@@ -731,6 +731,16 @@
   "@couldNotShare": {
     "placeholders": { "name": {"type": "String"} }
   },
+  "openWithTooltip": "Open with…",
+  "openWithButton": "Open with…",
+  "preparingToOpen": "Preparing {name}…",
+  "@preparingToOpen": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "couldNotOpen": "Could not open {name}",
+  "@couldNotOpen": {
+    "placeholders": { "name": {"type": "String"} }
+  },
   "savingFile": "Saving {name}…",
   "@savingFile": {
     "placeholders": { "name": {"type": "String"} }

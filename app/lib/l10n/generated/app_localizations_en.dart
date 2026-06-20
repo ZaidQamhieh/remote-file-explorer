@@ -1305,6 +1305,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get openWithTooltip => 'Open with…';
+
+  @override
+  String get openWithButton => 'Open with…';
+
+  @override
+  String preparingToOpen(String name) {
+    return 'Preparing $name…';
+  }
+
+  @override
+  String couldNotOpen(String name) {
+    return 'Could not open $name';
+  }
+
+  @override
   String savingFile(String name) {
     return 'Saving $name…';
   }

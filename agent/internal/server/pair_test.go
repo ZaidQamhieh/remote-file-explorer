@@ -49,6 +49,55 @@ func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	}
 }
 
+func TestPairHandler_InvalidBody(t *testing.T) {
+	db, _ := newTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
+	cfg := Config{Name: "test-pc"}
+	handler := pairHandler(cfg, db, pm)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("not json"))
+	handler(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestPairHandler_ValidPairing(t *testing.T) {
+	db, _ := newTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "10.0.0.1", "sha256-fp")
+	cfg := Config{
+		Name:             "test-pc",
+		CertFingerprint:  "sha256-fp",
+		Address:          "127.0.0.1:8765",
+		TailscaleAddress: "10.0.0.1",
+	}
+	handler := pairHandler(cfg, db, pm)
+
+	code, _, err := pm.Mint(time.Minute)
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+
+	body := `{"pairingCode":"` + code + `","deviceLabel":"my-phone","deviceId":"android-123"}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(body))
+	handler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp pairResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.DeviceToken == "" || resp.DeviceID == "" {
+		t.Fatalf("expected token+deviceID, got %+v", resp)
+	}
+	if resp.AgentName != "test-pc" {
+		t.Fatalf("expected agentName test-pc, got %s", resp.AgentName)
+	}
+}
+
 // TestFixedWindowLimiter_AllowsBurstThenBlocks exercises the limiter directly,
 // including that the window resets over time.
 func TestFixedWindowLimiter_AllowsBurstThenBlocks(t *testing.T) {

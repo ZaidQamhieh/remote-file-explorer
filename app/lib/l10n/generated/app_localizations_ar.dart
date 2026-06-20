@@ -1716,4 +1716,55 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get bandwidthUnlimited => 'بلا حدود';
+
+  @override
+  String get cacheSection => 'ذاكرة التخزين';
+
+  @override
+  String get cacheListingLabel => 'قوائم المجلدات';
+
+  @override
+  String get cacheTempLabel => 'الملفات المحمّلة';
+
+  @override
+  String get cacheTotalLabel => 'الإجمالي';
+
+  @override
+  String get cacheClearAll => 'مسح كل التخزين المؤقت';
+
+  @override
+  String get cacheCleared => 'تم مسح التخزين المؤقت';
+
+  @override
+  String get cacheCalculating => 'جارٍ الحساب…';
+
+  @override
+  String get onboardingWelcomeTitle => 'مرحباً في مستكشف الملفات عن بُعد';
+
+  @override
+  String get onboardingWelcomeBody =>
+      'تصفّح وأدِر وانقل الملفات بين هاتفك وأي حاسوب على شبكتك.';
+
+  @override
+  String get onboardingHowTitle => 'كيف يعمل';
+
+  @override
+  String get onboardingHowBody =>
+      'ثبّت الوكيل على حاسوبك، وقرنه مع هذا التطبيق برمز لمرة واحدة — عبر الواي فاي أو Tailscale.';
+
+  @override
+  String get onboardingReadyTitle => 'جاهز للبدء';
+
+  @override
+  String get onboardingReadyBody =>
+      'قرن أول حاسوب لبدء الاستكشاف. ملفاتك تبقى على أجهزتك — لا شيء يذهب إلى السحابة.';
+
+  @override
+  String get onboardingNext => 'التالي';
+
+  @override
+  String get onboardingBack => 'رجوع';
+
+  @override
+  String get onboardingGetStarted => 'ابدأ';
 }

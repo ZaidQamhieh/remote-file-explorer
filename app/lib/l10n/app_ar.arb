@@ -509,5 +509,21 @@
   "bandwidthSection": "عرض النطاق",
   "bandwidthUploadLimit": "حد الرفع",
   "bandwidthDownloadLimit": "حد التنزيل",
-  "bandwidthUnlimited": "بلا حدود"
+  "bandwidthUnlimited": "بلا حدود",
+  "cacheSection": "ذاكرة التخزين",
+  "cacheListingLabel": "قوائم المجلدات",
+  "cacheTempLabel": "الملفات المحمّلة",
+  "cacheTotalLabel": "الإجمالي",
+  "cacheClearAll": "مسح كل التخزين المؤقت",
+  "cacheCleared": "تم مسح التخزين المؤقت",
+  "cacheCalculating": "جارٍ الحساب…",
+  "onboardingWelcomeTitle": "مرحباً في مستكشف الملفات عن بُعد",
+  "onboardingWelcomeBody": "تصفّح وأدِر وانقل الملفات بين هاتفك وأي حاسوب على شبكتك.",
+  "onboardingHowTitle": "كيف يعمل",
+  "onboardingHowBody": "ثبّت الوكيل على حاسوبك، وقرنه مع هذا التطبيق برمز لمرة واحدة — عبر الواي فاي أو Tailscale.",
+  "onboardingReadyTitle": "جاهز للبدء",
+  "onboardingReadyBody": "قرن أول حاسوب لبدء الاستكشاف. ملفاتك تبقى على أجهزتك — لا شيء يذهب إلى السحابة.",
+  "onboardingNext": "التالي",
+  "onboardingBack": "رجوع",
+  "onboardingGetStarted": "ابدأ"
 }

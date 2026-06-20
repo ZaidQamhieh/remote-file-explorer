@@ -434,6 +434,39 @@ func TestDeviceJailMiddleware_NarrowsOpsForJailedDevice(t *testing.T) {
 	}
 }
 
+func TestPatchSettingsHandler_InvalidJSON(t *testing.T) {
+	_, st := newTestDeps(t)
+	rr := httptest.NewRecorder()
+	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader("not json")))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestPatchSettingsHandler_SetRoots(t *testing.T) {
+	_, st := newTestDeps(t)
+	root := t.TempDir()
+	body := `{"roots":["` + root + `"]}`
+	rr := httptest.NewRecorder()
+	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	roots := st.Roots()
+	if len(roots) != 1 || roots[0] != root {
+		t.Fatalf("expected roots [%s], got %v", root, roots)
+	}
+}
+
+func TestPutBandwidthHandler_InvalidJSON(t *testing.T) {
+	_, st := newTestDeps(t)
+	rr := httptest.NewRecorder()
+	putBandwidthHandler(st)(rr, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader("{bad")))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
 func TestBandwidthHandler_GetAndPut(t *testing.T) {
 	_, st := newTestDeps(t)
 

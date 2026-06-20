@@ -1709,4 +1709,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bandwidthUnlimited => 'Unlimited';
+
+  @override
+  String get cacheSection => 'Cache';
+
+  @override
+  String get cacheListingLabel => 'Listing cache';
+
+  @override
+  String get cacheTempLabel => 'Downloaded files';
+
+  @override
+  String get cacheTotalLabel => 'Total';
+
+  @override
+  String get cacheClearAll => 'Clear all cache';
+
+  @override
+  String get cacheCleared => 'Cache cleared';
+
+  @override
+  String get cacheCalculating => 'Calculating…';
+
+  @override
+  String get onboardingWelcomeTitle => 'Welcome to Remote File Explorer';
+
+  @override
+  String get onboardingWelcomeBody =>
+      'Browse, manage, and transfer files between your phone and any PC on your network.';
+
+  @override
+  String get onboardingHowTitle => 'How it works';
+
+  @override
+  String get onboardingHowBody =>
+      'Install the agent on your PC, pair it with this app using a one-time code, and you\'re connected — over Wi-Fi or Tailscale.';
+
+  @override
+  String get onboardingReadyTitle => 'Ready to go';
+
+  @override
+  String get onboardingReadyBody =>
+      'Pair your first PC to start exploring. Your files stay on your devices — nothing goes to the cloud.';
+
+  @override
+  String get onboardingNext => 'Next';
+
+  @override
+  String get onboardingBack => 'Back';
+
+  @override
+  String get onboardingGetStarted => 'Get started';
 }

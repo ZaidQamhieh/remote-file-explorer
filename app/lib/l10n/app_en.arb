@@ -935,5 +935,21 @@
   "bandwidthSection": "Bandwidth",
   "bandwidthUploadLimit": "Upload limit",
   "bandwidthDownloadLimit": "Download limit",
-  "bandwidthUnlimited": "Unlimited"
+  "bandwidthUnlimited": "Unlimited",
+  "cacheSection": "Cache",
+  "cacheListingLabel": "Listing cache",
+  "cacheTempLabel": "Downloaded files",
+  "cacheTotalLabel": "Total",
+  "cacheClearAll": "Clear all cache",
+  "cacheCleared": "Cache cleared",
+  "cacheCalculating": "Calculating…",
+  "onboardingWelcomeTitle": "Welcome to Remote File Explorer",
+  "onboardingWelcomeBody": "Browse, manage, and transfer files between your phone and any PC on your network.",
+  "onboardingHowTitle": "How it works",
+  "onboardingHowBody": "Install the agent on your PC, pair it with this app using a one-time code, and you're connected — over Wi-Fi or Tailscale.",
+  "onboardingReadyTitle": "Ready to go",
+  "onboardingReadyBody": "Pair your first PC to start exploring. Your files stay on your devices — nothing goes to the cloud.",
+  "onboardingNext": "Next",
+  "onboardingBack": "Back",
+  "onboardingGetStarted": "Get started"
 }

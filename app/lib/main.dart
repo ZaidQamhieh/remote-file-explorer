@@ -9,6 +9,7 @@ import 'core/platform/transfer_notifications.dart';
 import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/hosts/host_list_screen.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'features/share/share_intake.dart';
 
 void main() async {
@@ -105,8 +106,29 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(
         navigatorKey: navigatorKey,
-        child: const HostListScreen(),
+        child: const _HomeRouter(),
       ),
+    );
+  }
+}
+
+class _HomeRouter extends ConsumerWidget {
+  const _HomeRouter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onboarded = ref.watch(onboardingCompleteProvider);
+    return onboarded.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => const HostListScreen(),
+      data: (complete) {
+        if (complete) return const HostListScreen();
+        return OnboardingScreen(
+          onComplete: () => ref.invalidate(onboardingCompleteProvider),
+        );
+      },
     );
   }
 }

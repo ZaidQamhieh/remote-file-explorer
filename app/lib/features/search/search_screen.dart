@@ -11,89 +11,20 @@ import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/recent_searches.dart';
-import '../../core/theme/tokens.dart';
-import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import 'search_logic.dart';
+import 'search_types.dart';
+import 'widgets/category_chips_row.dart';
+import 'widgets/centered_message.dart';
+import 'widgets/filter_button.dart';
+import 'widgets/filter_sheet.dart';
+import 'widgets/glob_indicator.dart';
+import 'widgets/recent_searches_view.dart';
+import 'widgets/search_result_tile.dart';
+import 'widgets/truncation_banner.dart';
 
-/// Selectable entry-type categories for the search filter chips, mapped to
-/// the server's `types` query parameter values.
-enum SearchCategory {
-  folder(Icons.folder, 'folder'),
-  image(Icons.image, 'image'),
-  video(Icons.movie, 'video'),
-  audio(Icons.music_note, 'audio'),
-  document(Icons.description, 'document'),
-  archive(Icons.folder_zip, 'archive'),
-  other(Icons.insert_drive_file, 'other');
-
-  const SearchCategory(this.icon, this.apiValue);
-
-  final IconData icon;
-  final String apiValue;
-
-  String localizedLabel(BuildContext context) => switch (this) {
-    folder => context.l10n.searchCategoryFolders,
-    image => context.l10n.searchCategoryImages,
-    video => context.l10n.searchCategoryVideos,
-    audio => context.l10n.searchCategoryAudio,
-    document => context.l10n.searchCategoryDocs,
-    archive => context.l10n.searchCategoryArchives,
-    other => context.l10n.searchCategoryOther,
-  };
-}
-
-/// Minimum-size filter presets, mapped to the server's `minSize` (bytes).
-enum SizePreset {
-  any(null),
-  mb1(1024 * 1024),
-  mb10(10 * 1024 * 1024),
-  mb100(100 * 1024 * 1024),
-  gb1(1024 * 1024 * 1024);
-
-  const SizePreset(this.minBytes);
-
-  final int? minBytes;
-
-  String localizedLabel(BuildContext context) => switch (this) {
-    any => context.l10n.sizePresetAny,
-    mb1 => context.l10n.sizePresetMb1,
-    mb10 => context.l10n.sizePresetMb10,
-    mb100 => context.l10n.sizePresetMb100,
-    gb1 => context.l10n.sizePresetGb1,
-  };
-}
-
-/// Modified-date filter presets. [resolve] computes the `modifiedAfter`
-/// timestamp at query time (relative to "now").
-enum DatePreset {
-  any(null),
-  last24h(Duration(hours: 24)),
-  last7d(Duration(days: 7)),
-  last30d(Duration(days: 30)),
-  thisYear(null);
-
-  const DatePreset(this.lookback);
-
-  final Duration? lookback;
-
-  String localizedLabel(BuildContext context) => switch (this) {
-    any => context.l10n.datePresetAny,
-    last24h => context.l10n.datePresetLast24h,
-    last7d => context.l10n.datePresetLast7d,
-    last30d => context.l10n.datePresetLast30d,
-    thisYear => context.l10n.datePresetThisYear,
-  };
-
-  /// Computes the `modifiedAfter` bound for this preset, or `null` for
-  /// [DatePreset.any].
-  DateTime? resolve(DateTime now) {
-    if (this == DatePreset.any) return null;
-    if (this == DatePreset.thisYear) return DateTime(now.year, 1, 1);
-    return now.subtract(lookback!);
-  }
-}
+export 'search_types.dart';
 
 /// Full-screen search UI for files and folders on [host].
 ///
@@ -150,11 +81,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// [_rawResults] sorted by relevance and (unless [_includeHidden])
   /// filtered through the same file-visibility prefs as the explorer
   /// listing.
-  ///
-  /// Reads the resolved per-host file-visibility prefs from the two-tier
-  /// settings model via `ref.watch` (called only from [build], directly or
-  /// through [_buildBody]) so this screen re-filters live if the user changes
-  /// visibility prefs for this host while it's mounted.
   List<Entry> get _results {
     final settings =
         ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
@@ -188,8 +114,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       const Duration(milliseconds: 450),
       () => _runSearch(value),
     );
-    // Refresh recent-searches visibility immediately when the field becomes
-    // empty/non-empty.
     setState(() {});
   }
 
@@ -205,7 +129,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _error = null;
     });
 
-    // Cancel any in-flight request before starting a new one.
     _cancelToken?.cancel();
 
     if (q.isEmpty) {
@@ -241,7 +164,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _truncated = result.truncated;
         _timeBudgetHit = result.timeBudgetHit;
       });
-      // Only record searches that actually ran with a non-empty query.
       unawaited(ref.read(recentSearchesProvider.notifier).record(q));
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return;
@@ -286,11 +208,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _openFiltersSheet() async {
-    final result = await showModalBottomSheet<_FilterSheetResult>(
+    final result = await showModalBottomSheet<FilterSheetResult>(
       context: context,
       isScrollControlled: true,
       builder:
-          (_) => _FilterSheet(
+          (_) => FilterSheet(
             sizePreset: _sizePreset,
             datePreset: _datePreset,
             searchFromHere: _searchFromHere,
@@ -315,8 +237,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _openResult(Entry entry) {
     final stack = buildPathStack(entry.path);
-    // Parent directory: second-to-last element of the path stack, or the
-    // entry's own path if it's already a top-level item.
     final parent = stack.length >= 2 ? stack[stack.length - 2] : entry.path;
     Navigator.of(context).pop(parent);
   }
@@ -346,7 +266,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 _onChanged('');
               },
             ),
-          _FilterButton(
+          FilterButton(
             activeCount: _activeFilterCount,
             onPressed: _openFiltersSheet,
           ),
@@ -354,13 +274,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       body: Column(
         children: [
-          _CategoryChipsRow(
+          CategoryChipsRow(
             selected: _selectedCategories,
             onToggle: _toggleCategory,
           ),
-          if (_isGlob) const _GlobIndicator(),
+          if (_isGlob) const GlobIndicator(),
           if (_truncated || _timeBudgetHit)
-            _TruncationBanner(
+            TruncationBanner(
               truncated: _truncated,
               timeBudgetHit: _timeBudgetHit,
               limit: _results.length,
@@ -374,7 +294,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildBody(BuildContext context) {
     if (_query.isEmpty) {
-      return _RecentSearchesView(onSelect: _selectRecent);
+      return RecentSearchesView(onSelect: _selectRecent);
     }
     if (_loading) {
       return const Center(
@@ -391,7 +311,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
     if (_results.isEmpty) {
-      return _CenteredMessage(
+      return CenteredMessage(
         icon: Icons.search_off,
         message: context.l10n.noResultsFor(_query),
       );
@@ -400,516 +320,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       itemCount: _results.length,
       itemBuilder: (context, i) {
         final entry = _results[i];
-        return _SearchResultTile(
+        return SearchResultTile(
           entry: entry,
           query: _query,
           highlight: !_isGlob,
           onTap: () => _openResult(entry),
         );
       },
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Filter button (tune icon + active-filter count badge)
-// ---------------------------------------------------------------------------
-
-class _FilterButton extends StatelessWidget {
-  const _FilterButton({required this.activeCount, required this.onPressed});
-
-  final int activeCount;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = const Icon(Icons.tune);
-    return IconButton(
-      tooltip: context.l10n.searchFiltersTooltip,
-      onPressed: onPressed,
-      icon:
-          activeCount > 0
-              ? Badge(label: Text('$activeCount'), child: icon)
-              : icon,
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Category chips row (multi-select, maps to `types`)
-// ---------------------------------------------------------------------------
-
-class _CategoryChipsRow extends StatelessWidget {
-  const _CategoryChipsRow({required this.selected, required this.onToggle});
-
-  final Set<SearchCategory> selected;
-  final void Function(SearchCategory category, bool selected) onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.xs,
-        ),
-        itemCount: SearchCategory.values.length,
-        separatorBuilder: (_, __) => const SizedBox(width: Spacing.xs),
-        itemBuilder: (context, i) {
-          final category = SearchCategory.values[i];
-          final isSelected = selected.contains(category);
-          return FilterChip(
-            label: Text(category.localizedLabel(context)),
-            avatar: Icon(category.icon, size: 18),
-            selected: isSelected,
-            onSelected: (value) => onToggle(category, value),
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Glob-mode indicator chip
-// ---------------------------------------------------------------------------
-
-class _GlobIndicator extends StatelessWidget {
-  const _GlobIndicator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Spacing.md, 0, Spacing.md, Spacing.xs),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Chip(
-          avatar: const Icon(Icons.pattern, size: 18),
-          label: Text(context.l10n.globPattern),
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Truncation banner
-// ---------------------------------------------------------------------------
-
-class _TruncationBanner extends StatelessWidget {
-  const _TruncationBanner({
-    required this.truncated,
-    required this.timeBudgetHit,
-    required this.limit,
-  });
-
-  final bool truncated;
-  final bool timeBudgetHit;
-  final int limit;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme;
-    final message =
-        truncated
-            ? context.l10n.showingFirstNResults(limit)
-            : context.l10n.searchTimedOut;
-    return Material(
-      color: c.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm,
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, size: 16, color: c.onTertiaryContainer),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: c.onTertiaryContainer, fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Recent searches (shown when the query field is empty)
-// ---------------------------------------------------------------------------
-
-class _RecentSearchesView extends ConsumerWidget {
-  const _RecentSearchesView({required this.onSelect});
-
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final recent = ref.watch(recentSearchesProvider).valueOrNull ?? const [];
-
-    if (recent.isEmpty) {
-      return _CenteredMessage(
-        icon: Icons.search,
-        message: context.l10n.typeToSearch,
-      );
-    }
-
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.md,
-            Spacing.md,
-            Spacing.sm,
-            Spacing.xs,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.l10n.recentSearches,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-              TextButton(
-                onPressed:
-                    () => ref.read(recentSearchesProvider.notifier).clear(),
-                child: Text(context.l10n.clearAllButton),
-              ),
-            ],
-          ),
-        ),
-        for (final query in recent)
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: Text(query),
-            trailing: IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              tooltip: context.l10n.removeTooltip,
-              onPressed:
-                  () => ref.read(recentSearchesProvider.notifier).remove(query),
-            ),
-            onTap: () => onSelect(query),
-          ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Filters bottom sheet
-// ---------------------------------------------------------------------------
-
-class _FilterSheetResult {
-  const _FilterSheetResult({
-    required this.sizePreset,
-    required this.datePreset,
-    required this.searchFromHere,
-    required this.includeHidden,
-  });
-
-  final SizePreset sizePreset;
-  final DatePreset datePreset;
-  final bool searchFromHere;
-  final bool includeHidden;
-}
-
-class _FilterSheet extends StatefulWidget {
-  const _FilterSheet({
-    required this.sizePreset,
-    required this.datePreset,
-    required this.searchFromHere,
-    required this.includeHidden,
-    required this.currentPath,
-  });
-
-  final SizePreset sizePreset;
-  final DatePreset datePreset;
-  final bool searchFromHere;
-  final bool includeHidden;
-  final String currentPath;
-
-  @override
-  State<_FilterSheet> createState() => _FilterSheetState();
-}
-
-class _FilterSheetState extends State<_FilterSheet> {
-  late SizePreset _sizePreset = widget.sizePreset;
-  late DatePreset _datePreset = widget.datePreset;
-  late bool _searchFromHere = widget.searchFromHere;
-  late bool _includeHidden = widget.includeHidden;
-
-  void _apply() {
-    Navigator.of(context).pop(
-      _FilterSheetResult(
-        sizePreset: _sizePreset,
-        datePreset: _datePreset,
-        searchFromHere: _searchFromHere,
-        includeHidden: _includeHidden,
-      ),
-    );
-  }
-
-  void _reset() {
-    setState(() {
-      _sizePreset = SizePreset.any;
-      _datePreset = DatePreset.any;
-      _searchFromHere = true;
-      _includeHidden = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.md,
-          Spacing.md,
-          Spacing.md,
-          Spacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.l10n.searchFiltersTooltip,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton(
-                  onPressed: _reset,
-                  child: Text(context.l10n.resetButton),
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.fileSize,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              children: [
-                for (final preset in SizePreset.values)
-                  ChoiceChip(
-                    label: Text(preset.localizedLabel(context)),
-                    selected: _sizePreset == preset,
-                    onSelected: (_) => setState(() => _sizePreset = preset),
-                  ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.sortFieldDate,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              children: [
-                for (final preset in DatePreset.values)
-                  ChoiceChip(
-                    label: Text(preset.localizedLabel(context)),
-                    selected: _datePreset == preset,
-                    onSelected: (_) => setState(() => _datePreset = preset),
-                  ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.searchScope,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _searchFromHere
-                        ? context.l10n.searchingIn(widget.currentPath)
-                        : context.l10n.searchingEverywhere,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                const SizedBox(width: Spacing.sm),
-                Text(context.l10n.fromHere),
-                Switch(
-                  value: !_searchFromHere,
-                  onChanged:
-                      (everywhere) =>
-                          setState(() => _searchFromHere = !everywhere),
-                ),
-                Text(context.l10n.everywhere),
-              ],
-            ),
-            const SizedBox(height: Spacing.sm),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.l10n.includeHiddenItems),
-              subtitle: Text(context.l10n.includeHiddenSubtitle),
-              value: _includeHidden,
-              onChanged: (v) => setState(() => _includeHidden = v),
-            ),
-            const SizedBox(height: Spacing.md),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _apply,
-                child: Text(context.l10n.applyButton),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Result tile — mirrors the look of the explorer's entry list tiles
-// (icon, name, size/date subtitle), plus the parent path for context, with
-// the matched substring highlighted in the name.
-// ---------------------------------------------------------------------------
-
-class _SearchResultTile extends StatelessWidget {
-  const _SearchResultTile({
-    required this.entry,
-    required this.query,
-    required this.highlight,
-    required this.onTap,
-  });
-
-  final Entry entry;
-  final String query;
-  final bool highlight;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final subtitleParts = <String>[
-      entry.path,
-      if (!entry.isDir) formatSize(entry.size),
-      if (entry.modified != null) formatDate(entry.modified!),
-    ];
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: Spacing.md,
-        vertical: Spacing.xs,
-      ),
-      leading: _resultIcon(entry),
-      title: _highlightedName(context),
-      subtitle: Text(
-        subtitleParts.where((s) => s.isNotEmpty).join('  ·  '),
-        overflow: TextOverflow.ellipsis,
-        maxLines: 2,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: entry.isDir ? const Icon(Icons.chevron_right) : null,
-      onTap: onTap,
-    );
-  }
-
-  Widget _highlightedName(BuildContext context) {
-    final baseStyle = Theme.of(context).textTheme.bodyLarge;
-    final range = highlight ? highlightRange(entry.name, query) : null;
-    if (range == null) {
-      return Text(
-        entry.name,
-        overflow: TextOverflow.ellipsis,
-        style: baseStyle,
-      );
-    }
-    final highlightStyle = baseStyle?.copyWith(
-      fontWeight: FontWeight.bold,
-      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      color: Theme.of(context).colorScheme.onPrimaryContainer,
-    );
-    return RichText(
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        style: baseStyle,
-        children: [
-          TextSpan(text: entry.name.substring(0, range.start)),
-          TextSpan(
-            text: entry.name.substring(range.start, range.end),
-            style: highlightStyle,
-          ),
-          TextSpan(text: entry.name.substring(range.end)),
-        ],
-      ),
-    );
-  }
-}
-
-Icon _resultIcon(Entry entry) {
-  if (entry.isDir) {
-    return const Icon(Icons.folder, color: Colors.amber);
-  }
-  final mime = entry.mimeType ?? '';
-  if (mime.startsWith('image/')) {
-    return const Icon(Icons.image, color: Colors.blue);
-  }
-  if (mime.startsWith('video/')) {
-    return const Icon(Icons.movie, color: Colors.purple);
-  }
-  if (mime.startsWith('audio/')) {
-    return const Icon(Icons.music_note, color: Colors.green);
-  }
-  if (mime.contains('pdf')) {
-    return const Icon(Icons.picture_as_pdf, color: Colors.red);
-  }
-  if (mime.contains('zip') || mime.contains('archive')) {
-    return const Icon(Icons.folder_zip, color: Colors.orange);
-  }
-  if (mime.startsWith('text/') || mime.contains('json')) {
-    return const Icon(Icons.description, color: Colors.teal);
-  }
-  return const Icon(Icons.insert_drive_file);
-}
-
-// ---------------------------------------------------------------------------
-// Empty / error / hint state
-// ---------------------------------------------------------------------------
-
-class _CenteredMessage extends StatelessWidget {
-  const _CenteredMessage({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: Spacing.sm + Spacing.xs),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

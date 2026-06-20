@@ -2815,6 +2815,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unlimited'**
   String get bandwidthUnlimited;
+
+  /// No description provided for @cacheSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get cacheSection;
+
+  /// No description provided for @cacheListingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing cache'**
+  String get cacheListingLabel;
+
+  /// No description provided for @cacheTempLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded files'**
+  String get cacheTempLabel;
+
+  /// No description provided for @cacheTotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get cacheTotalLabel;
+
+  /// No description provided for @cacheClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all cache'**
+  String get cacheClearAll;
+
+  /// No description provided for @cacheCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache cleared'**
+  String get cacheCleared;
+
+  /// No description provided for @cacheCalculating.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating…'**
+  String get cacheCalculating;
+
+  /// No description provided for @onboardingWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Remote File Explorer'**
+  String get onboardingWelcomeTitle;
+
+  /// No description provided for @onboardingWelcomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse, manage, and transfer files between your phone and any PC on your network.'**
+  String get onboardingWelcomeBody;
+
+  /// No description provided for @onboardingHowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How it works'**
+  String get onboardingHowTitle;
+
+  /// No description provided for @onboardingHowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Install the agent on your PC, pair it with this app using a one-time code, and you\'re connected — over Wi-Fi or Tailscale.'**
+  String get onboardingHowBody;
+
+  /// No description provided for @onboardingReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to go'**
+  String get onboardingReadyTitle;
+
+  /// No description provided for @onboardingReadyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pair your first PC to start exploring. Your files stay on your devices — nothing goes to the cloud.'**
+  String get onboardingReadyBody;
+
+  /// No description provided for @onboardingNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get onboardingNext;
+
+  /// No description provided for @onboardingBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get onboardingBack;
+
+  /// No description provided for @onboardingGetStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Get started'**
+  String get onboardingGetStarted;
 }
 
 class _AppLocalizationsDelegate

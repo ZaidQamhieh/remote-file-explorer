@@ -24,15 +24,21 @@ import 'meta_sheet.dart';
 import 'trash_screen.dart';
 import 'widgets/batch_rename_sheet.dart';
 import 'widgets/batch_report.dart';
-import 'widgets/breadcrumb_bar.dart';
+import 'widgets/browse_app_bar.dart';
 import 'widgets/conflict_resolution_dialog.dart';
 import 'widgets/create_menu.dart';
 import 'widgets/entry_grid_cell.dart';
 import 'widgets/entry_tile.dart';
+import 'widgets/explorer_fab.dart';
+import 'widgets/explorer_selection_app_bar.dart';
 import 'widgets/favorites_pin_row.dart';
 import 'widgets/favorites_sheet.dart';
+import 'widgets/hidden_items_footer.dart';
+import 'widgets/load_more_indicator.dart';
 import 'widgets/selection_bar.dart';
 import 'widgets/view_options_sheet.dart';
+
+export 'widgets/hidden_items_footer.dart';
 
 class ExplorerScreen extends ConsumerStatefulWidget {
   const ExplorerScreen({
@@ -43,15 +49,7 @@ class ExplorerScreen extends ConsumerStatefulWidget {
   });
 
   final Host host;
-
-  /// Directory this explorer instance is rooted at — `/` for POSIX hosts, or
-  /// a drive path (e.g. `C:\`) when opened from [DrivesView]. Determines
-  /// [ExplorerState.atRoot], so popping at this directory exits the screen
-  /// (back to the drive list, for Windows hosts).
   final String rootPath;
-
-  /// If set, the explorer jumps straight to this path (e.g. a favorited
-  /// folder on this drive) instead of showing [rootPath] itself.
   final String? initialPath;
 
   @override
@@ -68,7 +66,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     super.initState();
     final initialPath = widget.initialPath;
     if (initialPath != null && initialPath != widget.rootPath) {
-      // Defer until after the provider's initial build/load is scheduled.
       Future.microtask(() => _notifier.jumpTo(initialPath));
     }
   }
@@ -112,12 +109,20 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         body: Column(
           children: [
             Expanded(child: _buildBody(context, state, client)),
-            // Thin live-progress strip; collapses to nothing when idle.
             const MiniTransferBar(),
           ],
         ),
         floatingActionButton:
-            state.multiSelect ? null : _buildFab(context, state, client),
+            state.multiSelect
+                ? null
+                : ExplorerFab(
+                  clipboard: ref.watch(clipboardProvider),
+                  hostId: widget.host.id,
+                  multiSelect: state.multiSelect,
+                  onPaste: () => _paste(context, state, ref.read(clipboardProvider)!),
+                  onUpload: () => _pickAndUpload(context, state),
+                  onNew: () => _showCreateMenu(context),
+                ),
         bottomNavigationBar:
             state.multiSelect
                 ? SelectionBar(
@@ -130,9 +135,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  /// App bar that morphs between the normal browsing bar and the selection
-  /// contextual bar via a fadeThrough-style cross-fade (opacity + slight
-  /// scale, [MotionDuration.medium], `easeOutCubic`) — Skia-safe, no blur.
   PreferredSizeWidget _buildAppBar(
     BuildContext context,
     ExplorerState state,
@@ -155,149 +157,32 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             ),
         child:
             state.multiSelect
-                ? _buildSelectionAppBar(context, state)
-                : _buildBrowseAppBar(context, state, isFav, client),
+                ? ExplorerSelectionAppBar(
+                  state: state,
+                  onClose: _notifier.clearSelection,
+                  onBatchRename: () => _batchRename(context, state),
+                  onSelectAll: _notifier.selectAll,
+                  onClearSelection: _notifier.clearSelection,
+                  onInvertSelection: _notifier.invertSelection,
+                )
+                : BrowseAppBar(
+                  state: state,
+                  isFav: isFav,
+                  onBack: _notifier.popDirectory,
+                  onNavigateTo: _notifier.navigateTo,
+                  onMoveInto:
+                      (dragged, dest) async =>
+                          _moveInto(context, client, dragged, dest),
+                  onSearch: () => _openSearch(context, state, client),
+                  onToggleFavorite: () =>
+                      _toggleFavorite(context, state, isFav),
+                  onOverflow: (action) =>
+                      _onOverflowAction(context, state, action),
+                ),
       ),
     );
   }
 
-  AppBar _buildBrowseAppBar(
-    BuildContext context,
-    ExplorerState state,
-    bool isFav,
-    AgentClient client,
-  ) {
-    return AppBar(
-      key: const ValueKey('browse_app_bar'),
-      leading:
-          state.atRoot
-              ? null
-              : BackButton(onPressed: () => _notifier.popDirectory()),
-      title: Text(
-        folderLabel(state.currentPath),
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(44),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(
-            start: Spacing.md,
-            bottom: Spacing.xs,
-          ),
-          child: BreadcrumbBar(
-            pathStack: state.pathStack,
-            onNavigateTo: _notifier.navigateTo,
-            onMoveInto:
-                (dragged, dest) => _moveInto(context, client, dragged, dest),
-          ),
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.search_rounded),
-          tooltip: context.l10n.searchTooltip,
-          onPressed: () => _openSearch(context, state, client),
-        ),
-        IconButton(
-          icon: Icon(isFav ? Icons.star_rounded : Icons.star_border_rounded),
-          color: isFav ? Colors.amber : null,
-          tooltip:
-              isFav
-                  ? context.l10n.removeFavoriteTooltip
-                  : context.l10n.favoriteFolderTooltip,
-          onPressed: () => _toggleFavorite(context, state, isFav),
-        ),
-        PopupMenuButton<_OverflowAction>(
-          icon: const Icon(Icons.more_vert_rounded),
-          tooltip: context.l10n.moreTooltip,
-          onSelected: (action) => _onOverflowAction(context, state, action),
-          itemBuilder:
-              (ctx) => [
-                PopupMenuItem(
-                  value: _OverflowAction.viewOptions,
-                  child: ListTile(
-                    leading: const Icon(Icons.tune_rounded),
-                    title: Text(ctx.l10n.viewOptionsTitle),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _OverflowAction.favorites,
-                  child: ListTile(
-                    leading: const Icon(Icons.bookmarks_outlined),
-                    title: Text(ctx.l10n.favoritesTitle),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _OverflowAction.transfers,
-                  child: ListTile(
-                    leading: const Icon(Icons.file_upload_outlined),
-                    title: Text(ctx.l10n.transfersMenuItem),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _OverflowAction.trash,
-                  child: ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded),
-                    title: Text(ctx.l10n.trashTitle),
-                  ),
-                ),
-              ],
-        ),
-      ],
-    );
-  }
-
-  /// Contextual action bar shown while one or more entries are selected:
-  /// `✕  N selected   ⊞ select-all   ⋮ (invert)`.
-  AppBar _buildSelectionAppBar(BuildContext context, ExplorerState state) {
-    final allSelected =
-        state.selected.length == state.entries.length &&
-        state.entries.isNotEmpty;
-    return AppBar(
-      key: const ValueKey('selection_app_bar'),
-      leading: IconButton(
-        icon: const Icon(Icons.close_rounded),
-        tooltip: context.l10n.clearSelectionTooltip,
-        onPressed: _notifier.clearSelection,
-      ),
-      title: Text(
-        context.l10n.nSelected(state.selected.length),
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      // Empty bottom matching the browse bar's breadcrumb row height, so the
-      // fadeThrough cross-fade doesn't jump in size.
-      bottom: const PreferredSize(
-        preferredSize: Size.fromHeight(44),
-        child: SizedBox.shrink(),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.drive_file_rename_outline),
-          tooltip: context.l10n.batchRenameTooltip,
-          onPressed: () => _batchRename(context, state),
-        ),
-        IconButton(
-          icon: Icon(
-            allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
-          ),
-          tooltip:
-              allSelected
-                  ? context.l10n.deselectAllTooltip
-                  : context.l10n.selectAllTooltip,
-          onPressed:
-              allSelected ? _notifier.clearSelection : _notifier.selectAll,
-        ),
-        IconButton(
-          icon: const Icon(Icons.flip_to_back_rounded),
-          tooltip: context.l10n.invertSelectionTooltip,
-          onPressed: _notifier.invertSelection,
-        ),
-      ],
-    );
-  }
-
-  /// Batch-renames the current selection via [BatchRenameSheet], then reports
-  /// the per-item outcome.
   Future<void> _batchRename(BuildContext context, ExplorerState state) async {
     final paths = state.selected.toList();
     if (paths.isEmpty) return;
@@ -324,16 +209,16 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   void _onOverflowAction(
     BuildContext context,
     ExplorerState state,
-    _OverflowAction action,
+    OverflowAction action,
   ) {
     switch (action) {
-      case _OverflowAction.viewOptions:
+      case OverflowAction.viewOptions:
         ViewOptionsSheet.show(context, notifier: _notifier);
-      case _OverflowAction.favorites:
+      case OverflowAction.favorites:
         _showFavorites(context);
-      case _OverflowAction.transfers:
+      case OverflowAction.transfers:
         _showTransfers(context);
-      case _OverflowAction.trash:
+      case OverflowAction.trash:
         _openTrash(context);
     }
   }
@@ -346,7 +231,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         builder: (_) => TrashScreen(host: widget.host, client: client),
       ),
     );
-    // A restore may have dropped an item back into the current folder.
     if (changed == true) _notifier.refresh();
   }
 
@@ -416,9 +300,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  /// Pin row of favorited folders, shown above the listing only at the
-  /// filesystem root (`state.atRoot`) when the host has favorites. Returns
-  /// `null` (renders nothing) otherwise.
   Widget? _buildPinRow(BuildContext context, ExplorerState state) {
     if (!state.atRoot) return null;
     final favs =
@@ -447,7 +328,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   ) {
     final pinRow = _buildPinRow(context, state);
 
-    // First load with nothing cached yet → lightweight skeleton.
     if (state.loading && state.entries.isEmpty) {
       return Column(
         children: [
@@ -456,7 +336,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ],
       );
     }
-    // Hard error with no cached entries to fall back on → retry card.
     if (state.error != null && state.entries.isEmpty) {
       return Column(
         children: [
@@ -470,7 +349,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ],
       );
     }
-    // Empty (non-error) directory → friendly empty view.
     if (!state.loading && state.entries.isEmpty && state.error == null) {
       return Column(
         children: [
@@ -512,7 +390,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  /// Paths of this host's favorited folders, for the tile star badge.
   Set<String> _favoritePaths() =>
       ref
           .watch(favoritesProvider)
@@ -546,7 +423,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         }
         if (i >= entries.length) {
           _notifier.loadMore();
-          return _LoadMoreIndicator(loading: state.loadingMore);
+          return LoadMoreIndicator(loading: state.loadingMore);
         }
         final entry = entries[i];
         final hidden = state.hiddenPaths.contains(entry.path);
@@ -575,12 +452,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  /// Moves a dragged [dragged] entry into the [destFolder] directory, then
-  /// refreshes the listing and reports the outcome.
-  ///
-  /// Pre-flight: if [destFolder] already has an entry named [dragged.name],
-  /// offer Keep both / Overwrite / Skip / Cancel before issuing the move —
-  /// same prompt as the selection bar's Move action.
   Future<void> _moveInto(
     BuildContext context,
     AgentClient client,
@@ -688,7 +559,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         }
         if (i >= entries.length) {
           _notifier.loadMore();
-          return _LoadMoreIndicator(loading: state.loadingMore);
+          return LoadMoreIndicator(loading: state.loadingMore);
         }
         final entry = entries[i];
         final hidden = state.hiddenPaths.contains(entry.path);
@@ -727,8 +598,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   void _showMeta(BuildContext context, Entry entry, AgentClient client) {
-    // Pass the visible listing so the preview can swipe between previewable
-    // siblings. Captured at open time — good enough for paging the current view.
     final siblings = ref.read(explorerProvider(_arg)).displayEntries;
     showModalBottomSheet(
       context: context,
@@ -744,58 +613,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     );
   }
 
-  Widget _buildFab(
-    BuildContext context,
-    ExplorerState state,
-    AgentClient client,
-  ) {
-    final clipboard = ref.watch(clipboardProvider);
-    final showPaste =
-        clipboard != null &&
-        !clipboard.isEmpty &&
-        clipboard.hostId == widget.host.id &&
-        !state.multiSelect;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (showPaste) ...[
-          FloatingActionButton.small(
-            heroTag: 'fab_paste',
-            tooltip: context.l10n.pasteNItems(clipboard.paths.length),
-            onPressed: () => _paste(context, state, clipboard),
-            child: const Icon(Icons.content_paste),
-          ),
-          const SizedBox(height: 8),
-        ],
-        FloatingActionButton.small(
-          heroTag: 'fab_upload',
-          tooltip: context.l10n.uploadFileTooltip,
-          onPressed: () => _pickAndUpload(context, state),
-          child: const Icon(Icons.upload_file),
-        ),
-        const SizedBox(height: 8),
-        FloatingActionButton.extended(
-          heroTag: 'fab_new',
-          onPressed: () => _showCreateMenu(context),
-          icon: const Icon(Icons.add),
-          label: Text(context.l10n.newButton),
-        ),
-      ],
-    );
-  }
-
-  /// Pastes [clipboard]'s paths into [state.currentPath], reusing the same
-  /// pre-flight collision-check flow as the old destination-picker (Move/Copy
-  /// from the selection bar): list [state.currentPath], offer Keep
-  /// both/Overwrite/Skip/Cancel if anything collides, then issue
-  /// [ExplorerNotifier.moveSelected] (cut) or [ExplorerNotifier.copySelected]
-  /// (copy) and report the result via [reportBatchResult].
-  ///
-  /// Cut pastes clear the clipboard on success (the items "moved away" from
-  /// it); copy pastes keep it so the same clipboard can be pasted again
-  /// elsewhere.
   Future<void> _paste(
     BuildContext context,
     ExplorerState state,
@@ -805,8 +622,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final sources = clipboard.paths;
     final isCut = clipboard.mode == ClipboardMode.cut;
 
-    // Guard: cutting into the folder the items already live in is a no-op —
-    // bail out before touching the agent.
     if (isCut && sources.every((p) => _parentDirOf(p) == dest)) {
       showInfo(context, context.l10n.alreadyInThisFolder);
       return;
@@ -903,10 +718,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
   }
 
-  /// Picks a file to upload and, if its name already exists in the current
-  /// directory (checked against the already-loaded listing — no extra
-  /// round-trip), offers Keep both / Overwrite / Skip / Cancel before
-  /// enqueueing the upload.
   Future<void> _pickAndUpload(BuildContext context, ExplorerState state) async {
     final result = await FilePicker.pickFiles();
     if (result == null || result.files.isEmpty) return;
@@ -966,146 +777,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 }
 
-/// Actions available from the browse app bar's overflow (⋮) menu.
-enum _OverflowAction { viewOptions, favorites, transfers, trash }
-
-/// Parent directory of [path] — works for both POSIX (`/`) and Windows (`\`)
-/// separators, mirroring the split used by [renameDestination]. Used by the
-/// paste handler's "already in this folder" guard.
 String _parentDirOf(String path) {
   final sep = path.contains('\\') ? r'\' : '/';
   final idx = path.lastIndexOf(sep);
   return idx <= 0 ? sep : path.substring(0, idx);
-}
-
-// ---------------------------------------------------------------------------
-// Pagination "load more" trailing item
-// ---------------------------------------------------------------------------
-
-/// Trailing tile shown at the end of the list/grid when a directory has more
-/// pages. Becoming visible triggers [ExplorerNotifier.loadMore]; this just
-/// renders the resulting spinner (or a quiet placeholder while the request
-/// is still being kicked off).
-class _LoadMoreIndicator extends StatelessWidget {
-  const _LoadMoreIndicator({required this.loading});
-
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
-      child: Center(
-        child:
-            loading
-                ? const SizedBox.square(
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const SizedBox.square(dimension: 24),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hidden-items reveal footer
-// ---------------------------------------------------------------------------
-
-/// Trailing tile shown at the end of the list/grid when [count] of the
-/// current listing's entries are filtered by file-visibility prefs
-/// (`core/storage/visibility_prefs.dart`). Tapping it flips the
-/// per-screen [ExplorerState.showHidden] session override via [onToggle] —
-/// this is the listing's primary "never make files silently unreachable"
-/// affordance (see also the eye toggle in [ViewOptionsSheet]).
-///
-/// In [compact] mode (used inside [GridView] cells, which are fixed-size),
-/// the label wraps onto two lines instead of a full-width row.
-class HiddenItemsFooter extends StatelessWidget {
-  const HiddenItemsFooter({
-    super.key,
-    required this.count,
-    required this.revealed,
-    required this.onToggle,
-    this.compact = false,
-  });
-
-  /// Number of entries in the current listing hidden by visibility prefs.
-  final int count;
-
-  /// Whether hidden entries are currently revealed (at reduced opacity) for
-  /// this session.
-  final bool revealed;
-
-  final VoidCallback onToggle;
-
-  /// `true` when rendered as a [GridView] trailing cell instead of a
-  /// full-width list row.
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final label = context.l10n.nHidden(count);
-    final action = revealed ? context.l10n.hideLabel : context.l10n.showLabel;
-    final style = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
-    final actionStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: scheme.primary,
-      fontWeight: FontWeight.w600,
-    );
-
-    if (compact) {
-      return Center(
-        child: InkWell(
-          borderRadius: Radii.smR,
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.all(Spacing.sm),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  revealed
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: Spacing.xs),
-                Text(label, style: style, textAlign: TextAlign.center),
-                Text(action, style: actionStyle, textAlign: TextAlign.center),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.md,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              revealed
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: Spacing.sm),
-            Text('$label · ', style: style),
-            Text(action, style: actionStyle),
-          ],
-        ),
-      ),
-    );
-  }
 }

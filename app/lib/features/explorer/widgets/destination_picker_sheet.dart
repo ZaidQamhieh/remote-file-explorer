@@ -86,11 +86,10 @@ class DestinationPickerSheet extends ConsumerWidget {
       maxChildSize: 0.9,
       minChildSize: 0.5,
       builder:
-          (_, scrollController) => Container(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: Radii.sheetTopR,
-            ),
+          (_, scrollController) => Material(
+            color: scheme.surfaceContainerLow,
+            borderRadius: Radii.sheetTopR,
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 _buildHeader(context, headerText),

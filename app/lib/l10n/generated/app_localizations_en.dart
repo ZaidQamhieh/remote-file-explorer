@@ -1665,4 +1665,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'This year';
+
+  @override
+  String get wakeButton => 'Wake';
+
+  @override
+  String wolPacketSent(String hostname) {
+    return 'Magic packet sent to $hostname';
+  }
+
+  @override
+  String get wolPacketFailed => 'Failed to send magic packet';
+
+  @override
+  String previewPageIndicator(int current, int total) {
+    return '$current of $total';
+  }
 }

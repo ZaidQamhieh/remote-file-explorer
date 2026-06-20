@@ -492,5 +492,13 @@
   "@wolPacketSent": {
     "placeholders": { "hostname": {"type": "String"} }
   },
-  "wolPacketFailed": "فشل إرسال حزمة الإيقاظ"
+  "wolPacketFailed": "فشل إرسال حزمة الإيقاظ",
+
+  "previewPageIndicator": "{current} من {total}",
+  "@previewPageIndicator": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  }
 }

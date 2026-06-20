@@ -912,5 +912,13 @@
   "@wolPacketSent": {
     "placeholders": { "hostname": {"type": "String"} }
   },
-  "wolPacketFailed": "Failed to send magic packet"
+  "wolPacketFailed": "Failed to send magic packet",
+
+  "previewPageIndicator": "{current} of {total}",
+  "@previewPageIndicator": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  }
 }

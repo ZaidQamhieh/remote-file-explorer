@@ -2743,6 +2743,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This year'**
   String get datePresetThisYear;
+
+  /// No description provided for @wakeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake'**
+  String get wakeButton;
+
+  /// No description provided for @wolPacketSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Magic packet sent to {hostname}'**
+  String wolPacketSent(String hostname);
+
+  /// No description provided for @wolPacketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send magic packet'**
+  String get wolPacketFailed;
+
+  /// No description provided for @previewPageIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String previewPageIndicator(int current, int total);
 }
 
 class _AppLocalizationsDelegate

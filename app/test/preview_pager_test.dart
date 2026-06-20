@@ -76,6 +76,9 @@ void main() {
     expect(find.byIcon(Icons.ios_share_outlined), findsOneWidget);
     expect(find.byIcon(Icons.folder_open_outlined), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    // Page indicator shows "1 of 2".
+    expect(find.text('1 of 2'), findsOneWidget);
   });
 
   testWidgets('line-numbers toggle shows and hides the gutter', (tester) async {

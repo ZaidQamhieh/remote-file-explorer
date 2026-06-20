@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'audio_preview.dart';
 import 'image_preview.dart';
@@ -329,26 +331,57 @@ class _PreviewPagerState extends State<PreviewPager> {
         ),
         onDelete: _onDeletedCurrent,
       ),
-      body: PageView.builder(
-        controller: _controller,
-        itemCount: _entries.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, i) {
-          // KeyedSubtree so each page's per-type State is preserved as the user
-          // pages back and forth (e.g. a video keeps its controller).
-          final e = _entries[i];
-          return KeyedSubtree(
-            key: ValueKey(e.path),
-            child:
-                _viewerFor(
-                  e,
-                  host: widget.host,
-                  client: widget.client,
-                  chromeless: true,
-                ) ??
-                const SizedBox.shrink(),
-          );
-        },
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: _entries.length,
+            onPageChanged: _onPageChanged,
+            itemBuilder: (context, i) {
+              // KeyedSubtree so each page's per-type State is preserved as the
+              // user pages back and forth (e.g. a video keeps its controller).
+              final e = _entries[i];
+              return KeyedSubtree(
+                key: ValueKey(e.path),
+                child:
+                    _viewerFor(
+                      e,
+                      host: widget.host,
+                      client: widget.client,
+                      chromeless: true,
+                    ) ??
+                    const SizedBox.shrink(),
+              );
+            },
+          ),
+          if (_entries.length > 1)
+            Positioned(
+              bottom: Spacing.lg,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsetsDirectional.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: Radii.stadiumR,
+                  ),
+                  child: Text(
+                    context.l10n.previewPageIndicator(
+                      _index + 1,
+                      _entries.length,
+                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

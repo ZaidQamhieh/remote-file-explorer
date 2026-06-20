@@ -1672,4 +1672,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get datePresetThisYear => 'هذا العام';
+
+  @override
+  String get wakeButton => 'إيقاظ';
+
+  @override
+  String wolPacketSent(String hostname) {
+    return 'تم إرسال حزمة الإيقاظ إلى $hostname';
+  }
+
+  @override
+  String get wolPacketFailed => 'فشل إرسال حزمة الإيقاظ';
+
+  @override
+  String previewPageIndicator(int current, int total) {
+    return '$current من $total';
+  }
 }

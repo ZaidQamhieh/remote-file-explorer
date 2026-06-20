@@ -9,6 +9,8 @@ import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/text_editor.dart';
 
+import 'l10n_helpers.dart';
+
 // TextEditorScreen widget tests — headless (fake AgentClient, no real host).
 //
 // Covers: the editor loads and displays the text it was constructed with;
@@ -92,6 +94,7 @@ Future<void> _pumpEditor(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: l10nDelegates,
       home: TextEditorScreen(
         entry: entry ?? _textEntry(),
         client: client,
@@ -307,6 +310,7 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Navigator(
             onGenerateRoute:
                 (settings) => MaterialPageRoute(
@@ -368,6 +372,7 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Navigator(
             onGenerateRoute:
                 (settings) => MaterialPageRoute(

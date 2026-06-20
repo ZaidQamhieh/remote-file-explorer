@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/conflict_resolution_dialog.dart';
 
+import 'l10n_helpers.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -14,6 +16,7 @@ void main() {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: Builder(
             builder:
@@ -78,6 +81,7 @@ void main() {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: Builder(
             builder:
@@ -111,6 +115,7 @@ void main() {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: Builder(
             builder:
@@ -144,6 +149,7 @@ void main() {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: Builder(
             builder:
@@ -177,6 +183,7 @@ void main() {
     ConflictResolution? result;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nDelegates,
         home: Scaffold(
           body: Builder(
             builder:

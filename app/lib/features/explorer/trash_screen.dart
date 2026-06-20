@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/models/trash_entry.dart';
 import '../../core/theme/tokens.dart';
@@ -62,44 +63,42 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     try {
       await widget.client.restoreTrash([item.id]);
       _changed = true;
-      if (mounted) showSuccess(context, 'Restored "${item.name}"');
+      if (mounted) showSuccess(context, context.l10n.restoredItem(item.name));
       await _load();
     } catch (e) {
-      if (mounted) showError(context, 'Restore failed: $e');
+      if (mounted) showError(context, context.l10n.restoreFailed(e.toString()));
     }
   }
 
   Future<void> _deleteForever(TrashEntry item) async {
     final ok = await _confirm(
-      title: 'Delete forever?',
-      body: 'Permanently delete "${item.name}"? This cannot be undone.',
-      action: 'Delete forever',
+      title: context.l10n.deleteForeverTitle,
+      body: context.l10n.deleteForeverConfirm(item.name),
+      action: context.l10n.deleteForeverButton,
     );
     if (ok != true) return;
     try {
       await widget.client.emptyTrash(ids: [item.id]);
-      if (mounted) showSuccess(context, 'Deleted "${item.name}" forever');
+      if (mounted) showSuccess(context, context.l10n.deletedForever(item.name));
       await _load();
     } catch (e) {
-      if (mounted) showError(context, 'Delete failed: $e');
+      if (mounted) showError(context, context.l10n.deleteFailed(e.toString()));
     }
   }
 
   Future<void> _emptyAll() async {
     final ok = await _confirm(
-      title: 'Empty trash?',
-      body:
-          'Permanently delete all ${_items?.length ?? 0} item(s)? '
-          'This cannot be undone.',
-      action: 'Empty trash',
+      title: context.l10n.emptyTrashTitle,
+      body: context.l10n.emptyTrashBody(_items?.length ?? 0),
+      action: context.l10n.emptyTrashTooltip,
     );
     if (ok != true) return;
     try {
       await widget.client.emptyTrash();
-      if (mounted) showSuccess(context, 'Trash emptied');
+      if (mounted) showSuccess(context, context.l10n.trashEmptied);
       await _load();
     } catch (e) {
-      if (mounted) showError(context, 'Empty failed: $e');
+      if (mounted) showError(context, context.l10n.emptyFailed(e.toString()));
     }
   }
 
@@ -117,7 +116,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
@@ -141,12 +140,12 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Trash'),
+          title: Text(context.l10n.trashTitle),
           actions: [
             if (items != null && items.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.delete_sweep_outlined),
-                tooltip: 'Empty trash',
+                tooltip: context.l10n.emptyTrashTooltip,
                 onPressed: _emptyAll,
               ),
           ],
@@ -184,12 +183,12 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           Icon(Icons.delete_outline_rounded, size: 64, color: c.outline),
           const SizedBox(height: 12),
           Text(
-            'Trash is empty',
+            context.l10n.trashIsEmpty,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 6),
           Text(
-            'Deleted items appear here and can be restored.',
+            context.l10n.trashEmptySubtitle,
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: c.onSurfaceVariant),
@@ -203,7 +202,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final scheme = Theme.of(context).colorScheme;
     final subtitle = <String>[
       item.originalPath,
-      if (item.deletedAt != null) 'deleted ${formatRelative(item.deletedAt!)}',
+      if (item.deletedAt != null)
+        context.l10n.deletedRelative(formatRelative(item.deletedAt!)),
       if (!item.isDir && item.size != null) formatSize(item.size),
     ].join(' · ');
     return ListTile(
@@ -224,19 +224,19 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           if (v == 'delete') _deleteForever(item);
         },
         itemBuilder:
-            (_) => const [
+            (ctx) => [
               PopupMenuItem(
                 value: 'restore',
                 child: ListTile(
-                  leading: Icon(Icons.restore_rounded),
-                  title: Text('Restore'),
+                  leading: const Icon(Icons.restore_rounded),
+                  title: Text(ctx.l10n.restoreButton),
                 ),
               ),
               PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
-                  leading: Icon(Icons.delete_forever_outlined),
-                  title: Text('Delete forever'),
+                  leading: const Icon(Icons.delete_forever_outlined),
+                  title: Text(ctx.l10n.deleteForeverButton),
                 ),
               ),
             ],

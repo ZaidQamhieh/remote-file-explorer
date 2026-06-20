@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
@@ -50,14 +51,14 @@ class TransferManagerSheet extends ConsumerWidget {
                     child: Row(
                       children: [
                         Text(
-                          'Transfers',
+                          context.l10n.transfersTitle,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const Spacer(),
                         if (doneAndFailed.isNotEmpty)
                           TextButton.icon(
                             icon: const Icon(Icons.clear_all_rounded, size: 18),
-                            label: const Text('Clear completed'),
+                            label: Text(context.l10n.clearCompletedButton),
                             onPressed: () {
                               for (final t in doneAndFailed) {
                                 ref
@@ -72,7 +73,7 @@ class TransferManagerSheet extends ConsumerWidget {
                   Expanded(
                     child:
                         transfers.isEmpty
-                            ? const Center(child: Text('No transfers'))
+                            ? Center(child: Text(context.l10n.noTransfers))
                             : ListView(
                               controller: controller,
                               padding: const EdgeInsets.only(
@@ -121,11 +122,11 @@ class TransferManagerSheet extends ConsumerWidget {
 enum TransferGroup { active, queued, done, failed }
 
 extension TransferGroupLabel on TransferGroup {
-  String get label => switch (this) {
-    TransferGroup.active => 'Active',
-    TransferGroup.queued => 'Queued',
-    TransferGroup.done => 'Done',
-    TransferGroup.failed => 'Failed',
+  String localizedLabel(BuildContext context) => switch (this) {
+    TransferGroup.active => context.l10n.transferGroupActive,
+    TransferGroup.queued => context.l10n.transferGroupQueued,
+    TransferGroup.done => context.l10n.transferGroupDone,
+    TransferGroup.failed => context.l10n.transferGroupFailed,
   };
 }
 
@@ -172,7 +173,7 @@ class _TransferSectionState extends State<_TransferSection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionHeader(
-          label: widget.group.label,
+          label: widget.group.localizedLabel(context),
           count: widget.tasks.length,
           expanded: _expanded,
           onToggle: () => setState(() => _expanded = !_expanded),
@@ -326,9 +327,9 @@ class _TransferTile extends ConsumerWidget {
     notifier.remove(removed.id);
     showSuccess(
       context,
-      'Removed ${removed.displayName}',
+      context.l10n.removedTransfer(removed.displayName),
       action: SnackBarAction(
-        label: 'Undo',
+        label: context.l10n.undoButton,
         onPressed: () => notifier.enqueue(reenqueuableCopy(removed)),
       ),
     );
@@ -347,7 +348,10 @@ class _TransferTile extends ConsumerWidget {
                 : Icons.pause_rounded);
     return Container(
       color: color,
-      alignment: removing ? Alignment.centerLeft : Alignment.centerRight,
+      alignment:
+          removing
+              ? AlignmentDirectional.centerStart
+              : AlignmentDirectional.centerEnd,
       padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
       child: Icon(icon, color: onColor),
     );
@@ -389,7 +393,7 @@ class _TransferTile extends ConsumerWidget {
         final eta = paused ? null : ref.watch(transferSamplerProvider)[task.id];
         final meta = <String>[
           '${formatSize(task.transferredBytes)} / ${formatSize(task.totalBytes)}',
-          if (paused) 'Paused',
+          if (paused) context.l10n.pausedStatus,
           if (eta?.speedLabel != null) eta!.speedLabel!,
           if (eta?.etaLabel != null) eta!.etaLabel!,
         ].join(' · ');
@@ -415,17 +419,17 @@ class _TransferTile extends ConsumerWidget {
         return Padding(
           padding: const EdgeInsets.only(top: Spacing.xs),
           child: Text(
-            task.error ?? 'Unknown error',
+            task.error ?? context.l10n.unknownError,
             style: TextStyle(color: scheme.error),
           ),
         );
       case TransferStatus.completed:
         final label =
             task.kind == TransferKind.upload
-                ? 'Uploaded'
+                ? context.l10n.uploadedStatus
                 : (task.savedLocation != null
-                    ? 'Saved to ${task.savedLocation}'
-                    : 'Downloaded');
+                    ? context.l10n.savedToLocation(task.savedLocation!)
+                    : context.l10n.downloadedStatus);
         final showVerified = task.kind == TransferKind.upload && task.verified;
         if (!showVerified) {
           return Text(
@@ -451,7 +455,7 @@ class _TransferTile extends ConsumerWidget {
           ),
         );
       case TransferStatus.queued:
-        return const Text('Queued');
+        return Text(context.l10n.queuedStatus);
     }
   }
 
@@ -460,13 +464,13 @@ class _TransferTile extends ConsumerWidget {
       case TransferStatus.running:
         return IconButton(
           icon: const Icon(Icons.pause),
-          tooltip: 'Pause',
+          tooltip: context.l10n.pauseTooltip,
           onPressed: () => notifier.pause(task.id),
         );
       case TransferStatus.paused:
         return IconButton(
           icon: const Icon(Icons.play_arrow),
-          tooltip: 'Resume',
+          tooltip: context.l10n.resumeTooltip,
           onPressed: () => notifier.retry(task.id),
         );
       case TransferStatus.failed:
@@ -475,12 +479,12 @@ class _TransferTile extends ConsumerWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Retry',
+              tooltip: context.l10n.retryButton,
               onPressed: () => notifier.retry(task.id),
             ),
             IconButton(
               icon: const Icon(Icons.close),
-              tooltip: 'Remove',
+              tooltip: context.l10n.removeTooltip,
               onPressed: () => notifier.remove(task.id),
             ),
           ],
@@ -488,13 +492,13 @@ class _TransferTile extends ConsumerWidget {
       case TransferStatus.completed:
         return IconButton(
           icon: const Icon(Icons.close),
-          tooltip: 'Remove',
+          tooltip: context.l10n.removeTooltip,
           onPressed: () => notifier.remove(task.id),
         );
       case TransferStatus.queued:
         return IconButton(
           icon: const Icon(Icons.close),
-          tooltip: 'Remove',
+          tooltip: context.l10n.removeTooltip,
           onPressed: () => notifier.remove(task.id),
         );
     }
@@ -534,7 +538,7 @@ class _VerifiedBadge extends StatelessWidget {
           ),
           const SizedBox(width: Spacing.xs),
           Text(
-            'Verified',
+            context.l10n.verifiedLabel,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: scheme.onTertiaryContainer,
               fontWeight: FontWeight.w600,
@@ -547,7 +551,7 @@ class _VerifiedBadge extends StatelessWidget {
     if (sha256 == null || sha256!.isEmpty) return chip;
 
     final short = sha256!.length > 10 ? sha256!.substring(0, 10) : sha256!;
-    return Tooltip(message: 'SHA-256 $short…', child: chip);
+    return Tooltip(message: context.l10n.sha256Prefix(short), child: chip);
   }
 }
 

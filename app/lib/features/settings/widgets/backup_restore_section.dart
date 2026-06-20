@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/backup/backup_service.dart';
+import '../../../core/l10n_ext.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/favorites.dart';
 import '../../../core/storage/host_store.dart';
@@ -25,31 +26,27 @@ class BackupRestoreSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     return SettingsSection(
-      title: 'Backup & restore',
+      title: context.l10n.backupRestoreSection,
       icon: Icons.shield_outlined,
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.upload_file_outlined),
-          title: const Text('Export config'),
-          subtitle: const Text(
-            'Save paired hosts, tokens, favorites, and settings to an '
-            'encrypted file',
-          ),
+          title: Text(context.l10n.exportConfig),
+          subtitle: Text(context.l10n.exportConfigSubtitle),
           onTap: () => _exportConfig(context, ref),
         ),
         const Divider(height: Spacing.lg),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.download_outlined),
-          title: const Text('Import config'),
-          subtitle: const Text('Restore from a previously exported file'),
+          title: Text(context.l10n.importConfig),
+          subtitle: Text(context.l10n.importConfigSubtitle),
           onTap: () => _importConfig(context, ref),
         ),
         const SizedBox(height: Spacing.sm),
         Text(
-          'Backups are encrypted with your passphrase. If you lose it, the '
-          'backup cannot be recovered.',
+          context.l10n.backupEncryptionWarning,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
@@ -65,7 +62,7 @@ class BackupRestoreSection extends ConsumerWidget {
   Future<void> _exportConfig(BuildContext context, WidgetRef ref) async {
     final passphrase = await _promptPassphrase(
       context,
-      title: 'Export config',
+      title: context.l10n.exportConfigTitle,
       confirm: true,
     );
     if (passphrase == null || !context.mounted) return;
@@ -84,9 +81,9 @@ class BackupRestoreSection extends ConsumerWidget {
         await Share.shareXFiles([XFile(file.path)]);
         return true;
       },
-      running: 'Preparing backup…',
-      success: (_) => 'Backup ready to share',
-      error: 'Export failed',
+      running: context.l10n.preparingBackup,
+      success: (_) => context.l10n.backupReadyToShare,
+      error: context.l10n.exportFailed,
     );
   }
 
@@ -104,14 +101,16 @@ class BackupRestoreSection extends ConsumerWidget {
     try {
       envelope = await File(path).readAsString();
     } catch (e) {
-      if (context.mounted) showError(context, 'Could not read file: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.couldNotReadFile('$e'));
+      }
       return;
     }
 
     if (!context.mounted) return;
     final passphrase = await _promptPassphrase(
       context,
-      title: 'Import config',
+      title: context.l10n.importConfigTitle,
       confirm: false,
     );
     if (passphrase == null || !context.mounted) return;
@@ -120,19 +119,16 @@ class BackupRestoreSection extends ConsumerWidget {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Replace current config?'),
-            content: const Text(
-              'Importing replaces all current hosts, tokens, and settings on '
-              'this device. Continue?',
-            ),
+            title: Text(ctx.l10n.replaceCurrentConfig),
+            content: Text(ctx.l10n.importWarningMessage),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Replace'),
+                child: Text(ctx.l10n.replaceButton),
               ),
             ],
           ),
@@ -146,11 +142,9 @@ class BackupRestoreSection extends ConsumerWidget {
         await service.importFromEnvelope(envelope, passphrase);
         return true;
       },
-      running: 'Restoring config…',
-      success:
-          (_) =>
-              'Config restored. For best results, fully close and reopen the app.',
-      error: 'Import failed',
+      running: context.l10n.restoringConfig,
+      success: (_) => context.l10n.configRestored,
+      error: context.l10n.importFailed,
     );
     if (ok != true || !context.mounted) return;
 
@@ -221,11 +215,11 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
   void _submit() {
     final pass = _passCtrl.text;
     if (pass.length < 6) {
-      setState(() => _error = 'Passphrase must be at least 6 characters');
+      setState(() => _error = context.l10n.passphraseMinLength);
       return;
     }
     if (widget.confirm && pass != _confirmCtrl.text) {
-      setState(() => _error = 'Passphrases do not match');
+      setState(() => _error = context.l10n.passphraseMismatch);
       return;
     }
     Navigator.of(context).pop(pass);
@@ -243,7 +237,9 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
             controller: _passCtrl,
             obscureText: true,
             autofocus: true,
-            decoration: const InputDecoration(labelText: 'Passphrase'),
+            decoration: InputDecoration(
+              labelText: context.l10n.passphraseLabel,
+            ),
             onSubmitted: widget.confirm ? null : (_) => _submit(),
           ),
           if (widget.confirm) ...[
@@ -251,8 +247,8 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
             TextField(
               controller: _confirmCtrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirm passphrase',
+              decoration: InputDecoration(
+                labelText: context.l10n.confirmPassphraseLabel,
               ),
               onSubmitted: (_) => _submit(),
             ),
@@ -269,9 +265,12 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancelButton),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Continue')),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(context.l10n.continueButton),
+        ),
       ],
     );
   }

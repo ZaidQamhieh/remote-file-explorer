@@ -11,6 +11,7 @@ import '../../core/storage/favorites.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../search/search_screen.dart';
@@ -81,7 +82,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         appBar: AppBar(title: Text(widget.host.label)),
         body:
             clientAsync.hasError
-                ? Center(child: Text('Error: ${clientAsync.error}'))
+                ? Center(
+                  child: Text(
+                    context.l10n.errorLabel(clientAsync.error.toString()),
+                  ),
+                )
                 : const Center(child: CircularProgressIndicator()),
       );
     }
@@ -175,7 +180,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(44),
         child: Padding(
-          padding: const EdgeInsets.only(left: Spacing.md, bottom: Spacing.xs),
+          padding: const EdgeInsetsDirectional.only(
+            start: Spacing.md,
+            bottom: Spacing.xs,
+          ),
           child: BreadcrumbBar(
             pathStack: state.pathStack,
             onNavigateTo: _notifier.navigateTo,
@@ -187,47 +195,50 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.search_rounded),
-          tooltip: 'Search',
+          tooltip: context.l10n.searchTooltip,
           onPressed: () => _openSearch(context, state, client),
         ),
         IconButton(
           icon: Icon(isFav ? Icons.star_rounded : Icons.star_border_rounded),
           color: isFav ? Colors.amber : null,
-          tooltip: isFav ? 'Remove favorite' : 'Favorite this folder',
+          tooltip:
+              isFav
+                  ? context.l10n.removeFavoriteTooltip
+                  : context.l10n.favoriteFolderTooltip,
           onPressed: () => _toggleFavorite(context, state, isFav),
         ),
         PopupMenuButton<_OverflowAction>(
           icon: const Icon(Icons.more_vert_rounded),
-          tooltip: 'More',
+          tooltip: context.l10n.moreTooltip,
           onSelected: (action) => _onOverflowAction(context, state, action),
           itemBuilder:
-              (_) => const [
+              (ctx) => [
                 PopupMenuItem(
                   value: _OverflowAction.viewOptions,
                   child: ListTile(
-                    leading: Icon(Icons.tune_rounded),
-                    title: Text('View options'),
+                    leading: const Icon(Icons.tune_rounded),
+                    title: Text(ctx.l10n.viewOptionsTitle),
                   ),
                 ),
                 PopupMenuItem(
                   value: _OverflowAction.favorites,
                   child: ListTile(
-                    leading: Icon(Icons.bookmarks_outlined),
-                    title: Text('Favorites'),
+                    leading: const Icon(Icons.bookmarks_outlined),
+                    title: Text(ctx.l10n.favoritesTitle),
                   ),
                 ),
                 PopupMenuItem(
                   value: _OverflowAction.transfers,
                   child: ListTile(
-                    leading: Icon(Icons.file_upload_outlined),
-                    title: Text('Transfers'),
+                    leading: const Icon(Icons.file_upload_outlined),
+                    title: Text(ctx.l10n.transfersMenuItem),
                   ),
                 ),
                 PopupMenuItem(
                   value: _OverflowAction.trash,
                   child: ListTile(
-                    leading: Icon(Icons.delete_outline_rounded),
-                    title: Text('Trash'),
+                    leading: const Icon(Icons.delete_outline_rounded),
+                    title: Text(ctx.l10n.trashTitle),
                   ),
                 ),
               ],
@@ -246,11 +257,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       key: const ValueKey('selection_app_bar'),
       leading: IconButton(
         icon: const Icon(Icons.close_rounded),
-        tooltip: 'Clear selection',
+        tooltip: context.l10n.clearSelectionTooltip,
         onPressed: _notifier.clearSelection,
       ),
       title: Text(
-        '${state.selected.length} selected',
+        context.l10n.nSelected(state.selected.length),
         style: Theme.of(context).textTheme.titleLarge,
       ),
       // Empty bottom matching the browse bar's breadcrumb row height, so the
@@ -262,20 +273,23 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.drive_file_rename_outline),
-          tooltip: 'Batch rename',
+          tooltip: context.l10n.batchRenameTooltip,
           onPressed: () => _batchRename(context, state),
         ),
         IconButton(
           icon: Icon(
             allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
           ),
-          tooltip: allSelected ? 'Deselect all' : 'Select all',
+          tooltip:
+              allSelected
+                  ? context.l10n.deselectAllTooltip
+                  : context.l10n.selectAllTooltip,
           onPressed:
               allSelected ? _notifier.clearSelection : _notifier.selectAll,
         ),
         IconButton(
           icon: const Icon(Icons.flip_to_back_rounded),
-          tooltip: 'Invert selection',
+          tooltip: context.l10n.invertSelectionTooltip,
           onPressed: _notifier.invertSelection,
         ),
       ],
@@ -297,9 +311,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     try {
       final res = await _notifier.batchRename(renames);
       _notifier.clearSelection();
-      if (context.mounted) await reportBatchResult(context, res, 'Renamed');
+      if (context.mounted) {
+        await reportBatchResult(context, res, context.l10n.renamedLabel);
+      }
     } catch (e) {
-      if (context.mounted) showError(context, 'Rename failed: $e');
+      if (context.mounted) {
+        showError(context, context.l10n.renameFailed(e.toString()));
+      }
     }
   }
 
@@ -343,11 +361,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           ),
         );
     if (isFav) {
-      showInfo(context, 'Removed from favorites');
+      showInfo(
+        context,
+        context.l10n.removedFavorite(folderLabel(state.currentPath)),
+      );
     } else {
       showSuccess(
         context,
-        'Added "${folderLabel(state.currentPath)}" to favorites',
+        context.l10n.addedFavorite(folderLabel(state.currentPath)),
       );
     }
   }
@@ -416,7 +437,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
   void _removeFavorite(BuildContext context, Favorite fav) {
     ref.read(favoritesProvider.notifier).remove(fav.hostId, fav.path);
-    showInfo(context, 'Removed "${fav.label}" from favorites');
+    showInfo(context, context.l10n.removedFavorite(fav.label));
   }
 
   Widget _buildBody(
@@ -587,7 +608,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             if (context.mounted) {
               showInfo(
                 context,
-                '${dragged.name} already exists in ${folderLabel(destFolder)}',
+                context.l10n.itemExistsInFolder(
+                  dragged.name,
+                  folderLabel(destFolder),
+                ),
               );
             }
             return;
@@ -601,8 +625,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       if (context.mounted) {
         showError(
           context,
-          'Could not check ${folderLabel(destFolder)} for '
-          'existing items: $e',
+          context.l10n.couldNotCheckFolder(
+            folderLabel(destFolder),
+            e.toString(),
+          ),
         );
       }
       return;
@@ -617,12 +643,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         overwrite: overwrite,
       );
       await _notifier.refresh();
-      if (context.mounted) showSuccess(context, 'Moved ${dragged.name}');
+      if (context.mounted) {
+        showSuccess(context, context.l10n.movedFile(dragged.name));
+      }
     } catch (e) {
       if (context.mounted) {
         showError(
           context,
-          'Move failed: $e',
+          context.l10n.moveFailed(e.toString()),
           onRetry: () => _moveInto(context, client, dragged, destFolder),
         );
       }
@@ -735,9 +763,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         if (showPaste) ...[
           FloatingActionButton.small(
             heroTag: 'fab_paste',
-            tooltip:
-                'Paste ${clipboard.paths.length} item'
-                '${clipboard.paths.length == 1 ? '' : 's'}',
+            tooltip: context.l10n.pasteNItems(clipboard.paths.length),
             onPressed: () => _paste(context, state, clipboard),
             child: const Icon(Icons.content_paste),
           ),
@@ -745,7 +771,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ],
         FloatingActionButton.small(
           heroTag: 'fab_upload',
-          tooltip: 'Upload file',
+          tooltip: context.l10n.uploadFileTooltip,
           onPressed: () => _pickAndUpload(context, state),
           child: const Icon(Icons.upload_file),
         ),
@@ -754,7 +780,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           heroTag: 'fab_new',
           onPressed: () => _showCreateMenu(context),
           icon: const Icon(Icons.add),
-          label: const Text('New'),
+          label: Text(context.l10n.newButton),
         ),
       ],
     );
@@ -782,7 +808,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     // Guard: cutting into the folder the items already live in is a no-op —
     // bail out before touching the agent.
     if (isCut && sources.every((p) => _parentDirOf(p) == dest)) {
-      showInfo(context, 'Already in this folder');
+      showInfo(context, context.l10n.alreadyInThisFolder);
       return;
     }
 
@@ -816,9 +842,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               if (context.mounted) {
                 showInfo(
                   context,
-                  'All clipboard items already exist in '
-                  '${folderLabel(dest)} — nothing to '
-                  '${isCut ? 'move' : 'copy'}',
+                  context.l10n.clipboardAllExistNothing(
+                    folderLabel(dest),
+                    isCut ? context.l10n.moveLabel : context.l10n.copyLabel,
+                  ),
                 );
               }
               return;
@@ -829,8 +856,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       if (context.mounted) {
         showError(
           context,
-          'Could not check ${folderLabel(dest)} for '
-          'existing items: $e',
+          context.l10n.couldNotCheckFolder(folderLabel(dest), e.toString()),
           onRetry: () => _paste(context, state, clipboard),
         );
       }
@@ -857,13 +883,20 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         ref.read(clipboardProvider.notifier).clear();
       }
       if (context.mounted) {
-        await reportBatchResult(context, res, isCut ? 'Moved' : 'Copied');
+        await reportBatchResult(
+          context,
+          res,
+          isCut ? context.l10n.movedLabel : context.l10n.copiedLabel,
+        );
       }
     } catch (e) {
       if (context.mounted) {
         showError(
           context,
-          '${isCut ? 'Move' : 'Copy'} failed: $e',
+          context.l10n.operationFailed(
+            isCut ? context.l10n.moveLabel : context.l10n.copyLabel,
+            e.toString(),
+          ),
           onRetry: () => _paste(context, state, clipboard),
         );
       }
@@ -898,7 +931,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           return;
         case ConflictResolution.skip:
           if (context.mounted) {
-            showInfo(context, '$name already exists — skipped');
+            showInfo(context, context.l10n.alreadyExistsSkipped(name));
           }
           return;
         case ConflictResolution.overwrite:
@@ -921,7 +954,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         );
 
     if (context.mounted) {
-      showInfo(context, 'Uploading $name…');
+      showInfo(context, context.l10n.uploadingFile(name));
     }
   }
 
@@ -1013,8 +1046,8 @@ class HiddenItemsFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final label = '$count hidden';
-    final action = revealed ? 'Hide' : 'Show';
+    final label = context.l10n.nHidden(count);
+    final action = revealed ? context.l10n.hideLabel : context.l10n.showLabel;
     final style = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);

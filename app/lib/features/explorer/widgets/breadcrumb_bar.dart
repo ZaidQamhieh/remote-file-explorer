@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
@@ -131,7 +132,7 @@ String crumbLabel(List<String> stack, int index) =>
 void copyPathToClipboard(BuildContext context, String path) {
   Clipboard.setData(ClipboardData(text: path));
   HapticFeedback.selectionClick();
-  showInfo(context, 'Copied "$path"');
+  showInfo(context, context.l10n.copiedPath(path));
 }
 
 /// A single breadcrumb chip: filled-tonal for the current directory,
@@ -252,7 +253,7 @@ class _CollapsedChip extends StatelessWidget {
     final stack = pathStack;
 
     return PopupMenuButton<int>(
-      tooltip: 'Show hidden folders',
+      tooltip: context.l10n.showHiddenFoldersTooltip,
       onSelected: onNavigateTo,
       itemBuilder:
           (_) =>

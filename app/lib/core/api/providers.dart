@@ -50,14 +50,18 @@ typedef RefReader = T Function<T>(ProviderListenable<T> provider);
 /// widget's `WidgetRef` (e.g. `ref.read`).
 ///
 /// Throws if [hostId] doesn't correspond to a paired host.
-Future<AgentClient> buildClientForHost(RefReader read, String hostId) async {
+Future<AgentClient> buildClientForHost(
+  RefReader read,
+  String hostId, {
+  bool probeLanFirst = false,
+}) async {
   final host = await read(hostByIdProvider(hostId).future);
   if (host == null) {
     throw StateError('No paired host with id "$hostId"');
   }
   final store = await read(hostStoreProvider.future);
   final token = await store.getToken(hostId);
-  return AgentClient(host, deviceToken: token);
+  return AgentClient(host, deviceToken: token, probeLanFirst: probeLanFirst);
 }
 
 /// Builds (and owns) an [AgentClient] for the host identified by [hostId].

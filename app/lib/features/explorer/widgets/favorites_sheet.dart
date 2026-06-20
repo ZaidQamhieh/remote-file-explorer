@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/l10n_ext.dart';
 import '../../../core/models/host.dart';
 import '../../../core/storage/favorites.dart';
 
@@ -26,21 +27,24 @@ class FavoritesSheet extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(Icons.bookmarks_outlined),
-                SizedBox(width: 8),
-                Text('Favorites', style: TextStyle(fontSize: 18)),
+                const Icon(Icons.bookmarks_outlined),
+                const SizedBox(width: 8),
+                Text(
+                  context.l10n.favoritesTitle,
+                  style: const TextStyle(fontSize: 18),
+                ),
               ],
             ),
           ),
           if (favs.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               child: Text(
-                'No favorites yet. Open a folder and tap the ☆ star to bookmark it.',
+                context.l10n.noFavoritesYet,
                 textAlign: TextAlign.center,
               ),
             )
@@ -60,7 +64,7 @@ class FavoritesSheet extends ConsumerWidget {
                     subtitle: Text(f.path, overflow: TextOverflow.ellipsis),
                     trailing: IconButton(
                       icon: const Icon(Icons.star, color: Colors.amber),
-                      tooltip: 'Remove',
+                      tooltip: context.l10n.removeTooltip,
                       onPressed:
                           () => ref
                               .read(favoritesProvider.notifier)

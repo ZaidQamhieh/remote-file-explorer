@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/ui/feedback.dart';
@@ -55,8 +56,8 @@ class PreviewActions {
         await client.downloadFile(remotePath: entry.path, localFile: file);
         await Share.shareXFiles([XFile(file.path)]);
       },
-      running: 'Preparing ${entry.name} to share…',
-      error: 'Could not share ${entry.name}',
+      running: context.l10n.preparingToShare(entry.name),
+      error: context.l10n.couldNotShare(entry.name),
     );
   }
 
@@ -77,7 +78,7 @@ class PreviewActions {
             host: host,
           ),
         );
-    if (context.mounted) showInfo(context, 'Saving ${entry.name}…');
+    if (context.mounted) showInfo(context, context.l10n.savingFile(entry.name));
   }
 
   /// Deletes the file after a confirm dialog (mirroring the meta-sheet's delete
@@ -89,25 +90,23 @@ class PreviewActions {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Delete?'),
-            content: Text(
-              'Move "${entry.name}" to Trash? You can restore it later.',
-            ),
+            title: Text(ctx.l10n.deleteTitle),
+            content: Text(ctx.l10n.moveToTrashConfirm(entry.name)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(ctx).colorScheme.error,
                 ),
-                child: const Text('Delete forever'),
+                child: Text(ctx.l10n.deleteForeverButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Move to Trash'),
+                child: Text(ctx.l10n.moveToTrashButton),
               ),
             ],
           ),
@@ -120,12 +119,14 @@ class PreviewActions {
       if (context.mounted) {
         showSuccess(
           context,
-          permanent ? 'Deleted $name' : 'Moved $name to Trash',
+          permanent
+              ? context.l10n.deletedName(name)
+              : context.l10n.movedToTrashName(name),
         );
       }
       return true;
     } catch (e) {
-      if (context.mounted) showError(context, 'Delete failed: $e');
+      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
       return false;
     }
   }
@@ -212,27 +213,25 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
         ...leadingActions,
         IconButton(
           icon: const Icon(Icons.ios_share_outlined),
-          tooltip: 'Share',
+          tooltip: context.l10n.shareTooltip,
           onPressed: () => actions.share(context),
         ),
-        // Save needs a WidgetRef for the transfer queue — wrap a Consumer so we
-        // don't force every host into a ConsumerWidget.
         Consumer(
           builder:
               (context, ref, _) => IconButton(
                 icon: const Icon(Icons.download_outlined),
-                tooltip: 'Save to device',
+                tooltip: context.l10n.saveToDeviceTooltip,
                 onPressed: () => actions.save(context, ref),
               ),
         ),
         IconButton(
           icon: const Icon(Icons.folder_open_outlined),
-          tooltip: 'Show in folder',
+          tooltip: context.l10n.showInFolderTooltip,
           onPressed: onShowInFolder ?? () => Navigator.of(context).maybePop(),
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline),
-          tooltip: 'Delete',
+          tooltip: context.l10n.deleteTooltip,
           onPressed: () async {
             final deleted = await actions.delete(context);
             if (!deleted) return;

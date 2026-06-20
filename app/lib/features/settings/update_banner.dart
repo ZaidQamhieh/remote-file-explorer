@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/update_service.dart';
@@ -46,7 +47,7 @@ class UpdateBanner extends ConsumerWidget {
                   const SizedBox(width: Spacing.sm),
                   Expanded(
                     child: Text(
-                      'Update available · v${release!.versionName}',
+                      context.l10n.updateAvailable(release!.versionName),
                       style: textTheme.titleSmall?.copyWith(
                         color: scheme.onPrimaryContainer,
                       ),
@@ -64,7 +65,7 @@ class UpdateBanner extends ConsumerWidget {
                         () => ref
                             .read(dismissedUpdateProvider.notifier)
                             .dismiss(release.versionCode),
-                    child: const Text('Dismiss'),
+                    child: Text(context.l10n.dismissButton),
                   ),
                   const SizedBox(width: Spacing.xs),
                   FilledButton(
@@ -74,7 +75,7 @@ class UpdateBanner extends ConsumerWidget {
                             builder: (_) => const AppSettingsScreen(),
                           ),
                         ),
-                    child: const Text('Update'),
+                    child: Text(context.l10n.updateButton),
                   ),
                 ],
               ),

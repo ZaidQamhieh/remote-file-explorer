@@ -6,6 +6,8 @@ import 'package:remote_file_explorer/core/storage/view_prefs.dart';
 import 'package:remote_file_explorer/features/settings/app_settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // AppSettingsScreen widget tests — the global "general settings" surface that
 // edits the app-wide view defaults via settingsProvider.
 
@@ -28,7 +30,10 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: AppSettingsScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: l10nDelegates,
+          home: AppSettingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();

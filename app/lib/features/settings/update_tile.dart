@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
+import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
 import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
@@ -73,13 +74,13 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       if (!mounted) return;
       if (now > _preInstallBuild) {
         setState(() {
-          _status = 'Updated to v${info.version} ✓';
+          _status = context.l10n.updatedToVersion(info.version);
           _statusIsError = false;
           _busy = false;
         });
       } else {
         setState(() {
-          _status = 'Update not completed — tap to retry.';
+          _status = context.l10n.updateNotCompleted;
           _statusIsError = true;
           _busy = false;
         });
@@ -93,7 +94,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     if (!Platform.isAndroid) return;
     setState(() {
       _busy = true;
-      _status = 'Checking for updates…';
+      _status = context.l10n.checkingForUpdates;
       _statusIsError = false;
     });
     final source = GithubUpdateSource();
@@ -105,7 +106,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       if (!isUpdateAvailable(installedBuild: installed, release: rel)) {
         setState(() {
           _busy = false;
-          _status = 'Up to date (v${info.version})';
+          _status = context.l10n.upToDate(info.version);
           _statusIsError = false;
         });
         return;
@@ -144,7 +145,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
       if (_installLaunched) {
         setState(() {
           _busy = true;
-          _status = 'Opening installer — confirm in Android, then return here.';
+          _status = context.l10n.openingInstallerConfirm;
           _statusIsError = false;
         });
       } else {
@@ -153,7 +154,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     } catch (e) {
       setState(() {
         _busy = false;
-        _status = 'Update failed: $e';
+        _status = context.l10n.updateFailed('$e');
         _statusIsError = true;
       });
     }
@@ -199,7 +200,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         _statusIsError ? Icons.error_outline : Icons.system_update,
         color: _statusIsError ? scheme.error : null,
       ),
-      title: const Text('Check for updates'),
+      title: Text(context.l10n.checkForUpdates),
       subtitle:
           _status.isEmpty
               ? null
@@ -340,7 +341,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         _stage = _Stage.error;
         _errorMsg =
             e is PlatformException
-                ? (e.message ?? 'Could not open the installer.')
+                ? (e.message ?? context.l10n.couldNotOpenInstaller)
                 : '$e';
       });
     }
@@ -357,7 +358,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   Widget build(BuildContext context) {
     final v = widget.release.versionName;
     return AlertDialog(
-      title: Text('Updating to v$v'),
+      title: Text(context.l10n.updatingToVersion(v)),
       content: _buildContent(context),
       actions: _buildActions(context),
     );
@@ -375,28 +376,30 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
             const SizedBox(height: 12),
             Text(
               pct == null
-                  ? 'Downloading…'
-                  : 'Downloading $pct%  ·  ${_fmtBytes(_received)} / ${_fmtBytes(_total)}',
+                  ? context.l10n.downloadingStatus
+                  : context.l10n.downloadingProgress(
+                    '$pct',
+                    _fmtBytes(_received),
+                    _fmtBytes(_total),
+                  ),
             ),
           ],
         );
       case _Stage.opening:
-        return const Row(
+        return Row(
           children: [
-            SizedBox.square(
+            const SizedBox.square(
               dimension: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(width: 16),
-            Expanded(child: Text('Opening installer…')),
+            const SizedBox(width: 16),
+            Expanded(child: Text(context.l10n.openingInstaller)),
           ],
         );
       case _Stage.error:
-        return Text(_errorMsg ?? 'Something went wrong.');
+        return Text(_errorMsg ?? context.l10n.somethingWentWrong);
       case _Stage.cancelled:
-        return const Text(
-          'Download paused. Retry to resume where it left off.',
-        );
+        return Text(context.l10n.downloadPaused);
     }
   }
 
@@ -404,32 +407,39 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
     switch (_stage) {
       case _Stage.downloading:
         return [
-          TextButton(onPressed: _cancelDownload, child: const Text('Cancel')),
+          TextButton(
+            onPressed: _cancelDownload,
+            child: Text(context.l10n.cancelButton),
+          ),
         ];
       case _Stage.opening:
-        // The APK is already fully downloaded and handed to the installer —
-        // nothing left to cancel.
         return [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancelButton),
           ),
         ];
       case _Stage.error:
         return [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(context.l10n.closeButton),
           ),
-          FilledButton(onPressed: _download, child: const Text('Retry')),
+          FilledButton(
+            onPressed: _download,
+            child: Text(context.l10n.retryButton),
+          ),
         ];
       case _Stage.cancelled:
         return [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(context.l10n.closeButton),
           ),
-          FilledButton(onPressed: _download, child: const Text('Retry')),
+          FilledButton(
+            onPressed: _download,
+            child: Text(context.l10n.retryButton),
+          ),
         ];
     }
   }

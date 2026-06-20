@@ -6,6 +6,8 @@ import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // FileVisibilitySection widget tests — the App Settings "File visibility" card
 // that edits the app-DEFAULT visibility (hostId null): hide-dotfiles switch,
 // one section per category with a toggle chip per file type, and a "Custom"
@@ -30,6 +32,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: SingleChildScrollView(child: FileVisibilitySection()),
           ),

@@ -1,0 +1,909 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Remote File Explorer",
+
+  "browseButton": "Browse",
+  "searchButton": "Search",
+  "moreTooltip": "More",
+  "refreshTooltip": "Refresh",
+  "appSettingsTooltip": "App settings",
+  "cancelButton": "Cancel",
+  "retryButton": "Retry",
+  "okButton": "OK",
+  "saveButton": "Save",
+  "closeButton": "Close",
+  "addButton": "Add",
+  "createButton": "Create",
+  "applyButton": "Apply",
+  "resetButton": "Reset",
+  "updateButton": "Update",
+  "dismissButton": "Dismiss",
+  "undoButton": "Undo",
+  "continueButton": "Continue",
+  "replaceButton": "Replace",
+  "discardButton": "Discard",
+  "pairButton": "Pair",
+
+  "onlineStatus": "Online",
+  "offlineStatus": "Offline",
+  "checkingStatus": "Checking…",
+  "networkLan": "LAN",
+  "networkTailscale": "Tailscale",
+
+  "hostSubtitleVersionNetwork": "v{version} · {network}",
+  "@hostSubtitleVersionNetwork": {
+    "placeholders": {
+      "version": {"type": "String"},
+      "network": {"type": "String"}
+    }
+  },
+  "statusCheckedRelative": "Checked {relative}",
+  "@statusCheckedRelative": {
+    "placeholders": { "relative": {"type": "String"} }
+  },
+  "statusOfflineLastSeen": "Offline · last seen {relative}",
+  "@statusOfflineLastSeen": {
+    "placeholders": { "relative": {"type": "String"} }
+  },
+  "relativeJustNow": "just now",
+  "relativeSecondsAgo": "{count}s ago",
+  "@relativeSecondsAgo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "relativeMinutesAgo": "{count}m ago",
+  "@relativeMinutesAgo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "relativeHoursAgo": "{count}h ago",
+  "@relativeHoursAgo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "relativeDaysAgo": "{count}d ago",
+  "@relativeDaysAgo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "couldNotReachComputer": "Could not reach this computer.",
+  "forgetComputerTitle": "Forget this computer?",
+  "forgetComputerConfirm": "Remove \"{hostLabel}\"? You can re-add it later.",
+  "@forgetComputerConfirm": {
+    "placeholders": { "hostLabel": {"type": "String"} }
+  },
+  "forgetButton": "Forget",
+  "forgetComputerMenuItem": "Forget this computer",
+  "storageMenuItem": "Storage",
+  "transfersMenuItem": "Transfers",
+  "diagnosticsMenuItem": "Diagnostics",
+  "settingsMenuItem": "Settings",
+
+  "nMoreDrives": "+{count} more",
+  "@nMoreDrives": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "addComputerButton": "Add computer",
+  "scanQrCodeButton": "Scan QR code",
+  "emptyStatePairTitle": "Pair your first PC",
+  "emptyStatePairBody": "Scan the pairing QR code shown by the desktop agent to connect this phone over your network or Tailscale.",
+  "errorLabel": "Error: {error}",
+  "@errorLabel": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+
+  "connectionDiagnosticsTitle": "Connection Diagnostics",
+  "retestButton": "Re-test",
+  "probeTimedOut": "Timed out",
+  "probeError": "Error",
+  "probeLatencyMs": "{ms}ms",
+  "@probeLatencyMs": {
+    "placeholders": { "ms": {"type": "int"} }
+  },
+
+  "hostStorageTitle": "{hostLabel} · Storage",
+  "@hostStorageTitle": {
+    "placeholders": { "hostLabel": {"type": "String"} }
+  },
+  "allDrives": "All drives",
+  "couldNotLoadStorage": "Could not load storage: {error}",
+  "@couldNotLoadStorage": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "freeOfTotal": "{free} free of {total}",
+  "@freeOfTotal": {
+    "placeholders": {
+      "free": {"type": "String"},
+      "total": {"type": "String"}
+    }
+  },
+  "freeOfTotalDrives": "{free} free of {total} · {count, plural, =1{1 drive} other{{count} drives}}",
+  "@freeOfTotalDrives": {
+    "placeholders": {
+      "free": {"type": "String"},
+      "total": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+
+  "searchHint": "Search files and folders…",
+  "clearTooltip": "Clear",
+  "searchFiltersTooltip": "Search filters",
+  "activeFilterCount": "{count}",
+  "@activeFilterCount": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "globPattern": "Glob pattern",
+  "clearAllButton": "Clear all",
+  "removeTooltip": "Remove",
+  "fileSize": "File size",
+  "searchScope": "Search scope",
+  "fromHere": "From here",
+  "everywhere": "Everywhere",
+  "includeHiddenItems": "Include hidden items",
+  "searchFailed": "Search failed: {error}",
+  "@searchFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "noResultsFor": "No results for \"{query}\".",
+  "@noResultsFor": {
+    "placeholders": { "query": {"type": "String"} }
+  },
+  "typeToSearch": "Type to search for files and folders by name.",
+  "showingFirstNResults": "Showing first {limit} results — refine your search.",
+  "@showingFirstNResults": {
+    "placeholders": { "limit": {"type": "int"} }
+  },
+  "searchTimedOut": "Search timed out — showing partial results.",
+  "searchingIn": "Searching in: {path}",
+  "@searchingIn": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "searchingEverywhere": "Searching everywhere",
+
+  "searchTooltip": "Search",
+  "clearSelectionTooltip": "Clear selection",
+  "batchRenameTooltip": "Batch rename",
+  "invertSelectionTooltip": "Invert selection",
+  "selectAllTooltip": "Select all",
+  "deselectAllTooltip": "Deselect all",
+  "nSelected": "{count} selected",
+  "@nSelected": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "uploadFileTooltip": "Upload file",
+  "newButton": "New",
+  "favoriteFolderTooltip": "Favorite this folder",
+  "removeFavoriteTooltip": "Remove favorite",
+
+  "viewOptionsTitle": "View options",
+  "layoutLabel": "Layout",
+  "listLabel": "List",
+  "gridLabel": "Grid",
+  "densityLabel": "Density",
+  "comfortableLabel": "Comfortable",
+  "compactLabel": "Compact",
+  "sortByLabel": "Sort by",
+  "showHiddenItems": "Show hidden items",
+  "nHiddenByVisibility": "{count} hidden by file visibility settings",
+  "@nHiddenByVisibility": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "newFolderButton": "New folder",
+  "newFileButton": "New file",
+  "nameHint": "Name",
+  "createdName": "Created {name}",
+  "@createdName": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "createFailed": "Couldn't create {name}: {error}",
+  "@createFailed": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "error": {"type": "String"}
+    }
+  },
+
+  "favoritesTitle": "Favorites",
+  "noFavoritesYet": "No favorites yet. Open a folder and tap the star to bookmark it.",
+
+  "cancelTooltip": "Cancel",
+
+  "nameConflictTitle": "Name conflict",
+  "nameConflictBody": "{collidingCount} of {totalCount} {totalCount, plural, =1{item} other{items}} already exist in {dest}.",
+  "@nameConflictBody": {
+    "placeholders": {
+      "collidingCount": {"type": "int"},
+      "totalCount": {"type": "int"},
+      "dest": {"type": "String"}
+    }
+  },
+  "skipTheseButton": "Skip these",
+  "keepBothButton": "Keep both",
+  "overwriteButton": "Overwrite",
+
+  "previewButton": "Preview",
+  "downloadButton": "Download",
+  "extractHereButton": "Extract here",
+  "renameButton": "Rename",
+  "duplicateButton": "Duplicate",
+  "deleteButton": "Delete",
+  "newNameLabel": "New name",
+  "deleteTitle": "Delete?",
+  "deleteForeverButton": "Delete forever",
+  "moveToTrashButton": "Move to Trash",
+  "favoriteButton": "Favorite",
+  "unfavoriteButton": "Unfavorite",
+  "yesLabel": "Yes",
+
+  "copiedPath": "Copied \"{path}\"",
+  "@copiedPath": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "removedFavorite": "Removed \"{name}\" from favorites",
+  "@removedFavorite": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "addedFavorite": "Added \"{name}\" to favorites",
+  "@addedFavorite": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "downloadingFile": "Downloading {name}…",
+  "@downloadingFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "renamedTo": "Renamed to {newName}",
+  "@renamedTo": {
+    "placeholders": { "newName": {"type": "String"} }
+  },
+  "renameFailed": "Rename failed: {error}",
+  "@renameFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "duplicatedFile": "Duplicated \"{name}\"",
+  "@duplicatedFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "duplicateFailed": "Duplicate failed: {error}",
+  "@duplicateFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "extractedFile": "Extracted \"{name}\"",
+  "@extractedFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "extractFailed": "Extract failed: {error}",
+  "@extractFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "moveToTrashConfirm": "Move \"{name}\" to Trash? You can restore it later.",
+  "@moveToTrashConfirm": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "deletedName": "Deleted {name}",
+  "@deletedName": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "movedToTrashName": "Moved {name} to Trash",
+  "@movedToTrashName": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "deleteFailed": "Delete failed: {error}",
+  "@deleteFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "folderDetailsTooltip": "Folder details",
+
+  "trashTitle": "Trash",
+  "emptyTrashTooltip": "Empty trash",
+  "deleteForeverTitle": "Delete forever?",
+  "emptyTrashTitle": "Empty trash?",
+  "restoreButton": "Restore",
+
+  "patternLabel": "Pattern",
+  "findAndReplaceLabel": "Find & replace",
+  "baseNameLabel": "Base name",
+  "startNumberLabel": "Start number",
+  "findLabel": "Find",
+  "replaceWithLabel": "Replace with",
+  "renameNItemsTitle": "Rename {count} items",
+  "@renameNItemsTitle": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "renameNItems": "Rename {count}",
+  "@renameNItems": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "baseNameHelperText": "Place the number with the n token; else it''s appended.",
+  "andNMore": "… and {count} more",
+  "@andNMore": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "batchSuccessNItems": "{verb} {count} {count, plural, =1{item} other{items}}",
+  "@batchSuccessNItems": {
+    "placeholders": {
+      "verb": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "batchResultWithErrors": "{verb} with {errorCount} error(s)",
+  "@batchResultWithErrors": {
+    "placeholders": {
+      "verb": {"type": "String"},
+      "errorCount": {"type": "int"}
+    }
+  },
+
+  "cutButton": "Cut",
+  "copyButton": "Copy",
+  "compressButton": "Compress",
+  "moveNItemsToTrash": "Move {count} {count, plural, =1{item} other{items}} to Trash?",
+  "@moveNItemsToTrash": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "canRestoreFromTrash": "You can restore {count, plural, =1{it} other{them}} from Trash.",
+  "@canRestoreFromTrash": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "compressedTo": "Compressed to {name}",
+  "@compressedTo": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "compressFailed": "Compress failed: {error}",
+  "@compressFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "queuedNDownloads": "Queued {count} {count, plural, =1{download} other{downloads}}",
+  "@queuedNDownloads": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "deletedLabel": "Deleted",
+  "movedToTrashLabel": "Moved to Trash",
+  "clipboardCopiedHint": "{count, plural, =1{1 item} other{{count} items}} copied — open a folder and tap Paste",
+  "@clipboardCopiedHint": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "clipboardCutHint": "{count, plural, =1{1 item} other{{count} items}} cut — open a folder and tap Paste",
+  "@clipboardCutHint": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "pasteNItems": "Paste {count} {count, plural, =1{item} other{items}}",
+  "@pasteNItems": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "movedLabel": "Moved",
+  "copiedLabel": "Copied",
+  "moveLabel": "Move",
+  "copyLabel": "Copy",
+  "operationFailed": "{operation} failed: {error}",
+  "@operationFailed": {
+    "placeholders": {
+      "operation": {"type": "String"},
+      "error": {"type": "String"}
+    }
+  },
+  "alreadyExistsSkipped": "{name} already exists — skipped",
+  "@alreadyExistsSkipped": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "uploadingFile": "Uploading {name}…",
+  "@uploadingFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "nHidden": "{count} hidden",
+  "@nHidden": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "hideLabel": "Hide",
+  "showLabel": "Show",
+
+  "itemExistsInFolder": "{name} already exists in {folder}",
+  "@itemExistsInFolder": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "folder": {"type": "String"}
+    }
+  },
+  "couldNotCheckFolder": "Could not check {folder} for existing items: {error}",
+  "@couldNotCheckFolder": {
+    "placeholders": {
+      "folder": {"type": "String"},
+      "error": {"type": "String"}
+    }
+  },
+  "movedFile": "Moved {name}",
+  "@movedFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "moveFailed": "Move failed: {error}",
+  "@moveFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "nothingToPaste": "{folder} — nothing to {operation}",
+  "@nothingToPaste": {
+    "placeholders": {
+      "folder": {"type": "String"},
+      "operation": {"type": "String"}
+    }
+  },
+  "pathLabel": "{label} · ",
+  "@pathLabel": {
+    "placeholders": { "label": {"type": "String"} }
+  },
+
+  "showHiddenFoldersTooltip": "Show hidden folders",
+
+  "addComputerTitle": "Add computer",
+  "scanQrTab": "Scan QR",
+  "manualTab": "Manual",
+  "agentAddressLabel": "Agent address",
+  "agentAddressHint": "192.168.1.10:8765",
+  "pairingCodeLabel": "Pairing code",
+  "pairingCodeHint": "123456",
+  "requiredLabel": "Required",
+  "pairedWith": "Paired with {name}",
+  "@pairedWith": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "fingerprintMismatch": "Fingerprint mismatch: {error}",
+  "@fingerprintMismatch": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "pairingFailed": "Pairing failed: {error}",
+  "@pairingFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+
+  "photoBackupTitle": "Photo backup",
+  "enablePhotoBackup": "Enable photo backup",
+  "photoBackupSubtitle": "One-way: copies new photos to your PC",
+  "backUpTo": "Back up to",
+  "destinationFolderLabel": "Destination folder on PC",
+  "destinationFolderHint": "/home/you/PhoneBackup",
+  "onlyOnWifi": "Only on Wi-Fi",
+  "onlyWhileCharging": "Only while charging",
+  "photosBackedUp": "{count} photo(s) backed up",
+  "@photosBackedUp": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "shareTooltip": "Share",
+  "saveToDeviceTooltip": "Save to device",
+  "showInFolderTooltip": "Show in folder",
+  "deleteTooltip": "Delete",
+
+  "fileChangedOnDisk": "File changed on disk",
+  "reloadButton": "Reload",
+  "discardChangesTitle": "Discard changes?",
+  "unsavedChangesMessage": "You have unsaved changes that will be lost.",
+  "keepEditingButton": "Keep editing",
+  "saveTooltip": "Save",
+  "savedFile": "Saved \"{name}\"",
+  "@savedFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "couldNotSaveFile": "Could not save this file.\n{error}",
+  "@couldNotSaveFile": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "couldNotReloadFile": "Could not reload this file.\n{error}",
+  "@couldNotReloadFile": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "editTooltip": "Edit",
+  "hideLineNumbers": "Hide line numbers",
+
+  "appSettingsTitle": "App settings",
+  "appearanceSection": "Appearance",
+  "systemTheme": "System",
+  "lightTheme": "Light",
+  "darkTheme": "Dark",
+  "useWallpaperColors": "Use wallpaper colors",
+  "displaySection": "Display",
+  "updatesSection": "Updates",
+  "photoBackupSection": "Photo backup",
+  "copyPhonePhotos": "Copy phone photos to a PC",
+
+  "settingsTitle": "Settings",
+  "agentSection": "Agent",
+  "agentNameLabel": "Agent name",
+  "accessSection": "Access",
+  "readOnlyMode": "Read-only mode",
+  "allowedFoldersSection": "Allowed folders",
+  "addFolderTooltip": "Add folder",
+  "removeFolderTooltip": "Remove folder",
+  "pairedDevicesSection": "Paired devices",
+  "aboutSection": "About",
+  "pcNameLabel": "PC name",
+  "disconnectButton": "Disconnect",
+  "disconnectDeviceTitle": "Disconnect this device?",
+  "addAllowedFolder": "Add allowed folder",
+  "allowedFolderHint": "/home/me/Documents",
+  "renameAgentTitle": "Rename agent",
+  "hideDotfiles": "Hide dotfiles",
+  "hideDotfilesSubtitle": "Hide files and folders starting with \".\"",
+  "customLabel": "Custom",
+  "dotExtension": ".{ext}",
+  "@dotExtension": {
+    "placeholders": { "ext": {"type": "String"} }
+  },
+  "fileVisibilitySection": "File visibility",
+  "fileVisibilityDeviceSection": "File visibility (this device)",
+  "overrideForDevice": "Override for this device",
+  "addExtensionHint": "Add extension (e.g. tmp)",
+  "addExtensionTooltip": "Add extension",
+
+  "displayDeviceSection": "Display (this device)",
+  "resetToAppDefaults": "Reset to app defaults",
+  "displayFollowsDefaults": "These follow your app defaults unless you override them here.",
+  "sortLabel": "Sort",
+
+  "backupRestoreSection": "Backup & restore",
+  "exportConfig": "Export config",
+  "importConfig": "Import config",
+  "importConfigSubtitle": "Restore from a previously exported file",
+  "exportConfigTitle": "Export config",
+  "importConfigTitle": "Import config",
+  "replaceCurrentConfig": "Replace current config?",
+  "passphraseLabel": "Passphrase",
+  "confirmPassphraseLabel": "Confirm passphrase",
+
+  "checkForUpdates": "Check for updates",
+  "updatedToVersion": "Updated to v{version} ✓",
+  "@updatedToVersion": {
+    "placeholders": { "version": {"type": "String"} }
+  },
+  "upToDate": "Up to date (v{version})",
+  "@upToDate": {
+    "placeholders": { "version": {"type": "String"} }
+  },
+  "updateFailed": "Update failed: {error}",
+  "@updateFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "couldNotOpenInstaller": "Could not open the installer.",
+  "updatingToVersion": "Updating to v{version}",
+  "@updatingToVersion": {
+    "placeholders": { "version": {"type": "String"} }
+  },
+  "downloadingStatus": "Downloading…",
+  "downloadingProgress": "Downloading {percent}%  ·  {received} / {totalSize}",
+  "@downloadingProgress": {
+    "placeholders": {
+      "percent": {"type": "String"},
+      "received": {"type": "String"},
+      "totalSize": {"type": "String"}
+    }
+  },
+  "openingInstaller": "Opening installer…",
+  "somethingWentWrong": "Something went wrong.",
+  "updateAvailable": "Update available · v{version}",
+  "@updateAvailable": {
+    "placeholders": { "version": {"type": "String"} }
+  },
+  "fmtMB": "{value} MB",
+  "@fmtMB": {
+    "placeholders": { "value": {"type": "String"} }
+  },
+  "fmtKB": "{value} KB",
+  "@fmtKB": {
+    "placeholders": { "value": {"type": "String"} }
+  },
+  "fmtBytes": "{value} B",
+  "@fmtBytes": {
+    "placeholders": { "value": {"type": "String"} }
+  },
+
+  "clearCompletedButton": "Clear completed",
+  "noTransfers": "No transfers",
+  "queuedStatus": "Queued",
+  "pauseTooltip": "Pause",
+  "resumeTooltip": "Resume",
+  "removedTransfer": "Removed {name}",
+  "@removedTransfer": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "transferProgress": "{transferred} / {total}",
+  "@transferProgress": {
+    "placeholders": {
+      "transferred": {"type": "String"},
+      "total": {"type": "String"}
+    }
+  },
+  "unknownError": "Unknown error",
+  "uploadedStatus": "Uploaded",
+  "downloadedStatus": "Downloaded",
+  "savedToLocation": "Saved to {location}",
+  "@savedToLocation": {
+    "placeholders": { "location": {"type": "String"} }
+  },
+  "sha256Prefix": "SHA-256 {hash}…",
+  "@sha256Prefix": {
+    "placeholders": { "hash": {"type": "String"} }
+  },
+  "transferringFile": "Transferring {name}",
+  "@transferringFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "transferringFileAndMore": "Transferring {name} (+{count} more)",
+  "@transferringFileAndMore": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+
+  "loadingImage": "Loading image…",
+  "couldNotLoadImage": "Could not load image.\n{error}",
+  "@couldNotLoadImage": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "decodingImage": "Decoding image…",
+  "couldNotDecodeImage": "Could not decode this image.\n{error}",
+  "@couldNotDecodeImage": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "loadingPdf": "Loading PDF…",
+  "couldNotLoadPdf": "Could not load this PDF.\n{error}",
+  "@couldNotLoadPdf": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "renderingPdf": "Rendering PDF…",
+  "couldNotRenderPdf": "Could not render this PDF.\n{error}",
+  "@couldNotRenderPdf": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "loadingText": "Loading text…",
+  "couldNotLoadFile": "Could not load this file.\n{error}",
+  "@couldNotLoadFile": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "couldNotLoadVideo": "Could not load this video.\n{error}",
+  "@couldNotLoadVideo": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "couldNotLoadAudio": "Could not load this audio.\n{error}",
+  "@couldNotLoadAudio": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+
+  "connectionLost": "Connection lost — check your network and try again.",
+
+  "couldNotLoadDrives": "Could not load drives: {error}",
+  "@couldNotLoadDrives": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "driveInfoFreeOfTotal": "{free} free of {total}  ·  {path}",
+  "@driveInfoFreeOfTotal": {
+    "placeholders": {
+      "free": {"type": "String"},
+      "total": {"type": "String"},
+      "path": {"type": "String"}
+    }
+  },
+  "alreadyInThisFolder": "Already in this folder",
+  "clipboardAllExistNothing": "All clipboard items already exist in {folder} — nothing to {operation}",
+  "@clipboardAllExistNothing": {
+    "placeholders": {
+      "folder": {"type": "String"},
+      "operation": {"type": "String"}
+    }
+  },
+  "renamedLabel": "Renamed",
+
+  "emptyFolderMessage": "This folder is empty",
+  "offlineBannerText": "Offline — showing cached files",
+  "defaultsApplyHint": "These defaults apply to every device. Override any of them for a single device from that device’s settings.",
+  "themeLabel": "Theme",
+  "wallpaperSubtitle": "Material You — derive the palette from your wallpaper where supported",
+  "languageLabel": "Language",
+  "sortFieldName": "Name",
+  "sortFieldSize": "Size",
+  "sortFieldDate": "Date modified",
+  "sortFieldType": "Type",
+  "invalidQrFormat": "Invalid QR code format.",
+  "qrMissingFields": "QR missing required fields.",
+  "backUpNow": "Back up now",
+  "scanningStatus": "Scanning…",
+  "backingUpPhotos": "Backing up {count} photo(s)",
+  "@backingUpPhotos": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "alreadyUpToDate": "Already up to date",
+  "pickPcFirst": "Pick a PC and destination folder first",
+  "photoAccessDenied": "Photo access denied — grant it in system settings",
+  "backupFailed": "Backup failed: {error}",
+  "@backupFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "noPairedPcs": "No paired PCs — pair one first",
+  "choosePc": "Choose a PC",
+  "backupRecordCleared": "Backup record cleared",
+  "resetBackupHint": "Tap to forget the record (re-backs-up everything)",
+  "destinationFolderHelper": "Photos land in <folder>/YYYY/YYYY-MM/",
+  "preparingToShare": "Preparing {name} to share…",
+  "@preparingToShare": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "couldNotShare": "Could not share {name}",
+  "@couldNotShare": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "savingFile": "Saving {name}…",
+  "@savingFile": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "fileTooLargeToPreview": "This file is too large to preview ({sizeLabel}).\nDownload it to view it instead.",
+  "@fileTooLargeToPreview": {
+    "placeholders": { "sizeLabel": {"type": "String"} }
+  },
+  "readOnlyModeSaveError": "This host is in read-only mode — changes can’t be saved.",
+  "fileTooLargeToSave": "This file is too large to save.",
+  "staleWriteMessage": "This file was modified on the host since you opened it. You can reload the current version (your edits here will be lost) or overwrite it with your edits.",
+  "reloadedFromHost": "Reloaded the current version from the host",
+  "recentSearches": "Recent searches",
+  "includeHiddenSubtitle": "Also show results hidden by file visibility settings",
+  "writesRejected": "Writes are rejected",
+  "phoneCanModify": "This phone can modify files",
+  "allFoldersAllowed": "All folders allowed",
+  "securityWarning": "This phone has full control of the host. Anyone with access to it can change these settings and reach allowed folders.",
+  "thisDevice": "This device",
+  "revokedStatus": "Revoked",
+  "activeStatus": "Active",
+  "limitedTo": "Limited to: {path}",
+  "@limitedTo": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "managedOnPc": "Managed on the PC",
+  "osLabel": "OS",
+  "driveCapacityLine": "Used {used} of {total} · {free} free",
+  "@driveCapacityLine": {
+    "placeholders": {
+      "used": {"type": "String"},
+      "total": {"type": "String"},
+      "free": {"type": "String"}
+    }
+  },
+  "driveCapacityLineOs": "Used {used} of {total} · {free} free · contains the OS",
+  "@driveCapacityLineOs": {
+    "placeholders": {
+      "used": {"type": "String"},
+      "total": {"type": "String"},
+      "free": {"type": "String"}
+    }
+  },
+  "addedFolder": "Added {path}",
+  "@addedFolder": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "removedFolder": "Removed {path}",
+  "@removedFolder": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "disconnectFailed": "Disconnect failed: {error}",
+  "@disconnectFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "disconnectDeviceMessage": "Disconnect this device from {pcName}? You’ll need a new pairing code to reconnect.",
+  "@disconnectDeviceMessage": {
+    "placeholders": { "pcName": {"type": "String"} }
+  },
+  "noCustomExtensions": "None — add an extension below.",
+  "passphraseMismatch": "Passphrases do not match",
+  "passphraseMinLength": "Passphrase must be at least 6 characters",
+  "usingDeviceVisibility": "Using device-specific visibility",
+  "usingAppDefault": "Using app default",
+  "followsAppDefaultVisibility": "Follows your app-default file visibility unless you override it here.",
+  "overriddenForDevice": "Overridden for this device",
+  "usingAppDefaultLabel": "Using app default ({label})",
+  "@usingAppDefaultLabel": {
+    "placeholders": { "label": {"type": "String"} }
+  },
+  "checkingForUpdates": "Checking for updates…",
+  "updateNotCompleted": "Update not completed — tap to retry.",
+  "openingInstallerConfirm": "Opening installer — confirm in Android, then return here.",
+  "downloadPaused": "Download paused. Retry to resume where it left off.",
+  "exportConfigSubtitle": "Save paired hosts, tokens, favorites, and settings to an encrypted file",
+  "backupEncryptionWarning": "Backups are encrypted with your passphrase. If you lose it, the backup cannot be recovered.",
+  "preparingBackup": "Preparing backup…",
+  "backupReadyToShare": "Backup ready to share",
+  "exportFailed": "Export failed",
+  "couldNotReadFile": "Could not read file: {error}",
+  "@couldNotReadFile": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "importWarningMessage": "Importing replaces all current hosts, tokens, and settings on this device. Continue?",
+  "replaceButton": "Replace",
+  "restoringConfig": "Restoring config…",
+  "configRestored": "Config restored. For best results, fully close and reopen the app.",
+  "importFailed": "Import failed",
+  "ascendingTooltip": "Ascending",
+  "descendingTooltip": "Descending",
+  "pausedStatus": "Paused",
+  "verifiedLabel": "Verified",
+
+  "metaPath": "Path",
+  "metaSize": "Size",
+  "metaType": "Type",
+  "metaPermissions": "Permissions",
+  "metaModified": "Modified",
+  "metaCreated": "Created",
+  "metaSymlink": "Symlink",
+  "noLabel": "No",
+  "couldNotDuplicate": "Couldn't duplicate \"{name}\"",
+  "@couldNotDuplicate": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "restoredItem": "Restored \"{name}\"",
+  "@restoredItem": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "restoreFailed": "Restore failed: {error}",
+  "@restoreFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "deleteForeverConfirm": "Permanently delete \"{name}\"? This cannot be undone.",
+  "@deleteForeverConfirm": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "deletedForever": "Deleted \"{name}\" forever",
+  "@deletedForever": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "emptyTrashBody": "Permanently delete all {count} item(s)? This cannot be undone.",
+  "@emptyTrashBody": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "trashEmptied": "Trash emptied",
+  "emptyFailed": "Empty failed: {error}",
+  "@emptyFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "trashIsEmpty": "Trash is empty",
+  "trashEmptySubtitle": "Deleted items appear here and can be restored.",
+  "deletedRelative": "deleted {relative}",
+  "@deletedRelative": {
+    "placeholders": { "relative": {"type": "String"} }
+  },
+  "copyItemsTo": "Copy {count} {count, plural, =1{item} other{items}} to…",
+  "@copyItemsTo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "moveItemsTo": "Move {count} {count, plural, =1{item} other{items}} to…",
+  "@moveItemsTo": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "copyHereButton": "Copy here",
+  "moveHereButton": "Move here",
+
+  "downloadingEllipsis": "Downloading…",
+  "transfersTitle": "Transfers",
+  "transferGroupActive": "Active",
+  "transferGroupQueued": "Queued",
+  "transferGroupDone": "Done",
+  "transferGroupFailed": "Failed",
+  "followsDefaultsOverrideHint": "These follow your app defaults unless you override them here.",
+  "importReplacesBody": "Importing replaces all current hosts, tokens, and settings on this device. Continue?",
+
+  "searchCategoryFolders": "Folders",
+  "searchCategoryImages": "Images",
+  "searchCategoryVideos": "Videos",
+  "searchCategoryAudio": "Audio",
+  "searchCategoryDocs": "Docs",
+  "searchCategoryArchives": "Archives",
+  "searchCategoryOther": "Other",
+
+  "sizePresetAny": "Any size",
+  "sizePresetMb1": "> 1 MB",
+  "sizePresetMb10": "> 10 MB",
+  "sizePresetMb100": "> 100 MB",
+  "sizePresetGb1": "> 1 GB",
+
+  "datePresetAny": "Any time",
+  "datePresetLast24h": "Last 24 hours",
+  "datePresetLast7d": "Last 7 days",
+  "datePresetLast30d": "Last 30 days",
+  "datePresetThisYear": "This year"
+}

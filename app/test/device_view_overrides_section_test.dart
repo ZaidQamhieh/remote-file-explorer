@@ -5,6 +5,8 @@ import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/features/settings/widgets/device_view_overrides_section.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // DeviceViewOverridesSection widget tests — the per-device "Use app default /
 // Override" controls plus "Reset to app defaults".
 
@@ -21,6 +23,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: SingleChildScrollView(
               child: DeviceViewOverridesSection(hostId: 'h1'),

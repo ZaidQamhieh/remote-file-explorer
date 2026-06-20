@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'dart:ui' show Locale;
+
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,6 +45,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kVisHiddenNames = 'app.visibility.hiddenNames';
   static const _kThemeMode = 'app.themeMode';
   static const _kDynamicColor = 'app.dynamicColor';
+  static const _kLocale = 'app.locale';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -108,6 +111,16 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> setDynamicColor(bool value) async {
     await _prefs?.setBool(_kDynamicColor, value);
     _emit((s) => s.copyWith(app: s.app.copyWith(dynamicColor: value)));
+  }
+
+  /// Sets the app locale override, or clears it (null = follow system).
+  Future<void> setLocale(Locale? value) async {
+    if (value == null) {
+      await _prefs?.remove(_kLocale);
+    } else {
+      await _prefs?.setString(_kLocale, value.languageCode);
+    }
+    _emit((s) => s.copyWith(app: s.app.copyWithLocale(value)));
   }
 
   // --- File visibility (app default + per-device override) ----------------
@@ -348,6 +361,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   }
 
   SettingsState _read(SharedPreferences prefs) {
+    final localeCode = prefs.getString(_kLocale);
     final app = AppDefaults(
       gridView: prefs.getBool(_kGridView) ?? false,
       density: _densityFrom(prefs.getString(_kDensity)),
@@ -358,6 +372,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       visibility: _readAppVisibility(prefs),
       themeMode: _themeModeFrom(prefs.getString(_kThemeMode)),
       dynamicColor: prefs.getBool(_kDynamicColor) ?? true,
+      locale: localeCode != null ? Locale(localeCode) : null,
     );
 
     final overrides = <String, DeviceOverrides>{};

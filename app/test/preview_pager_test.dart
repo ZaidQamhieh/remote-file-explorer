@@ -12,6 +12,8 @@ import 'package:remote_file_explorer/features/preview/preview.dart';
 import 'package:remote_file_explorer/features/preview/preview_actions.dart';
 import 'package:remote_file_explorer/features/preview/text_preview.dart';
 
+import 'l10n_helpers.dart';
+
 // Widget tests for the swipeable PreviewPager and the text line-numbers toggle.
 // Headless: a fake AgentClient returns canned text bytes per path, no real host.
 
@@ -36,7 +38,9 @@ class _FakeAgentClient extends AgentClient {
 Entry _txt(String name, {int? size}) =>
     Entry(name: name, path: '/dir/$name', isDir: false, size: size);
 
-Widget _wrap(Widget child) => ProviderScope(child: MaterialApp(home: child));
+Widget _wrap(Widget child) => ProviderScope(
+  child: MaterialApp(localizationsDelegates: l10nDelegates, home: child),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

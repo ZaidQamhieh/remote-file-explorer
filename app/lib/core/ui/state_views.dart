@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n_ext.dart';
+
 /// Friendly empty-directory placeholder.
 class EmptyFolderView extends StatelessWidget {
   const EmptyFolderView({super.key});
@@ -14,7 +16,7 @@ class EmptyFolderView extends StatelessWidget {
           Icon(Icons.folder_open, size: 64, color: c.outline),
           const SizedBox(height: 12),
           Text(
-            'This folder is empty',
+            context.l10n.emptyFolderMessage,
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
@@ -49,7 +51,7 @@ class ErrorRetryCard extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(context.l10n.retryButton),
             ),
           ],
         ),
@@ -75,7 +77,7 @@ class OfflineBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Offline — showing cached files',
+                context.l10n.offlineBannerText,
                 style: TextStyle(color: c.onTertiaryContainer, fontSize: 13),
               ),
             ),

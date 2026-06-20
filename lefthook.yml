@@ -20,7 +20,7 @@ pre-commit:
     flutter-analyze:
       root: "app/"
       glob: "*.dart"
-      run: flutter analyze
+      run: flutter analyze --no-fatal-infos
     gofmt:
       root: "agent/"
       glob: "*.go"

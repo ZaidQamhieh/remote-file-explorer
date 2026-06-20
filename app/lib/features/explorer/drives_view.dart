@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/providers.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/drive.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
@@ -53,7 +54,7 @@ class DrivesView extends ConsumerWidget {
         loading: () => const ListingSkeleton(),
         error:
             (e, _) => ErrorRetryCard(
-              message: 'Could not load drives: $e',
+              message: context.l10n.couldNotLoadDrives('$e'),
               onRetry: () => ref.invalidate(drivesProvider(host.id)),
             ),
         data: (drives) {
@@ -101,7 +102,7 @@ class DrivesView extends ConsumerWidget {
 
   void _removeFavorite(BuildContext context, WidgetRef ref, Favorite fav) {
     ref.read(favoritesProvider.notifier).remove(fav.hostId, fav.path);
-    showInfo(context, 'Removed "${fav.label}" from favorites');
+    showInfo(context, context.l10n.removedFavorite(fav.label));
   }
 }
 

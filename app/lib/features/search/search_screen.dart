@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
@@ -19,48 +20,71 @@ import 'search_logic.dart';
 /// Selectable entry-type categories for the search filter chips, mapped to
 /// the server's `types` query parameter values.
 enum SearchCategory {
-  folder('Folders', Icons.folder, 'folder'),
-  image('Images', Icons.image, 'image'),
-  video('Videos', Icons.movie, 'video'),
-  audio('Audio', Icons.music_note, 'audio'),
-  document('Docs', Icons.description, 'document'),
-  archive('Archives', Icons.folder_zip, 'archive'),
-  other('Other', Icons.insert_drive_file, 'other');
+  folder(Icons.folder, 'folder'),
+  image(Icons.image, 'image'),
+  video(Icons.movie, 'video'),
+  audio(Icons.music_note, 'audio'),
+  document(Icons.description, 'document'),
+  archive(Icons.folder_zip, 'archive'),
+  other(Icons.insert_drive_file, 'other');
 
-  const SearchCategory(this.label, this.icon, this.apiValue);
+  const SearchCategory(this.icon, this.apiValue);
 
-  final String label;
   final IconData icon;
   final String apiValue;
+
+  String localizedLabel(BuildContext context) => switch (this) {
+    folder => context.l10n.searchCategoryFolders,
+    image => context.l10n.searchCategoryImages,
+    video => context.l10n.searchCategoryVideos,
+    audio => context.l10n.searchCategoryAudio,
+    document => context.l10n.searchCategoryDocs,
+    archive => context.l10n.searchCategoryArchives,
+    other => context.l10n.searchCategoryOther,
+  };
 }
 
 /// Minimum-size filter presets, mapped to the server's `minSize` (bytes).
 enum SizePreset {
-  any('Any size', null),
-  mb1('> 1 MB', 1024 * 1024),
-  mb10('> 10 MB', 10 * 1024 * 1024),
-  mb100('> 100 MB', 100 * 1024 * 1024),
-  gb1('> 1 GB', 1024 * 1024 * 1024);
+  any(null),
+  mb1(1024 * 1024),
+  mb10(10 * 1024 * 1024),
+  mb100(100 * 1024 * 1024),
+  gb1(1024 * 1024 * 1024);
 
-  const SizePreset(this.label, this.minBytes);
+  const SizePreset(this.minBytes);
 
-  final String label;
   final int? minBytes;
+
+  String localizedLabel(BuildContext context) => switch (this) {
+    any => context.l10n.sizePresetAny,
+    mb1 => context.l10n.sizePresetMb1,
+    mb10 => context.l10n.sizePresetMb10,
+    mb100 => context.l10n.sizePresetMb100,
+    gb1 => context.l10n.sizePresetGb1,
+  };
 }
 
 /// Modified-date filter presets. [resolve] computes the `modifiedAfter`
 /// timestamp at query time (relative to "now").
 enum DatePreset {
-  any('Any time', null),
-  last24h('Last 24 hours', Duration(hours: 24)),
-  last7d('Last 7 days', Duration(days: 7)),
-  last30d('Last 30 days', Duration(days: 30)),
-  thisYear('This year', null);
+  any(null),
+  last24h(Duration(hours: 24)),
+  last7d(Duration(days: 7)),
+  last30d(Duration(days: 30)),
+  thisYear(null);
 
-  const DatePreset(this.label, this.lookback);
+  const DatePreset(this.lookback);
 
-  final String label;
   final Duration? lookback;
+
+  String localizedLabel(BuildContext context) => switch (this) {
+    any => context.l10n.datePresetAny,
+    last24h => context.l10n.datePresetLast24h,
+    last7d => context.l10n.datePresetLast7d,
+    last30d => context.l10n.datePresetLast30d,
+    thisYear => context.l10n.datePresetThisYear,
+  };
 
   /// Computes the `modifiedAfter` bound for this preset, or `null` for
   /// [DatePreset.any].
@@ -305,8 +329,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           controller: _controller,
           autofocus: true,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: 'Search files and folders…',
+          decoration: InputDecoration(
+            hintText: context.l10n.searchHint,
             border: InputBorder.none,
           ),
           onChanged: _onChanged,
@@ -316,7 +340,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           if (_controller.text.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.clear),
-              tooltip: 'Clear',
+              tooltip: context.l10n.clearTooltip,
               onPressed: () {
                 _controller.clear();
                 _onChanged('');
@@ -362,14 +386,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
     if (_error != null) {
       return ErrorRetryCard(
-        message: 'Search failed: $_error',
+        message: context.l10n.searchFailed(_error!),
         onRetry: () => _runSearch(_query),
       );
     }
     if (_results.isEmpty) {
       return _CenteredMessage(
         icon: Icons.search_off,
-        message: 'No results for "$_query".',
+        message: context.l10n.noResultsFor(_query),
       );
     }
     return ListView.builder(
@@ -401,7 +425,7 @@ class _FilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = const Icon(Icons.tune);
     return IconButton(
-      tooltip: 'Search filters',
+      tooltip: context.l10n.searchFiltersTooltip,
       onPressed: onPressed,
       icon:
           activeCount > 0
@@ -437,7 +461,7 @@ class _CategoryChipsRow extends StatelessWidget {
           final category = SearchCategory.values[i];
           final isSelected = selected.contains(category);
           return FilterChip(
-            label: Text(category.label),
+            label: Text(category.localizedLabel(context)),
             avatar: Icon(category.icon, size: 18),
             selected: isSelected,
             onSelected: (value) => onToggle(category, value),
@@ -463,7 +487,7 @@ class _GlobIndicator extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Chip(
           avatar: const Icon(Icons.pattern, size: 18),
-          label: const Text('Glob pattern'),
+          label: Text(context.l10n.globPattern),
           visualDensity: VisualDensity.compact,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
@@ -492,8 +516,8 @@ class _TruncationBanner extends StatelessWidget {
     final c = Theme.of(context).colorScheme;
     final message =
         truncated
-            ? 'Showing first $limit results — refine your search.'
-            : 'Search timed out — showing partial results.';
+            ? context.l10n.showingFirstNResults(limit)
+            : context.l10n.searchTimedOut;
     return Material(
       color: c.tertiaryContainer,
       child: Padding(
@@ -532,9 +556,9 @@ class _RecentSearchesView extends ConsumerWidget {
     final recent = ref.watch(recentSearchesProvider).valueOrNull ?? const [];
 
     if (recent.isEmpty) {
-      return const _CenteredMessage(
+      return _CenteredMessage(
         icon: Icons.search,
-        message: 'Type to search for files and folders by name.',
+        message: context.l10n.typeToSearch,
       );
     }
 
@@ -551,14 +575,14 @@ class _RecentSearchesView extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Recent searches',
+                  context.l10n.recentSearches,
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ),
               TextButton(
                 onPressed:
                     () => ref.read(recentSearchesProvider.notifier).clear(),
-                child: const Text('Clear all'),
+                child: Text(context.l10n.clearAllButton),
               ),
             ],
           ),
@@ -569,7 +593,7 @@ class _RecentSearchesView extends ConsumerWidget {
             title: Text(query),
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18),
-              tooltip: 'Remove',
+              tooltip: context.l10n.removeTooltip,
               onPressed:
                   () => ref.read(recentSearchesProvider.notifier).remove(query),
             ),
@@ -661,22 +685,28 @@ class _FilterSheetState extends State<_FilterSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    'Search filters',
+                    context.l10n.searchFiltersTooltip,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                TextButton(onPressed: _reset, child: const Text('Reset')),
+                TextButton(
+                  onPressed: _reset,
+                  child: Text(context.l10n.resetButton),
+                ),
               ],
             ),
             const SizedBox(height: Spacing.md),
-            Text('File size', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              context.l10n.fileSize,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: Spacing.xs),
             Wrap(
               spacing: Spacing.xs,
               children: [
                 for (final preset in SizePreset.values)
                   ChoiceChip(
-                    label: Text(preset.label),
+                    label: Text(preset.localizedLabel(context)),
                     selected: _sizePreset == preset,
                     onSelected: (_) => setState(() => _sizePreset = preset),
                   ),
@@ -684,7 +714,7 @@ class _FilterSheetState extends State<_FilterSheet> {
             ),
             const SizedBox(height: Spacing.md),
             Text(
-              'Date modified',
+              context.l10n.sortFieldDate,
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: Spacing.xs),
@@ -693,44 +723,45 @@ class _FilterSheetState extends State<_FilterSheet> {
               children: [
                 for (final preset in DatePreset.values)
                   ChoiceChip(
-                    label: Text(preset.label),
+                    label: Text(preset.localizedLabel(context)),
                     selected: _datePreset == preset,
                     onSelected: (_) => setState(() => _datePreset = preset),
                   ),
               ],
             ),
             const SizedBox(height: Spacing.md),
-            Text('Search scope', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              context.l10n.searchScope,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: Spacing.xs),
             Row(
               children: [
                 Expanded(
                   child: Text(
                     _searchFromHere
-                        ? 'Searching in: ${widget.currentPath}'
-                        : 'Searching everywhere',
+                        ? context.l10n.searchingIn(widget.currentPath)
+                        : context.l10n.searchingEverywhere,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
                 const SizedBox(width: Spacing.sm),
-                const Text('From here'),
+                Text(context.l10n.fromHere),
                 Switch(
                   value: !_searchFromHere,
                   onChanged:
                       (everywhere) =>
                           setState(() => _searchFromHere = !everywhere),
                 ),
-                const Text('Everywhere'),
+                Text(context.l10n.everywhere),
               ],
             ),
             const SizedBox(height: Spacing.sm),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Include hidden items'),
-              subtitle: const Text(
-                'Also show results hidden by file visibility settings',
-              ),
+              title: Text(context.l10n.includeHiddenItems),
+              subtitle: Text(context.l10n.includeHiddenSubtitle),
               value: _includeHidden,
               onChanged: (v) => setState(() => _includeHidden = v),
             ),
@@ -739,7 +770,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: _apply,
-                child: const Text('Apply'),
+                child: Text(context.l10n.applyButton),
               ),
             ),
           ],

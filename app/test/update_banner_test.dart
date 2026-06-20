@@ -6,11 +6,16 @@ import 'package:remote_file_explorer/core/models/app_release.dart';
 import 'package:remote_file_explorer/core/update/auto_update.dart';
 import 'package:remote_file_explorer/features/settings/update_banner.dart';
 
+import 'l10n_helpers.dart';
+
 const _release = AppRelease(versionName: '1.5.0', versionCode: 30, size: 1);
 
 Widget _app(List<Override> overrides) => ProviderScope(
   overrides: overrides,
-  child: const MaterialApp(home: Scaffold(body: UpdateBanner())),
+  child: const MaterialApp(
+    localizationsDelegates: l10nDelegates,
+    home: Scaffold(body: UpdateBanner()),
+  ),
 );
 
 void main() {

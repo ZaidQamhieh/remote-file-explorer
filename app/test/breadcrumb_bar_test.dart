@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/breadcrumb_bar.dart';
 
+import 'l10n_helpers.dart';
+
 // BreadcrumbBar collapse-logic tests.
 //
 // `collapsedCrumbIndices` is the pure function deciding which head-ancestor
@@ -85,6 +87,7 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: l10nDelegates,
           home: Scaffold(
             body: Builder(
               builder:

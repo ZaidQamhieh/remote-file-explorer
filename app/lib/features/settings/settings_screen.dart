@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/agent_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/drive.dart';
@@ -100,7 +101,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted && successMsg != null) showSuccess(context, successMsg);
     } catch (e) {
       setState(() => _settings = prev); // rollback
-      if (mounted) showError(context, 'Update failed: $e');
+      if (mounted) showError(context, context.l10n.updateFailed('$e'));
     }
   }
 
@@ -129,19 +130,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Disconnect this device?'),
-            content: Text(
-              'Disconnect this device from $pcName? You\'ll need a new '
-              'pairing code to reconnect.',
-            ),
+            title: Text(ctx.l10n.disconnectDeviceTitle),
+            content: Text(ctx.l10n.disconnectDeviceMessage(pcName)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Disconnect'),
+                child: Text(ctx.l10n.disconnectButton),
               ),
             ],
           ),
@@ -151,7 +149,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       await client.deleteDevice(self.id);
     } catch (e) {
-      if (mounted) showError(context, 'Disconnect failed: $e');
+      if (mounted) showError(context, context.l10n.disconnectFailed('$e'));
       return;
     }
 
@@ -171,27 +169,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Add allowed folder'),
+            title: Text(ctx.l10n.addAllowedFolder),
             content: TextField(
               controller: ctrl,
               autofocus: true,
-              decoration: const InputDecoration(hintText: '/home/me/Documents'),
+              decoration: InputDecoration(hintText: ctx.l10n.allowedFolderHint),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('Add'),
+                child: Text(ctx.l10n.addButton),
               ),
             ],
           ),
     );
     if (path != null && path.isNotEmpty) {
       final roots = [...?_settings?.roots, path];
-      await _patch(roots: roots, successMsg: 'Added $path');
+      await _patch(roots: roots, successMsg: context.l10n.addedFolder(path));
     }
   }
 
@@ -201,34 +199,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Rename agent'),
+            title: Text(ctx.l10n.renameAgentTitle),
             content: TextField(controller: ctrl, autofocus: true),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('Save'),
+                child: Text(ctx.l10n.saveButton),
               ),
             ],
           ),
     );
     if (name != null && name.isNotEmpty) {
-      await _patch(name: name, successMsg: 'Renamed to $name');
+      await _patch(name: name, successMsg: context.l10n.renamedTo(name));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.l10n.settingsTitle)),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-              ? Center(child: Text('Error: $_error'))
+              ? Center(child: Text(context.l10n.errorLabel(_error!)))
               : _buildBody(context),
     );
   }
@@ -249,12 +247,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _SecurityWarningCard(scheme: scheme),
         const SizedBox(height: Spacing.lg),
         SettingsSection(
-          title: 'Agent',
+          title: context.l10n.agentSection,
           icon: Icons.dns_outlined,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Agent name'),
+              title: Text(context.l10n.agentNameLabel),
               subtitle: Text(s.agentName),
               trailing: const Icon(Icons.edit_outlined),
               onTap: _editName,
@@ -263,16 +261,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
-          title: 'Access',
+          title: context.l10n.accessSection,
           icon: Icons.lock_outline,
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Read-only mode'),
+              title: Text(context.l10n.readOnlyMode),
               subtitle: Text(
                 s.readOnly
-                    ? 'Writes are rejected'
-                    : 'This phone can modify files',
+                    ? context.l10n.writesRejected
+                    : context.l10n.phoneCanModify,
               ),
               value: s.readOnly,
               onChanged: (v) => _patch(readOnly: v),
@@ -281,11 +279,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
-          title: 'Allowed folders',
+          title: context.l10n.allowedFoldersSection,
           icon: Icons.folder_outlined,
           trailing: IconButton(
             icon: const Icon(Icons.add),
-            tooltip: 'Add folder',
+            tooltip: context.l10n.addFolderTooltip,
             onPressed: _addRoot,
           ),
           children: [
@@ -293,7 +291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
                 child: Text(
-                  'All folders allowed',
+                  context.l10n.allFoldersAllowed,
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               )
@@ -306,11 +304,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: Text(r),
                   trailing: IconButton(
                     icon: const Icon(Icons.remove_circle_outline),
-                    tooltip: 'Remove folder',
+                    tooltip: context.l10n.removeFolderTooltip,
                     onPressed:
                         () => _patch(
                           roots: s.roots.where((x) => x != r).toList(),
-                          successMsg: 'Removed $r',
+                          successMsg: context.l10n.removedFolder(r),
                         ),
                   ),
                 ),
@@ -321,7 +319,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         DeviceVisibilityOverrideSection(hostId: widget.host.id),
         const SizedBox(height: Spacing.md),
         SettingsSection(
-          title: 'Paired devices',
+          title: context.l10n.pairedDevicesSection,
           icon: Icons.devices_outlined,
           children: [
             for (final d in _devices) _DeviceRow(device: d, screen: this),
@@ -329,12 +327,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
-          title: 'About',
+          title: context.l10n.aboutSection,
           icon: Icons.info_outline,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('PC name'),
+              title: Text(context.l10n.pcNameLabel),
               subtitle: Text(
                 s.agentName.isNotEmpty
                     ? s.agentName
@@ -374,8 +372,7 @@ class _SecurityWarningCard extends StatelessWidget {
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(
-                'This phone has full control of the host. Anyone with access '
-                'to it can change these settings and reach allowed folders.',
+                context.l10n.securityWarning,
                 style: TextStyle(color: scheme.onSecondaryContainer),
               ),
             ),
@@ -432,8 +429,8 @@ class VisibilityEditor extends StatelessWidget {
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Hide dotfiles'),
-          subtitle: const Text('Hide files and folders starting with "."'),
+          title: Text(context.l10n.hideDotfiles),
+          subtitle: Text(context.l10n.hideDotfilesSubtitle),
           value: prefs.hideDotfiles,
           onChanged: (v) => notifier.setHideDotfiles(v, hostId: hostId),
         ),
@@ -448,13 +445,16 @@ class VisibilityEditor extends StatelessWidget {
             hostId: hostId,
           ),
         const Divider(height: Spacing.lg),
-        Text('Custom', style: Theme.of(context).textTheme.labelLarge),
+        Text(
+          context.l10n.customLabel,
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
         const SizedBox(height: Spacing.xs),
         if (custom.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
             child: Text(
-              'None — add an extension below.',
+              context.l10n.noCustomExtensions,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           )
@@ -494,7 +494,7 @@ class FileVisibilitySection extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return SettingsSection(
-      title: 'File visibility',
+      title: context.l10n.fileVisibilitySection,
       icon: Icons.visibility_outlined,
       children: [
         VisibilityEditor(prefs: settings.app.visibility, notifier: notifier),
@@ -523,25 +523,24 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return SettingsSection(
-      title: 'File visibility (this device)',
+      title: context.l10n.fileVisibilityDeviceSection,
       icon: Icons.visibility_outlined,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: Spacing.xs),
           child: Text(
-            'Follows your app-default file visibility unless you override it '
-            'here.',
+            context.l10n.followsAppDefaultVisibility,
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text('Override for this device'),
+          title: Text(context.l10n.overrideForDevice),
           subtitle: Text(
             isOverridden
-                ? 'Using device-specific visibility'
-                : 'Using app default',
+                ? context.l10n.usingDeviceVisibility
+                : context.l10n.usingAppDefault,
           ),
           value: isOverridden,
           onChanged: (on) => notifier.setDeviceVisibilityOverride(hostId, on),
@@ -654,10 +653,10 @@ class _AddExtensionFieldState extends State<_AddExtensionField> {
       decoration: InputDecoration(
         isDense: true,
         prefixText: '.',
-        hintText: 'Add extension (e.g. tmp)',
+        hintText: context.l10n.addExtensionHint,
         suffixIcon: IconButton(
           icon: const Icon(Icons.add),
-          tooltip: 'Add extension',
+          tooltip: context.l10n.addExtensionTooltip,
           onPressed: _submit,
         ),
       ),
@@ -688,11 +687,11 @@ class _DeviceRow extends StatelessWidget {
     String status;
     Color statusColor;
     if (d.current) {
-      status = 'This device';
+      status = context.l10n.thisDevice;
       statusColor = Brand.online;
     } else {
       final parts = <String>[
-        d.revoked ? 'Revoked' : 'Active',
+        d.revoked ? context.l10n.revokedStatus : context.l10n.activeStatus,
         if (d.lastAddress.isNotEmpty) d.lastAddress,
         if (d.lastVersion.isNotEmpty) 'v${d.lastVersion}',
         formatRelative(d.lastSeen.toLocal()),
@@ -706,7 +705,7 @@ class _DeviceRow extends StatelessWidget {
             ? TextButton(
               onPressed: () => screen._disconnectThisDevice(d),
               style: TextButton.styleFrom(foregroundColor: scheme.error),
-              child: const Text('Disconnect'),
+              child: Text(context.l10n.disconnectButton),
             )
             : null;
 
@@ -732,7 +731,7 @@ class _DeviceRow extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      'Limited to: ${d.jailRoot}',
+                      context.l10n.limitedTo(d.jailRoot),
                       style: TextStyle(color: scheme.tertiary, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -744,7 +743,7 @@ class _DeviceRow extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                'Managed on the PC',
+                context.l10n.managedOnPc,
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
             ),
@@ -775,9 +774,9 @@ class _DriveRow extends StatelessWidget {
             ? drive.label!
             : drive.path;
 
-    final capacityLine =
-        'Used ${formatSize(used)} of ${formatSize(total)} · '
-        '${formatSize(free)} free';
+    final usedStr = formatSize(used);
+    final totalStr = formatSize(total);
+    final freeStr = formatSize(free);
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -800,7 +799,7 @@ class _DriveRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                'OS',
+                context.l10n.osLabel,
                 style: TextStyle(
                   color: scheme.onPrimaryContainer,
                   fontSize: 11,
@@ -812,7 +811,9 @@ class _DriveRow extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        drive.isOS ? '$capacityLine · contains the OS' : capacityLine,
+        drive.isOS
+            ? context.l10n.driveCapacityLineOs(usedStr, totalStr, freeStr)
+            : context.l10n.driveCapacityLine(usedStr, totalStr, freeStr),
       ),
     );
   }

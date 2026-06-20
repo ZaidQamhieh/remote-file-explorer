@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
@@ -55,12 +56,15 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add computer'),
+        title: Text(context.l10n.addComputerTitle),
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [
-            Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan QR'),
-            Tab(icon: Icon(Icons.keyboard), text: 'Manual'),
+          tabs: [
+            Tab(
+              icon: const Icon(Icons.qr_code_scanner),
+              text: context.l10n.scanQrTab,
+            ),
+            Tab(icon: const Icon(Icons.keyboard), text: context.l10n.manualTab),
           ],
         ),
       ),
@@ -97,7 +101,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
     try {
       qr = jsonDecode(raw) as Map<String, dynamic>;
     } catch (_) {
-      setState(() => _error = 'Invalid QR code format.');
+      setState(() => _error = context.l10n.invalidQrFormat);
       return;
     }
 
@@ -106,7 +110,7 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
     final pairingCode = qr['pairingCode'] as String?;
 
     if (address == null || pairingCode == null) {
-      setState(() => _error = 'QR missing required fields.');
+      setState(() => _error = context.l10n.qrMissingFields);
       return;
     }
 
@@ -175,13 +179,15 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
       }
 
       if (mounted) {
-        showSuccess(context, 'Paired with ${host.label}');
+        showSuccess(context, context.l10n.pairedWith(host.label));
         Navigator.of(context).pop(host);
       }
     } on CertPinMismatch catch (e) {
-      if (mounted) setState(() => _error = 'Fingerprint mismatch: $e');
+      if (mounted) {
+        setState(() => _error = context.l10n.fingerprintMismatch('$e'));
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Pairing failed: $e');
+      if (mounted) setState(() => _error = context.l10n.pairingFailed('$e'));
     } finally {
       client.close();
       if (mounted) setState(() => _processing = false);
@@ -309,11 +315,11 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
       }
 
       if (mounted) {
-        showSuccess(context, 'Paired with ${host.label}');
+        showSuccess(context, context.l10n.pairedWith(host.label));
         Navigator.of(context).pop(host);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Pairing failed: $e');
+      if (mounted) setState(() => _error = context.l10n.pairingFailed('$e'));
     } finally {
       client.close();
       if (mounted) setState(() => _loading = false);
@@ -332,26 +338,32 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
             const SizedBox(height: Spacing.sm),
             TextFormField(
               controller: _addressCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Agent address',
-                hintText: '192.168.1.10:8765',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.computer),
+              decoration: InputDecoration(
+                labelText: context.l10n.agentAddressLabel,
+                hintText: context.l10n.agentAddressHint,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.computer),
               ),
               validator:
-                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  (v) =>
+                      (v == null || v.trim().isEmpty)
+                          ? context.l10n.requiredLabel
+                          : null,
             ),
             const SizedBox(height: Spacing.md),
             TextFormField(
               controller: _codeCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Pairing code',
-                hintText: '123456',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
+              decoration: InputDecoration(
+                labelText: context.l10n.pairingCodeLabel,
+                hintText: context.l10n.pairingCodeHint,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.lock),
               ),
               validator:
-                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  (v) =>
+                      (v == null || v.trim().isEmpty)
+                          ? context.l10n.requiredLabel
+                          : null,
             ),
             const SizedBox(height: Spacing.lg),
             if (_error != null) ...[
@@ -367,7 +379,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                       : const Icon(Icons.link),
-              label: const Text('Pair'),
+              label: Text(context.l10n.pairButton),
             ),
           ],
         ),

@@ -14,6 +14,9 @@ dependencies:
   file_picker: ^11.0.2
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   flutter_riverpod: ^2.6.1
   flutter_secure_storage: ^10.3.1
   mobile_scanner: ^7.2.0
@@ -37,3 +40,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true

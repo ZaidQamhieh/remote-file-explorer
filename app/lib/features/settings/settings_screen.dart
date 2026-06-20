@@ -5,6 +5,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/agent_settings.dart';
+import '../../core/models/bandwidth_settings.dart';
 import '../../core/models/device.dart';
 import '../../core/models/drive.dart';
 import '../../core/models/host.dart';
@@ -29,6 +30,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   AgentClient? _client;
   AgentSettings? _settings;
+  BandwidthSettings _bandwidth = const BandwidthSettings();
   List<Device> _devices = const [];
   List<Drive> _drives = const [];
   bool _loading = true;
@@ -59,9 +61,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final settings = await client.getSettings();
       final devices = await client.listDevices();
       final drives = await client.drives();
+      BandwidthSettings bw = const BandwidthSettings();
+      try {
+        bw = await client.getBandwidth();
+      } catch (_) {
+        // Agent may not support bandwidth endpoint yet — use defaults.
+      }
       setState(() {
         _client = client;
         _settings = settings;
+        _bandwidth = bw;
         _devices = devices;
         _drives = drives;
         _loading = false;
@@ -278,6 +287,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
+        _BandwidthSection(
+          bandwidth: _bandwidth,
+          onChanged: (bw) async {
+            final client = _client;
+            if (client == null) return;
+            final prev = _bandwidth;
+            setState(() => _bandwidth = bw);
+            try {
+              final updated = await client.setBandwidth(
+                maxUploadBytesPerSec: bw.maxUploadBytesPerSec,
+                maxDownloadBytesPerSec: bw.maxDownloadBytesPerSec,
+              );
+              setState(() => _bandwidth = updated);
+            } catch (e) {
+              setState(() => _bandwidth = prev);
+              if (mounted) showError(context, context.l10n.updateFailed('$e'));
+            }
+          },
+        ),
+        const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.allowedFoldersSection,
           icon: Icons.folder_outlined,
@@ -348,6 +377,94 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bandwidth controls
+// ---------------------------------------------------------------------------
+
+/// Preset bandwidth options in bytes/sec. 0 = unlimited.
+const _bandwidthPresets = <int>[
+  0, // Unlimited
+  1024 * 1024, // 1 MB/s
+  5 * 1024 * 1024, // 5 MB/s
+  10 * 1024 * 1024, // 10 MB/s
+  50 * 1024 * 1024, // 50 MB/s
+];
+
+class _BandwidthSection extends StatelessWidget {
+  const _BandwidthSection({required this.bandwidth, required this.onChanged});
+
+  final BandwidthSettings bandwidth;
+  final ValueChanged<BandwidthSettings> onChanged;
+
+  String _label(BuildContext context, int bytesPerSec) {
+    if (bytesPerSec == 0) return context.l10n.bandwidthUnlimited;
+    return '${formatSize(bytesPerSec)}/s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsSection(
+      title: context.l10n.bandwidthSection,
+      icon: Icons.speed_outlined,
+      children: [
+        _BandwidthDropdown(
+          label: context.l10n.bandwidthUploadLimit,
+          value: bandwidth.maxUploadBytesPerSec,
+          onChanged:
+              (v) => onChanged(bandwidth.copyWith(maxUploadBytesPerSec: v)),
+          labelBuilder: (v) => _label(context, v),
+        ),
+        _BandwidthDropdown(
+          label: context.l10n.bandwidthDownloadLimit,
+          value: bandwidth.maxDownloadBytesPerSec,
+          onChanged:
+              (v) => onChanged(bandwidth.copyWith(maxDownloadBytesPerSec: v)),
+          labelBuilder: (v) => _label(context, v),
+        ),
+      ],
+    );
+  }
+}
+
+class _BandwidthDropdown extends StatelessWidget {
+  const _BandwidthDropdown({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.labelBuilder,
+  });
+
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+  final String Function(int) labelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    // If current value isn't in presets, include it so the dropdown works.
+    final items =
+        _bandwidthPresets.contains(value)
+            ? _bandwidthPresets
+            : [value, ..._bandwidthPresets];
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(label),
+      trailing: DropdownButton<int>(
+        value: value,
+        underline: const SizedBox.shrink(),
+        items: [
+          for (final v in items)
+            DropdownMenuItem(value: v, child: Text(labelBuilder(v))),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
     );
   }
 }

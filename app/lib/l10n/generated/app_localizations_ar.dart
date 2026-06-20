@@ -1688,4 +1688,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String previewPageIndicator(int current, int total) {
     return '$current من $total';
   }
+
+  @override
+  String get bandwidthSection => 'عرض النطاق';
+
+  @override
+  String get bandwidthUploadLimit => 'حد الرفع';
+
+  @override
+  String get bandwidthDownloadLimit => 'حد التنزيل';
+
+  @override
+  String get bandwidthUnlimited => 'بلا حدود';
 }

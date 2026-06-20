@@ -433,3 +433,49 @@ func TestDeviceJailMiddleware_NarrowsOpsForJailedDevice(t *testing.T) {
 		t.Fatalf("expected 200 for unrestricted device accessing sibling path, got %d: %s", rr3.Code, rr3.Body.String())
 	}
 }
+
+func TestBandwidthHandler_GetAndPut(t *testing.T) {
+	_, st := newTestDeps(t)
+
+	// GET defaults to zero (unlimited).
+	rr := httptest.NewRecorder()
+	getBandwidthHandler(st)(rr, httptest.NewRequest(http.MethodGet, "/v1/settings/bandwidth", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET code = %d", rr.Code)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got["maxUploadBytesPerSec"] != float64(0) || got["maxDownloadBytesPerSec"] != float64(0) {
+		t.Fatalf("unexpected GET body: %v", got)
+	}
+
+	// PUT sets limits.
+	body := `{"maxUploadBytesPerSec":1000000,"maxDownloadBytesPerSec":5000000}`
+	rr2 := httptest.NewRecorder()
+	putBandwidthHandler(st)(rr2, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body)))
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("PUT code = %d: %s", rr2.Code, rr2.Body.String())
+	}
+	var got2 map[string]any
+	_ = json.Unmarshal(rr2.Body.Bytes(), &got2)
+	if got2["maxUploadBytesPerSec"] != float64(1000000) || got2["maxDownloadBytesPerSec"] != float64(5000000) {
+		t.Fatalf("unexpected PUT response: %v", got2)
+	}
+	if st.MaxUploadBytesPerSec() != 1000000 || st.MaxDownloadBytesPerSec() != 5000000 {
+		t.Fatalf("settings not applied")
+	}
+
+	// PUT with partial body only updates specified fields.
+	body2 := `{"maxUploadBytesPerSec":0}`
+	rr3 := httptest.NewRecorder()
+	putBandwidthHandler(st)(rr3, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body2)))
+	if rr3.Code != http.StatusOK {
+		t.Fatalf("PUT partial code = %d", rr3.Code)
+	}
+	if st.MaxUploadBytesPerSec() != 0 {
+		t.Fatalf("expected upload reset to 0, got %d", st.MaxUploadBytesPerSec())
+	}
+	if st.MaxDownloadBytesPerSec() != 5000000 {
+		t.Fatalf("expected download unchanged at 5000000, got %d", st.MaxDownloadBytesPerSec())
+	}
+}

@@ -1681,4 +1681,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String previewPageIndicator(int current, int total) {
     return '$current of $total';
   }
+
+  @override
+  String get bandwidthSection => 'Bandwidth';
+
+  @override
+  String get bandwidthUploadLimit => 'Upload limit';
+
+  @override
+  String get bandwidthDownloadLimit => 'Download limit';
+
+  @override
+  String get bandwidthUnlimited => 'Unlimited';
 }

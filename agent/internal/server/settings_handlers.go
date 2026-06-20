@@ -72,6 +72,48 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 	}
 }
 
+// --------- GET /settings/bandwidth ---------
+
+func getBandwidthHandler(st *settings.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"maxUploadBytesPerSec":   st.MaxUploadBytesPerSec(),
+			"maxDownloadBytesPerSec": st.MaxDownloadBytesPerSec(),
+		})
+	}
+}
+
+// --------- PUT /settings/bandwidth ---------
+
+func putBandwidthHandler(st *settings.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			MaxUploadBytesPerSec   *int64 `json:"maxUploadBytesPerSec"`
+			MaxDownloadBytesPerSec *int64 `json:"maxDownloadBytesPerSec"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+			return
+		}
+		if b.MaxUploadBytesPerSec != nil {
+			if err := st.SetMaxUploadBytesPerSec(*b.MaxUploadBytesPerSec); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
+		if b.MaxDownloadBytesPerSec != nil {
+			if err := st.SetMaxDownloadBytesPerSec(*b.MaxDownloadBytesPerSec); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"maxUploadBytesPerSec":   st.MaxUploadBytesPerSec(),
+			"maxDownloadBytesPerSec": st.MaxDownloadBytesPerSec(),
+		})
+	}
+}
+
 // deviceJSON builds the Device JSON shape shared by GET /devices (list) and
 // PATCH /devices/{id} (single updated device).
 func deviceJSON(d store.Device, cur *store.Device) map[string]any {

@@ -8,6 +8,7 @@ import 'package:dio/io.dart';
 
 import '../app_info.dart';
 import '../models/agent_settings.dart';
+import '../models/bandwidth_settings.dart';
 import '../models/app_release.dart';
 import '../models/device.dart';
 import '../models/drive.dart';
@@ -330,6 +331,15 @@ class AgentClient {
     }
   }
 
+  Future<T> _put<T>(String path, {dynamic data}) async {
+    try {
+      final res = await _dio.put<T>(path, data: data);
+      return res.data as T;
+    } on DioException catch (e) {
+      throw _apiError(e);
+    }
+  }
+
   Future<T> _delete<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -511,6 +521,31 @@ class AgentClient {
   /// device" action to un-pair the current phone.
   Future<void> deleteDevice(String id) async {
     await _delete<void>('/devices/$id', queryParameters: {'purge': 'true'});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bandwidth
+  // ---------------------------------------------------------------------------
+
+  Future<BandwidthSettings> getBandwidth() async {
+    final data = await _get<Map<String, dynamic>>('/settings/bandwidth');
+    return BandwidthSettings.fromJson(data);
+  }
+
+  Future<BandwidthSettings> setBandwidth({
+    int? maxUploadBytesPerSec,
+    int? maxDownloadBytesPerSec,
+  }) async {
+    final data = await _put<Map<String, dynamic>>(
+      '/settings/bandwidth',
+      data: {
+        if (maxUploadBytesPerSec != null)
+          'maxUploadBytesPerSec': maxUploadBytesPerSec,
+        if (maxDownloadBytesPerSec != null)
+          'maxDownloadBytesPerSec': maxDownloadBytesPerSec,
+      },
+    );
+    return BandwidthSettings.fromJson(data);
   }
 
   // ---------------------------------------------------------------------------

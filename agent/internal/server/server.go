@@ -61,6 +61,8 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			// Settings & devices
 			r.Get("/settings", getSettingsHandler(cfg.Settings))
 			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
+			r.Get("/settings/bandwidth", getBandwidthHandler(cfg.Settings))
+			r.Put("/settings/bandwidth", putBandwidthHandler(cfg.Settings))
 			r.Get("/devices", listDevicesHandler(db))
 			r.Patch("/devices/{id}", setDeviceJailHandler())
 			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
@@ -105,13 +107,13 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
 
 			// Download / write content
-			r.Get("/content", downloadHandler(ops))
+			r.Get("/content", downloadHandler(ops, cfg.Settings))
 			r.Put("/content", writeContentHandler(ops))
 
 			// Upload / transfers
 			r.Post("/transfers", openTransferHandler(tm, ops))
 			r.Get("/transfers/{id}", transferStatusHandler(tm))
-			r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm))
+			r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
 			r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
 		})
 	})

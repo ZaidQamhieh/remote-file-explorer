@@ -69,6 +69,66 @@ func TestSetters_PersistAndApply(t *testing.T) {
 	}
 }
 
+func TestBandwidth_DefaultsUnlimited(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if s.MaxUploadBytesPerSec() != 0 {
+		t.Fatalf("expected default upload 0, got %d", s.MaxUploadBytesPerSec())
+	}
+	if s.MaxDownloadBytesPerSec() != 0 {
+		t.Fatalf("expected default download 0, got %d", s.MaxDownloadBytesPerSec())
+	}
+}
+
+func TestBandwidth_SetAndPersist(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := s.SetMaxUploadBytesPerSec(1_000_000); err != nil {
+		t.Fatalf("set upload: %v", err)
+	}
+	if err := s.SetMaxDownloadBytesPerSec(5_000_000); err != nil {
+		t.Fatalf("set download: %v", err)
+	}
+	if s.MaxUploadBytesPerSec() != 1_000_000 {
+		t.Fatalf("expected upload 1000000, got %d", s.MaxUploadBytesPerSec())
+	}
+	if s.MaxDownloadBytesPerSec() != 5_000_000 {
+		t.Fatalf("expected download 5000000, got %d", s.MaxDownloadBytesPerSec())
+	}
+
+	// Persisted: a fresh Load sees the new values.
+	s2, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if s2.MaxUploadBytesPerSec() != 1_000_000 {
+		t.Fatalf("persisted upload wrong: %d", s2.MaxUploadBytesPerSec())
+	}
+	if s2.MaxDownloadBytesPerSec() != 5_000_000 {
+		t.Fatalf("persisted download wrong: %d", s2.MaxDownloadBytesPerSec())
+	}
+}
+
+func TestBandwidth_NegativeClampsToZero(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := s.SetMaxUploadBytesPerSec(-100); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if s.MaxUploadBytesPerSec() != 0 {
+		t.Fatalf("expected negative clamped to 0, got %d", s.MaxUploadBytesPerSec())
+	}
+}
+
 func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 	db := newDB(t)
 	// First load seeds readOnly=true.

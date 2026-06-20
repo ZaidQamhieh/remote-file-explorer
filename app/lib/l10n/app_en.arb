@@ -920,5 +920,10 @@
       "current": {"type": "int"},
       "total": {"type": "int"}
     }
-  }
+  },
+
+  "bandwidthSection": "Bandwidth",
+  "bandwidthUploadLimit": "Upload limit",
+  "bandwidthDownloadLimit": "Download limit",
+  "bandwidthUnlimited": "Unlimited"
 }

@@ -500,5 +500,10 @@
       "current": {"type": "int"},
       "total": {"type": "int"}
     }
-  }
+  },
+
+  "bandwidthSection": "عرض النطاق",
+  "bandwidthUploadLimit": "حد الرفع",
+  "bandwidthDownloadLimit": "حد التنزيل",
+  "bandwidthUnlimited": "بلا حدود"
 }

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.2.0
+  version: 1.3.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair and /health require
@@ -54,6 +54,29 @@ paths:
             Too many pairing attempts (rate-limited at 10/min per agent, since the
             pairing code is short and brute-forceable). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /wol:
+    post:
+      summary: Send a Wake-on-LAN magic packet to a MAC address on the agent's LAN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mac]
+              properties:
+                mac: { type: string, description: "Colon-separated MAC address (e.g. aa:bb:cc:dd:ee:ff)" }
+      responses:
+        "200":
+          description: Magic packet sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [sent] }
+        "400": { $ref: "#/components/responses/Error" }
 
   /system/drives:
     get:

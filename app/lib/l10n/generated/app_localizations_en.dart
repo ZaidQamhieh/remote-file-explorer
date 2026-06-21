@@ -1760,4 +1760,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingGetStarted => 'Get started';
+
+  @override
+  String get notificationsSection => 'Notifications';
+
+  @override
+  String get transferNotifications => 'Transfer notifications';
+
+  @override
+  String get transferNotificationsSubtitle =>
+      'Show a notification when transfers complete';
+
+  @override
+  String get lowDiskAlerts => 'Low disk alerts';
+
+  @override
+  String get lowDiskAlertsSubtitle =>
+      'Show a warning when a drive has less than 1 GB free';
+
+  @override
+  String get lowDiskWarning => 'Low disk space';
+
+  @override
+  String get wolRelayFailed => 'Could not wake via relay';
+
+  @override
+  String wolRelaySent(String relayHost) {
+    return 'Wake packet sent via $relayHost';
+  }
+
+  @override
+  String get savedSearches => 'Saved searches';
+
+  @override
+  String get saveSearch => 'Save search';
+
+  @override
+  String get savedSearchName => 'Name';
+
+  @override
+  String get noSavedSearches => 'No saved searches yet';
+
+  @override
+  String get deleteSavedSearch => 'Delete saved search';
+
+  @override
+  String get searchModeSubstring => 'Contains';
+
+  @override
+  String get searchModeGlob => 'Glob';
+
+  @override
+  String get searchModeRegex => 'Regex';
+
+  @override
+  String get diagnosticsExportTitle => 'Diagnostics';
+
+  @override
+  String get diagnosticsExportButton => 'Export diagnostics';
+
+  @override
+  String get diagnosticsExportSubtitle =>
+      'Share device and connection info for troubleshooting';
+
+  @override
+  String get diagnosticsCopied => 'Diagnostics copied to clipboard';
 }

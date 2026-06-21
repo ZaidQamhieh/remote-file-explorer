@@ -28,6 +28,8 @@ class AppDefaults {
     this.themeMode = ThemeMode.system,
     this.dynamicColor = true,
     this.locale,
+    this.notificationsEnabled = true,
+    this.lowDiskThresholdBytes = 1024 * 1024 * 1024,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -57,6 +59,14 @@ class AppDefaults {
   /// Explicit locale override, or `null` to follow the system locale.
   final Locale? locale;
 
+  /// Whether transfer notifications (foreground service + completion) are
+  /// enabled. App-global only — no per-device override.
+  final bool notificationsEnabled;
+
+  /// Free-space threshold (bytes) below which drives show a low-disk warning
+  /// on the host card. Default 1 GB.
+  final int lowDiskThresholdBytes;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -64,6 +74,8 @@ class AppDefaults {
     VisibilityPrefs? visibility,
     ThemeMode? themeMode,
     bool? dynamicColor,
+    bool? notificationsEnabled,
+    int? lowDiskThresholdBytes,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -72,6 +84,8 @@ class AppDefaults {
     themeMode: themeMode ?? this.themeMode,
     dynamicColor: dynamicColor ?? this.dynamicColor,
     locale: locale,
+    notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    lowDiskThresholdBytes: lowDiskThresholdBytes ?? this.lowDiskThresholdBytes,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -82,6 +96,8 @@ class AppDefaults {
     themeMode: themeMode,
     dynamicColor: dynamicColor,
     locale: value,
+    notificationsEnabled: notificationsEnabled,
+    lowDiskThresholdBytes: lowDiskThresholdBytes,
   );
 
   @override
@@ -93,7 +109,9 @@ class AppDefaults {
       other.visibility == visibility &&
       other.themeMode == themeMode &&
       other.dynamicColor == dynamicColor &&
-      other.locale == locale;
+      other.locale == locale &&
+      other.notificationsEnabled == notificationsEnabled &&
+      other.lowDiskThresholdBytes == lowDiskThresholdBytes;
 
   @override
   int get hashCode => Object.hash(
@@ -104,6 +122,8 @@ class AppDefaults {
     themeMode,
     dynamicColor,
     locale,
+    notificationsEnabled,
+    lowDiskThresholdBytes,
   );
 }
 

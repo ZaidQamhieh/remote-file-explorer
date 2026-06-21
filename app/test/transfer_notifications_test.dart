@@ -36,7 +36,7 @@ void main() {
 
   test('active transfers start the foreground service with progress', () {
     TransferNotifications(
-      channel,
+      channel: channel,
     ).sync([_task(TransferStatus.running), _task(TransferStatus.queued)]);
     expect(calls.single.method, 'start');
     final args = calls.single.arguments as Map;
@@ -46,13 +46,13 @@ void main() {
 
   test('a single active transfer names the file', () {
     TransferNotifications(
-      channel,
+      channel: channel,
     ).sync([_task(TransferStatus.running, name: 'photo.jpg')]);
     expect((calls.single.arguments as Map)['text'], 'photo.jpg');
   });
 
   test('draining the queue stops the service and posts completion', () {
-    final n = TransferNotifications(channel);
+    final n = TransferNotifications(channel: channel);
     n.sync([_task(TransferStatus.running)]); // becomes active
     calls.clear();
     n.sync([_task(TransferStatus.completed), _task(TransferStatus.failed)]);
@@ -66,7 +66,7 @@ void main() {
   });
 
   test('no active transfers and nothing was running is a no-op', () {
-    TransferNotifications(channel).sync([_task(TransferStatus.completed)]);
+    TransferNotifications(channel: channel).sync([_task(TransferStatus.completed)]);
     expect(calls, isEmpty);
   });
 }

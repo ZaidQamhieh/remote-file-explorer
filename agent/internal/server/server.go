@@ -76,6 +76,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 				revokeDeviceHandler(db)(w, req, id)
 			})
 
+			// WOL relay
+			r.Post("/wol", wolRelayHandler())
+
 			// Drives
 			r.Get("/system/drives", drivesHandler())
 

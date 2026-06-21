@@ -46,6 +46,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kThemeMode = 'app.themeMode';
   static const _kDynamicColor = 'app.dynamicColor';
   static const _kLocale = 'app.locale';
+  static const _kNotifications = 'app.notificationsEnabled';
+  static const _kLowDiskThreshold = 'app.lowDiskThresholdBytes';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -91,6 +93,20 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
     await _prefs?.setString(_kSortField, value.field.name);
     await _prefs?.setBool(_kSortAscending, value.ascending);
     _emit((s) => s.copyWith(app: s.app.copyWith(sort: value)));
+  }
+
+  Future<void> setNotificationsEnabled(bool value) async {
+    await _prefs?.setBool(_kNotifications, value);
+    _emit(
+      (s) => s.copyWith(app: s.app.copyWith(notificationsEnabled: value)),
+    );
+  }
+
+  Future<void> setLowDiskThreshold(int bytes) async {
+    await _prefs?.setInt(_kLowDiskThreshold, bytes);
+    _emit(
+      (s) => s.copyWith(app: s.app.copyWith(lowDiskThresholdBytes: bytes)),
+    );
   }
 
   // --- Appearance (Wave F) ------------------------------------------------
@@ -373,6 +389,9 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       themeMode: _themeModeFrom(prefs.getString(_kThemeMode)),
       dynamicColor: prefs.getBool(_kDynamicColor) ?? true,
       locale: localeCode != null ? Locale(localeCode) : null,
+      notificationsEnabled: prefs.getBool(_kNotifications) ?? true,
+      lowDiskThresholdBytes:
+          prefs.getInt(_kLowDiskThreshold) ?? 1024 * 1024 * 1024,
     );
 
     final overrides = <String, DeviceOverrides>{};

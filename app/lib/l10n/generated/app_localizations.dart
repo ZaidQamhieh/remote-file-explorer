@@ -2911,6 +2911,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Get started'**
   String get onboardingGetStarted;
+
+  /// No description provided for @notificationsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsSection;
+
+  /// No description provided for @transferNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer notifications'**
+  String get transferNotifications;
+
+  /// No description provided for @transferNotificationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a notification when transfers complete'**
+  String get transferNotificationsSubtitle;
+
+  /// No description provided for @lowDiskAlerts.
+  ///
+  /// In en, this message translates to:
+  /// **'Low disk alerts'**
+  String get lowDiskAlerts;
+
+  /// No description provided for @lowDiskAlertsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a warning when a drive has less than 1 GB free'**
+  String get lowDiskAlertsSubtitle;
+
+  /// No description provided for @lowDiskWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Low disk space'**
+  String get lowDiskWarning;
+
+  /// No description provided for @wolRelayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not wake via relay'**
+  String get wolRelayFailed;
+
+  /// No description provided for @wolRelaySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake packet sent via {relayHost}'**
+  String wolRelaySent(String relayHost);
+
+  /// No description provided for @savedSearches.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved searches'**
+  String get savedSearches;
+
+  /// No description provided for @saveSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Save search'**
+  String get saveSearch;
+
+  /// No description provided for @savedSearchName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get savedSearchName;
+
+  /// No description provided for @noSavedSearches.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved searches yet'**
+  String get noSavedSearches;
+
+  /// No description provided for @deleteSavedSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete saved search'**
+  String get deleteSavedSearch;
+
+  /// No description provided for @searchModeSubstring.
+  ///
+  /// In en, this message translates to:
+  /// **'Contains'**
+  String get searchModeSubstring;
+
+  /// No description provided for @searchModeGlob.
+  ///
+  /// In en, this message translates to:
+  /// **'Glob'**
+  String get searchModeGlob;
+
+  /// No description provided for @searchModeRegex.
+  ///
+  /// In en, this message translates to:
+  /// **'Regex'**
+  String get searchModeRegex;
+
+  /// No description provided for @diagnosticsExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get diagnosticsExportTitle;
+
+  /// No description provided for @diagnosticsExportButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Export diagnostics'**
+  String get diagnosticsExportButton;
+
+  /// No description provided for @diagnosticsExportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share device and connection info for troubleshooting'**
+  String get diagnosticsExportSubtitle;
+
+  /// No description provided for @diagnosticsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics copied to clipboard'**
+  String get diagnosticsCopied;
 }
 
 class _AppLocalizationsDelegate

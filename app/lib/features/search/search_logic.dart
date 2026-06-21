@@ -5,9 +5,33 @@ library;
 import '../../core/models/entry.dart';
 import '../../core/storage/visibility_prefs.dart';
 
+/// Search mode controls how the query string is interpreted.
+enum SearchMode {
+  /// Plain substring match (default).
+  substring,
+  /// Glob pattern (wildcards `*` and `?`).
+  glob,
+  /// Regular expression, converted to a glob for the agent API.
+  regex,
+}
+
 /// Returns `true` if [q] should be treated as a glob pattern (contains `*`
 /// or `?`) rather than a plain substring match.
 bool isGlobQuery(String q) => q.contains('*') || q.contains('?');
+
+/// Wraps [q] based on [mode] for the agent's search API (which only speaks
+/// substring and glob). Regex is approximated by wrapping the term in `*`.
+String queryForMode(String q, SearchMode mode) {
+  switch (mode) {
+    case SearchMode.substring:
+      return q;
+    case SearchMode.glob:
+      return q;
+    case SearchMode.regex:
+      // Agent only supports glob — wrap regex in wildcards as best-effort.
+      return '*$q*';
+  }
+}
 
 /// Sorts [entries] by relevance to [query]:
 ///

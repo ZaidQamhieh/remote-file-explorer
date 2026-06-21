@@ -1,10 +1,15 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/cache_manager.dart';
+import '../../core/storage/host_store.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -228,7 +233,33 @@ class AppSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: context.l10n.notificationsSection,
+            icon: Icons.notifications_outlined,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(context.l10n.transferNotifications),
+                subtitle: Text(context.l10n.transferNotificationsSubtitle),
+                value: app.notificationsEnabled,
+                onChanged: notifier.setNotificationsEnabled,
+              ),
+              const Divider(height: Spacing.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(context.l10n.lowDiskAlerts),
+                subtitle: Text(context.l10n.lowDiskAlertsSubtitle),
+                value: app.lowDiskThresholdBytes > 0,
+                onChanged: (on) => notifier.setLowDiskThreshold(
+                  on ? 1024 * 1024 * 1024 : 0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
           const _CacheSection(),
+          const SizedBox(height: Spacing.md),
+          const _DiagnosticsSection(),
           const SizedBox(height: Spacing.md),
           const BackupRestoreSection(),
         ],
@@ -357,5 +388,69 @@ class _CacheRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _DiagnosticsSection extends ConsumerWidget {
+  const _DiagnosticsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SettingsSection(
+      title: context.l10n.diagnosticsExportTitle,
+      icon: Icons.bug_report_outlined,
+      padded: false,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.share_outlined),
+          title: Text(context.l10n.diagnosticsExportButton),
+          subtitle: Text(context.l10n.diagnosticsExportSubtitle),
+          onTap: () => _export(context, ref),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _export(BuildContext context, WidgetRef ref) async {
+    final info = await PackageInfo.fromPlatform();
+    final hosts = await ref.read(hostStoreProvider.future);
+    final hostList = hosts.listHosts();
+    final settings =
+        ref.read(settingsProvider).valueOrNull ?? const SettingsState();
+
+    final buf = StringBuffer()
+      ..writeln('=== RFE Diagnostics ===')
+      ..writeln('App: ${info.appName} ${info.version}+${info.buildNumber}')
+      ..writeln('Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
+      ..writeln('Dart: ${Platform.version}')
+      ..writeln('Locale: ${Platform.localeName}')
+      ..writeln()
+      ..writeln('--- Settings ---')
+      ..writeln('Theme: ${settings.app.themeMode.name}')
+      ..writeln('Dynamic color: ${settings.app.dynamicColor}')
+      ..writeln('Notifications: ${settings.app.notificationsEnabled}')
+      ..writeln('Low-disk threshold: ${formatSize(settings.app.lowDiskThresholdBytes)}')
+      ..writeln('Grid view: ${settings.app.gridView}')
+      ..writeln('Density: ${settings.app.density.name}')
+      ..writeln('Sort: ${settings.app.sort.field.name} ${settings.app.sort.ascending ? "asc" : "desc"}')
+      ..writeln()
+      ..writeln('--- Hosts (${hostList.length}) ---');
+
+    for (final h in hostList) {
+      buf
+        ..writeln('  ${h.label}')
+        ..writeln('    Address: ${h.address}')
+        ..writeln('    Tailscale: ${h.tailscaleAddress ?? "none"}')
+        ..writeln('    MAC: ${h.macAddress ?? "none"}');
+    }
+
+    buf
+      ..writeln()
+      ..writeln('Generated: ${DateTime.now().toIso8601String()}');
+
+    await Clipboard.setData(ClipboardData(text: buf.toString()));
+    if (context.mounted) {
+      showSuccess(context, context.l10n.diagnosticsCopied);
+    }
   }
 }

@@ -391,6 +391,16 @@ class AgentClient {
   }
 
   // ---------------------------------------------------------------------------
+  // WOL relay
+  // ---------------------------------------------------------------------------
+
+  /// Asks this agent to send a Wake-on-LAN magic packet to [mac] on its LAN.
+  /// Used when the app is connected via Tailscale and can't broadcast directly.
+  Future<void> sendWolRelay(String mac) async {
+    await _post<Map<String, dynamic>>('/wol', data: {'mac': mac});
+  }
+
+  // ---------------------------------------------------------------------------
   // Filesystem — read
   // ---------------------------------------------------------------------------
 

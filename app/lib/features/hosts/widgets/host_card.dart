@@ -8,6 +8,7 @@ import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
 import '../../../core/platform/wol.dart';
+import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../explorer/drives_view.dart';
@@ -340,6 +341,14 @@ class _HostCardState extends ConsumerState<HostCard> {
     final future = _drivesFuture;
     if (future == null) return const [];
 
+    final threshold =
+        ref
+            .read(settingsProvider)
+            .valueOrNull
+            ?.app
+            .lowDiskThresholdBytes ??
+        0;
+
     return [
       const SizedBox(height: Spacing.sm),
       FutureBuilder<List<Drive>>(
@@ -347,7 +356,37 @@ class _HostCardState extends ConsumerState<HostCard> {
         builder: (context, snap) {
           final drives = snap.data ?? const <Drive>[];
           if (drives.isEmpty) return const SizedBox.shrink();
-          return _DriveGauges(drives: drives);
+          final hasLowDisk = threshold > 0 &&
+              drives.any(
+                (d) => d.freeBytes != null && d.freeBytes! < threshold,
+              );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasLowDisk)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: Spacing.sm),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: Spacing.xs),
+                      Text(
+                        context.l10n.lowDiskWarning,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              _DriveGauges(drives: drives),
+            ],
+          );
         },
       ),
     ];

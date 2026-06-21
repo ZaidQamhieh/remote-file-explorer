@@ -951,5 +951,32 @@
   "onboardingReadyBody": "Pair your first PC to start exploring. Your files stay on your devices — nothing goes to the cloud.",
   "onboardingNext": "Next",
   "onboardingBack": "Back",
-  "onboardingGetStarted": "Get started"
+  "onboardingGetStarted": "Get started",
+
+  "notificationsSection": "Notifications",
+  "transferNotifications": "Transfer notifications",
+  "transferNotificationsSubtitle": "Show a notification when transfers complete",
+  "lowDiskAlerts": "Low disk alerts",
+  "lowDiskAlertsSubtitle": "Show a warning when a drive has less than 1 GB free",
+  "lowDiskWarning": "Low disk space",
+
+  "wolRelayFailed": "Could not wake via relay",
+  "wolRelaySent": "Wake packet sent via {relayHost}",
+  "@wolRelaySent": {
+    "placeholders": { "relayHost": {"type": "String"} }
+  },
+
+  "savedSearches": "Saved searches",
+  "saveSearch": "Save search",
+  "savedSearchName": "Name",
+  "noSavedSearches": "No saved searches yet",
+  "deleteSavedSearch": "Delete saved search",
+  "searchModeSubstring": "Contains",
+  "searchModeGlob": "Glob",
+  "searchModeRegex": "Regex",
+
+  "diagnosticsExportTitle": "Diagnostics",
+  "diagnosticsExportButton": "Export diagnostics",
+  "diagnosticsExportSubtitle": "Share device and connection info for troubleshooting",
+  "diagnosticsCopied": "Diagnostics copied to clipboard"
 }

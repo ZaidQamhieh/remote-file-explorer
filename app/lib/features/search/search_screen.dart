@@ -11,6 +11,7 @@ import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/recent_searches.dart';
+import '../../core/storage/saved_searches.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import 'search_logic.dart';
@@ -67,6 +68,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// filter them out of results, same as the explorer listing.
   bool _includeHidden = false;
 
+  SearchMode _searchMode = SearchMode.substring;
+
   String _query = '';
   bool _loading = false;
   String? _error;
@@ -76,7 +79,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _truncated = false;
   bool _timeBudgetHit = false;
 
-  bool get _isGlob => isGlobQuery(_query);
+  bool get _isGlob =>
+      _searchMode == SearchMode.glob ||
+      _searchMode == SearchMode.regex ||
+      isGlobQuery(_query);
 
   /// [_rawResults] sorted by relevance and (unless [_includeHidden])
   /// filtered through the same file-visibility prefs as the explorer
@@ -147,7 +153,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     setState(() => _loading = true);
     try {
       final result = await widget.client.search(
-        q: q,
+        q: queryForMode(q, _searchMode),
         root: _searchFromHere ? widget.currentPath : null,
         types:
             _selectedCategories.isEmpty
@@ -257,7 +263,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onSubmitted: _onSubmitted,
         ),
         actions: [
-          if (_controller.text.isNotEmpty)
+          if (_controller.text.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.bookmark_add_outlined),
+              tooltip: context.l10n.saveSearch,
+              onPressed: () => _saveCurrentSearch(context),
+            ),
             IconButton(
               icon: const Icon(Icons.clear),
               tooltip: context.l10n.clearTooltip,
@@ -266,6 +277,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 _onChanged('');
               },
             ),
+          ],
           FilterButton(
             activeCount: _activeFilterCount,
             onPressed: _openFiltersSheet,
@@ -277,6 +289,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           CategoryChipsRow(
             selected: _selectedCategories,
             onToggle: _toggleCategory,
+          ),
+          _SearchModeChips(
+            mode: _searchMode,
+            onChanged: (m) {
+              setState(() => _searchMode = m);
+              if (_query.isNotEmpty) _runSearch(_query);
+            },
           ),
           if (_isGlob) const GlobIndicator(),
           if (_truncated || _timeBudgetHit)
@@ -292,9 +311,46 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  Future<void> _saveCurrentSearch(BuildContext context) async {
+    final q = _controller.text.trim();
+    if (q.isEmpty) return;
+    final nameCtl = TextEditingController(text: q);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.l10n.saveSearch),
+        content: TextField(
+          controller: nameCtl,
+          decoration: InputDecoration(
+            labelText: ctx.l10n.savedSearchName,
+          ),
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nameCtl.text.trim()),
+            child: Text(ctx.l10n.saveButton),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    await ref.read(savedSearchesProvider.notifier).add(
+      SavedSearch(name: name, query: q),
+    );
+  }
+
   Widget _buildBody(BuildContext context) {
     if (_query.isEmpty) {
-      return RecentSearchesView(onSelect: _selectRecent);
+      return _RecentAndSavedSearches(
+        onSelectRecent: _selectRecent,
+        onSelectSaved: _selectRecent,
+      );
     }
     if (_loading) {
       return const Center(
@@ -327,6 +383,83 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onTap: () => _openResult(entry),
         );
       },
+    );
+  }
+}
+
+class _SearchModeChips extends StatelessWidget {
+  const _SearchModeChips({required this.mode, required this.onChanged});
+
+  final SearchMode mode;
+  final ValueChanged<SearchMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          for (final m in SearchMode.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(_label(context, m)),
+                selected: mode == m,
+                onSelected: (_) => onChanged(m),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _label(BuildContext context, SearchMode m) => switch (m) {
+    SearchMode.substring => context.l10n.searchModeSubstring,
+    SearchMode.glob => context.l10n.searchModeGlob,
+    SearchMode.regex => context.l10n.searchModeRegex,
+  };
+}
+
+class _RecentAndSavedSearches extends ConsumerWidget {
+  const _RecentAndSavedSearches({
+    required this.onSelectRecent,
+    required this.onSelectSaved,
+  });
+
+  final ValueChanged<String> onSelectRecent;
+  final ValueChanged<String> onSelectSaved;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saved = ref.watch(savedSearchesProvider).valueOrNull ?? const [];
+
+    return ListView(
+      children: [
+        if (saved.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              context.l10n.savedSearches,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
+          for (final s in saved)
+            ListTile(
+              leading: const Icon(Icons.bookmark_outline),
+              title: Text(s.name),
+              subtitle: Text(s.query),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: context.l10n.deleteSavedSearch,
+                onPressed: () =>
+                    ref.read(savedSearchesProvider.notifier).remove(s.name),
+              ),
+              onTap: () => onSelectSaved(s.query),
+            ),
+          const Divider(),
+        ],
+        RecentSearchesView(onSelect: onSelectRecent),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../settings/settings_controller.dart';
 import '../../features/transfers/transfer_state.dart';
 
 /// Bridge between the in-app transfer queue and an Android **foreground
@@ -19,11 +20,16 @@ import '../../features/transfers/transfer_state.dart';
 /// before the native side is registered they no-op (MissingPluginException is
 /// swallowed), so this is safe to wire unconditionally.
 class TransferNotifications {
-  TransferNotifications([MethodChannel? channel])
+  TransferNotifications({MethodChannel? channel, this.enabled = true})
     : _channel = channel ?? const MethodChannel('rfe/transfers');
 
   final MethodChannel _channel;
   bool _serviceRunning = false;
+
+  /// When false, completion notifications are suppressed. The foreground
+  /// service still runs (Android requires it for background transfers) but
+  /// the one-off "done" notification is skipped.
+  bool enabled;
 
   bool get _supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -67,7 +73,7 @@ class TransferNotifications {
           tasks.where((t) => t.status == TransferStatus.completed).length;
       final failed =
           tasks.where((t) => t.status == TransferStatus.failed).length;
-      if (completed > 0 || failed > 0) {
+      if ((completed > 0 || failed > 0) && enabled) {
         final parts = <String>[
           if (completed > 0) '$completed done',
           if (failed > 0) '$failed failed',
@@ -98,6 +104,11 @@ class TransferNotifications {
 /// [transferQueueProvider] and drives [TransferNotifications].
 final transferNotificationsProvider = Provider<TransferNotifications>((ref) {
   final notifications = TransferNotifications();
+  ref.listen(settingsProvider, (_, next) {
+    final enabled =
+        next.valueOrNull?.app.notificationsEnabled ?? true;
+    notifications.enabled = enabled;
+  }, fireImmediately: true);
   ref.listen<List<TransferTask>>(transferQueueProvider, (_, next) {
     notifications.sync(next);
   }, fireImmediately: true);

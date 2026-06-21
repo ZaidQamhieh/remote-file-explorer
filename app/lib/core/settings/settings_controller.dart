@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'dart:ui' show Locale;
+import 'dart:ui' show Color, Locale;
 
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,6 +48,9 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kLocale = 'app.locale';
   static const _kNotifications = 'app.notificationsEnabled';
   static const _kLowDiskThreshold = 'app.lowDiskThresholdBytes';
+  static const _kAppLock = 'app.appLockEnabled';
+  static const _kAmoledDark = 'app.amoledDark';
+  static const _kSeedColor = 'app.seedColor';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -103,6 +106,25 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> setLowDiskThreshold(int bytes) async {
     await _prefs?.setInt(_kLowDiskThreshold, bytes);
     _emit((s) => s.copyWith(app: s.app.copyWith(lowDiskThresholdBytes: bytes)));
+  }
+
+  Future<void> setAppLockEnabled(bool value) async {
+    await _prefs?.setBool(_kAppLock, value);
+    _emit((s) => s.copyWith(app: s.app.copyWith(appLockEnabled: value)));
+  }
+
+  Future<void> setAmoledDark(bool value) async {
+    await _prefs?.setBool(_kAmoledDark, value);
+    _emit((s) => s.copyWith(app: s.app.copyWith(amoledDark: value)));
+  }
+
+  Future<void> setSeedColor(Color? value) async {
+    if (value == null) {
+      await _prefs?.remove(_kSeedColor);
+    } else {
+      await _prefs?.setInt(_kSeedColor, value.toARGB32());
+    }
+    _emit((s) => s.copyWith(app: s.app.copyWithSeedColor(value)));
   }
 
   // --- Appearance (Wave F) ------------------------------------------------
@@ -388,6 +410,12 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       notificationsEnabled: prefs.getBool(_kNotifications) ?? true,
       lowDiskThresholdBytes:
           prefs.getInt(_kLowDiskThreshold) ?? 1024 * 1024 * 1024,
+      appLockEnabled: prefs.getBool(_kAppLock) ?? false,
+      amoledDark: prefs.getBool(_kAmoledDark) ?? false,
+      seedColor:
+          prefs.getInt(_kSeedColor) != null
+              ? Color(prefs.getInt(_kSeedColor)!)
+              : null,
     );
 
     final overrides = <String, DeviceOverrides>{};

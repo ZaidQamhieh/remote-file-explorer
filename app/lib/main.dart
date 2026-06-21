@@ -8,6 +8,7 @@ import 'core/app_info.dart';
 import 'core/platform/transfer_notifications.dart';
 import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
+import 'core/ui/lock_gate.dart';
 import 'features/hosts/host_list_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/share/share_intake.dart';
@@ -57,18 +58,23 @@ class RemoteFileExplorerApp extends ConsumerWidget {
 
     final app = settings.app;
 
+    ThemeData Function(ThemeData) maybePatchDark =
+        app.amoledDark ? AppTheme.toAmoled : (d) => d;
+
     if (!app.dynamicColor) {
+      final seed = app.seedColor;
+      final light =
+          seed != null ? AppTheme.lightWithSeed(seed) : AppTheme.light;
+      final dark =
+          seed != null ? AppTheme.darkWithSeed(seed) : AppTheme.dark;
       return _app(
-        light: AppTheme.light,
-        dark: AppTheme.dark,
+        light: light,
+        dark: maybePatchDark(dark),
         mode: app.themeMode,
         locale: app.locale,
       );
     }
 
-    // Dynamic color requested: use the platform scheme when available, else
-    // fall back to the seed palette. Harmonize keeps brand accents legible
-    // against the wallpaper-derived primary.
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
         final light =
@@ -81,7 +87,7 @@ class RemoteFileExplorerApp extends ConsumerWidget {
                 : AppTheme.dark;
         return _app(
           light: light,
-          dark: dark,
+          dark: maybePatchDark(dark),
           mode: app.themeMode,
           locale: app.locale,
         );
@@ -106,7 +112,7 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(
         navigatorKey: navigatorKey,
-        child: const _HomeRouter(),
+        child: const LockGate(child: _HomeRouter()),
       ),
     );
   }

@@ -307,6 +307,28 @@ class _HostCardState extends ConsumerState<HostCard> {
                     lastChecked: _lastChecked,
                     lastSeen: _lastSeen,
                   ),
+                  if (online && snap.data?.readOnly == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: Spacing.sm),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: Spacing.xs),
+                          Text(
+                            'Read-only',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (online) ..._buildGauges(context),
                   const SizedBox(height: Spacing.md),
                   _QuickActions(

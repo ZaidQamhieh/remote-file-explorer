@@ -103,6 +103,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Post("/fs/compress", compressHandler(ops))
 			r.Post("/fs/extract", extractHandler(ops))
 			r.Get("/fs/meta", metaHandler(ops))
+			r.Get("/fs/checksum", checksumHandler(ops))
 
 			// Trash
 			r.Get("/trash", listTrashHandler(cfg.TrashDir))

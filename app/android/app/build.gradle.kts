@@ -39,7 +39,7 @@ android {
         applicationId = "com.zqamhieh.remote_file_explorer"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23 // mobile_scanner (QR pairing) requires API 23+
+        minSdk = flutter.minSdkVersion // mobile_scanner (QR pairing) requires API 23+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -434,6 +434,15 @@ class AgentClient {
     return Entry.fromJson(data);
   }
 
+  /// Compute a file's checksum. Returns a hex-encoded hash string.
+  Future<String> checksum(String path, {String algo = 'sha256'}) async {
+    final data = await _get<Map<String, dynamic>>(
+      '/fs/checksum',
+      queryParameters: {'path': path, 'algo': algo},
+    );
+    return data['checksum'] as String;
+  }
+
   /// Search for files and folders whose name contains [q] (case-insensitive),
   /// or matches it as a case-insensitive glob if [q] contains `*` or `?`.
   ///

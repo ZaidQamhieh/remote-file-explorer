@@ -48,6 +48,8 @@ class MetaSheet extends ConsumerStatefulWidget {
 
 class _MetaSheetState extends ConsumerState<MetaSheet> {
   late Entry _entry;
+  String? _checksum;
+  bool _checksumLoading = false;
 
   @override
   void initState() {
@@ -197,8 +199,11 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         context,
         Icons.link_outlined,
         l.metaSymlink,
-        _entry.isSymlink ? l.yesLabel : l.noLabel,
+        _entry.isSymlink
+            ? (_entry.symlinkTarget ?? l.yesLabel)
+            : l.noLabel,
       ),
+      if (!_entry.isDir) _checksumRow(context),
     ];
 
     return Container(
@@ -399,6 +404,60 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         ),
       ],
     );
+  }
+
+  Widget _checksumRow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (_checksum != null) {
+      return _row(context, Icons.tag_outlined, 'SHA-256', _checksum);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+      child: Row(
+        children: [
+          Icon(Icons.tag_outlined, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: Spacing.sm),
+          SizedBox(
+            width: 100,
+            child: Text(
+              'SHA-256',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (_checksumLoading)
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            GestureDetector(
+              onTap: _computeChecksum,
+              child: Text(
+                'Compute',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.primary,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _computeChecksum() async {
+    setState(() => _checksumLoading = true);
+    try {
+      final sum = await widget.client.checksum(_entry.path);
+      if (mounted) setState(() => _checksum = sum);
+    } catch (e) {
+      if (mounted) showError(context, 'Checksum failed: $e');
+    } finally {
+      if (mounted) setState(() => _checksumLoading = false);
+    }
   }
 
   void _toggleFavorite(BuildContext context, bool wasFavorite) {

@@ -15,6 +15,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../photo_backup/photo_backup_screen.dart';
+import '../transfers/transfer_journal_screen.dart';
+import 'about_screen.dart';
 import 'settings_screen.dart' show FileVisibilitySection;
 import 'update_tile.dart';
 import 'widgets/backup_restore_section.dart';
@@ -95,6 +97,22 @@ class AppSettingsScreen extends ConsumerWidget {
                 subtitle: Text(context.l10n.wallpaperSubtitle),
                 value: app.dynamicColor,
                 onChanged: notifier.setDynamicColor,
+              ),
+              const Divider(height: Spacing.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('AMOLED Dark'),
+                subtitle: const Text('Pure black background in dark mode'),
+                value: app.amoledDark,
+                onChanged: notifier.setAmoledDark,
+              ),
+              const Divider(height: Spacing.lg),
+              _LabeledControl(
+                label: 'Accent Color',
+                control: _AccentColorPicker(
+                  selected: app.seedColor,
+                  onChanged: notifier.setSeedColor,
+                ),
               ),
               const Divider(height: Spacing.lg),
               _LabeledControl(
@@ -258,11 +276,66 @@ class AppSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Security',
+            icon: Icons.security_outlined,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('App Lock'),
+                subtitle: const Text('Require biometric or PIN to open'),
+                value: app.appLockEnabled,
+                onChanged: notifier.setAppLockEnabled,
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
           const _CacheSection(),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Transfer History',
+            icon: Icons.history_outlined,
+            padded: false,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.history_outlined),
+                title: const Text('View Transfer History'),
+                subtitle: const Text('Completed uploads and downloads'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder:
+                            (_) => const TransferJournalScreen(),
+                      ),
+                    ),
+              ),
+            ],
+          ),
           const SizedBox(height: Spacing.md),
           const _DiagnosticsSection(),
           const SizedBox(height: Spacing.md),
           const BackupRestoreSection(),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'About',
+            icon: Icons.info_outline,
+            padded: false,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('About & Changelog'),
+                subtitle: const Text('Version info and what\'s new'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AboutScreen(),
+                      ),
+                    ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -460,5 +533,57 @@ class _DiagnosticsSection extends ConsumerWidget {
     if (context.mounted) {
       showSuccess(context, context.l10n.diagnosticsCopied);
     }
+  }
+}
+
+class _AccentColorPicker extends StatelessWidget {
+  const _AccentColorPicker({required this.selected, required this.onChanged});
+
+  final Color? selected;
+  final ValueChanged<Color?> onChanged;
+
+  static const _presets = <Color?>[
+    null,
+    Color(0xFF2196F3),
+    Color(0xFF4CAF50),
+    Color(0xFFFF5722),
+    Color(0xFF9C27B0),
+    Color(0xFFFF9800),
+    Color(0xFFE91E63),
+    Color(0xFF009688),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: Spacing.sm,
+      runSpacing: Spacing.sm,
+      children: [
+        for (final preset in _presets)
+          GestureDetector(
+            onTap: () => onChanged(preset),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: preset ?? Brand.seed,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color:
+                      selected == preset
+                          ? scheme.primary
+                          : Colors.transparent,
+                  width: 3,
+                ),
+              ),
+              child:
+                  selected == preset
+                      ? const Icon(Icons.check, size: 18, color: Colors.white)
+                      : null,
+            ),
+          ),
+      ],
+    );
   }
 }

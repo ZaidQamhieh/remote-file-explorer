@@ -10,6 +10,7 @@ class Entry {
     this.modified,
     this.created,
     this.isSymlink = false,
+    this.symlinkTarget,
   });
 
   final String name;
@@ -24,6 +25,9 @@ class Entry {
   final DateTime? modified;
   final DateTime? created;
   final bool isSymlink;
+
+  /// Absolute path the symlink points to (only present when isSymlink is true).
+  final String? symlinkTarget;
 
   factory Entry.fromJson(Map<String, dynamic> json) => Entry(
     name: json['name'] as String? ?? '',
@@ -41,6 +45,7 @@ class Entry {
             ? null
             : DateTime.parse(json['created'] as String),
     isSymlink: json['isSymlink'] as bool? ?? false,
+    symlinkTarget: json['symlinkTarget'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -53,5 +58,6 @@ class Entry {
     if (modified != null) 'modified': modified!.toIso8601String(),
     if (created != null) 'created': created!.toIso8601String(),
     'isSymlink': isSymlink,
+    if (symlinkTarget != null) 'symlinkTarget': symlinkTarget,
   };
 }

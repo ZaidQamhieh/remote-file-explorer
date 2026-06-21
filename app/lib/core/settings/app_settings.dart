@@ -1,4 +1,4 @@
-import 'dart:ui' show Locale;
+import 'dart:ui' show Color, Locale;
 
 import 'package:flutter/material.dart' show ThemeMode;
 
@@ -30,6 +30,9 @@ class AppDefaults {
     this.locale,
     this.notificationsEnabled = true,
     this.lowDiskThresholdBytes = 1024 * 1024 * 1024,
+    this.appLockEnabled = false,
+    this.amoledDark = false,
+    this.seedColor,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -67,6 +70,13 @@ class AppDefaults {
   /// on the host card. Default 1 GB.
   final int lowDiskThresholdBytes;
 
+  final bool appLockEnabled;
+
+  final bool amoledDark;
+
+  /// Custom seed color for the color scheme. `null` = default [Brand.seed].
+  final Color? seedColor;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -76,6 +86,8 @@ class AppDefaults {
     bool? dynamicColor,
     bool? notificationsEnabled,
     int? lowDiskThresholdBytes,
+    bool? appLockEnabled,
+    bool? amoledDark,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -86,6 +98,9 @@ class AppDefaults {
     locale: locale,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     lowDiskThresholdBytes: lowDiskThresholdBytes ?? this.lowDiskThresholdBytes,
+    appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+    amoledDark: amoledDark ?? this.amoledDark,
+    seedColor: seedColor,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -98,6 +113,24 @@ class AppDefaults {
     locale: value,
     notificationsEnabled: notificationsEnabled,
     lowDiskThresholdBytes: lowDiskThresholdBytes,
+    appLockEnabled: appLockEnabled,
+    amoledDark: amoledDark,
+    seedColor: seedColor,
+  );
+
+  AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
+    gridView: gridView,
+    density: density,
+    sort: sort,
+    visibility: visibility,
+    themeMode: themeMode,
+    dynamicColor: dynamicColor,
+    locale: locale,
+    notificationsEnabled: notificationsEnabled,
+    lowDiskThresholdBytes: lowDiskThresholdBytes,
+    appLockEnabled: appLockEnabled,
+    amoledDark: amoledDark,
+    seedColor: value,
   );
 
   @override
@@ -111,7 +144,10 @@ class AppDefaults {
       other.dynamicColor == dynamicColor &&
       other.locale == locale &&
       other.notificationsEnabled == notificationsEnabled &&
-      other.lowDiskThresholdBytes == lowDiskThresholdBytes;
+      other.lowDiskThresholdBytes == lowDiskThresholdBytes &&
+      other.appLockEnabled == appLockEnabled &&
+      other.amoledDark == amoledDark &&
+      other.seedColor == seedColor;
 
   @override
   int get hashCode => Object.hash(
@@ -124,6 +160,9 @@ class AppDefaults {
     locale,
     notificationsEnabled,
     lowDiskThresholdBytes,
+    appLockEnabled,
+    amoledDark,
+    seedColor,
   );
 }
 

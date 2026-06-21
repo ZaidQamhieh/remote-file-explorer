@@ -298,6 +298,33 @@ func metaHandler(ops *fsops.Ops) http.HandlerFunc {
 	}
 }
 
+// --------- /fs/checksum GET ---------
+
+func checksumHandler(ops *fsops.Ops) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
+			return
+		}
+		algo := r.URL.Query().Get("algo")
+		if algo == "" {
+			algo = "sha256"
+		}
+		sum, err := ops.Checksum(path, algo)
+		if err != nil {
+			handleFsError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"path":      path,
+			"algorithm": algo,
+			"checksum":  sum,
+		})
+	}
+}
+
 // --------- error mapping ---------
 
 func handleFsError(w http.ResponseWriter, err error) {

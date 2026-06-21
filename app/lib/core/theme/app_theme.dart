@@ -14,6 +14,11 @@ class AppTheme {
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
+  static ThemeData lightWithSeed(Color seed) =>
+      _build(Brightness.light, null, seed);
+  static ThemeData darkWithSeed(Color seed) =>
+      _build(Brightness.dark, null, seed);
+
   /// Builds the light theme from an optional [scheme] override (e.g. a
   /// platform dynamic-color scheme). When `null`, falls back to the seed-based
   /// [light] theme. All component theming is identical — only the source
@@ -25,11 +30,30 @@ class AppTheme {
   static ThemeData darkFrom(ColorScheme? scheme) =>
       _build(Brightness.dark, scheme);
 
-  static ThemeData _build(Brightness brightness, [ColorScheme? override]) {
+  static ThemeData toAmoled(ThemeData dark) {
+    final scheme = dark.colorScheme.copyWith(
+      surface: Colors.black,
+      surfaceContainerLowest: Colors.black,
+      surfaceContainerLow: const Color(0xFF0A0A0A),
+      surfaceContainer: const Color(0xFF121212),
+      surfaceContainerHigh: const Color(0xFF1A1A1A),
+      surfaceContainerHighest: const Color(0xFF222222),
+    );
+    return dark.copyWith(
+      colorScheme: scheme,
+      scaffoldBackgroundColor: Colors.black,
+    );
+  }
+
+  static ThemeData _build(
+    Brightness brightness, [
+    ColorScheme? override,
+    Color? seed,
+  ]) {
     final scheme =
         override ??
         ColorScheme.fromSeed(
-          seedColor: Brand.seed,
+          seedColor: seed ?? Brand.seed,
           brightness: brightness,
           secondary: Brand.accent,
         );

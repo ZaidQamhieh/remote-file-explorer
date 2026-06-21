@@ -4,8 +4,13 @@
 package fsops
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"mime"
 	"net/http"
@@ -96,7 +101,8 @@ type Entry struct {
 	Mode      string    `json:"mode"`
 	Modified  time.Time `json:"modified"`
 	Created   time.Time `json:"created"`
-	IsSymlink bool      `json:"isSymlink"`
+	IsSymlink     bool   `json:"isSymlink"`
+	SymlinkTarget string `json:"symlinkTarget,omitempty"`
 }
 
 // Listing is a paginated directory listing.
@@ -190,6 +196,48 @@ func (o *Ops) Meta(path string) (*Entry, error) {
 	}
 	e := entryFromInfo(info, resolved)
 	return &e, nil
+}
+
+// --------- Checksum ---------
+
+// Checksum computes a hex-encoded hash of the file at path.
+// Supported algorithms: "sha256" (default), "sha1", "md5".
+func (o *Ops) Checksum(path, algo string) (string, error) {
+	resolved, err := o.Resolve(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(resolved)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("cannot checksum a directory")
+	}
+	f, err := os.Open(resolved)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var h hash.Hash
+	switch algo {
+	case "md5":
+		h = md5.New()
+	case "sha1":
+		h = sha1.New()
+	case "", "sha256":
+		h = sha256.New()
+	default:
+		return "", fmt.Errorf("unsupported algorithm %q (use sha256, sha1, or md5)", algo)
+	}
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // --------- Drives ---------
@@ -549,7 +597,7 @@ func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 	if !info.IsDir() {
 		mtype = mimeForPath(fullPath, info)
 	}
-	return Entry{
+	e := Entry{
 		Name:      info.Name(),
 		Path:      fullPath,
 		IsDir:     info.IsDir(),
@@ -560,6 +608,12 @@ func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 		Created:   birthTime(info),
 		IsSymlink: isSymlink,
 	}
+	if isSymlink {
+		if target, err := os.Readlink(fullPath); err == nil {
+			e.SymlinkTarget = target
+		}
+	}
+	return e
 }
 
 func mimeForPath(path string, info os.FileInfo) string {

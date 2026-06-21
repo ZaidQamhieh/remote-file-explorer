@@ -9,6 +9,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/download_saver.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/storage/transfer_journal.dart';
 import 'chunk_planner.dart';
 
 // ---------------------------------------------------------------------------
@@ -299,6 +300,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       final current = state.firstWhereOrNull((t) => t.id == id);
       if (current != null && current.status == TransferStatus.running) {
         _updateById(id, (t) => t.copyWith(status: TransferStatus.completed));
+        _logToJournal(task);
       }
     } on _TaskStopped {
       // pause()/remove() already updated (or removed) the task; nothing
@@ -496,6 +498,23 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       id,
       (t) => t.copyWith(verified: result.verified, sha256: result.sha256),
     );
+  }
+
+  void _logToJournal(TransferTask task) {
+    final fileName = task.remotePath.split('/').last.split('\\').last;
+    final record = TransferRecord(
+      fileName: fileName,
+      remotePath: task.remotePath,
+      hostLabel: task.host.label,
+      kind: task.kind.name,
+      bytes: task.totalBytes,
+      completedAt: DateTime.now(),
+    );
+    // Fire-and-forget: wait for the async notifier to be ready, then add.
+    final sub = ref.read(transferJournalProvider);
+    if (sub.hasValue) {
+      ref.read(transferJournalProvider.notifier).add(record);
+    }
   }
 }
 

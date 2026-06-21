@@ -119,7 +119,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                   clipboard: ref.watch(clipboardProvider),
                   hostId: widget.host.id,
                   multiSelect: state.multiSelect,
-                  onPaste: () => _paste(context, state, ref.read(clipboardProvider)!),
+                  onPaste:
+                      () =>
+                          _paste(context, state, ref.read(clipboardProvider)!),
                   onUpload: () => _pickAndUpload(context, state),
                   onNew: () => _showCreateMenu(context),
                 ),
@@ -174,10 +176,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                       (dragged, dest) async =>
                           _moveInto(context, client, dragged, dest),
                   onSearch: () => _openSearch(context, state, client),
-                  onToggleFavorite: () =>
-                      _toggleFavorite(context, state, isFav),
-                  onOverflow: (action) =>
-                      _onOverflowAction(context, state, action),
+                  onToggleFavorite:
+                      () => _toggleFavorite(context, state, isFav),
+                  onOverflow:
+                      (action) => _onOverflowAction(context, state, action),
                 ),
       ),
     );

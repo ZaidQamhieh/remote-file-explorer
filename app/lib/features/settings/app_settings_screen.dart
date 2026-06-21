@@ -250,9 +250,10 @@ class AppSettingsScreen extends ConsumerWidget {
                 title: Text(context.l10n.lowDiskAlerts),
                 subtitle: Text(context.l10n.lowDiskAlertsSubtitle),
                 value: app.lowDiskThresholdBytes > 0,
-                onChanged: (on) => notifier.setLowDiskThreshold(
-                  on ? 1024 * 1024 * 1024 : 0,
-                ),
+                onChanged:
+                    (on) => notifier.setLowDiskThreshold(
+                      on ? 1024 * 1024 * 1024 : 0,
+                    ),
               ),
             ],
           ),
@@ -375,9 +376,9 @@ class _CacheRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontWeight: bold ? FontWeight.w600 : null,
-    );
+    final style = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontWeight: bold ? FontWeight.w600 : null);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
       child: Row(
@@ -418,23 +419,30 @@ class _DiagnosticsSection extends ConsumerWidget {
     final settings =
         ref.read(settingsProvider).valueOrNull ?? const SettingsState();
 
-    final buf = StringBuffer()
-      ..writeln('=== RFE Diagnostics ===')
-      ..writeln('App: ${info.appName} ${info.version}+${info.buildNumber}')
-      ..writeln('Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
-      ..writeln('Dart: ${Platform.version}')
-      ..writeln('Locale: ${Platform.localeName}')
-      ..writeln()
-      ..writeln('--- Settings ---')
-      ..writeln('Theme: ${settings.app.themeMode.name}')
-      ..writeln('Dynamic color: ${settings.app.dynamicColor}')
-      ..writeln('Notifications: ${settings.app.notificationsEnabled}')
-      ..writeln('Low-disk threshold: ${formatSize(settings.app.lowDiskThresholdBytes)}')
-      ..writeln('Grid view: ${settings.app.gridView}')
-      ..writeln('Density: ${settings.app.density.name}')
-      ..writeln('Sort: ${settings.app.sort.field.name} ${settings.app.sort.ascending ? "asc" : "desc"}')
-      ..writeln()
-      ..writeln('--- Hosts (${hostList.length}) ---');
+    final buf =
+        StringBuffer()
+          ..writeln('=== RFE Diagnostics ===')
+          ..writeln('App: ${info.appName} ${info.version}+${info.buildNumber}')
+          ..writeln(
+            'Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+          )
+          ..writeln('Dart: ${Platform.version}')
+          ..writeln('Locale: ${Platform.localeName}')
+          ..writeln()
+          ..writeln('--- Settings ---')
+          ..writeln('Theme: ${settings.app.themeMode.name}')
+          ..writeln('Dynamic color: ${settings.app.dynamicColor}')
+          ..writeln('Notifications: ${settings.app.notificationsEnabled}')
+          ..writeln(
+            'Low-disk threshold: ${formatSize(settings.app.lowDiskThresholdBytes)}',
+          )
+          ..writeln('Grid view: ${settings.app.gridView}')
+          ..writeln('Density: ${settings.app.density.name}')
+          ..writeln(
+            'Sort: ${settings.app.sort.field.name} ${settings.app.sort.ascending ? "asc" : "desc"}',
+          )
+          ..writeln()
+          ..writeln('--- Hosts (${hostList.length}) ---');
 
     for (final h in hostList) {
       buf

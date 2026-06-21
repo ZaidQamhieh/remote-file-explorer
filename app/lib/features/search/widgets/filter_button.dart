@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n_ext.dart';
 
 class FilterButton extends StatelessWidget {
-  const FilterButton({super.key, required this.activeCount, required this.onPressed});
+  const FilterButton({
+    super.key,
+    required this.activeCount,
+    required this.onPressed,
+  });
 
   final int activeCount;
   final VoidCallback onPressed;

@@ -105,8 +105,7 @@ class TransferNotifications {
 final transferNotificationsProvider = Provider<TransferNotifications>((ref) {
   final notifications = TransferNotifications();
   ref.listen(settingsProvider, (_, next) {
-    final enabled =
-        next.valueOrNull?.app.notificationsEnabled ?? true;
+    final enabled = next.valueOrNull?.app.notificationsEnabled ?? true;
     notifications.enabled = enabled;
   }, fireImmediately: true);
   ref.listen<List<TransferTask>>(transferQueueProvider, (_, next) {

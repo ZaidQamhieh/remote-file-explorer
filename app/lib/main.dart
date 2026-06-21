@@ -119,9 +119,9 @@ class _HomeRouter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final onboarded = ref.watch(onboardingCompleteProvider);
     return onboarded.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading:
+          () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, __) => const HostListScreen(),
       data: (complete) {
         if (complete) return const HostListScreen();

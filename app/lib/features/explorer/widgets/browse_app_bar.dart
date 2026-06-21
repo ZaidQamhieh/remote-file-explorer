@@ -34,10 +34,7 @@ class BrowseAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppBar(
       key: const ValueKey('browse_app_bar'),
-      leading:
-          state.atRoot
-              ? null
-              : BackButton(onPressed: onBack),
+      leading: state.atRoot ? null : BackButton(onPressed: onBack),
       title: Text(
         folderLabel(state.currentPath),
         style: Theme.of(context).textTheme.titleLarge,

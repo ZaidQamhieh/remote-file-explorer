@@ -353,9 +353,9 @@ func TestHealthHandler(t *testing.T) {
 	db, st := newTestDeps(t)
 	_ = db
 	cfg := Config{
-		Name:    "test-pc",
-		Version: "1.0.0",
-		Address: "192.168.1.1:8765",
+		Name:     "test-pc",
+		Version:  "1.0.0",
+		Address:  "192.168.1.1:8765",
 		Settings: st,
 	}
 	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)

@@ -4,7 +4,11 @@ import '../../../core/theme/tokens.dart';
 import '../search_types.dart';
 
 class CategoryChipsRow extends StatelessWidget {
-  const CategoryChipsRow({super.key, required this.selected, required this.onToggle});
+  const CategoryChipsRow({
+    super.key,
+    required this.selected,
+    required this.onToggle,
+  });
 
   final Set<SearchCategory> selected;
   final void Function(SearchCategory category, bool selected) onToggle;

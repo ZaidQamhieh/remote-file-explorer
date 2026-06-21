@@ -317,32 +317,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final nameCtl = TextEditingController(text: q);
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.l10n.saveSearch),
-        content: TextField(
-          controller: nameCtl,
-          decoration: InputDecoration(
-            labelText: ctx.l10n.savedSearchName,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(ctx.l10n.saveSearch),
+            content: TextField(
+              controller: nameCtl,
+              decoration: InputDecoration(labelText: ctx.l10n.savedSearchName),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, nameCtl.text.trim()),
+                child: Text(ctx.l10n.saveButton),
+              ),
+            ],
           ),
-          autofocus: true,
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(ctx.l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, nameCtl.text.trim()),
-            child: Text(ctx.l10n.saveButton),
-          ),
-        ],
-      ),
     );
     if (name == null || name.isEmpty) return;
-    await ref.read(savedSearchesProvider.notifier).add(
-      SavedSearch(name: name, query: q),
-    );
+    await ref
+        .read(savedSearchesProvider.notifier)
+        .add(SavedSearch(name: name, query: q));
   }
 
   Widget _buildBody(BuildContext context) {
@@ -451,8 +450,9 @@ class _RecentAndSavedSearches extends ConsumerWidget {
               trailing: IconButton(
                 icon: const Icon(Icons.close, size: 18),
                 tooltip: context.l10n.deleteSavedSearch,
-                onPressed: () =>
-                    ref.read(savedSearchesProvider.notifier).remove(s.name),
+                onPressed:
+                    () =>
+                        ref.read(savedSearchesProvider.notifier).remove(s.name),
               ),
               onTap: () => onSelectSaved(s.query),
             ),

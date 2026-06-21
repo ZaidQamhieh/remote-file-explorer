@@ -97,16 +97,12 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
 
   Future<void> setNotificationsEnabled(bool value) async {
     await _prefs?.setBool(_kNotifications, value);
-    _emit(
-      (s) => s.copyWith(app: s.app.copyWith(notificationsEnabled: value)),
-    );
+    _emit((s) => s.copyWith(app: s.app.copyWith(notificationsEnabled: value)));
   }
 
   Future<void> setLowDiskThreshold(int bytes) async {
     await _prefs?.setInt(_kLowDiskThreshold, bytes);
-    _emit(
-      (s) => s.copyWith(app: s.app.copyWith(lowDiskThresholdBytes: bytes)),
-    );
+    _emit((s) => s.copyWith(app: s.app.copyWith(lowDiskThresholdBytes: bytes)));
   }
 
   // --- Appearance (Wave F) ------------------------------------------------

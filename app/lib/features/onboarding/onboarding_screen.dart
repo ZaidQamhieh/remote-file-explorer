@@ -99,10 +99,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   const Spacer(),
                   if (_page > 0)
                     TextButton(
-                      onPressed: () => _controller.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      ),
+                      onPressed:
+                          () => _controller.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          ),
                       child: Text(context.l10n.onboardingBack),
                     ),
                   const SizedBox(width: Spacing.sm),
@@ -131,11 +132,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 }
 
 class _Page extends StatelessWidget {
-  const _Page({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+  const _Page({required this.icon, required this.title, required this.body});
 
   final IconData icon;
   final String title;
@@ -159,9 +156,9 @@ class _Page extends StatelessWidget {
           const SizedBox(height: Spacing.md),
           Text(
             body,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
         ],

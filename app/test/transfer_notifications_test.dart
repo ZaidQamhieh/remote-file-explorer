@@ -66,7 +66,9 @@ void main() {
   });
 
   test('no active transfers and nothing was running is a no-op', () {
-    TransferNotifications(channel: channel).sync([_task(TransferStatus.completed)]);
+    TransferNotifications(
+      channel: channel,
+    ).sync([_task(TransferStatus.completed)]);
     expect(calls, isEmpty);
   });
 }

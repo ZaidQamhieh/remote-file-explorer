@@ -9,8 +9,10 @@ import '../../core/storage/visibility_prefs.dart';
 enum SearchMode {
   /// Plain substring match (default).
   substring,
+
   /// Glob pattern (wildcards `*` and `?`).
   glob,
+
   /// Regular expression, converted to a glob for the agent API.
   regex,
 }

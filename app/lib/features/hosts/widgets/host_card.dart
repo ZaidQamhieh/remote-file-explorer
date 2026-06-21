@@ -134,11 +134,11 @@ class _HostCardState extends ConsumerState<HostCard> {
     final newTailscale = health.tailscaleAddress;
     final newMac = health.macAddress;
 
-    final tailscaleChanged = newTailscale != null &&
+    final tailscaleChanged =
+        newTailscale != null &&
         newTailscale != widget.host.tailscaleAddress &&
         newTailscale != widget.host.address;
-    final macChanged =
-        newMac != null && newMac != widget.host.macAddress;
+    final macChanged = newMac != null && newMac != widget.host.macAddress;
 
     if (!tailscaleChanged && !macChanged) return;
 
@@ -312,9 +312,7 @@ class _HostCardState extends ConsumerState<HostCard> {
                   _QuickActions(
                     online: online,
                     canWake:
-                        !online &&
-                        !checking &&
-                        widget.host.macAddress != null,
+                        !online && !checking && widget.host.macAddress != null,
                     onBrowse: () => _openExplorer(context),
                     onSearch: () => _openSearch(context),
                     onWake: () => _sendWol(context),
@@ -342,12 +340,7 @@ class _HostCardState extends ConsumerState<HostCard> {
     if (future == null) return const [];
 
     final threshold =
-        ref
-            .read(settingsProvider)
-            .valueOrNull
-            ?.app
-            .lowDiskThresholdBytes ??
-        0;
+        ref.read(settingsProvider).valueOrNull?.app.lowDiskThresholdBytes ?? 0;
 
     return [
       const SizedBox(height: Spacing.sm),
@@ -356,7 +349,8 @@ class _HostCardState extends ConsumerState<HostCard> {
         builder: (context, snap) {
           final drives = snap.data ?? const <Drive>[];
           if (drives.isEmpty) return const SizedBox.shrink();
-          final hasLowDisk = threshold > 0 &&
+          final hasLowDisk =
+              threshold > 0 &&
               drives.any(
                 (d) => d.freeBytes != null && d.freeBytes! < threshold,
               );
@@ -376,10 +370,11 @@ class _HostCardState extends ConsumerState<HostCard> {
                       const SizedBox(width: Spacing.xs),
                       Text(
                         context.l10n.lowDiskWarning,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ],
                   ),

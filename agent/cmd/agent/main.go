@@ -19,10 +19,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/mdns"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/netinfo"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
@@ -120,6 +122,8 @@ func runServe(args []string) {
 		log.Fatalf("settings: %v", err)
 	}
 
+	hub := server.NewEventHub()
+
 	handler, err := server.New(server.Config{
 		Name:             st.AgentName(),
 		Version:          version,
@@ -131,7 +135,7 @@ func runServe(args []string) {
 		Settings:         st,
 		UpdatesDir:       updatesDir,
 		TrashDir:         trashDir,
-	}, db, pm, tm)
+	}, db, pm, tm, hub)
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
@@ -165,6 +169,18 @@ func runServe(args []string) {
 			log.Fatalf("serve: %v", err)
 		}
 	}()
+
+	// Start mDNS advertisement.
+	if _, portStr, splitErr := net.SplitHostPort(*addr); splitErr == nil {
+		if mdnsPort, convErr := strconv.Atoi(portStr); convErr == nil {
+			mdnsSvc, mdnsErr := mdns.Start(mdnsPort, version)
+			if mdnsErr != nil {
+				log.Printf("mDNS: failed to start: %v", mdnsErr)
+			} else {
+				defer mdnsSvc.Stop()
+			}
+		}
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

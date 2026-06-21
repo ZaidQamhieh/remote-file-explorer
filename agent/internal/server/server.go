@@ -32,7 +32,7 @@ type Config struct {
 }
 
 // New builds the v1 router and wires all routes.
-func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
+func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hub *EventHub) (http.Handler, error) {
 	ops := fsops.NewWithSettings(cfg.Settings)
 
 	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
@@ -104,6 +104,12 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Post("/fs/extract", extractHandler(ops))
 			r.Get("/fs/meta", metaHandler(ops))
 			r.Get("/fs/checksum", checksumHandler(ops))
+			r.Post("/fs/chmod", chmodHandler(ops))
+			r.Get("/fs/archive", archivePeekHandler(ops))
+			r.Post("/fs/checksums", batchChecksumHandler(ops))
+
+			// SSE events
+			r.Get("/events", sseHandler(hub))
 
 			// Trash
 			r.Get("/trash", listTrashHandler(cfg.TrashDir))

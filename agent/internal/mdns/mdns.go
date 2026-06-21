@@ -1,0 +1,83 @@
+// Package mdns advertises the RFE agent via mDNS/DNS-SD so mobile apps
+// can discover agents on the local network without manual IP entry.
+package mdns
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/grandcat/zeroconf"
+)
+
+const (
+	serviceType = "_rfe._tcp"
+	domain      = "local."
+)
+
+// Service manages the mDNS advertisement lifetime.
+type Service struct {
+	server *zeroconf.Server
+}
+
+// Start begins advertising the RFE agent on the local network.
+func Start(port int, version string) (*Service, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "rfe-agent"
+	}
+
+	txt := []string{
+		fmt.Sprintf("version=%s", version),
+		fmt.Sprintf("name=%s", host),
+	}
+
+	server, err := zeroconf.Register(
+		host,        // instance name
+		serviceType, // service type
+		domain,      // domain
+		port,        // port
+		txt,         // TXT records
+		nil,         // interfaces (nil = all)
+	)
+	if err != nil {
+		return nil, fmt.Errorf("mdns register: %w", err)
+	}
+
+	log.Printf("mDNS: advertising %s on port %d", serviceType, port)
+	return &Service{server: server}, nil
+}
+
+// Stop shuts down the mDNS advertisement.
+func (s *Service) Stop() {
+	if s.server != nil {
+		s.server.Shutdown()
+		log.Println("mDNS: stopped")
+	}
+}
+
+// Discover searches for RFE agents on the local network for the given
+// duration. Returns discovered entries. Intended for testing.
+func Discover(ctx context.Context) ([]*zeroconf.ServiceEntry, error) {
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make(chan *zeroconf.ServiceEntry)
+	var results []*zeroconf.ServiceEntry
+
+	go func() {
+		for e := range entries {
+			results = append(results, e)
+		}
+	}()
+
+	if err := resolver.Browse(ctx, serviceType, domain, entries); err != nil {
+		return nil, err
+	}
+
+	<-ctx.Done()
+	return results, nil
+}

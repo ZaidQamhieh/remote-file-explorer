@@ -8,6 +8,7 @@ import 'package:dio/io.dart';
 
 import '../app_info.dart';
 import '../models/agent_settings.dart';
+import '../models/archive_entry.dart';
 import '../models/bandwidth_settings.dart';
 import '../models/app_release.dart';
 import '../models/device.dart';
@@ -441,6 +442,93 @@ class AgentClient {
       queryParameters: {'path': path, 'algo': algo},
     );
     return data['checksum'] as String;
+  }
+
+  /// Change the POSIX permissions of a file or directory.
+  ///
+  /// [mode] is an octal string like `"0755"`. Returns the updated [Entry].
+  Future<Entry> chmod(String path, String mode) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/chmod',
+      data: {'path': path, 'mode': mode},
+    );
+    return Entry.fromJson(data);
+  }
+
+  /// List the contents of an archive without extracting it.
+  ///
+  /// Supports `.zip`, `.tar.gz`, `.tgz`, and `.tar`. Returns at most [limit]
+  /// entries (default 500 server-side).
+  Future<List<ArchiveEntry>> archiveList(
+    String path, {
+    int? limit,
+  }) async {
+    final data = await _get<Map<String, dynamic>>(
+      '/fs/archive',
+      queryParameters: {
+        'path': path,
+        if (limit != null) 'limit': limit,
+      },
+    );
+    final entries = (data['entries'] as List?) ?? const [];
+    return entries
+        .map((e) => ArchiveEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Compute checksums for multiple files in one request.
+  ///
+  /// Returns a map of path to hex-encoded hash. Files that could not be
+  /// hashed are omitted from the map.
+  Future<Map<String, String>> batchChecksums(
+    List<String> paths, {
+    String algo = 'sha256',
+  }) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/fs/checksums',
+      data: {'paths': paths, 'algo': algo},
+    );
+    final checksums = (data['checksums'] as List?) ?? const [];
+    final result = <String, String>{};
+    for (final item in checksums) {
+      final m = item as Map<String, dynamic>;
+      final hash = m['hash'] as String?;
+      if (hash != null && hash.isNotEmpty) {
+        result[m['path'] as String] = hash;
+      }
+    }
+    return result;
+  }
+
+  /// Connect to the SSE event stream.
+  ///
+  /// Returns a broadcast [Stream] that emits parsed SSE data lines as raw
+  /// JSON strings. The caller is responsible for parsing the JSON and
+  /// handling reconnection.
+  Stream<String> events() async* {
+    try {
+      final response = await _dio.get<ResponseBody>(
+        '/events',
+        options: Options(responseType: ResponseType.stream),
+      );
+      final stream = response.data?.stream;
+      if (stream == null) return;
+
+      String buffer = '';
+      await for (final chunk in stream) {
+        buffer += utf8.decode(chunk);
+        while (buffer.contains('\n')) {
+          final idx = buffer.indexOf('\n');
+          final line = buffer.substring(0, idx).trim();
+          buffer = buffer.substring(idx + 1);
+          if (line.startsWith('data: ')) {
+            yield line.substring(6);
+          }
+        }
+      }
+    } on DioException catch (e) {
+      throw _apiError(e);
+    }
   }
 
   /// Search for files and folders whose name contains [q] (case-insensitive),

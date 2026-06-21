@@ -1,13 +1,12 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.4.0
+  version: 1.5.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair and /health require
-    a bearer device token. A WebSocket channel (/v1/events) for live progress and filesystem
-    change-event push is planned for a future wave but does not exist yet — clients must poll
-    (e.g. GET /transfers/{id}, GET /fs) for now. Clients may send an optional
+    a bearer device token. GET /v1/events provides a Server-Sent Events stream for live
+    filesystem change events and transfer progress. Clients may send an optional
     `X-RFE-Client-Version` header (e.g. "1.10.0+18") on every authenticated request; the
     agent records this plus the caller's network address against the device row and
     surfaces both via GET /devices (see Device.lastAddress / Device.lastVersion).
@@ -295,6 +294,113 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+
+  /events:
+    get:
+      summary: Server-Sent Events stream for live filesystem and transfer events
+      description: >
+        Long-lived SSE connection. The server pushes JSON-encoded events as
+        `data:` lines and sends a `: keepalive` comment every 30s to keep the
+        connection alive. Event types: `fs.change` (path, action:
+        created/modified/deleted), `transfer.progress` (id, bytes, total),
+        `transfer.complete` (id, path).
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: "Newline-delimited SSE `data:` lines, each containing a JSON SseEvent."
+        "401": { $ref: "#/components/responses/Error" }
+
+  /fs/chmod:
+    post:
+      summary: Change POSIX permissions of a file or directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, mode]
+              properties:
+                path: { type: string, description: "Absolute path to the file or directory." }
+                mode: { type: string, description: "Octal permission string, e.g. \"0755\"." }
+      responses:
+        "200": { description: Updated entry, content: { application/json: { schema: { $ref: "#/components/schemas/Entry" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /fs/archive:
+    get:
+      summary: List the contents of an archive without extracting
+      description: >
+        Reads the headers of a zip, tar.gz, tgz, or tar archive and returns
+        an array of entries (path, size, modified, isDir) without extracting
+        any content. Respects the limit parameter (default 500).
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 500 } }
+      responses:
+        "200":
+          description: Archive entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/ArchiveEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /fs/checksums:
+    post:
+      summary: Compute checksums for multiple files in one request
+      description: >
+        Accepts an array of paths and returns a checksum for each. Files that
+        fail (not found, directory, permission denied) report an error string
+        per entry. Capped at 1000 paths per request. Uses a bounded goroutine
+        pool (4 workers) for parallelism.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  items: { type: string }
+                  maxItems: 1000
+                algo:
+                  type: string
+                  enum: [sha256, sha1, md5]
+                  default: sha256
+      responses:
+        "200":
+          description: Batch checksum results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checksums:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path: { type: string }
+                        hash: { type: string }
+                        error: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
 
   /trash:
     get:
@@ -977,6 +1083,27 @@ components:
         totalChunks: { type: integer }
         receivedChunks: { type: array, items: { type: integer }, description: Indices already stored }
         status: { type: string, enum: [open, completed, failed] }
+
+    ArchiveEntry:
+      type: object
+      properties:
+        path: { type: string, description: "Relative path inside the archive." }
+        size: { type: integer, format: int64, description: "Uncompressed size in bytes." }
+        modified: { type: string, format: date-time }
+        isDir: { type: boolean }
+
+    SseEvent:
+      type: object
+      description: >
+        A server-sent event payload. Only the fields relevant to the event
+        type are populated.
+      properties:
+        type: { type: string, enum: [fs.change, transfer.progress, transfer.complete] }
+        path: { type: string }
+        action: { type: string, enum: [created, modified, deleted] }
+        id: { type: string }
+        bytes: { type: integer, format: int64 }
+        total: { type: integer, format: int64 }
 
     Error:
       type: object

@@ -196,7 +196,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
     );
-    if (path != null && path.isNotEmpty) {
+    if (path != null && path.isNotEmpty && mounted) {
       final roots = [...?_settings?.roots, path];
       await _patch(roots: roots, successMsg: context.l10n.addedFolder(path));
     }
@@ -222,7 +222,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
     );
-    if (name != null && name.isNotEmpty) {
+    if (name != null && name.isNotEmpty && mounted) {
       await _patch(name: name, successMsg: context.l10n.renamedTo(name));
     }
   }
@@ -302,7 +302,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               setState(() => _bandwidth = updated);
             } catch (e) {
               setState(() => _bandwidth = prev);
-              if (mounted) showError(context, context.l10n.updateFailed('$e'));
+              if (mounted) {
+                showError(this.context, this.context.l10n.updateFailed('$e'));
+              }
             }
           },
         ),

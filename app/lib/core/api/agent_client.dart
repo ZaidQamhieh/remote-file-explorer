@@ -459,16 +459,10 @@ class AgentClient {
   ///
   /// Supports `.zip`, `.tar.gz`, `.tgz`, and `.tar`. Returns at most [limit]
   /// entries (default 500 server-side).
-  Future<List<ArchiveEntry>> archiveList(
-    String path, {
-    int? limit,
-  }) async {
+  Future<List<ArchiveEntry>> archiveList(String path, {int? limit}) async {
     final data = await _get<Map<String, dynamic>>(
       '/fs/archive',
-      queryParameters: {
-        'path': path,
-        if (limit != null) 'limit': limit,
-      },
+      queryParameters: {'path': path, if (limit != null) 'limit': limit},
     );
     final entries = (data['entries'] as List?) ?? const [];
     return entries

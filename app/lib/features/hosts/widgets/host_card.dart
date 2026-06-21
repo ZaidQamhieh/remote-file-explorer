@@ -320,11 +320,8 @@ class _HostCardState extends ConsumerState<HostCard> {
                           const SizedBox(width: Spacing.xs),
                           Text(
                             'Read-only',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
                         ],
                       ),

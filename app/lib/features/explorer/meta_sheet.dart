@@ -199,9 +199,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         context,
         Icons.link_outlined,
         l.metaSymlink,
-        _entry.isSymlink
-            ? (_entry.symlinkTarget ?? l.yesLabel)
-            : l.noLabel,
+        _entry.isSymlink ? (_entry.symlinkTarget ?? l.yesLabel) : l.noLabel,
       ),
       if (!_entry.isDir) _checksumRow(context),
     ];

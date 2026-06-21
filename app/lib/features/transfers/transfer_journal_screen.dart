@@ -23,21 +23,23 @@ class TransferJournalScreen extends ConsumerWidget {
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Clear History'),
-                  content:
-                      const Text('Remove all transfer history records?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(ctx.l10n.cancelButton),
+                builder:
+                    (ctx) => AlertDialog(
+                      title: const Text('Clear History'),
+                      content: const Text(
+                        'Remove all transfer history records?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(ctx.l10n.cancelButton),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Clear'),
+                        ),
+                      ],
                     ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Clear'),
-                    ),
-                  ],
-                ),
               );
               if (confirmed == true) {
                 await ref.read(transferJournalProvider.notifier).clear();
@@ -78,9 +80,7 @@ class TransferJournalScreen extends ConsumerWidget {
               final isUpload = r.kind == 'upload';
               return ListTile(
                 leading: Icon(
-                  isUpload
-                      ? Icons.upload_outlined
-                      : Icons.download_outlined,
+                  isUpload ? Icons.upload_outlined : Icons.download_outlined,
                   color: isUpload ? scheme.tertiary : scheme.primary,
                 ),
                 title: Text(
@@ -88,9 +88,7 @@ class TransferJournalScreen extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  '${r.hostLabel} · ${formatSize(r.bytes)}',
-                ),
+                subtitle: Text('${r.hostLabel} · ${formatSize(r.bytes)}'),
                 trailing: Text(
                   _formatRelative(r.completedAt),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

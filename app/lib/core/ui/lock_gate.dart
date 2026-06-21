@@ -67,7 +67,9 @@ class _LockGateState extends ConsumerState<LockGate>
   @override
   Widget build(BuildContext context) {
     final enabled = ref.watch(
-      settingsProvider.select((s) => s.valueOrNull?.app.appLockEnabled ?? false),
+      settingsProvider.select(
+        (s) => s.valueOrNull?.app.appLockEnabled ?? false,
+      ),
     );
 
     if (!enabled || !_locked) return widget.child;

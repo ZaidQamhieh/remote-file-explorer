@@ -93,16 +93,16 @@ func (o *Ops) Roots() []string {
 
 // Entry is the JSON representation of a filesystem item.
 type Entry struct {
-	Name      string    `json:"name"`
-	Path      string    `json:"path"`
-	IsDir     bool      `json:"isDir"`
-	Size      int64     `json:"size"`
-	MimeType  string    `json:"mimeType,omitempty"`
-	Mode      string    `json:"mode"`
-	Modified  time.Time `json:"modified"`
-	Created   time.Time `json:"created"`
-	IsSymlink     bool   `json:"isSymlink"`
-	SymlinkTarget string `json:"symlinkTarget,omitempty"`
+	Name          string    `json:"name"`
+	Path          string    `json:"path"`
+	IsDir         bool      `json:"isDir"`
+	Size          int64     `json:"size"`
+	MimeType      string    `json:"mimeType,omitempty"`
+	Mode          string    `json:"mode"`
+	Modified      time.Time `json:"modified"`
+	Created       time.Time `json:"created"`
+	IsSymlink     bool      `json:"isSymlink"`
+	SymlinkTarget string    `json:"symlinkTarget,omitempty"`
 }
 
 // Listing is a paginated directory listing.

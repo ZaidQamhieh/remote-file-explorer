@@ -86,9 +86,7 @@ void main() {
     });
 
     test('single file', () {
-      final r = aggregateByExtension([
-        (ext: '.jpg', size: 1024),
-      ]);
+      final r = aggregateByExtension([(ext: '.jpg', size: 1024)]);
       expect(r.totalFiles, 1);
       expect(r.totalSize, 1024);
       expect(r.sizeByExt['.jpg'], 1024);

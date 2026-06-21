@@ -71,7 +71,9 @@ class _CsvPreviewScreenState extends State<CsvPreviewScreen> {
         final body = _buildBody(context, snapshot);
         final totalRows = snapshot.data?.totalRows;
         final subtitle =
-            totalRows != null ? '$totalRows row${totalRows == 1 ? '' : 's'}' : null;
+            totalRows != null
+                ? '$totalRows row${totalRows == 1 ? '' : 's'}'
+                : null;
 
         return PreviewScaffold(
           title: widget.entry.name,
@@ -169,9 +171,7 @@ class _CsvPreviewScreenState extends State<CsvPreviewScreen> {
               DataRow(
                 cells: [
                   for (var i = 0; i < data.headers.length; i++)
-                    DataCell(
-                      Text(i < row.length ? row[i] : ''),
-                    ),
+                    DataCell(Text(i < row.length ? row[i] : '')),
                 ],
               ),
           ],

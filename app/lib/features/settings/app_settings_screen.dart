@@ -305,8 +305,7 @@ class AppSettingsScreen extends ConsumerWidget {
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder:
-                            (_) => const TransferJournalScreen(),
+                        builder: (_) => const TransferJournalScreen(),
                       ),
                     ),
               ),
@@ -571,9 +570,7 @@ class _AccentColorPicker extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color:
-                      selected == preset
-                          ? scheme.primary
-                          : Colors.transparent,
+                      selected == preset ? scheme.primary : Colors.transparent,
                   width: 3,
                 ),
               ),

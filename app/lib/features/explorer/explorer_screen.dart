@@ -247,11 +247,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     if (!context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => TypeTreemapScreen(
-          hostId: widget.host.id,
-          path: state.currentPath,
-          client: client,
-        ),
+        builder:
+            (_) => TypeTreemapScreen(
+              hostId: widget.host.id,
+              path: state.currentPath,
+              client: client,
+            ),
       ),
     );
   }

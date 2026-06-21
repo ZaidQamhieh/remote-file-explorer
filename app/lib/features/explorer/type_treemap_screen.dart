@@ -16,23 +16,70 @@ import '../../core/theme/tokens.dart';
 // ---------------------------------------------------------------------------
 
 /// Extension-to-category mapping used for colouring bar segments.
-enum FileCategory {
-  image,
-  video,
-  audio,
-  document,
-  archive,
-  code,
-  other,
-}
+enum FileCategory { image, video, audio, document, archive, code, other }
 
 const _categoryExtensions = <FileCategory, Set<String>>{
-  FileCategory.image: {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico', '.tiff'},
+  FileCategory.image: {
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.webp',
+    '.svg',
+    '.bmp',
+    '.ico',
+    '.tiff',
+  },
   FileCategory.video: {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm'},
   FileCategory.audio: {'.mp3', '.flac', '.wav', '.aac', '.ogg', '.wma', '.m4a'},
-  FileCategory.document: {'.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.odt', '.xls', '.xlsx', '.ppt', '.pptx', '.csv'},
-  FileCategory.archive: {'.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz', '.tgz'},
-  FileCategory.code: {'.dart', '.go', '.py', '.js', '.ts', '.java', '.kt', '.c', '.cpp', '.h', '.rs', '.rb', '.swift', '.html', '.css', '.json', '.yaml', '.yml', '.xml', '.sh', '.bat', '.sql'},
+  FileCategory.document: {
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.txt',
+    '.md',
+    '.rtf',
+    '.odt',
+    '.xls',
+    '.xlsx',
+    '.ppt',
+    '.pptx',
+    '.csv',
+  },
+  FileCategory.archive: {
+    '.zip',
+    '.tar',
+    '.gz',
+    '.rar',
+    '.7z',
+    '.bz2',
+    '.xz',
+    '.tgz',
+  },
+  FileCategory.code: {
+    '.dart',
+    '.go',
+    '.py',
+    '.js',
+    '.ts',
+    '.java',
+    '.kt',
+    '.c',
+    '.cpp',
+    '.h',
+    '.rs',
+    '.rb',
+    '.swift',
+    '.html',
+    '.css',
+    '.json',
+    '.yaml',
+    '.yml',
+    '.xml',
+    '.sh',
+    '.bat',
+    '.sql',
+  },
 };
 
 FileCategory categoryFor(String ext) {
@@ -200,7 +247,11 @@ class _TypeTreemapScreenState extends State<TypeTreemapScreen> {
   ) async {
     String? cursor;
     do {
-      final listing = await widget.client.list(path, cursor: cursor, limit: 200);
+      final listing = await widget.client.list(
+        path,
+        cursor: cursor,
+        limit: 200,
+      );
       for (final entry in listing.entries) {
         if (entry.isDir) {
           await _walkDirectory(entry.path, out);
@@ -220,22 +271,22 @@ class _TypeTreemapScreenState extends State<TypeTreemapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Storage by type'),
-      ),
-      body: _scanning
-          ? _ScanningView(fileCount: _scannedFiles)
-          : _error != null
+      appBar: AppBar(title: Text('Storage by type')),
+      body:
+          _scanning
+              ? _ScanningView(fileCount: _scannedFiles)
+              : _error != null
               ? _ErrorView(error: _error!, onRetry: _scan)
               : _result != null && _result!.totalFiles > 0
-                  ? _ResultView(
-                      result: _result!,
-                      selectedExt: _selectedExt,
-                      onSelect: (ext) => setState(() {
-                        _selectedExt = _selectedExt == ext ? null : ext;
-                      }),
-                    )
-                  : const _EmptyView(),
+              ? _ResultView(
+                result: _result!,
+                selectedExt: _selectedExt,
+                onSelect:
+                    (ext) => setState(() {
+                      _selectedExt = _selectedExt == ext ? null : ext;
+                    }),
+              )
+              : const _EmptyView(),
     );
   }
 }
@@ -284,7 +335,11 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: Spacing.md),
             Text(error, textAlign: TextAlign.center),
             const SizedBox(height: Spacing.md),
@@ -305,9 +360,16 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.folder_open, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.folder_open,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: Spacing.md),
-          Text('No files found', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'No files found',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
         ],
       ),
     );
@@ -328,8 +390,9 @@ class _ResultView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Sort extensions by size descending.
-    final sorted = result.sizeByExt.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted =
+        result.sizeByExt.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
 
     final textTheme = Theme.of(context).textTheme;
 
@@ -348,13 +411,16 @@ class _ResultView extends StatelessWidget {
           height: 32,
           child: CustomPaint(
             painter: _StackedBarPainter(
-              segments: sorted
-                  .map((e) => _BarSegment(
-                        ext: e.key,
-                        bytes: e.value,
-                        color: colorFor(categoryFor(e.key)),
-                      ))
-                  .toList(),
+              segments:
+                  sorted
+                      .map(
+                        (e) => _BarSegment(
+                          ext: e.key,
+                          bytes: e.value,
+                          color: colorFor(categoryFor(e.key)),
+                        ),
+                      )
+                      .toList(),
               totalBytes: result.totalSize,
               selectedExt: selectedExt,
             ),
@@ -369,8 +435,7 @@ class _ResultView extends StatelessWidget {
           runSpacing: Spacing.xs,
           children: [
             for (final cat in FileCategory.values)
-              if (_categoryPresent(cat, sorted))
-                _LegendChip(category: cat),
+              if (_categoryPresent(cat, sorted)) _LegendChip(category: cat),
           ],
         ),
         const SizedBox(height: Spacing.md),
@@ -383,9 +448,8 @@ class _ResultView extends StatelessWidget {
             ext: entry.key,
             totalBytes: entry.value,
             fileCount: result.countByExt[entry.key] ?? 0,
-            percentage: result.totalSize > 0
-                ? entry.value / result.totalSize * 100
-                : 0,
+            percentage:
+                result.totalSize > 0 ? entry.value / result.totalSize * 100 : 0,
             selected: selectedExt == entry.key,
             onTap: () => onSelect(entry.key),
           ),
@@ -453,7 +517,10 @@ class _ExtensionRow extends StatelessWidget {
     final color = colorFor(categoryFor(ext));
 
     return Material(
-      color: selected ? scheme.primaryContainer.withValues(alpha: 0.3) : Colors.transparent,
+      color:
+          selected
+              ? scheme.primaryContainer.withValues(alpha: 0.3)
+              : Colors.transparent,
       borderRadius: Radii.smR,
       child: InkWell(
         borderRadius: Radii.smR,
@@ -471,9 +538,7 @@ class _ExtensionRow extends StatelessWidget {
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               const SizedBox(width: Spacing.sm),
-              Expanded(
-                child: Text(ext, style: textTheme.bodyMedium),
-              ),
+              Expanded(child: Text(ext, style: textTheme.bodyMedium)),
               Text(
                 formatSize(totalBytes),
                 style: textTheme.bodyMedium?.copyWith(
@@ -542,10 +607,7 @@ class _StackedBarPainter extends CustomPainter {
     if (totalBytes == 0 || segments.isEmpty) return;
 
     final radius = Radius.circular(Radii.sm);
-    final rrect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      radius,
-    );
+    final rrect = RRect.fromRectAndRadius(Offset.zero & size, radius);
     canvas.clipRRect(rrect);
 
     var x = 0.0;
@@ -553,10 +615,12 @@ class _StackedBarPainter extends CustomPainter {
       final w = (seg.bytes / totalBytes) * size.width;
       if (w < 0.5) continue; // skip sub-pixel segments
 
-      final paint = Paint()
-        ..color = selectedExt == null || selectedExt == seg.ext
-            ? seg.color
-            : seg.color.withValues(alpha: 0.3);
+      final paint =
+          Paint()
+            ..color =
+                selectedExt == null || selectedExt == seg.ext
+                    ? seg.color
+                    : seg.color.withValues(alpha: 0.3);
 
       canvas.drawRect(Rect.fromLTWH(x, 0, w, size.height), paint);
       x += w;

@@ -65,8 +65,7 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       final seed = app.seedColor;
       final light =
           seed != null ? AppTheme.lightWithSeed(seed) : AppTheme.light;
-      final dark =
-          seed != null ? AppTheme.darkWithSeed(seed) : AppTheme.dark;
+      final dark = seed != null ? AppTheme.darkWithSeed(seed) : AppTheme.dark;
       return _app(
         light: light,
         dark: maybePatchDark(dark),

@@ -223,8 +223,7 @@ class _SeekBar extends StatelessWidget {
               onChanged:
                   maxMs <= 0
                       ? null
-                      : (v) =>
-                          player.seek(Duration(milliseconds: v.round())),
+                      : (v) => player.seek(Duration(milliseconds: v.round())),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
@@ -304,22 +303,23 @@ class _SpeedButton extends StatelessWidget {
         return PopupMenuButton<double>(
           tooltip: context.l10n.audioSpeedLabel,
           onSelected: player.setSpeed,
-          itemBuilder: (_) => [
-            for (final s in _speedOptions)
-              PopupMenuItem(
-                value: s,
-                child: Text(
-                  context.l10n.audioSpeedValue(
-                    s == s.roundToDouble()
-                        ? s.toStringAsFixed(0)
-                        : s.toString(),
+          itemBuilder:
+              (_) => [
+                for (final s in _speedOptions)
+                  PopupMenuItem(
+                    value: s,
+                    child: Text(
+                      context.l10n.audioSpeedValue(
+                        s == s.roundToDouble()
+                            ? s.toStringAsFixed(0)
+                            : s.toString(),
+                      ),
+                      style: TextStyle(
+                        fontWeight: s == speed ? FontWeight.bold : null,
+                      ),
+                    ),
                   ),
-                  style: TextStyle(
-                    fontWeight: s == speed ? FontWeight.bold : null,
-                  ),
-                ),
-              ),
-          ],
+              ],
           child: Padding(
             padding: const EdgeInsets.all(Spacing.sm),
             child: Text(

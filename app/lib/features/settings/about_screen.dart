@@ -79,9 +79,7 @@ class AboutScreen extends StatelessWidget {
               const SizedBox(height: Spacing.xs),
               Center(
                 child: Text(
-                  info != null
-                      ? 'v${info.version}+${info.buildNumber}'
-                      : '...',
+                  info != null ? 'v${info.version}+${info.buildNumber}' : '...',
                   style: textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -108,9 +106,7 @@ class AboutScreen extends StatelessWidget {
               for (final entry in _changelog) ...[
                 Text(
                   entry.version,
-                  style: textTheme.labelLarge?.copyWith(
-                    color: scheme.primary,
-                  ),
+                  style: textTheme.labelLarge?.copyWith(color: scheme.primary),
                 ),
                 const SizedBox(height: Spacing.xs),
                 for (final item in entry.items)

@@ -339,9 +339,7 @@ class _PlayerWithSeekOverlay extends StatelessWidget {
             ),
             // Seek indicator overlay.
             if (seekSide != null)
-              Positioned.fill(
-                child: _SeekIndicator(side: seekSide!),
-              ),
+              Positioned.fill(child: _SeekIndicator(side: seekSide!)),
           ],
         ),
       ),
@@ -388,7 +386,8 @@ class _SeekIndicatorState extends State<_SeekIndicator>
   @override
   Widget build(BuildContext context) {
     final isLeft = widget.side == _SeekSide.left;
-    final label = isLeft ? '◄◄ ${_kSeekDeltaSeconds}s' : '${_kSeekDeltaSeconds}s ►►';
+    final label =
+        isLeft ? '◄◄ ${_kSeekDeltaSeconds}s' : '${_kSeekDeltaSeconds}s ►►';
 
     return Align(
       alignment: isLeft ? Alignment.centerLeft : Alignment.centerRight,

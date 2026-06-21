@@ -32,12 +32,13 @@ class _MockJustAudioPlatform extends JustAudioPlatform
 
   @override
   Future<DisposePlayerResponse> disposePlayer(
-          DisposePlayerRequest request) async =>
-      DisposePlayerResponse();
+    DisposePlayerRequest request,
+  ) async => DisposePlayerResponse();
 
   @override
   Future<DisposeAllPlayersResponse> disposeAllPlayers(
-          DisposeAllPlayersRequest request) async {
+    DisposeAllPlayersRequest request,
+  ) async {
     _players.clear();
     return DisposeAllPlayersResponse();
   }
@@ -61,16 +62,18 @@ class _MockAudioPlayerPlatform extends AudioPlayerPlatform {
     const dur = Duration(seconds: 30);
     Future.microtask(() {
       if (!_eventController.isClosed) {
-        _eventController.add(PlaybackEventMessage(
-          processingState: ProcessingStateMessage.ready,
-          updateTime: DateTime.now(),
-          updatePosition: Duration.zero,
-          bufferedPosition: dur,
-          duration: dur,
-          icyMetadata: null,
-          currentIndex: 0,
-          androidAudioSessionId: null,
-        ));
+        _eventController.add(
+          PlaybackEventMessage(
+            processingState: ProcessingStateMessage.ready,
+            updateTime: DateTime.now(),
+            updatePosition: Duration.zero,
+            bufferedPosition: dur,
+            duration: dur,
+            icyMetadata: null,
+            currentIndex: 0,
+            androidAudioSessionId: null,
+          ),
+        );
       }
     });
     return LoadResponse(duration: dur);
@@ -104,20 +107,20 @@ class _MockAudioPlayerPlatform extends AudioPlayerPlatform {
       SetPitchResponse();
   @override
   Future<SetSkipSilenceResponse> setSkipSilence(
-          SetSkipSilenceRequest request) async =>
-      SetSkipSilenceResponse();
+    SetSkipSilenceRequest request,
+  ) async => SetSkipSilenceResponse();
   @override
   Future<SetLoopModeResponse> setLoopMode(SetLoopModeRequest request) async =>
       SetLoopModeResponse();
   @override
   Future<SetShuffleModeResponse> setShuffleMode(
-          SetShuffleModeRequest request) async =>
-      SetShuffleModeResponse();
+    SetShuffleModeRequest request,
+  ) async => SetShuffleModeResponse();
   @override
   Future<SetAutomaticallyWaitsToMinimizeStallingResponse>
-      setAutomaticallyWaitsToMinimizeStalling(
-              SetAutomaticallyWaitsToMinimizeStallingRequest request) async =>
-          SetAutomaticallyWaitsToMinimizeStallingResponse();
+  setAutomaticallyWaitsToMinimizeStalling(
+    SetAutomaticallyWaitsToMinimizeStallingRequest request,
+  ) async => SetAutomaticallyWaitsToMinimizeStallingResponse();
   @override
   Future<DisposeResponse> dispose(DisposeRequest request) async {
     await _eventController.close();
@@ -155,8 +158,8 @@ Entry _audio(String name, {int? size}) =>
     Entry(name: name, path: '/music/$name', isDir: false, size: size);
 
 Widget _wrap(Widget child) => ProviderScope(
-      child: MaterialApp(localizationsDelegates: l10nDelegates, home: child),
-    );
+  child: MaterialApp(localizationsDelegates: l10nDelegates, home: child),
+);
 
 /// Pumps the widget inside runAsync so real I/O + platform calls complete,
 /// then pumps frames in fake-async for the UI, and adds a teardown to
@@ -202,26 +205,30 @@ void main() {
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async {
-        if (call.method == 'getTemporaryDirectory') return tempDir.path;
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            if (call.method == 'getTemporaryDirectory') return tempDir.path;
+            return null;
+          },
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.ryanheise.audio_session'),
-      (call) async => null,
-    );
+          const MethodChannel('com.ryanheise.audio_session'),
+          (call) async => null,
+        );
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'), null);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.ryanheise.audio_session'), null);
+          const MethodChannel('com.ryanheise.audio_session'),
+          null,
+        );
     try {
       tempDir.deleteSync(recursive: true);
     } catch (_) {}
@@ -292,8 +299,13 @@ void main() {
     final client = _FakeAgentClient();
     await _pumpAndWait(
       tester,
-      _wrap(AudioPreviewScreen(
-        entry: _audio('song.mp3'), client: client, chromeless: true)),
+      _wrap(
+        AudioPreviewScreen(
+          entry: _audio('song.mp3'),
+          client: client,
+          chromeless: true,
+        ),
+      ),
     );
 
     expect(find.byType(AppBar), findsNothing);

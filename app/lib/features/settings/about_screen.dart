@@ -7,6 +7,13 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.22.0', [
+      'Audio player with playback speed',
+      'Markdown file preview',
+      'CSV table preview',
+      'Video resume & double-tap seek',
+      'Storage-by-type breakdown',
+    ]),
     _ChangelogEntry('v1.21.0', [
       'File checksums (SHA-256/SHA-1/MD5)',
       'Symlink target display',

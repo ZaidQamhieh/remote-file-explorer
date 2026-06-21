@@ -30,10 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Mirrors ci.yml: pubspec pins Dart 3.7 → Flutter 3.29.x stable.
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.0"
           channel: "stable"
 
       - name: flutter pub get

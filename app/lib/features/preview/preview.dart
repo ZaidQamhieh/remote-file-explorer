@@ -7,17 +7,23 @@ import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'audio_preview.dart';
+import 'csv_preview.dart';
 import 'image_preview.dart';
+import 'markdown_preview.dart';
 import 'pdf_preview.dart';
 import 'preview_actions.dart';
 import 'preview_image_cache.dart';
 import 'text_preview.dart';
 import 'video_preview.dart';
 
-enum _PreviewKind { image, pdf, video, audio, text, none }
+enum _PreviewKind { image, pdf, video, audio, markdown, csv, text, none }
+
+const Set<String> _markdownExtensions = {'md', 'markdown'};
+
+const Set<String> _csvExtensions = {'csv'};
 
 const Set<String> _textExtensions = {
-  'txt', 'md', 'markdown', 'json', 'yaml', 'yml', 'xml', 'csv', 'tsv', 'log',
+  'txt', 'json', 'yaml', 'yml', 'xml', 'tsv', 'log',
   'ini', 'cfg', 'conf', 'toml', 'env',
   // source code
   'dart', 'go', 'py', 'js', 'jsx', 'ts', 'tsx', 'java', 'kt', 'kts', 'c', 'h',
@@ -76,6 +82,8 @@ _PreviewKind _kindOf(Entry entry) {
     if (mime == 'application/pdf') return _PreviewKind.pdf;
     if (mime.startsWith('video/')) return _PreviewKind.video;
     if (mime.startsWith('audio/')) return _PreviewKind.audio;
+    if (mime == 'text/markdown') return _PreviewKind.markdown;
+    if (mime == 'text/csv') return _PreviewKind.csv;
     if (mime.startsWith('text/')) return _PreviewKind.text;
     if (mime == 'application/json' ||
         mime == 'application/xml' ||
@@ -91,6 +99,8 @@ _PreviewKind _kindOf(Entry entry) {
   if (ext == 'pdf') return _PreviewKind.pdf;
   if (_videoExtensions.contains(ext)) return _PreviewKind.video;
   if (_audioExtensions.contains(ext)) return _PreviewKind.audio;
+  if (_markdownExtensions.contains(ext)) return _PreviewKind.markdown;
+  if (_csvExtensions.contains(ext)) return _PreviewKind.csv;
   if (_textExtensions.contains(ext)) return _PreviewKind.text;
 
   return _PreviewKind.none;
@@ -156,6 +166,18 @@ Widget? _viewerFor(
       );
     case _PreviewKind.audio:
       return AudioPreviewScreen(
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
+    case _PreviewKind.markdown:
+      return MarkdownPreviewScreen(
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
+    case _PreviewKind.csv:
+      return CsvPreviewScreen(
         entry: entry,
         client: client,
         chromeless: chromeless,

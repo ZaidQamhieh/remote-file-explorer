@@ -24,6 +24,7 @@ dependencies:
   shared_preferences: ^2.5.3
   photo_view: ^0.15.0
   pdfx: ^2.9.2
+  flutter_markdown: ^0.7.6
   just_audio: ^0.9.43
   video_player: ^2.9.5
   chewie: ^1.11.3

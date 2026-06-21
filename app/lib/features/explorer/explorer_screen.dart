@@ -22,6 +22,7 @@ import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
 import 'trash_screen.dart';
+import 'type_treemap_screen.dart';
 import 'widgets/batch_rename_sheet.dart';
 import 'widgets/batch_report.dart';
 import 'widgets/browse_app_bar.dart';
@@ -222,6 +223,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _showTransfers(context);
       case OverflowAction.trash:
         _openTrash(context);
+      case OverflowAction.storageByType:
+        _openStorageByType(context, state);
     }
   }
 
@@ -234,6 +237,23 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       ),
     );
     if (changed == true) _notifier.refresh();
+  }
+
+  Future<void> _openStorageByType(
+    BuildContext context,
+    ExplorerState state,
+  ) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TypeTreemapScreen(
+          hostId: widget.host.id,
+          path: state.currentPath,
+          client: client,
+        ),
+      ),
+    );
   }
 
   void _toggleFavorite(BuildContext context, ExplorerState state, bool isFav) {

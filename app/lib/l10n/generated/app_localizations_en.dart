@@ -1838,4 +1838,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String audioDownloadingProgress(String percent) {
     return 'Downloading audio for preview… $percent%';
   }
+
+  @override
+  String get storageByTypeTitle => 'Storage by type';
 }

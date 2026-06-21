@@ -3049,6 +3049,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloading audio for preview… {percent}%'**
   String audioDownloadingProgress(String percent);
+
+  /// No description provided for @storageByTypeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage by type'**
+  String get storageByTypeTitle;
 }
 
 class _AppLocalizationsDelegate

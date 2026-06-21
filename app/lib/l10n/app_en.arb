@@ -988,5 +988,7 @@
   "audioDownloadingProgress": "Downloading audio for preview… {percent}%",
   "@audioDownloadingProgress": {
     "placeholders": { "percent": {"type": "String"} }
-  }
+  },
+
+  "storageByTypeTitle": "Storage by type"
 }

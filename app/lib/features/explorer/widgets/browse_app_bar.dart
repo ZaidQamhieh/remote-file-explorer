@@ -6,7 +6,7 @@ import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
 import 'breadcrumb_bar.dart';
 
-enum OverflowAction { viewOptions, favorites, transfers, trash }
+enum OverflowAction { viewOptions, favorites, transfers, trash, storageByType }
 
 class BrowseAppBar extends StatelessWidget {
   const BrowseAppBar({
@@ -100,6 +100,13 @@ class BrowseAppBar extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.delete_outline_rounded),
                     title: Text(ctx.l10n.trashTitle),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: OverflowAction.storageByType,
+                  child: ListTile(
+                    leading: const Icon(Icons.pie_chart_outline_rounded),
+                    title: Text(ctx.l10n.storageByTypeTitle),
                   ),
                 ),
               ],

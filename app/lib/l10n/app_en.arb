@@ -978,5 +978,15 @@
   "diagnosticsExportTitle": "Diagnostics",
   "diagnosticsExportButton": "Export diagnostics",
   "diagnosticsExportSubtitle": "Share device and connection info for troubleshooting",
-  "diagnosticsCopied": "Diagnostics copied to clipboard"
+  "diagnosticsCopied": "Diagnostics copied to clipboard",
+
+  "audioSpeedLabel": "Speed",
+  "audioSpeedValue": "{speed}x",
+  "@audioSpeedValue": {
+    "placeholders": { "speed": {"type": "String"} }
+  },
+  "audioDownloadingProgress": "Downloading audio for preview… {percent}%",
+  "@audioDownloadingProgress": {
+    "placeholders": { "percent": {"type": "String"} }
+  }
 }

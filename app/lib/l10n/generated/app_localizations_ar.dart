@@ -1832,4 +1832,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get diagnosticsCopied => 'Diagnostics copied to clipboard';
+
+  @override
+  String get audioSpeedLabel => 'Speed';
+
+  @override
+  String audioSpeedValue(String speed) {
+    return '${speed}x';
+  }
+
+  @override
+  String audioDownloadingProgress(String percent) {
+    return 'Downloading audio for preview… $percent%';
+  }
 }

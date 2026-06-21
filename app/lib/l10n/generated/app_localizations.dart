@@ -3031,6 +3031,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Diagnostics copied to clipboard'**
   String get diagnosticsCopied;
+
+  /// No description provided for @audioSpeedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get audioSpeedLabel;
+
+  /// No description provided for @audioSpeedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{speed}x'**
+  String audioSpeedValue(String speed);
+
+  /// No description provided for @audioDownloadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading audio for preview… {percent}%'**
+  String audioDownloadingProgress(String percent);
 }
 
 class _AppLocalizationsDelegate

@@ -6,7 +6,14 @@ import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
 import 'breadcrumb_bar.dart';
 
-enum OverflowAction { viewOptions, favorites, transfers, trash, storageByType }
+enum OverflowAction {
+  viewOptions,
+  favorites,
+  transfers,
+  trash,
+  storageByType,
+  dupFinder,
+}
 
 class BrowseAppBar extends StatelessWidget {
   const BrowseAppBar({
@@ -121,6 +128,13 @@ class BrowseAppBar extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.pie_chart_outline_rounded),
                     title: Text(ctx.l10n.storageByTypeTitle),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: OverflowAction.dupFinder,
+                  child: ListTile(
+                    leading: Icon(Icons.find_replace_rounded),
+                    title: Text('Find Duplicates'),
                   ),
                 ),
               ],

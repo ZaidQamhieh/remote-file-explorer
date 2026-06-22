@@ -22,6 +22,7 @@ import 'clipboard_state.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
 import 'trash_screen.dart';
+import 'dup_finder_screen.dart';
 import 'type_treemap_screen.dart';
 import 'widgets/batch_rename_sheet.dart';
 import 'widgets/batch_report.dart';
@@ -226,6 +227,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _openTrash(context);
       case OverflowAction.storageByType:
         _openStorageByType(context, state);
+      case OverflowAction.dupFinder:
+        _openDupFinder(context, state);
     }
   }
 
@@ -250,6 +253,21 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       MaterialPageRoute(
         builder:
             (_) => TypeTreemapScreen(
+              hostId: widget.host.id,
+              path: state.currentPath,
+              client: client,
+            ),
+      ),
+    );
+  }
+
+  Future<void> _openDupFinder(BuildContext context, ExplorerState state) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => DupFinderScreen(
               hostId: widget.host.id,
               path: state.currentPath,
               client: client,

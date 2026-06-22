@@ -7,6 +7,16 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.23.0', [
+      'Live updates via SSE (auto-refresh on file changes)',
+      'Permission editing (chmod dialog)',
+      'mDNS agent discovery on local network',
+      'Archive browser (zip/tar preview)',
+      'Duplicate file finder',
+      'Sync rules (download remote folders)',
+      'Cross-host search',
+      'Command palette',
+    ]),
     _ChangelogEntry('v1.22.0', [
       'Audio player with playback speed',
       'Markdown file preview',

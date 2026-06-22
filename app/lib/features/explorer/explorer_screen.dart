@@ -171,6 +171,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                 : BrowseAppBar(
                   state: state,
                   isFav: isFav,
+                  sseConnected: state.sseConnected,
                   onBack: _notifier.popDirectory,
                   onNavigateTo: _notifier.navigateTo,
                   onMoveInto:

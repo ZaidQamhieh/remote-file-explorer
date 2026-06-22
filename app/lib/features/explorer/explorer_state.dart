@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
@@ -7,6 +9,7 @@ import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/storage/visibility_prefs.dart';
+import 'sse_listener.dart';
 
 export '../../core/storage/view_prefs.dart' show SortField, SortOrder;
 
@@ -70,6 +73,7 @@ class ExplorerState {
     this.nextCursor,
     this.visibilityPrefs = const VisibilityPrefs(),
     this.showHidden = false,
+    this.sseConnected = false,
   }) : sortedEntries = _sortEntries(entries, sort),
        hiddenPaths = _hiddenPaths(entries, visibilityPrefs);
 
@@ -99,6 +103,9 @@ class ExplorerState {
   /// via [ExplorerNotifier.toggleShowHidden]. Not persisted: resets the next
   /// time this provider instance is recreated.
   final bool showHidden;
+
+  /// `true` while the SSE event stream from the agent is connected.
+  final bool sseConnected;
 
   /// [entries] partitioned (directories first) and sorted per [sort],
   /// computed once at construction time so list/grid `itemBuilder`s can do
@@ -162,6 +169,7 @@ class ExplorerState {
     Object? nextCursor = _sentinel,
     VisibilityPrefs? visibilityPrefs,
     bool? showHidden,
+    bool? sseConnected,
   }) => ExplorerState(
     pathStack: pathStack ?? this.pathStack,
     entries: entries ?? this.entries,
@@ -177,6 +185,7 @@ class ExplorerState {
         nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
     visibilityPrefs: visibilityPrefs ?? this.visibilityPrefs,
     showHidden: showHidden ?? this.showHidden,
+    sseConnected: sseConnected ?? this.sseConnected,
   );
 }
 
@@ -241,7 +250,13 @@ class ExplorerNotifier
       arg.hostId,
     );
 
-    // Schedule async load after construction.
+    // Dispose SSE listener and debounce timer when this provider is torn down.
+    ref.onDispose(() {
+      _sse?.dispose();
+      _refreshDebounce?.cancel();
+    });
+
+    // Schedule async load after construction (SSE starts after first success).
     Future.microtask(_load);
     return ExplorerState(
       pathStack: [arg.rootPath],
@@ -252,6 +267,8 @@ class ExplorerNotifier
   }
 
   final ListingCache _cache = ListingCache();
+  SseListener? _sse;
+  Timer? _refreshDebounce;
 
   Future<AgentClient> _client() => ref.read(clientProvider(arg.hostId).future);
 
@@ -296,6 +313,8 @@ class ExplorerNotifier
         error: null,
         nextCursor: listing.nextCursor,
       );
+      // Start SSE once (first successful load proves the client works).
+      if (_sse == null) _initSse(client);
     } catch (e) {
       if (state.currentPath != path) return;
       if (cached != null) {
@@ -305,6 +324,19 @@ class ExplorerNotifier
         state = state.copyWith(loading: false, error: e.toString());
       }
     }
+  }
+
+  void _initSse(AgentClient client) {
+    _sse = SseListener(client.events);
+    _sse!.events.listen((event) {
+      if (event.type == 'fs.change' &&
+          event.path.startsWith(state.currentPath)) {
+        _refreshDebounce?.cancel();
+        _refreshDebounce = Timer(const Duration(milliseconds: 500), refresh);
+      }
+    });
+    _sse!.start();
+    state = state.copyWith(sseConnected: true);
   }
 
   /// Loads the next page of entries for the current directory and appends

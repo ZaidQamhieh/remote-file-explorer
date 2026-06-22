@@ -6,6 +6,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import 'archive_preview.dart';
 import 'audio_preview.dart';
 import 'csv_preview.dart';
 import 'image_preview.dart';
@@ -16,11 +17,31 @@ import 'preview_image_cache.dart';
 import 'text_preview.dart';
 import 'video_preview.dart';
 
-enum _PreviewKind { image, pdf, video, audio, markdown, csv, text, none }
+enum _PreviewKind {
+  image,
+  pdf,
+  video,
+  audio,
+  markdown,
+  csv,
+  archive,
+  text,
+  none,
+}
 
 const Set<String> _markdownExtensions = {'md', 'markdown'};
 
 const Set<String> _csvExtensions = {'csv'};
+
+const Set<String> _archiveExtensions = {
+  'zip',
+  'tar',
+  'gz',
+  'tgz',
+  'bz2',
+  '7z',
+  'rar',
+};
 
 const Set<String> _textExtensions = {
   'txt', 'json', 'yaml', 'yml', 'xml', 'tsv', 'log',
@@ -101,6 +122,7 @@ _PreviewKind _kindOf(Entry entry) {
   if (_audioExtensions.contains(ext)) return _PreviewKind.audio;
   if (_markdownExtensions.contains(ext)) return _PreviewKind.markdown;
   if (_csvExtensions.contains(ext)) return _PreviewKind.csv;
+  if (_archiveExtensions.contains(ext)) return _PreviewKind.archive;
   if (_textExtensions.contains(ext)) return _PreviewKind.text;
 
   return _PreviewKind.none;
@@ -178,6 +200,12 @@ Widget? _viewerFor(
       );
     case _PreviewKind.csv:
       return CsvPreviewScreen(
+        entry: entry,
+        client: client,
+        chromeless: chromeless,
+      );
+    case _PreviewKind.archive:
+      return ArchivePreviewScreen(
         entry: entry,
         client: client,
         chromeless: chromeless,

@@ -30,7 +30,11 @@ Future<String?> _deviceId() async {
 /// Entry point for pairing a new host. Shows a tab bar with QR scan and
 /// manual-entry options.
 class PairingScreen extends ConsumerStatefulWidget {
-  const PairingScreen({super.key});
+  const PairingScreen({super.key, this.prefillAddress});
+
+  /// When non-null the manual-entry tab opens with this address pre-filled
+  /// (e.g. from mDNS discovery) and the tab bar starts on "Manual".
+  final String? prefillAddress;
 
   @override
   ConsumerState<PairingScreen> createState() => _PairingScreenState();
@@ -43,7 +47,11 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.prefillAddress != null ? 1 : 0,
+    );
   }
 
   @override
@@ -70,7 +78,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
       ),
       body: TabBarView(
         controller: _tabs,
-        children: const [_QrPairingTab(), _ManualPairingTab()],
+        children: [
+          const _QrPairingTab(),
+          _ManualPairingTab(prefillAddress: widget.prefillAddress),
+        ],
       ),
     );
   }
@@ -253,7 +264,9 @@ class _InlineErrorCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _ManualPairingTab extends ConsumerStatefulWidget {
-  const _ManualPairingTab();
+  const _ManualPairingTab({this.prefillAddress});
+
+  final String? prefillAddress;
 
   @override
   ConsumerState<_ManualPairingTab> createState() => _ManualPairingTabState();
@@ -261,10 +274,16 @@ class _ManualPairingTab extends ConsumerStatefulWidget {
 
 class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
   final _formKey = GlobalKey<FormState>();
-  final _addressCtrl = TextEditingController();
+  late final TextEditingController _addressCtrl;
   final _codeCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _addressCtrl = TextEditingController(text: widget.prefillAddress);
+  }
 
   @override
   void dispose() {

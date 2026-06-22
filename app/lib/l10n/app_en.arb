@@ -990,5 +990,55 @@
     "placeholders": { "percent": {"type": "String"} }
   },
 
-  "storageByTypeTitle": "Storage by type"
+  "storageByTypeTitle": "Storage by type",
+
+  "sseConnected": "Live",
+
+  "chmodTitle": "Permissions",
+  "chmodOwner": "Owner",
+  "chmodGroup": "Group",
+  "chmodOther": "Other",
+
+  "discoveredHosts": "Discovered on network",
+
+  "archiveContents": "Archive Contents",
+  "archiveEmpty": "Empty archive",
+  "archiveEntries": "{count} entries",
+  "@archiveEntries": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+
+  "dupFinderTitle": "Find Duplicates",
+  "dupFinderScreenTitle": "Duplicate Finder",
+  "dupFinderScan": "Scan for Duplicates",
+  "dupFinderScanning": "Scanning {count} files...",
+  "@dupFinderScanning": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "dupFinderNone": "No duplicates found",
+
+  "syncRulesTitle": "Sync Rules",
+  "syncRulesSubtitle": "Download remote folders to local storage",
+  "syncAddRule": "Add Sync Rule",
+  "syncDeleteRule": "Delete Sync Rule",
+  "syncDeleteConfirm": "Delete this sync rule?",
+  "syncNow": "Sync Now",
+  "syncNever": "Never synced",
+  "syncNoRules": "No sync rules yet",
+  "syncRemotePath": "Remote Path",
+  "syncLocalPath": "Local Folder",
+
+  "crossHostSearchTitle": "Search All Hosts",
+  "crossHostSearchHint": "Search all hosts...",
+  "crossHostSearching": "Searching {count} hosts...",
+  "@crossHostSearching": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "crossHostNoResults": "No results",
+  "crossHostTypeToSearch": "Type to search across all hosts",
+  "crossHostSearchTooltip": "Search all hosts",
+
+  "commandPaletteTitle": "Command Palette",
+  "commandPaletteHint": "Type a command...",
+  "goToPathTitle": "Go to Path"
 }

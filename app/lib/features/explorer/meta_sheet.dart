@@ -14,6 +14,7 @@ import '../preview/preview.dart';
 import '../preview/preview_actions.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show folderLabel, renameDestination;
+import 'widgets/chmod_dialog.dart';
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
 /// delete, and download actions.
@@ -180,7 +181,25 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (_entry.mimeType != null)
         _row(context, Icons.label_outline, l.metaType, _entry.mimeType!),
       if (_entry.mode != null)
-        _row(context, Icons.lock_outline, l.metaPermissions, _entry.mode!),
+        InkWell(
+          onTap: () async {
+            final updated = await ChmodDialog.show(
+              context,
+              entry: _entry,
+              client: widget.client,
+            );
+            if (updated != null && mounted) {
+              setState(() => _entry = updated);
+              widget.onChanged?.call();
+            }
+          },
+          child: _row(
+            context,
+            Icons.lock_outline,
+            l.metaPermissions,
+            _entry.mode!,
+          ),
+        ),
       if (_entry.modified != null)
         _row(
           context,

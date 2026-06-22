@@ -16,6 +16,7 @@ import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../sync/sync_screen.dart';
 import 'widgets/settings_section.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
@@ -354,6 +355,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           icon: Icons.devices_outlined,
           children: [
             for (final d in _devices) _DeviceRow(device: d, screen: this),
+          ],
+        ),
+        const SizedBox(height: Spacing.md),
+        SettingsSection(
+          title: 'Sync Rules',
+          icon: Icons.sync_outlined,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.sync),
+              title: const Text('Manage Sync Rules'),
+              subtitle: const Text('Download remote folders to local storage'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => SyncScreen(hostId: widget.host.id),
+                    ),
+                  ),
+            ),
           ],
         ),
         const SizedBox(height: Spacing.md),

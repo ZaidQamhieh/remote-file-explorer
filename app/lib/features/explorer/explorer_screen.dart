@@ -19,9 +19,11 @@ import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
 import '../transfers/widgets/mini_transfer_bar.dart';
 import 'clipboard_state.dart';
+import 'command_palette.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
 import 'trash_screen.dart';
+import 'dup_finder_screen.dart';
 import 'type_treemap_screen.dart';
 import 'widgets/batch_rename_sheet.dart';
 import 'widgets/batch_report.dart';
@@ -171,6 +173,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                 : BrowseAppBar(
                   state: state,
                   isFav: isFav,
+                  sseConnected: state.sseConnected,
                   onBack: _notifier.popDirectory,
                   onNavigateTo: _notifier.navigateTo,
                   onMoveInto:
@@ -225,6 +228,10 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _openTrash(context);
       case OverflowAction.storageByType:
         _openStorageByType(context, state);
+      case OverflowAction.dupFinder:
+        _openDupFinder(context, state);
+      case OverflowAction.commandPalette:
+        _showCommandPalette(context, state);
     }
   }
 
@@ -255,6 +262,111 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             ),
       ),
     );
+  }
+
+  Future<void> _openDupFinder(BuildContext context, ExplorerState state) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => DupFinderScreen(
+              hostId: widget.host.id,
+              path: state.currentPath,
+              client: client,
+            ),
+      ),
+    );
+  }
+
+  Future<void> _showCommandPalette(
+    BuildContext context,
+    ExplorerState state,
+  ) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    await CommandPalette.show(
+      context,
+      actions: [
+        PaletteAction(
+          label: 'Search',
+          icon: Icons.search,
+          onTap: () => _openSearch(context, state, client),
+        ),
+        PaletteAction(
+          label: 'Refresh',
+          icon: Icons.refresh,
+          onTap: () => _notifier.refresh(),
+        ),
+        PaletteAction(
+          label: 'Toggle Grid/List',
+          icon: Icons.view_module,
+          onTap: () => _notifier.toggleView(),
+        ),
+        PaletteAction(
+          label: 'View Options',
+          icon: Icons.tune,
+          onTap: () => ViewOptionsSheet.show(context, notifier: _notifier),
+        ),
+        PaletteAction(
+          label: 'Favorites',
+          icon: Icons.bookmarks_outlined,
+          onTap: () => _showFavorites(context),
+        ),
+        PaletteAction(
+          label: 'Transfers',
+          icon: Icons.file_upload_outlined,
+          onTap: () => _showTransfers(context),
+        ),
+        PaletteAction(
+          label: 'Trash',
+          icon: Icons.delete_outline,
+          onTap: () => _openTrash(context),
+        ),
+        PaletteAction(
+          label: 'Storage by Type',
+          icon: Icons.pie_chart_outline,
+          onTap: () => _openStorageByType(context, state),
+        ),
+        PaletteAction(
+          label: 'Find Duplicates',
+          icon: Icons.find_replace,
+          onTap: () => _openDupFinder(context, state),
+        ),
+        PaletteAction(
+          label: 'Navigate to Path',
+          icon: Icons.route,
+          onTap: () => _showGoToPath(context),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showGoToPath(BuildContext context) async {
+    final path = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Go to Path'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: '/path/to/folder'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('Go'),
+            ),
+          ],
+        );
+      },
+    );
+    if (path != null && path.isNotEmpty) _notifier.jumpTo(path);
   }
 
   void _toggleFavorite(BuildContext context, ExplorerState state, bool isFav) {

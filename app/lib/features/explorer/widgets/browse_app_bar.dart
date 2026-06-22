@@ -6,7 +6,15 @@ import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
 import 'breadcrumb_bar.dart';
 
-enum OverflowAction { viewOptions, favorites, transfers, trash, storageByType }
+enum OverflowAction {
+  viewOptions,
+  favorites,
+  transfers,
+  trash,
+  storageByType,
+  dupFinder,
+  commandPalette,
+}
 
 class BrowseAppBar extends StatelessWidget {
   const BrowseAppBar({
@@ -19,6 +27,7 @@ class BrowseAppBar extends StatelessWidget {
     required this.onSearch,
     required this.onToggleFavorite,
     required this.onOverflow,
+    this.sseConnected = false,
   });
 
   final ExplorerState state;
@@ -29,15 +38,28 @@ class BrowseAppBar extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onToggleFavorite;
   final void Function(OverflowAction action) onOverflow;
+  final bool sseConnected;
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
       key: const ValueKey('browse_app_bar'),
       leading: state.atRoot ? null : BackButton(onPressed: onBack),
-      title: Text(
-        folderLabel(state.currentPath),
-        style: Theme.of(context).textTheme.titleLarge,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              folderLabel(state.currentPath),
+              style: Theme.of(context).textTheme.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (sseConnected) ...[
+            const SizedBox(width: Spacing.xs),
+            const Tooltip(message: 'Live', child: _LiveDot()),
+          ],
+        ],
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(44),
@@ -74,6 +96,13 @@ class BrowseAppBar extends StatelessWidget {
           onSelected: onOverflow,
           itemBuilder:
               (ctx) => [
+                const PopupMenuItem(
+                  value: OverflowAction.commandPalette,
+                  child: ListTile(
+                    leading: Icon(Icons.terminal_rounded),
+                    title: Text('Command Palette'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: OverflowAction.viewOptions,
                   child: ListTile(
@@ -109,9 +138,32 @@ class BrowseAppBar extends StatelessWidget {
                     title: Text(ctx.l10n.storageByTypeTitle),
                   ),
                 ),
+                const PopupMenuItem(
+                  value: OverflowAction.dupFinder,
+                  child: ListTile(
+                    leading: Icon(Icons.find_replace_rounded),
+                    title: Text('Find Duplicates'),
+                  ),
+                ),
               ],
         ),
       ],
+    );
+  }
+}
+
+class _LiveDot extends StatelessWidget {
+  const _LiveDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: Colors.green,
+        shape: BoxShape.circle,
+      ),
     );
   }
 }

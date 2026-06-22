@@ -8,8 +8,10 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../pairing/pairing_screen.dart';
+import '../search/cross_host_search_screen.dart';
 import '../settings/app_settings_screen.dart';
 import '../settings/update_banner.dart';
+import 'mdns_discovery.dart';
 import 'widgets/host_card.dart';
 
 /// Displays all paired hosts as a dashboard of [HostCard]s.
@@ -46,6 +48,20 @@ class HostListScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.search_rounded),
+            tooltip: 'Search all hosts',
+            onPressed: () {
+              final store = storeAsync.valueOrNull;
+              if (store == null) return;
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder:
+                      (_) => CrossHostSearchScreen(hosts: store.listHosts()),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: context.l10n.refreshTooltip,
             onPressed: () => ref.invalidate(hostStoreProvider),
@@ -79,14 +95,23 @@ class HostListScreen extends ConsumerWidget {
                     onScan: () => _addComputer(context, ref),
                   );
                 }
-                return ListView.builder(
+                return ListView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: Spacing.sm,
                     vertical: Spacing.md,
                   ),
-                  itemCount: hosts.length,
-                  itemBuilder:
-                      (ctx, i) => AppearListItem(
+                  children: [
+                    _DiscoveredHostsSection(
+                      pairedAddresses: hosts.map((h) => h.address).toSet(),
+                      onAdd:
+                          (address) => _addComputer(
+                            context,
+                            ref,
+                            prefillAddress: address,
+                          ),
+                    ),
+                    for (int i = 0; i < hosts.length; i++)
+                      AppearListItem(
                         index: i,
                         child: HostCard(
                           host: hosts[i],
@@ -94,6 +119,7 @@ class HostListScreen extends ConsumerWidget {
                           isFirst: i == 0,
                         ),
                       ),
+                  ],
                 );
               },
             ),
@@ -108,10 +134,16 @@ class HostListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _addComputer(BuildContext context, WidgetRef ref) async {
-    await Navigator.of(
-      context,
-    ).push<Host>(MaterialPageRoute(builder: (_) => const PairingScreen()));
+  Future<void> _addComputer(
+    BuildContext context,
+    WidgetRef ref, {
+    String? prefillAddress,
+  }) async {
+    await Navigator.of(context).push<Host>(
+      MaterialPageRoute(
+        builder: (_) => PairingScreen(prefillAddress: prefillAddress),
+      ),
+    );
     // Reload the host store after pairing
     ref.invalidate(hostStoreProvider);
   }
@@ -175,6 +207,62 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Discovered agents section — mDNS `_rfe._tcp`
+// ---------------------------------------------------------------------------
+
+class _DiscoveredHostsSection extends ConsumerWidget {
+  const _DiscoveredHostsSection({
+    required this.pairedAddresses,
+    required this.onAdd,
+  });
+
+  final Set<String> pairedAddresses;
+  final ValueChanged<String> onAdd;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final discovered = ref.watch(mdnsDiscoveryProvider);
+    return discovered.when(
+      data: (agents) {
+        final unpaired =
+            agents
+                .where((a) => !pairedAddresses.contains(a.hostAddress))
+                .toList();
+        if (unpaired.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.xs,
+              ),
+              child: Text(
+                'Discovered on network',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            for (final agent in unpaired)
+              ListTile(
+                leading: const Icon(Icons.computer_rounded),
+                title: Text(agent.name),
+                subtitle: Text(agent.hostAddress),
+                trailing: FilledButton.tonal(
+                  onPressed: () => onAdd(agent.hostAddress),
+                  child: const Text('Add'),
+                ),
+              ),
+            const Divider(),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

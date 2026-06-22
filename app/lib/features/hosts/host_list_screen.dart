@@ -8,6 +8,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../pairing/pairing_screen.dart';
+import '../search/cross_host_search_screen.dart';
 import '../settings/app_settings_screen.dart';
 import '../settings/update_banner.dart';
 import 'mdns_discovery.dart';
@@ -46,6 +47,20 @@ class HostListScreen extends ConsumerWidget {
           },
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search_rounded),
+            tooltip: 'Search all hosts',
+            onPressed: () {
+              final store = storeAsync.valueOrNull;
+              if (store == null) return;
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder:
+                      (_) => CrossHostSearchScreen(hosts: store.listHosts()),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: context.l10n.refreshTooltip,

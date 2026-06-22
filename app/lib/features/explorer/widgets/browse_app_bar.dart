@@ -13,6 +13,7 @@ enum OverflowAction {
   trash,
   storageByType,
   dupFinder,
+  commandPalette,
 }
 
 class BrowseAppBar extends StatelessWidget {
@@ -95,6 +96,13 @@ class BrowseAppBar extends StatelessWidget {
           onSelected: onOverflow,
           itemBuilder:
               (ctx) => [
+                const PopupMenuItem(
+                  value: OverflowAction.commandPalette,
+                  child: ListTile(
+                    leading: Icon(Icons.terminal_rounded),
+                    title: Text('Command Palette'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: OverflowAction.viewOptions,
                   child: ListTile(

@@ -33,6 +33,7 @@ dependencies:
   receive_sharing_intent: ^1.8.1
   photo_manager: ^3.6.1
   connectivity_plus: ^6.1.0
+  nsd: ^5.0.1
   battery_plus: ^6.2.0
   local_auth: ^2.3.0
 

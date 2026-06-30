@@ -216,6 +216,17 @@ class AppSettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const Divider(height: Spacing.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Preload previews on cellular'),
+                subtitle: const Text(
+                  'Warm neighbouring images while swiping the preview, even '
+                  'off Wi-Fi',
+                ),
+                value: app.preloadPreviewOnCellular,
+                onChanged: notifier.setPreloadPreviewOnCellular,
+              ),
             ],
           ),
           const SizedBox(height: Spacing.md),

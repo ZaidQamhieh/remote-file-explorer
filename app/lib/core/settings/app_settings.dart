@@ -34,6 +34,7 @@ class AppDefaults {
     this.amoledDark = false,
     this.seedColor,
     this.watchedFolders = const {},
+    this.preloadPreviewOnCellular = false,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -83,6 +84,12 @@ class AppDefaults {
   /// parent directory is in this set, a local notification is shown.
   final Set<String> watchedFolders;
 
+  /// Whether the preview pager may preload neighbouring images while on a
+  /// cellular connection (S4). Default off — preloading on cellular without
+  /// asking burns data for a convenience feature. Wi-Fi/ethernet preloading is
+  /// unaffected by this setting.
+  final bool preloadPreviewOnCellular;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -95,6 +102,7 @@ class AppDefaults {
     bool? appLockEnabled,
     bool? amoledDark,
     Set<String>? watchedFolders,
+    bool? preloadPreviewOnCellular,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -109,6 +117,8 @@ class AppDefaults {
     amoledDark: amoledDark ?? this.amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders ?? this.watchedFolders,
+    preloadPreviewOnCellular:
+        preloadPreviewOnCellular ?? this.preloadPreviewOnCellular,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -125,6 +135,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders,
+    preloadPreviewOnCellular: preloadPreviewOnCellular,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -141,6 +152,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: value,
     watchedFolders: watchedFolders,
+    preloadPreviewOnCellular: preloadPreviewOnCellular,
   );
 
   @override
@@ -159,7 +171,8 @@ class AppDefaults {
       other.amoledDark == amoledDark &&
       other.seedColor == seedColor &&
       other.watchedFolders.length == watchedFolders.length &&
-      other.watchedFolders.containsAll(watchedFolders);
+      other.watchedFolders.containsAll(watchedFolders) &&
+      other.preloadPreviewOnCellular == preloadPreviewOnCellular;
 
   @override
   int get hashCode => Object.hash(
@@ -176,6 +189,7 @@ class AppDefaults {
     amoledDark,
     seedColor,
     Object.hashAllUnordered(watchedFolders),
+    preloadPreviewOnCellular,
   );
 }
 

@@ -1,9 +1,14 @@
+import 'dart:async' show unawaited;
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'archive_preview.dart';
@@ -138,6 +143,33 @@ bool isPreviewable(Entry entry) {
 /// Whether [entry]'s viewer is the image viewer — the only kind that uses a
 /// tile→preview [Hero] and gets neighbour byte-preloading in the pager.
 bool _isImage(Entry entry) => _kindOf(entry) == _PreviewKind.image;
+
+/// Network-aware prefetch gate (S4): whether [_preloadNeighbours] should
+/// actually fetch neighbour bytes. Wi-Fi/ethernet/unknown connectivity always
+/// preloads; on cellular, only if the user opted in via Settings.
+///
+/// Pure + side-effect-free so it can be unit-tested without touching
+/// `connectivity_plus`.
+bool shouldPreloadOnCellular({
+  required bool isCellular,
+  required bool settingEnabled,
+}) => !isCellular || settingEnabled;
+
+/// Whether the device is currently on a cellular-only connection (no Wi-Fi or
+/// ethernet also up). Mirrors the Wi-Fi check in
+/// `photo_backup_controller.dart`'s `_onWifi`. Defaults to `false` (i.e.
+/// "preload as usual") if the connectivity plugin is unavailable.
+Future<bool> _isOnCellular() async {
+  try {
+    final results = await Connectivity().checkConnectivity();
+    final onWifiOrEthernet =
+        results.contains(ConnectivityResult.wifi) ||
+        results.contains(ConnectivityResult.ethernet);
+    return !onWifiOrEthernet && results.contains(ConnectivityResult.mobile);
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Filters [siblings] down to the previewable ones (in their original order)
 /// and locates [entry]'s index within that filtered list.
@@ -291,7 +323,7 @@ Future<void> openPreview(
 /// Swiping pages between sibling files; when a page settles, the immediate
 /// neighbours' (±1) image bytes are preloaded so the next swipe shows instantly.
 /// Only images are preloaded — pdf/video are too heavy to warm speculatively.
-class PreviewPager extends StatefulWidget {
+class PreviewPager extends ConsumerStatefulWidget {
   const PreviewPager({
     super.key,
     required this.entries,
@@ -308,10 +340,10 @@ class PreviewPager extends StatefulWidget {
   final VoidCallback? onChanged;
 
   @override
-  State<PreviewPager> createState() => _PreviewPagerState();
+  ConsumerState<PreviewPager> createState() => _PreviewPagerState();
 }
 
-class _PreviewPagerState extends State<PreviewPager> {
+class _PreviewPagerState extends ConsumerState<PreviewPager> {
   late final PageController _controller;
   late List<Entry> _entries;
   late int _index;
@@ -331,9 +363,24 @@ class _PreviewPagerState extends State<PreviewPager> {
     super.dispose();
   }
 
-  /// Warms the ±1 neighbours' image bytes so swiping is instant. Bounded to the
-  /// immediate neighbours and to images only.
+  /// Warms the ±1 neighbours' image bytes so swiping is instant. Bounded to
+  /// the immediate neighbours and to images only. Network-aware (S4): skipped
+  /// on cellular unless the user opted in via Settings.
   void _preloadNeighbours() {
+    unawaited(_preloadNeighboursIfAllowed());
+  }
+
+  Future<void> _preloadNeighboursIfAllowed() async {
+    final isCellular = await _isOnCellular();
+    final settingEnabled =
+        ref.read(settingsProvider).valueOrNull?.app.preloadPreviewOnCellular ??
+        false;
+    if (!shouldPreloadOnCellular(
+      isCellular: isCellular,
+      settingEnabled: settingEnabled,
+    )) {
+      return;
+    }
     for (final i in [_index - 1, _index + 1]) {
       if (i < 0 || i >= _entries.length) continue;
       final e = _entries[i];

@@ -52,6 +52,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kAmoledDark = 'app.amoledDark';
   static const _kSeedColor = 'app.seedColor';
   static const _kWatchedFolders = 'app.watchedFolders.v1';
+  static const _kPreloadPreviewOnCellular = 'app.preloadPreviewOnCellular';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -117,6 +118,15 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> setAmoledDark(bool value) async {
     await _prefs?.setBool(_kAmoledDark, value);
     _emit((s) => s.copyWith(app: s.app.copyWith(amoledDark: value)));
+  }
+
+  /// Sets whether the preview pager may preload neighbouring images on
+  /// cellular (S4). Default off.
+  Future<void> setPreloadPreviewOnCellular(bool value) async {
+    await _prefs?.setBool(_kPreloadPreviewOnCellular, value);
+    _emit(
+      (s) => s.copyWith(app: s.app.copyWith(preloadPreviewOnCellular: value)),
+    );
   }
 
   Future<void> setSeedColor(Color? value) async {
@@ -438,6 +448,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
               ? Color(prefs.getInt(_kSeedColor)!)
               : null,
       watchedFolders: _decodeStringSet(prefs.getString(_kWatchedFolders)),
+      preloadPreviewOnCellular:
+          prefs.getBool(_kPreloadPreviewOnCellular) ?? false,
     );
 
     final overrides = <String, DeviceOverrides>{};

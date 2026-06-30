@@ -31,6 +31,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
 
+  /status:
+    get:
+      summary: Agent self-report (uptime, version, platform, disk space)
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Agent status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentStatus' }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+
   /pair:
     post:
       summary: Complete device pairing (unauthenticated; consumes one-time pairing code)
@@ -1104,6 +1117,15 @@ components:
         id: { type: string }
         bytes: { type: integer, format: int64 }
         total: { type: integer, format: int64 }
+
+    AgentStatus:
+      type: object
+      properties:
+        version: { type: string }
+        uptimeSeconds: { type: integer, format: int64 }
+        platform: { type: string }
+        freeBytes: { type: integer, format: int64 }
+        totalBytes: { type: integer, format: int64 }
 
     Error:
       type: object

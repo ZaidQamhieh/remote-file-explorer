@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,8 +28,10 @@ type Config struct {
 	MACAddress       string // MAC address of the LAN interface (for Wake-on-LAN)
 	ThumbCacheDir    string // directory for on-disk thumbnail cache
 	Settings         *settings.Store
-	UpdatesDir       string // directory of downloadable APKs for in-app update
-	TrashDir         string // trash store root (XDG Trash on Linux; managed dir elsewhere)
+	UpdatesDir       string    // directory of downloadable APKs for in-app update
+	TrashDir         string    // trash store root (XDG Trash on Linux; managed dir elsewhere)
+	StartTime        time.Time // agent process start time (for uptime reporting)
+	DataDir          string    // data directory path (for disk-space reporting)
 }
 
 // New builds the v1 router and wires all routes.
@@ -49,6 +52,12 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		// Unauthenticated.
 		r.Get("/health", healthHandler(cfg))
 		r.Post("/pair", pairHandler(cfg, db, pm))
+
+		// Authenticated, no path jail (non-filesystem endpoints).
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware(db))
+			r.Get("/status", statusHandler(cfg))
+		})
 
 		// Authenticated sub-router.
 		r.Group(func(r chi.Router) {

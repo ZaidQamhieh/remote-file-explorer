@@ -55,6 +55,7 @@ func main() {
 }
 
 func runServe(args []string) {
+	startTime := time.Now()
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", ":8765", "listen address (host:port)")
 	name := fs.String("name", hostName(), "agent display name shown to the phone")
@@ -135,6 +136,8 @@ func runServe(args []string) {
 		Settings:         st,
 		UpdatesDir:       updatesDir,
 		TrashDir:         trashDir,
+		StartTime:        startTime,
+		DataDir:          *dataDir,
 	}, db, pm, tm, hub)
 	if err != nil {
 		log.Fatalf("server: %v", err)

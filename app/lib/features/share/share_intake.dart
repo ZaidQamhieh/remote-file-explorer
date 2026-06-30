@@ -13,6 +13,14 @@
 /// v1 only supports items with a real file path (images/videos/generic
 /// files). Pure text/URL shares are not uploadable — if *only* text/URL was
 /// shared we show an info snackbar and stop.
+///
+/// This is intent-driven and doesn't care who sent the `ACTION_SEND`/
+/// `ACTION_SEND_MULTIPLE` intent — another app's share sheet and Tasker's
+/// "Send Intent" action (with a file URI extra) both land here the same way.
+/// That makes this flow double as the Tasker "upload to PC" hook with no
+/// extra code needed; see `app/android/app/src/main/AndroidManifest.xml`'s
+/// SEND/SEND_MULTIPLE filters and `host_open_listener.dart` for the sibling
+/// "open host" intent hook.
 library;
 
 import 'dart:async';

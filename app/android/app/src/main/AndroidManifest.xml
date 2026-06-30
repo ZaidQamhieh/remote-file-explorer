@@ -62,6 +62,14 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="*/*"/>
             </intent-filter>
+            <!-- Tasker / automation hook: jump straight to a paired host's
+                 explorer screen. Addressed by explicit package+class+action
+                 (e.g. Tasker's "Send Intent" action), not by data matching,
+                 so no <data> element is needed. -->
+            <intent-filter>
+                <action android:name="com.zqamhieh.remote_file_explorer.OPEN_HOST"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
         <!-- FileProvider used by the in-app updater to grant the system
              installer read access to the downloaded APK. -->

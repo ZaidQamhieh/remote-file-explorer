@@ -10,6 +10,7 @@ import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'core/ui/lock_gate.dart';
 import 'features/hosts/host_list_screen.dart';
+import 'features/hosts/host_open_listener.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/share/share_intake.dart';
 
@@ -111,7 +112,10 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(
         navigatorKey: navigatorKey,
-        child: const LockGate(child: _HomeRouter()),
+        child: HostOpenListener(
+          navigatorKey: navigatorKey,
+          child: const LockGate(child: _HomeRouter()),
+        ),
       ),
     );
   }

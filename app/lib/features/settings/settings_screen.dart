@@ -88,6 +88,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool? readOnly,
     List<String>? roots,
     String? name,
+    bool? allowSharing,
     String? successMsg,
   }) async {
     final client = _client;
@@ -99,6 +100,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         readOnly: readOnly,
         roots: roots,
         agentName: name,
+        allowSharing: allowSharing,
       );
     });
     try {
@@ -106,6 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         readOnly: readOnly,
         roots: roots,
         agentName: name,
+        allowSharing: allowSharing,
       );
       setState(() => _settings = updated);
       if (mounted && successMsg != null) showSuccess(context, successMsg);
@@ -284,6 +287,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               value: s.readOnly,
               onChanged: (v) => _patch(readOnly: v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(context.l10n.enableShareLinks),
+              subtitle: Text(
+                s.allowSharing
+                    ? context.l10n.shareLinksEnabledHint
+                    : context.l10n.shareLinksDisabledHint,
+              ),
+              value: s.allowSharing,
+              onChanged: (v) => _patch(allowSharing: v),
             ),
           ],
         ),

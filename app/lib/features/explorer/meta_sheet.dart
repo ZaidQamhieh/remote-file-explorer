@@ -12,6 +12,7 @@ import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../preview/preview.dart';
 import '../preview/preview_actions.dart';
+import '../share/share_sheet.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show folderLabel, renameDestination;
 import 'widgets/chmod_dialog.dart';
@@ -368,6 +369,19 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             label: Text(context.l10n.shareTooltip),
             onPressed: () => _share(context),
           ),
+        if (!_entry.isDir)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.link),
+            label: Text(context.l10n.shareLinkButton),
+            onPressed: () => _shareLink(context),
+          ),
         if (!_entry.isDir && isExtractableArchive(_entry.name))
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
@@ -541,6 +555,27 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       client: widget.client,
     );
     await actions.share(context);
+  }
+
+  /// Mints a one-time share link and opens [ShareLinkSheet] to show it.
+  ///
+  /// Deliberately not gated on a client-side "is sharing enabled" check —
+  /// the agent's `allowSharing` setting is the single source of truth. If
+  /// it's off, the mint call 403s and that's surfaced as a normal error.
+  Future<void> _shareLink(BuildContext context) async {
+    try {
+      final link = await widget.client.mintShareLink(_entry.path);
+      if (!context.mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => ShareSheet(client: widget.client, link: link),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        showError(context, context.l10n.shareLinkFailed(e.toString()));
+      }
+    }
   }
 
   Future<void> _rename(BuildContext context) async {

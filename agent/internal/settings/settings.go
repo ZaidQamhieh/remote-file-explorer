@@ -18,6 +18,7 @@ const (
 	keyAgentName      = "agentName"
 	keyMaxUploadBPS   = "maxUploadBytesPerSec"
 	keyMaxDownloadBPS = "maxDownloadBytesPerSec"
+	keyAllowSharing   = "allowSharing"
 )
 
 // Store is a concurrency-safe view over the agent's settings.
@@ -29,6 +30,7 @@ type Store struct {
 	agentName          string
 	maxUploadBytesPS   int64 // 0 = unlimited
 	maxDownloadBytesPS int64 // 0 = unlimited
+	allowSharing       bool  // R1 one-time share links; always seeds false
 }
 
 // Load builds a Store. Any config key that is unset is seeded from the
@@ -76,6 +78,19 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 		s.agentName = nm
 	}
 
+	as, err := db.GetConfig(keyAllowSharing)
+	if err != nil {
+		return nil, err
+	}
+	if as == "" {
+		s.allowSharing = false // R1: always seeds false, not CLI-configurable
+		if err := db.SetConfig(keyAllowSharing, boolToStr(false)); err != nil {
+			return nil, err
+		}
+	} else {
+		s.allowSharing = as == "true"
+	}
+
 	// Bandwidth limits default to 0 (unlimited) and are only written on
 	// first explicit set — no seed needed.
 	if v, err := db.GetConfig(keyMaxUploadBPS); err != nil {
@@ -113,6 +128,24 @@ func (s *Store) AgentName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.agentName
+}
+
+// IsAllowSharing reports whether R1 one-time share links are enabled.
+func (s *Store) IsAllowSharing() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.allowSharing
+}
+
+// SetAllowSharing persists and applies the share-links-enabled flag.
+func (s *Store) SetAllowSharing(v bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyAllowSharing, boolToStr(v)); err != nil {
+		return err
+	}
+	s.allowSharing = v
+	return nil
 }
 
 // SetReadOnly persists and applies the read-only flag.

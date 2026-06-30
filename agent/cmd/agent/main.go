@@ -123,6 +123,9 @@ func runServe(args []string) {
 		log.Fatalf("settings: %v", err)
 	}
 
+	// R1: periodically delete expired one-time share tokens (T6).
+	server.StartShareSweeper(db)
+
 	hub := server.NewEventHub()
 
 	handler, err := server.New(server.Config{

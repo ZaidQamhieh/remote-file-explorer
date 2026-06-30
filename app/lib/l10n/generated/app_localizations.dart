@@ -1352,6 +1352,48 @@ abstract class AppLocalizations {
   /// **'Share'**
   String get shareTooltip;
 
+  /// No description provided for @shareLinkButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link'**
+  String get shareLinkButton;
+
+  /// No description provided for @shareLinkSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link'**
+  String get shareLinkSheetTitle;
+
+  /// No description provided for @shareLinkExpiresIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires in {time}'**
+  String shareLinkExpiresIn(String time);
+
+  /// No description provided for @shareLinkExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Link expired'**
+  String get shareLinkExpired;
+
+  /// No description provided for @shareLinkRevokeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get shareLinkRevokeButton;
+
+  /// No description provided for @shareLinkRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link revoked'**
+  String get shareLinkRevoked;
+
+  /// No description provided for @shareLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link failed: {error}'**
+  String shareLinkFailed(String error);
+
   /// No description provided for @saveToDeviceTooltip.
   ///
   /// In en, this message translates to:
@@ -1525,6 +1567,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read-only mode'**
   String get readOnlyMode;
+
+  /// No description provided for @enableShareLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable share links'**
+  String get enableShareLinks;
+
+  /// No description provided for @shareLinksEnabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Files can be shared via one-time links'**
+  String get shareLinksEnabledHint;
+
+  /// No description provided for @shareLinksDisabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Share links are turned off'**
+  String get shareLinksDisabledHint;
 
   /// No description provided for @allowedFoldersSection.
   ///
@@ -3055,6 +3115,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Storage by type'**
   String get storageByTypeTitle;
+
+  /// No description provided for @sseConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get sseConnected;
+
+  /// No description provided for @chmodTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get chmodTitle;
+
+  /// No description provided for @chmodOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get chmodOwner;
+
+  /// No description provided for @chmodGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get chmodGroup;
+
+  /// No description provided for @chmodOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get chmodOther;
+
+  /// No description provided for @discoveredHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Discovered on network'**
+  String get discoveredHosts;
+
+  /// No description provided for @archiveContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive Contents'**
+  String get archiveContents;
+
+  /// No description provided for @archiveEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty archive'**
+  String get archiveEmpty;
+
+  /// No description provided for @archiveEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entries'**
+  String archiveEntries(int count);
+
+  /// No description provided for @dupFinderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find Duplicates'**
+  String get dupFinderTitle;
+
+  /// No description provided for @dupFinderScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate Finder'**
+  String get dupFinderScreenTitle;
+
+  /// No description provided for @dupFinderScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan for Duplicates'**
+  String get dupFinderScan;
+
+  /// No description provided for @dupFinderScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning {count} files...'**
+  String dupFinderScanning(int count);
+
+  /// No description provided for @dupFinderNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No duplicates found'**
+  String get dupFinderNone;
+
+  /// No description provided for @syncRulesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Rules'**
+  String get syncRulesTitle;
+
+  /// No description provided for @syncRulesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download remote folders to local storage'**
+  String get syncRulesSubtitle;
+
+  /// No description provided for @syncAddRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Sync Rule'**
+  String get syncAddRule;
+
+  /// No description provided for @syncDeleteRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Sync Rule'**
+  String get syncDeleteRule;
+
+  /// No description provided for @syncDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this sync rule?'**
+  String get syncDeleteConfirm;
+
+  /// No description provided for @syncNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Now'**
+  String get syncNow;
+
+  /// No description provided for @syncNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never synced'**
+  String get syncNever;
+
+  /// No description provided for @syncNoRules.
+  ///
+  /// In en, this message translates to:
+  /// **'No sync rules yet'**
+  String get syncNoRules;
+
+  /// No description provided for @syncRemotePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Path'**
+  String get syncRemotePath;
+
+  /// No description provided for @syncLocalPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Local Folder'**
+  String get syncLocalPath;
+
+  /// No description provided for @crossHostSearchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search All Hosts'**
+  String get crossHostSearchTitle;
+
+  /// No description provided for @crossHostSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search all hosts...'**
+  String get crossHostSearchHint;
+
+  /// No description provided for @crossHostSearching.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching {count} hosts...'**
+  String crossHostSearching(int count);
+
+  /// No description provided for @crossHostNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get crossHostNoResults;
+
+  /// No description provided for @crossHostTypeToSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search across all hosts'**
+  String get crossHostTypeToSearch;
+
+  /// No description provided for @crossHostSearchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search all hosts'**
+  String get crossHostSearchTooltip;
+
+  /// No description provided for @commandPaletteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Palette'**
+  String get commandPaletteTitle;
+
+  /// No description provided for @commandPaletteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a command...'**
+  String get commandPaletteHint;
+
+  /// No description provided for @goToPathTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Path'**
+  String get goToPathTitle;
 }
 
 class _AppLocalizationsDelegate

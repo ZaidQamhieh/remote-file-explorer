@@ -293,6 +293,95 @@ func TestTouchDeviceRecordsAddressAndVersion(t *testing.T) {
 	}
 }
 
+// TestConsumeShareTokenLifecycle verifies a share token can be consumed
+// exactly once (single-use), that expired tokens are rejected, and that
+// unknown tokens are rejected.
+func TestConsumeShareTokenLifecycle(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateShareToken("hash-1", "/srv/file.txt", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	path, ok, err := db.ConsumeShareToken("hash-1")
+	if err != nil {
+		t.Fatalf("consume: %v", err)
+	}
+	if !ok || path != "/srv/file.txt" {
+		t.Fatalf("expected first consume to succeed with path, got ok=%v path=%q", ok, path)
+	}
+
+	// Single-use: a second consume of the same hash fails.
+	_, ok, err = db.ConsumeShareToken("hash-1")
+	if err != nil {
+		t.Fatalf("consume 2: %v", err)
+	}
+	if ok {
+		t.Fatal("expected second consume to fail (single-use)")
+	}
+
+	// An expired token is rejected (and removed).
+	if err := db.CreateShareToken("hash-old", "/srv/old.txt", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatalf("create expired: %v", err)
+	}
+	_, ok, err = db.ConsumeShareToken("hash-old")
+	if err != nil {
+		t.Fatalf("consume expired: %v", err)
+	}
+	if ok {
+		t.Fatal("expected expired token to be rejected")
+	}
+
+	// An unknown token is rejected.
+	_, ok, err = db.ConsumeShareToken("does-not-exist")
+	if err != nil {
+		t.Fatalf("consume unknown: %v", err)
+	}
+	if ok {
+		t.Fatal("expected unknown token to be rejected")
+	}
+}
+
+// TestSweepExpiredShareTokens verifies the sweeper deletes only expired
+// tokens, leaving active ones consumable.
+func TestSweepExpiredShareTokens(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateShareToken("expired-1", "/a", time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("create expired-1: %v", err)
+	}
+	if err := db.CreateShareToken("expired-2", "/b", time.Now().Add(-time.Second)); err != nil {
+		t.Fatalf("create expired-2: %v", err)
+	}
+	if err := db.CreateShareToken("active-1", "/c", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create active-1: %v", err)
+	}
+
+	n, err := db.SweepExpiredShareTokens()
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 swept, got %d", n)
+	}
+
+	tokens, err := db.ListShareTokens()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(tokens) != 1 || tokens[0].TokenHash != "active-1" {
+		t.Fatalf("expected only active-1 left, got %+v", tokens)
+	}
+}
+
 // TestOpenEnablesWAL verifies the DSN params from Open actually take effect:
 // modernc.org/sqlite only honors `_pragma=...` query params, so the
 // mattn-style `_journal_mode`/`_busy_timeout` keys would otherwise be

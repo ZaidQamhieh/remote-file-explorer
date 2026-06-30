@@ -14,6 +14,7 @@ import '../models/app_release.dart';
 import '../models/device.dart';
 import '../models/drive.dart';
 import '../models/entry.dart';
+import '../models/agent_status.dart';
 import '../models/health.dart';
 import '../models/host.dart';
 import '../models/listing.dart';
@@ -366,6 +367,12 @@ class AgentClient {
   Future<Health> health() async {
     final data = await _get<Map<String, dynamic>>('/health');
     return Health.fromJson(data);
+  }
+
+  /// Calls the authenticated `/status` endpoint.
+  Future<AgentStatus> fetchStatus() async {
+    final data = await _get<Map<String, dynamic>>('/status');
+    return AgentStatus.fromJson(data);
   }
 
   /// Pair this device with the agent.

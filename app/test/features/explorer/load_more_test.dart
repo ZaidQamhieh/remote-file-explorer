@@ -23,8 +23,9 @@ Future<void> _waitUntil(
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
-    if (DateTime.now().isAfter(deadline))
+    if (DateTime.now().isAfter(deadline)) {
       fail('condition not met within $timeout');
+    }
     await Future<void>.delayed(const Duration(milliseconds: 5));
   }
 }

@@ -284,6 +284,16 @@ class AppSettingsScreen extends ConsumerWidget {
                       on ? 1024 * 1024 * 1024 : 0,
                     ),
               ),
+              const Divider(height: Spacing.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Weekly storage digest'),
+                subtitle: const Text(
+                  'Once a week, notify me how free space is trending on my hosts',
+                ),
+                value: app.weeklyDigestEnabled,
+                onChanged: notifier.setWeeklyDigestEnabled,
+              ),
             ],
           ),
           const SizedBox(height: Spacing.md),

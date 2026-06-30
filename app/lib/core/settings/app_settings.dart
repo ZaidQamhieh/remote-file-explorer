@@ -36,6 +36,7 @@ class AppDefaults {
     this.watchedFolders = const {},
     this.compressDownloadsOnCellular = true,
     this.preloadPreviewOnCellular = false,
+    this.weeklyDigestEnabled = false,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -97,6 +98,10 @@ class AppDefaults {
   /// unaffected by this setting.
   final bool preloadPreviewOnCellular;
 
+  /// Opt-in (L4): show a once-a-week notification summarizing storage trends
+  /// across paired hosts. App-global only. Defaults to off.
+  final bool weeklyDigestEnabled;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -111,6 +116,7 @@ class AppDefaults {
     Set<String>? watchedFolders,
     bool? compressDownloadsOnCellular,
     bool? preloadPreviewOnCellular,
+    bool? weeklyDigestEnabled,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -129,6 +135,7 @@ class AppDefaults {
         compressDownloadsOnCellular ?? this.compressDownloadsOnCellular,
     preloadPreviewOnCellular:
         preloadPreviewOnCellular ?? this.preloadPreviewOnCellular,
+    weeklyDigestEnabled: weeklyDigestEnabled ?? this.weeklyDigestEnabled,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -147,6 +154,7 @@ class AppDefaults {
     watchedFolders: watchedFolders,
     compressDownloadsOnCellular: compressDownloadsOnCellular,
     preloadPreviewOnCellular: preloadPreviewOnCellular,
+    weeklyDigestEnabled: weeklyDigestEnabled,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -165,6 +173,7 @@ class AppDefaults {
     watchedFolders: watchedFolders,
     compressDownloadsOnCellular: compressDownloadsOnCellular,
     preloadPreviewOnCellular: preloadPreviewOnCellular,
+    weeklyDigestEnabled: weeklyDigestEnabled,
   );
 
   @override
@@ -185,7 +194,8 @@ class AppDefaults {
       other.watchedFolders.length == watchedFolders.length &&
       other.watchedFolders.containsAll(watchedFolders) &&
       other.compressDownloadsOnCellular == compressDownloadsOnCellular &&
-      other.preloadPreviewOnCellular == preloadPreviewOnCellular;
+      other.preloadPreviewOnCellular == preloadPreviewOnCellular &&
+      other.weeklyDigestEnabled == weeklyDigestEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -204,6 +214,7 @@ class AppDefaults {
     Object.hashAllUnordered(watchedFolders),
     compressDownloadsOnCellular,
     preloadPreviewOnCellular,
+    weeklyDigestEnabled,
   );
 }
 

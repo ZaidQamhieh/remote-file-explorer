@@ -55,6 +55,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kCompressDownloadsOnCellular =
       'app.compressDownloadsOnCellular';
   static const _kPreloadPreviewOnCellular = 'app.preloadPreviewOnCellular';
+  static const _kWeeklyDigest = 'app.weeklyDigestEnabled';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -166,6 +167,13 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       await _prefs?.setString(_kWatchedFolders, jsonEncode(updated.toList()));
     }
     _emit((s) => s.copyWith(app: s.app.copyWith(watchedFolders: updated)));
+  }
+
+  // --- Weekly storage digest (L4) ------------------------------------------
+
+  Future<void> setWeeklyDigestEnabled(bool value) async {
+    await _prefs?.setBool(_kWeeklyDigest, value);
+    _emit((s) => s.copyWith(app: s.app.copyWith(weeklyDigestEnabled: value)));
   }
 
   // --- Appearance (Wave F) ------------------------------------------------
@@ -462,6 +470,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
           prefs.getBool(_kCompressDownloadsOnCellular) ?? true,
       preloadPreviewOnCellular:
           prefs.getBool(_kPreloadPreviewOnCellular) ?? false,
+      weeklyDigestEnabled: prefs.getBool(_kWeeklyDigest) ?? false,
     );
 
     final overrides = <String, DeviceOverrides>{};

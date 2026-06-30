@@ -11,6 +11,7 @@ import 'core/theme/app_theme.dart';
 import 'core/ui/lock_gate.dart';
 import 'features/hosts/host_list_screen.dart';
 import 'features/hosts/host_open_listener.dart';
+import 'features/hosts/weekly_digest_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/share/share_intake.dart';
 
@@ -114,7 +115,9 @@ class RemoteFileExplorerApp extends ConsumerWidget {
         navigatorKey: navigatorKey,
         child: HostOpenListener(
           navigatorKey: navigatorKey,
-          child: const LockGate(child: _HomeRouter()),
+          child: const LockGate(
+            child: WeeklyDigestChecker(child: _HomeRouter()),
+          ),
         ),
       ),
     );

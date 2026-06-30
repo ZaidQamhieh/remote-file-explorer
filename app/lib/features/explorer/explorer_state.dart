@@ -383,6 +383,13 @@ class ExplorerNotifier
 
   Future<void> refresh() => _load();
 
+  /// Marks or unmarks a cached listing as pinned so the eviction pass skips
+  /// it. Cache key format: `"$hostId:$path"` — used by Part B to look up
+  /// pinned entries without knowing the internal hostId separator.
+  void setPinnedListing(String path, bool pinned) {
+    _cache.setPinned('${arg.hostId}:$path', pinned);
+  }
+
   void navigate(String path) {
     state = state.copyWith(pathStack: [...state.pathStack, path]);
     _load();

@@ -25,6 +25,7 @@ class EntryGridCell extends StatelessWidget {
     this.hostId,
     this.onMoveInto,
     this.isFavorite = false,
+    this.isPinned = false,
     this.onBookmark,
   });
 
@@ -44,6 +45,10 @@ class EntryGridCell extends StatelessWidget {
   /// Whether [entry] is a favorited folder — shows a small star badge on the
   /// leading icon/thumbnail container. Has no effect for files.
   final bool isFavorite;
+
+  /// Whether [entry] is pinned for offline caching — shows a small pin badge.
+  /// Has no effect for files.
+  final bool isPinned;
 
   /// When set and NOT in multiSelect mode, long-press opens the bookmark
   /// sheet instead of entering selection mode.
@@ -164,6 +169,25 @@ class EntryGridCell extends StatelessWidget {
                       Icons.star_rounded,
                       size: 13,
                       color: Colors.amber,
+                    ),
+                  ),
+                ),
+              if (isPinned && entry.isDir)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.push_pin_rounded,
+                      size: 12,
+                      color: scheme.primary,
                     ),
                   ),
                 ),

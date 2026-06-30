@@ -14,6 +14,7 @@ enum OverflowAction {
   storageByType,
   dupFinder,
   commandPalette,
+  pinOffline,
 }
 
 class BrowseAppBar extends StatelessWidget {
@@ -29,10 +30,12 @@ class BrowseAppBar extends StatelessWidget {
     required this.onOpenBookmarks,
     required this.onOverflow,
     this.sseConnected = false,
+    this.isCurrentFolderPinned = false,
   });
 
   final ExplorerState state;
   final bool isFav;
+  final bool isCurrentFolderPinned;
   final VoidCallback onBack;
   final void Function(int index) onNavigateTo;
   final Future<void> Function(Entry dragged, String dest) onMoveInto;
@@ -150,6 +153,19 @@ class BrowseAppBar extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(Icons.find_replace_rounded),
                     title: Text('Find Duplicates'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: OverflowAction.pinOffline,
+                  child: ListTile(
+                    leading: Icon(
+                      isCurrentFolderPinned
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                    ),
+                    title: Text(
+                      isCurrentFolderPinned ? 'Unpin offline' : 'Pin offline',
+                    ),
                   ),
                 ),
               ],

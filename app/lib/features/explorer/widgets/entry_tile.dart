@@ -37,6 +37,7 @@ class EntryTile extends StatelessWidget {
     this.onMoveInto,
     this.density = EntryDensity.comfortable,
     this.isFavorite = false,
+    this.isPinned = false,
     this.onShowMeta,
     this.onBookmark,
     this.client,
@@ -59,6 +60,10 @@ class EntryTile extends StatelessWidget {
   /// Whether [entry] is a favorited folder — shows a small star badge on the
   /// leading icon container. Has no effect for files.
   final bool isFavorite;
+
+  /// Whether [entry] is pinned for offline caching — shows a small pin badge
+  /// on the leading icon container. Has no effect for files.
+  final bool isPinned;
 
   /// Opens this entry's detail sheet (e.g. to favorite/unfavorite a folder).
   /// When set for a directory, the trailing chevron becomes tappable; has no
@@ -92,6 +97,7 @@ class EntryTile extends StatelessWidget {
               entry: entry,
               compact: compact,
               isFavorite: isFavorite && entry.isDir,
+              isPinned: isPinned && entry.isDir,
               client: client,
             );
 
@@ -189,12 +195,14 @@ class _IconTile extends StatelessWidget {
     required this.entry,
     required this.compact,
     this.isFavorite = false,
+    this.isPinned = false,
     this.client,
   });
 
   final Entry entry;
   final bool compact;
   final bool isFavorite;
+  final bool isPinned;
   final AgentClient? client;
 
   @override
@@ -233,29 +241,49 @@ class _IconTile extends StatelessWidget {
       );
     }
 
-    if (!isFavorite) return container;
+    if (!isFavorite && !isPinned) return container;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         container,
-        Positioned(
-          right: -4,
-          top: -4,
-          child: Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.star_rounded,
-              size: 12,
-              color: Colors.amber,
+        if (isFavorite)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.star_rounded,
+                size: 12,
+                color: Colors.amber,
+              ),
             ),
           ),
-        ),
+        if (isPinned)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.push_pin_rounded,
+                size: 11,
+                color: scheme.primary,
+              ),
+            ),
+          ),
       ],
     );
   }

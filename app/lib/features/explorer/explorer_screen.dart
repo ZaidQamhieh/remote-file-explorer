@@ -9,6 +9,7 @@ import '../../core/models/host.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/favorites.dart';
+import '../../core/storage/pin_store.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
@@ -179,6 +180,16 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                   state: state,
                   isFav: isFav,
                   sseConnected: state.sseConnected,
+                  isCurrentFolderPinned:
+                      ref
+                          .watch(pinStoreProvider)
+                          .valueOrNull
+                          ?.any(
+                            (p) =>
+                                p.hostId == widget.host.id &&
+                                p.remotePath == state.currentPath,
+                          ) ??
+                      false,
                   onBack: _notifier.popDirectory,
                   onNavigateTo: _notifier.navigateTo,
                   onMoveInto:
@@ -243,6 +254,22 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _openDupFinder(context, state);
       case OverflowAction.commandPalette:
         _showCommandPalette(context, state);
+      case OverflowAction.pinOffline:
+        _togglePin(state);
+    }
+  }
+
+  Future<void> _togglePin(ExplorerState state) async {
+    final path = state.currentPath;
+    final hostId = widget.host.id;
+    final pinStore = ref.read(pinStoreProvider.notifier);
+    final pinned = pinStore.isPinned(hostId, path);
+    if (pinned) {
+      await pinStore.unpin(hostId, path);
+      _notifier.setPinnedListing(path, false);
+    } else {
+      await pinStore.pin(hostId, path);
+      _notifier.setPinnedListing(path, true);
     }
   }
 
@@ -678,6 +705,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           .toSet() ??
       const {};
 
+  Set<String> _pinnedPaths() =>
+      ref
+          .watch(pinStoreProvider)
+          .valueOrNull
+          ?.where((p) => p.hostId == widget.host.id)
+          .map((p) => p.remotePath)
+          .toSet() ??
+      const {};
+
   Widget _buildList(
     BuildContext context,
     ExplorerState state,
@@ -690,6 +726,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final itemCount =
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
+    final pinnedPaths = _pinnedPaths();
     return ListView.builder(
       itemCount: itemCount,
       itemBuilder: (ctx, i) {
@@ -717,6 +754,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               multiSelect: state.multiSelect,
               density: density,
               isFavorite: favoritePaths.contains(entry.path),
+              isPinned: pinnedPaths.contains(entry.path),
               onTap: () => _onEntryTap(context, entry, client),
               onLongPress: () => _notifier.toggleSelect(entry.path),
               onSelect: () => _notifier.toggleSelect(entry.path),
@@ -819,6 +857,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final itemCount =
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
+    final pinnedPaths = _pinnedPaths();
     return GridView.builder(
       padding: const EdgeInsets.all(Spacing.md),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -854,6 +893,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               selected: state.selected.contains(entry.path),
               multiSelect: state.multiSelect,
               isFavorite: favoritePaths.contains(entry.path),
+              isPinned: pinnedPaths.contains(entry.path),
               onTap: () => _onEntryTap(context, entry, client),
               onLongPress: () => _notifier.toggleSelect(entry.path),
               onMoveInto:

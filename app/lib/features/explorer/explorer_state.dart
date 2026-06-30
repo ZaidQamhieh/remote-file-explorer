@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
+import '../../core/notifications/notification_service.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
 import '../../core/storage/view_prefs.dart';
@@ -334,6 +335,16 @@ class ExplorerNotifier
         _refreshDebounce?.cancel();
         _refreshDebounce = Timer(const Duration(milliseconds: 500), refresh);
       }
+      // L3: notify when a file is created inside a watched folder.
+      if (event.type == 'fs.change' && event.action.contains('create')) {
+        final parent = _dirnameOf(event.path);
+        final settings = ref.read(settingsProvider).valueOrNull;
+        if (settings != null && settings.isWatched(parent)) {
+          ref
+              .read(notificationServiceProvider)
+              .showNewFileNotification(parent, basenameOf(event.path));
+        }
+      }
     });
     _sse!.start();
     state = state.copyWith(sseConnected: true);
@@ -624,6 +635,15 @@ final explorerProvider = NotifierProvider.autoDispose
 /// (`folderLabel`, `breadcrumb_bar.dart`, `selection_bar.dart`).
 String basenameOf(String path) =>
     path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+
+/// Parent directory of [path] — works for both POSIX and Windows separators.
+/// Used by the L3 watched-folder notification to get the containing folder.
+String _dirnameOf(String path) {
+  final lastSep = path.lastIndexOf(RegExp(r'[/\\]'));
+  if (lastSep < 0) return path;
+  if (lastSep == 0) return '/';
+  return path.substring(0, lastSep);
+}
 
 /// Returns a name derived from [name] that isn't in [existingNames], by
 /// inserting " (1)", " (2)", … before the extension (or at the end, for an

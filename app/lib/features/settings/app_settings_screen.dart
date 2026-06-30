@@ -276,6 +276,8 @@ class AppSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
+          const _WatchedFoldersSection(),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Security',
             icon: Icons.security_outlined,
@@ -582,5 +584,92 @@ class _AccentColorPicker extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// Lists watched folders and lets the user add or remove them.
+///
+/// A watched folder causes a local notification whenever the SSE stream reports
+/// a file-create event inside it (L3). Folders are added by typing a remote
+/// path; the toggle on each entry removes it.
+class _WatchedFoldersSection extends ConsumerWidget {
+  const _WatchedFoldersSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings =
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
+    final notifier = ref.read(settingsProvider.notifier);
+    final folders = settings.app.watchedFolders.toList()..sort();
+
+    return SettingsSection(
+      title: 'Watched folders',
+      icon: Icons.folder_special_outlined,
+      padded: false,
+      children: [
+        if (folders.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(Spacing.md),
+            child: Text(
+              'No watched folders. Add a remote folder path below to get notified when new files appear there.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        for (final folder in folders)
+          ListTile(
+            dense: true,
+            title: Text(folder, overflow: TextOverflow.ellipsis),
+            trailing: IconButton(
+              icon: const Icon(Icons.remove_circle_outline),
+              tooltip: 'Stop watching',
+              onPressed: () => notifier.removeWatchedFolder(folder),
+            ),
+          ),
+        ListTile(
+          leading: const Icon(Icons.add),
+          title: const Text('Add folder path'),
+          onTap: () => _showAddDialog(context, notifier),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAddDialog(
+    BuildContext context,
+    SettingsNotifier notifier,
+  ) async {
+    final controller = TextEditingController();
+    final path = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Watch a folder'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: '/home/user/Downloads',
+                labelText: 'Remote folder path',
+              ),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Watch'),
+              ),
+            ],
+          ),
+    );
+    controller.dispose();
+    if (path != null && path.isNotEmpty) {
+      await notifier.addWatchedFolder(path);
+    }
   }
 }

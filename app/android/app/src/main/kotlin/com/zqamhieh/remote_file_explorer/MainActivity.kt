@@ -24,6 +24,22 @@ import java.io.File
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "rfe/downloads"
     private val transfersChannelName = "rfe/transfers"
+    private val intentsChannelName = "rfe/intents"
+
+    /** Set by Tasker's "Send Intent" (or any caller) to jump to a host's explorer. */
+    private val actionOpenHost = "com.zqamhieh.remote_file_explorer.OPEN_HOST"
+    private val extraHostId = "hostId"
+
+    private var intentChannel: MethodChannel? = null
+
+    /**
+     * Host id from an [actionOpenHost] intent that started the activity cold —
+     * stashed here and pulled by the Dart side via `getInitialHostId` once its
+     * method-channel handler is ready, the same pull-for-cold-start pattern
+     * `receive_sharing_intent` uses for share intents (a push at this point
+     * would race the Dart handler and be silently dropped).
+     */
+    private var pendingHostId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,10 +52,42 @@ class MainActivity : FlutterFragmentActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0x504E)
         }
+        pendingHostId = hostIdFromIntent(intent)
+    }
+
+    /**
+     * Fires when the activity is already running (`singleTop`) and receives a
+     * new intent, e.g. a warm-start Tasker "Send Intent". The Dart side's
+     * method-channel handler is already registered by now, so this pushes
+     * directly instead of stashing for a pull.
+     *
+     * Calls `super.onNewIntent` first so plugins that hook this lifecycle
+     * method themselves (e.g. `receive_sharing_intent`) still see the intent.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val hostId = hostIdFromIntent(intent) ?: return
+        intentChannel?.invokeMethod("openHost", hostId)
+    }
+
+    private fun hostIdFromIntent(intent: Intent?): String? {
+        if (intent?.action != actionOpenHost) return null
+        return intent.getStringExtra(extraHostId)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        intentChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, intentsChannelName)
+        intentChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialHostId" -> {
+                    result.success(pendingHostId)
+                    pendingHostId = null
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, transfersChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {

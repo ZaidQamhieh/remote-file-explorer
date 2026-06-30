@@ -51,6 +51,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kAppLock = 'app.appLockEnabled';
   static const _kAmoledDark = 'app.amoledDark';
   static const _kSeedColor = 'app.seedColor';
+  static const _kWatchedFolders = 'app.watchedFolders.v1';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -125,6 +126,26 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       await _prefs?.setInt(_kSeedColor, value.toARGB32());
     }
     _emit((s) => s.copyWith(app: s.app.copyWithSeedColor(value)));
+  }
+
+  // --- Watched folders (L3) -----------------------------------------------
+
+  Future<void> addWatchedFolder(String path) async {
+    final cur = state.valueOrNull ?? const SettingsState();
+    final updated = {...cur.app.watchedFolders, path};
+    await _prefs?.setString(_kWatchedFolders, jsonEncode(updated.toList()));
+    _emit((s) => s.copyWith(app: s.app.copyWith(watchedFolders: updated)));
+  }
+
+  Future<void> removeWatchedFolder(String path) async {
+    final cur = state.valueOrNull ?? const SettingsState();
+    final updated = cur.app.watchedFolders.difference({path});
+    if (updated.isEmpty) {
+      await _prefs?.remove(_kWatchedFolders);
+    } else {
+      await _prefs?.setString(_kWatchedFolders, jsonEncode(updated.toList()));
+    }
+    _emit((s) => s.copyWith(app: s.app.copyWith(watchedFolders: updated)));
   }
 
   // --- Appearance (Wave F) ------------------------------------------------
@@ -416,6 +437,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
           prefs.getInt(_kSeedColor) != null
               ? Color(prefs.getInt(_kSeedColor)!)
               : null,
+      watchedFolders: _decodeStringSet(prefs.getString(_kWatchedFolders)),
     );
 
     final overrides = <String, DeviceOverrides>{};

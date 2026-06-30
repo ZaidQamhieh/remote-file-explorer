@@ -33,6 +33,7 @@ class AppDefaults {
     this.appLockEnabled = false,
     this.amoledDark = false,
     this.seedColor,
+    this.watchedFolders = const {},
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -77,6 +78,11 @@ class AppDefaults {
   /// Custom seed color for the color scheme. `null` = default [Brand.seed].
   final Color? seedColor;
 
+  /// Remote folder paths (on the host) that the user has opted in to
+  /// watch for new files. When the SSE stream fires a create event whose
+  /// parent directory is in this set, a local notification is shown.
+  final Set<String> watchedFolders;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -88,6 +94,7 @@ class AppDefaults {
     int? lowDiskThresholdBytes,
     bool? appLockEnabled,
     bool? amoledDark,
+    Set<String>? watchedFolders,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -101,6 +108,7 @@ class AppDefaults {
     appLockEnabled: appLockEnabled ?? this.appLockEnabled,
     amoledDark: amoledDark ?? this.amoledDark,
     seedColor: seedColor,
+    watchedFolders: watchedFolders ?? this.watchedFolders,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -116,6 +124,7 @@ class AppDefaults {
     appLockEnabled: appLockEnabled,
     amoledDark: amoledDark,
     seedColor: seedColor,
+    watchedFolders: watchedFolders,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -131,6 +140,7 @@ class AppDefaults {
     appLockEnabled: appLockEnabled,
     amoledDark: amoledDark,
     seedColor: value,
+    watchedFolders: watchedFolders,
   );
 
   @override
@@ -147,7 +157,9 @@ class AppDefaults {
       other.lowDiskThresholdBytes == lowDiskThresholdBytes &&
       other.appLockEnabled == appLockEnabled &&
       other.amoledDark == amoledDark &&
-      other.seedColor == seedColor;
+      other.seedColor == seedColor &&
+      other.watchedFolders.length == watchedFolders.length &&
+      other.watchedFolders.containsAll(watchedFolders);
 
   @override
   int get hashCode => Object.hash(
@@ -163,6 +175,7 @@ class AppDefaults {
     appLockEnabled,
     amoledDark,
     seedColor,
+    Object.hashAllUnordered(watchedFolders),
   );
 }
 
@@ -273,6 +286,9 @@ class SettingsState {
 
   /// Whether [hostId] overrides at least one setting.
   bool hasOverride(String hostId) => !overridesFor(hostId).isEmpty;
+
+  /// Whether [folderPath] is in the watched-folders set (L3).
+  bool isWatched(String folderPath) => app.watchedFolders.contains(folderPath);
 
   /// Resolves the effective view settings for [hostId]:
   /// `deviceOverride ?? appDefault`.

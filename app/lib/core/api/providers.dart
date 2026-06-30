@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/host.dart';
+import '../settings/app_settings.dart';
+import '../settings/settings_controller.dart';
 import '../storage/host_store.dart';
 import 'agent_client.dart';
 
@@ -61,7 +63,14 @@ Future<AgentClient> buildClientForHost(
   }
   final store = await read(hostStoreProvider.future);
   final token = await store.getToken(hostId);
-  return AgentClient(host, deviceToken: token, probeLanFirst: probeLanFirst);
+  final client = AgentClient(
+    host,
+    deviceToken: token,
+    probeLanFirst: probeLanFirst,
+  );
+  final settings = read(settingsProvider).valueOrNull ?? const SettingsState();
+  client.compressDownloadsOnCellular = settings.app.compressDownloadsOnCellular;
+  return client;
 }
 
 /// Builds (and owns) an [AgentClient] for the host identified by [hostId].

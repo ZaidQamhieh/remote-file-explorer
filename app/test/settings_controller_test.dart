@@ -36,6 +36,33 @@ void main() {
       expect(v.sort, const SortOrder());
       expect(s.hasOverride('any-host'), isFalse);
     });
+
+    test('compressDownloadsOnCellular defaults to true', () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final s = await c.read(settingsProvider.future);
+      expect(s.app.compressDownloadsOnCellular, isTrue);
+    });
+  });
+
+  group('compressDownloadsOnCellular (S3)', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('setCompressDownloadsOnCellular persists across restart', () async {
+      final c1 = ProviderContainer();
+      final n1 = await load(c1);
+      await n1.setCompressDownloadsOnCellular(false);
+      expect(
+        c1.read(settingsProvider).valueOrNull!.app.compressDownloadsOnCellular,
+        isFalse,
+      );
+      c1.dispose();
+
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      final s = await c2.read(settingsProvider.future);
+      expect(s.app.compressDownloadsOnCellular, isFalse);
+    });
   });
 
   group('resolution precedence', () {

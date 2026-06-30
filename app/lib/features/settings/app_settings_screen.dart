@@ -276,6 +276,23 @@ class AppSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Transfers',
+            icon: Icons.swap_vert_outlined,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Compress downloads on cellular'),
+                subtitle: const Text(
+                  'Sends Accept-Encoding: gzip on mobile data for '
+                  'compressible files (text, logs, source code)',
+                ),
+                value: app.compressDownloadsOnCellular,
+                onChanged: notifier.setCompressDownloadsOnCellular,
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
           const _WatchedFoldersSection(),
           const SizedBox(height: Spacing.md),
           SettingsSection(

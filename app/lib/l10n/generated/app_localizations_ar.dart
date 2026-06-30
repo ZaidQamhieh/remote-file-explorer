@@ -832,6 +832,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shareTooltip => 'مشاركة';
 
   @override
+  String get shareLinkButton => 'Share link';
+
+  @override
+  String get shareLinkSheetTitle => 'Share link';
+
+  @override
+  String shareLinkExpiresIn(String time) {
+    return 'Expires in $time';
+  }
+
+  @override
+  String get shareLinkExpired => 'Link expired';
+
+  @override
+  String get shareLinkRevokeButton => 'Revoke';
+
+  @override
+  String get shareLinkRevoked => 'Share link revoked';
+
+  @override
+  String shareLinkFailed(String error) {
+    return 'Share link failed: $error';
+  }
+
+  @override
   String get saveToDeviceTooltip => 'حفظ على الجهاز';
 
   @override
@@ -923,6 +948,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get readOnlyMode => 'وضع القراءة فقط';
+
+  @override
+  String get enableShareLinks => 'Enable share links';
+
+  @override
+  String get shareLinksEnabledHint => 'Files can be shared via one-time links';
+
+  @override
+  String get shareLinksDisabledHint => 'Share links are turned off';
 
   @override
   String get allowedFoldersSection => 'المجلدات المسموحة';
@@ -1848,4 +1882,109 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get storageByTypeTitle => 'Storage by type';
+
+  @override
+  String get sseConnected => 'Live';
+
+  @override
+  String get chmodTitle => 'Permissions';
+
+  @override
+  String get chmodOwner => 'Owner';
+
+  @override
+  String get chmodGroup => 'Group';
+
+  @override
+  String get chmodOther => 'Other';
+
+  @override
+  String get discoveredHosts => 'Discovered on network';
+
+  @override
+  String get archiveContents => 'Archive Contents';
+
+  @override
+  String get archiveEmpty => 'Empty archive';
+
+  @override
+  String archiveEntries(int count) {
+    return '$count entries';
+  }
+
+  @override
+  String get dupFinderTitle => 'Find Duplicates';
+
+  @override
+  String get dupFinderScreenTitle => 'Duplicate Finder';
+
+  @override
+  String get dupFinderScan => 'Scan for Duplicates';
+
+  @override
+  String dupFinderScanning(int count) {
+    return 'Scanning $count files...';
+  }
+
+  @override
+  String get dupFinderNone => 'No duplicates found';
+
+  @override
+  String get syncRulesTitle => 'Sync Rules';
+
+  @override
+  String get syncRulesSubtitle => 'Download remote folders to local storage';
+
+  @override
+  String get syncAddRule => 'Add Sync Rule';
+
+  @override
+  String get syncDeleteRule => 'Delete Sync Rule';
+
+  @override
+  String get syncDeleteConfirm => 'Delete this sync rule?';
+
+  @override
+  String get syncNow => 'Sync Now';
+
+  @override
+  String get syncNever => 'Never synced';
+
+  @override
+  String get syncNoRules => 'No sync rules yet';
+
+  @override
+  String get syncRemotePath => 'Remote Path';
+
+  @override
+  String get syncLocalPath => 'Local Folder';
+
+  @override
+  String get crossHostSearchTitle => 'Search All Hosts';
+
+  @override
+  String get crossHostSearchHint => 'Search all hosts...';
+
+  @override
+  String crossHostSearching(int count) {
+    return 'Searching $count hosts...';
+  }
+
+  @override
+  String get crossHostNoResults => 'No results';
+
+  @override
+  String get crossHostTypeToSearch => 'Type to search across all hosts';
+
+  @override
+  String get crossHostSearchTooltip => 'Search all hosts';
+
+  @override
+  String get commandPaletteTitle => 'Command Palette';
+
+  @override
+  String get commandPaletteHint => 'Type a command...';
+
+  @override
+  String get goToPathTitle => 'Go to Path';
 }

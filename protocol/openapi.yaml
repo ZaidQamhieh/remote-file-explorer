@@ -90,6 +90,85 @@ paths:
                   status: { type: string, enum: [sent] }
         "400": { $ref: "#/components/responses/Error" }
 
+  /share/mint:
+    post:
+      summary: Mint a one-time share link for a single file
+      description: >
+        Generates a short-lived, single-use, unauthenticated download URL for
+        one file. Returns 403 if the agent's `allowSharing` setting is
+        disabled (default). See docs/r1-share-link-threat-model.md.
+      security: [{ deviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, description: "Absolute path to the file to share." }
+                expiresInSeconds:
+                  type: integer
+                  format: int64
+                  description: "Defaults to 900 (15min) if absent/zero. Maximum 86400 (24h)."
+      responses:
+        "200":
+          description: Share link minted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareLink" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403":
+          description: Share links are disabled on this agent. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /share/{token}:
+    get:
+      summary: Fetch a shared file (UNAUTHENTICATED, single-use)
+      description: >
+        The only unauthenticated route in the entire agent besides /health
+        and /pair. token is single-use: the first successful (or attempted)
+        fetch deletes it. Rate-limited 10/min. Returns 404 for both "expired"
+        and "never existed" — the response never reveals which.
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: File bytes, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "429":
+          description: Too many share requests (rate-limited 10/min). code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /share/{tokenHash}:
+    delete:
+      summary: Revoke an active share link
+      description: >
+        Takes the SHA-256 hash of the token (as returned by POST
+        /share/mint's tokenHash field), not the raw token.
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: tokenHash, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Revoked (or was already gone) }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /share:
+    get:
+      summary: List active (unexpired) share links
+      security: [{ deviceToken: [] }]
+      responses:
+        "200":
+          description: Active share links
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ShareLinkSummary" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /system/drives:
     get:
       summary: List drives / mount points (virtual roots)
@@ -924,6 +1003,24 @@ components:
           type: array
           items: { type: string }
         agentName: { type: string }
+        allowSharing:
+          type: boolean
+          description: >
+            Host-level gate for R1 one-time share links (default false).
+            POST /share/mint returns 403 while this is false.
+    ShareLink:
+      type: object
+      properties:
+        token: { type: string, description: "Raw token — shown only once, in this response." }
+        tokenHash: { type: string, description: "SHA-256 hash of token; pass this to DELETE /share/{tokenHash}." }
+        expiresAt: { type: integer, format: int64, description: "Unix seconds." }
+        url: { type: string, description: "Fully-qualified https URL the recipient fetches." }
+    ShareLinkSummary:
+      type: object
+      properties:
+        tokenHash: { type: string }
+        path: { type: string }
+        expiresAt: { type: integer, format: int64, description: "Unix seconds." }
     BandwidthSettings:
       type: object
       properties:

@@ -129,6 +129,35 @@ func TestBandwidth_NegativeClampsToZero(t *testing.T) {
 	}
 }
 
+// TestAllowSharing_DefaultsFalseAndPersists verifies AllowSharing always
+// seeds false (R1 is opt-in, not CLI-configurable) and that SetAllowSharing
+// persists across a reload.
+func TestAllowSharing_DefaultsFalseAndPersists(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if s.IsAllowSharing() {
+		t.Fatal("expected allowSharing to default false")
+	}
+
+	if err := s.SetAllowSharing(true); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if !s.IsAllowSharing() {
+		t.Fatal("expected in-memory allowSharing=true")
+	}
+
+	s2, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if !s2.IsAllowSharing() {
+		t.Fatal("expected persisted allowSharing=true to survive reload")
+	}
+}
+
 func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 	db := newDB(t)
 	// First load seeds readOnly=true.

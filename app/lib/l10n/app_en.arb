@@ -470,6 +470,19 @@
   },
 
   "shareTooltip": "Share",
+  "shareLinkButton": "Share link",
+  "shareLinkSheetTitle": "Share link",
+  "shareLinkExpiresIn": "Expires in {time}",
+  "@shareLinkExpiresIn": {
+    "placeholders": { "time": {"type": "String"} }
+  },
+  "shareLinkExpired": "Link expired",
+  "shareLinkRevokeButton": "Revoke",
+  "shareLinkRevoked": "Share link revoked",
+  "shareLinkFailed": "Share link failed: {error}",
+  "@shareLinkFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
   "saveToDeviceTooltip": "Save to device",
   "showInFolderTooltip": "Show in folder",
   "deleteTooltip": "Delete",
@@ -511,6 +524,9 @@
   "agentNameLabel": "Agent name",
   "accessSection": "Access",
   "readOnlyMode": "Read-only mode",
+  "enableShareLinks": "Enable share links",
+  "shareLinksEnabledHint": "Files can be shared via one-time links",
+  "shareLinksDisabledHint": "Share links are turned off",
   "allowedFoldersSection": "Allowed folders",
   "addFolderTooltip": "Add folder",
   "removeFolderTooltip": "Remove folder",

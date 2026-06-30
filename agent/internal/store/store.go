@@ -81,6 +81,23 @@ CREATE TABLE IF NOT EXISTS transfers (
     temp_path        TEXT NOT NULL,
     total_chunks     INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS share_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    path        TEXT NOT NULL,
+    created     INTEGER NOT NULL,
+    expires     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS share_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash   TEXT NOT NULL,
+    path         TEXT NOT NULL,
+    minted_at    INTEGER NOT NULL,
+    expires_at   INTEGER NOT NULL,
+    served_at    INTEGER,
+    requester_ip TEXT
+);
 `)
 	if err != nil {
 		return err
@@ -490,6 +507,124 @@ func (s *DB) MarkChunkReceived(id string, n int) error {
 func (s *DB) SetTransferStatus(id, status string) error {
 	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
 	return err
+}
+
+// --------- share tokens (R1) ---------
+
+// ShareToken is an active (unconsumed, unexpired) one-time share link.
+type ShareToken struct {
+	TokenHash string
+	Path      string
+	Expires   time.Time
+}
+
+// CreateShareToken stores a new one-time share token. tokenHash is the
+// SHA-256 hash of the raw token — only the hash is ever persisted.
+func (s *DB) CreateShareToken(tokenHash, path string, expiresAt time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT INTO share_tokens (token_hash, path, created, expires) VALUES (?,?,?,?)`,
+		tokenHash, path, time.Now().Unix(), expiresAt.Unix(),
+	)
+	return err
+}
+
+// ConsumeShareToken atomically looks up tokenHash, deletes it (single-use),
+// and returns the path it was bound to. ok is false if the token doesn't
+// exist or has expired — callers must not distinguish the two in their
+// response (don't leak which).
+func (s *DB) ConsumeShareToken(tokenHash string) (path string, ok bool, err error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", false, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	var expires int64
+	err = tx.QueryRow(
+		`SELECT path, expires FROM share_tokens WHERE token_hash=?`, tokenHash,
+	).Scan(&path, &expires)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM share_tokens WHERE token_hash=?`, tokenHash); err != nil {
+		return "", false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", false, err
+	}
+
+	if time.Now().Unix() > expires {
+		return "", false, nil
+	}
+	return path, true, nil
+}
+
+// DeleteShareToken removes a share token (explicit revoke), regardless of
+// whether it has expired.
+func (s *DB) DeleteShareToken(tokenHash string) error {
+	_, err := s.db.Exec(`DELETE FROM share_tokens WHERE token_hash=?`, tokenHash)
+	return err
+}
+
+// ListShareTokens returns all active (unexpired) share tokens.
+func (s *DB) ListShareTokens() ([]ShareToken, error) {
+	rows, err := s.db.Query(
+		`SELECT token_hash, path, expires FROM share_tokens WHERE expires >= ? ORDER BY created`,
+		time.Now().Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ShareToken
+	for rows.Next() {
+		var t ShareToken
+		var expires int64
+		if err := rows.Scan(&t.TokenHash, &t.Path, &expires); err != nil {
+			return nil, err
+		}
+		t.Expires = time.Unix(expires, 0)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// LogShareMint records a share token's minting in the audit log.
+func (s *DB) LogShareMint(tokenHash, path string, expiresAt time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT INTO share_log (token_hash, path, minted_at, expires_at) VALUES (?,?,?,?)`,
+		tokenHash, path, time.Now().Unix(), expiresAt.Unix(),
+	)
+	return err
+}
+
+// LogShareServed records that a share token was successfully served, by
+// stamping served_at + requesterIP on its most recent (served_at IS NULL)
+// mint row.
+func (s *DB) LogShareServed(tokenHash, requesterIP string) error {
+	_, err := s.db.Exec(
+		`UPDATE share_log SET served_at=?, requester_ip=?
+         WHERE id = (SELECT id FROM share_log WHERE token_hash=? AND served_at IS NULL ORDER BY id DESC LIMIT 1)`,
+		time.Now().Unix(), requesterIP, tokenHash,
+	)
+	return err
+}
+
+// SweepExpiredShareTokens deletes every share token whose expiry has passed
+// and returns the number of rows removed. Called periodically by a
+// background goroutine (see cmd/agent/main.go).
+func (s *DB) SweepExpiredShareTokens() (int, error) {
+	res, err := s.db.Exec(`DELETE FROM share_tokens WHERE expires < ?`, time.Now().Unix())
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
 }
 
 func scanTransfer(row *sql.Row) (*Transfer, error) {

@@ -52,6 +52,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		// Unauthenticated.
 		r.Get("/health", healthHandler(cfg))
 		r.Post("/pair", pairHandler(cfg, db, pm))
+		// R1: the ONLY unauthenticated route besides health/pair. See
+		// docs/r1-share-link-threat-model.md — single-use, expiring, rate-limited.
+		r.Get("/share/{token}", serveShareHandler(db, ops))
 
 		// Authenticated, no path jail (non-filesystem endpoints).
 		r.Group(func(r chi.Router) {
@@ -87,6 +90,12 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 
 			// WOL relay
 			r.Post("/wol", wolRelayHandler())
+
+			// R1 share links (mint/revoke/list — authenticated; serving the
+			// file itself happens on the unauthenticated route above)
+			r.Post("/share/mint", mintShareHandler(cfg, db, ops))
+			r.Delete("/share/{tokenHash}", revokeShareHandler(db))
+			r.Get("/share", listSharesHandler(db))
 
 			// Drives
 			r.Get("/system/drives", drivesHandler())

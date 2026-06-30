@@ -24,17 +24,19 @@ func deviceFromContext(r *http.Request) *store.Device {
 }
 
 type settingsBody struct {
-	ReadOnly  *bool     `json:"readOnly,omitempty"`
-	Roots     *[]string `json:"roots,omitempty"`
-	AgentName *string   `json:"agentName,omitempty"`
+	ReadOnly     *bool     `json:"readOnly,omitempty"`
+	Roots        *[]string `json:"roots,omitempty"`
+	AgentName    *string   `json:"agentName,omitempty"`
+	AllowSharing *bool     `json:"allowSharing,omitempty"`
 }
 
 func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":  st.IsReadOnly(),
-			"roots":     st.Roots(),
-			"agentName": st.AgentName(),
+			"readOnly":     st.IsReadOnly(),
+			"roots":        st.Roots(),
+			"agentName":    st.AgentName(),
+			"allowSharing": st.IsAllowSharing(),
 		})
 	}
 }
@@ -64,10 +66,17 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
+		if b.AllowSharing != nil {
+			if err := st.SetAllowSharing(*b.AllowSharing); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":  st.IsReadOnly(),
-			"roots":     st.Roots(),
-			"agentName": st.AgentName(),
+			"readOnly":     st.IsReadOnly(),
+			"roots":        st.Roots(),
+			"agentName":    st.AgentName(),
+			"allowSharing": st.IsAllowSharing(),
 		})
 	}
 }

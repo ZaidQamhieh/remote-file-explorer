@@ -21,6 +21,7 @@ import '../models/host.dart';
 import '../models/listing.dart';
 import '../models/pair_response.dart';
 import '../models/search_result.dart';
+import '../models/share_link.dart';
 import '../models/trash_entry.dart';
 import '../models/upload_session.dart';
 
@@ -619,6 +620,7 @@ class AgentClient {
     bool? readOnly,
     List<String>? roots,
     String? agentName,
+    bool? allowSharing,
   }) async {
     final data = await _patch<Map<String, dynamic>>(
       '/settings',
@@ -626,6 +628,7 @@ class AgentClient {
         if (readOnly != null) 'readOnly': readOnly,
         if (roots != null) 'roots': roots,
         if (agentName != null) 'agentName': agentName,
+        if (allowSharing != null) 'allowSharing': allowSharing,
       },
     );
     return AgentSettings.fromJson(data);
@@ -644,6 +647,37 @@ class AgentClient {
   /// device" action to un-pair the current phone.
   Future<void> deleteDevice(String id) async {
     await _delete<void>('/devices/$id', queryParameters: {'purge': 'true'});
+  }
+
+  // ---------------------------------------------------------------------------
+  // R1 — one-time share links
+  // ---------------------------------------------------------------------------
+
+  /// Mints a one-time share link for [path]. Throws [AgentApiException] with
+  /// statusCode 403 if the agent's "Enable share links" setting is off.
+  Future<ShareLink> mintShareLink(
+    String path, {
+    Duration expiresIn = const Duration(minutes: 15),
+  }) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/share/mint',
+      data: {'path': path, 'expiresInSeconds': expiresIn.inSeconds},
+    );
+    return ShareLink.fromJson(data);
+  }
+
+  /// Revokes an active share link, identified by its hash
+  /// ([ShareLink.tokenHash], not the raw token).
+  Future<void> revokeShareLink(String tokenHash) async {
+    await _delete<void>('/share/$tokenHash');
+  }
+
+  /// Lists active (unexpired) share links.
+  Future<List<ShareLink>> listShareLinks() async {
+    final data = await _get<List<dynamic>>('/share');
+    return data
+        .map((e) => ShareLink.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ---------------------------------------------------------------------------

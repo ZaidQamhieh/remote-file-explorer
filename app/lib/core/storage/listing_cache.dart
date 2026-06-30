@@ -96,8 +96,9 @@ class ListingCache {
       var toEvict = data.length - maxEntries;
       for (final k in keys) {
         if (toEvict <= 0) break;
-        if (_pinnedKeys.contains('$hostId:$k'))
+        if (_pinnedKeys.contains('$hostId:$k')) {
           continue; // ponytail: skip pinned
+        }
         data.remove(k);
         toEvict--;
       }

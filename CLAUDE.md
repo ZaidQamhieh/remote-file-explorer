@@ -36,7 +36,7 @@ go run ./cmd/agent status        # name, addresses, fingerprint, counts
 ```
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`
 
-### App (Flutter 3.29.0 / Dart 3.7, in `app/`)
+### App (Flutter 3.44.2 / Dart 3.12, in `app/`)
 ```sh
 flutter pub get
 flutter analyze                  # must be clean

@@ -35,6 +35,7 @@ class AppDefaults {
     this.seedColor,
     this.watchedFolders = const {},
     this.compressDownloadsOnCellular = true,
+    this.preloadPreviewOnCellular = false,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -90,6 +91,12 @@ class AppDefaults {
   /// safe to default on. App-global only — no per-device override.
   final bool compressDownloadsOnCellular;
 
+  /// Whether the preview pager may preload neighbouring images while on a
+  /// cellular connection (S4). Default off — preloading on cellular without
+  /// asking burns data for a convenience feature. Wi-Fi/ethernet preloading is
+  /// unaffected by this setting.
+  final bool preloadPreviewOnCellular;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -103,6 +110,7 @@ class AppDefaults {
     bool? amoledDark,
     Set<String>? watchedFolders,
     bool? compressDownloadsOnCellular,
+    bool? preloadPreviewOnCellular,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -119,6 +127,8 @@ class AppDefaults {
     watchedFolders: watchedFolders ?? this.watchedFolders,
     compressDownloadsOnCellular:
         compressDownloadsOnCellular ?? this.compressDownloadsOnCellular,
+    preloadPreviewOnCellular:
+        preloadPreviewOnCellular ?? this.preloadPreviewOnCellular,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -136,6 +146,7 @@ class AppDefaults {
     seedColor: seedColor,
     watchedFolders: watchedFolders,
     compressDownloadsOnCellular: compressDownloadsOnCellular,
+    preloadPreviewOnCellular: preloadPreviewOnCellular,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -153,6 +164,7 @@ class AppDefaults {
     seedColor: value,
     watchedFolders: watchedFolders,
     compressDownloadsOnCellular: compressDownloadsOnCellular,
+    preloadPreviewOnCellular: preloadPreviewOnCellular,
   );
 
   @override
@@ -172,7 +184,8 @@ class AppDefaults {
       other.seedColor == seedColor &&
       other.watchedFolders.length == watchedFolders.length &&
       other.watchedFolders.containsAll(watchedFolders) &&
-      other.compressDownloadsOnCellular == compressDownloadsOnCellular;
+      other.compressDownloadsOnCellular == compressDownloadsOnCellular &&
+      other.preloadPreviewOnCellular == preloadPreviewOnCellular;
 
   @override
   int get hashCode => Object.hash(
@@ -190,6 +203,7 @@ class AppDefaults {
     seedColor,
     Object.hashAllUnordered(watchedFolders),
     compressDownloadsOnCellular,
+    preloadPreviewOnCellular,
   );
 }
 

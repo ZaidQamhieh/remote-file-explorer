@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
 import '../../../core/l10n_ext.dart';
+import '../../../core/models/agent_status.dart';
 import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
@@ -66,6 +67,7 @@ class HostCard extends ConsumerStatefulWidget {
 class _HostCardState extends ConsumerState<HostCard> {
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
+  Future<AgentStatus?>? _statusFuture;
 
   /// Address the most recent successful client used — drives the "LAN" vs
   /// "Tailscale" chip. `null` while unknown (offline / not yet pinged).
@@ -106,6 +108,7 @@ class _HostCardState extends ConsumerState<HostCard> {
         });
       }
       _drivesFuture = _loadDrives(client);
+      _statusFuture = _loadStatus(client);
       return health;
     } catch (_) {
       if (mounted) setState(() => _lastChecked = DateTime.now());
@@ -124,6 +127,54 @@ class _HostCardState extends ConsumerState<HostCard> {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Fetches agent status (uptime + disk summary). Returns null on any error
+  /// so the status row is silently omitted on older agents.
+  Future<AgentStatus?> _loadStatus(AgentClient client) async {
+    try {
+      return await client.fetchStatus();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildStatusSection(BuildContext context) {
+    return FutureBuilder<AgentStatus?>(
+      future: _statusFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(top: Spacing.sm),
+            child: Center(child: CircularProgressIndicator.adaptive()),
+          );
+        }
+        final status = snap.data;
+        if (status == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: Spacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Uptime: ${_formatUptime(status.uptimeSeconds)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Spacing.xs),
+              StorageGauge(
+                drive: Drive(
+                  path: '/',
+                  totalBytes: status.totalBytes,
+                  freeBytes: status.freeBytes,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// Adopts any LAN/Tailscale address or MAC the agent reports that we don't
@@ -326,6 +377,8 @@ class _HostCardState extends ConsumerState<HostCard> {
                         ],
                       ),
                     ),
+                  if (online && _statusFuture != null)
+                    _buildStatusSection(context),
                   if (online) ..._buildGauges(context),
                   const SizedBox(height: Spacing.md),
                   _QuickActions(
@@ -764,4 +817,11 @@ class _QuickActions extends StatelessWidget {
       ],
     );
   }
+}
+
+// ponytail: int division, no dep
+String _formatUptime(int seconds) {
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  return '${h}h ${m}m';
 }

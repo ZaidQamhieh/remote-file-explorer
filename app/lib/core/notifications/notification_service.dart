@@ -47,7 +47,32 @@ class NotificationService {
       ),
     );
   }
+
+  /// Shows the weekly storage-trend digest (L4) with [summary] as the body.
+  ///
+  /// Uses a fixed notification id so each week's digest replaces the last
+  /// one rather than stacking up. Separate channel (`rfe_weekly_digest`) from
+  /// watched-folder notifications so the user can mute one without the other.
+  Future<void> showWeeklyDigest(String summary) async {
+    await init();
+    await _plugin.show(
+      _weeklyDigestNotificationId,
+      'Weekly storage digest',
+      summary,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'rfe_weekly_digest',
+          'Weekly storage digest',
+          channelDescription: 'Weekly summary of free-space trends per host',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+      ),
+    );
+  }
 }
+
+const _weeklyDigestNotificationId = 0x57446967; // 'WDig'
 
 final notificationServiceProvider = Provider<NotificationService>(
   (ref) => NotificationService(),

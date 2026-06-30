@@ -52,6 +52,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kAmoledDark = 'app.amoledDark';
   static const _kSeedColor = 'app.seedColor';
   static const _kWatchedFolders = 'app.watchedFolders.v1';
+  static const _kWeeklyDigest = 'app.weeklyDigestEnabled';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -146,6 +147,13 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       await _prefs?.setString(_kWatchedFolders, jsonEncode(updated.toList()));
     }
     _emit((s) => s.copyWith(app: s.app.copyWith(watchedFolders: updated)));
+  }
+
+  // --- Weekly storage digest (L4) ------------------------------------------
+
+  Future<void> setWeeklyDigestEnabled(bool value) async {
+    await _prefs?.setBool(_kWeeklyDigest, value);
+    _emit((s) => s.copyWith(app: s.app.copyWith(weeklyDigestEnabled: value)));
   }
 
   // --- Appearance (Wave F) ------------------------------------------------
@@ -438,6 +446,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
               ? Color(prefs.getInt(_kSeedColor)!)
               : null,
       watchedFolders: _decodeStringSet(prefs.getString(_kWatchedFolders)),
+      weeklyDigestEnabled: prefs.getBool(_kWeeklyDigest) ?? false,
     );
 
     final overrides = <String, DeviceOverrides>{};

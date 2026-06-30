@@ -34,6 +34,7 @@ class AppDefaults {
     this.amoledDark = false,
     this.seedColor,
     this.watchedFolders = const {},
+    this.weeklyDigestEnabled = false,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -83,6 +84,10 @@ class AppDefaults {
   /// parent directory is in this set, a local notification is shown.
   final Set<String> watchedFolders;
 
+  /// Opt-in (L4): show a once-a-week notification summarizing storage trends
+  /// across paired hosts. App-global only. Defaults to off.
+  final bool weeklyDigestEnabled;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -95,6 +100,7 @@ class AppDefaults {
     bool? appLockEnabled,
     bool? amoledDark,
     Set<String>? watchedFolders,
+    bool? weeklyDigestEnabled,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -109,6 +115,7 @@ class AppDefaults {
     amoledDark: amoledDark ?? this.amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders ?? this.watchedFolders,
+    weeklyDigestEnabled: weeklyDigestEnabled ?? this.weeklyDigestEnabled,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -125,6 +132,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders,
+    weeklyDigestEnabled: weeklyDigestEnabled,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -141,6 +149,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: value,
     watchedFolders: watchedFolders,
+    weeklyDigestEnabled: weeklyDigestEnabled,
   );
 
   @override
@@ -159,7 +168,8 @@ class AppDefaults {
       other.amoledDark == amoledDark &&
       other.seedColor == seedColor &&
       other.watchedFolders.length == watchedFolders.length &&
-      other.watchedFolders.containsAll(watchedFolders);
+      other.watchedFolders.containsAll(watchedFolders) &&
+      other.weeklyDigestEnabled == weeklyDigestEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -176,6 +186,7 @@ class AppDefaults {
     amoledDark,
     seedColor,
     Object.hashAllUnordered(watchedFolders),
+    weeklyDigestEnabled,
   );
 }
 

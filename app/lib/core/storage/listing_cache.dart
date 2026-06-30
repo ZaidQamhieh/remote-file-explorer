@@ -25,6 +25,23 @@ class ListingCache {
   final Directory? baseDir;
   final int maxEntries;
 
+  /// Keys of the form `"$hostId:$path"` that the eviction pass must skip.
+  // ponytail: in-memory only; repopulated from PinStore on each app start via
+  // ExplorerNotifier.setPinnedListing. Survives the session but not restarts —
+  // Part B should wire up persistent re-hydration from PinStore on build.
+  final Set<String> _pinnedKeys = {};
+
+  /// Mark or unmark a cached listing as pinned so the eviction pass skips it.
+  /// [key] must be in the form `"$hostId:$path"` — same format used by
+  /// [ExplorerNotifier.setPinnedListing] and expected by Part B.
+  void setPinned(String key, bool pinned) {
+    if (pinned) {
+      _pinnedKeys.add(key);
+    } else {
+      _pinnedKeys.remove(key);
+    }
+  }
+
   Future<Directory> _dir() async {
     final base = baseDir ?? await getApplicationDocumentsDirectory();
     final d = Directory('${base.path}/listing_cache');
@@ -75,8 +92,14 @@ class ListingCache {
                 DateTime(0);
             return fa.compareTo(fb);
           });
-      for (final k in keys.take(data.length - maxEntries)) {
+      // Evict oldest non-pinned entries until we're back at capacity.
+      var toEvict = data.length - maxEntries;
+      for (final k in keys) {
+        if (toEvict <= 0) break;
+        if (_pinnedKeys.contains('$hostId:$k'))
+          continue; // ponytail: skip pinned
         data.remove(k);
+        toEvict--;
       }
     }
     await _write(hostId, data);

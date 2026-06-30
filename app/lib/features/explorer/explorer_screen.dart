@@ -7,6 +7,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/settings/settings_controller.dart';
+import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/motion.dart';
@@ -14,6 +15,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
+import '../bookmarks/bookmarks_screen.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
@@ -63,6 +65,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   ExplorerArg get _arg => (hostId: widget.host.id, rootPath: widget.rootPath);
 
   ExplorerNotifier get _notifier => ref.read(explorerProvider(_arg).notifier);
+
+  // Active bookmark tag filter; reset on directory navigation.
+  String? _activeTag;
 
   @override
   void initState() {
@@ -182,6 +187,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                   onSearch: () => _openSearch(context, state, client),
                   onToggleFavorite:
                       () => _toggleFavorite(context, state, isFav),
+                  onOpenBookmarks:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const BookmarksScreen(),
+                        ),
+                      ),
                   onOverflow:
                       (action) => _onOverflowAction(context, state, action),
                 ),
@@ -456,11 +467,141 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     showInfo(context, context.l10n.removedFavorite(fav.label));
   }
 
+  // ---------------------------------------------------------------------------
+  // Bookmarks
+  // ---------------------------------------------------------------------------
+
+  Future<void> _showBookmarkSheet(BuildContext context, Entry entry) async {
+    final notifier = ref.read(bookmarkStoreProvider.notifier);
+    final already = notifier.isBookmarked(widget.host.id, entry.path);
+
+    if (already) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Remove Bookmark'),
+              content: Text('Remove bookmark for "${entry.name}"?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Remove'),
+                ),
+              ],
+            ),
+      );
+      if (ok == true) notifier.removeBookmark(widget.host.id, entry.path);
+    } else {
+      final ctrl = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: Text('Bookmark "${entry.name}"'),
+              content: TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(
+                  hintText: 'Tag (optional)',
+                  labelText: 'Tag',
+                ),
+                autofocus: true,
+                onSubmitted: (_) => Navigator.pop(ctx, true),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+      );
+      final tag = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
+      ctrl.dispose();
+      if (ok == true) {
+        notifier.addBookmark(
+          Bookmark(hostId: widget.host.id, remotePath: entry.path, tag: tag),
+        );
+      }
+    }
+  }
+
+  /// Chip row of distinct tags for bookmarks whose paths appear in the current
+  /// directory listing. Returns null when there are no tagged bookmarks.
+  Widget? _buildBookmarkChipRow(ExplorerState state) {
+    final all = ref.watch(bookmarkStoreProvider).valueOrNull ?? [];
+    final visiblePaths = state.displayEntries.map((e) => e.path).toSet();
+    final tags =
+        all
+            .where(
+              (b) =>
+                  b.hostId == widget.host.id &&
+                  b.tag != null &&
+                  visiblePaths.contains(b.remotePath),
+            )
+            .map((b) => b.tag!)
+            .toSet()
+            .toList();
+    if (tags.isEmpty) return null;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.xs,
+      ),
+      child: Row(
+        children: [
+          if (_activeTag != null) ...[
+            ActionChip(
+              label: const Text('All'),
+              onPressed: () => setState(() => _activeTag = null),
+            ),
+            const SizedBox(width: Spacing.xs),
+          ],
+          for (final tag in tags) ...[
+            FilterChip(
+              label: Text(tag),
+              selected: _activeTag == tag,
+              onSelected:
+                  (sel) => setState(() => _activeTag = sel ? tag : null),
+            ),
+            const SizedBox(width: Spacing.xs),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Filters [entries] to only those bookmarked with [_activeTag].
+  /// Returns [entries] unchanged when no tag filter is active.
+  List<Entry> _filteredEntries(List<Entry> entries) {
+    final tag = _activeTag;
+    if (tag == null) return entries;
+    final bookmarks = ref.read(bookmarkStoreProvider).valueOrNull ?? [];
+    final tagged = {
+      for (final b in bookmarks)
+        if (b.hostId == widget.host.id && b.tag == tag) b.remotePath,
+    };
+    return entries.where((e) => tagged.contains(e.path)).toList();
+  }
+
   Widget _buildBody(
     BuildContext context,
     ExplorerState state,
     AgentClient client,
   ) {
+    // Reset tag filter when the user navigates to a different directory.
+    ref.listen(explorerProvider(_arg).select((s) => s.currentPath), (_, __) {
+      if (_activeTag != null) setState(() => _activeTag = null);
+    });
+
     final pinRow = _buildPinRow(context, state);
 
     if (state.loading && state.entries.isEmpty) {
@@ -508,9 +649,12 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
             .density ??
         EntryDensity.comfortable;
 
+    final chipRow = _buildBookmarkChipRow(state);
+
     return Column(
       children: [
         if (pinRow != null) pinRow,
+        if (chipRow != null) chipRow,
         if (state.offline) const OfflineBanner(),
         Expanded(
           child: RefreshIndicator(
@@ -540,9 +684,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     AgentClient client,
     EntryDensity density,
   ) {
-    final entries = state.displayEntries;
-    final showLoadMore = state.hasMore;
-    final showHiddenFooter = state.hiddenCount > 0;
+    final entries = _filteredEntries(state.displayEntries);
+    final showLoadMore = state.hasMore && _activeTag == null;
+    final showHiddenFooter = state.hiddenCount > 0 && _activeTag == null;
     final itemCount =
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
@@ -580,6 +724,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                   (dragged, dest) => _moveInto(context, client, dragged, dest),
               onShowMeta:
                   entry.isDir ? () => _showMeta(context, entry, client) : null,
+              onBookmark: () => _showBookmarkSheet(context, entry),
             ),
           ),
         );
@@ -668,9 +813,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     ExplorerState state,
     AgentClient client,
   ) {
-    final entries = state.displayEntries;
-    final showLoadMore = state.hasMore;
-    final showHiddenFooter = state.hiddenCount > 0;
+    final entries = _filteredEntries(state.displayEntries);
+    final showLoadMore = state.hasMore && _activeTag == null;
+    final showHiddenFooter = state.hiddenCount > 0 && _activeTag == null;
     final itemCount =
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
@@ -713,6 +858,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               onLongPress: () => _notifier.toggleSelect(entry.path),
               onMoveInto:
                   (dragged, dest) => _moveInto(context, client, dragged, dest),
+              onBookmark: () => _showBookmarkSheet(context, entry),
             ),
           ),
         );

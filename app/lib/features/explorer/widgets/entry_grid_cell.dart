@@ -25,6 +25,7 @@ class EntryGridCell extends StatelessWidget {
     this.hostId,
     this.onMoveInto,
     this.isFavorite = false,
+    this.onBookmark,
   });
 
   final Entry entry;
@@ -43,6 +44,10 @@ class EntryGridCell extends StatelessWidget {
   /// Whether [entry] is a favorited folder — shows a small star badge on the
   /// leading icon/thumbnail container. Has no effect for files.
   final bool isFavorite;
+
+  /// When set and NOT in multiSelect mode, long-press opens the bookmark
+  /// sheet instead of entering selection mode.
+  final VoidCallback? onBookmark;
 
   /// Wraps [child] in a [Hero] when [hostId] is set so the thumbnail animates
   /// into the full-screen image preview (matching tag). A cheap flight on Skia
@@ -71,7 +76,8 @@ class EntryGridCell extends StatelessWidget {
       child: InkWell(
         borderRadius: Radii.cardR,
         onTap: onTap,
-        onLongPress: onLongPress,
+        onLongPress:
+            (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: Radii.cardR,

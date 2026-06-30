@@ -26,6 +26,7 @@ class BrowseAppBar extends StatelessWidget {
     required this.onMoveInto,
     required this.onSearch,
     required this.onToggleFavorite,
+    required this.onOpenBookmarks,
     required this.onOverflow,
     this.sseConnected = false,
   });
@@ -37,6 +38,7 @@ class BrowseAppBar extends StatelessWidget {
   final Future<void> Function(Entry dragged, String dest) onMoveInto;
   final VoidCallback onSearch;
   final VoidCallback onToggleFavorite;
+  final VoidCallback onOpenBookmarks;
   final void Function(OverflowAction action) onOverflow;
   final bool sseConnected;
 
@@ -80,6 +82,11 @@ class BrowseAppBar extends StatelessWidget {
           icon: const Icon(Icons.search_rounded),
           tooltip: context.l10n.searchTooltip,
           onPressed: onSearch,
+        ),
+        IconButton(
+          icon: const Icon(Icons.bookmark_border_rounded),
+          tooltip: 'Bookmarks',
+          onPressed: onOpenBookmarks,
         ),
         IconButton(
           icon: Icon(isFav ? Icons.star_rounded : Icons.star_border_rounded),

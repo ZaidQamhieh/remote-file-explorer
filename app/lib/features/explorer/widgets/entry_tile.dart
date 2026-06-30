@@ -38,6 +38,7 @@ class EntryTile extends StatelessWidget {
     this.density = EntryDensity.comfortable,
     this.isFavorite = false,
     this.onShowMeta,
+    this.onBookmark,
     this.client,
   });
 
@@ -63,6 +64,10 @@ class EntryTile extends StatelessWidget {
   /// When set for a directory, the trailing chevron becomes tappable; has no
   /// effect for files (which already open their sheet via [onTap]).
   final VoidCallback? onShowMeta;
+
+  /// When set and NOT in multiSelect mode, long-press opens the bookmark
+  /// sheet instead of entering selection mode.
+  final VoidCallback? onBookmark;
 
   /// File metadata (size · date), joined with `·`. Empty for directories.
   String get _meta {
@@ -135,7 +140,8 @@ class EntryTile extends StatelessWidget {
       child: InkWell(
         borderRadius: Radii.cardR,
         onTap: onTap,
-        onLongPress: onLongPress,
+        onLongPress:
+            (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: Spacing.md,

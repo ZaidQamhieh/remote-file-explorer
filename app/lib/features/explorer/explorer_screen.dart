@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
@@ -70,6 +73,13 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   // Active bookmark tag filter; reset on directory navigation.
   String? _activeTag;
 
+  // P2 keyboard shortcuts + type-ahead jump (entry-list scoped, see
+  // `_buildBody`'s Actions/Shortcuts/Focus wrapper).
+  final _listFocusNode = FocusNode(debugLabel: 'explorerEntryList');
+  final _scrollController = ScrollController();
+  String _typeAheadQuery = '';
+  Timer? _typeAheadTimer;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +87,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     if (initialPath != null && initialPath != widget.rootPath) {
       Future.microtask(() => _notifier.jumpTo(initialPath));
     }
+  }
+
+  @override
+  void dispose() {
+    _listFocusNode.dispose();
+    _scrollController.dispose();
+    _typeAheadTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -684,15 +702,204 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         if (chipRow != null) chipRow,
         if (state.offline) const OfflineBanner(),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _notifier.refresh,
-            child:
-                state.gridView
-                    ? _buildGrid(context, state, client)
-                    : _buildList(context, state, client, density),
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              VoidCallbackIntent: VoidCallbackAction(),
+            },
+            child: Shortcuts(
+              shortcuts: _entryListShortcuts(context, state, client),
+              child: Focus(
+                focusNode: _listFocusNode,
+                autofocus: true,
+                onKeyEvent: (node, event) => _handleTypeAheadKey(event, state),
+                child: RefreshIndicator(
+                  onRefresh: _notifier.refresh,
+                  child:
+                      state.gridView
+                          ? _buildGrid(context, state, client)
+                          : _buildList(context, state, client, density),
+                ),
+              ),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // P2: external-keyboard shortcuts + type-ahead jump
+  //
+  // Scoped to the entry-list area only (see the Actions/Shortcuts/Focus
+  // wrapper in `_buildBody` above) so typing in the rename dialog, the "Go to
+  // Path" dialog, or the search screen is unaffected — those are separate
+  // routes/overlays, not descendants of this Focus subtree.
+  // ---------------------------------------------------------------------------
+
+  /// Hardware-keyboard shortcuts, bound to the exact same notifier/clipboard
+  /// methods the existing touch UI already calls (`SelectionBar`,
+  /// `ExplorerSelectionAppBar`, the paste FAB, the search icon).
+  Map<ShortcutActivator, Intent> _entryListShortcuts(
+    BuildContext context,
+    ExplorerState state,
+    AgentClient client,
+  ) => {
+    const SingleActivator(
+      LogicalKeyboardKey.keyC,
+      control: true,
+    ): VoidCallbackIntent(() => _copySelection(context, state)),
+    const SingleActivator(
+      LogicalKeyboardKey.keyX,
+      control: true,
+    ): VoidCallbackIntent(() => _cutSelection(context, state)),
+    const SingleActivator(
+      LogicalKeyboardKey.keyV,
+      control: true,
+    ): VoidCallbackIntent(() => _pasteFromShortcut(context, state)),
+    const SingleActivator(LogicalKeyboardKey.delete): VoidCallbackIntent(
+      () => _confirmDeleteSelection(context, state),
+    ),
+    const SingleActivator(
+      LogicalKeyboardKey.keyF,
+      control: true,
+    ): VoidCallbackIntent(() => _openSearch(context, state, client)),
+    const SingleActivator(
+      LogicalKeyboardKey.keyA,
+      control: true,
+    ): VoidCallbackIntent(_notifier.selectAll),
+    const SingleActivator(LogicalKeyboardKey.escape): VoidCallbackIntent(
+      _notifier.clearSelection,
+    ),
+    const SingleActivator(LogicalKeyboardKey.backspace): VoidCallbackIntent(
+      _notifier.popDirectory,
+    ),
+    const SingleActivator(
+      LogicalKeyboardKey.arrowLeft,
+      alt: true,
+    ): VoidCallbackIntent(_notifier.popDirectory),
+  };
+
+  /// Same effect as `SelectionBar._copySelected`: no-op when nothing's
+  /// selected (don't toast "Copied 0 items").
+  void _copySelection(BuildContext context, ExplorerState state) {
+    if (state.selected.isEmpty) return;
+    final paths = state.selected.toList();
+    ref.read(clipboardProvider.notifier).copy(paths, widget.host.id);
+    _notifier.clearSelection();
+    showSuccess(context, context.l10n.clipboardCopiedHint(paths.length));
+  }
+
+  /// Same effect as `SelectionBar._cutSelected`.
+  void _cutSelection(BuildContext context, ExplorerState state) {
+    if (state.selected.isEmpty) return;
+    final paths = state.selected.toList();
+    ref.read(clipboardProvider.notifier).cut(paths, widget.host.id);
+    _notifier.clearSelection();
+    showSuccess(context, context.l10n.clipboardCutHint(paths.length));
+  }
+
+  /// Same effect as the paste FAB's `onPaste`: no-op on an empty clipboard.
+  void _pasteFromShortcut(BuildContext context, ExplorerState state) {
+    final clipboard = ref.read(clipboardProvider);
+    if (clipboard == null) return;
+    _paste(context, state, clipboard);
+  }
+
+  /// Mirrors `SelectionBar._confirmDelete` (same three-way dialog, same
+  /// `deleteSelected` call) — duplicated rather than shared because
+  /// `selection_bar.dart` isn't to be modified for this wave.
+  Future<void> _confirmDeleteSelection(
+    BuildContext context,
+    ExplorerState state,
+  ) async {
+    if (state.selected.isEmpty) return;
+    final count = state.selected.length;
+    final permanent = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(ctx.l10n.deleteTitle),
+            content: Text(
+              '${ctx.l10n.moveNItemsToTrash(count)} '
+              '${ctx.l10n.canRestoreFromTrash(count)}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: Text(ctx.l10n.deleteForeverButton),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.l10n.moveToTrashButton),
+              ),
+            ],
+          ),
+    );
+    if (permanent == null) return;
+    try {
+      final res = await _notifier.deleteSelected(permanent: permanent);
+      if (context.mounted) {
+        await reportBatchResult(
+          context,
+          res,
+          permanent
+              ? context.l10n.deletedLabel
+              : context.l10n.movedToTrashLabel,
+        );
+      }
+    } catch (e) {
+      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
+    }
+  }
+
+  /// Accumulates printable keystrokes into a buffer (reset ~1s after the last
+  /// keystroke) and jumps the list to the first entry whose name starts with
+  /// it. Returns `ignored` for non-printable keys / modifier combos so they
+  /// fall through to `_entryListShortcuts` above.
+  KeyEventResult _handleTypeAheadKey(KeyEvent event, ExplorerState state) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final char = event.character;
+    if (char == null || char.isEmpty || char.codeUnitAt(0) < 0x20) {
+      return KeyEventResult.ignored;
+    }
+    final keys = HardwareKeyboard.instance;
+    if (keys.isControlPressed || keys.isMetaPressed || keys.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    _typeAheadTimer?.cancel();
+    _typeAheadQuery += char;
+    _typeAheadTimer = Timer(const Duration(seconds: 1), _resetTypeAhead);
+    final entries = _filteredEntries(state.displayEntries);
+    final index = firstMatchIndex(entries, _typeAheadQuery);
+    if (index != null) _scrollToIndex(index, entries.length);
+    return KeyEventResult.handled;
+  }
+
+  void _resetTypeAhead() {
+    _typeAheadQuery = '';
+    _typeAheadTimer = null;
+  }
+
+  // ponytail: proportional estimate (index / count), not pixel-exact —
+  // entry rows have no fixed itemExtent (comfortable/compact density), so an
+  // exact offset would need per-row measurement. Good enough to land the
+  // viewport near the match; switch to an itemExtent-based calc if a reviewer
+  // wants pixel precision.
+  void _scrollToIndex(int index, int total) {
+    if (!_scrollController.hasClients || total <= 1) return;
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    final fraction = (index / (total - 1)).clamp(0.0, 1.0);
+    _scrollController.animateTo(
+      maxExtent * fraction,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
     );
   }
 
@@ -728,6 +935,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final favoritePaths = _favoritePaths();
     final pinnedPaths = _pinnedPaths();
     return ListView.builder(
+      controller: _scrollController,
       itemCount: itemCount,
       itemBuilder: (ctx, i) {
         if (i >= entries.length + (showLoadMore ? 1 : 0)) {
@@ -859,6 +1067,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final favoritePaths = _favoritePaths();
     final pinnedPaths = _pinnedPaths();
     return GridView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.all(Spacing.md),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 144,
@@ -1102,4 +1311,16 @@ String _parentDirOf(String path) {
   final sep = path.contains('\\') ? r'\' : '/';
   final idx = path.lastIndexOf(sep);
   return idx <= 0 ? sep : path.substring(0, idx);
+}
+
+/// Index of the first [entries] entry whose name starts with [typed]
+/// (case-insensitive), or `null` if none match. Pure/testable core of the
+/// type-ahead jump in `_ExplorerScreenState._handleTypeAheadKey`.
+int? firstMatchIndex(List<Entry> entries, String typed) {
+  if (typed.isEmpty) return null;
+  final lower = typed.toLowerCase();
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].name.toLowerCase().startsWith(lower)) return i;
+  }
+  return null;
 }

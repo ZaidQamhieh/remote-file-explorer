@@ -34,6 +34,7 @@ class AppDefaults {
     this.amoledDark = false,
     this.seedColor,
     this.watchedFolders = const {},
+    this.compressDownloadsOnCellular = true,
   });
 
   /// Default list/grid choice. `true` = grid. Hosts without an override follow
@@ -83,6 +84,12 @@ class AppDefaults {
   /// parent directory is in this set, a local notification is shown.
   final Set<String> watchedFolders;
 
+  /// Whether to send `Accept-Encoding: gzip` on downloads while on a
+  /// cellular connection (S3). The agent only honors it for fresh,
+  /// non-Range requests on compressible text/code extensions, so this is
+  /// safe to default on. App-global only — no per-device override.
+  final bool compressDownloadsOnCellular;
+
   AppDefaults copyWith({
     bool? gridView,
     EntryDensity? density,
@@ -95,6 +102,7 @@ class AppDefaults {
     bool? appLockEnabled,
     bool? amoledDark,
     Set<String>? watchedFolders,
+    bool? compressDownloadsOnCellular,
   }) => AppDefaults(
     gridView: gridView ?? this.gridView,
     density: density ?? this.density,
@@ -109,6 +117,8 @@ class AppDefaults {
     amoledDark: amoledDark ?? this.amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders ?? this.watchedFolders,
+    compressDownloadsOnCellular:
+        compressDownloadsOnCellular ?? this.compressDownloadsOnCellular,
   );
 
   AppDefaults copyWithLocale(Locale? value) => AppDefaults(
@@ -125,6 +135,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: seedColor,
     watchedFolders: watchedFolders,
+    compressDownloadsOnCellular: compressDownloadsOnCellular,
   );
 
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
@@ -141,6 +152,7 @@ class AppDefaults {
     amoledDark: amoledDark,
     seedColor: value,
     watchedFolders: watchedFolders,
+    compressDownloadsOnCellular: compressDownloadsOnCellular,
   );
 
   @override
@@ -159,7 +171,8 @@ class AppDefaults {
       other.amoledDark == amoledDark &&
       other.seedColor == seedColor &&
       other.watchedFolders.length == watchedFolders.length &&
-      other.watchedFolders.containsAll(watchedFolders);
+      other.watchedFolders.containsAll(watchedFolders) &&
+      other.compressDownloadsOnCellular == compressDownloadsOnCellular;
 
   @override
   int get hashCode => Object.hash(
@@ -176,6 +189,7 @@ class AppDefaults {
     amoledDark,
     seedColor,
     Object.hashAllUnordered(watchedFolders),
+    compressDownloadsOnCellular,
   );
 }
 

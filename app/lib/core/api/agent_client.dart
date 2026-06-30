@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -122,6 +123,22 @@ class UploadCompleteResult {
       );
 }
 
+/// Pure decision for S3 gzip-on-download: should this request send
+/// `Accept-Encoding: gzip`? Combines the user's "compress on cellular"
+/// setting with the current connectivity state — kept separate from Dio so
+/// it's directly unit-testable.
+bool shouldRequestGzipDownload({
+  required bool settingEnabled,
+  required List<ConnectivityResult> connectivity,
+}) {
+  if (!settingEnabled) return false;
+  if (connectivity.contains(ConnectivityResult.wifi) ||
+      connectivity.contains(ConnectivityResult.ethernet)) {
+    return false;
+  }
+  return connectivity.contains(ConnectivityResult.mobile);
+}
+
 /// HTTPS client for a single host agent.
 ///
 /// The agent uses a self-signed certificate, so standard CA validation is
@@ -230,6 +247,14 @@ class AgentClient {
   /// When null, no caching occurs.
   bool Function(String hostId, String folderPath)? isPinnedFolder;
 
+  /// Whether to send `Accept-Encoding: gzip` on a fresh (non-resumed)
+  /// download while on a cellular connection (S3) — set from the user's
+  /// "Compress downloads on cellular" app setting at client construction
+  /// (see `buildClientForHost`). The agent only honors the header for
+  /// non-Range requests on compressible text/code extensions above a small
+  /// size floor, so defaulting to true is safe.
+  bool compressDownloadsOnCellular = true;
+
   /// The address (`host:port`, no scheme) this client is currently talking
   /// to — initially whichever candidate worked last time, and updated if a
   /// request falls back to the next candidate (see the retry interceptor in
@@ -248,6 +273,17 @@ class AgentClient {
   static String _parentOf(String path) {
     final i = path.lastIndexOf('/');
     return i <= 0 ? '/' : path.substring(0, i);
+  }
+
+  /// Whether [fetchBytes]/[downloadFile] should send `Accept-Encoding: gzip`
+  /// on this request — see [shouldRequestGzipDownload].
+  Future<bool> _wantsGzip() async {
+    if (!compressDownloadsOnCellular) return false;
+    final connectivity = await Connectivity().checkConnectivity();
+    return shouldRequestGzipDownload(
+      settingEnabled: compressDownloadsOnCellular,
+      connectivity: connectivity,
+    );
   }
 
   /// Best-effort extraction of the `code` field from an error response body,
@@ -859,7 +895,13 @@ class AgentClient {
     try {
       final headers = <String, dynamic>{};
       if (startByte > 0) {
+        // Resumed download: never request gzip (the server already skips
+        // compression for any Range request — see downloadHandler — but
+        // sending the header here would falsely imply we want it on this
+        // path).
         headers['Range'] = 'bytes=$startByte-';
+      } else if (await _wantsGzip()) {
+        headers['Accept-Encoding'] = 'gzip';
       }
       final response = await _dio.download(
         '/content',
@@ -898,10 +940,14 @@ class AgentClient {
     CancelToken? cancelToken,
   }) async {
     try {
+      final headers = <String, dynamic>{};
+      if (await _wantsGzip()) {
+        headers['Accept-Encoding'] = 'gzip';
+      }
       final res = await _dio.get<List<int>>(
         '/content',
         queryParameters: {'path': remotePath},
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(responseType: ResponseType.bytes, headers: headers),
         cancelToken: cancelToken,
       );
       final data = res.data;

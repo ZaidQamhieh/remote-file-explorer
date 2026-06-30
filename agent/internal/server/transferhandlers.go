@@ -2,12 +2,16 @@
 package server
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +22,23 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
+
+// compressibleExtensions are the (lowercase, dot-free) file extensions
+// eligible for opt-in gzip-on-download (S3). Deliberately a small text/code
+// allowlist — anything already compressed (zip/jpg/mp4/...) or not in this
+// list is served as-is. Not the search package's categoryExtensions: that
+// table is image/video/audio/document/archive *display* categories (and
+// includes already-compressed formats like pdf/docx), not a
+// compresses-well-with-gzip allowlist.
+var compressibleExtensions = map[string]bool{
+	"txt": true, "log": true, "md": true, "json": true, "yaml": true,
+	"yml": true, "csv": true, "xml": true, "html": true, "css": true,
+	"js": true, "go": true, "dart": true, "py": true, "java": true,
+	"c": true, "cpp": true, "h": true, "sql": true,
+}
+
+// compressMinBytes is the floor below which gzip overhead isn't worth it.
+const compressMinBytes = 1024
 
 // --------- /content GET ---------
 
@@ -63,9 +84,48 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			}
 		}
 
+		// Gzip-on-download (S3): only for a fresh, non-ranged request whose
+		// client opted in via Accept-Encoding, on a compressible extension
+		// above the size floor. Gzip and Range don't compose — a gzip'd
+		// stream's offsets don't correspond to the original file's byte
+		// offsets — so any Range header unconditionally falls through to the
+		// plain http.ServeContent path below, which is what makes resumable
+		// download (agent_client.dart's downloadFile) safe.
+		if r.Header.Get("Range") == "" &&
+			acceptsGzip(r) &&
+			compressibleExtensions[extOfName(info.Name())] &&
+			info.Size() >= compressMinBytes {
+			w.Header().Set("Content-Type", contentTypeForName(info.Name()))
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+			gz := gzip.NewWriter(w)
+			defer gz.Close()
+			_, _ = io.Copy(gz, content) // best-effort stream; client sees a truncated body on error
+			return
+		}
+
 		// http.ServeContent handles Range, 206, 416, Content-Type, ETag, etc.
 		http.ServeContent(w, r, info.Name(), info.ModTime(), content)
 	}
+}
+
+// acceptsGzip reports whether the request's Accept-Encoding header lists gzip.
+func acceptsGzip(r *http.Request) bool {
+	for _, enc := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+		if strings.EqualFold(strings.TrimSpace(enc), "gzip") {
+			return true
+		}
+	}
+	return false
+}
+
+// contentTypeForName returns the same MIME type http.ServeContent would have
+// detected from the file extension, falling back to application/octet-stream.
+func contentTypeForName(name string) string {
+	if m := mime.TypeByExtension(filepath.Ext(name)); m != "" {
+		return m
+	}
+	return "application/octet-stream"
 }
 
 // MaxContentBytes caps the size of a PUT /v1/content request body.

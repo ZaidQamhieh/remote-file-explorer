@@ -469,6 +469,13 @@ paths:
   /content:
     get:
       summary: Download file content (supports HTTP Range for resumable download)
+      description: >
+        Accepts an Accept-Encoding: gzip request header. When present, the
+        request has no Range header, the file's extension is a compressible
+        text/code type, and the file is above a small size floor, the agent
+        may respond with Content-Encoding: gzip. A Range header always
+        disables compression (gzip offsets don't correspond to the
+        original file's byte offsets), so resumable downloads are unaffected.
       parameters:
         - { in: query, name: path, required: true, schema: { type: string } }
       responses:

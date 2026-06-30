@@ -52,6 +52,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   static const _kAmoledDark = 'app.amoledDark';
   static const _kSeedColor = 'app.seedColor';
   static const _kWatchedFolders = 'app.watchedFolders.v1';
+  static const _kCompressDownloadsOnCellular =
+      'app.compressDownloadsOnCellular';
   static const _kOverrides = 'settings.deviceOverrides.v1';
   static const _kMigrated = 'settings.migrated.v1';
   static const _kVisMigrated = 'settings.visibilityMigrated.v1';
@@ -117,6 +119,14 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> setAmoledDark(bool value) async {
     await _prefs?.setBool(_kAmoledDark, value);
     _emit((s) => s.copyWith(app: s.app.copyWith(amoledDark: value)));
+  }
+
+  Future<void> setCompressDownloadsOnCellular(bool value) async {
+    await _prefs?.setBool(_kCompressDownloadsOnCellular, value);
+    _emit(
+      (s) =>
+          s.copyWith(app: s.app.copyWith(compressDownloadsOnCellular: value)),
+    );
   }
 
   Future<void> setSeedColor(Color? value) async {
@@ -438,6 +448,8 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
               ? Color(prefs.getInt(_kSeedColor)!)
               : null,
       watchedFolders: _decodeStringSet(prefs.getString(_kWatchedFolders)),
+      compressDownloadsOnCellular:
+          prefs.getBool(_kCompressDownloadsOnCellular) ?? true,
     );
 
     final overrides = <String, DeviceOverrides>{};

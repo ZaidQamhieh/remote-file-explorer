@@ -8,6 +8,8 @@ import '../../core/models/entry.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
+import '../../core/storage/offline_body_cache.dart';
+import '../../core/storage/pin_store.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/storage/visibility_prefs.dart';
 import 'sse_listener.dart';
@@ -268,10 +270,19 @@ class ExplorerNotifier
   }
 
   final ListingCache _cache = ListingCache();
+  final OfflineBodyCache _offlineBodyCache = OfflineBodyCache();
   SseListener? _sse;
   Timer? _refreshDebounce;
 
-  Future<AgentClient> _client() => ref.read(clientProvider(arg.hostId).future);
+  Future<AgentClient> _client() async {
+    final client = await ref.read(clientProvider(arg.hostId).future);
+    // Wire offline cache once (??= is idempotent on the same instance).
+    client.offlineBodyCache ??= _offlineBodyCache;
+    client.isPinnedFolder ??=
+        (hostId, folderPath) =>
+            ref.read(pinStoreProvider.notifier).isPinned(hostId, folderPath);
+    return client;
+  }
 
   Future<void> _load() async {
     final path = state.currentPath;
@@ -384,10 +395,31 @@ class ExplorerNotifier
   Future<void> refresh() => _load();
 
   /// Marks or unmarks a cached listing as pinned so the eviction pass skips
-  /// it. Cache key format: `"$hostId:$path"` — used by Part B to look up
-  /// pinned entries without knowing the internal hostId separator.
+  /// it, and (when pinning) fires a background pass to cache file bytes for
+  /// offline access. Cache key format: `"$hostId:$path"`.
   void setPinnedListing(String path, bool pinned) {
     _cache.setPinned('${arg.hostId}:$path', pinned);
+    if (pinned && path == state.currentPath) {
+      _preCacheCurrentEntries().ignore();
+    }
+  }
+
+  /// Downloads and caches bytes for every non-directory file ≤ 50 MB in the
+  /// current listing. Fire-and-forget; errors are silently swallowed.
+  Future<void> _preCacheCurrentEntries() async {
+    const maxBytes = 50 * 1024 * 1024;
+    final client = await _client();
+    // Snapshot entries so navigation mid-pass doesn't cause concurrent mutation.
+    for (final e in List.of(state.entries)) {
+      if (e.isDir || (e.size ?? 0) > maxBytes) continue;
+      if (await _offlineBodyCache.has(arg.hostId, e.path)) continue;
+      try {
+        final bytes = await client.fetchBytes(e.path);
+        await _offlineBodyCache.put(arg.hostId, e.path, bytes);
+      } catch (_) {
+        // Best-effort: agent may be slow or file inaccessible — skip.
+      }
+    }
   }
 
   void navigate(String path) {

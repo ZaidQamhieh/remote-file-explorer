@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
+import '../storage/offline_body_cache.dart';
 import '../app_info.dart';
 import '../models/agent_settings.dart';
 import '../models/archive_entry.dart';
@@ -220,6 +221,15 @@ class AgentClient {
   /// Fingerprint observed on the most recent TLS handshake (for TOFU capture).
   String? lastSeenFingerprint;
 
+  /// When set, [fetchBytes] writes to this cache on success and reads from it
+  /// as a fallback when the agent is unreachable.
+  OfflineBodyCache? offlineBodyCache;
+
+  /// Called by [fetchBytes] to decide whether to cache a file's bytes.
+  /// Receives [host].id and the file's parent folder path.
+  /// When null, no caching occurs.
+  bool Function(String hostId, String folderPath)? isPinnedFolder;
+
   /// The address (`host:port`, no scheme) this client is currently talking
   /// to — initially whichever candidate worked last time, and updated if a
   /// request falls back to the next candidate (see the retry interceptor in
@@ -234,6 +244,11 @@ class AgentClient {
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
+
+  static String _parentOf(String path) {
+    final i = path.lastIndexOf('/');
+    return i <= 0 ? '/' : path.substring(0, i);
+  }
 
   /// Best-effort extraction of the `code` field from an error response body,
   /// regardless of whether Dio parsed it as JSON (`Map`) or left it as raw
@@ -890,9 +905,23 @@ class AgentClient {
         cancelToken: cancelToken,
       );
       final data = res.data;
-      if (data is Uint8List) return data;
-      return Uint8List.fromList(data ?? const []);
+      final bytes =
+          data is Uint8List ? data : Uint8List.fromList(data ?? const []);
+
+      // Cache bytes when the parent folder is pinned (fire-and-forget).
+      final cache = offlineBodyCache;
+      final pinCheck = isPinnedFolder;
+      if (cache != null &&
+          pinCheck != null &&
+          pinCheck(host.id, _parentOf(remotePath))) {
+        cache.put(host.id, remotePath, bytes).ignore();
+      }
+
+      return bytes;
     } on DioException catch (e) {
+      // Offline fallback: serve from cache when the agent is unreachable.
+      final cached = await offlineBodyCache?.get(host.id, remotePath);
+      if (cached != null) return cached;
       throw _apiError(e);
     }
   }

@@ -1,0 +1,112 @@
+# R1 — One-Time Share Link: Threat Model
+
+**Status: DRAFT — must be reviewed by owner before implementation.**
+Written: 2026-06-30. Required gate per `docs/next-waves-addendum.md`.
+
+---
+
+## What it does
+
+The agent serves a single file via a short-lived, tokenized HTTPS URL.
+The recipient fetches it once; the token then expires and is deleted.
+
+---
+
+## Trust boundary
+
+Every other RFE feature stays inside Tailscale (WireGuard encrypted, device-authenticated).
+R1 **breaks out of that boundary**: the share URL is reachable by anyone who has it,
+over the public internet (or LAN, depending on how the agent is bound).
+
+This is intentional and useful ("grab this file from my PC"), but it is the **only
+RFE surface that is not Tailscale-gated**. Everything else below exists to make that
+safe.
+
+---
+
+## Threat inventory
+
+| # | Threat | Likelihood | Impact | Mitigation |
+|---|--------|-----------|--------|------------|
+| T1 | Link forwarded to unintended recipient | Medium | High | Token is single-use + expiring; once fetched it's gone |
+| T2 | Brute-force token guessing | Low | High | Token = 32 bytes crypto/rand → 2^256 space; rate-limit `/share/` to 10 req/min (reuse existing rate-limit middleware) |
+| T3 | Path traversal via crafted share request | Low | Critical | Share token is bound to an absolute, jail-checked path at mint time; `/share/:token` never accepts a path parameter |
+| T4 | Token leaked in server logs | Medium | Medium | Agent logs the token as `sha256(token)[:8]` only, never the raw value |
+| T5 | Share feature enabled without user knowledge | Low | High | Host-level `"allowSharing": false` default; must be explicitly enabled in agent settings |
+| T6 | Expired token still served (clock drift) | Low | Low | Tokens are deleted from DB on first serve OR on expiry sweep — whichever comes first |
+| T7 | Serving a directory instead of a file | Low | High | Mint-time check: stat the path, reject if not a regular file |
+| T8 | Large file exhausting agent bandwidth | Medium | Medium | Optional max-file-size cap in agent settings (default 500 MB); owner can raise/remove |
+| T9 | No audit trail | Medium | Medium | Each share mint + serve is logged to a `share_log` table in SQLite (token hash, path, minted_at, served_at, requester IP) |
+
+---
+
+## Design decisions
+
+### Token format
+`crypto/rand` 32-byte random → hex-encoded 64-char string.
+Stored in SQLite as SHA-256 hash; raw token only in the response to the minting caller.
+
+### Expiry
+Default: **15 minutes**. Max: 24 hours (agent setting). The app UI shows a countdown.
+Expired tokens are deleted by a background goroutine sweeping every 5 minutes.
+
+### Revoke
+`DELETE /v1/share/:tokenHash` (authenticated, bearer token required).
+The app shows a "Revoke" button while the share is active.
+
+### Host-level gate
+`agent_settings.go` gets a new `AllowSharing bool` field (default `false`).
+`GET /v1/share/mint` returns 403 if `allowSharing == false`.
+The Flutter settings screen exposes a "Enable share links" toggle per host.
+
+### Endpoint surface (OpenAPI changes required)
+```
+POST /v1/share/mint        → {token, expiresAt, url}        (authenticated)
+GET  /v1/share/:token      → file bytes                      (public, single-use)
+DELETE /v1/share/:token    → 204                             (authenticated, revoke)
+GET  /v1/share             → [{tokenHash, path, expiresAt}]  (authenticated, list active)
+```
+`GET /v1/share/:token` is the **only unauthenticated endpoint** in the entire agent.
+
+### Audit log
+New `share_log` table in `store.go`:
+```sql
+CREATE TABLE share_log (
+  id          INTEGER PRIMARY KEY,
+  token_hash  TEXT NOT NULL,
+  path        TEXT NOT NULL,
+  minted_at   INTEGER NOT NULL,   -- Unix timestamp
+  expires_at  INTEGER NOT NULL,
+  served_at   INTEGER,            -- NULL until fetched
+  requester_ip TEXT               -- NULL for mint row
+);
+```
+
+### Flutter UX
+- Explorer: "Share link" in the file context menu (only if host has `allowSharing: true`)
+- Shows: generated URL + copy button + expiry countdown + Revoke button
+- Settings: per-host "Enable share links" toggle
+
+---
+
+## What is explicitly OUT OF SCOPE
+
+- Password-protecting the link (adds complexity; expiry + single-use is the safety model)
+- Link re-use (would require removing the single-use guarantee)  
+- Folder shares (directories only — not a regular file; T7 blocks it)
+- Analytics on who fetched the link (IP is logged, nothing more)
+
+---
+
+## Implementation pre-conditions (must be true before coding starts)
+
+1. This doc reviewed and approved by owner ✅/❌
+2. Agent `store.go` extended with `share_tokens` and `share_log` tables
+3. `agent_settings.go` has `AllowSharing bool`
+4. Rate-limit middleware confirmed reusable for `/share/` path
+5. OpenAPI updated in same commit as implementation
+
+---
+
+## R1 is safe to build given the mitigations above.
+The critical invariant: **the only unauthenticated endpoint serves one file once, for at most 24 hours, only when the host owner has explicitly opted in.**

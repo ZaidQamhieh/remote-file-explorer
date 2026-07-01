@@ -10,6 +10,7 @@ import '../../core/storage/favorites.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../handoff/qr_generate_screen.dart';
 import '../preview/preview.dart';
 import '../preview/preview_actions.dart';
 import '../share/share_sheet.dart';
@@ -382,6 +383,19 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             label: Text(context.l10n.shareLinkButton),
             onPressed: () => _shareLink(context),
           ),
+        if (!_entry.isDir)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+            ),
+            icon: const Icon(Icons.qr_code),
+            label: Text(context.l10n.sendViaQrButton),
+            onPressed: () => _sendViaQr(context),
+          ),
         if (!_entry.isDir && isExtractableArchive(_entry.name))
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
@@ -576,6 +590,27 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
         showError(context, context.l10n.shareLinkFailed(e.toString()));
       }
     }
+  }
+
+  /// Shows a QR code another phone (already paired to this same agent) can
+  /// scan to fetch this file directly with its own credentials — see
+  /// `qr_scan_screen.dart` for the receiving side.
+  Future<void> _sendViaQr(BuildContext context) async {
+    final fp = widget.host.certFingerprint;
+    if (fp == null) {
+      showError(context, context.l10n.qrHandoffNoFingerprint);
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (_) => QrGenerateSheet(
+            certFingerprint: fp,
+            path: _entry.path,
+            name: _entry.name,
+          ),
+    );
   }
 
   Future<void> _rename(BuildContext context) async {

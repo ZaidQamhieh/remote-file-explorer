@@ -1292,6 +1292,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get qrMissingFields => 'رمز QR يفتقر لحقول مطلوبة.';
 
   @override
+  String get sendViaQrButton => 'Send via QR';
+
+  @override
+  String get qrHandoffSheetTitle => 'Scan to receive';
+
+  @override
+  String get qrHandoffNoFingerprint =>
+      'Can\'t share — this host has no pinned certificate.';
+
+  @override
+  String get receiveFileTooltip => 'Receive file';
+
+  @override
+  String get receiveFileTitle => 'Receive file';
+
+  @override
+  String get qrHandoffNoHostMatch =>
+      'You\'re not paired to this PC — pair first, then scan again.';
+
+  @override
   String get backUpNow => 'نسخ احتياطي الآن';
 
   @override

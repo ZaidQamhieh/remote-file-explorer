@@ -7,6 +7,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../handoff/qr_scan_screen.dart';
 import '../pairing/pairing_screen.dart';
 import '../search/cross_host_search_screen.dart';
 import '../settings/app_settings_screen.dart';
@@ -47,6 +48,14 @@ class HostListScreen extends ConsumerWidget {
           },
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: context.l10n.receiveFileTooltip,
+            onPressed:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const QrScanScreen()),
+                ),
+          ),
           IconButton(
             icon: const Icon(Icons.search_rounded),
             tooltip: 'Search all hosts',

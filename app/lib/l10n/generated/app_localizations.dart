@@ -2132,6 +2132,42 @@ abstract class AppLocalizations {
   /// **'QR missing required fields.'**
   String get qrMissingFields;
 
+  /// No description provided for @sendViaQrButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send via QR'**
+  String get sendViaQrButton;
+
+  /// No description provided for @qrHandoffSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to receive'**
+  String get qrHandoffSheetTitle;
+
+  /// No description provided for @qrHandoffNoFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t share — this host has no pinned certificate.'**
+  String get qrHandoffNoFingerprint;
+
+  /// No description provided for @receiveFileTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive file'**
+  String get receiveFileTooltip;
+
+  /// No description provided for @receiveFileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive file'**
+  String get receiveFileTitle;
+
+  /// No description provided for @qrHandoffNoHostMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re not paired to this PC — pair first, then scan again.'**
+  String get qrHandoffNoHostMatch;
+
   /// No description provided for @backUpNow.
   ///
   /// In en, this message translates to:

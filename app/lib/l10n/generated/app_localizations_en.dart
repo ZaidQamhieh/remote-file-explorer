@@ -456,6 +456,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get copyPathAction => 'Copy path';
+
+  @override
+  String get pastePathAction => 'Paste path';
+
+  @override
+  String get clipboardEmptyMessage => 'Clipboard is empty';
+
+  @override
   String removedFavorite(String name) {
     return 'Removed \"$name\" from favorites';
   }
@@ -1250,6 +1259,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyFolderMessage => 'This folder is empty';
+
+  @override
+  String get noMatchesMessage => 'No items match the current filter';
 
   @override
   String get offlineBannerText => 'Offline — showing cached files';

@@ -860,6 +860,24 @@ abstract class AppLocalizations {
   /// **'Copied \"{path}\"'**
   String copiedPath(String path);
 
+  /// No description provided for @copyPathAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path'**
+  String get copyPathAction;
+
+  /// No description provided for @pastePathAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste path'**
+  String get pastePathAction;
+
+  /// No description provided for @clipboardEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Clipboard is empty'**
+  String get clipboardEmptyMessage;
+
   /// No description provided for @removedFavorite.
   ///
   /// In en, this message translates to:
@@ -2065,6 +2083,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This folder is empty'**
   String get emptyFolderMessage;
+
+  /// No description provided for @noMatchesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No items match the current filter'**
+  String get noMatchesMessage;
 
   /// No description provided for @offlineBannerText.
   ///

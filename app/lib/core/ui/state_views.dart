@@ -2,21 +2,47 @@ import 'package:flutter/material.dart';
 
 import '../l10n_ext.dart';
 
-/// Friendly empty-directory placeholder.
+/// Which empty-state message an entry list should show.
+enum EmptyStateKind {
+  /// The directory itself has no entries.
+  emptyFolder,
+
+  /// The directory has entries, but the current filter (bookmark tag /
+  /// hidden-items visibility) hides all of them.
+  noMatches,
+}
+
+/// Picks the empty-state case for an entry list: a genuinely empty folder vs.
+/// one where a filter is hiding every entry. Pure so the selection logic is
+/// unit-testable without a widget tree.
+EmptyStateKind resolveEmptyState({required bool hasRawEntries}) =>
+    hasRawEntries ? EmptyStateKind.noMatches : EmptyStateKind.emptyFolder;
+
+/// Friendly empty-directory placeholder. Pass [kind] to distinguish a truly
+/// empty folder from one where the current filter matches nothing.
 class EmptyFolderView extends StatelessWidget {
-  const EmptyFolderView({super.key});
+  const EmptyFolderView({super.key, this.kind = EmptyStateKind.emptyFolder});
+
+  final EmptyStateKind kind;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
+    final noMatches = kind == EmptyStateKind.noMatches;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.folder_open, size: 64, color: c.outline),
+          Icon(
+            noMatches ? Icons.filter_alt_off_outlined : Icons.folder_open,
+            size: 64,
+            color: c.outline,
+          ),
           const SizedBox(height: 12),
           Text(
-            context.l10n.emptyFolderMessage,
+            noMatches
+                ? context.l10n.noMatchesMessage
+                : context.l10n.emptyFolderMessage,
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],

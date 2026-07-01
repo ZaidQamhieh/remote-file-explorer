@@ -27,6 +27,7 @@ class EntryGridCell extends StatelessWidget {
     this.isFavorite = false,
     this.isPinned = false,
     this.onBookmark,
+    this.onPeek,
   });
 
   final Entry entry;
@@ -54,6 +55,11 @@ class EntryGridCell extends StatelessWidget {
   /// sheet instead of entering selection mode.
   final VoidCallback? onBookmark;
 
+  /// When set, long-pressing the thumbnail/icon (a target distinct from the
+  /// cell's own long-press) shows a quick preview peek instead of the cell's
+  /// usual long-press behavior. Has no effect for directories.
+  final VoidCallback? onPeek;
+
   /// Wraps [child] in a [Hero] when [hostId] is set so the thumbnail animates
   /// into the full-screen image preview (matching tag). A cheap flight on Skia
   /// (transform/opacity only — no shaders).
@@ -71,6 +77,42 @@ class EntryGridCell extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final mime = entry.mimeType ?? '';
     final isImage = !entry.isDir && mime.startsWith('image/');
+
+    Widget thumbnail =
+        isImage
+            ? _maybeHero(
+              ClipRRect(
+                borderRadius: Radii.chipR,
+                child: SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: ThumbnailImage(
+                    entry: entry,
+                    client: client,
+                    fallback: Center(
+                      child: EntryLeading(entry: entry, size: 40),
+                    ),
+                  ),
+                ),
+              ),
+            )
+            : Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: Radii.chipR,
+              ),
+              alignment: Alignment.center,
+              child: EntryLeading(entry: entry, size: 32),
+            );
+
+    // Long-pressing the thumbnail/icon specifically (not the cell) shows a
+    // quick preview peek — a target distinct from the cell's own long-press
+    // (bookmark/select) so neither gesture steals the other.
+    if (!multiSelect && !entry.isDir && onPeek != null) {
+      thumbnail = GestureDetector(onLongPress: onPeek, child: thumbnail);
+    }
 
     final cell = Material(
       color:
@@ -97,34 +139,7 @@ class EntryGridCell extends StatelessWidget {
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (isImage)
-                    _maybeHero(
-                      ClipRRect(
-                        borderRadius: Radii.chipR,
-                        child: SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: ThumbnailImage(
-                            entry: entry,
-                            client: client,
-                            fallback: Center(
-                              child: EntryLeading(entry: entry, size: 40),
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
-                        borderRadius: Radii.chipR,
-                      ),
-                      alignment: Alignment.center,
-                      child: EntryLeading(entry: entry, size: 32),
-                    ),
+                  thumbnail,
                   const SizedBox(height: Spacing.sm),
                   Text(
                     entry.name,

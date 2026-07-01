@@ -20,6 +20,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../bookmarks/bookmarks_screen.dart';
+import '../preview/preview.dart';
 import '../search/search_screen.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
@@ -224,6 +225,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                       ),
                   onOverflow:
                       (action) => _onOverflowAction(context, state, action),
+                  onJumpTo: _notifier.jumpTo,
                 ),
       ),
     );
@@ -696,6 +698,29 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
 
     final chipRow = _buildBookmarkChipRow(state);
 
+    // Entries exist, but the bookmark-tag filter or hidden-items visibility
+    // hides all of them — a different message than a genuinely empty folder.
+    if (_filteredEntries(state.displayEntries).isEmpty) {
+      final kind = resolveEmptyState(hasRawEntries: state.entries.isNotEmpty);
+      return Column(
+        children: [
+          if (pinRow != null) pinRow,
+          if (chipRow != null) chipRow,
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _notifier.refresh,
+              child: ListView(
+                children: [
+                  const SizedBox(height: 120),
+                  EmptyFolderView(kind: kind),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         if (pinRow != null) pinRow,
@@ -971,6 +996,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               onShowMeta:
                   entry.isDir ? () => _showMeta(context, entry, client) : null,
               onBookmark: () => _showBookmarkSheet(context, entry),
+              onPeek:
+                  isPreviewable(entry)
+                      ? () => openPreviewPeek(
+                        context,
+                        entry: entry,
+                        host: widget.host,
+                        client: client,
+                      )
+                      : null,
             ),
           ),
         );
@@ -1108,6 +1142,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
               onMoveInto:
                   (dragged, dest) => _moveInto(context, client, dragged, dest),
               onBookmark: () => _showBookmarkSheet(context, entry),
+              onPeek:
+                  isPreviewable(entry)
+                      ? () => openPreviewPeek(
+                        context,
+                        entry: entry,
+                        host: widget.host,
+                        client: client,
+                      )
+                      : null,
             ),
           ),
         );

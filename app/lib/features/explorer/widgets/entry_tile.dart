@@ -40,6 +40,7 @@ class EntryTile extends StatelessWidget {
     this.isPinned = false,
     this.onShowMeta,
     this.onBookmark,
+    this.onPeek,
     this.client,
   });
 
@@ -74,6 +75,11 @@ class EntryTile extends StatelessWidget {
   /// sheet instead of entering selection mode.
   final VoidCallback? onBookmark;
 
+  /// When set, long-pressing the leading icon/thumbnail (a target distinct
+  /// from the row's own long-press) shows a quick preview peek instead of
+  /// the row's usual long-press behavior. Has no effect for directories.
+  final VoidCallback? onPeek;
+
   /// File metadata (size · date), joined with `·`. Empty for directories.
   String get _meta {
     if (entry.isDir) return '';
@@ -90,7 +96,7 @@ class EntryTile extends StatelessWidget {
     final compact = density == EntryDensity.compact;
     final meta = _meta;
 
-    final Widget leading =
+    Widget leading =
         multiSelect
             ? Checkbox(value: selected, onChanged: (_) => onSelect())
             : _IconTile(
@@ -100,6 +106,13 @@ class EntryTile extends StatelessWidget {
               isPinned: isPinned && entry.isDir,
               client: client,
             );
+
+    // Long-pressing the icon/thumbnail specifically (not the row) shows a
+    // quick preview peek — a target distinct from the row's own long-press
+    // (bookmark/select) so neither gesture steals the other.
+    if (!multiSelect && !entry.isDir && onPeek != null) {
+      leading = GestureDetector(onLongPress: onPeek, child: leading);
+    }
 
     final nameStyle = Theme.of(context).textTheme.titleMedium;
     final metaStyle = Theme.of(

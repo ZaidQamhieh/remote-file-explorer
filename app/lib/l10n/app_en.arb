@@ -240,6 +240,9 @@
   "@copiedPath": {
     "placeholders": { "path": {"type": "String"} }
   },
+  "copyPathAction": "Copy path",
+  "pastePathAction": "Paste path",
+  "clipboardEmptyMessage": "Clipboard is empty",
   "removedFavorite": "Removed \"{name}\" from favorites",
   "@removedFavorite": {
     "placeholders": { "name": {"type": "String"} }
@@ -710,6 +713,7 @@
   "renamedLabel": "Renamed",
 
   "emptyFolderMessage": "This folder is empty",
+  "noMatchesMessage": "No items match the current filter",
   "offlineBannerText": "Offline — showing cached files",
   "defaultsApplyHint": "These defaults apply to every device. Override any of them for a single device from that device’s settings.",
   "themeLabel": "Theme",

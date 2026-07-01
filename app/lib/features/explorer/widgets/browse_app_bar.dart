@@ -31,6 +31,7 @@ class BrowseAppBar extends StatelessWidget {
     required this.onOverflow,
     this.sseConnected = false,
     this.isCurrentFolderPinned = false,
+    this.onJumpTo,
   });
 
   final ExplorerState state;
@@ -39,6 +40,10 @@ class BrowseAppBar extends StatelessWidget {
   final VoidCallback onBack;
   final void Function(int index) onNavigateTo;
   final Future<void> Function(Entry dragged, String dest) onMoveInto;
+
+  /// Navigates to an arbitrary absolute path (e.g. pasted from the
+  /// clipboard). Forwarded to [BreadcrumbBar]'s overflow menu.
+  final void Function(String path)? onJumpTo;
   final VoidCallback onSearch;
   final VoidCallback onToggleFavorite;
   final VoidCallback onOpenBookmarks;
@@ -77,6 +82,7 @@ class BrowseAppBar extends StatelessWidget {
             pathStack: state.pathStack,
             onNavigateTo: onNavigateTo,
             onMoveInto: onMoveInto,
+            onJumpTo: onJumpTo,
           ),
         ),
       ),

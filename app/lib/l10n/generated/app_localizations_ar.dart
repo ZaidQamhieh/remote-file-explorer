@@ -452,6 +452,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get copyPathAction => 'Copy path';
+
+  @override
+  String get pastePathAction => 'Paste path';
+
+  @override
+  String get clipboardEmptyMessage => 'Clipboard is empty';
+
+  @override
   String removedFavorite(String name) {
     return 'أُزيل \"$name\" من المفضلة';
   }
@@ -1255,6 +1264,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyFolderMessage => 'هذا المجلد فارغ';
+
+  @override
+  String get noMatchesMessage => 'No items match the current filter';
 
   @override
   String get offlineBannerText => 'غير متصل — عرض الملفات المخزنة مؤقتاً';

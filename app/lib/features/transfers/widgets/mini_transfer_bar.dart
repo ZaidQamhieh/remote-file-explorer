@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../transfer_manager.dart';
+import '../transfer_speed.dart';
 import '../transfer_state.dart';
 
 /// A thin, tappable progress strip that appears above the explorer's bottom
@@ -20,6 +22,25 @@ class MiniTransferBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A light haptic when a task finishes — completion isn't signaled by any
+    // toast today (unlike delete/rename, which go through
+    // showSuccess/showError and already haptic themselves), so this is the
+    // one place that wires it in for transfers.
+    ref.listen<List<TransferTask>>(transferQueueProvider, (previous, next) {
+      final prevStatus = {
+        for (final t in previous ?? const <TransferTask>[]) t.id: t.status,
+      };
+      for (final t in next) {
+        final was = prevStatus[t.id];
+        if (was == t.status) continue;
+        if (t.status == TransferStatus.completed) {
+          HapticFeedback.mediumImpact();
+        } else if (t.status == TransferStatus.failed) {
+          HapticFeedback.heavyImpact();
+        }
+      }
+    });
+
     final transfers = ref.watch(transferQueueProvider);
     final active =
         transfers
@@ -40,6 +61,17 @@ class MiniTransferBar extends ConsumerWidget {
       }
     }
     final value = total > 0 ? (done / total).clamp(0.0, 1.0) : null;
+
+    // ETA of the task named in the label — the sampler already maintains a
+    // rolling-average speed/ETA per task (see transfer_speed.dart); reused
+    // as-is here rather than recomputed.
+    final sampler = ref.watch(transferSamplerProvider);
+    final running = active.where((t) => t.status == TransferStatus.running);
+    final primary =
+        running.isNotEmpty
+            ? running.first
+            : (active.isEmpty ? null : active.first);
+    final eta = primary == null ? null : sampler[primary.id];
 
     final scheme = Theme.of(context).colorScheme;
 
@@ -75,7 +107,7 @@ class MiniTransferBar extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _label(active),
+                                _label(active, eta),
                                 style: Theme.of(context).textTheme.labelMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -106,15 +138,16 @@ class MiniTransferBar extends ConsumerWidget {
     );
   }
 
-  String _label(List<TransferTask> active) {
+  String _label(List<TransferTask> active, SpeedEta? eta) {
     final n = active.length;
     final running = active.where((t) => t.status == TransferStatus.running);
     final name =
         running.isNotEmpty
             ? running.first.displayName
             : active.first.displayName;
-    if (n == 1) return 'Transferring $name';
-    return 'Transferring $name (+${n - 1} more)';
+    final suffix = eta?.etaLabel == null ? '' : ' · ${eta!.etaLabel}';
+    if (n == 1) return 'Transferring $name$suffix';
+    return 'Transferring $name (+${n - 1} more)$suffix';
   }
 
   void _openManager(BuildContext context) {

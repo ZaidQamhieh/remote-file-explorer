@@ -25,6 +25,37 @@ import 'storage_gauge.dart';
 /// "+N more".
 const _maxVisibleDrives = 3;
 
+/// Curated accent palette for [hostAccentColor] — picked hues rather than raw
+/// hash→HSL so every result stays legible on both light and dark surfaces.
+const List<Color> _hostAccentPalette = [
+  Color(0xFF4285F4), // blue
+  Color(0xFF34A853), // green
+  Color(0xFFEA4335), // red
+  Color(0xFFFBBC05), // amber
+  Color(0xFF9C27B0), // purple
+  Color(0xFF00ACC1), // cyan
+  Color(0xFFFF7043), // orange
+  Color(0xFF5C6BC0), // indigo
+];
+
+/// Deterministic string hash (djb2). Used instead of [Object.hashCode], which
+/// Dart doesn't guarantee to stay fixed across SDK versions — this keeps a
+/// host's accent color stable across app runs/restarts.
+int _stableHash(String s) {
+  var hash = 5381;
+  for (final code in s.codeUnits) {
+    hash = ((hash << 5) + hash + code) & 0x7fffffff;
+  }
+  return hash;
+}
+
+/// A stable accent color for [hostId], so hosts stay visually distinguishable
+/// at a glance across the list. Pure — same [hostId] always yields the same
+/// color, and the picked colors are drawn from a fixed palette rather than
+/// generated ad hoc so they never clash with the M3 surface underneath.
+Color hostAccentColor(String hostId) =>
+    _hostAccentPalette[_stableHash(hostId) % _hostAccentPalette.length];
+
 /// Picks the root screen to open when browsing [host], based on its most
 /// recent `/health` response.
 ///
@@ -335,66 +366,81 @@ class _HostCardState extends ConsumerState<HostCard> {
             horizontal: Spacing.sm,
             vertical: Spacing.sm,
           ),
+          // Accent strip on a plain (unrounded) outer box — a BoxDecoration
+          // can't combine a non-uniform Border with a borderRadius, so the
+          // rounded card itself lives in the inner Container below.
           decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: Radii.lgR,
+            border: Border(
+              left: BorderSide(
+                color: hostAccentColor(widget.host.id),
+                width: 3,
+              ),
+            ),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            borderRadius: Radii.lgR,
-            onTap: () => _openExplorer(context),
-            onLongPress: () => _confirmRemove(context),
-            child: Padding(
-              padding: const EdgeInsets.all(Spacing.md3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HostHeader(
-                    host: widget.host,
-                    snapshot: snap,
-                    checking: checking,
-                    online: online,
-                    isTailscaleActive: _isTailscaleActive,
-                    lastChecked: _lastChecked,
-                    lastSeen: _lastSeen,
-                  ),
-                  if (online && snap.data?.readOnly == true)
-                    Padding(
-                      padding: const EdgeInsets.only(top: Spacing.sm),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 16,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: Spacing.xs),
-                          Text(
-                            'Read-only',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: Radii.lgR,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: Radii.lgR,
+              onTap: () => _openExplorer(context),
+              onLongPress: () => _confirmRemove(context),
+              child: Padding(
+                padding: const EdgeInsets.all(Spacing.md3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HostHeader(
+                      host: widget.host,
+                      snapshot: snap,
+                      checking: checking,
+                      online: online,
+                      isTailscaleActive: _isTailscaleActive,
+                      lastChecked: _lastChecked,
+                      lastSeen: _lastSeen,
                     ),
-                  if (online && _statusFuture != null)
-                    _buildStatusSection(context),
-                  if (online) ..._buildGauges(context),
-                  const SizedBox(height: Spacing.md),
-                  _QuickActions(
-                    online: online,
-                    canWake:
-                        !online && !checking && widget.host.macAddress != null,
-                    onBrowse: () => _openExplorer(context),
-                    onSearch: () => _openSearch(context),
-                    onWake: () => _sendWol(context),
-                    onStorage: () => _openStorage(context),
-                    onTransfers: () => _openTransfers(context),
-                    onDiagnostics: () => _openDiagnostics(context),
-                    onSettings: () => _openSettings(context),
-                    onForget: () => _confirmRemove(context),
-                  ),
-                ],
+                    if (online && snap.data?.readOnly == true)
+                      Padding(
+                        padding: const EdgeInsets.only(top: Spacing.sm),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 16,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: Spacing.xs),
+                            Text(
+                              'Read-only',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (online && _statusFuture != null)
+                      _buildStatusSection(context),
+                    if (online) ..._buildGauges(context),
+                    const SizedBox(height: Spacing.md),
+                    _QuickActions(
+                      online: online,
+                      canWake:
+                          !online &&
+                          !checking &&
+                          widget.host.macAddress != null,
+                      onBrowse: () => _openExplorer(context),
+                      onSearch: () => _openSearch(context),
+                      onWake: () => _sendWol(context),
+                      onStorage: () => _openStorage(context),
+                      onTransfers: () => _openTransfers(context),
+                      onDiagnostics: () => _openDiagnostics(context),
+                      onSettings: () => _openSettings(context),
+                      onForget: () => _confirmRemove(context),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

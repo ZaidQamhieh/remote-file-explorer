@@ -54,6 +54,7 @@ class BreadcrumbBar extends StatelessWidget {
     required this.pathStack,
     required this.onNavigateTo,
     this.onMoveInto,
+    this.onJumpTo,
   });
 
   /// Path segments from the filesystem root to the current directory (see
@@ -65,6 +66,10 @@ class BreadcrumbBar extends StatelessWidget {
   final void Function(int index) onNavigateTo;
 
   final Future<void> Function(Entry dragged, String destFolder)? onMoveInto;
+
+  /// Navigates to an arbitrary absolute path (e.g. one pasted from the
+  /// clipboard). When null, the "Paste path" overflow-menu action is hidden.
+  final void Function(String path)? onJumpTo;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +92,7 @@ class BreadcrumbBar extends StatelessWidget {
               pathStack: stack,
               onNavigateTo: onNavigateTo,
               indices: collapsedRange,
+              onJumpTo: onJumpTo,
             ),
           );
         }
@@ -233,38 +239,71 @@ class _StadiumClipper extends CustomClipper<Path> {
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 
+/// Non-navigation actions in the collapsed-crumb overflow menu.
+enum _CrumbMenuAction { copyPath, pastePath }
+
 /// The `…` chip shown when head ancestors collapse. Tapping opens a popup
 /// menu listing the collapsed ancestors (root excluded, since it always has
-/// its own visible chip); selecting one navigates there.
+/// its own visible chip); selecting one navigates there. Also offers
+/// "Copy path" (the current directory) and, when [onJumpTo] is set,
+/// "Paste path" (navigate to a path read from the clipboard).
 class _CollapsedChip extends StatelessWidget {
   const _CollapsedChip({
     required this.pathStack,
     required this.onNavigateTo,
     required this.indices,
+    this.onJumpTo,
   });
 
   final List<String> pathStack;
   final void Function(int index) onNavigateTo;
   final List<int> indices;
+  final void Function(String path)? onJumpTo;
+
+  Future<void> _pastePath(BuildContext context) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final path = data?.text?.trim();
+    if (path == null || path.isEmpty) {
+      if (context.mounted) {
+        showInfo(context, context.l10n.clipboardEmptyMessage);
+      }
+      return;
+    }
+    onJumpTo?.call(path);
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final stack = pathStack;
 
-    return PopupMenuButton<int>(
+    return PopupMenuButton<Object>(
       tooltip: context.l10n.showHiddenFoldersTooltip,
-      onSelected: onNavigateTo,
+      onSelected: (value) {
+        if (value is int) {
+          onNavigateTo(value);
+        } else if (value == _CrumbMenuAction.copyPath) {
+          copyPathToClipboard(context, stack.last);
+        } else if (value == _CrumbMenuAction.pastePath) {
+          _pastePath(context);
+        }
+      },
       itemBuilder:
-          (_) =>
-              indices
-                  .map(
-                    (i) => PopupMenuItem(
-                      value: i,
-                      child: Text(crumbLabel(stack, i)),
-                    ),
-                  )
-                  .toList(),
+          (_) => [
+            ...indices.map(
+              (i) => PopupMenuItem(value: i, child: Text(crumbLabel(stack, i))),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: _CrumbMenuAction.copyPath,
+              child: Text(context.l10n.copyPathAction),
+            ),
+            if (onJumpTo != null)
+              PopupMenuItem(
+                value: _CrumbMenuAction.pastePath,
+                child: Text(context.l10n.pastePathAction),
+              ),
+          ],
       child: Material(
         color: Colors.transparent,
         shape: StadiumBorder(

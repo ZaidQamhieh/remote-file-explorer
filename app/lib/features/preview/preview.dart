@@ -316,6 +316,35 @@ Future<void> openPreview(
   await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 }
 
+/// Shows a quick, non-navigating "peek" of [entry] — the same chromeless
+/// per-type viewer [openPreview] uses, hosted in a draggable bottom sheet
+/// instead of a pushed route. Silently no-ops for entries with no known
+/// viewer (callers should gate the long-press with [isPreviewable]).
+Future<void> openPreviewPeek(
+  BuildContext context, {
+  required Entry entry,
+  required Host host,
+  required AgentClient client,
+}) async {
+  final viewer = _viewerFor(
+    entry,
+    host: host,
+    client: client,
+    chromeless: true,
+  );
+  if (viewer == null) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder:
+        (_) => SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: viewer,
+        ),
+  );
+}
+
 /// A swipeable preview host: a `PageView` over a list of previewable
 /// [entries], each rendered by its per-type viewer (chromeless), under a single
 /// shared [PreviewTopBar] driven by the current page's entry.

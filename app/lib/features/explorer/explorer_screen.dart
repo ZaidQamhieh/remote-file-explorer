@@ -964,9 +964,19 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       padded: false,
       children: [
         Expanded(
-          child: ListView.builder(
+          child: ListView.separated(
             controller: _scrollController,
             itemCount: itemCount,
+            separatorBuilder:
+                (ctx, i) =>
+                    i < entries.length - 1
+                        ? Divider(
+                          height: 1,
+                          indent: Spacing.md,
+                          endIndent: Spacing.md,
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        )
+                        : const SizedBox.shrink(),
             itemBuilder: (ctx, i) {
               if (i >= entries.length + (showLoadMore ? 1 : 0)) {
                 return HiddenItemsFooter(

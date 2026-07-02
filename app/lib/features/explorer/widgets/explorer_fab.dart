@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n_ext.dart';
 import '../clipboard_state.dart';
 
+/// Figma's stacked-pill FAB cluster: ghost dark pills for secondary actions
+/// (paste, upload) + a solid accent pill for the primary "new" action.
 class ExplorerFab extends StatelessWidget {
   const ExplorerFab({
     super.key,
@@ -34,28 +36,108 @@ class ExplorerFab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (showPaste) ...[
-          FloatingActionButton.small(
-            heroTag: 'fab_paste',
-            tooltip: context.l10n.pasteNItems(clipboard!.paths.length),
+          _GhostPill(
+            icon: Icons.content_paste,
+            label: context.l10n.pasteNItems(clipboard!.paths.length),
             onPressed: onPaste,
-            child: const Icon(Icons.content_paste),
           ),
           const SizedBox(height: 8),
         ],
-        FloatingActionButton.small(
-          heroTag: 'fab_upload',
-          tooltip: context.l10n.uploadFileTooltip,
+        _GhostPill(
+          icon: Icons.upload_file,
+          label: context.l10n.uploadFileTooltip,
           onPressed: onUpload,
-          child: const Icon(Icons.upload_file),
         ),
         const SizedBox(height: 8),
-        FloatingActionButton.extended(
-          heroTag: 'fab_new',
+        _SolidPill(
+          icon: Icons.add,
+          label: context.l10n.newButton,
           onPressed: onNew,
-          icon: const Icon(Icons.add),
-          label: Text(context.l10n.newButton),
         ),
       ],
+    );
+  }
+}
+
+/// Dark ghost pill — `bg #27272a`, `border #3f3f46`.
+class _GhostPill extends StatelessWidget {
+  const _GhostPill({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF27272A),
+      shape: const StadiumBorder(side: BorderSide(color: Color(0xFF3F3F46))),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Solid accent pill — the primary action.
+class _SolidPill extends StatelessWidget {
+  const _SolidPill({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.primary,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: scheme.onPrimary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: scheme.onPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

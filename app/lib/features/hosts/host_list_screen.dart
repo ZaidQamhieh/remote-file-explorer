@@ -129,6 +129,10 @@ class HostListScreen extends ConsumerWidget {
                           ],
                         ],
                       ),
+                      const SizedBox(height: Spacing.md),
+                      _AddComputerGhostButton(
+                        onPressed: () => _addComputer(context, ref),
+                      ),
                     ],
                   ),
                 );
@@ -136,11 +140,6 @@ class HostListScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add_rounded),
-        label: Text(context.l10n.addComputerButton),
-        onPressed: () => _addComputer(context, ref),
       ),
     );
   }
@@ -157,6 +156,49 @@ class HostListScreen extends ConsumerWidget {
     );
     // Reload the host store after pairing
     ref.invalidate(hostStoreProvider);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add-computer ghost button — inline dashed-style affordance below the list
+// ---------------------------------------------------------------------------
+
+class _AddComputerGhostButton extends StatelessWidget {
+  const _AddComputerGhostButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: Radii.cardR,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: Radii.cardR,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_rounded, size: 18, color: scheme.onSurfaceVariant),
+              const SizedBox(width: Spacing.xs),
+              Text(
+                context.l10n.addComputerButton,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

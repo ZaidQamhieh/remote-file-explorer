@@ -139,8 +139,9 @@ const Color _documentBg = Color(0xFF0C4A6E);
 const Color _otherBg = Color(0xFF27272A); // zinc-800
 
 _IconSpec _iconSpecFor(Entry entry) {
-  if (entry.isDir)
+  if (entry.isDir) {
     return const _IconSpec(Icons.folder, _folderColor, _folderBg);
+  }
   final mime = entry.mimeType ?? '';
   switch (categoryOf(entry)) {
     case EntryCategory.folder:

@@ -122,7 +122,7 @@ class TransferGroupedList extends ConsumerWidget {
         Expanded(
           child:
               transfers.isEmpty
-                  ? Center(child: Text(context.l10n.noTransfers))
+                  ? _EmptyTransfers(text: context.l10n.noTransfers)
                   : ListView(
                     controller: controller,
                     padding: const EdgeInsets.only(bottom: Spacing.md),
@@ -138,6 +138,34 @@ class TransferGroupedList extends ConsumerWidget {
                   ),
         ),
       ],
+    );
+  }
+}
+
+/// Muted icon-over-text empty state, matching the Figma spec's "Empty
+/// folder"/"No results" pattern (`FileBrowserScreen.tsx`) rather than a bare
+/// line of text.
+class _EmptyTransfers extends StatelessWidget {
+  const _EmptyTransfers({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.swap_vert_rounded,
+            size: 36,
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: Spacing.sm),
+          Text(text, style: TextStyle(color: scheme.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/ui/screen_header.dart';
 import '../explorer/explorer_screen.dart';
 import '../explorer/explorer_state.dart' show explorerProvider;
 import '../hosts/host_list_screen.dart';
@@ -8,6 +9,7 @@ import '../hosts/widgets/host_card.dart' show explorerRootFor;
 import '../settings/app_settings_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import '../transfers/transfer_manager.dart';
+import '../transfers/transfer_state.dart';
 import 'home_state.dart';
 import 'widgets/app_bottom_nav.dart';
 
@@ -130,14 +132,28 @@ class _FilesTab extends ConsumerWidget {
   }
 }
 
-class _TransfersTab extends StatelessWidget {
+class _TransfersTab extends ConsumerWidget {
   const _TransfersTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeCount =
+        ref
+            .watch(transferQueueProvider)
+            .where(
+              (t) =>
+                  t.status == TransferStatus.running ||
+                  t.status == TransferStatus.paused,
+            )
+            .length;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transfers'),
+        toolbarHeight: 72,
+        title: ScreenHeader(
+          'Transfers',
+          subtitle: activeCount > 0 ? '$activeCount active' : null,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),

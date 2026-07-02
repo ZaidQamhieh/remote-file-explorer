@@ -26,12 +26,23 @@ class BookmarksScreen extends ConsumerWidget {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(Spacing.xl),
-            child: Text(
-              'No bookmarks yet. Long-press any file to bookmark it.',
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.bookmark_outline_rounded,
+                  size: 36,
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+                const SizedBox(height: Spacing.sm),
+                Text(
+                  'No bookmarks yet. Long-press any file to bookmark it.',
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

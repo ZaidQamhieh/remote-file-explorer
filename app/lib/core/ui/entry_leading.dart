@@ -112,42 +112,65 @@ EntryCategory categoryOf(Entry entry) {
 /// `document`) the specific MIME type — pdf and text/json render distinct
 /// icons even though both are "documents".
 class _IconSpec {
-  const _IconSpec(this.icon, this.color);
+  const _IconSpec(this.icon, this.color, this.bg);
   final IconData icon;
   final Color? color;
+
+  /// Figma's per-type tonal chip background (dark theme only — see
+  /// [figmaIconBg]).
+  final Color bg;
 }
 
-// Figma spec (figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ) file-type palette.
+// Figma spec (figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ) file-type palette:
+// icon tint + the dark-tonal chip background behind it (`colorMap`/`bgMap`
+// in FileBrowserScreen.tsx).
 const Color _folderColor = Color(0xFFFACC15); // yellow-400
+const Color _folderBg = Color(0xFF422006);
 const Color _imageColor = Color(0xFF34D399); // emerald-400
+const Color _imageBg = Color(0xFF022C22);
 const Color _videoColor = Color(0xFFA78BFA); // violet-400
+const Color _videoBg = Color(0xFF2E1065);
 const Color _audioColor = Color(0xFFF472B6); // pink-400
+const Color _audioBg = Color(0xFF4A044E);
 const Color _archiveColor = Color(0xFFFB923C); // orange-400
+const Color _archiveBg = Color(0xFF431407);
 const Color _documentColor = Color(0xFF38BDF8); // sky-400
+const Color _documentBg = Color(0xFF0C4A6E);
+const Color _otherBg = Color(0xFF27272A); // zinc-800
 
 _IconSpec _iconSpecFor(Entry entry) {
-  if (entry.isDir) return const _IconSpec(Icons.folder, _folderColor);
+  if (entry.isDir)
+    return const _IconSpec(Icons.folder, _folderColor, _folderBg);
   final mime = entry.mimeType ?? '';
   switch (categoryOf(entry)) {
     case EntryCategory.folder:
-      return const _IconSpec(Icons.folder, _folderColor);
+      return const _IconSpec(Icons.folder, _folderColor, _folderBg);
     case EntryCategory.image:
-      return const _IconSpec(Icons.image, _imageColor);
+      return const _IconSpec(Icons.image, _imageColor, _imageBg);
     case EntryCategory.video:
-      return const _IconSpec(Icons.movie, _videoColor);
+      return const _IconSpec(Icons.movie, _videoColor, _videoBg);
     case EntryCategory.audio:
-      return const _IconSpec(Icons.music_note, _audioColor);
+      return const _IconSpec(Icons.music_note, _audioColor, _audioBg);
     case EntryCategory.archive:
-      return const _IconSpec(Icons.folder_zip, _archiveColor);
+      return const _IconSpec(Icons.folder_zip, _archiveColor, _archiveBg);
     case EntryCategory.document:
       if (mime.contains('pdf')) {
-        return const _IconSpec(Icons.picture_as_pdf, _documentColor);
+        return const _IconSpec(
+          Icons.picture_as_pdf,
+          _documentColor,
+          _documentBg,
+        );
       }
-      return const _IconSpec(Icons.description, _documentColor);
+      return const _IconSpec(Icons.description, _documentColor, _documentBg);
     case EntryCategory.other:
-      return const _IconSpec(Icons.insert_drive_file, null);
+      return const _IconSpec(Icons.insert_drive_file, null, _otherBg);
   }
 }
+
+/// Figma's per-type tonal chip background for [entry]'s icon container.
+/// Dark-theme-only (the Figma spec has no light variant) — callers fall back
+/// to their own scheme-derived background in light theme.
+Color figmaIconBg(Entry entry) => _iconSpecFor(entry).bg;
 
 /// File-type icon for [entry] — centralises the category/MIME → icon + tint
 /// mapping shared by the explorer's list tile, grid cell, and search result

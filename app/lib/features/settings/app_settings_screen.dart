@@ -14,6 +14,7 @@ import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/screen_header.dart';
 import '../photo_backup/photo_backup_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import 'about_screen.dart';
@@ -40,7 +41,7 @@ class AppSettingsScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.appSettingsTitle)),
+      appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('Settings')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,

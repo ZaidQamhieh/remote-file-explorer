@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
@@ -8,6 +7,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
@@ -24,29 +24,17 @@ class HostListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final storeAsync = ref.watch(hostStoreProvider);
     final scheme = Theme.of(context).colorScheme;
+    final hostCount = storeAsync.valueOrNull?.listHosts().length ?? 0;
 
     return Scaffold(
       appBar: AppBar(
-        title: FutureBuilder<PackageInfo>(
-          future: PackageInfo.fromPlatform(),
-          builder: (context, snap) {
-            final v = snap.data?.version;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(context.l10n.appTitle),
-                if (v != null)
-                  Text(
-                    'v$v',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-              ],
-            );
-          },
+        toolbarHeight: 72,
+        title: ScreenHeader(
+          'Servers',
+          subtitle:
+              hostCount > 0
+                  ? '$hostCount computer${hostCount == 1 ? '' : 's'}'
+                  : null,
         ),
         actions: [
           IconButton(

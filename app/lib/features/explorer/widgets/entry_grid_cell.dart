@@ -101,7 +101,9 @@ class EntryGridCell extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 color:
-                    entry.isDir
+                    Theme.of(context).brightness == Brightness.dark
+                        ? figmaIconBg(entry)
+                        : entry.isDir
                         ? scheme.primary.withValues(alpha: 0.16)
                         : scheme.surfaceContainerHighest,
                 borderRadius: Radii.chipR,

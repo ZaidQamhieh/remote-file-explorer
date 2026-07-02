@@ -221,13 +221,16 @@ class _IconTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final size = compact ? 32.0 : 40.0;
     final container = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color:
-            entry.isDir
+            dark
+                ? figmaIconBg(entry)
+                : entry.isDir
                 ? scheme.primary.withValues(alpha: 0.16)
                 : scheme.surfaceContainerHighest,
         borderRadius: Radii.smR,

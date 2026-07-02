@@ -48,25 +48,57 @@ void main() {
     // re-lock, or a successful scan re-locks itself right after unlocking.
     test('false while authenticating, even if app lock is enabled', () {
       expect(
-        shouldRelockOnResume(appLockEnabled: true, authenticating: true),
+        shouldRelockOnResume(
+          appLockEnabled: true,
+          authenticating: true,
+          justUnlocked: false,
+        ),
         isFalse,
       );
     });
 
     test('true on a genuine resume (not mid-authentication)', () {
       expect(
-        shouldRelockOnResume(appLockEnabled: true, authenticating: false),
+        shouldRelockOnResume(
+          appLockEnabled: true,
+          authenticating: false,
+          justUnlocked: false,
+        ),
         isTrue,
+      );
+    });
+
+    // The native "resumed" event fired when the prompt UI closes can arrive
+    // AFTER authenticate() already resolved true and reset `authenticating`
+    // to false — a successful scan would unlock, then this same resume
+    // would immediately re-lock, looking like biometrics "doesn't let you in".
+    test('false just after a successful unlock, even though authenticating '
+        'has already been reset to false', () {
+      expect(
+        shouldRelockOnResume(
+          appLockEnabled: true,
+          authenticating: false,
+          justUnlocked: true,
+        ),
+        isFalse,
       );
     });
 
     test('false when app lock is off, regardless of authenticating', () {
       expect(
-        shouldRelockOnResume(appLockEnabled: false, authenticating: false),
+        shouldRelockOnResume(
+          appLockEnabled: false,
+          authenticating: false,
+          justUnlocked: false,
+        ),
         isFalse,
       );
       expect(
-        shouldRelockOnResume(appLockEnabled: false, authenticating: true),
+        shouldRelockOnResume(
+          appLockEnabled: false,
+          authenticating: true,
+          justUnlocked: false,
+        ),
         isFalse,
       );
     });

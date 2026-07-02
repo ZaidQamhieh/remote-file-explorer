@@ -18,16 +18,29 @@ const _noAuthAvailableCodes = {
   auth_error.otherOperatingSystem,
 };
 
+/// How long after a successful unlock a resume event is treated as the
+/// delayed echo of that same auth flow rather than a genuine re-open.
+const _postUnlockGrace = Duration(seconds: 2);
+
 /// True when an [AppLifecycleState.resumed] event should re-lock the app.
 ///
 /// Showing the system biometric prompt itself pauses/resumes the app on some
 /// devices (see local_auth's `stickyAuth` docs) — re-locking on that resume
 /// would stomp the unlock that's about to land from the in-flight
 /// `authenticate()` call, making a successful scan look like it did nothing.
+///
+/// That guard alone isn't enough: the native resumed event (fired when the
+/// prompt UI closes) can arrive *after* `authenticate()` already resolved and
+/// reset `authenticating` to false — so a successful scan unlocks the app for
+/// an instant, then this same resume immediately re-locks it, looking like
+/// biometrics "doesn't let you in". `justUnlocked` covers that race with a
+/// short grace window; it does not weaken re-lock-on-backgrounding since a
+/// real re-open more than [_postUnlockGrace] later still re-locks normally.
 bool shouldRelockOnResume({
   required bool appLockEnabled,
   required bool authenticating,
-}) => appLockEnabled && !authenticating;
+  required bool justUnlocked,
+}) => appLockEnabled && !authenticating && !justUnlocked;
 
 class LockGate extends ConsumerStatefulWidget {
   const LockGate({super.key, required this.child});
@@ -43,6 +56,7 @@ class _LockGateState extends ConsumerState<LockGate>
   final _auth = LocalAuthentication();
   bool _locked = true;
   bool _authenticating = false;
+  DateTime? _lastUnlockAt;
 
   @override
   void initState() {
@@ -69,6 +83,9 @@ class _LockGateState extends ConsumerState<LockGate>
         shouldRelockOnResume(
           appLockEnabled: _isEnabled,
           authenticating: _authenticating,
+          justUnlocked:
+              _lastUnlockAt != null &&
+              DateTime.now().difference(_lastUnlockAt!) < _postUnlockGrace,
         )) {
       setState(() => _locked = true);
       _tryUnlock();
@@ -96,7 +113,10 @@ class _LockGateState extends ConsumerState<LockGate>
           stickyAuth: true,
         ),
       );
-      if (ok && mounted) setState(() => _locked = false);
+      if (ok && mounted) {
+        _lastUnlockAt = DateTime.now();
+        setState(() => _locked = false);
+      }
     } on PlatformException catch (e) {
       if (_noAuthAvailableCodes.contains(e.code) && mounted) {
         setState(() => _locked = false);

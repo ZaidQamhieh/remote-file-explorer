@@ -164,54 +164,85 @@ func (f *searchFilters) matchEntry(entry *fsops.Entry) bool {
 func parseSearchFilters(q url.Values) (*searchFilters, string, string) {
 	f := &searchFilters{}
 
-	rawQ := strings.TrimSpace(q.Get("q"))
-	if isGlobPattern(rawQ) {
-		f.glob = strings.ToLower(rawQ)
-		// Validate the pattern eagerly so bad patterns 400 immediately
-		// rather than silently matching nothing on every entry.
-		if _, err := path.Match(f.glob, ""); err != nil {
-			return nil, "BAD_REQUEST", "invalid glob pattern in q"
-		}
-	} else {
+	if code, msg := f.applyQueryParam(strings.TrimSpace(q.Get("q"))); code != "" {
+		return nil, code, msg
+	}
+	if code, msg := f.applyTypesParam(strings.TrimSpace(q.Get("types"))); code != "" {
+		return nil, code, msg
+	}
+	f.applyExtParam(strings.TrimSpace(q.Get("ext")))
+	if code, msg := f.applySizeBounds(q); code != "" {
+		return nil, code, msg
+	}
+	if code, msg := f.applyModifiedBounds(q); code != "" {
+		return nil, code, msg
+	}
+
+	return f, "", ""
+}
+
+// applyQueryParam sets f.glob or f.needle from the raw `q` value.
+func (f *searchFilters) applyQueryParam(rawQ string) (code, message string) {
+	if !isGlobPattern(rawQ) {
 		f.needle = strings.ToLower(rawQ)
+		return "", ""
 	}
-
-	if typesParam := strings.TrimSpace(q.Get("types")); typesParam != "" {
-		set := make(map[string]bool)
-		for _, raw := range strings.Split(typesParam, ",") {
-			t := strings.ToLower(strings.TrimSpace(raw))
-			if t == "" {
-				continue
-			}
-			if !searchCategories[t] {
-				return nil, "BAD_REQUEST", "invalid types value: " + t
-			}
-			set[t] = true
-		}
-		if len(set) > 0 {
-			f.types = set
-		}
+	f.glob = strings.ToLower(rawQ)
+	// Validate the pattern eagerly so bad patterns 400 immediately rather
+	// than silently matching nothing on every entry.
+	if _, err := path.Match(f.glob, ""); err != nil {
+		return "BAD_REQUEST", "invalid glob pattern in q"
 	}
+	return "", ""
+}
 
-	if extParam := strings.TrimSpace(q.Get("ext")); extParam != "" {
-		set := make(map[string]bool)
-		for _, raw := range strings.Split(extParam, ",") {
-			e := strings.ToLower(strings.TrimSpace(raw))
-			e = strings.TrimPrefix(e, ".")
-			if e == "" {
-				continue
-			}
-			set[e] = true
-		}
-		if len(set) > 0 {
-			f.exts = set
-		}
+// applyTypesParam sets f.types from the comma-separated `types` value.
+func (f *searchFilters) applyTypesParam(typesParam string) (code, message string) {
+	if typesParam == "" {
+		return "", ""
 	}
+	set := make(map[string]bool)
+	for _, raw := range strings.Split(typesParam, ",") {
+		t := strings.ToLower(strings.TrimSpace(raw))
+		if t == "" {
+			continue
+		}
+		if !searchCategories[t] {
+			return "BAD_REQUEST", "invalid types value: " + t
+		}
+		set[t] = true
+	}
+	if len(set) > 0 {
+		f.types = set
+	}
+	return "", ""
+}
 
+// applyExtParam sets f.exts from the comma-separated `ext` value.
+func (f *searchFilters) applyExtParam(extParam string) {
+	if extParam == "" {
+		return
+	}
+	set := make(map[string]bool)
+	for _, raw := range strings.Split(extParam, ",") {
+		e := strings.ToLower(strings.TrimSpace(raw))
+		e = strings.TrimPrefix(e, ".")
+		if e == "" {
+			continue
+		}
+		set[e] = true
+	}
+	if len(set) > 0 {
+		f.exts = set
+	}
+}
+
+// applySizeBounds sets f.minSize/f.maxSize from the `minSize`/`maxSize` params.
+func (f *searchFilters) applySizeBounds(q url.Values) (code, message string) {
 	if minParam := strings.TrimSpace(q.Get("minSize")); minParam != "" {
 		n, err := strconv.ParseInt(minParam, 10, 64)
 		if err != nil {
-			return nil, "BAD_REQUEST", "invalid minSize"
+			return "BAD_REQUEST", "invalid minSize"
 		}
 		f.minSize = n
 		f.hasMinSize = true
@@ -219,16 +250,21 @@ func parseSearchFilters(q url.Values) (*searchFilters, string, string) {
 	if maxParam := strings.TrimSpace(q.Get("maxSize")); maxParam != "" {
 		n, err := strconv.ParseInt(maxParam, 10, 64)
 		if err != nil {
-			return nil, "BAD_REQUEST", "invalid maxSize"
+			return "BAD_REQUEST", "invalid maxSize"
 		}
 		f.maxSize = n
 		f.hasMaxSize = true
 	}
+	return "", ""
+}
 
+// applyModifiedBounds sets f.modAfter/f.modBefore from the
+// `modifiedAfter`/`modifiedBefore` params.
+func (f *searchFilters) applyModifiedBounds(q url.Values) (code, message string) {
 	if afterParam := strings.TrimSpace(q.Get("modifiedAfter")); afterParam != "" {
 		ts, err := time.Parse(time.RFC3339, afterParam)
 		if err != nil {
-			return nil, "BAD_REQUEST", "invalid modifiedAfter"
+			return "BAD_REQUEST", "invalid modifiedAfter"
 		}
 		f.modAfter = ts
 		f.hasModAfter = true
@@ -236,13 +272,12 @@ func parseSearchFilters(q url.Values) (*searchFilters, string, string) {
 	if beforeParam := strings.TrimSpace(q.Get("modifiedBefore")); beforeParam != "" {
 		ts, err := time.Parse(time.RFC3339, beforeParam)
 		if err != nil {
-			return nil, "BAD_REQUEST", "invalid modifiedBefore"
+			return "BAD_REQUEST", "invalid modifiedBefore"
 		}
 		f.modBefore = ts
 		f.hasModBefore = true
 	}
-
-	return f, "", ""
+	return "", ""
 }
 
 // --------- /search GET ---------

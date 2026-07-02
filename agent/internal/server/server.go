@@ -49,12 +49,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 	r.Use(middleware.Recoverer)
 
 	r.Route("/v1", func(r chi.Router) {
-		// Unauthenticated.
-		r.Get("/health", healthHandler(cfg))
-		r.Post("/pair", pairHandler(cfg, db, pm))
-		// R1: the ONLY unauthenticated route besides health/pair. See
-		// docs/r1-share-link-threat-model.md — single-use, expiring, rate-limited.
-		r.Get("/share/{token}", serveShareHandler(db, ops))
+		registerUnauthRoutes(r, cfg, db, pm, ops)
 
 		// Authenticated, no path jail (non-filesystem endpoints).
 		r.Group(func(r chi.Router) {
@@ -70,83 +65,108 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			// in context) and before any handler that resolves paths.
 			r.Use(deviceJailMiddleware(ops))
 
-			// Settings & devices
-			r.Get("/settings", getSettingsHandler(cfg.Settings))
-			r.Patch("/settings", patchSettingsHandler(cfg.Settings))
-			r.Get("/settings/bandwidth", getBandwidthHandler(cfg.Settings))
-			r.Put("/settings/bandwidth", putBandwidthHandler(cfg.Settings))
-			r.Get("/devices", listDevicesHandler(db))
-			r.Patch("/devices/{id}", setDeviceJailHandler())
-			r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
-				id := chi.URLParam(req, "id")
-				// ?purge=true permanently removes the row (used to clear
-				// revoked devices); otherwise the device is revoked.
-				if req.URL.Query().Get("purge") == "true" {
-					deleteDeviceHandler(db)(w, req, id)
-					return
-				}
-				revokeDeviceHandler(db)(w, req, id)
-			})
-
-			// WOL relay
-			r.Post("/wol", wolRelayHandler())
-
-			// R1 share links (mint/revoke/list — authenticated; serving the
-			// file itself happens on the unauthenticated route above)
-			r.Post("/share/mint", mintShareHandler(cfg, db, ops))
-			r.Delete("/share/{tokenHash}", revokeShareHandler(db))
-			r.Get("/share", listSharesHandler(db))
-
-			// Drives
+			registerSettingsAndDeviceRoutes(r, cfg, db)
+			registerShareRoutes(r, cfg, db, ops)
 			r.Get("/system/drives", drivesHandler())
-
-			// Search
 			r.Get("/search", searchHandler(ops))
-
-			// Thumbnails
 			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
-
-			// In-app updater
-			r.Get("/app/latest", latestAppHandler(cfg.UpdatesDir))
-			r.Get("/app/download", downloadAppHandler(cfg.UpdatesDir))
-
-			// Filesystem
-			r.Get("/fs", listDirHandler(ops))
-			r.Delete("/fs", deleteHandler(ops, cfg.TrashDir))
-			r.Post("/fs/folder", createFolderHandler(ops))
-			r.Post("/fs/file", createFileHandler(ops))
-			r.Patch("/fs/rename", renameHandler(ops))
-			r.Post("/fs/copy", copyHandler(ops))
-			r.Post("/fs/move", moveHandler(ops))
-			r.Post("/fs/compress", compressHandler(ops))
-			r.Post("/fs/extract", extractHandler(ops))
-			r.Get("/fs/meta", metaHandler(ops))
-			r.Get("/fs/checksum", checksumHandler(ops))
-			r.Post("/fs/chmod", chmodHandler(ops))
-			r.Get("/fs/archive", archivePeekHandler(ops))
-			r.Post("/fs/checksums", batchChecksumHandler(ops))
-
-			// SSE events
+			registerUpdateRoutes(r, cfg)
+			registerFsRoutes(r, cfg, ops)
 			r.Get("/events", sseHandler(hub))
-
-			// Trash
-			r.Get("/trash", listTrashHandler(cfg.TrashDir))
-			r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
-			r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
-
-			// Download / write content
-			r.Get("/content", downloadHandler(ops, cfg.Settings))
-			r.Put("/content", writeContentHandler(ops))
-
-			// Upload / transfers
-			r.Post("/transfers", openTransferHandler(tm, ops))
-			r.Get("/transfers/{id}", transferStatusHandler(tm))
-			r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
-			r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
+			registerTrashRoutes(r, cfg, ops)
+			registerContentRoutes(r, cfg, ops)
+			registerTransferRoutes(r, tm, cfg, ops)
 		})
 	})
 
 	return r, nil
+}
+
+// registerUnauthRoutes wires the routes reachable without a bearer token:
+// health, pairing, and the single-use share-link fetch (rate-limited and
+// expiring — see docs/r1-share-link-threat-model.md).
+func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops) {
+	r.Get("/health", healthHandler(cfg))
+	r.Post("/pair", pairHandler(cfg, db, pm))
+	r.Get("/share/{token}", serveShareHandler(db, ops))
+}
+
+// registerSettingsAndDeviceRoutes wires agent settings, bandwidth limits, and
+// paired-device management (list/jail/revoke/purge).
+func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB) {
+	r.Get("/settings", getSettingsHandler(cfg.Settings))
+	r.Patch("/settings", patchSettingsHandler(cfg.Settings))
+	r.Get("/settings/bandwidth", getBandwidthHandler(cfg.Settings))
+	r.Put("/settings/bandwidth", putBandwidthHandler(cfg.Settings))
+	r.Get("/devices", listDevicesHandler(db))
+	r.Patch("/devices/{id}", setDeviceJailHandler())
+	r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+		// ?purge=true permanently removes the row (used to clear revoked
+		// devices); otherwise the device is revoked.
+		if req.URL.Query().Get("purge") == "true" {
+			deleteDeviceHandler(db)(w, req, id)
+			return
+		}
+		revokeDeviceHandler(db)(w, req, id)
+	})
+	r.Post("/wol", wolRelayHandler())
+}
+
+// registerShareRoutes wires the authenticated R1 share-link management
+// endpoints (mint/revoke/list — serving the file itself is unauthenticated,
+// see registerUnauthRoutes).
+func registerShareRoutes(r chi.Router, cfg Config, db *store.DB, ops *fsops.Ops) {
+	r.Post("/share/mint", mintShareHandler(cfg, db, ops))
+	r.Delete("/share/{tokenHash}", revokeShareHandler(db))
+	r.Get("/share", listSharesHandler(db))
+}
+
+// registerUpdateRoutes wires the in-app updater's APK metadata/download.
+func registerUpdateRoutes(r chi.Router, cfg Config) {
+	r.Get("/app/latest", latestAppHandler(cfg.UpdatesDir))
+	r.Get("/app/download", downloadAppHandler(cfg.UpdatesDir))
+}
+
+// registerFsRoutes wires the filesystem CRUD/browse endpoints.
+func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
+	r.Get("/fs", listDirHandler(ops))
+	r.Delete("/fs", deleteHandler(ops, cfg.TrashDir))
+	r.Post("/fs/folder", createFolderHandler(ops))
+	r.Post("/fs/file", createFileHandler(ops))
+	r.Patch("/fs/rename", renameHandler(ops))
+	r.Post("/fs/copy", copyHandler(ops))
+	r.Post("/fs/move", moveHandler(ops))
+	r.Post("/fs/compress", compressHandler(ops))
+	r.Post("/fs/extract", extractHandler(ops))
+	r.Get("/fs/meta", metaHandler(ops))
+	r.Get("/fs/checksum", checksumHandler(ops))
+	r.Post("/fs/chmod", chmodHandler(ops))
+	r.Get("/fs/archive", archivePeekHandler(ops))
+	r.Post("/fs/checksums", batchChecksumHandler(ops))
+}
+
+// registerTrashRoutes wires the trash list/restore/empty endpoints.
+func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
+	r.Get("/trash", listTrashHandler(cfg.TrashDir))
+	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
+	r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
+}
+
+// registerContentRoutes wires whole-file download/write (as opposed to the
+// chunked transfer endpoints in registerTransferRoutes).
+func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
+	r.Get("/content", downloadHandler(ops, cfg.Settings))
+	r.Put("/content", writeContentHandler(ops))
+}
+
+// registerTransferRoutes wires the resumable chunked upload session
+// endpoints.
+func registerTransferRoutes(r chi.Router, tm *transfer.Manager, cfg Config, ops *fsops.Ops) {
+	r.Post("/transfers", openTransferHandler(tm, ops))
+	r.Get("/transfers/{id}", transferStatusHandler(tm))
+	r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
+	r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
 }
 
 // --------- helpers ---------

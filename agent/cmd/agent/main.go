@@ -54,8 +54,17 @@ func main() {
 	}
 }
 
-func runServe(args []string) {
-	startTime := time.Now()
+// serveFlags holds the parsed `-addr`/`-name`/`-data`/`-read-only`/`-roots`
+// flags for runServe.
+type serveFlags struct {
+	addr     string
+	name     string
+	dataDir  string
+	readOnly bool
+	roots    string
+}
+
+func parseServeFlags(args []string) serveFlags {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", ":8765", "listen address (host:port)")
 	name := fs.String("name", hostName(), "agent display name shown to the phone")
@@ -63,91 +72,57 @@ func runServe(args []string) {
 	readOnly := fs.Bool("read-only", false, "reject all write operations")
 	roots := fs.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
 	_ = fs.Parse(args)
+	return serveFlags{addr: *addr, name: *name, dataDir: *dataDir, readOnly: *readOnly, roots: *roots}
+}
 
-	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
-		log.Fatalf("data dir: %v", err)
+// serveDirs holds the on-disk directories runServe creates under dataDir.
+type serveDirs struct {
+	tempDir       string
+	thumbCacheDir string
+	updatesDir    string
+	trashDir      string
+}
+
+// prepareServeDirs creates (and returns) the working directories the agent
+// needs under dataDir, fatal-exiting if any can't be created.
+func prepareServeDirs(dataDir string) serveDirs {
+	d := serveDirs{
+		tempDir:       filepath.Join(dataDir, "transfers"),
+		thumbCacheDir: filepath.Join(dataDir, "thumbs"),
+		updatesDir:    filepath.Join(dataDir, "updates"),
+		trashDir:      defaultTrashDir(dataDir),
 	}
-
-	cert, err := security.LoadOrCreateCert(*dataDir)
-	if err != nil {
-		log.Fatalf("tls: %v", err)
-	}
-	fingerprint := security.Fingerprint(cert)
-	log.Printf("agent %q  cert-fingerprint=%s", *name, fingerprint)
-
-	lanAddr, tsAddr, macAddr := reachableAddresses(*addr)
-	log.Printf("reachable at  lan=%s  tailscale=%s  mac=%s", orNone(lanAddr), orNone(tsAddr), orNone(macAddr))
-
-	db, err := store.Open(*dataDir)
-	if err != nil {
-		log.Fatalf("store: %v", err)
-	}
-	defer db.Close()
-
-	tempDir := filepath.Join(*dataDir, "transfers")
-	tm, err := transfer.New(db, tempDir)
-	if err != nil {
-		log.Fatalf("transfer: %v", err)
-	}
-
-	thumbCacheDir := filepath.Join(*dataDir, "thumbs")
-	if err := os.MkdirAll(thumbCacheDir, 0o700); err != nil {
+	if err := os.MkdirAll(d.thumbCacheDir, 0o700); err != nil {
 		log.Fatalf("thumb cache dir: %v", err)
 	}
-
-	updatesDir := filepath.Join(*dataDir, "updates")
-	if err := os.MkdirAll(updatesDir, 0o755); err != nil {
+	if err := os.MkdirAll(d.updatesDir, 0o755); err != nil {
 		log.Fatalf("updates dir: %v", err)
 	}
-
-	trashDir := defaultTrashDir(*dataDir)
-	if err := os.MkdirAll(trashDir, 0o700); err != nil {
+	if err := os.MkdirAll(d.trashDir, 0o700); err != nil {
 		log.Fatalf("trash dir: %v", err)
 	}
+	return d
+}
 
-	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
-	log.Printf("run `rfe-agent pair` to add a device")
-
-	// Parse seed roots from the flag (first-run only; DB wins thereafter).
+// parseSeedRoots splits the comma-separated -roots flag value. It only seeds
+// the DB on first run — the DB wins on every subsequent start.
+func parseSeedRoots(roots string) []string {
 	var seedRoots []string
-	if *roots != "" {
-		for _, r := range strings.Split(*roots, ",") {
-			if r = strings.TrimSpace(r); r != "" {
-				seedRoots = append(seedRoots, r)
-			}
+	if roots == "" {
+		return seedRoots
+	}
+	for _, r := range strings.Split(roots, ",") {
+		if r = strings.TrimSpace(r); r != "" {
+			seedRoots = append(seedRoots, r)
 		}
 	}
+	return seedRoots
+}
 
-	st, err := settings.Load(db, *readOnly, seedRoots, *name)
-	if err != nil {
-		log.Fatalf("settings: %v", err)
-	}
-
-	// R1: periodically delete expired one-time share tokens (T6).
-	server.StartShareSweeper(db)
-
-	hub := server.NewEventHub()
-
-	handler, err := server.New(server.Config{
-		Name:             st.AgentName(),
-		Version:          version,
-		CertFingerprint:  fingerprint,
-		Address:          lanAddr,
-		TailscaleAddress: tsAddr,
-		MACAddress:       macAddr,
-		ThumbCacheDir:    thumbCacheDir,
-		Settings:         st,
-		UpdatesDir:       updatesDir,
-		TrashDir:         trashDir,
-		StartTime:        startTime,
-		DataDir:          *dataDir,
-	}, db, pm, tm, hub)
-	if err != nil {
-		log.Fatalf("server: %v", err)
-	}
-
-	srv := &http.Server{
-		Addr:    *addr,
+// newHTTPServer builds the *http.Server for the agent's TLS listener.
+func newHTTPServer(addr string, handler http.Handler, cert tls.Certificate) *http.Server {
+	return &http.Server{
+		Addr:    addr,
 		Handler: handler,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -167,27 +142,30 @@ func runServe(args []string) {
 		// while freeing resources from abandoned connections.
 		IdleTimeout: 2 * time.Minute,
 	}
+}
 
-	go func() {
-		log.Printf("listening on https://%s/v1  (LAN + Tailscale)", *addr)
-		// Cert/key are already in TLSConfig, so empty paths are correct here.
-		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("serve: %v", err)
-		}
-	}()
-
-	// Start mDNS advertisement.
-	if _, portStr, splitErr := net.SplitHostPort(*addr); splitErr == nil {
-		if mdnsPort, convErr := strconv.Atoi(portStr); convErr == nil {
-			mdnsSvc, mdnsErr := mdns.Start(mdnsPort, version)
-			if mdnsErr != nil {
-				log.Printf("mDNS: failed to start: %v", mdnsErr)
-			} else {
-				defer mdnsSvc.Stop()
-			}
-		}
+// startMDNS advertises the agent over mDNS on addr's port, if resolvable. It
+// returns a stop func to be deferred by the caller, or nil if mDNS didn't
+// start (invalid port or start error, both logged and non-fatal).
+func startMDNS(addr, version string) func() {
+	_, portStr, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil {
+		return nil
 	}
+	mdnsPort, convErr := strconv.Atoi(portStr)
+	if convErr != nil {
+		return nil
+	}
+	mdnsSvc, mdnsErr := mdns.Start(mdnsPort, version)
+	if mdnsErr != nil {
+		log.Printf("mDNS: failed to start: %v", mdnsErr)
+		return nil
+	}
+	return mdnsSvc.Stop
+}
 
+// waitForShutdown blocks until SIGINT/SIGTERM, then gracefully shuts srv down.
+func waitForShutdown(srv *http.Server) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
@@ -198,6 +176,85 @@ func runServe(args []string) {
 		log.Printf("shutdown: %v", err)
 	}
 	log.Println("agent stopped")
+}
+
+func runServe(args []string) {
+	startTime := time.Now()
+	flags := parseServeFlags(args)
+
+	if err := os.MkdirAll(flags.dataDir, 0o700); err != nil {
+		log.Fatalf("data dir: %v", err)
+	}
+
+	cert, err := security.LoadOrCreateCert(flags.dataDir)
+	if err != nil {
+		log.Fatalf("tls: %v", err)
+	}
+	fingerprint := security.Fingerprint(cert)
+	log.Printf("agent %q  cert-fingerprint=%s", flags.name, fingerprint)
+
+	lanAddr, tsAddr, macAddr := reachableAddresses(flags.addr)
+	log.Printf("reachable at  lan=%s  tailscale=%s  mac=%s", orNone(lanAddr), orNone(tsAddr), orNone(macAddr))
+
+	db, err := store.Open(flags.dataDir)
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer db.Close()
+
+	dirs := prepareServeDirs(flags.dataDir)
+
+	tm, err := transfer.New(db, dirs.tempDir)
+	if err != nil {
+		log.Fatalf("transfer: %v", err)
+	}
+
+	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
+	log.Printf("run `rfe-agent pair` to add a device")
+
+	st, err := settings.Load(db, flags.readOnly, parseSeedRoots(flags.roots), flags.name)
+	if err != nil {
+		log.Fatalf("settings: %v", err)
+	}
+
+	// R1: periodically delete expired one-time share tokens (T6).
+	server.StartShareSweeper(db)
+
+	hub := server.NewEventHub()
+
+	handler, err := server.New(server.Config{
+		Name:             st.AgentName(),
+		Version:          version,
+		CertFingerprint:  fingerprint,
+		Address:          lanAddr,
+		TailscaleAddress: tsAddr,
+		MACAddress:       macAddr,
+		ThumbCacheDir:    dirs.thumbCacheDir,
+		Settings:         st,
+		UpdatesDir:       dirs.updatesDir,
+		TrashDir:         dirs.trashDir,
+		StartTime:        startTime,
+		DataDir:          flags.dataDir,
+	}, db, pm, tm, hub)
+	if err != nil {
+		log.Fatalf("server: %v", err)
+	}
+
+	srv := newHTTPServer(flags.addr, handler, cert)
+
+	go func() {
+		log.Printf("listening on https://%s/v1  (LAN + Tailscale)", flags.addr)
+		// Cert/key are already in TLSConfig, so empty paths are correct here.
+		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("serve: %v", err)
+		}
+	}()
+
+	if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
+		defer stopMDNS()
+	}
+
+	waitForShutdown(srv)
 }
 
 func hostName() string {

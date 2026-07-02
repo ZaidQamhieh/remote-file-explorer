@@ -10,6 +10,7 @@ library;
 
 import 'dart:io';
 
+import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -102,13 +103,78 @@ Future<bool> isApkReadyToInstall(AppRelease release) async {
   return await file.exists() && await file.length() == release.size;
 }
 
+/// Tracks the in-flight APK download for a given [AppRelease.versionCode], if
+/// any. Both [backgroundApkDownloadProvider] and [UpdateTile]'s manual flow
+/// target the same cached file ([apkCacheFileFor]) — without this, a manual
+/// check that lands while the silent background download is still running
+/// would start a *second* concurrent write to that file, corrupting it.
+/// Android then refuses to parse the resulting APK ("There was a problem
+/// with the app file") even though the file appears complete by size.
+final _activeApkDownloads = <int, _SharedApkDownload>{};
+
+class _SharedApkDownload {
+  _SharedApkDownload(this.future, this.cancelToken);
+  final Future<void> future;
+  final CancelToken cancelToken;
+  final _listeners = <void Function(int received, int total)>[];
+
+  void _notify(int received, int total) {
+    for (final l in _listeners) {
+      l(received, total);
+    }
+  }
+}
+
+/// Downloads [release]'s APK to [localFile] (resuming from whatever is
+/// already on disk), joining an already in-flight download for the same
+/// [AppRelease.versionCode] instead of starting a second concurrent writer.
+Future<void> sharedDownloadApk({
+  required GithubUpdateSource source,
+  required AppRelease release,
+  required File localFile,
+  void Function(int received, int total)? onProgress,
+}) {
+  final existing = _activeApkDownloads[release.versionCode];
+  if (existing != null) {
+    if (onProgress != null) existing._listeners.add(onProgress);
+    return existing.future;
+  }
+
+  final token = CancelToken();
+  late final _SharedApkDownload entry;
+  Future<void> start() async {
+    final startByte = await localFile.exists() ? await localFile.length() : 0;
+    await source.downloadApk(
+      release: release,
+      localFile: localFile,
+      startByte: startByte,
+      cancelToken: token,
+      onProgress: (received, total) => entry._notify(received, total),
+    );
+  }
+
+  final future = start().whenComplete(
+    () => _activeApkDownloads.remove(release.versionCode),
+  );
+  entry = _SharedApkDownload(future, token);
+  if (onProgress != null) entry._listeners.add(onProgress);
+  _activeApkDownloads[release.versionCode] = entry;
+  return future;
+}
+
+/// Cancels the in-flight download for [versionCode], if any. Safe to call
+/// even if there is none, or if it already finished.
+void cancelApkDownload(int versionCode) {
+  _activeApkDownloads[versionCode]?.cancelToken.cancel();
+}
+
 /// Silently pre-downloads the APK for the currently-available update (if
 /// any) as soon as it's detected, so tapping "Update" later is instant
 /// instead of waiting through the full download. Runs once per session
 /// (kept alive by [RemoteFileExplorerApp] watching it for the app's
 /// lifetime), best-effort — any failure (no network, storage full, killed
-/// mid-download) is swallowed; [UpdateTile]'s manual flow downloads/resumes
-/// the same file itself regardless, so this is a pure optimization.
+/// mid-download) is swallowed; [UpdateTile]'s manual flow joins this same
+/// download via [sharedDownloadApk] rather than racing it.
 final backgroundApkDownloadProvider = FutureProvider<void>((ref) async {
   if (!Platform.isAndroid) return;
   final release = await ref.watch(latestUpdateProvider.future);
@@ -116,11 +182,12 @@ final backgroundApkDownloadProvider = FutureProvider<void>((ref) async {
   if (await isApkReadyToInstall(release)) return;
 
   final file = await apkCacheFileFor(release.versionCode);
-  final startByte = await file.exists() ? await file.length() : 0;
   try {
-    await ref
-        .watch(githubUpdateSourceProvider)
-        .downloadApk(release: release, localFile: file, startByte: startByte);
+    await sharedDownloadApk(
+      source: ref.watch(githubUpdateSourceProvider),
+      release: release,
+      localFile: file,
+    );
   } catch (_) {
     // Best effort — see doc comment above.
   }

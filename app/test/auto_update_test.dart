@@ -1,9 +1,30 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/models/app_release.dart';
 import 'package:remote_file_explorer/core/update/auto_update.dart';
+import 'package:remote_file_explorer/core/update/github_update_source.dart';
+
+/// Counts calls and simulates a slow download so two overlapping
+/// [sharedDownloadApk] calls have a window to race if the join fails.
+class _CountingUpdateSource extends GithubUpdateSource {
+  int downloadCalls = 0;
+
+  @override
+  Future<void> downloadApk({
+    required AppRelease release,
+    required File localFile,
+    int startByte = 0,
+    void Function(int received, int total)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    downloadCalls++;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await localFile.writeAsBytes(List.filled(release.size, 0));
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -78,4 +99,20 @@ void main() {
       expect(await isApkReadyToInstall(release), isFalse);
     },
   );
+
+  test('sharedDownloadApk joins an overlapping call instead of downloading '
+      'the same release twice (the background pre-download / manual "Update" '
+      'race that corrupted the cached APK)', () async {
+    const release = AppRelease(versionName: '1.0.0', versionCode: 5, size: 10);
+    final file = await apkCacheFileFor(5);
+    final source = _CountingUpdateSource();
+
+    final results = await Future.wait([
+      sharedDownloadApk(source: source, release: release, localFile: file),
+      sharedDownloadApk(source: source, release: release, localFile: file),
+    ]);
+
+    expect(results.length, 2);
+    expect(source.downloadCalls, 1);
+  });
 }

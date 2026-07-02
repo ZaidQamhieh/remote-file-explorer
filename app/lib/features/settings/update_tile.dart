@@ -260,11 +260,6 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   int _total = 0;
   String? _errorMsg;
 
-  /// Cancels the in-flight APK download when the user taps Cancel. Replaced
-  /// with a fresh token on each Retry so a cancelled token can't poison a
-  /// later attempt.
-  CancelToken _cancelToken = CancelToken();
-
   @override
   void initState() {
     super.initState();
@@ -273,28 +268,24 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
 
   @override
   void dispose() {
-    if (!_cancelToken.isCancelled) _cancelToken.cancel();
+    cancelApkDownload(widget.release.versionCode);
     super.dispose();
   }
 
   Future<void> _download() async {
-    _cancelToken = CancelToken();
     setState(() {
       _stage = _Stage.downloading;
       _progress = null;
       _errorMsg = null;
     });
     try {
-      // Resume from whatever is already on disk. The APK is named for this
-      // release's versionCode and stale APKs were pruned before the dialog
-      // opened, so any existing bytes belong to exactly this download.
-      final startByte =
-          await widget.apk.exists() ? await widget.apk.length() : 0;
-      await widget.source.downloadApk(
+      // Joins the silent background pre-download if one is already in
+      // flight for this release, instead of writing to the same cached
+      // file concurrently (which corrupts it).
+      await sharedDownloadApk(
+        source: widget.source,
         release: widget.release,
         localFile: widget.apk,
-        startByte: startByte,
-        cancelToken: _cancelToken,
         onProgress: (received, total) {
           if (!mounted) return;
           setState(() {
@@ -333,7 +324,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   /// [_download]'s catch block, which moves to [_Stage.cancelled] — closing
   /// the dialog directly here would race with that and could pop twice.
   void _cancelDownload() {
-    if (!_cancelToken.isCancelled) _cancelToken.cancel();
+    cancelApkDownload(widget.release.versionCode);
   }
 
   Future<void> _install() async {

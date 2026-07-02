@@ -176,7 +176,7 @@ class EntryTile extends StatelessWidget {
                     ? IconButton(
                       icon: Icon(
                         Icons.chevron_right_rounded,
-                        color: scheme.outline,
+                        color: scheme.primary,
                       ),
                       tooltip: context.l10n.folderDetailsTooltip,
                       onPressed: onShowMeta,
@@ -184,7 +184,7 @@ class EntryTile extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     )
-                    : Icon(Icons.chevron_right_rounded, color: scheme.outline),
+                    : Icon(Icons.chevron_right_rounded, color: scheme.primary),
             ],
           ),
         ),
@@ -226,7 +226,10 @@ class _IconTile extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        color:
+            entry.isDir
+                ? scheme.primary.withValues(alpha: 0.16)
+                : scheme.surfaceContainerHighest,
         borderRadius: Radii.smR,
       ),
       alignment: Alignment.center,

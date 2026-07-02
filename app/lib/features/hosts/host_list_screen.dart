@@ -7,6 +7,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/grouped_card.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
@@ -117,15 +118,29 @@ class HostListScreen extends ConsumerWidget {
                               prefillAddress: address,
                             ),
                       ),
-                      for (int i = 0; i < hosts.length; i++)
-                        AppearListItem(
-                          index: i,
-                          child: HostCard(
-                            host: hosts[i],
-                            store: store,
-                            isFirst: i == 0,
-                          ),
-                        ),
+                      const SectionLabel('Your computers'),
+                      GroupedCard(
+                        padded: false,
+                        children: [
+                          for (int i = 0; i < hosts.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                indent: Spacing.md,
+                                endIndent: Spacing.md,
+                                color: scheme.outlineVariant,
+                              ),
+                            AppearListItem(
+                              index: i,
+                              child: HostCard(
+                                host: hosts[i],
+                                store: store,
+                                isFirst: i == 0,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 );

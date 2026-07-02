@@ -190,7 +190,7 @@ class _LiveDot extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: const BoxDecoration(
-        color: Colors.green,
+        color: Brand.online,
         shape: BoxShape.circle,
       ),
     );

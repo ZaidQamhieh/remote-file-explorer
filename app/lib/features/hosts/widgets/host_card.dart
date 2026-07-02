@@ -364,87 +364,63 @@ class _HostCardState extends ConsumerState<HostCard> {
         final online = snap.data != null;
         final checking = snap.connectionState == ConnectionState.waiting;
 
-        return Container(
-          margin: const EdgeInsets.symmetric(
-            horizontal: Spacing.sm,
-            vertical: Spacing.sm,
-          ),
-          // Accent strip on a plain (unrounded) outer box — a BoxDecoration
-          // can't combine a non-uniform Border with a borderRadius, so the
-          // rounded card itself lives in the inner Container below.
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: hostAccentColor(widget.host.id),
-                width: 3,
-              ),
-            ),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: Radii.lgR,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              borderRadius: Radii.lgR,
-              onTap: () => _openExplorer(context),
-              onLongPress: () => _confirmRemove(context),
-              child: Padding(
-                padding: const EdgeInsets.all(Spacing.md3),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _HostHeader(
-                      host: widget.host,
-                      snapshot: snap,
-                      checking: checking,
-                      online: online,
-                      isTailscaleActive: _isTailscaleActive,
-                      lastChecked: _lastChecked,
-                      lastSeen: _lastSeen,
-                    ),
-                    if (online && snap.data?.readOnly == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: Spacing.sm),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lock_outline,
-                              size: 16,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: Spacing.xs),
-                            Text(
-                              'Read-only',
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (online && _statusFuture != null)
-                      _buildStatusSection(context),
-                    if (online) ..._buildGauges(context),
-                    const SizedBox(height: Spacing.md),
-                    _QuickActions(
-                      online: online,
-                      canWake:
-                          !online &&
-                          !checking &&
-                          widget.host.macAddress != null,
-                      onBrowse: () => _openExplorer(context),
-                      onSearch: () => _openSearch(context),
-                      onWake: () => _sendWol(context),
-                      onStorage: () => _openStorage(context),
-                      onTransfers: () => _openTransfers(context),
-                      onDiagnostics: () => _openDiagnostics(context),
-                      onSettings: () => _openSettings(context),
-                      onForget: () => _confirmRemove(context),
-                    ),
-                  ],
+        // Renders as a divided row inside the host list's shared GroupedCard
+        // (see HostListScreen) rather than its own bordered/elevated card —
+        // the per-host accent now lives on the icon chip in [_HostHeader].
+        return InkWell(
+          onTap: () => _openExplorer(context),
+          onLongPress: () => _confirmRemove(context),
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.md3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _HostHeader(
+                  host: widget.host,
+                  snapshot: snap,
+                  checking: checking,
+                  online: online,
+                  isTailscaleActive: _isTailscaleActive,
+                  lastChecked: _lastChecked,
+                  lastSeen: _lastSeen,
                 ),
-              ),
+                if (online && snap.data?.readOnly == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 16,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: Spacing.xs),
+                        Text(
+                          'Read-only',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (online && _statusFuture != null)
+                  _buildStatusSection(context),
+                if (online) ..._buildGauges(context),
+                const SizedBox(height: Spacing.md),
+                _QuickActions(
+                  online: online,
+                  canWake:
+                      !online && !checking && widget.host.macAddress != null,
+                  onBrowse: () => _openExplorer(context),
+                  onSearch: () => _openSearch(context),
+                  onWake: () => _sendWol(context),
+                  onStorage: () => _openStorage(context),
+                  onTransfers: () => _openTransfers(context),
+                  onDiagnostics: () => _openDiagnostics(context),
+                  onSettings: () => _openSettings(context),
+                  onForget: () => _confirmRemove(context),
+                ),
+              ],
             ),
           ),
         );
@@ -545,15 +521,18 @@ class _HostHeader extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
     );
 
+    // Colored rounded-square icon chip (Figma's per-item accent pattern) —
+    // stable per host via [hostAccentColor] so hosts stay visually
+    // distinguishable at a glance across the list.
     final iconBlock = Container(
       width: 48,
       height: 48,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: Radii.cardR,
+        color: hostAccentColor(host.id),
+        borderRadius: Radii.chipR,
       ),
-      child: Icon(Icons.computer_rounded, color: scheme.onPrimaryContainer),
+      child: const Icon(Icons.computer_rounded, color: Colors.white),
     );
 
     final statusLabel = _StatusLabel(checking: checking, online: online);

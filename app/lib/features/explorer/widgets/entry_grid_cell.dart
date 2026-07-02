@@ -100,7 +100,10 @@ class EntryGridCell extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
+                color:
+                    entry.isDir
+                        ? scheme.primary.withValues(alpha: 0.16)
+                        : scheme.surfaceContainerHighest,
                 borderRadius: Radii.chipR,
               ),
               alignment: Alignment.center,

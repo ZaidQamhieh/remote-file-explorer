@@ -5,6 +5,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
 import 'transfer_speed.dart';
 import 'transfer_state.dart';
 
@@ -85,6 +86,10 @@ class TransferGroupedList extends ConsumerWidget {
       ...groups[TransferGroup.done]!,
       ...groups[TransferGroup.failed]!,
     ];
+    final visibleGroups = [
+      for (final group in TransferGroup.values)
+        if (groups[group]!.isNotEmpty) group,
+    ];
 
     return Column(
       children: [
@@ -122,9 +127,13 @@ class TransferGroupedList extends ConsumerWidget {
                     controller: controller,
                     padding: const EdgeInsets.only(bottom: Spacing.md),
                     children: [
-                      for (final group in TransferGroup.values)
-                        if (groups[group]!.isNotEmpty)
-                          _TransferSection(group: group, tasks: groups[group]!),
+                      for (var i = 0; i < visibleGroups.length; i++) ...[
+                        if (i > 0) const SizedBox(height: Spacing.md),
+                        _TransferSection(
+                          group: visibleGroups[i],
+                          tasks: groups[visibleGroups[i]]!,
+                        ),
+                      ],
                     ],
                   ),
         ),
@@ -191,85 +200,56 @@ class _TransferSectionState extends State<_TransferSection> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionHeader(
-          label: widget.group.localizedLabel(context),
-          count: widget.tasks.length,
-          expanded: _expanded,
-          onToggle: () => setState(() => _expanded = !_expanded),
-        ),
-        if (_expanded)
-          for (final t in widget.tasks) _TransferTile(task: t),
-      ],
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.label,
-    required this.count,
-    required this.expanded,
-    required this.onToggle,
-  });
-
-  final String label;
-  final int count;
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.md,
-          Spacing.md,
-          Spacing.md,
-          Spacing.xs,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              expanded
-                  ? Icons.keyboard_arrow_down_rounded
-                  : Icons.keyboard_arrow_right_rounded,
-              size: 18,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: Spacing.xs),
-            Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.6,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: Spacing.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.sm,
-                vertical: 1,
-              ),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
-                borderRadius: Radii.chipR,
-              ),
-              child: Text(
-                '$count',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: SectionLabel(
+            widget.group.localizedLabel(context),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.sm,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: Radii.chipR,
+                  ),
+                  child: Text(
+                    '${widget.tasks.length}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Spacing.xs),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_right_rounded,
+                  size: 18,
                   color: scheme.onSurfaceVariant,
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        if (_expanded)
+          GroupedCard(
+            padded: false,
+            children: [
+              for (var i = 0; i < widget.tasks.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                _TransferTile(task: widget.tasks[i]),
+              ],
+            ],
+          ),
+      ],
     );
   }
 }
@@ -379,26 +359,46 @@ class _TransferTile extends ConsumerWidget {
     );
   }
 
+  /// The chip's icon tint for non-terminal states: blue (scheme primary) for
+  /// downloads, emerald (scheme secondary) for uploads — Figma's
+  /// direction-coded status chips. Terminal states (completed/failed) keep
+  /// their own universal semantic color regardless of direction.
+  Color _directionColor(ColorScheme scheme) =>
+      task.kind == TransferKind.upload ? scheme.secondary : scheme.primary;
+
   Widget _statusIcon(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    switch (task.status) {
-      case TransferStatus.running:
-        return SizedBox.square(
-          dimension: 24,
-          child: CircularProgressIndicator(
-            value: task.progress > 0 ? task.progress : null,
-            strokeWidth: 3,
-          ),
-        );
-      case TransferStatus.completed:
-        return const Icon(Icons.check_circle, color: Brand.online);
-      case TransferStatus.failed:
-        return Icon(Icons.error_outline, color: scheme.error);
-      case TransferStatus.paused:
-        return Icon(Icons.pause_circle_outline, color: scheme.tertiary);
-      case TransferStatus.queued:
-        return Icon(Icons.schedule, color: scheme.outline);
-    }
+    final directionColor = _directionColor(scheme);
+    final Widget glyph = switch (task.status) {
+      TransferStatus.running => SizedBox.square(
+        dimension: 20,
+        child: CircularProgressIndicator(
+          value: task.progress > 0 ? task.progress : null,
+          strokeWidth: 2.5,
+          color: directionColor,
+        ),
+      ),
+      TransferStatus.completed => const Icon(
+        Icons.check_circle,
+        color: Brand.online,
+      ),
+      TransferStatus.failed => Icon(Icons.error_outline, color: scheme.error),
+      TransferStatus.paused => Icon(
+        Icons.pause_circle_outline,
+        color: directionColor,
+      ),
+      TransferStatus.queued => Icon(Icons.schedule, color: directionColor),
+    };
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: Radii.smR,
+      ),
+      alignment: Alignment.center,
+      child: glyph,
+    );
   }
 
   Widget? _buildSubtitle(
@@ -429,6 +429,7 @@ class _TransferTile extends ConsumerWidget {
                 child: LinearProgressIndicator(
                   value: task.progress > 0 ? task.progress : null,
                   minHeight: 6,
+                  color: _directionColor(scheme),
                 ),
               ),
               const SizedBox(height: Spacing.xs),

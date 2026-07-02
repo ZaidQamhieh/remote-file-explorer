@@ -9,6 +9,7 @@ import '../settings/app_settings_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import '../transfers/transfer_manager.dart';
 import 'home_state.dart';
+import 'widgets/app_bottom_nav.dart';
 
 /// Persistent 4-tab shell: Servers / Files / Transfers / Settings. Replaces
 /// the old push-based flow where opening a host pushed [ExplorerScreen] on
@@ -70,29 +71,29 @@ class HomeShell extends ConsumerWidget {
         bottomNavigationBar:
             filesMultiSelect
                 ? null
-                : NavigationBar(
+                : AppBottomNav(
                   selectedIndex: index,
                   onDestinationSelected:
                       (i) =>
                           ref.read(selectedTabIndexProvider.notifier).state = i,
                   destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.dns_outlined),
-                      selectedIcon: Icon(Icons.dns_rounded),
+                    AppBottomNavDestination(
+                      icon: Icons.dns_outlined,
+                      selectedIcon: Icons.dns_rounded,
                       label: 'Servers',
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.folder_outlined),
-                      selectedIcon: Icon(Icons.folder_rounded),
+                    AppBottomNavDestination(
+                      icon: Icons.folder_outlined,
+                      selectedIcon: Icons.folder_rounded,
                       label: 'Files',
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.swap_vert_rounded),
+                    AppBottomNavDestination(
+                      icon: Icons.swap_vert_rounded,
                       label: 'Transfers',
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings_rounded),
+                    AppBottomNavDestination(
+                      icon: Icons.settings_outlined,
+                      selectedIcon: Icons.settings_rounded,
                       label: 'Settings',
                     ),
                   ],

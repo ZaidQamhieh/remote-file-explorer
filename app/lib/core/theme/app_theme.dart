@@ -11,6 +11,32 @@ import 'tokens.dart';
 class AppTheme {
   AppTheme._();
 
+  /// Dark scheme matching the Figma spec (`figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ`):
+  /// zinc-950/900/800 surfaces, blue-400 primary. Hand-picked rather than
+  /// derived via [ColorScheme.fromSeed] because the algorithmic neutral ramp
+  /// from a seed doesn't reproduce Tailwind's exact zinc stops. Only the
+  /// default [dark] getter uses this — [darkWithSeed] (accent-color picker)
+  /// and [darkFrom] (platform dynamic color) still derive their own scheme so
+  /// those features are unaffected.
+  static const ColorScheme _figmaDark = ColorScheme.dark(
+    primary: Color(0xFF60A5FA), // blue-400
+    onPrimary: Color(0xFF0B1220),
+    secondary: Color(0xFF34D399), // emerald-400 (upload/success accent)
+    onSecondary: Color(0xFF06281E),
+    error: Color(0xFFF87171), // red-400
+    onError: Color(0xFF2E0A0A),
+    surface: Color(0xFF09090B), // zinc-950
+    onSurface: Color(0xFFF4F4F5), // zinc-100
+    onSurfaceVariant: Color(0xFF71717A), // zinc-500
+    outline: Color(0xFF52525B), // zinc-600
+    outlineVariant: Color(0xFF27272A), // zinc-800
+    surfaceContainerLowest: Color(0xFF000000),
+    surfaceContainerLow: Color(0xFF0F0F11),
+    surfaceContainer: Color(0xFF18181B), // zinc-900
+    surfaceContainerHigh: Color(0xFF212125),
+    surfaceContainerHighest: Color(0xFF27272A), // zinc-800
+  );
+
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
@@ -34,10 +60,10 @@ class AppTheme {
     final scheme = dark.colorScheme.copyWith(
       surface: Colors.black,
       surfaceContainerLowest: Colors.black,
-      surfaceContainerLow: const Color(0xFF0A0A0A),
-      surfaceContainer: const Color(0xFF121212),
-      surfaceContainerHigh: const Color(0xFF1A1A1A),
-      surfaceContainerHighest: const Color(0xFF222222),
+      surfaceContainerLow: const Color(0xFF09090B), // zinc-950
+      surfaceContainer: const Color(0xFF18181B), // zinc-900
+      surfaceContainerHigh: const Color(0xFF27272A), // zinc-800
+      surfaceContainerHighest: const Color(0xFF3F3F46), // zinc-700
     );
     return dark.copyWith(
       colorScheme: scheme,
@@ -50,13 +76,19 @@ class AppTheme {
     ColorScheme? override,
     Color? seed,
   ]) {
+    // The app's own default dark theme (no platform dynamic scheme, no
+    // custom accent-picker seed) is the hand-picked Figma scheme rather than
+    // a seed derivation — everywhere else (a custom seed, or an injected
+    // platform scheme) is untouched.
     final scheme =
         override ??
-        ColorScheme.fromSeed(
-          seedColor: seed ?? Brand.seed,
-          brightness: brightness,
-          secondary: Brand.accent,
-        );
+        (brightness == Brightness.dark && seed == null
+            ? _figmaDark
+            : ColorScheme.fromSeed(
+              seedColor: seed ?? Brand.seed,
+              brightness: brightness,
+              secondary: Brand.accent,
+            ));
 
     final base = ThemeData(
       useMaterial3: true,

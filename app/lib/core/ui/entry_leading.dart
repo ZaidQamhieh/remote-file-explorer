@@ -117,25 +117,33 @@ class _IconSpec {
   final Color? color;
 }
 
+// Figma spec (figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ) file-type palette.
+const Color _folderColor = Color(0xFFFACC15); // yellow-400
+const Color _imageColor = Color(0xFF34D399); // emerald-400
+const Color _videoColor = Color(0xFFA78BFA); // violet-400
+const Color _audioColor = Color(0xFFF472B6); // pink-400
+const Color _archiveColor = Color(0xFFFB923C); // orange-400
+const Color _documentColor = Color(0xFF38BDF8); // sky-400
+
 _IconSpec _iconSpecFor(Entry entry) {
-  if (entry.isDir) return const _IconSpec(Icons.folder, Colors.amber);
+  if (entry.isDir) return const _IconSpec(Icons.folder, _folderColor);
   final mime = entry.mimeType ?? '';
   switch (categoryOf(entry)) {
     case EntryCategory.folder:
-      return const _IconSpec(Icons.folder, Colors.amber);
+      return const _IconSpec(Icons.folder, _folderColor);
     case EntryCategory.image:
-      return const _IconSpec(Icons.image, Colors.blue);
+      return const _IconSpec(Icons.image, _imageColor);
     case EntryCategory.video:
-      return const _IconSpec(Icons.movie, Colors.purple);
+      return const _IconSpec(Icons.movie, _videoColor);
     case EntryCategory.audio:
-      return const _IconSpec(Icons.music_note, Colors.green);
+      return const _IconSpec(Icons.music_note, _audioColor);
     case EntryCategory.archive:
-      return const _IconSpec(Icons.folder_zip, Colors.orange);
+      return const _IconSpec(Icons.folder_zip, _archiveColor);
     case EntryCategory.document:
       if (mime.contains('pdf')) {
-        return const _IconSpec(Icons.picture_as_pdf, Colors.red);
+        return const _IconSpec(Icons.picture_as_pdf, _documentColor);
       }
-      return const _IconSpec(Icons.description, Colors.teal);
+      return const _IconSpec(Icons.description, _documentColor);
     case EntryCategory.other:
       return const _IconSpec(Icons.insert_drive_file, null);
   }

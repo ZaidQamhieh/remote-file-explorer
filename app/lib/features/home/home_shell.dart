@@ -21,65 +21,83 @@ class HomeShell extends ConsumerWidget {
     final index = ref.watch(selectedTabIndexProvider);
     final active = ref.watch(activeHostProvider);
 
-    // The Files tab nests ExplorerScreen's own Scaffold (with its
-    // multi-select SelectionBar as *its* bottomNavigationBar) inside this
-    // Scaffold's body. Without this, multi-select would show two bottom bars
-    // stacked — hide ours instead while multi-select is active there. Only
-    // applies when the Files tab actually renders ExplorerScreen rooted at
-    // '/' (not DrivesView, which has no selection state of its own) — mirrors
-    // the windows check in `explorerRootFor`.
-    final filesMultiSelect =
-        index == 1 &&
+    // Does the Files tab render ExplorerScreen rooted at '/' directly (not
+    // DrivesView, which has no folder-depth/selection state of its own)?
+    // Mirrors the windows check in `explorerRootFor`.
+    final showsExplorerRoot =
         active != null &&
         (active.initialPath != null ||
-            active.health?.os.toLowerCase() != 'windows') &&
-        ref.watch(
-          explorerProvider((
-            hostId: active.host.id,
-            rootPath: '/',
-          )).select((s) => s.multiSelect),
-        );
+            active.health?.os.toLowerCase() != 'windows');
 
-    return Scaffold(
-      body: IndexedStack(
-        index: index,
-        children: const [
-          HostListScreen(),
-          _FilesTab(),
-          _TransfersTab(),
-          AppSettingsScreen(),
-        ],
+    (bool atRoot, bool multiSelect)? explorer;
+    if (showsExplorerRoot) {
+      explorer = ref.watch(
+        explorerProvider((
+          hostId: active.host.id,
+          rootPath: '/',
+        )).select((s) => (s.atRoot, s.multiSelect)),
+      );
+    }
+
+    final filesMultiSelect = shouldHideTabBar(
+      selectedIndex: index,
+      explorerMultiSelect: explorer?.$2 ?? false,
+    );
+    final returnToServersOnBack = shouldReturnToServersOnBack(
+      selectedIndex: index,
+      showsExplorerRoot: showsExplorerRoot,
+      explorerAtRoot: explorer?.$1 ?? false,
+      explorerMultiSelect: explorer?.$2 ?? false,
+    );
+
+    return PopScope(
+      canPop: !returnToServersOnBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && returnToServersOnBack) {
+          ref.read(selectedTabIndexProvider.notifier).state = 0;
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: index,
+          children: const [
+            HostListScreen(),
+            _FilesTab(),
+            _TransfersTab(),
+            AppSettingsScreen(),
+          ],
+        ),
+        bottomNavigationBar:
+            filesMultiSelect
+                ? null
+                : NavigationBar(
+                  selectedIndex: index,
+                  onDestinationSelected:
+                      (i) =>
+                          ref.read(selectedTabIndexProvider.notifier).state = i,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.dns_outlined),
+                      selectedIcon: Icon(Icons.dns_rounded),
+                      label: 'Servers',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.folder_outlined),
+                      selectedIcon: Icon(Icons.folder_rounded),
+                      label: 'Files',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.swap_vert_rounded),
+                      label: 'Transfers',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings_rounded),
+                      label: 'Settings',
+                    ),
+                  ],
+                ),
       ),
-      bottomNavigationBar:
-          filesMultiSelect
-              ? null
-              : NavigationBar(
-                selectedIndex: index,
-                onDestinationSelected:
-                    (i) =>
-                        ref.read(selectedTabIndexProvider.notifier).state = i,
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.dns_outlined),
-                    selectedIcon: Icon(Icons.dns_rounded),
-                    label: 'Servers',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.folder_outlined),
-                    selectedIcon: Icon(Icons.folder_rounded),
-                    label: 'Files',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.swap_vert_rounded),
-                    label: 'Transfers',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.settings_outlined),
-                    selectedIcon: Icon(Icons.settings_rounded),
-                    label: 'Settings',
-                  ),
-                ],
-              ),
     );
   }
 }
@@ -98,10 +116,16 @@ class _FilesTab extends ConsumerWidget {
         body: Center(child: Text('Select a server from the Servers tab')),
       );
     }
-    if (active.initialPath != null) {
-      return ExplorerScreen(host: active.host, initialPath: active.initialPath);
-    }
-    return explorerRootFor(active.health, active.host);
+    final body =
+        active.initialPath != null
+            ? ExplorerScreen(host: active.host, initialPath: active.initialPath)
+            : explorerRootFor(active.health, active.host);
+    // Keyed on the ActiveHost instance (a fresh object every "open" action):
+    // without this, re-selecting a different bookmark/host while this tab's
+    // ExplorerScreen is already mounted only updates its widget properties
+    // (didUpdateWidget), so ExplorerScreen's initState-only initialPath jump
+    // never re-fires and the second navigation silently does nothing.
+    return KeyedSubtree(key: ObjectKey(active), child: body);
   }
 }
 

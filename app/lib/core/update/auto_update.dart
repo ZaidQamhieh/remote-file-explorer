@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_release.dart';
@@ -75,3 +76,52 @@ final dismissedUpdateProvider =
     AsyncNotifierProvider<DismissedUpdateNotifier, int>(
       DismissedUpdateNotifier.new,
     );
+
+/// Where a downloaded APK for [versionCode] is cached — shared by the silent
+/// background pre-download below and [UpdateTile]'s manual flow so both
+/// agree on the same file (and a background download that only got partway
+/// resumes cleanly from the manual flow instead of restarting).
+Future<File> apkCacheFileFor(int versionCode) async {
+  // getExternalCacheDirectories() throws on non-Android platforms — only
+  // call it where it's actually supported; everywhere else (including
+  // tests, which run on the host OS) falls back to getTemporaryDirectory().
+  final dirs = Platform.isAndroid ? await getExternalCacheDirectories() : null;
+  final base =
+      (dirs != null && dirs.isNotEmpty)
+          ? dirs.first
+          : await getTemporaryDirectory();
+  return File('${base.path}/update-$versionCode.apk');
+}
+
+/// True when a complete, size-matched APK for [release] is already cached —
+/// the install flow can skip straight to the installer instead of
+/// downloading (or resuming) it again.
+Future<bool> isApkReadyToInstall(AppRelease release) async {
+  if (release.size <= 0) return false;
+  final file = await apkCacheFileFor(release.versionCode);
+  return await file.exists() && await file.length() == release.size;
+}
+
+/// Silently pre-downloads the APK for the currently-available update (if
+/// any) as soon as it's detected, so tapping "Update" later is instant
+/// instead of waiting through the full download. Runs once per session
+/// (kept alive by [RemoteFileExplorerApp] watching it for the app's
+/// lifetime), best-effort — any failure (no network, storage full, killed
+/// mid-download) is swallowed; [UpdateTile]'s manual flow downloads/resumes
+/// the same file itself regardless, so this is a pure optimization.
+final backgroundApkDownloadProvider = FutureProvider<void>((ref) async {
+  if (!Platform.isAndroid) return;
+  final release = await ref.watch(latestUpdateProvider.future);
+  if (release == null) return;
+  if (await isApkReadyToInstall(release)) return;
+
+  final file = await apkCacheFileFor(release.versionCode);
+  final startByte = await file.exists() ? await file.length() : 0;
+  try {
+    await ref
+        .watch(githubUpdateSourceProvider)
+        .downloadApk(release: release, localFile: file, startByte: startByte);
+  } catch (_) {
+    // Best effort — see doc comment above.
+  }
+});

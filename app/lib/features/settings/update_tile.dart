@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
+import '../../core/update/auto_update.dart';
 import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
 
@@ -112,20 +112,28 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         return;
       }
 
-      // Prepare the destination file in external cache (covered by the
-      // FileProvider paths so the installer can read it).
-      final dirs = await getExternalCacheDirectories();
-      final base =
-          (dirs != null && dirs.isNotEmpty)
-              ? dirs.first
-              : await getTemporaryDirectory();
-      final apk = File('${base.path}/update-${rel!.versionCode}.apk');
+      // Destination file, shared with the silent background pre-download
+      // (covered by the FileProvider paths so the installer can read it).
+      final apk = await apkCacheFileFor(rel!.versionCode);
 
       // Remove any previously downloaded APKs so updates don't pile up in the
       // app's cache — only the one we're about to install is kept.
-      await _pruneOldApks(base, keep: apk);
+      await _pruneOldApks(apk.parent, keep: apk);
 
       _preInstallBuild = installed;
+
+      // The background pre-download may have already finished this exact
+      // file — skip straight to the installer instead of re-downloading.
+      if (await isApkReadyToInstall(rel)) {
+        await _launchInstaller(apk);
+        if (!mounted) return;
+        setState(() {
+          _busy = true;
+          _status = context.l10n.openingInstallerConfirm;
+          _statusIsError = false;
+        });
+        return;
+      }
 
       if (!mounted) return;
       await showDialog<void>(

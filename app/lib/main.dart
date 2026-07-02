@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'core/app_info.dart';
 import 'core/platform/transfer_notifications.dart';
 import 'core/settings/settings_controller.dart';
+import 'core/update/auto_update.dart';
 import 'core/theme/app_theme.dart';
 import 'core/ui/lock_gate.dart';
 import 'features/home/home_shell.dart';
@@ -46,6 +47,9 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     // Keep the transfer foreground-service/notification bridge alive for the
     // whole app lifetime so backgrounded transfers stay running + visible.
     ref.watch(transferNotificationsProvider);
+    // Silently pre-download an available update's APK so tapping "Update" in
+    // Settings is instant instead of waiting through the full download.
+    ref.watch(backgroundApkDownloadProvider);
 
     final settings = ref.watch(settingsProvider).valueOrNull;
 

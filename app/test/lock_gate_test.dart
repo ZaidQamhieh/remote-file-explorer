@@ -41,4 +41,34 @@ void main() {
     expect(find.text('unlocked content'), findsOneWidget);
     expect(find.text('Locked'), findsNothing);
   });
+
+  group('shouldRelockOnResume', () {
+    // The system biometric prompt itself pauses/resumes the app on some
+    // devices — a resume during an in-flight authenticate() call must NOT
+    // re-lock, or a successful scan re-locks itself right after unlocking.
+    test('false while authenticating, even if app lock is enabled', () {
+      expect(
+        shouldRelockOnResume(appLockEnabled: true, authenticating: true),
+        isFalse,
+      );
+    });
+
+    test('true on a genuine resume (not mid-authentication)', () {
+      expect(
+        shouldRelockOnResume(appLockEnabled: true, authenticating: false),
+        isTrue,
+      );
+    });
+
+    test('false when app lock is off, regardless of authenticating', () {
+      expect(
+        shouldRelockOnResume(appLockEnabled: false, authenticating: false),
+        isFalse,
+      );
+      expect(
+        shouldRelockOnResume(appLockEnabled: false, authenticating: true),
+        isFalse,
+      );
+    });
+  });
 }

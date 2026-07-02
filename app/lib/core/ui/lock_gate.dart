@@ -18,6 +18,17 @@ const _noAuthAvailableCodes = {
   auth_error.otherOperatingSystem,
 };
 
+/// True when an [AppLifecycleState.resumed] event should re-lock the app.
+///
+/// Showing the system biometric prompt itself pauses/resumes the app on some
+/// devices (see local_auth's `stickyAuth` docs) — re-locking on that resume
+/// would stomp the unlock that's about to land from the in-flight
+/// `authenticate()` call, making a successful scan look like it did nothing.
+bool shouldRelockOnResume({
+  required bool appLockEnabled,
+  required bool authenticating,
+}) => appLockEnabled && !authenticating;
+
 class LockGate extends ConsumerStatefulWidget {
   const LockGate({super.key, required this.child});
 
@@ -54,7 +65,11 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _isEnabled) {
+    if (state == AppLifecycleState.resumed &&
+        shouldRelockOnResume(
+          appLockEnabled: _isEnabled,
+          authenticating: _authenticating,
+        )) {
       setState(() => _locked = true);
       _tryUnlock();
     }
@@ -73,7 +88,13 @@ class _LockGateState extends ConsumerState<LockGate>
     try {
       final ok = await _auth.authenticate(
         localizedReason: 'Unlock Remote File Explorer',
-        options: const AuthenticationOptions(biometricOnly: false),
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          // Without this, the prompt itself pausing/resuming the app is
+          // reported as an auth failure on some devices — see local_auth's
+          // README section on stickyAuth.
+          stickyAuth: true,
+        ),
       );
       if (ok && mounted) setState(() => _locked = false);
     } on PlatformException catch (e) {

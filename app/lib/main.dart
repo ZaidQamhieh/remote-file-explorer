@@ -9,7 +9,7 @@ import 'core/platform/transfer_notifications.dart';
 import 'core/settings/settings_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'core/ui/lock_gate.dart';
-import 'features/hosts/host_list_screen.dart';
+import 'features/home/home_shell.dart';
 import 'features/hosts/host_open_listener.dart';
 import 'features/hosts/weekly_digest_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -134,9 +134,9 @@ class _HomeRouter extends ConsumerWidget {
       loading:
           () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, __) => const HostListScreen(),
+      error: (_, __) => const HomeShell(),
       data: (complete) {
-        if (complete) return const HostListScreen();
+        if (complete) return const HomeShell();
         return OnboardingScreen(
           onComplete: () => ref.invalidate(onboardingCompleteProvider),
         );

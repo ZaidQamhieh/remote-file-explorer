@@ -15,19 +15,11 @@ import 'transfer_state.dart';
 ///
 /// All engine interaction goes through [TransferQueueNotifier]; this screen is
 /// pure presentation plus the read-only [transferSamplerProvider] for speed.
-class TransferManagerSheet extends ConsumerWidget {
+class TransferManagerSheet extends StatelessWidget {
   const TransferManagerSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final transfers = ref.watch(transferQueueProvider);
-
-    final groups = groupTransfers(transfers);
-    final doneAndFailed = [
-      ...groups[TransferGroup.done]!,
-      ...groups[TransferGroup.failed]!,
-    ];
-
+  Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.5,
@@ -43,52 +35,7 @@ class TransferManagerSheet extends ConsumerWidget {
               child: Column(
                 children: [
                   _buildHandle(context),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md,
-                      vertical: Spacing.sm,
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          context.l10n.transfersTitle,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const Spacer(),
-                        if (doneAndFailed.isNotEmpty)
-                          TextButton.icon(
-                            icon: const Icon(Icons.clear_all_rounded, size: 18),
-                            label: Text(context.l10n.clearCompletedButton),
-                            onPressed: () {
-                              for (final t in doneAndFailed) {
-                                ref
-                                    .read(transferQueueProvider.notifier)
-                                    .remove(t.id);
-                              }
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child:
-                        transfers.isEmpty
-                            ? Center(child: Text(context.l10n.noTransfers))
-                            : ListView(
-                              controller: controller,
-                              padding: const EdgeInsets.only(
-                                bottom: Spacing.md,
-                              ),
-                              children: [
-                                for (final group in TransferGroup.values)
-                                  if (groups[group]!.isNotEmpty)
-                                    _TransferSection(
-                                      group: group,
-                                      tasks: groups[group]!,
-                                    ),
-                              ],
-                            ),
-                  ),
+                  Expanded(child: TransferGroupedList(controller: controller)),
                 ],
               ),
             ),
@@ -107,6 +54,81 @@ class TransferManagerSheet extends ConsumerWidget {
           borderRadius: BorderRadius.circular(2),
         ),
       ),
+    );
+  }
+}
+
+/// Header (title + clear-completed) and collapsible-section list of all
+/// transfers. Shared by [TransferManagerSheet] and the Transfers tab body
+/// ([HomeShell]'s `_TransfersTab`).
+class TransferGroupedList extends ConsumerWidget {
+  const TransferGroupedList({
+    super.key,
+    this.controller,
+    this.showTitle = true,
+  });
+
+  /// Hooks into the host [DraggableScrollableSheet]'s scroll position; null
+  /// for non-sheet hosts (e.g. a tab body), where the list scrolls on its own.
+  final ScrollController? controller;
+
+  /// Whether to show the inline "Transfers" title — off when an app bar
+  /// already shows it (the tab body case).
+  final bool showTitle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final transfers = ref.watch(transferQueueProvider);
+
+    final groups = groupTransfers(transfers);
+    final doneAndFailed = [
+      ...groups[TransferGroup.done]!,
+      ...groups[TransferGroup.failed]!,
+    ];
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md,
+            vertical: Spacing.sm,
+          ),
+          child: Row(
+            children: [
+              if (showTitle)
+                Text(
+                  context.l10n.transfersTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              const Spacer(),
+              if (doneAndFailed.isNotEmpty)
+                TextButton.icon(
+                  icon: const Icon(Icons.clear_all_rounded, size: 18),
+                  label: Text(context.l10n.clearCompletedButton),
+                  onPressed: () {
+                    for (final t in doneAndFailed) {
+                      ref.read(transferQueueProvider.notifier).remove(t.id);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child:
+              transfers.isEmpty
+                  ? Center(child: Text(context.l10n.noTransfers))
+                  : ListView(
+                    controller: controller,
+                    padding: const EdgeInsets.only(bottom: Spacing.md),
+                    children: [
+                      for (final group in TransferGroup.values)
+                        if (groups[group]!.isNotEmpty)
+                          _TransferSection(group: group, tasks: groups[group]!),
+                    ],
+                  ),
+        ),
+      ],
     );
   }
 }

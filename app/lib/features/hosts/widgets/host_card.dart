@@ -14,6 +14,7 @@ import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
+import '../../home/home_state.dart';
 import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../../transfers/transfer_manager.dart';
@@ -242,9 +243,11 @@ class _HostCardState extends ConsumerState<HostCard> {
   Future<void> _openExplorer(BuildContext context) async {
     final health = await _pingFuture;
     if (!context.mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => explorerRootFor(health, widget.host)),
+    ref.read(activeHostProvider.notifier).state = ActiveHost(
+      host: widget.host,
+      health: health,
     );
+    ref.read(selectedTabIndexProvider.notifier).state = 1;
   }
 
   /// Opens search for this host with a short-lived client, closed once the

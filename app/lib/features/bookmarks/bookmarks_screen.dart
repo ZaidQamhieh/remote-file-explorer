@@ -5,7 +5,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
-import '../explorer/explorer_screen.dart';
+import '../home/home_state.dart';
 
 /// Full-screen list of all bookmarks, grouped by host.
 ///
@@ -104,15 +104,12 @@ class BookmarksScreen extends ConsumerWidget {
                 onTap: () {
                   final host = hostMap[b.hostId];
                   if (host == null) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (_) => ExplorerScreen(
-                            host: host,
-                            initialPath: b.remotePath,
-                          ),
-                    ),
+                  ref.read(activeHostProvider.notifier).state = ActiveHost(
+                    host: host,
+                    initialPath: b.remotePath,
                   );
+                  ref.read(selectedTabIndexProvider.notifier).state = 1;
+                  Navigator.of(context).pop();
                 },
               ),
           ],

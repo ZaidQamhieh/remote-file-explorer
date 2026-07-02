@@ -128,9 +128,11 @@ class PhotoBackupController {
       try {
         final file = await a.originFile ?? await a.file;
         if (file == null) continue;
-        // Skip zero-byte files (not yet materialized from the media store).
-        final length = await file.length();
-        if (length <= 0) continue;
+        // Skip a file that's still being written (e.g. cloud-sync still
+        // downloading the original under photo_manager's feet) — its length
+        // is checked twice a beat apart and must agree (and be non-zero).
+        // Skipped assets aren't marked done, so they're retried next run.
+        if (!await isFileStable(file.length)) continue;
         final title = await a.titleAsync;
         final name = title.isNotEmpty ? title : '${a.id}.jpg';
         final remote = backupRemotePath(

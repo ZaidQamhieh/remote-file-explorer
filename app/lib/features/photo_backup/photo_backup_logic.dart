@@ -31,3 +31,25 @@ String backupRemotePath({
 /// [backedUp] — i.e. the photos still needing upload, preserving order.
 List<String> pendingIds(List<String> allIds, Set<String> backedUp) =>
     allIds.where((id) => !backedUp.contains(id)).toList();
+
+/// True once two reads of [readLength] taken [interval] apart agree and are
+/// non-zero.
+///
+/// The plain "skip if zero-byte" check (v1.20.0) only catches a file that
+/// hasn't started materializing yet. It misses the more common case: the
+/// media store/cloud-sync client is still *writing* the file when
+/// `photo_manager` hands us the path, so the length is non-zero but still
+/// growing — uploading it races the write and ships a truncated photo. A
+/// second read after a short delay catches that: a length still changing
+/// means "not ready yet, try again next run" instead of "looks done, go".
+Future<bool> isFileStable(
+  Future<int> Function() readLength, {
+  Future<void> Function(Duration) wait = Future.delayed,
+  Duration interval = const Duration(milliseconds: 300),
+}) async {
+  final first = await readLength();
+  if (first <= 0) return false;
+  await wait(interval);
+  final second = await readLength();
+  return second == first;
+}

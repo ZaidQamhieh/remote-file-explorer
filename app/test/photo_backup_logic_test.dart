@@ -41,4 +41,31 @@ void main() {
       expect(pendingIds(['a', 'b'], {}), ['a', 'b']);
     });
   });
+
+  group('isFileStable', () {
+    test('false immediately when the first read is zero-byte', () async {
+      var waited = false;
+      final stable = await isFileStable(
+        () async => 0,
+        wait: (_) async => waited = true,
+      );
+      expect(stable, isFalse);
+      expect(waited, isFalse); // no point waiting on an empty file
+    });
+
+    test('false when the length is still growing between reads', () async {
+      final lengths = [100, 250];
+      var i = 0;
+      final stable = await isFileStable(
+        () async => lengths[i++],
+        wait: (_) async {},
+      );
+      expect(stable, isFalse);
+    });
+
+    test('true once two reads a beat apart agree and are non-zero', () async {
+      final stable = await isFileStable(() async => 4096, wait: (_) async {});
+      expect(stable, isTrue);
+    });
+  });
 }

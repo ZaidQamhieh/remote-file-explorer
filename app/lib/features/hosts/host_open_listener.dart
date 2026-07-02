@@ -21,8 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
-import '../explorer/explorer_screen.dart';
-import 'host_list_screen.dart';
+import '../home/home_state.dart';
 
 /// Returns the [Host] in [hosts] whose `id` is [hostId], or `null` if it's
 /// not paired (or was removed since the intent was sent).
@@ -85,14 +84,11 @@ class _HostOpenListenerState extends ConsumerState<HostOpenListener> {
     if (host == null) {
       if (!context.mounted) return;
       showInfo(context, 'Host not found — was it unpaired?');
-      widget.navigatorKey.currentState?.push(
-        MaterialPageRoute<void>(builder: (_) => const HostListScreen()),
-      );
+      ref.read(selectedTabIndexProvider.notifier).state = 0;
       return;
     }
 
-    widget.navigatorKey.currentState?.push(
-      MaterialPageRoute<void>(builder: (_) => ExplorerScreen(host: host)),
-    );
+    ref.read(activeHostProvider.notifier).state = ActiveHost(host: host);
+    ref.read(selectedTabIndexProvider.notifier).state = 1;
   }
 }

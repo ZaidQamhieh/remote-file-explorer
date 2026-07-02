@@ -35,7 +35,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../explorer/explorer_state.dart' show basenameOf;
 import '../explorer/widgets/destination_picker_sheet.dart';
-import '../hosts/host_list_screen.dart';
+import '../home/home_state.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
 
@@ -166,9 +166,7 @@ class _ShareIntakeListenerState extends ConsumerState<ShareIntakeListener> {
     if (hosts.isEmpty) {
       if (!context.mounted) return;
       showInfo(context, 'Pair a PC first');
-      widget.navigatorKey.currentState?.push(
-        MaterialPageRoute<void>(builder: (_) => const HostListScreen()),
-      );
+      ref.read(selectedTabIndexProvider.notifier).state = 0;
       return;
     }
 

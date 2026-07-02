@@ -53,7 +53,7 @@ class GroupedCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Card(
       elevation: Elevations.card,
-      color: scheme.surfaceContainerLow,
+      color: scheme.surfaceContainer,
       shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
       clipBehavior: Clip.antiAlias,
       child:

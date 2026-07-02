@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/ui/screen_header.dart';
 import '../explorer/explorer_screen.dart';
@@ -80,22 +81,20 @@ class HomeShell extends ConsumerWidget {
                           ref.read(selectedTabIndexProvider.notifier).state = i,
                   destinations: const [
                     AppBottomNavDestination(
-                      icon: Icons.dns_outlined,
-                      selectedIcon: Icons.dns_rounded,
+                      icon: LucideIcons.server,
                       label: 'Servers',
                     ),
                     AppBottomNavDestination(
-                      icon: Icons.folder_outlined,
-                      selectedIcon: Icons.folder_rounded,
+                      icon: LucideIcons.folder,
+                      selectedIcon: LucideIcons.folderOpen,
                       label: 'Files',
                     ),
                     AppBottomNavDestination(
-                      icon: Icons.swap_vert_rounded,
+                      icon: LucideIcons.arrowDownUp,
                       label: 'Transfers',
                     ),
                     AppBottomNavDestination(
-                      icon: Icons.settings_outlined,
-                      selectedIcon: Icons.settings_rounded,
+                      icon: LucideIcons.settings,
                       label: 'Settings',
                     ),
                   ],

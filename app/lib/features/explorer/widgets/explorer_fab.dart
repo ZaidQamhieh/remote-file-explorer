@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../clipboard_state.dart';
@@ -37,20 +38,20 @@ class ExplorerFab extends StatelessWidget {
       children: [
         if (showPaste) ...[
           _GhostPill(
-            icon: Icons.content_paste,
+            icon: LucideIcons.clipboardPaste,
             label: context.l10n.pasteNItems(clipboard!.paths.length),
             onPressed: onPaste,
           ),
           const SizedBox(height: 8),
         ],
         _GhostPill(
-          icon: Icons.upload_file,
+          icon: LucideIcons.upload,
           label: context.l10n.uploadFileTooltip,
           onPressed: onUpload,
         ),
         const SizedBox(height: 8),
         _SolidPill(
-          icon: Icons.add,
+          icon: LucideIcons.plus,
           label: context.l10n.newButton,
           onPressed: onNew,
         ),

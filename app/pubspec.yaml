@@ -1,7 +1,7 @@
 name: remote_file_explorer
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.31.0+50
+version: 1.32.0+51
 
 environment:
   sdk: ^3.7.0
@@ -39,7 +39,7 @@ dependencies:
   local_auth: ^2.3.0
   flutter_local_notifications: ^18.0.0
   path: ^1.9.0
-
+  lucide_icons_flutter: ^3.1.14+2
 dev_dependencies:
   flutter_test:
     sdk: flutter

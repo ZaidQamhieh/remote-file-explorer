@@ -1,8 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 
 import '../settings/settings_controller.dart';
+
+/// [PlatformException.code]s meaning the device has no biometric/PIN/pattern
+/// set up at all — there's nothing to lock behind, so falling through
+/// unlocked is correct. Any other error (cancelled, lockout, unknown) must
+/// NOT unlock — that would make the lock trivially bypassable by dismissing
+/// the prompt.
+const _noAuthAvailableCodes = {
+  auth_error.notAvailable,
+  auth_error.notEnrolled,
+  auth_error.passcodeNotSet,
+  auth_error.otherOperatingSystem,
+};
 
 class LockGate extends ConsumerStatefulWidget {
   const LockGate({super.key, required this.child});
@@ -23,7 +37,13 @@ class _LockGateState extends ConsumerState<LockGate>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tryUnlock();
+    // settingsProvider loads asynchronously from SharedPreferences — reading
+    // it synchronously here (before it resolves) always sees the not-yet-
+    // loaded default (app lock "off") and would unlock immediately regardless
+    // of the real persisted value. Wait for it to actually load first.
+    ref.read(settingsProvider.future).then((_) {
+      if (mounted) _tryUnlock();
+    });
   }
 
   @override
@@ -56,9 +76,13 @@ class _LockGateState extends ConsumerState<LockGate>
         options: const AuthenticationOptions(biometricOnly: false),
       );
       if (ok && mounted) setState(() => _locked = false);
+    } on PlatformException catch (e) {
+      if (_noAuthAvailableCodes.contains(e.code) && mounted) {
+        setState(() => _locked = false);
+      }
+      // Otherwise (cancelled, lockout, unknown) stay locked.
     } catch (_) {
-      // Device has no biometric/PIN — fall through unlocked.
-      if (mounted) setState(() => _locked = false);
+      // Unexpected error — stay locked rather than silently bypassing.
     } finally {
       _authenticating = false;
     }

@@ -5,7 +5,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/update_service.dart';
-import 'app_settings_screen.dart';
+import '../home/home_state.dart';
 
 /// A passive, dismissible "Update available" banner driven by the once-per-
 /// session [latestUpdateProvider]. Renders nothing unless a newer release is
@@ -70,11 +70,9 @@ class UpdateBanner extends ConsumerWidget {
                   const SizedBox(width: Spacing.xs),
                   FilledButton(
                     onPressed:
-                        () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const AppSettingsScreen(),
-                          ),
-                        ),
+                        () =>
+                            ref.read(selectedTabIndexProvider.notifier).state =
+                                3,
                     child: Text(context.l10n.updateButton),
                   ),
                 ],

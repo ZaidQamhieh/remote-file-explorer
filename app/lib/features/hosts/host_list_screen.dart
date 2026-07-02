@@ -8,9 +8,9 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../handoff/qr_scan_screen.dart';
+import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
 import '../search/cross_host_search_screen.dart';
-import '../settings/app_settings_screen.dart';
 import '../settings/update_banner.dart';
 import 'mdns_discovery.dart';
 import 'widgets/host_card.dart';
@@ -79,11 +79,7 @@ class HostListScreen extends ConsumerWidget {
             icon: const Icon(Icons.settings_outlined),
             tooltip: context.l10n.appSettingsTooltip,
             onPressed:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AppSettingsScreen(),
-                  ),
-                ),
+                () => ref.read(selectedTabIndexProvider.notifier).state = 3,
           ),
           const SizedBox(width: Spacing.xs),
         ],

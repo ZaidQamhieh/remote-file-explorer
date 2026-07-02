@@ -68,6 +68,7 @@ class AppTheme {
     return dark.copyWith(
       colorScheme: scheme,
       scaffoldBackgroundColor: Colors.black,
+      appBarTheme: dark.appBarTheme.copyWith(backgroundColor: Colors.black),
     );
   }
 

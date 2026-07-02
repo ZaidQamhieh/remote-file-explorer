@@ -104,31 +104,34 @@ class HostListScreen extends ConsumerWidget {
                     onScan: () => _addComputer(context, ref),
                   );
                 }
-                return ListView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Spacing.sm,
-                    vertical: Spacing.md,
-                  ),
-                  children: [
-                    _DiscoveredHostsSection(
-                      pairedAddresses: hosts.map((h) => h.address).toSet(),
-                      onAdd:
-                          (address) => _addComputer(
-                            context,
-                            ref,
-                            prefillAddress: address,
-                          ),
+                return RefreshIndicator(
+                  onRefresh: () => ref.refresh(hostStoreProvider.future),
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.sm,
+                      vertical: Spacing.md,
                     ),
-                    for (int i = 0; i < hosts.length; i++)
-                      AppearListItem(
-                        index: i,
-                        child: HostCard(
-                          host: hosts[i],
-                          store: store,
-                          isFirst: i == 0,
-                        ),
+                    children: [
+                      _DiscoveredHostsSection(
+                        pairedAddresses: hosts.map((h) => h.address).toSet(),
+                        onAdd:
+                            (address) => _addComputer(
+                              context,
+                              ref,
+                              prefillAddress: address,
+                            ),
                       ),
-                  ],
+                      for (int i = 0; i < hosts.length; i++)
+                        AppearListItem(
+                          index: i,
+                          child: HostCard(
+                            host: hosts[i],
+                            store: store,
+                            isFirst: i == 0,
+                          ),
+                        ),
+                    ],
+                  ),
                 );
               },
             ),

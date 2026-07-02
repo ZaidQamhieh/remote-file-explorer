@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../explorer/explorer_screen.dart';
+import '../explorer/explorer_state.dart' show explorerProvider;
 import '../hosts/host_list_screen.dart';
 import '../hosts/widgets/host_card.dart' show explorerRootFor;
 import '../settings/app_settings_screen.dart';
@@ -18,6 +19,26 @@ class HomeShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final index = ref.watch(selectedTabIndexProvider);
+    final active = ref.watch(activeHostProvider);
+
+    // The Files tab nests ExplorerScreen's own Scaffold (with its
+    // multi-select SelectionBar as *its* bottomNavigationBar) inside this
+    // Scaffold's body. Without this, multi-select would show two bottom bars
+    // stacked — hide ours instead while multi-select is active there. Only
+    // applies when the Files tab actually renders ExplorerScreen rooted at
+    // '/' (not DrivesView, which has no selection state of its own) — mirrors
+    // the windows check in `explorerRootFor`.
+    final filesMultiSelect =
+        index == 1 &&
+        active != null &&
+        (active.initialPath != null ||
+            active.health?.os.toLowerCase() != 'windows') &&
+        ref.watch(
+          explorerProvider((
+            hostId: active.host.id,
+            rootPath: '/',
+          )).select((s) => s.multiSelect),
+        );
 
     return Scaffold(
       body: IndexedStack(
@@ -29,32 +50,36 @@ class HomeShell extends ConsumerWidget {
           AppSettingsScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected:
-            (i) => ref.read(selectedTabIndexProvider.notifier).state = i,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dns_outlined),
-            selectedIcon: Icon(Icons.dns_rounded),
-            label: 'Servers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            selectedIcon: Icon(Icons.folder_rounded),
-            label: 'Files',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.swap_vert_rounded),
-            label: 'Transfers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded),
-            label: 'Settings',
-          ),
-        ],
-      ),
+      bottomNavigationBar:
+          filesMultiSelect
+              ? null
+              : NavigationBar(
+                selectedIndex: index,
+                onDestinationSelected:
+                    (i) =>
+                        ref.read(selectedTabIndexProvider.notifier).state = i,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.dns_outlined),
+                    selectedIcon: Icon(Icons.dns_rounded),
+                    label: 'Servers',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.folder_outlined),
+                    selectedIcon: Icon(Icons.folder_rounded),
+                    label: 'Files',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.swap_vert_rounded),
+                    label: 'Transfers',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings_rounded),
+                    label: 'Settings',
+                  ),
+                ],
+              ),
     );
   }
 }

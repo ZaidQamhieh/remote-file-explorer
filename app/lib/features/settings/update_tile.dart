@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
+import '../../core/ui/format.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
@@ -347,13 +348,6 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
     }
   }
 
-  String _fmtBytes(int b) {
-    const mb = 1024 * 1024;
-    if (b >= mb) return '${(b / mb).toStringAsFixed(1)} MB';
-    if (b >= 1024) return '${(b / 1024).toStringAsFixed(0)} KB';
-    return '$b B';
-  }
-
   @override
   Widget build(BuildContext context) {
     final v = widget.release.versionName;
@@ -379,8 +373,8 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
                   ? context.l10n.downloadingStatus
                   : context.l10n.downloadingProgress(
                     '$pct',
-                    _fmtBytes(_received),
-                    _fmtBytes(_total),
+                    formatSize(_received),
+                    formatSize(_total),
                   ),
             ),
           ],

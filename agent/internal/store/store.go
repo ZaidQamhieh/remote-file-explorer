@@ -488,6 +488,16 @@ func (s *DB) CreateUser(username, passwordHash string) error {
 	return err
 }
 
+// HasAnyUser reports whether at least one account exists on this agent —
+// used to enforce the documented one-account-per-agent model at the
+// /v1/register gate (CLI `adduser` intentionally bypasses this, for
+// headless/scripted setups).
+func (s *DB) HasAnyUser() (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists)
+	return exists != 0, err
+}
+
 // GetUserByUsername returns the user, or (nil,nil) if none exists.
 func (s *DB) GetUserByUsername(username string) (*User, error) {
 	var u User

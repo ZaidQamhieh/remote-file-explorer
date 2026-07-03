@@ -15,9 +15,12 @@ func TestRegisterHandler_RequiresValidPairingCode(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
 	cfg := Config{Name: "test-pc"}
-	handler := registerHandler(cfg, db, pm, newNonceStore())
+	nonces := newNonceStore()
+	handler := registerHandler(cfg, db, pm, nonces)
 
-	body := `{"pairingCode":"WRONGCODE","username":"owner","password":"correct-horse-battery"}`
+	pubKey, nonce, sig := signedDeviceProof(t, nonces)
+	body := `{"pairingCode":"WRONGCODE","username":"owner","password":"correct-horse-battery",` +
+		`"devicePublicKey":"` + pubKey + `","nonce":"` + nonce + `","signature":"` + sig + `"}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/register", strings.NewReader(body))
 	handler(rr, req)
@@ -43,6 +46,13 @@ func TestRegisterHandler_WeakPasswordRejected(t *testing.T) {
 	handler(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// A recoverable mistake (weak password) must NOT burn the one-time
+	// pairing code — the user should be able to fix the password and retry
+	// with the same code, no trip back to the terminal required.
+	if !pm.Consume(code) {
+		t.Fatal("pairing code should still be valid after a weak-password rejection")
 	}
 }
 
@@ -86,13 +96,39 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 		t.Fatalf("expected account to be created: %v", err)
 	}
 
-	// The same pairing code can't be reused for a second registration.
-	body2 := `{"pairingCode":"` + code + `","username":"someone-else","password":"correct-horse-battery"}`
+	// The pairing code itself was consumed by the successful registration
+	// above (single-use, can't be reused for anything else).
+	if pm.Consume(code) {
+		t.Fatal("pairing code should have been consumed by the successful registration")
+	}
+
+	// A second registration attempt is rejected once an account exists —
+	// one account per agent — even with a fresh valid pairing code and
+	// valid device proof for a different device/username.
+	code2, _, err := pm.Mint(time.Minute)
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	pubKey2, nonce2, sig2 := signedDeviceProof(t, nonces)
+	body2 := `{"pairingCode":"` + code2 + `","username":"someone-else","password":"correct-horse-battery",` +
+		`"devicePublicKey":"` + pubKey2 + `","nonce":"` + nonce2 + `","signature":"` + sig2 + `"}`
 	rr2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest(http.MethodPost, "/v1/register", strings.NewReader(body2))
 	handler(rr2, req2)
-	if rr2.Code != http.StatusUnauthorized {
-		t.Fatalf("expected reused pairing code to be rejected, got %d", rr2.Code)
+	if rr2.Code != http.StatusConflict {
+		t.Fatalf("expected a second registration to be rejected once an account exists, got %d: %s", rr2.Code, rr2.Body.String())
+	}
+	var got apiError
+	if err := json.Unmarshal(rr2.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if got.Code != "ACCOUNT_ALREADY_EXISTS" {
+		t.Fatalf("unexpected error code: %+v", got)
+	}
+	// And that fresh pairing code is untouched, since the request never
+	// got far enough to consume it.
+	if !pm.Consume(code2) {
+		t.Fatal("second pairing code should still be valid — request was rejected before reaching pairing-code consumption")
 	}
 }
 

@@ -64,7 +64,7 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, true); err != nil {
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rejectOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
 

@@ -11,6 +11,34 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 )
 
+// TestPairHandler_BadDeviceProofDoesNotBurnPairingCode verifies a recoverable
+// device-proof failure (here, no proof fields at all) does not consume the
+// one-time pairing code — the user should be able to retry with the same
+// code, no trip back to the terminal required.
+func TestPairHandler_BadDeviceProofDoesNotBurnPairingCode(t *testing.T) {
+	db, _ := newTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
+	cfg := Config{Name: "test-pc"}
+	handler := pairHandler(cfg, db, pm, newNonceStore())
+
+	code, _, err := pm.Mint(time.Minute)
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+
+	body := `{"pairingCode":"` + code + `","deviceLabel":"phone"}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(body))
+	handler(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 DEVICE_KEY_REQUIRED, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	if !pm.Consume(code) {
+		t.Fatal("pairing code should still be valid after a missing-device-proof rejection")
+	}
+}
+
 // TestPairHandler_RateLimitedAfterTooManyAttempts verifies /v1/pair returns
 // 429 once more than pairRateLimitAttempts requests land within the window,
 // regardless of whether the supplied pairing codes are valid.
@@ -18,13 +46,17 @@ func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
 	cfg := Config{Name: "test-pc"}
-	handler := pairHandler(cfg, db, pm, newNonceStore())
-
-	body := `{"pairingCode":"WRONGCODE","deviceLabel":"phone"}`
+	nonces := newNonceStore()
+	handler := pairHandler(cfg, db, pm, nonces)
 
 	// First pairRateLimitAttempts requests are not rate-limited (they fail
-	// with 401 INVALID_CODE since the code is bogus).
+	// with 401 INVALID_CODE since the code is bogus) — device proof must be
+	// valid on each one (a fresh nonce per attempt) so the request actually
+	// reaches the pairing-code check instead of failing earlier on proof.
 	for i := 0; i < pairRateLimitAttempts; i++ {
+		pubKey, nonce, sig := signedDeviceProof(t, nonces)
+		body := `{"pairingCode":"WRONGCODE","deviceLabel":"phone",` +
+			`"devicePublicKey":"` + pubKey + `","nonce":"` + nonce + `","signature":"` + sig + `"}`
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(body))
 		handler(rr, req)
@@ -33,9 +65,10 @@ func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 		}
 	}
 
-	// The next attempt exceeds the limit and should be rejected with 429.
+	// The next attempt exceeds the limit and should be rejected with 429
+	// before even reaching body validation.
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(`{"pairingCode":"WRONGCODE","deviceLabel":"phone"}`))
 	handler(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d: %s", rr.Code, rr.Body.String())

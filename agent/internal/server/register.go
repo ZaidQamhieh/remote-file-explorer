@@ -13,7 +13,9 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
@@ -50,16 +52,36 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 			return
 		}
-		if !pm.Consume(req.PairingCode) {
-			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair` on the computer to mint one")
-			return
-		}
-		if req.Username == "" || len(req.Password) < 8 {
+		// Validate the cheap stuff and device-identity proof BEFORE consuming
+		// the one-time pairing code: the code is precious (minted at the
+		// terminal, single-use) while a weak password or a bad/expired nonce
+		// is a recoverable client-side mistake — burning the code on that
+		// would force a trip back to the PC for something that wasn't the
+		// code's fault. See pairHandler for the same reasoning.
+		if req.Username == "" || utf8.RuneCountInString(req.Password) < 8 {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "username required and password must be at least 8 characters")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, false); err != nil {
+		// One account per agent (see the `users` table doc comment in
+		// store.go) — enforced here, not just documented, so a stranger
+		// with a valid pairing code can't spawn additional accounts once
+		// the owner has already registered. `rfe-agent adduser` bypasses
+		// this deliberately for headless/scripted setups.
+		hasUser, err := db.HasAnyUser()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		if hasUser {
+			writeError(w, http.StatusConflict, "ACCOUNT_ALREADY_EXISTS", "this computer already has an account — log in instead, or ask the owner to add a device")
+			return
+		}
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
+		}
+		if !pm.Consume(req.PairingCode) {
+			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair` on the computer to mint one")
+			return
 		}
 
 		hash, err := security.HashPassword(req.Password)
@@ -68,7 +90,14 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			return
 		}
 		if err := db.CreateUser(req.Username, hash); err != nil {
-			writeError(w, http.StatusConflict, "USERNAME_TAKEN", "that username is already registered on this computer")
+			// Distinguish a genuine username collision (which is a common,
+			// user-facing 409) from any other DB error (locked/corrupt DB,
+			// disk full) — the latter must not be misreported as "taken".
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				writeError(w, http.StatusConflict, "USERNAME_TAKEN", "that username is already registered on this computer")
+			} else {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			}
 			return
 		}
 

@@ -247,12 +247,29 @@
   const TOKEN_KEY = 'rfe_device_token';
   const FP_KEY = 'rfe_cert_fingerprint';
   const NAME_KEY = 'rfe_agent_name';
+  const BROWSER_ID_KEY = 'rfe_browser_id';
 
   const $ = (id) => document.getElementById(id);
   const pairView = $('pair-view');
   const dashView = $('dashboard-view');
 
   function token() { return localStorage.getItem(TOKEN_KEY); }
+
+  // A stable per-browser-profile id (there's no hardware id to key off of
+  // like the phone app's Android ID). Persisted in localStorage so this
+  // browser's device row is reused on re-login instead of piling up a new
+  // row every time, and — the reason this matters for security, not just
+  // tidiness — so the agent can pin this browser's device-identity key to
+  // a stable id at all. Without a stable deviceId, every login looks like a
+  // brand-new device and DEVICE_KEY_MISMATCH can never trigger.
+  function browserId() {
+    let id = localStorage.getItem(BROWSER_ID_KEY);
+    if (!id) {
+      id = 'browser-' + crypto.randomUUID();
+      localStorage.setItem(BROWSER_ID_KEY, id);
+    }
+    return id;
+  }
 
   async function api(path, opts) {
     opts = opts || {};
@@ -344,17 +361,20 @@
   }
 
   // Fetches a fresh challenge nonce and signs it with this browser's
-  // identity key — the (devicePublicKey, nonce, signature) triple every
-  // pair/register/login call needs.
+  // identity key — the (devicePublicKey, nonce, signature, deviceId) that
+  // every pair/register/login call needs. Uses api() (not a raw fetch) so a
+  // failed challenge (rate-limited, server error) throws instead of
+  // silently yielding an undefined nonce.
   async function deviceProof() {
-    const res = await fetch('/v1/auth/challenge', { method: 'POST' });
-    const nonce = (await res.json()).nonce;
-    const kp = await deviceKeyPair();
+    const [{ nonce }, kp] = await Promise.all([
+      api('/auth/challenge', { method: 'POST' }),
+      deviceKeyPair(),
+    ]);
     const [rawPub, sig] = await Promise.all([
       crypto.subtle.exportKey('raw', kp.publicKey),
       crypto.subtle.sign({ name: 'Ed25519' }, kp.privateKey, new TextEncoder().encode(nonce)),
     ]);
-    return { devicePublicKey: bufToBase64(rawPub), nonce, signature: bufToBase64(sig) };
+    return { devicePublicKey: bufToBase64(rawPub), nonce, signature: bufToBase64(sig), deviceId: browserId() };
   }
 
   // ---------- Login/pair/register tabs ----------

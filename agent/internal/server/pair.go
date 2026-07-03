@@ -27,7 +27,7 @@ type pairRequest struct {
 	// present it deduplicates pairings so the same phone reuses its device row.
 	DeviceID string `json:"deviceId"`
 	// DevicePublicKey is the device's permanent Ed25519 identity key
-	// (standard base64), Nonce a value freshly minted by GET /v1/auth/challenge,
+	// (standard base64), Nonce a value freshly minted by POST /v1/auth/challenge,
 	// and Signature that nonce signed with the matching private key — proof of
 	// possession, pinned to the device row on success. See device_identity.go.
 	DevicePublicKey string `json:"devicePublicKey"`
@@ -56,12 +56,18 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 			return
 		}
+		// Validate device-identity proof BEFORE consuming the one-time
+		// pairing code: the code is precious (minted at the terminal,
+		// single-use) while a bad/expired nonce or signature is a
+		// recoverable client-side hiccup — burning the code on that would
+		// force a trip back to the PC for something that wasn't the code's
+		// fault.
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+			return // verifyDeviceProof already wrote the error response
+		}
 		if !pm.Consume(req.PairingCode) {
 			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code")
 			return
-		}
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, false); err != nil {
-			return // verifyDeviceProof already wrote the error response
 		}
 		if req.DeviceLabel == "" {
 			req.DeviceLabel = "unnamed-device"

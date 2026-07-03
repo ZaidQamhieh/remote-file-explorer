@@ -2,8 +2,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"sync"
@@ -35,11 +33,10 @@ func newNonceStore() *nonceStore {
 
 // Mint generates a new nonce and records it as valid until nonceTTL elapses.
 func (s *nonceStore) Mint() (string, error) {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
+	nonce, err := randomToken(24)
+	if err != nil {
 		return "", err
 	}
-	nonce := hex.EncodeToString(b)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -97,27 +94,42 @@ func challengeHandler(nonces *nonceStore) http.HandlerFunc {
 	}
 }
 
+// keyPinPolicy names how verifyDeviceProof treats a deviceID that already
+// has a *different* key pinned than the one just presented. A bare bool
+// here would let a future caller pass the wrong trust policy with nothing
+// but a doc comment to catch the mistake — these two names force the
+// caller to say which policy they mean.
+type keyPinPolicy int
+
+const (
+	// rePinOnKeyChange silently trusts the newly-presented key (and updates
+	// the pin) rather than rejecting. Used by pairHandler/registerHandler:
+	// consuming a fresh one-time pairing code is itself a stronger trust
+	// event (physical/terminal access to the host) than key pinning, so a
+	// legitimate reinstall (new keypair, same clientID, same physical
+	// access to mint a new code) re-pins rather than getting rejected —
+	// see store.UpsertDevice's re-pair-reuses-the-row comment for the same
+	// reasoning applied to tokens.
+	rePinOnKeyChange keyPinPolicy = iota
+	// rejectOnKeyChange fails the request with DEVICE_KEY_MISMATCH instead
+	// of re-pinning. Used by loginHandler: a password alone is
+	// comparatively low-entropy proof, so a key change on an already-known
+	// device id is treated as suspicious (stolen credentials trying to
+	// mint a token as an existing device) and must be resolved by
+	// re-pairing instead.
+	rejectOnKeyChange
+)
+
 // verifyDeviceProof validates the device-identity signature shared by
 // pairHandler, registerHandler, and loginHandler: the presented public key
-// must have signed a nonce this server just minted.
-//
-// enforceKeyPin additionally rejects a deviceID that already has a
-// *different* key pinned, rather than silently re-trusting the new one.
-// loginHandler passes true: a password alone is comparatively low-entropy
-// proof, so a key change on an already-known device id is treated as
-// suspicious (stolen credentials trying to mint a token as an existing
-// device) and must be resolved by re-pairing. pairHandler/registerHandler
-// pass false: consuming a fresh one-time pairing code is itself a stronger
-// trust event (physical/terminal access to the host) than key pinning, so a
-// legitimate reinstall (new keypair, same clientID, same physical access to
-// mint a new code) re-pins rather than getting rejected — see
-// store.UpsertDevice's re-pair-reuses-the-row comment for the same
-// reasoning applied to tokens.
+// must have signed a nonce this server just minted. pinPolicy controls what
+// happens when deviceID already has a different key pinned — see
+// keyPinPolicy.
 //
 // On failure it writes the appropriate error response itself and returns a
 // non-nil error; callers should return immediately without writing anything
 // else.
-func verifyDeviceProof(db *store.DB, nonces *nonceStore, deviceID, publicKey, nonce, signature string, w http.ResponseWriter, enforceKeyPin bool) error {
+func verifyDeviceProof(db *store.DB, nonces *nonceStore, deviceID, publicKey, nonce, signature string, w http.ResponseWriter, pinPolicy keyPinPolicy) error {
 	if publicKey == "" || nonce == "" || signature == "" {
 		writeError(w, http.StatusBadRequest, "DEVICE_KEY_REQUIRED", "devicePublicKey, nonce, and signature are required")
 		return errDeviceProofFailed
@@ -130,7 +142,7 @@ func verifyDeviceProof(db *store.DB, nonces *nonceStore, deviceID, publicKey, no
 		writeError(w, http.StatusUnauthorized, "INVALID_SIGNATURE", "signature does not match devicePublicKey")
 		return errDeviceProofFailed
 	}
-	if !enforceKeyPin {
+	if pinPolicy == rePinOnKeyChange {
 		return nil
 	}
 	pinned, err := db.DevicePublicKeyByClientID(deviceID)

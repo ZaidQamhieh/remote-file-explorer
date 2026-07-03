@@ -137,7 +137,10 @@ paths:
         for first-time setup entirely from the phone app or web companion.
         Requires the same one-time pairing code as POST /pair — this is what
         stops a stranger on the network from creating an account before the
-        owner does. Response shape is identical to PairResponse.
+        owner does. Enforces one account per agent: fails once any account
+        already exists (code=ACCOUNT_ALREADY_EXISTS), regardless of pairing
+        code validity — log in instead. Response shape is identical to
+        PairResponse.
       security: []
       requestBody:
         required: true
@@ -162,7 +165,10 @@ paths:
             failed (code=INVALID_NONCE / INVALID_SIGNATURE — see POST /pair).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "409":
-          description: That username is already registered on this agent. code=USERNAME_TAKEN.
+          description: >
+            This agent already has an account (code=ACCOUNT_ALREADY_EXISTS —
+            one account per agent; log in instead), or that exact username
+            was taken by a concurrent request (code=USERNAME_TAKEN).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
           description: >

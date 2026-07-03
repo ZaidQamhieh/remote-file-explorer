@@ -116,6 +116,7 @@
   .nav { display: flex; flex-direction: column; gap: 2px; }
   .nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--dim); font-size: 13px; font-weight: 600; text-decoration: none; }
   .nav a:hover { background: var(--surface-2); color: var(--ink); }
+  .nav a.nav-active { background: rgba(79, 142, 247, .14); color: var(--primary); }
   .sidebar .spacer { flex: 1; }
 
   .main { flex: 1; min-width: 0; }
@@ -225,11 +226,11 @@
       </div>
       <div class="status-chip">Agent running</div>
       <div class="nav">
-        <a href="#status-panel">Status</a>
-        <a href="#control-panel">Agent control</a>
-        <a href="#settings-panel">Settings</a>
-        <a href="#devices-panel">Paired devices</a>
-        <a href="#files-panel">Files</a>
+        <a href="#" data-page="status" class="nav-active">Status</a>
+        <a href="#" data-page="control">Agent control</a>
+        <a href="#" data-page="settings">Settings</a>
+        <a href="#" data-page="devices">Paired devices</a>
+        <a href="#" data-page="files">Files</a>
       </div>
       <div class="spacer"></div>
       <button id="forget-btn" style="width:100%">Forget this browser</button>
@@ -238,77 +239,83 @@
     <div class="main">
       <div class="topbar">
         <div>
-          <h1>Overview</h1>
+          <h1 id="page-title">Status</h1>
           <div class="sub mono" id="agent-version"></div>
         </div>
         <span class="spacer"></span>
       </div>
       <div class="content">
 
-        <div id="status-panel" class="stat-grid">
-          <div class="stat">
-            <div class="stat-label">Uptime</div>
-            <div class="stat-value" id="uptime"></div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Platform</div>
-            <div class="stat-value" id="platform" style="font-size:16px"></div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Storage</div>
-            <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
-            <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
-          </div>
-        </div>
-
-        <div id="control-panel" class="panel">
-          <div class="panel-title">Agent control</div>
-          <div class="row">
-            <span>Restart agent service</span>
-            <button class="danger" id="restart-btn">Restart</button>
-          </div>
-          <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
-        </div>
-
-        <div id="settings-panel" class="panel">
-          <div class="panel-title">Settings</div>
-          <div class="row">
-            <span>Read-only mode</span>
-            <label class="switch"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
-          </div>
-          <div class="row" style="display:block">
-            <div class="field" style="margin:14px 0 0">
-              <label>Max upload (MB/s, 0 = unlimited)</label>
-              <input type="number" id="bw-upload" min="0">
+        <div id="page-status" class="page">
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-label">Uptime</div>
+              <div class="stat-value" id="uptime"></div>
             </div>
-            <div class="field" style="margin-bottom:0">
-              <label>Max download (MB/s, 0 = unlimited)</label>
-              <input type="number" id="bw-download" min="0">
+            <div class="stat">
+              <div class="stat-label">Platform</div>
+              <div class="stat-value" id="platform" style="font-size:16px"></div>
             </div>
-            <button class="primary" id="bw-save" style="margin-top:10px">Save bandwidth limits</button>
+            <div class="stat">
+              <div class="stat-label">Storage</div>
+              <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
+              <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
+            </div>
           </div>
         </div>
 
-        <div id="devices-panel" class="panel">
-          <div class="panel-title">Paired devices</div>
-          <div id="devices-list"></div>
+        <div id="page-control" class="page hidden">
+          <div class="panel">
+            <div class="row">
+              <span>Restart agent service</span>
+              <button class="danger" id="restart-btn">Restart</button>
+            </div>
+            <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
+          </div>
         </div>
 
-        <div id="files-panel" class="panel">
-          <div class="panel-title">Files</div>
-          <div class="row" style="gap:8px">
-            <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
-            <button id="new-folder-btn">New folder</button>
-          </div>
-          <div id="files-list"></div>
-          <div id="file-preview" class="hidden" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px">
-            <div class="row"><strong id="preview-name"></strong>
-              <span>
-                <button id="preview-download">Download</button>
-                <button id="preview-close">Close</button>
-              </span>
+        <div id="page-settings" class="page hidden">
+          <div class="panel">
+            <div class="row">
+              <span>Read-only mode</span>
+              <label class="switch"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
             </div>
-            <div id="preview-body" style="max-height:400px; overflow:auto; margin-top:8px"></div>
+            <div class="row" style="display:block">
+              <div class="field" style="margin:14px 0 0">
+                <label>Max upload (MB/s, 0 = unlimited)</label>
+                <input type="number" id="bw-upload" min="0">
+              </div>
+              <div class="field" style="margin-bottom:0">
+                <label>Max download (MB/s, 0 = unlimited)</label>
+                <input type="number" id="bw-download" min="0">
+              </div>
+              <button class="primary" id="bw-save" style="margin-top:10px">Save bandwidth limits</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-devices" class="page hidden">
+          <div class="panel">
+            <div id="devices-list"></div>
+          </div>
+        </div>
+
+        <div id="page-files" class="page hidden">
+          <div class="panel">
+            <div class="row" style="gap:8px">
+              <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
+              <button id="new-folder-btn">New folder</button>
+            </div>
+            <div id="files-list"></div>
+            <div id="file-preview" class="hidden" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px">
+              <div class="row"><strong id="preview-name"></strong>
+                <span>
+                  <button id="preview-download">Download</button>
+                  <button id="preview-close">Close</button>
+                </span>
+              </div>
+              <div id="preview-body" style="max-height:400px; overflow:auto; margin-top:8px"></div>
+            </div>
           </div>
         </div>
 
@@ -829,9 +836,21 @@
     }
   }
 
+  // ---------- Page routing (sidebar switches one section at a time) ----------
+  const PAGE_TITLES = { status: 'Status', control: 'Agent control', settings: 'Settings', devices: 'Paired devices', files: 'Files' };
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach((el) => el.classList.toggle('hidden', el.id !== 'page-' + name));
+    document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('nav-active', a.dataset.page === name));
+    $('page-title').textContent = PAGE_TITLES[name] || name;
+  }
+  document.querySelectorAll('.nav a').forEach((a) => {
+    a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });
+  });
+
   function showDashboard() {
     pairView.classList.add('hidden');
     dashView.classList.remove('hidden');
+    showPage('status');
     loadDashboard();
   }
 

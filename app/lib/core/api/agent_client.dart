@@ -715,6 +715,19 @@ class AgentClient {
     }
   }
 
+  /// Lists the most recently modified files (not directories) under the
+  /// agent's configured roots, newest first — `GET /v1/fs/recent`.
+  ///
+  /// If [root] is provided the walk is constrained to that subtree.
+  /// [limit] caps the number of results (server-side capped too).
+  Future<List<Entry>> recent({String? root, int limit = 100}) async {
+    final data = await _get<List<dynamic>>(
+      '/fs/recent',
+      queryParameters: {'limit': limit, if (root != null) 'root': root},
+    );
+    return data.map((e) => Entry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   // ---------------------------------------------------------------------------
   // Settings & device management
   // ---------------------------------------------------------------------------

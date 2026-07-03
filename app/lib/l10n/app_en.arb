@@ -303,6 +303,10 @@
   "emptyTrashTitle": "Empty trash?",
   "restoreButton": "Restore",
 
+  "recentTitle": "Recent",
+  "recentIsEmpty": "No recent files",
+  "recentEmptySubtitle": "Files you edit will show up here.",
+
   "patternLabel": "Pattern",
   "findAndReplaceLabel": "Find & replace",
   "baseNameLabel": "Base name",

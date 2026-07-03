@@ -992,6 +992,24 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get restoreButton;
 
+  /// No description provided for @recentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get recentTitle;
+
+  /// No description provided for @recentIsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent files'**
+  String get recentIsEmpty;
+
+  /// No description provided for @recentEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Files you edit will show up here.'**
+  String get recentEmptySubtitle;
+
   /// No description provided for @patternLabel.
   ///
   /// In en, this message translates to:

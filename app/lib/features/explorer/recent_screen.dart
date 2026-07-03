@@ -1,0 +1,122 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/api/agent_client.dart';
+import '../../core/l10n_ext.dart';
+import '../../core/models/entry.dart';
+import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/ui/state_views.dart';
+import '../explorer/explorer_state.dart' show buildPathStack;
+import '../search/widgets/search_result_tile.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+/// Lists the most recently modified files across [host], newest first.
+///
+/// Pops with the tapped [Entry]'s parent directory path so the caller (the
+/// explorer screen) can navigate there — same convention as [SearchScreen].
+class RecentScreen extends ConsumerStatefulWidget {
+  const RecentScreen({super.key, required this.host, required this.client});
+
+  final Host host;
+  final AgentClient client;
+
+  @override
+  ConsumerState<RecentScreen> createState() => _RecentScreenState();
+}
+
+class _RecentScreenState extends ConsumerState<RecentScreen> {
+  List<Entry>? _entries;
+  String? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final entries = await widget.client.recent();
+      if (mounted) {
+        setState(() {
+          _entries = entries;
+          _error = null;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  void _openResult(Entry entry) {
+    final stack = buildPathStack(entry.path);
+    final parent = stack.length >= 2 ? stack[stack.length - 2] : entry.path;
+    Navigator.of(context).pop(parent);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(context.l10n.recentTitle)),
+      body: _buildBody(context, _entries),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, List<Entry>? entries) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return ErrorRetryCard(message: _error!, onRetry: _load);
+    }
+    if (entries == null || entries.isEmpty) {
+      return _emptyView(context);
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+        itemCount: entries.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder:
+            (_, i) => SearchResultTile(
+              entry: entries[i],
+              query: '',
+              highlight: false,
+              onTap: () => _openResult(entries[i]),
+            ),
+      ),
+    );
+  }
+
+  Widget _emptyView(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.history, size: 64, color: c.outline),
+          const SizedBox(height: 12),
+          Text(
+            context.l10n.recentIsEmpty,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.l10n.recentEmptySubtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: c.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}

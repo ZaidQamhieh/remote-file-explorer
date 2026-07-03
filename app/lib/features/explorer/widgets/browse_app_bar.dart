@@ -12,6 +12,7 @@ enum OverflowAction {
   favorites,
   transfers,
   trash,
+  recent,
   storageByType,
   dupFinder,
   commandPalette,
@@ -146,6 +147,13 @@ class BrowseAppBar extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(LucideIcons.trash2),
                     title: Text(ctx.l10n.trashTitle),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: OverflowAction.recent,
+                  child: ListTile(
+                    leading: const Icon(LucideIcons.history),
+                    title: Text(ctx.l10n.recentTitle),
                   ),
                 ),
                 PopupMenuItem(

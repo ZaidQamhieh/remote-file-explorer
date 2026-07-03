@@ -544,6 +544,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get restoreButton => 'استعادة';
 
   @override
+  String get recentTitle => 'Recent';
+
+  @override
+  String get recentIsEmpty => 'No recent files';
+
+  @override
+  String get recentEmptySubtitle => 'Files you edit will show up here.';
+
+  @override
   String get patternLabel => 'نمط';
 
   @override

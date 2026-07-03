@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.8.0
+  version: 1.9.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -964,6 +964,38 @@ paths:
             unknown types value, a non-integer minSize/maxSize, or an
             invalid RFC3339 modifiedAfter/modifiedBefore.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /fs/recent:
+    get:
+      summary: List the most recently modified files
+      description: >
+        Recursively walks root (or the configured roots / home directory),
+        returning the `limit` most recently modified *files* (directories
+        are never included), newest first. Unlike /search, this can't stop
+        early once it has `limit` candidates — it keeps a bounded top-K
+        (min-heap) of the best candidates seen so far, so the full walk
+        (bounded by the same 15s time budget) still has to run. Same
+        time-budget signaling as /search: X-Search-Time-Budget is set when
+        the budget expired before the walk finished — results are then
+        partial (the most recent files *seen*, not guaranteed to be the
+        true most-recent files in the tree).
+      parameters:
+        - { in: query, name: root, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        "200":
+          description: Results as a bare JSON array of Entry, newest first.
+          headers:
+            X-Search-Time-Budget:
+              description: >
+                Set to `1` when the 15s time budget expired before the walk
+                finished, indicating results may be missing more-recent
+                files that hadn't been visited yet.
+              schema: { type: string, enum: ["1"] }
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Entry" } }
         "401": { $ref: "#/components/responses/Error" }
 
   /settings:

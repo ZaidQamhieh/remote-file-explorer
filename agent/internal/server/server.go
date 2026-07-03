@@ -157,6 +157,7 @@ func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 	r.Post("/fs/chmod", chmodHandler(ops))
 	r.Get("/fs/archive", archivePeekHandler(ops))
 	r.Post("/fs/checksums", batchChecksumHandler(ops))
+	r.Get("/fs/recent", recentHandler(ops))
 }
 
 // registerTrashRoutes wires the trash list/restore/empty endpoints.

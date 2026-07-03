@@ -30,6 +30,7 @@ import 'clipboard_state.dart';
 import 'command_palette.dart';
 import 'explorer_state.dart';
 import 'meta_sheet.dart';
+import 'recent_screen.dart';
 import 'trash_screen.dart';
 import 'dup_finder_screen.dart';
 import 'type_treemap_screen.dart';
@@ -270,6 +271,8 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         _showTransfers(context);
       case OverflowAction.trash:
         _openTrash(context);
+      case OverflowAction.recent:
+        _openRecent(context, state);
       case OverflowAction.storageByType:
         _openStorageByType(context, state);
       case OverflowAction.dupFinder:
@@ -304,6 +307,17 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       ),
     );
     if (changed == true) _notifier.refresh();
+  }
+
+  Future<void> _openRecent(BuildContext context, ExplorerState state) async {
+    final client = await ref.read(clientProvider(widget.host.id).future);
+    if (!context.mounted) return;
+    final parentPath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => RecentScreen(host: widget.host, client: client),
+      ),
+    );
+    if (parentPath != null) _notifier.jumpTo(parentPath);
   }
 
   Future<void> _openStorageByType(
@@ -382,6 +396,11 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           label: 'Trash',
           icon: LucideIcons.trash2,
           onTap: () => _openTrash(context),
+        ),
+        PaletteAction(
+          label: 'Recent',
+          icon: LucideIcons.history,
+          onTap: () => _openRecent(context, state),
         ),
         PaletteAction(
           label: 'Storage by Type',

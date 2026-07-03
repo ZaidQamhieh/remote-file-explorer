@@ -1026,6 +1026,7 @@
   }
 
   async function pollMetrics() {
+    if (document.hidden) return; // don't poll (or make the agent read /proc) for a backgrounded tab
     try {
       const t = await api('/metrics');
       $('net-rx').textContent = fmtBytes(t.rxBytes);

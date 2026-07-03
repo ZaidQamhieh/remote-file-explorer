@@ -98,6 +98,12 @@ CREATE TABLE IF NOT EXISTS share_log (
     served_at    INTEGER,
     requester_ip TEXT
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    username      TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    created       INTEGER NOT NULL
+);
 `)
 	if err != nil {
 		return err
@@ -424,6 +430,50 @@ func (s *DB) SetConfig(key, value string) error {
 		key, value,
 	)
 	return err
+}
+
+// --------- users ---------
+//
+// One account per agent (per PC) — logging in with it grants access to
+// everything this agent's device tokens already grant (same authorization
+// model as a paired device; login is just an additional way to obtain a
+// device token, alongside the existing one-time pairing code). password_hash
+// is produced by internal/security's bcrypt wrapper, never stored raw.
+
+// User is an account that can log in from any client (phone or browser) to
+// obtain a device token, instead of a one-time pairing code.
+type User struct {
+	Username     string
+	PasswordHash string
+	Created      time.Time
+}
+
+// CreateUser inserts a new account. Returns an error if the username already
+// exists (PRIMARY KEY conflict) — callers should surface that as "already
+// set up", not overwrite silently.
+func (s *DB) CreateUser(username, passwordHash string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO users (username,password_hash,created) VALUES (?,?,?)`,
+		username, passwordHash, time.Now().Unix(),
+	)
+	return err
+}
+
+// GetUserByUsername returns the user, or (nil,nil) if none exists.
+func (s *DB) GetUserByUsername(username string) (*User, error) {
+	var u User
+	var created int64
+	err := s.db.QueryRow(
+		`SELECT username,password_hash,created FROM users WHERE username=?`, username,
+	).Scan(&u.Username, &u.PasswordHash, &created)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u.Created = time.Unix(created, 0)
+	return &u, nil
 }
 
 // --------- transfers ---------

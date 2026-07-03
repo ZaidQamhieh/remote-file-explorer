@@ -90,11 +90,12 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 }
 
 // registerUnauthRoutes wires the routes reachable without a bearer token:
-// health, pairing, and the single-use share-link fetch (rate-limited and
-// expiring — see docs/r1-share-link-threat-model.md).
+// health, pairing, login, and the single-use share-link fetch (rate-limited
+// and expiring — see docs/r1-share-link-threat-model.md).
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops) {
 	r.Get("/health", healthHandler(cfg))
 	r.Post("/pair", pairHandler(cfg, db, pm))
+	r.Post("/login", loginHandler(cfg, db))
 	r.Get("/share/{token}", serveShareHandler(db, ops))
 }
 

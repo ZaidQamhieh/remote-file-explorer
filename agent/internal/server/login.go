@@ -1,0 +1,86 @@
+// Package server — username/password login handler.
+//
+// Login is an additional way to obtain a device token, alongside the
+// existing one-time pairing code (POST /v1/pair) — it does not replace it.
+// One account per agent; logging in with it grants exactly the same access
+// any paired device already has (there is no separate "user session" — the
+// response is a normal device token, so every existing authenticated route
+// works unchanged).
+package server
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+)
+
+// loginRateLimit mirrors pairRateLimit — a password is lower-entropy than a
+// pairing code, so throttling matters at least as much here.
+const (
+	loginRateLimitAttempts = 10
+	loginRateLimitWindow   = time.Minute
+)
+
+type loginRequest struct {
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	DeviceLabel string `json:"deviceLabel"`
+	DeviceID    string `json:"deviceId"`
+}
+
+func loginHandler(cfg Config, db *store.DB) http.HandlerFunc {
+	limiter := newFixedWindowLimiter(loginRateLimitAttempts, loginRateLimitWindow)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow() {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+			return
+		}
+		var req loginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+			return
+		}
+		if req.Username == "" || req.Password == "" {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "username and password required")
+			return
+		}
+
+		user, err := db.GetUserByUsername(req.Username)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		// Same error for "no such user" and "wrong password" — don't leak
+		// which one it was.
+		if user == nil || !security.VerifyPassword(user.PasswordHash, req.Password) {
+			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
+			return
+		}
+
+		if req.DeviceLabel == "" {
+			req.DeviceLabel = "unnamed-device"
+		}
+		token, err := randomToken(32)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
+			return
+		}
+		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, pairResponse{
+			DeviceToken:      token,
+			DeviceID:         deviceID,
+			AgentName:        cfg.Name,
+			CertFingerprint:  cfg.CertFingerprint,
+			Address:          cfg.Address,
+			TailscaleAddress: cfg.TailscaleAddress,
+		})
+	}
+}

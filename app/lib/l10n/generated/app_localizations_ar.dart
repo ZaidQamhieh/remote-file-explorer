@@ -779,6 +779,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get manualTab => 'يدوي';
 
   @override
+  String get loginTab => 'Log in';
+
+  @override
   String get agentAddressLabel => 'عنوان الوكيل';
 
   @override
@@ -789,6 +792,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pairingCodeHint => '123456';
+
+  @override
+  String get usernameLabel => 'Username';
+
+  @override
+  String get passwordLabel => 'Password';
+
+  @override
+  String get loginButton => 'Log in';
+
+  @override
+  String loginFailed(String error) {
+    return 'Login failed: $error';
+  }
+
+  @override
+  String get loginHint =>
+      'No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.';
 
   @override
   String get requiredLabel => 'مطلوب';

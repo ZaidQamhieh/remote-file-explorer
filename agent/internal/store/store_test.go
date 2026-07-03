@@ -562,3 +562,46 @@ func TestMarkChunkReceivedConcurrent(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateAndGetUser(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateUser("owner", "hashed-value"); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	u, err := db.GetUserByUsername("owner")
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if u == nil || u.PasswordHash != "hashed-value" {
+		t.Fatalf("expected user with stored hash, got %+v", u)
+	}
+
+	none, err := db.GetUserByUsername("nobody")
+	if err != nil {
+		t.Fatalf("get nonexistent user: %v", err)
+	}
+	if none != nil {
+		t.Fatalf("expected nil for nonexistent user, got %+v", none)
+	}
+}
+
+func TestCreateUser_DuplicateUsernameFails(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.CreateUser("owner", "hash-1"); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	if err := db.CreateUser("owner", "hash-2"); err == nil {
+		t.Fatal("expected an error creating a duplicate username, got nil")
+	}
+}

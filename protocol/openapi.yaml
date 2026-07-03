@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.6.0
+  version: 1.7.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair and /health require
@@ -85,6 +85,37 @@ paths:
           description: >
             Too many pairing attempts (rate-limited at 10/min per agent, since the
             pairing code is short and brute-forceable). code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /login:
+    post:
+      summary: >
+        Log in with the account created via `rfe-agent adduser` (unauthenticated).
+        An additional way to obtain a device token alongside POST /pair — not a
+        replacement for it. Response shape is identical to PairResponse.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Logged in; device token issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401":
+          description: >
+            Invalid username or password. code=INVALID_CREDENTIALS. The same
+            error is returned for a nonexistent username as for a wrong
+            password, so a caller can't enumerate valid usernames.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: >
+            Too many login attempts (rate-limited at 10/min per agent).
+            code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /wol:
@@ -1132,6 +1163,19 @@ components:
             Optional hardware-stable client identifier (e.g. Android ID). When
             present, the agent deduplicates pairings so the same device reuses
             its device row instead of creating a duplicate on re-pair.
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        deviceLabel: { type: string, description: "Defaults to \"unnamed-device\" if omitted." }
+        deviceId:
+          type: string
+          description: >
+            Optional hardware-stable client identifier, same dedup behavior as
+            PairRequest.deviceId.
 
     PairResponse:
       type: object

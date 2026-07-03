@@ -441,10 +441,19 @@
   "addComputerTitle": "Add computer",
   "scanQrTab": "Scan QR",
   "manualTab": "Manual",
+  "loginTab": "Log in",
   "agentAddressLabel": "Agent address",
   "agentAddressHint": "192.168.1.10:8765",
   "pairingCodeLabel": "Pairing code",
   "pairingCodeHint": "123456",
+  "usernameLabel": "Username",
+  "passwordLabel": "Password",
+  "loginButton": "Log in",
+  "loginFailed": "Login failed: {error}",
+  "@loginFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "loginHint": "No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.",
   "requiredLabel": "Required",
   "pairedWith": "Paired with {name}",
   "@pairedWith": {

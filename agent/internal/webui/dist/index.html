@@ -88,21 +88,51 @@
 <div id="pair-view">
   <div class="container">
     <div class="card">
-      <h2>Pair this browser</h2>
-      <div class="field">
-        <label>Pairing code (from <code>rfe-agent pair</code>)</label>
-        <input id="pair-code" type="text" placeholder="ABCD1234" autocomplete="off" autocapitalize="characters">
+      <div class="row" style="gap:8px; padding:0 0 12px; border:none">
+        <button id="tab-login" class="primary" style="flex:1">Log in</button>
+        <button id="tab-code" style="flex:1">Pair with code</button>
       </div>
-      <div class="field">
-        <label>Label for this browser</label>
-        <input id="pair-label" type="text" placeholder="Chrome on laptop" autocomplete="off">
+
+      <div id="login-form">
+        <h2>Log in</h2>
+        <div class="field">
+          <label>Username</label>
+          <input id="login-username" type="text" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="login-password" type="password" autocomplete="current-password">
+        </div>
+        <div class="field">
+          <label>Label for this browser</label>
+          <input id="login-label" type="text" placeholder="Chrome on laptop" autocomplete="off">
+        </div>
+        <button class="primary" id="login-submit" style="width:100%">Log in</button>
+        <div class="error-text hidden" id="login-error"></div>
+        <p class="muted" style="margin-top:16px">
+          No account yet? Run <code>rfe-agent adduser &lt;username&gt;</code> on
+          the PC once, then log in from any browser or the phone app.
+        </p>
       </div>
-      <button class="primary" id="pair-submit" style="width:100%">Pair</button>
-      <div class="error-text hidden" id="pair-error"></div>
+
+      <div id="code-form" class="hidden">
+        <h2>Pair this browser</h2>
+        <div class="field">
+          <label>Pairing code (from <code>rfe-agent pair</code>)</label>
+          <input id="pair-code" type="text" placeholder="ABCD1234" autocomplete="off" autocapitalize="characters">
+        </div>
+        <div class="field">
+          <label>Label for this browser</label>
+          <input id="pair-label" type="text" placeholder="Chrome on laptop" autocomplete="off">
+        </div>
+        <button class="primary" id="pair-submit" style="width:100%">Pair</button>
+        <div class="error-text hidden" id="pair-error"></div>
+      </div>
+
       <p class="muted" style="margin-top:16px">
         This browser stores its access token in localStorage — a weaker
-        guarantee than the phone app's Keystore-backed pairing. Only pair
-        browsers you trust on this device.
+        guarantee than the phone app's Keystore-backed pairing. Only log in
+        from browsers you trust on this device.
       </p>
     </div>
   </div>
@@ -224,6 +254,46 @@
     if (h > 0) return h + 'h ' + m + 'm';
     return m + 'm';
   }
+
+  // ---------- Login/pair tabs ----------
+  $('tab-login').addEventListener('click', () => {
+    $('tab-login').classList.add('primary');
+    $('tab-code').classList.remove('primary');
+    $('login-form').classList.remove('hidden');
+    $('code-form').classList.add('hidden');
+  });
+  $('tab-code').addEventListener('click', () => {
+    $('tab-code').classList.add('primary');
+    $('tab-login').classList.remove('primary');
+    $('code-form').classList.remove('hidden');
+    $('login-form').classList.add('hidden');
+  });
+
+  // ---------- Login ----------
+  $('login-submit').addEventListener('click', async () => {
+    const username = $('login-username').value.trim();
+    const password = $('login-password').value;
+    const label = $('login-label').value.trim() || 'Web browser';
+    const errEl = $('login-error');
+    errEl.classList.add('hidden');
+    if (!username || !password) return;
+    try {
+      const res = await fetch('/v1/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, deviceLabel: label }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'login failed');
+      localStorage.setItem(TOKEN_KEY, body.deviceToken);
+      localStorage.setItem(FP_KEY, body.certFingerprint || '');
+      localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+      showDashboard();
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+    }
+  });
 
   // ---------- Pairing ----------
   $('pair-submit').addEventListener('click', async () => {

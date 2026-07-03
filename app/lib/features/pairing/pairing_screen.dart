@@ -49,7 +49,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   void initState() {
     super.initState();
     _tabs = TabController(
-      length: 2,
+      length: 3,
       vsync: this,
       initialIndex: widget.prefillAddress != null ? 1 : 0,
     );
@@ -77,6 +77,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
               icon: const Icon(LucideIcons.keyboard),
               text: context.l10n.manualTab,
             ),
+            Tab(
+              icon: const Icon(LucideIcons.userRound),
+              text: context.l10n.loginTab,
+            ),
           ],
         ),
       ),
@@ -85,6 +89,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
         children: [
           const _QrPairingTab(),
           _ManualPairingTab(prefillAddress: widget.prefillAddress),
+          _LoginTab(prefillAddress: widget.prefillAddress),
         ],
       ),
     );
@@ -407,6 +412,181 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                       )
                       : const Icon(LucideIcons.link),
               label: Text(context.l10n.pairButton),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Login tab — an additional way to obtain a device token, alongside the
+// one-time pairing code, using the account created via `rfe-agent adduser`.
+// ---------------------------------------------------------------------------
+
+class _LoginTab extends ConsumerStatefulWidget {
+  const _LoginTab({this.prefillAddress});
+
+  final String? prefillAddress;
+
+  @override
+  ConsumerState<_LoginTab> createState() => _LoginTabState();
+}
+
+class _LoginTabState extends ConsumerState<_LoginTab> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _addressCtrl;
+  final _usernameCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _loading = false;
+  bool _obscure = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _addressCtrl = TextEditingController(text: widget.prefillAddress);
+  }
+
+  @override
+  void dispose() {
+    _addressCtrl.dispose();
+    _usernameCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    // Probe host — not yet in the store, same as _ManualPairingTab.
+    final probeHost = Host(
+      id: 'pairing_probe',
+      label: 'probe',
+      address: _addressCtrl.text.trim(),
+    );
+    final client = AgentClient(probeHost);
+
+    try {
+      final resp = await client.login(
+        username: _usernameCtrl.text.trim(),
+        password: _passwordCtrl.text,
+        deviceLabel: 'Mobile App',
+        deviceId: await _deviceId(),
+      );
+
+      final capturedFp = client.lastSeenFingerprint;
+      final host = Host(
+        id: resp.deviceId,
+        label: resp.agentName,
+        address: _addressCtrl.text.trim(),
+        certFingerprint: capturedFp ?? resp.certFingerprint,
+        tailscaleAddress: resp.tailscaleAddress,
+      );
+
+      final store = await ref.read(hostStoreProvider.future);
+      await store.addHost(host);
+      await store.setToken(host.id, resp.deviceToken);
+      if (host.certFingerprint != null) {
+        await store.setFingerprint(host.id, host.certFingerprint!);
+      }
+
+      if (mounted) {
+        showSuccess(context, context.l10n.pairedWith(host.label));
+        Navigator.of(context).pop(host);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = context.l10n.loginFailed('$e'));
+    } finally {
+      client.close();
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(Spacing.lg),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: Spacing.sm),
+            TextFormField(
+              controller: _addressCtrl,
+              decoration: InputDecoration(
+                labelText: context.l10n.agentAddressLabel,
+                hintText: context.l10n.agentAddressHint,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(LucideIcons.computer),
+              ),
+              validator:
+                  (v) =>
+                      (v == null || v.trim().isEmpty)
+                          ? context.l10n.requiredLabel
+                          : null,
+            ),
+            const SizedBox(height: Spacing.md),
+            TextFormField(
+              controller: _usernameCtrl,
+              decoration: InputDecoration(
+                labelText: context.l10n.usernameLabel,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(LucideIcons.userRound),
+              ),
+              validator:
+                  (v) =>
+                      (v == null || v.trim().isEmpty)
+                          ? context.l10n.requiredLabel
+                          : null,
+            ),
+            const SizedBox(height: Spacing.md),
+            TextFormField(
+              controller: _passwordCtrl,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                labelText: context.l10n.passwordLabel,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(LucideIcons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
+              validator:
+                  (v) =>
+                      (v == null || v.isEmpty)
+                          ? context.l10n.requiredLabel
+                          : null,
+            ),
+            const SizedBox(height: Spacing.md),
+            Text(
+              context.l10n.loginHint,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: Spacing.lg),
+            if (_error != null) ...[
+              _InlineErrorCard(message: _error!),
+              const SizedBox(height: Spacing.sm + Spacing.xs),
+            ],
+            FilledButton.icon(
+              onPressed: _loading ? null : _submit,
+              icon:
+                  _loading
+                      ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(LucideIcons.logIn),
+              label: Text(context.l10n.loginButton),
             ),
           ],
         ),

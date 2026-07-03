@@ -450,6 +450,27 @@ class AgentClient {
     return PairResponse.fromJson(data);
   }
 
+  /// Log in with the account created via `rfe-agent adduser` on the PC — an
+  /// additional way to obtain a device token alongside [pair], for repeat
+  /// access without a fresh one-time code. Same response shape as [pair].
+  Future<PairResponse> login({
+    required String username,
+    required String password,
+    required String deviceLabel,
+    String? deviceId,
+  }) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/login',
+      data: {
+        'username': username,
+        'password': password,
+        'deviceLabel': deviceLabel,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+      },
+    );
+    return PairResponse.fromJson(data);
+  }
+
   // ---------------------------------------------------------------------------
   // WOL relay
   // ---------------------------------------------------------------------------

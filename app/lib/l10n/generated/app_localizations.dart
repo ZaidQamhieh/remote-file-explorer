@@ -1262,6 +1262,12 @@ abstract class AppLocalizations {
   /// **'Manual'**
   String get manualTab;
 
+  /// No description provided for @loginTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in'**
+  String get loginTab;
+
   /// No description provided for @agentAddressLabel.
   ///
   /// In en, this message translates to:
@@ -1285,6 +1291,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'123456'**
   String get pairingCodeHint;
+
+  /// No description provided for @usernameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get usernameLabel;
+
+  /// No description provided for @passwordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get passwordLabel;
+
+  /// No description provided for @loginButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in'**
+  String get loginButton;
+
+  /// No description provided for @loginFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Login failed: {error}'**
+  String loginFailed(String error);
+
+  /// No description provided for @loginHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.'**
+  String get loginHint;
 
   /// No description provided for @requiredLabel.
   ///

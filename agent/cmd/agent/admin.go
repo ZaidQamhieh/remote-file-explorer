@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"golang.org/x/term"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
@@ -35,6 +36,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdReadonly(args)
 	case "status":
 		return cmdStatus(args)
+	case "adduser":
+		return cmdAddUser(args)
 	case "help", "-h", "--help":
 		printAdminUsage(os.Stdout)
 		return nil
@@ -56,6 +59,9 @@ Usage:
   rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
   rfe-agent readonly <id> <on|off>  allow browse/download but block all writes
   rfe-agent status               show name, addresses, fingerprint, devices
+  rfe-agent adduser <username>   create the account used to log in from the
+                                  phone app / web companion (prompts for a
+                                  password, hidden input)
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
 `)
@@ -116,6 +122,53 @@ func cmdPair(args []string) error {
 		fmt.Println(qr.ToSmallString(false))
 	}
 	fmt.Println("Scan in the app: Add computer → Scan QR.")
+	return nil
+}
+
+// cmdAddUser creates the account used by POST /v1/login (an additional way
+// to obtain a device token, alongside the one-time pairing code above — not
+// a replacement for it). Fails if the username already exists rather than
+// silently overwriting its password.
+func cmdAddUser(args []string) error {
+	fs := flag.NewFlagSet("adduser", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	passwordFlag := fs.String("password", "", "password (non-interactive; omit to be prompted with hidden input)")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: rfe-agent adduser <username> [-password <pw>] [-data <dir>]")
+	}
+	username := fs.Arg(0)
+
+	password := *passwordFlag
+	if password == "" {
+		fmt.Print("Password: ")
+		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			return fmt.Errorf("read password: %w", err)
+		}
+		password = strings.TrimSpace(string(passwordBytes))
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
+	}
+
+	hash, err := security.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if err := db.CreateUser(username, hash); err != nil {
+		return fmt.Errorf("create user %q (does it already exist?): %w", username, err)
+	}
+	fmt.Printf("Account %q created — log in from the phone app or web companion with this username and password.\n", username)
 	return nil
 }
 

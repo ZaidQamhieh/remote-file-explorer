@@ -76,19 +76,28 @@
   /* ---------- Panels / stat cards ---------- */
   .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
   .panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin: 0 0 14px; }
+  .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--dim); }
+  .panel-head .panel-title { margin: 0; }
+  .panel-head .spacer { flex: 1; }
+  .panel-head .meta { font-size: 12px; color: var(--dim); }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 16px; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
-  .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin-bottom: 10px; }
-  .stat-value { font-size: 26px; font-weight: 700; }
+  .stat-head { display: flex; align-items: center; gap: 7px; color: var(--dim); margin-bottom: 10px; }
+  .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
+  .stat-value { font-size: 26px; font-weight: 700; font-family: var(--mono); }
 
   /* ---------- Status text / tags ---------- */
-  .status-text { font-size: 12px; font-weight: 700; }
+  .status-text { font-size: 12px; font-weight: 700; font-family: var(--mono); }
   .status-green { color: var(--green); }
   .status-amber { color: var(--amber); }
   .status-red { color: var(--red); }
   .status-dim { color: var(--dim); }
-  .type-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .status-text.dot::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; }
+  .type-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; font-family: var(--mono); }
+
+  /* ---------- Icons ---------- */
+  .icon { width: 15px; height: 15px; flex-shrink: 0; }
 
   /* ---------- Avatar with status dot ---------- */
   .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; position: relative; flex-shrink: 0; }
@@ -105,7 +114,9 @@
   .tab.tab-active { background: var(--primary); color: #fff; }
 
   /* ---------- Dashboard shell ---------- */
-  .shell { display: flex; min-height: 100vh; }
+  .topstrip { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); }
+  .topstrip .divider { margin: 0 8px; opacity: .5; }
+  .shell { display: flex; min-height: calc(100vh - 34px); }
   .sidebar { width: 232px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 16px; display: flex; flex-direction: column; }
   .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .brand .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
@@ -215,6 +226,10 @@
 </div>
 
 <div id="dashboard-view" class="hidden">
+  <div class="topstrip mono">
+    <span><span id="strip-platform"></span></span>
+    <span><span id="strip-uptime"></span><span class="divider">·</span><span id="strip-version"></span></span>
+  </div>
   <div class="shell">
     <div class="sidebar">
       <div class="brand">
@@ -226,11 +241,11 @@
       </div>
       <div class="status-chip">Agent running</div>
       <div class="nav">
-        <a href="#" data-page="status" class="nav-active">Status</a>
-        <a href="#" data-page="control">Agent control</a>
-        <a href="#" data-page="settings">Settings</a>
-        <a href="#" data-page="devices">Paired devices</a>
-        <a href="#" data-page="files">Files</a>
+        <a href="#" data-page="status" class="nav-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Status</span></a>
+        <a href="#" data-page="control"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="11"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><span>Agent control</span></a>
+        <a href="#" data-page="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="18" r="2"/></svg><span>Settings</span></a>
+        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6.4 6-6.4s6 2.8 6 6.4"/><circle cx="17.5" cy="8.5" r="2.3"/><path d="M15.8 13.8c2.5.4 4.4 2.7 4.4 6.2"/></svg><span>Paired devices</span></a>
+        <a href="#" data-page="files"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 17.5v-11z"/></svg><span>Files</span></a>
       </div>
       <div class="spacer"></div>
       <button id="forget-btn" style="width:100%">Forget this browser</button>
@@ -249,15 +264,15 @@
         <div id="page-status" class="page">
           <div class="stat-grid">
             <div class="stat">
-              <div class="stat-label">Uptime</div>
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/></svg><span class="stat-label">Uptime</span></div>
               <div class="stat-value" id="uptime"></div>
             </div>
             <div class="stat">
-              <div class="stat-label">Platform</div>
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><line x1="9" y1="2.5" x2="9" y2="6"/><line x1="15" y1="2.5" x2="15" y2="6"/><line x1="9" y1="18" x2="9" y2="21.5"/><line x1="15" y1="18" x2="15" y2="21.5"/><line x1="2.5" y1="9" x2="6" y2="9"/><line x1="2.5" y1="15" x2="6" y2="15"/><line x1="18" y1="9" x2="21.5" y2="9"/><line x1="18" y1="15" x2="21.5" y2="15"/></svg><span class="stat-label">Platform</span></div>
               <div class="stat-value" id="platform" style="font-size:16px"></div>
             </div>
             <div class="stat">
-              <div class="stat-label">Storage</div>
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="14" x2="21" y2="14"/></svg><span class="stat-label">Storage</span></div>
               <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
               <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
             </div>
@@ -296,12 +311,22 @@
 
         <div id="page-devices" class="page hidden">
           <div class="panel">
+            <div class="panel-head">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6.4 6-6.4s6 2.8 6 6.4"/><circle cx="17.5" cy="8.5" r="2.3"/><path d="M15.8 13.8c2.5.4 4.4 2.7 4.4 6.2"/></svg>
+              <h2 class="panel-title">Paired devices</h2>
+              <span class="spacer"></span>
+              <span class="meta mono" id="devices-count"></span>
+            </div>
             <div id="devices-list"></div>
           </div>
         </div>
 
         <div id="page-files" class="page hidden">
           <div class="panel">
+            <div class="panel-head">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 17.5v-11z"/></svg>
+              <h2 class="panel-title">Files</h2>
+            </div>
             <div class="row" style="gap:8px">
               <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
               <button id="new-folder-btn">New folder</button>
@@ -661,7 +686,7 @@
         info.addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
 
         const size = document.createElement('span');
-        size.className = 'dim';
+        size.className = 'dim mono';
         size.textContent = entry.isDir ? '' : fmtBytes(entry.size);
 
         const actions = document.createElement('span');
@@ -809,12 +834,17 @@
       $('storage-bar').style.width = pct + '%';
       $('storage-text').textContent = fmtBytes(used) + ' / ' + fmtBytes(status.totalBytes);
 
+      $('strip-platform').textContent = status.platform;
+      $('strip-uptime').textContent = 'Up ' + fmtUptime(status.uptimeSeconds);
+      $('strip-version').textContent = 'v' + status.version;
+
       $('readonly-toggle').checked = !!settings.readOnly;
       $('bw-upload').value = bandwidth.maxUploadBytesPerSec ? (bandwidth.maxUploadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
       $('bw-download').value = bandwidth.maxDownloadBytesPerSec ? (bandwidth.maxDownloadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
 
       const list = $('devices-list');
       list.innerHTML = '';
+      $('devices-count').textContent = (devices || []).length + ' paired';
       (devices || []).forEach((d) => {
         const label = d.label || 'unnamed';
         const row = document.createElement('div');
@@ -822,7 +852,7 @@
         row.innerHTML =
           '<div class="avatar">' + label.charAt(0).toUpperCase() + '</div>' +
           '<span class="info"><span class="name">' + label + '</span><br><span class="sub mono">' + (d.lastAddress || '') + '</span></span>' +
-          '<span class="status-text status-green">Paired</span>';
+          '<span class="status-text status-green dot">Paired</span>';
         list.appendChild(row);
       });
       if (!devices || devices.length === 0) {

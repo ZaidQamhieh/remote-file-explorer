@@ -1,15 +1,27 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.7.0
+  version: 1.8.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
-    metadata; binary streams for file content. All routes except /pair and /health require
-    a bearer device token. GET /v1/events provides a Server-Sent Events stream for live
-    filesystem change events and transfer progress. Clients may send an optional
-    `X-RFE-Client-Version` header (e.g. "1.10.0+18") on every authenticated request; the
-    agent records this plus the caller's network address against the device row and
-    surfaces both via GET /devices (see Device.lastAddress / Device.lastVersion).
+    metadata; binary streams for file content. All routes except /pair, /register,
+    /login, /auth/challenge, and /health require a bearer device token. GET /v1/events
+    provides a Server-Sent Events stream for live filesystem change events and transfer
+    progress. Clients may send an optional `X-RFE-Client-Version` header (e.g.
+    "1.10.0+18") on every authenticated request; the agent records this plus the
+    caller's network address against the device row and surfaces both via GET /devices
+    (see Device.lastAddress / Device.lastVersion).
+
+    Pair, register, and login all require device-identity proof-of-possession: fetch a
+    nonce from POST /auth/challenge, sign it with the device's permanent Ed25519 key,
+    and send the (devicePublicKey, nonce, signature) triple. The agent pins the public
+    key to the device row on first use (TOFU). POST /login additionally *enforces* that
+    pin — a known device id presenting a different key is rejected
+    (code=DEVICE_KEY_MISMATCH) rather than silently re-trusted, since a password alone
+    is weaker proof than the one-time codes /pair and /register require. /pair and
+    /register instead re-pin on a key change: consuming a fresh one-time code is
+    itself a stronger trust event (physical/terminal access to the host), covering a
+    legitimate reinstall that generated a new device key.
 servers:
   - url: https://{host}:{port}/v1
     variables:
@@ -64,6 +76,26 @@ paths:
           description: Not supported on this platform. code=NOT_IMPLEMENTED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
+  /auth/challenge:
+    post:
+      summary: Mint a single-use nonce for device-identity proof-of-possession (unauthenticated)
+      description: >
+        Sign the returned nonce with the device's Ed25519 private key and pass
+        it (with the device's public key) to /pair, /register, or /login as
+        proof the caller controls that key. Valid for 2 minutes, single-use.
+      security: []
+      responses:
+        "200":
+          description: Nonce minted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { nonce: { type: string } }
+        "429":
+          description: Too many challenge requests (rate-limited at 30/min). code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
   /pair:
     post:
       summary: Complete device pairing (unauthenticated; consumes one-time pairing code)
@@ -79,20 +111,72 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PairResponse" }
-        "400": { $ref: "#/components/responses/Error" }
-        "401": { $ref: "#/components/responses/Error" }
+        "400":
+          description: >
+            Malformed body, or missing devicePublicKey/nonce/signature.
+            code=BAD_REQUEST or code=DEVICE_KEY_REQUIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: >
+            Invalid pairing code (code=INVALID_CODE), nonce missing/expired/reused
+            (code=INVALID_NONCE), or signature doesn't verify (code=INVALID_SIGNATURE).
+            A key change for an already-known device id is accepted here (re-pinned),
+            not rejected — see the device-identity note above.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
           description: >
             Too many pairing attempts (rate-limited at 10/min per agent, since the
             pairing code is short and brute-forceable). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
+  /register:
+    post:
+      summary: >
+        Create the account and pair this device in one step (unauthenticated;
+        consumes one-time pairing code). An alternative to `rfe-agent adduser`
+        for first-time setup entirely from the phone app or web companion.
+        Requires the same one-time pairing code as POST /pair — this is what
+        stops a stranger on the network from creating an account before the
+        owner does. Response shape is identical to PairResponse.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "200":
+          description: Account created, device paired; token issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairResponse" }
+        "400":
+          description: >
+            Malformed body, missing username, password under 8 characters, or
+            missing devicePublicKey/nonce/signature. code=BAD_REQUEST or
+            code=DEVICE_KEY_REQUIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: >
+            Invalid pairing code (code=INVALID_CODE), or device-identity proof
+            failed (code=INVALID_NONCE / INVALID_SIGNATURE — see POST /pair).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: That username is already registered on this agent. code=USERNAME_TAKEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: >
+            Too many registration attempts (rate-limited at 10/min per agent).
+            code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
   /login:
     post:
       summary: >
-        Log in with the account created via `rfe-agent adduser` (unauthenticated).
-        An additional way to obtain a device token alongside POST /pair — not a
-        replacement for it. Response shape is identical to PairResponse.
+        Log in with the account created via POST /register or `rfe-agent
+        adduser` (unauthenticated). An additional way to obtain a device
+        token alongside POST /pair — not a replacement for it. Response
+        shape is identical to PairResponse.
       security: []
       requestBody:
         required: true
@@ -105,12 +189,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PairResponse" }
-        "400": { $ref: "#/components/responses/Error" }
+        "400":
+          description: >
+            Malformed body, missing username/password, or missing
+            devicePublicKey/nonce/signature. code=BAD_REQUEST or
+            code=DEVICE_KEY_REQUIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401":
           description: >
-            Invalid username or password. code=INVALID_CREDENTIALS. The same
+            Invalid username or password (code=INVALID_CREDENTIALS — the same
             error is returned for a nonexistent username as for a wrong
-            password, so a caller can't enumerate valid usernames.
+            password, so a caller can't enumerate valid usernames), or
+            device-identity proof failed (code=INVALID_NONCE / INVALID_SIGNATURE
+            / DEVICE_KEY_MISMATCH — see POST /pair).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
           description: >
@@ -1152,11 +1243,17 @@ components:
 
     PairRequest:
       type: object
-      required: [pairingCode, deviceLabel, clientPublicKey]
+      required: [pairingCode, deviceLabel, devicePublicKey, nonce, signature]
       properties:
         pairingCode: { type: string, description: One-time code shown by the agent }
         deviceLabel: { type: string }
-        clientPublicKey: { type: string }
+        devicePublicKey:
+          type: string
+          description: This device's permanent Ed25519 public key, standard base64 (32 raw bytes).
+        nonce: { type: string, description: A nonce obtained from POST /auth/challenge. }
+        signature:
+          type: string
+          description: nonce signed with the device's private key, standard base64 (64 raw bytes).
         deviceId:
           type: string
           description: >
@@ -1164,13 +1261,31 @@ components:
             present, the agent deduplicates pairings so the same device reuses
             its device row instead of creating a duplicate on re-pair.
 
+    RegisterRequest:
+      type: object
+      required: [pairingCode, username, password, devicePublicKey, nonce, signature]
+      properties:
+        pairingCode: { type: string, description: One-time code shown by the agent (same as PairRequest). }
+        username: { type: string }
+        password: { type: string, description: Minimum 8 characters. }
+        deviceLabel: { type: string, description: "Defaults to \"unnamed-device\" if omitted." }
+        devicePublicKey: { $ref: "#/components/schemas/PairRequest/properties/devicePublicKey" }
+        nonce: { $ref: "#/components/schemas/PairRequest/properties/nonce" }
+        signature: { $ref: "#/components/schemas/PairRequest/properties/signature" }
+        deviceId:
+          type: string
+          description: Optional hardware-stable client identifier, same dedup behavior as PairRequest.deviceId.
+
     LoginRequest:
       type: object
-      required: [username, password]
+      required: [username, password, devicePublicKey, nonce, signature]
       properties:
         username: { type: string }
         password: { type: string }
         deviceLabel: { type: string, description: "Defaults to \"unnamed-device\" if omitted." }
+        devicePublicKey: { $ref: "#/components/schemas/PairRequest/properties/devicePublicKey" }
+        nonce: { $ref: "#/components/schemas/PairRequest/properties/nonce" }
+        signature: { $ref: "#/components/schemas/PairRequest/properties/signature" }
         deviceId:
           type: string
           description: >

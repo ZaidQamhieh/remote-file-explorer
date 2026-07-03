@@ -1322,6 +1322,48 @@ abstract class AppLocalizations {
   /// **'No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.'**
   String get loginHint;
 
+  /// No description provided for @registerTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Register'**
+  String get registerTab;
+
+  /// No description provided for @confirmPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get confirmPasswordLabel;
+
+  /// No description provided for @passwordTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 8 characters'**
+  String get passwordTooShort;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords don\'t match'**
+  String get passwordMismatch;
+
+  /// No description provided for @registerButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get registerButton;
+
+  /// No description provided for @registerFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration failed: {error}'**
+  String registerFailed(String error);
+
+  /// No description provided for @registerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Creates your account and pairs this device in one step. Run \"rfe-agent pair\" on the PC first to get a code — the same one-time code used for Scan QR / Manual.'**
+  String get registerHint;
+
   /// No description provided for @requiredLabel.
   ///
   /// In en, this message translates to:

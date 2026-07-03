@@ -34,7 +34,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
-const version = "1.2.0"
+const version = "1.3.0"
 
 func main() {
 	args := os.Args[1:]

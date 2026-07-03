@@ -61,7 +61,10 @@ Usage:
   rfe-agent status               show name, addresses, fingerprint, devices
   rfe-agent adduser <username>   create the account used to log in from the
                                   phone app / web companion (prompts for a
-                                  password, hidden input)
+                                  password, hidden input). Alternatively, use
+                                  the Register tab in the app/web companion
+                                  with a code from "rfe-agent pair" to do
+                                  this without the terminal.
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
 `)

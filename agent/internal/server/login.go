@@ -29,9 +29,14 @@ type loginRequest struct {
 	Password    string `json:"password"`
 	DeviceLabel string `json:"deviceLabel"`
 	DeviceID    string `json:"deviceId"`
+	// DevicePublicKey/Nonce/Signature — same device-identity proof as
+	// pairRequest (see pair.go and device_identity.go).
+	DevicePublicKey string `json:"devicePublicKey"`
+	Nonce           string `json:"nonce"`
+	Signature       string `json:"signature"`
 }
 
-func loginHandler(cfg Config, db *store.DB) http.HandlerFunc {
+func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow() {
@@ -59,6 +64,9 @@ func loginHandler(cfg Config, db *store.DB) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
 			return
 		}
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, true); err != nil {
+			return // verifyDeviceProof already wrote the error response
+		}
 
 		if req.DeviceLabel == "" {
 			req.DeviceLabel = "unnamed-device"
@@ -68,7 +76,7 @@ func loginHandler(cfg Config, db *store.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
 			return
 		}
-		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token)
+		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return

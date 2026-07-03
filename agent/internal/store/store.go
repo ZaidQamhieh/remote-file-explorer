@@ -147,6 +147,16 @@ CREATE TABLE IF NOT EXISTS users (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add the pinned device public key (base64 Ed25519, TOFU-pinned at
+	// pair/login time — see security.VerifyDeviceSignature). Empty means
+	// "not yet pinned", true for every row created before this feature and
+	// for the brief window between UpsertDevice inserting a row and the
+	// caller pinning its first key.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN public_key TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -164,6 +174,7 @@ type Device struct {
 	LastVersion string
 	JailRoot    string
 	ReadOnly    bool
+	PublicKey   string
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -178,14 +189,32 @@ func (s *DB) CreateDevice(id, label, token string) error {
 	return err
 }
 
+// DevicePublicKeyByClientID returns the pinned public key for the device
+// with the given hardware-stable clientID, or "" if no device (or no pinned
+// key yet) exists for it. Callers use this to detect a device-key mismatch
+// *before* calling UpsertDevice — see pairHandler/loginHandler.
+func (s *DB) DevicePublicKeyByClientID(clientID string) (string, error) {
+	if clientID == "" {
+		return "", nil
+	}
+	var key string
+	err := s.db.QueryRow(`SELECT public_key FROM devices WHERE client_id=?`, clientID).Scan(&key)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return key, err
+}
+
 // UpsertDevice pairs a device, deduplicating by the hardware-stable clientID.
 // If clientID is non-empty and a device with that clientID already exists, its
 // token is rotated, it is un-revoked, and its existing id is returned — so a
 // phone that re-pairs (after clearing app data, reinstalling, or losing its
 // token) reuses its row instead of creating a duplicate. Otherwise a fresh
 // device with a new UUID is inserted. Returns the device id to hand back to the
-// client.
-func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
+// client. publicKey is pinned on the row (callers must have already checked
+// it against DevicePublicKeyByClientID for a mismatch — this does not
+// re-check).
+func (s *DB) UpsertDevice(clientID, label, token, publicKey string) (string, error) {
 	hash := hashToken(token)
 	now := time.Now().Unix()
 
@@ -197,8 +226,8 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 		if err == nil {
 			// Same phone re-pairing: rotate token, clear revoked, refresh label.
 			if _, err := s.db.Exec(
-				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0 WHERE id=?`,
-				hash, label, now, existingID,
+				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=? WHERE id=?`,
+				hash, label, now, publicKey, existingID,
 			); err != nil {
 				return "", err
 			}
@@ -211,8 +240,8 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 
 	id := uuid.New().String()
 	if _, err := s.db.Exec(
-		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id) VALUES (?,?,?,?,?,0,?)`,
-		id, label, hash, now, now, clientID,
+		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key) VALUES (?,?,?,?,?,0,?,?)`,
+		id, label, hash, now, now, clientID, publicKey,
 	); err != nil {
 		return "", err
 	}
@@ -224,7 +253,7 @@ func (s *DB) UpsertDevice(clientID, label, token string) (string, error) {
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices WHERE token_hash=?`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -248,7 +277,7 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked, readOnly int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly)
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +297,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
 	var revoked, readOnly int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly); err != nil {
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
@@ -281,7 +310,7 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +373,7 @@ func (s *DB) DeleteDevice(id string) error {
 // GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
 func (s *DB) GetDeviceByID(id string) (*Device, error) {
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only FROM devices WHERE id=?`, id,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices WHERE id=?`, id,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {

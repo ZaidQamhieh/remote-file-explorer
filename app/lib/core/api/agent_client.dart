@@ -427,15 +427,27 @@ class AgentClient {
     return AgentStatus.fromJson(data);
   }
 
+  /// Fetches a single-use nonce for device-identity proof-of-possession —
+  /// sign it with [DeviceIdentity] and pass the result to [pair], [register],
+  /// or [login] as `signature`.
+  Future<String> challenge() async {
+    final data = await _post<Map<String, dynamic>>('/auth/challenge');
+    return data['nonce'] as String;
+  }
+
   /// Pair this device with the agent.
   ///
   /// Returns the [PairResponse] which contains the device token. The caller
   /// should capture [lastSeenFingerprint] (TOFU) immediately after and verify
-  /// it against any fingerprint obtained via QR.
+  /// it against any fingerprint obtained via QR. [devicePublicKey]/[nonce]/
+  /// [signature] prove possession of this device's identity key — see
+  /// [DeviceIdentity] and [challenge].
   Future<PairResponse> pair({
     required String pairingCode,
     required String deviceLabel,
-    required String clientPublicKey,
+    required String devicePublicKey,
+    required String nonce,
+    required String signature,
     String? deviceId,
   }) async {
     final data = await _post<Map<String, dynamic>>(
@@ -443,20 +455,56 @@ class AgentClient {
       data: {
         'pairingCode': pairingCode,
         'deviceLabel': deviceLabel,
-        'clientPublicKey': clientPublicKey,
+        'devicePublicKey': devicePublicKey,
+        'nonce': nonce,
+        'signature': signature,
         if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
       },
     );
     return PairResponse.fromJson(data);
   }
 
-  /// Log in with the account created via `rfe-agent adduser` on the PC — an
-  /// additional way to obtain a device token alongside [pair], for repeat
-  /// access without a fresh one-time code. Same response shape as [pair].
+  /// Creates the account used by [login] and pairs this device in the same
+  /// step — requires a fresh one-time pairing code, exactly like [pair], so
+  /// registration can't be done by a stranger on the network. Same response
+  /// shape and device-identity proof as [pair].
+  Future<PairResponse> register({
+    required String pairingCode,
+    required String username,
+    required String password,
+    required String deviceLabel,
+    required String devicePublicKey,
+    required String nonce,
+    required String signature,
+    String? deviceId,
+  }) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/register',
+      data: {
+        'pairingCode': pairingCode,
+        'username': username,
+        'password': password,
+        'deviceLabel': deviceLabel,
+        'devicePublicKey': devicePublicKey,
+        'nonce': nonce,
+        'signature': signature,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+      },
+    );
+    return PairResponse.fromJson(data);
+  }
+
+  /// Log in with an account (created via [register] or `rfe-agent adduser`)
+  /// — an additional way to obtain a device token alongside [pair], for
+  /// repeat access without a fresh one-time code. Same response shape and
+  /// device-identity proof as [pair].
   Future<PairResponse> login({
     required String username,
     required String password,
     required String deviceLabel,
+    required String devicePublicKey,
+    required String nonce,
+    required String signature,
     String? deviceId,
   }) async {
     final data = await _post<Map<String, dynamic>>(
@@ -465,6 +513,9 @@ class AgentClient {
         'username': username,
         'password': password,
         'deviceLabel': deviceLabel,
+        'devicePublicKey': devicePublicKey,
+        'nonce': nonce,
+        'signature': signature,
         if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
       },
     );

@@ -454,6 +454,16 @@
     "placeholders": { "error": {"type": "String"} }
   },
   "loginHint": "No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.",
+  "registerTab": "Register",
+  "confirmPasswordLabel": "Confirm password",
+  "passwordTooShort": "Password must be at least 8 characters",
+  "passwordMismatch": "Passwords don't match",
+  "registerButton": "Create account",
+  "registerFailed": "Registration failed: {error}",
+  "@registerFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "registerHint": "Creates your account and pairs this device in one step. Run \"rfe-agent pair\" on the PC first to get a code — the same one-time code used for Scan QR / Manual.",
   "requiredLabel": "Required",
   "pairedWith": "Paired with {name}",
   "@pairedWith": {

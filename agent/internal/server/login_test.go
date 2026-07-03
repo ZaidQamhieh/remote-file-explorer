@@ -13,7 +13,7 @@ import (
 func TestLoginHandler_InvalidBody(t *testing.T) {
 	db, _ := newTestDeps(t)
 	cfg := Config{Name: "test-pc"}
-	handler := loginHandler(cfg, db)
+	handler := loginHandler(cfg, db, newNonceStore())
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/login", strings.NewReader("not json"))
@@ -26,7 +26,7 @@ func TestLoginHandler_InvalidBody(t *testing.T) {
 func TestLoginHandler_UnknownUsername(t *testing.T) {
 	db, _ := newTestDeps(t)
 	cfg := Config{Name: "test-pc"}
-	handler := loginHandler(cfg, db)
+	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"nobody","password":"whatever123"}`
 	rr := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	cfg := Config{Name: "test-pc"}
-	handler := loginHandler(cfg, db)
+	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"owner","password":"wrong-password"}`
 	rr := httptest.NewRecorder()
@@ -80,9 +80,12 @@ func TestLoginHandler_ValidLogin(t *testing.T) {
 		Address:          "127.0.0.1:8765",
 		TailscaleAddress: "10.0.0.1",
 	}
-	handler := loginHandler(cfg, db)
+	nonces := newNonceStore()
+	handler := loginHandler(cfg, db, nonces)
+	pubKey, nonce, sig := signedDeviceProof(t, nonces)
 
-	body := `{"username":"owner","password":"correct-horse-battery","deviceLabel":"my-laptop-browser"}`
+	body := `{"username":"owner","password":"correct-horse-battery","deviceLabel":"my-laptop-browser",` +
+		`"devicePublicKey":"` + pubKey + `","nonce":"` + nonce + `","signature":"` + sig + `"}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/login", strings.NewReader(body))
 	handler(rr, req)
@@ -110,7 +113,7 @@ func TestLoginHandler_ValidLogin(t *testing.T) {
 func TestLoginHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	db, _ := newTestDeps(t)
 	cfg := Config{Name: "test-pc"}
-	handler := loginHandler(cfg, db)
+	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"nobody","password":"whatever123"}`
 	for i := 0; i < loginRateLimitAttempts; i++ {

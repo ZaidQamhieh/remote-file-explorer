@@ -805,6 +805,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'No account yet? Run \"rfe-agent adduser <username>\" on the PC once, then log in from any device.';
 
   @override
+  String get registerTab => 'Register';
+
+  @override
+  String get confirmPasswordLabel => 'Confirm password';
+
+  @override
+  String get passwordTooShort => 'Password must be at least 8 characters';
+
+  @override
+  String get passwordMismatch => 'Passwords don\'t match';
+
+  @override
+  String get registerButton => 'Create account';
+
+  @override
+  String registerFailed(String error) {
+    return 'Registration failed: $error';
+  }
+
+  @override
+  String get registerHint =>
+      'Creates your account and pairs this device in one step. Run \"rfe-agent pair\" on the PC first to get a code — the same one-time code used for Scan QR / Manual.';
+
+  @override
   String get requiredLabel => 'Required';
 
   @override

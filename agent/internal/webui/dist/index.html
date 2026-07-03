@@ -91,6 +91,7 @@
       <div class="row" style="gap:8px; padding:0 0 12px; border:none">
         <button id="tab-login" class="primary" style="flex:1">Log in</button>
         <button id="tab-code" style="flex:1">Pair with code</button>
+        <button id="tab-register" style="flex:1">Register</button>
       </div>
 
       <div id="login-form">
@@ -110,8 +111,9 @@
         <button class="primary" id="login-submit" style="width:100%">Log in</button>
         <div class="error-text hidden" id="login-error"></div>
         <p class="muted" style="margin-top:16px">
-          No account yet? Run <code>rfe-agent adduser &lt;username&gt;</code> on
-          the PC once, then log in from any browser or the phone app.
+          No account yet? Use the Register tab, or run
+          <code>rfe-agent adduser &lt;username&gt;</code> on the PC once, then
+          log in from any browser or the phone app.
         </p>
       </div>
 
@@ -127,6 +129,33 @@
         </div>
         <button class="primary" id="pair-submit" style="width:100%">Pair</button>
         <div class="error-text hidden" id="pair-error"></div>
+      </div>
+
+      <div id="register-form" class="hidden">
+        <h2>Register</h2>
+        <div class="field">
+          <label>Pairing code (from <code>rfe-agent pair</code>)</label>
+          <input id="register-code" type="text" placeholder="ABCD1234" autocomplete="off" autocapitalize="characters">
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input id="register-username" type="text" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Password (min. 8 characters)</label>
+          <input id="register-password" type="password" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label>Label for this browser</label>
+          <input id="register-label" type="text" placeholder="Chrome on laptop" autocomplete="off">
+        </div>
+        <button class="primary" id="register-submit" style="width:100%">Create account</button>
+        <div class="error-text hidden" id="register-error"></div>
+        <p class="muted" style="margin-top:16px">
+          Creates your account and pairs this browser in one step. Run
+          <code>rfe-agent pair</code> on the PC first to get a code — the
+          same one-time code used for "Pair with code".
+        </p>
       </div>
 
       <p class="muted" style="margin-top:16px">
@@ -255,19 +284,97 @@
     return m + 'm';
   }
 
-  // ---------- Login/pair tabs ----------
-  $('tab-login').addEventListener('click', () => {
-    $('tab-login').classList.add('primary');
-    $('tab-code').classList.remove('primary');
-    $('login-form').classList.remove('hidden');
-    $('code-form').classList.add('hidden');
-  });
-  $('tab-code').addEventListener('click', () => {
-    $('tab-code').classList.add('primary');
-    $('tab-login').classList.remove('primary');
-    $('code-form').classList.remove('hidden');
-    $('login-form').classList.add('hidden');
-  });
+  // ---------- Device identity ----------
+  // This browser's permanent Ed25519 identity — generated once with
+  // WebCrypto (Ed25519 support: Chrome 137+, Firefox 130+) and kept
+  // non-extractable in IndexedDB. Every agent this browser pairs/logs into
+  // pins this same public key per device row, so a stolen bearer token
+  // alone can't let an attacker re-mint a token as this browser from a
+  // different key — the private key never leaves the CryptoKey object.
+  const IDB_NAME = 'rfe_device_identity';
+  const IDB_STORE = 'keys';
+  const IDB_KEY = 'device-keypair';
+
+  function openIdentityDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbGet(db, key) {
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbSet(db, key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  let deviceKeyPairPromise = null;
+  function deviceKeyPair() {
+    if (!deviceKeyPairPromise) {
+      deviceKeyPairPromise = (async () => {
+        const db = await openIdentityDb();
+        const existing = await idbGet(db, IDB_KEY);
+        if (existing) return existing;
+        const keyPair = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']);
+        await idbSet(db, IDB_KEY, keyPair);
+        return keyPair;
+      })();
+    }
+    return deviceKeyPairPromise;
+  }
+
+  function bufToBase64(buf) {
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  // Fetches a fresh challenge nonce and signs it with this browser's
+  // identity key — the (devicePublicKey, nonce, signature) triple every
+  // pair/register/login call needs.
+  async function deviceProof() {
+    const res = await fetch('/v1/auth/challenge', { method: 'POST' });
+    const nonce = (await res.json()).nonce;
+    const kp = await deviceKeyPair();
+    const [rawPub, sig] = await Promise.all([
+      crypto.subtle.exportKey('raw', kp.publicKey),
+      crypto.subtle.sign({ name: 'Ed25519' }, kp.privateKey, new TextEncoder().encode(nonce)),
+    ]);
+    return { devicePublicKey: bufToBase64(rawPub), nonce, signature: bufToBase64(sig) };
+  }
+
+  // ---------- Login/pair/register tabs ----------
+  function selectTab(active) {
+    const tabs = { login: ['tab-login', 'login-form'], code: ['tab-code', 'code-form'], register: ['tab-register', 'register-form'] };
+    for (const key in tabs) {
+      const [btnId, formId] = tabs[key];
+      $(btnId).classList.toggle('primary', key === active);
+      $(formId).classList.toggle('hidden', key !== active);
+    }
+  }
+  $('tab-login').addEventListener('click', () => selectTab('login'));
+  $('tab-code').addEventListener('click', () => selectTab('code'));
+  $('tab-register').addEventListener('click', () => selectTab('register'));
+
+  function storeSession(body) {
+    localStorage.setItem(TOKEN_KEY, body.deviceToken);
+    localStorage.setItem(FP_KEY, body.certFingerprint || '');
+    localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+  }
 
   // ---------- Login ----------
   $('login-submit').addEventListener('click', async () => {
@@ -278,16 +385,15 @@
     errEl.classList.add('hidden');
     if (!username || !password) return;
     try {
+      const proof = await deviceProof();
       const res = await fetch('/v1/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, deviceLabel: label }),
+        body: JSON.stringify(Object.assign({ username, password, deviceLabel: label }, proof)),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'login failed');
-      localStorage.setItem(TOKEN_KEY, body.deviceToken);
-      localStorage.setItem(FP_KEY, body.certFingerprint || '');
-      localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+      storeSession(body);
       showDashboard();
     } catch (e) {
       errEl.textContent = e.message;
@@ -303,16 +409,46 @@
     errEl.classList.add('hidden');
     if (!code) return;
     try {
+      const proof = await deviceProof();
       const res = await fetch('/v1/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pairingCode: code, deviceLabel: label }),
+        body: JSON.stringify(Object.assign({ pairingCode: code, deviceLabel: label }, proof)),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'pairing failed');
-      localStorage.setItem(TOKEN_KEY, body.deviceToken);
-      localStorage.setItem(FP_KEY, body.certFingerprint || '');
-      localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+      storeSession(body);
+      showDashboard();
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+    }
+  });
+
+  // ---------- Register ----------
+  $('register-submit').addEventListener('click', async () => {
+    const pairingCode = $('register-code').value.trim();
+    const username = $('register-username').value.trim();
+    const password = $('register-password').value;
+    const label = $('register-label').value.trim() || 'Web browser';
+    const errEl = $('register-error');
+    errEl.classList.add('hidden');
+    if (!pairingCode || !username || !password) return;
+    if (password.length < 8) {
+      errEl.textContent = 'Password must be at least 8 characters';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    try {
+      const proof = await deviceProof();
+      const res = await fetch('/v1/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ pairingCode, username, password, deviceLabel: label }, proof)),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'registration failed');
+      storeSession(body);
       showDashboard();
     } catch (e) {
       errEl.textContent = e.message;

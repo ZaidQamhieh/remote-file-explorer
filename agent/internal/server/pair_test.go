@@ -18,7 +18,7 @@ func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
 	cfg := Config{Name: "test-pc"}
-	handler := pairHandler(cfg, db, pm)
+	handler := pairHandler(cfg, db, pm, newNonceStore())
 
 	body := `{"pairingCode":"WRONGCODE","deviceLabel":"phone"}`
 
@@ -53,7 +53,7 @@ func TestPairHandler_InvalidBody(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
 	cfg := Config{Name: "test-pc"}
-	handler := pairHandler(cfg, db, pm)
+	handler := pairHandler(cfg, db, pm, newNonceStore())
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader("not json"))
@@ -72,14 +72,17 @@ func TestPairHandler_ValidPairing(t *testing.T) {
 		Address:          "127.0.0.1:8765",
 		TailscaleAddress: "10.0.0.1",
 	}
-	handler := pairHandler(cfg, db, pm)
+	nonces := newNonceStore()
+	handler := pairHandler(cfg, db, pm, nonces)
 
 	code, _, err := pm.Mint(time.Minute)
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
+	pubKey, nonce, sig := signedDeviceProof(t, nonces)
 
-	body := `{"pairingCode":"` + code + `","deviceLabel":"my-phone","deviceId":"android-123"}`
+	body := `{"pairingCode":"` + code + `","deviceLabel":"my-phone","deviceId":"android-123",` +
+		`"devicePublicKey":"` + pubKey + `","nonce":"` + nonce + `","signature":"` + sig + `"}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/pair", strings.NewReader(body))
 	handler(rr, req)

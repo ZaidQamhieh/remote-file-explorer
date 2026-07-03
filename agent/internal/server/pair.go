@@ -21,12 +21,18 @@ const (
 )
 
 type pairRequest struct {
-	PairingCode     string `json:"pairingCode"`
-	DeviceLabel     string `json:"deviceLabel"`
-	ClientPublicKey string `json:"clientPublicKey"`
+	PairingCode string `json:"pairingCode"`
+	DeviceLabel string `json:"deviceLabel"`
 	// DeviceID is a hardware-stable client identifier (Android ID). When
 	// present it deduplicates pairings so the same phone reuses its device row.
 	DeviceID string `json:"deviceId"`
+	// DevicePublicKey is the device's permanent Ed25519 identity key
+	// (standard base64), Nonce a value freshly minted by GET /v1/auth/challenge,
+	// and Signature that nonce signed with the matching private key — proof of
+	// possession, pinned to the device row on success. See device_identity.go.
+	DevicePublicKey string `json:"devicePublicKey"`
+	Nonce           string `json:"nonce"`
+	Signature       string `json:"signature"`
 }
 
 type pairResponse struct {
@@ -38,7 +44,7 @@ type pairResponse struct {
 	TailscaleAddress string `json:"tailscaleAddress,omitempty"`
 }
 
-func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc {
+func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(pairRateLimitAttempts, pairRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow() {
@@ -54,6 +60,9 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc
 			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code")
 			return
 		}
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, false); err != nil {
+			return // verifyDeviceProof already wrote the error response
+		}
 		if req.DeviceLabel == "" {
 			req.DeviceLabel = "unnamed-device"
 		}
@@ -64,7 +73,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager) http.HandlerFunc
 			return
 		}
 
-		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token)
+		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return

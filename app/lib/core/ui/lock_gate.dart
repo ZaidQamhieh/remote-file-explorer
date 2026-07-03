@@ -5,6 +5,7 @@ import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 
 import '../settings/settings_controller.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// [PlatformException.code]s meaning the device has no biometric/PIN/pattern
 /// set up at all — there's nothing to lock behind, so falling through
@@ -145,13 +146,13 @@ class _LockGateState extends ConsumerState<LockGate>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_outline, size: 64, color: scheme.primary),
+            Icon(LucideIcons.lock, size: 64, color: scheme.primary),
             const SizedBox(height: 24),
             Text('Locked', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _tryUnlock,
-              icon: const Icon(Icons.fingerprint),
+              icon: const Icon(LucideIcons.fingerprint),
               label: const Text('Unlock'),
             ),
           ],

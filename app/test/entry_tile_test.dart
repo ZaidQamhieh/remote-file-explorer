@@ -8,6 +8,7 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
 import 'package:remote_file_explorer/features/explorer/thumbnail_image.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/entry_tile.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -63,10 +64,10 @@ void main() {
     // formatSize(2048) == '2.0 KB', formatDate(2024-03-05) == '2024-03-05'.
     expect(find.textContaining('2.0 KB'), findsOneWidget);
     expect(find.textContaining('2024-03-05'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
+    expect(find.byIcon(LucideIcons.chevronRight), findsNothing);
     // Not in multi-select mode: no checkbox, plain icon leading element.
     expect(find.byType(Checkbox), findsNothing);
-    expect(find.byIcon(Icons.picture_as_pdf), findsOneWidget);
+    expect(find.byIcon(LucideIcons.fileText), findsOneWidget);
   });
 
   testWidgets('image entry with a client renders a ThumbnailImage in the row', (
@@ -147,8 +148,8 @@ void main() {
     );
 
     expect(find.text('Documents'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.folder), findsOneWidget);
+    expect(find.byIcon(LucideIcons.chevronRight), findsOneWidget);
+    expect(find.byIcon(LucideIcons.folder), findsOneWidget);
     // No size/date subtitle for directories.
     expect(find.textContaining('KB'), findsNothing);
   });

@@ -22,6 +22,7 @@ import 'settings_screen.dart' show FileVisibilitySection;
 import 'update_tile.dart';
 import 'widgets/backup_restore_section.dart';
 import 'widgets/settings_section.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Global **App Settings** — the single "general settings" surface (Wave 0).
 ///
@@ -64,7 +65,7 @@ class AppSettingsScreen extends ConsumerWidget {
           ),
           SettingsSection(
             title: context.l10n.appearanceSection,
-            icon: Icons.palette_outlined,
+            icon: LucideIcons.palette,
             children: [
               _LabeledControl(
                 label: context.l10n.themeLabel,
@@ -74,17 +75,17 @@ class AppSettingsScreen extends ConsumerWidget {
                     ButtonSegment(
                       value: ThemeMode.system,
                       label: Text(context.l10n.systemTheme),
-                      icon: const Icon(Icons.brightness_auto_outlined),
+                      icon: const Icon(LucideIcons.sunMoon),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
                       label: Text(context.l10n.lightTheme),
-                      icon: const Icon(Icons.light_mode_outlined),
+                      icon: const Icon(LucideIcons.sun),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
                       label: Text(context.l10n.darkTheme),
-                      icon: const Icon(Icons.dark_mode_outlined),
+                      icon: const Icon(LucideIcons.moon),
                     ),
                   ],
                   selected: {app.themeMode},
@@ -143,7 +144,7 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.displaySection,
-            icon: Icons.grid_view_rounded,
+            icon: LucideIcons.layoutGrid,
             children: [
               _LabeledControl(
                 label: context.l10n.layoutLabel,
@@ -153,12 +154,12 @@ class AppSettingsScreen extends ConsumerWidget {
                     ButtonSegment(
                       value: false,
                       label: Text(context.l10n.listLabel),
-                      icon: const Icon(Icons.view_list_rounded),
+                      icon: const Icon(LucideIcons.list),
                     ),
                     ButtonSegment(
                       value: true,
                       label: Text(context.l10n.gridLabel),
-                      icon: const Icon(Icons.grid_view_rounded),
+                      icon: const Icon(LucideIcons.layoutGrid),
                     ),
                   ],
                   selected: {app.gridView},
@@ -199,8 +200,8 @@ class AppSettingsScreen extends ConsumerWidget {
                             app.sort.field == field
                                 ? Icon(
                                   app.sort.ascending
-                                      ? Icons.arrow_upward_rounded
-                                      : Icons.arrow_downward_rounded,
+                                      ? LucideIcons.arrowUp
+                                      : LucideIcons.arrowDown,
                                   size: 18,
                                 )
                                 : null,
@@ -233,7 +234,7 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.updatesSection,
-            icon: Icons.system_update_alt_outlined,
+            icon: LucideIcons.downloadCloud,
             padded: false,
             children: const [UpdateTile()],
           ),
@@ -245,14 +246,14 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.photoBackupSection,
-            icon: Icons.photo_library_outlined,
+            icon: LucideIcons.images,
             padded: false,
             children: [
               ListTile(
-                leading: const Icon(Icons.backup_outlined),
+                leading: const Icon(LucideIcons.cloudUpload),
                 title: Text(context.l10n.photoBackupTitle),
                 subtitle: Text(context.l10n.copyPhonePhotos),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(LucideIcons.chevronRight),
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -265,7 +266,7 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.notificationsSection,
-            icon: Icons.notifications_outlined,
+            icon: LucideIcons.bell,
             children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -300,7 +301,7 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Transfers',
-            icon: Icons.swap_vert_outlined,
+            icon: LucideIcons.arrowUpDown,
             children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -319,7 +320,7 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Security',
-            icon: Icons.security_outlined,
+            icon: LucideIcons.shieldCheck,
             children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -335,14 +336,14 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Transfer History',
-            icon: Icons.history_outlined,
+            icon: LucideIcons.history,
             padded: false,
             children: [
               ListTile(
-                leading: const Icon(Icons.history_outlined),
+                leading: const Icon(LucideIcons.history),
                 title: const Text('View Transfer History'),
                 subtitle: const Text('Completed uploads and downloads'),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(LucideIcons.chevronRight),
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -359,14 +360,14 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'About',
-            icon: Icons.info_outline,
+            icon: LucideIcons.info,
             padded: false,
             children: [
               ListTile(
-                leading: const Icon(Icons.info_outline),
+                leading: const Icon(LucideIcons.info),
                 title: const Text('About & Changelog'),
                 subtitle: const Text('Version info and what\'s new'),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(LucideIcons.chevronRight),
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -423,7 +424,7 @@ class _CacheSection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.cacheSection,
-      icon: Icons.cached_rounded,
+      icon: LucideIcons.refreshCw,
       children: [
         statsAsync.when(
           loading:
@@ -460,7 +461,7 @@ class _CacheSection extends ConsumerWidget {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.tonalIcon(
-            icon: const Icon(Icons.delete_sweep_outlined),
+            icon: const Icon(LucideIcons.trash2),
             label: Text(context.l10n.cacheClearAll),
             onPressed: () async {
               await ref.read(cacheManagerProvider).clearAll();
@@ -512,11 +513,11 @@ class _DiagnosticsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SettingsSection(
       title: context.l10n.diagnosticsExportTitle,
-      icon: Icons.bug_report_outlined,
+      icon: LucideIcons.bug,
       padded: false,
       children: [
         ListTile(
-          leading: const Icon(Icons.share_outlined),
+          leading: const Icon(LucideIcons.share2),
           title: Text(context.l10n.diagnosticsExportButton),
           subtitle: Text(context.l10n.diagnosticsExportSubtitle),
           onTap: () => _export(context, ref),
@@ -617,7 +618,11 @@ class _AccentColorPicker extends StatelessWidget {
               ),
               child:
                   selected == preset
-                      ? const Icon(Icons.check, size: 18, color: Colors.white)
+                      ? const Icon(
+                        LucideIcons.check,
+                        size: 18,
+                        color: Colors.white,
+                      )
                       : null,
             ),
           ),
@@ -643,7 +648,7 @@ class _WatchedFoldersSection extends ConsumerWidget {
 
     return SettingsSection(
       title: 'Watched folders',
-      icon: Icons.folder_special_outlined,
+      icon: LucideIcons.folderHeart,
       padded: false,
       children: [
         if (folders.isEmpty)
@@ -661,13 +666,13 @@ class _WatchedFoldersSection extends ConsumerWidget {
             dense: true,
             title: Text(folder, overflow: TextOverflow.ellipsis),
             trailing: IconButton(
-              icon: const Icon(Icons.remove_circle_outline),
+              icon: const Icon(LucideIcons.circleMinus),
               tooltip: 'Stop watching',
               onPressed: () => notifier.removeWatchedFolder(folder),
             ),
           ),
         ListTile(
-          leading: const Icon(Icons.add),
+          leading: const Icon(LucideIcons.plus),
           title: const Text('Add folder path'),
           onTap: () => _showAddDialog(context, notifier),
         ),

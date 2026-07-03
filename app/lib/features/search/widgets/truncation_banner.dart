@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class TruncationBanner extends StatelessWidget {
   const TruncationBanner({
@@ -31,7 +32,7 @@ class TruncationBanner extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.info_outline, size: 16, color: c.onTertiaryContainer),
+            Icon(LucideIcons.info, size: 16, color: c.onTertiaryContainer),
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(

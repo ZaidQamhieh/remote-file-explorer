@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet showing a QR code that hands one file off to another phone
 /// already paired to the same agent — see `qr_scan_screen.dart` for the
@@ -39,7 +40,7 @@ class QrGenerateSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.qr_code),
+                const Icon(LucideIcons.qrCode),
                 const SizedBox(width: Spacing.sm),
                 Text(
                   context.l10n.qrHandoffSheetTitle,

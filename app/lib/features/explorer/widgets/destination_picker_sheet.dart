@@ -18,6 +18,7 @@ import '../../../core/ui/feedback.dart';
 import '../../../core/ui/state_views.dart';
 import '../destination_picker_state.dart';
 import 'breadcrumb_bar.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Shows the destination picker sheet for [itemCount] selected items being
 /// `copy`d or `move`d, starting at [originPath] (the explorer's current
@@ -139,7 +140,7 @@ class DestinationPickerSheet extends ConsumerWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(LucideIcons.x),
             tooltip: context.l10n.cancelTooltip,
             onPressed: () => Navigator.pop(context),
           ),
@@ -203,7 +204,7 @@ class DestinationPickerSheet extends ConsumerWidget {
             child: EntryLeading(entry: folder, size: 22),
           ),
           title: Text(folder.name, overflow: TextOverflow.ellipsis),
-          trailing: const Icon(Icons.chevron_right_rounded),
+          trailing: const Icon(LucideIcons.chevronRight),
           onTap: () => notifier.navigate(folder.path),
         );
       },
@@ -231,7 +232,7 @@ class DestinationPickerSheet extends ConsumerWidget {
           children: [
             TextButton.icon(
               onPressed: () => _newFolder(context, ref, notifier),
-              icon: const Icon(Icons.create_new_folder_outlined),
+              icon: const Icon(LucideIcons.folderPlus),
               label: Text(context.l10n.newFolderButton),
             ),
             const Spacer(),

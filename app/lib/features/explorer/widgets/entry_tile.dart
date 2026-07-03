@@ -9,6 +9,7 @@ import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/format.dart';
 import '../thumbnail_image.dart';
 import 'entry_drag.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single row in the explorer's list view: leading icon (or checkbox in
 /// multi-select mode), name + size/date metadata, and a chevron for folders.
@@ -175,7 +176,7 @@ class EntryTile extends StatelessWidget {
                 onShowMeta != null
                     ? IconButton(
                       icon: Icon(
-                        Icons.chevron_right_rounded,
+                        LucideIcons.chevronRight,
                         color: scheme.primary,
                       ),
                       tooltip: context.l10n.folderDetailsTooltip,
@@ -184,7 +185,7 @@ class EntryTile extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     )
-                    : Icon(Icons.chevron_right_rounded, color: scheme.primary),
+                    : Icon(LucideIcons.chevronRight, color: scheme.primary),
             ],
           ),
         ),
@@ -278,7 +279,7 @@ class _IconTile extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: const Icon(
-                Icons.star_rounded,
+                LucideIcons.star,
                 size: 12,
                 color: Colors.amber,
               ),
@@ -296,11 +297,7 @@ class _IconTile extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(
-                Icons.push_pin_rounded,
-                size: 11,
-                color: scheme.primary,
-              ),
+              child: Icon(LucideIcons.pin, size: 11, color: scheme.primary),
             ),
           ),
       ],

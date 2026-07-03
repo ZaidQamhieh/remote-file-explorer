@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
 import 'text_editor.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Plain-text preview: fetches the file's bytes through the pinned +
 /// authenticated [AgentClient], decodes as UTF-8, and shows it in a
@@ -83,18 +84,14 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
         (widget.entry.size ?? loadedText.length) <= kMaxEditableBytes;
     return [
       IconButton(
-        icon: Icon(
-          _showLineNumbers
-              ? Icons.format_list_numbered
-              : Icons.format_list_numbered_outlined,
-        ),
+        icon: const Icon(LucideIcons.listOrdered),
         tooltip: _showLineNumbers ? 'Hide line numbers' : 'Show line numbers',
         isSelected: _showLineNumbers,
         onPressed: () => setState(() => _showLineNumbers = !_showLineNumbers),
       ),
       if (canEdit)
         IconButton(
-          icon: const Icon(Icons.edit_outlined),
+          icon: const Icon(LucideIcons.pencil),
           tooltip: 'Edit',
           onPressed: () => _edit(context, loadedText),
         ),

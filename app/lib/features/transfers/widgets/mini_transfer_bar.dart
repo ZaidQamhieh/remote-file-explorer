@@ -6,6 +6,7 @@ import '../../../core/theme/tokens.dart';
 import '../transfer_manager.dart';
 import '../transfer_speed.dart';
 import '../transfer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A thin, tappable progress strip that appears above the explorer's bottom
 /// area whenever any transfer is in flight (running or queued).
@@ -96,7 +97,7 @@ class MiniTransferBar extends ConsumerWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.sync_rounded,
+                          LucideIcons.refreshCw,
                           size: 18,
                           color: scheme.primary,
                         ),
@@ -126,7 +127,7 @@ class MiniTransferBar extends ConsumerWidget {
                         ),
                         const SizedBox(width: Spacing.sm),
                         Icon(
-                          Icons.chevron_right_rounded,
+                          LucideIcons.chevronRight,
                           size: 20,
                           color: scheme.onSurfaceVariant,
                         ),

@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/update_service.dart';
 import '../home/home_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A passive, dismissible "Update available" banner driven by the once-per-
 /// session [latestUpdateProvider]. Renders nothing unless a newer release is
@@ -41,7 +42,7 @@ class UpdateBanner extends ConsumerWidget {
               Row(
                 children: [
                   Icon(
-                    Icons.system_update_rounded,
+                    LucideIcons.downloadCloud,
                     color: scheme.onPrimaryContainer,
                   ),
                   const SizedBox(width: Spacing.sm),

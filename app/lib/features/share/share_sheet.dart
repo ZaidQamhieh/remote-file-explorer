@@ -7,6 +7,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/share_link.dart';
 import '../../core/ui/feedback.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet shown after minting an R1 one-time share link: the URL with
 /// a copy button, a live expiry countdown, and a Revoke button.
@@ -81,7 +82,7 @@ class _ShareSheetState extends State<ShareSheet> {
           children: [
             Row(
               children: [
-                const Icon(Icons.link),
+                const Icon(LucideIcons.link),
                 const SizedBox(width: 8),
                 Text(
                   context.l10n.shareLinkSheetTitle,
@@ -94,7 +95,7 @@ class _ShareSheetState extends State<ShareSheet> {
               children: [
                 Expanded(child: SelectableText(widget.link.url, maxLines: 2)),
                 IconButton(
-                  icon: const Icon(Icons.copy_outlined),
+                  icon: const Icon(LucideIcons.copy),
                   tooltip: context.l10n.copyButton,
                   onPressed: () => _copy(context),
                 ),
@@ -113,7 +114,7 @@ class _ShareSheetState extends State<ShareSheet> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                icon: const Icon(Icons.link_off),
+                icon: const Icon(LucideIcons.unlink),
                 label: Text(context.l10n.shareLinkRevokeButton),
                 onPressed: () => _revoke(context),
                 style: OutlinedButton.styleFrom(foregroundColor: scheme.error),

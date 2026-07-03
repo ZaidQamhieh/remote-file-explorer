@@ -14,6 +14,7 @@ import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import 'settings_section.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// **Backup & restore** (N1) — export the app's full local state (paired
 /// hosts, device tokens, cert fingerprints, favorites, all settings) to a
@@ -27,11 +28,11 @@ class BackupRestoreSection extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     return SettingsSection(
       title: context.l10n.backupRestoreSection,
-      icon: Icons.shield_outlined,
+      icon: LucideIcons.shield,
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.upload_file_outlined),
+          leading: const Icon(LucideIcons.fileUp),
           title: Text(context.l10n.exportConfig),
           subtitle: Text(context.l10n.exportConfigSubtitle),
           onTap: () => _exportConfig(context, ref),
@@ -39,7 +40,7 @@ class BackupRestoreSection extends ConsumerWidget {
         const Divider(height: Spacing.lg),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.download_outlined),
+          leading: const Icon(LucideIcons.download),
           title: Text(context.l10n.importConfig),
           subtitle: Text(context.l10n.importConfigSubtitle),
           onTap: () => _importConfig(context, ref),

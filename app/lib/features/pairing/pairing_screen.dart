@@ -12,6 +12,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Hardware-stable device id (Android ID), used so re-pairing the same phone
 /// reuses its device row on the agent instead of creating a duplicate. Returns
@@ -69,10 +70,13 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
           controller: _tabs,
           tabs: [
             Tab(
-              icon: const Icon(Icons.qr_code_scanner),
+              icon: const Icon(LucideIcons.scanQrCode),
               text: context.l10n.scanQrTab,
             ),
-            Tab(icon: const Icon(Icons.keyboard), text: context.l10n.manualTab),
+            Tab(
+              icon: const Icon(LucideIcons.keyboard),
+              text: context.l10n.manualTab,
+            ),
           ],
         ),
       ),
@@ -244,7 +248,11 @@ class _InlineErrorCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.error_outline, size: 20, color: scheme.onErrorContainer),
+            Icon(
+              LucideIcons.circleAlert,
+              size: 20,
+              color: scheme.onErrorContainer,
+            ),
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(
@@ -361,7 +369,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                 labelText: context.l10n.agentAddressLabel,
                 hintText: context.l10n.agentAddressHint,
                 border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.computer),
+                prefixIcon: const Icon(LucideIcons.computer),
               ),
               validator:
                   (v) =>
@@ -376,7 +384,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                 labelText: context.l10n.pairingCodeLabel,
                 hintText: context.l10n.pairingCodeHint,
                 border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock),
+                prefixIcon: const Icon(LucideIcons.lock),
               ),
               validator:
                   (v) =>
@@ -397,7 +405,7 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                      : const Icon(Icons.link),
+                      : const Icon(LucideIcons.link),
               label: Text(context.l10n.pairButton),
             ),
           ],

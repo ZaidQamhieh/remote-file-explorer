@@ -24,6 +24,7 @@ import 'widgets/glob_indicator.dart';
 import 'widgets/recent_searches_view.dart';
 import 'widgets/search_result_tile.dart';
 import 'widgets/truncation_banner.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 export 'search_types.dart';
 
@@ -265,12 +266,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         actions: [
           if (_controller.text.isNotEmpty) ...[
             IconButton(
-              icon: const Icon(Icons.bookmark_add_outlined),
+              icon: const Icon(LucideIcons.bookmarkPlus),
               tooltip: context.l10n.saveSearch,
               onPressed: () => _saveCurrentSearch(context),
             ),
             IconButton(
-              icon: const Icon(Icons.clear),
+              icon: const Icon(LucideIcons.x),
               tooltip: context.l10n.clearTooltip,
               onPressed: () {
                 _controller.clear();
@@ -367,7 +368,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
     if (_results.isEmpty) {
       return CenteredMessage(
-        icon: Icons.search_off,
+        icon: LucideIcons.searchX,
         message: context.l10n.noResultsFor(_query),
       );
     }
@@ -444,11 +445,11 @@ class _RecentAndSavedSearches extends ConsumerWidget {
           ),
           for (final s in saved)
             ListTile(
-              leading: const Icon(Icons.bookmark_outline),
+              leading: const Icon(LucideIcons.bookmark),
               title: Text(s.name),
               subtitle: Text(s.query),
               trailing: IconButton(
-                icon: const Icon(Icons.close, size: 18),
+                icon: const Icon(LucideIcons.x, size: 18),
                 tooltip: context.l10n.deleteSavedSearch,
                 onPressed:
                     () =>

@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
 import 'text_editor.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Markdown preview: fetches the file's bytes through the pinned +
 /// authenticated [AgentClient], decodes as UTF-8, and renders as formatted
@@ -58,7 +59,7 @@ class _MarkdownPreviewScreenState extends State<MarkdownPreviewScreen> {
   List<Widget> _controls() {
     return [
       IconButton(
-        icon: Icon(_showRaw ? Icons.code : Icons.article_outlined),
+        icon: Icon(_showRaw ? LucideIcons.code : LucideIcons.fileText),
         tooltip: _showRaw ? 'Show rendered' : 'Show raw',
         onPressed: () => setState(() => _showRaw = !_showRaw),
       ),

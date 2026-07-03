@@ -7,6 +7,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/ui/format.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single search result tagged with the [Host] it came from.
 class CrossHostResult {
@@ -160,7 +161,7 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
               final r = _results[i];
               return ListTile(
                 leading: Icon(
-                  r.entry.isDir ? Icons.folder : Icons.insert_drive_file,
+                  r.entry.isDir ? LucideIcons.folder : LucideIcons.file,
                 ),
                 title: Text(r.entry.name),
                 subtitle: Text('${r.host.label} · ${r.entry.path}'),

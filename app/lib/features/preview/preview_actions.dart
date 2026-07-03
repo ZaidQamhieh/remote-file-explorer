@@ -13,6 +13,7 @@ import '../../core/platform/file_opener.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../transfers/transfer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The set of cross-cutting actions a preview viewer offers for the file it's
 /// currently showing — Share, Save (download to device), Delete, and "Show in
@@ -236,30 +237,30 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         ...leadingActions,
         IconButton(
-          icon: const Icon(Icons.open_in_new_outlined),
+          icon: const Icon(LucideIcons.externalLink),
           tooltip: context.l10n.openWithTooltip,
           onPressed: () => actions.openWith(context),
         ),
         IconButton(
-          icon: const Icon(Icons.ios_share_outlined),
+          icon: const Icon(LucideIcons.share),
           tooltip: context.l10n.shareTooltip,
           onPressed: () => actions.share(context),
         ),
         Consumer(
           builder:
               (context, ref, _) => IconButton(
-                icon: const Icon(Icons.download_outlined),
+                icon: const Icon(LucideIcons.download),
                 tooltip: context.l10n.saveToDeviceTooltip,
                 onPressed: () => actions.save(context, ref),
               ),
         ),
         IconButton(
-          icon: const Icon(Icons.folder_open_outlined),
+          icon: const Icon(LucideIcons.folderOpen),
           tooltip: context.l10n.showInFolderTooltip,
           onPressed: onShowInFolder ?? () => Navigator.of(context).maybePop(),
         ),
         IconButton(
-          icon: const Icon(Icons.delete_outline),
+          icon: const Icon(LucideIcons.trash2),
           tooltip: context.l10n.deleteTooltip,
           onPressed: () async {
             final deleted = await actions.delete(context);

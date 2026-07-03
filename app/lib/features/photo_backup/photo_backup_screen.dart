@@ -8,6 +8,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import 'photo_backup_controller.dart';
 import 'photo_backup_prefs.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Settings + manual trigger for one-way photo backup (DCIM → a PC).
 class PhotoBackupScreen extends ConsumerStatefulWidget {
@@ -108,10 +109,10 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       ),
       const Divider(),
       ListTile(
-        leading: const Icon(Icons.computer_outlined),
+        leading: const Icon(LucideIcons.computer),
         title: Text(context.l10n.backUpTo),
         subtitle: Text(_hostLabel(context)),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const Icon(LucideIcons.chevronRight),
         onTap: _hosts.isEmpty ? null : _pickHost,
       ),
       Padding(
@@ -144,7 +145,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       ),
       const Divider(),
       ListTile(
-        leading: const Icon(Icons.cloud_done_outlined),
+        leading: const Icon(LucideIcons.cloudCheck),
         title: Text(context.l10n.photosBackedUp(_doneCount)),
         subtitle: Text(context.l10n.resetBackupHint),
         onTap: _doneCount == 0 ? null : _resetRecord,
@@ -160,7 +161,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                  : const Icon(Icons.backup_outlined),
+                  : const Icon(LucideIcons.cloudUpload),
           label: Text(
             _running ? context.l10n.scanningStatus : context.l10n.backUpNow,
           ),
@@ -187,7 +188,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
               children: [
                 for (final h in _hosts)
                   ListTile(
-                    leading: const Icon(Icons.computer),
+                    leading: const Icon(LucideIcons.computer),
                     title: Text(h.label),
                     subtitle: Text(h.address),
                     selected: h.id == _prefs.hostId,

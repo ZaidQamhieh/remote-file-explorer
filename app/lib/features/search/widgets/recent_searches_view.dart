@@ -5,6 +5,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/storage/recent_searches.dart';
 import '../../../core/theme/tokens.dart';
 import 'centered_message.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class RecentSearchesView extends ConsumerWidget {
   const RecentSearchesView({super.key, required this.onSelect});
@@ -17,7 +18,7 @@ class RecentSearchesView extends ConsumerWidget {
 
     if (recent.isEmpty) {
       return CenteredMessage(
-        icon: Icons.search,
+        icon: LucideIcons.search,
         message: context.l10n.typeToSearch,
       );
     }
@@ -49,10 +50,10 @@ class RecentSearchesView extends ConsumerWidget {
         ),
         for (final query in recent)
           ListTile(
-            leading: const Icon(Icons.history),
+            leading: const Icon(LucideIcons.history),
             title: Text(query),
             trailing: IconButton(
-              icon: const Icon(Icons.close, size: 18),
+              icon: const Icon(LucideIcons.x, size: 18),
               tooltip: context.l10n.removeTooltip,
               onPressed:
                   () => ref.read(recentSearchesProvider.notifier).remove(query),

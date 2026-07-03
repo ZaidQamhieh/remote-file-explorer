@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../batch_rename.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Modal sheet for batch-renaming [names] (basenames, in selection order).
 /// Pops a `List<String>` of the new basenames (same length/order as [names])
@@ -75,12 +76,12 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
               ButtonSegment(
                 value: BatchRenameMode.pattern,
                 label: Text(context.l10n.patternLabel),
-                icon: const Icon(Icons.format_list_numbered),
+                icon: const Icon(LucideIcons.listOrdered),
               ),
               ButtonSegment(
                 value: BatchRenameMode.findReplace,
                 label: Text(context.l10n.findAndReplaceLabel),
-                icon: const Icon(Icons.find_replace),
+                icon: const Icon(LucideIcons.replace),
               ),
             ],
             selected: {_mode},

@@ -94,26 +94,25 @@ void main() {
       );
       expect(dimmedAncestor, findsNothing);
 
-      // No storage gauges for an offline host.
+      // No storage gauges for an offline host — the thin row doesn't render
+      // any dashboard content inline.
       expect(find.byType(LinearProgressIndicator), findsNothing);
 
-      // Browse stays enabled offline; Search is disabled. FilledButton.icon(...)
-      // returns a _FilledButtonWithIcon subclass, so match by predicate instead
-      // of an exact find.byType(FilledButton).
-      ButtonStyleButton findButton(String label) {
-        final finder = find.ancestor(
-          of: find.text(label),
-          matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
-        );
-        return tester.widget<ButtonStyleButton>(finder.first);
-      }
-
-      expect(findButton('Browse').onPressed, isNotNull);
-      expect(findButton('Search').onPressed, isNull);
+      // The whole row browses on tap (no separate "Browse" button anymore);
+      // Search moved into the ⋯ menu and stays disabled while offline.
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      final searchItem = tester.widget<PopupMenuItem<String>>(
+        find.ancestor(
+          of: find.text('Search'),
+          matching: find.byType(PopupMenuItem<String>),
+        ),
+      );
+      expect(searchItem.enabled, isFalse);
     },
   );
 
-  testWidgets('renders the quick actions row', (tester) async {
+  testWidgets('renders the ⋯ menu with the row actions', (tester) async {
     final store = await buildStore();
 
     await tester.runAsync(() async {
@@ -131,8 +130,17 @@ void main() {
       }
     });
 
-    expect(find.text('Browse'), findsOneWidget);
-    expect(find.text('Search'), findsOneWidget);
     expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Transfers'), findsOneWidget);
+    expect(find.text('Diagnostics'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Forget this computer'), findsOneWidget);
+    // Offline host (no /system/drives data): Storage is omitted.
+    expect(find.text('Storage'), findsNothing);
   });
 }

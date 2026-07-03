@@ -48,6 +48,7 @@ import 'widgets/hidden_items_footer.dart';
 import 'widgets/load_more_indicator.dart';
 import 'widgets/selection_bar.dart';
 import 'widgets/view_options_sheet.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 export 'widgets/hidden_items_footer.dart';
 
@@ -349,52 +350,52 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       actions: [
         PaletteAction(
           label: 'Search',
-          icon: Icons.search,
+          icon: LucideIcons.search,
           onTap: () => _openSearch(context, state, client),
         ),
         PaletteAction(
           label: 'Refresh',
-          icon: Icons.refresh,
+          icon: LucideIcons.refreshCw,
           onTap: () => _notifier.refresh(),
         ),
         PaletteAction(
           label: 'Toggle Grid/List',
-          icon: Icons.view_module,
+          icon: LucideIcons.layoutGrid,
           onTap: () => _notifier.toggleView(),
         ),
         PaletteAction(
           label: 'View Options',
-          icon: Icons.tune,
+          icon: LucideIcons.slidersHorizontal,
           onTap: () => ViewOptionsSheet.show(context, notifier: _notifier),
         ),
         PaletteAction(
           label: 'Favorites',
-          icon: Icons.bookmarks_outlined,
+          icon: LucideIcons.bookmark,
           onTap: () => _showFavorites(context),
         ),
         PaletteAction(
           label: 'Transfers',
-          icon: Icons.file_upload_outlined,
+          icon: LucideIcons.fileUp,
           onTap: () => _showTransfers(context),
         ),
         PaletteAction(
           label: 'Trash',
-          icon: Icons.delete_outline,
+          icon: LucideIcons.trash2,
           onTap: () => _openTrash(context),
         ),
         PaletteAction(
           label: 'Storage by Type',
-          icon: Icons.pie_chart_outline,
+          icon: LucideIcons.pieChart,
           onTap: () => _openStorageByType(context, state),
         ),
         PaletteAction(
           label: 'Find Duplicates',
-          icon: Icons.find_replace,
+          icon: LucideIcons.replace,
           onTap: () => _openDupFinder(context, state),
         ),
         PaletteAction(
           label: 'Navigate to Path',
-          icon: Icons.route,
+          icon: LucideIcons.route,
           onTap: () => _showGoToPath(context),
         ),
       ],

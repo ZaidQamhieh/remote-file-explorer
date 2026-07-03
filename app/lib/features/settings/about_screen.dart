@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -78,7 +79,7 @@ class AboutScreen extends StatelessWidget {
                     borderRadius: Radii.lgR,
                   ),
                   child: Icon(
-                    Icons.folder_open_rounded,
+                    LucideIcons.folderOpen,
                     size: 36,
                     color: scheme.onPrimaryContainer,
                   ),

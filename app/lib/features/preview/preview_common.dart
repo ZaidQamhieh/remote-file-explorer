@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maximum size (in bytes) we'll happily load fully into memory for an
 /// in-app preview (images, text, PDFs). Beyond this we show a
@@ -135,7 +136,7 @@ class PreviewError extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.error_outline,
+              LucideIcons.circleAlert,
               size: 48,
               color: Theme.of(context).colorScheme.error,
             ),
@@ -144,7 +145,7 @@ class PreviewError extends StatelessWidget {
             if (onRetry != null) ...[
               const SizedBox(height: Spacing.md),
               OutlinedButton.icon(
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(LucideIcons.refreshCw),
                 label: Text(context.l10n.retryButton),
                 onPressed: onRetry,
               ),
@@ -171,7 +172,7 @@ class PreviewTooLarge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.file_present,
+              LucideIcons.file,
               size: 48,
               color: Theme.of(context).colorScheme.outline,
             ),

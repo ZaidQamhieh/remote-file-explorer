@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/storage/favorites.dart';
 import '../../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single row of [favorites], one tonal card per favorite (folder icon +
 /// label, r16 corners). Tapping a card calls [onOpen]; long-pressing offers
@@ -59,7 +60,7 @@ class FavoritesPinRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.folder_rounded,
+                      LucideIcons.folder,
                       size: 18,
                       color: scheme.onSecondaryContainer,
                     ),

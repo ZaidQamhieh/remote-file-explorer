@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/ui/feedback.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Pumps a button that runs [onTap] with a valid Scaffold/ScaffoldMessenger
 /// context, so the feedback helpers have somewhere to show their snackbars.
@@ -34,7 +35,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Done!'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+    expect(find.byIcon(LucideIcons.circleCheck), findsOneWidget);
   });
 
   testWidgets('showError offers a Retry that fires the callback', (
@@ -49,7 +50,7 @@ void main() {
     await tester.pumpAndSettle(); // let the floating snackbar finish entering
 
     expect(find.text('Boom'), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.byIcon(LucideIcons.circleAlert), findsOneWidget);
 
     await tester.tap(find.text('Retry'));
     await tester.pump();

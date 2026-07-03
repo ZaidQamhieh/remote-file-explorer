@@ -17,6 +17,7 @@ import '../share/share_sheet.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show folderLabel, renameDestination;
 import 'widgets/chmod_dialog.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
 /// delete, and download actions.
@@ -149,7 +150,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           ),
           alignment: Alignment.center,
           child: Icon(
-            _entry.isDir ? Icons.folder : Icons.insert_drive_file,
+            _entry.isDir ? LucideIcons.folder : LucideIcons.file,
             size: 30,
             color: _entry.isDir ? Colors.amber : scheme.onSurfaceVariant,
           ),
@@ -172,16 +173,11 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     final scheme = Theme.of(context).colorScheme;
     final l = context.l10n;
     final rows = <Widget>[
-      _row(context, Icons.route_outlined, l.metaPath, _entry.path),
+      _row(context, LucideIcons.route, l.metaPath, _entry.path),
       if (_entry.size != null)
-        _row(
-          context,
-          Icons.straighten_outlined,
-          l.metaSize,
-          formatSize(_entry.size),
-        ),
+        _row(context, LucideIcons.ruler, l.metaSize, formatSize(_entry.size)),
       if (_entry.mimeType != null)
-        _row(context, Icons.label_outline, l.metaType, _entry.mimeType!),
+        _row(context, LucideIcons.tag, l.metaType, _entry.mimeType!),
       if (_entry.mode != null)
         InkWell(
           onTap: () async {
@@ -197,7 +193,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           },
           child: _row(
             context,
-            Icons.lock_outline,
+            LucideIcons.lock,
             l.metaPermissions,
             _entry.mode!,
           ),
@@ -205,20 +201,20 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (_entry.modified != null)
         _row(
           context,
-          Icons.edit_calendar_outlined,
+          LucideIcons.calendarClock,
           l.metaModified,
           _entry.modified!.toLocal().toString(),
         ),
       if (_entry.created != null)
         _row(
           context,
-          Icons.event_outlined,
+          LucideIcons.calendar,
           l.metaCreated,
           _entry.created!.toLocal().toString(),
         ),
       _row(
         context,
-        Icons.link_outlined,
+        LucideIcons.link,
         l.metaSymlink,
         _entry.isSymlink ? (_entry.symlinkTarget ?? l.yesLabel) : l.noLabel,
       ),
@@ -307,10 +303,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: Icon(
-              isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-              color: isFav ? Colors.amber : null,
-            ),
+            icon: Icon(LucideIcons.star, color: isFav ? Colors.amber : null),
             label: Text(
               isFav
                   ? context.l10n.unfavoriteButton
@@ -327,7 +320,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.visibility_outlined),
+            icon: const Icon(LucideIcons.eye),
             label: Text(context.l10n.previewButton),
             onPressed: () => _preview(context),
           ),
@@ -340,7 +333,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.download_outlined),
+            icon: const Icon(LucideIcons.download),
             label: Text(context.l10n.downloadButton),
             onPressed: () => _download(context),
           ),
@@ -353,7 +346,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.open_in_new_outlined),
+            icon: const Icon(LucideIcons.externalLink),
             label: Text(context.l10n.openWithButton),
             onPressed: () => _openWith(context),
           ),
@@ -366,7 +359,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.ios_share_outlined),
+            icon: const Icon(LucideIcons.share),
             label: Text(context.l10n.shareTooltip),
             onPressed: () => _share(context),
           ),
@@ -379,7 +372,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.link),
+            icon: const Icon(LucideIcons.link),
             label: Text(context.l10n.shareLinkButton),
             onPressed: () => _shareLink(context),
           ),
@@ -392,7 +385,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.qr_code),
+            icon: const Icon(LucideIcons.qrCode),
             label: Text(context.l10n.sendViaQrButton),
             onPressed: () => _sendViaQr(context),
           ),
@@ -405,7 +398,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               ),
               shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
             ),
-            icon: const Icon(Icons.folder_zip_outlined),
+            icon: const Icon(LucideIcons.archive),
             label: Text(context.l10n.extractHereButton),
             onPressed: () => _extract(context),
           ),
@@ -417,7 +410,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             ),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
-          icon: const Icon(Icons.drive_file_rename_outline),
+          icon: const Icon(LucideIcons.filePen),
           label: Text(context.l10n.renameButton),
           onPressed: () => _rename(context),
         ),
@@ -429,7 +422,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             ),
             shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
           ),
-          icon: const Icon(Icons.copy_all_outlined),
+          icon: const Icon(LucideIcons.copy),
           label: Text(context.l10n.duplicateButton),
           onPressed: () => _duplicate(context),
         ),
@@ -443,7 +436,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
             foregroundColor: scheme.error,
             side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
           ),
-          icon: const Icon(Icons.delete_outline),
+          icon: const Icon(LucideIcons.trash2),
           label: Text(context.l10n.deleteButton),
           onPressed: () => _delete(context),
         ),
@@ -454,13 +447,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   Widget _checksumRow(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (_checksum != null) {
-      return _row(context, Icons.tag_outlined, 'SHA-256', _checksum);
+      return _row(context, LucideIcons.tag, 'SHA-256', _checksum);
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
       child: Row(
         children: [
-          Icon(Icons.tag_outlined, size: 18, color: scheme.onSurfaceVariant),
+          Icon(LucideIcons.tag, size: 18, color: scheme.onSurfaceVariant),
           const SizedBox(width: Spacing.sm),
           SizedBox(
             width: 100,

@@ -14,6 +14,7 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/audio_preview.dart';
 
 import 'l10n_helpers.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ---------------------------------------------------------------------------
 // Fake just_audio platform
@@ -241,9 +242,9 @@ void main() {
       _wrap(AudioPreviewScreen(entry: _audio('song.mp3'), client: client)),
     );
 
-    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    expect(find.byIcon(LucideIcons.music), findsOneWidget);
     expect(find.text('song.mp3'), findsWidgets);
-    expect(find.byIcon(Icons.pause), findsOneWidget);
+    expect(find.byIcon(LucideIcons.pause), findsOneWidget);
 
     await _disposeAndClean(tester);
   });
@@ -256,7 +257,7 @@ void main() {
     );
 
     expect(find.textContaining('Could not load this audio'), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.byIcon(LucideIcons.circleAlert), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -309,7 +310,7 @@ void main() {
     );
 
     expect(find.byType(AppBar), findsNothing);
-    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    expect(find.byIcon(LucideIcons.music), findsOneWidget);
 
     await _disposeAndClean(tester);
   });

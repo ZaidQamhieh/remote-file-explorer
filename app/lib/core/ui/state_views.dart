@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n_ext.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Which empty-state message an entry list should show.
 enum EmptyStateKind {
@@ -34,7 +35,7 @@ class EmptyFolderView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            noMatches ? Icons.filter_alt_off_outlined : Icons.folder_open,
+            noMatches ? LucideIcons.filterX : LucideIcons.folderOpen,
             size: 64,
             color: c.outline,
           ),
@@ -70,13 +71,13 @@ class ErrorRetryCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 56, color: c.error),
+            Icon(LucideIcons.circleAlert, size: 56, color: c.error),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(LucideIcons.refreshCw),
               label: Text(context.l10n.retryButton),
             ),
           ],
@@ -99,7 +100,7 @@ class OfflineBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            Icon(Icons.cloud_off, size: 16, color: c.onTertiaryContainer),
+            Icon(LucideIcons.cloudOff, size: 16, color: c.onTertiaryContainer),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

@@ -5,6 +5,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maximum number of crumbs shown before head ancestors collapse into a
 /// `…` menu chip. The root and the tail crumbs (ending with the current
@@ -124,7 +125,7 @@ class BreadcrumbBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
-      child: Icon(Icons.chevron_right_rounded, size: 18, color: scheme.outline),
+      child: Icon(LucideIcons.chevronRight, size: 18, color: scheme.outline),
     );
   }
 }

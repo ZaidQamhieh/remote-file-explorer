@@ -21,6 +21,7 @@ import '../../core/ui/state_views.dart';
 import 'explorer_screen.dart';
 import 'explorer_state.dart' show buildPathStack, folderLabel;
 import 'widgets/favorites_pin_row.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Fetches the drive list for [hostId] via the shared [clientProvider].
 /// `autoDispose` so it's refetched each time the drives screen is opened.
@@ -137,7 +138,7 @@ class _DriveTile extends StatelessWidget {
             borderRadius: Radii.smR,
           ),
           alignment: Alignment.center,
-          child: Icon(Icons.storage_rounded, color: scheme.onSurfaceVariant),
+          child: Icon(LucideIcons.hardDrive, color: scheme.onSurfaceVariant),
         ),
         title: Text(label, overflow: TextOverflow.ellipsis),
         subtitle: Text(
@@ -146,7 +147,7 @@ class _DriveTile extends StatelessWidget {
               : drive.path,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: const Icon(LucideIcons.chevronRight),
         onTap:
             () => Navigator.of(context).push(
               MaterialPageRoute(

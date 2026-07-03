@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/l10n_ext.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Selectable entry-type categories for the search filter chips, mapped to
 /// the server's `types` query parameter values.
 enum SearchCategory {
-  folder(Icons.folder, 'folder'),
-  image(Icons.image, 'image'),
-  video(Icons.movie, 'video'),
-  audio(Icons.music_note, 'audio'),
-  document(Icons.description, 'document'),
-  archive(Icons.folder_zip, 'archive'),
-  other(Icons.insert_drive_file, 'other');
+  folder(LucideIcons.folder, 'folder'),
+  image(LucideIcons.image, 'image'),
+  video(LucideIcons.video, 'video'),
+  audio(LucideIcons.music, 'audio'),
+  document(LucideIcons.fileText, 'document'),
+  archive(LucideIcons.fileArchive, 'archive'),
+  other(LucideIcons.file, 'other');
 
   const SearchCategory(this.icon, this.apiValue);
 

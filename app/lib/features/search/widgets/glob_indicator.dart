@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class GlobIndicator extends StatelessWidget {
   const GlobIndicator({super.key});
@@ -13,7 +14,7 @@ class GlobIndicator extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerLeft,
         child: Chip(
-          avatar: const Icon(Icons.pattern, size: 18),
+          avatar: const Icon(LucideIcons.regex, size: 18),
           label: Text(context.l10n.globPattern),
           visualDensity: VisualDensity.compact,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

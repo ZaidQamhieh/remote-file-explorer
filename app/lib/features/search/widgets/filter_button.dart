@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class FilterButton extends StatelessWidget {
   const FilterButton({
@@ -14,7 +15,7 @@ class FilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = const Icon(Icons.tune);
+    final icon = const Icon(LucideIcons.slidersHorizontal);
     return IconButton(
       tooltip: context.l10n.searchFiltersTooltip,
       onPressed: onPressed,

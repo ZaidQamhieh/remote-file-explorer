@@ -13,6 +13,7 @@ import 'package:remote_file_explorer/features/preview/preview_actions.dart';
 import 'package:remote_file_explorer/features/preview/text_preview.dart';
 
 import 'l10n_helpers.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // Widget tests for the swipeable PreviewPager and the text line-numbers toggle.
 // Headless: a fake AgentClient returns canned text bytes per path, no real host.
@@ -73,9 +74,9 @@ void main() {
     expect(find.text('alpha file'), findsOneWidget); // page body
 
     // Shared actions present.
-    expect(find.byIcon(Icons.ios_share_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.folder_open_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    expect(find.byIcon(LucideIcons.share), findsOneWidget);
+    expect(find.byIcon(LucideIcons.folderOpen), findsOneWidget);
+    expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
 
     // Page indicator shows "1 of 2".
     expect(find.text('1 of 2'), findsOneWidget);
@@ -98,14 +99,14 @@ void main() {
     expect(find.text('1\n2\n3'), findsNothing);
 
     // Toggle on.
-    await tester.tap(find.byIcon(Icons.format_list_numbered_outlined));
+    await tester.tap(find.byIcon(LucideIcons.listOrdered));
     await tester.pumpAndSettle();
 
     expect(find.text('1\n2\n3'), findsOneWidget); // gutter shown
     expect(find.text('one\ntwo\nthree'), findsOneWidget); // text still there
 
     // Toggle off again.
-    await tester.tap(find.byIcon(Icons.format_list_numbered));
+    await tester.tap(find.byIcon(LucideIcons.listOrdered));
     await tester.pumpAndSettle();
     expect(find.text('1\n2\n3'), findsNothing);
   });

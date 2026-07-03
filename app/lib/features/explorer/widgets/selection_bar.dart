@@ -10,6 +10,7 @@ import '../../transfers/transfer_state.dart';
 import '../clipboard_state.dart';
 import '../explorer_state.dart';
 import 'batch_report.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A labelled icon action used in the bottom contextual action bar — tonal
 /// icon button over a small caption, for tidier iconography than bare
@@ -116,27 +117,27 @@ class SelectionBar extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             BarAction(
-              icon: Icons.content_cut,
+              icon: LucideIcons.scissors,
               label: context.l10n.cutButton,
               onPressed: () => _cutSelected(context, ref),
             ),
             BarAction(
-              icon: Icons.copy_outlined,
+              icon: LucideIcons.copy,
               label: context.l10n.copyButton,
               onPressed: () => _copySelected(context, ref),
             ),
             BarAction(
-              icon: Icons.folder_zip_outlined,
+              icon: LucideIcons.archive,
               label: context.l10n.compressButton,
               onPressed: () => _compressSelected(context, ref),
             ),
             BarAction(
-              icon: Icons.download_outlined,
+              icon: LucideIcons.download,
               label: context.l10n.downloadButton,
               onPressed: () => _downloadSelected(context, ref),
             ),
             BarAction(
-              icon: Icons.delete_outline_rounded,
+              icon: LucideIcons.trash2,
               label: context.l10n.deleteButton,
               color: scheme.error,
               onPressed: () => _confirmDelete(context),

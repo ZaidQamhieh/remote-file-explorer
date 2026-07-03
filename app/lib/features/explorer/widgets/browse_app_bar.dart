@@ -5,6 +5,7 @@ import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
 import 'breadcrumb_bar.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 enum OverflowAction {
   viewOptions,
@@ -88,17 +89,17 @@ class BrowseAppBar extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.search_rounded),
+          icon: const Icon(LucideIcons.search),
           tooltip: context.l10n.searchTooltip,
           onPressed: onSearch,
         ),
         IconButton(
-          icon: const Icon(Icons.bookmark_border_rounded),
+          icon: const Icon(LucideIcons.bookmark),
           tooltip: 'Bookmarks',
           onPressed: onOpenBookmarks,
         ),
         IconButton(
-          icon: Icon(isFav ? Icons.star_rounded : Icons.star_border_rounded),
+          icon: Icon(LucideIcons.star),
           color: isFav ? Colors.amber : null,
           tooltip:
               isFav
@@ -107,7 +108,7 @@ class BrowseAppBar extends StatelessWidget {
           onPressed: onToggleFavorite,
         ),
         PopupMenuButton<OverflowAction>(
-          icon: const Icon(Icons.more_vert_rounded),
+          icon: const Icon(LucideIcons.moreVertical),
           tooltip: context.l10n.moreTooltip,
           onSelected: onOverflow,
           itemBuilder:
@@ -115,60 +116,56 @@ class BrowseAppBar extends StatelessWidget {
                 const PopupMenuItem(
                   value: OverflowAction.commandPalette,
                   child: ListTile(
-                    leading: Icon(Icons.terminal_rounded),
+                    leading: Icon(LucideIcons.terminal),
                     title: Text('Command Palette'),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.viewOptions,
                   child: ListTile(
-                    leading: const Icon(Icons.tune_rounded),
+                    leading: const Icon(LucideIcons.slidersHorizontal),
                     title: Text(ctx.l10n.viewOptionsTitle),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.favorites,
                   child: ListTile(
-                    leading: const Icon(Icons.bookmarks_outlined),
+                    leading: const Icon(LucideIcons.bookmark),
                     title: Text(ctx.l10n.favoritesTitle),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.transfers,
                   child: ListTile(
-                    leading: const Icon(Icons.file_upload_outlined),
+                    leading: const Icon(LucideIcons.fileUp),
                     title: Text(ctx.l10n.transfersMenuItem),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.trash,
                   child: ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded),
+                    leading: const Icon(LucideIcons.trash2),
                     title: Text(ctx.l10n.trashTitle),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.storageByType,
                   child: ListTile(
-                    leading: const Icon(Icons.pie_chart_outline_rounded),
+                    leading: const Icon(LucideIcons.pieChart),
                     title: Text(ctx.l10n.storageByTypeTitle),
                   ),
                 ),
                 const PopupMenuItem(
                   value: OverflowAction.dupFinder,
                   child: ListTile(
-                    leading: Icon(Icons.find_replace_rounded),
+                    leading: Icon(LucideIcons.replace),
                     title: Text('Find Duplicates'),
                   ),
                 ),
                 PopupMenuItem(
                   value: OverflowAction.pinOffline,
                   child: ListTile(
-                    leading: Icon(
-                      isCurrentFolderPinned
-                          ? Icons.push_pin_rounded
-                          : Icons.push_pin_outlined,
-                    ),
+                    leading: Icon(LucideIcons.pin),
                     title: Text(
                       isCurrentFolderPinned ? 'Unpin offline' : 'Pin offline',
                     ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/storage/favorites.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/favorites_pin_row.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // FavoritesPinRow: horizontal row of "pin" cards for a host's favorited
 // folders, shown above the listing at the explorer root (Wave C2 item 6).
@@ -45,7 +46,7 @@ void main() {
 
     expect(find.text('Documents'), findsOneWidget);
     expect(find.text('Photos'), findsOneWidget);
-    expect(find.byIcon(Icons.folder_rounded), findsNWidgets(2));
+    expect(find.byIcon(LucideIcons.folder), findsNWidgets(2));
   });
 
   testWidgets('tapping a card calls onOpen with that favorite', (tester) async {

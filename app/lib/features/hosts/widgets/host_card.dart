@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
 import '../../../core/l10n_ext.dart';
-import '../../../core/models/agent_status.dart';
 import '../../../core/models/drive.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
@@ -20,11 +20,6 @@ import '../../settings/settings_screen.dart';
 import '../../transfers/transfer_manager.dart';
 import '../storage_insights_screen.dart';
 import 'connection_diagnostics_sheet.dart';
-import 'storage_gauge.dart';
-
-/// Maximum number of storage gauges shown before collapsing the rest behind
-/// "+N more".
-const _maxVisibleDrives = 3;
 
 /// Curated accent palette for [hostAccentColor] — picked hues rather than raw
 /// hash→HSL so every result stays legible on both light and dark surfaces.
@@ -69,13 +64,13 @@ Widget explorerRootFor(Health? health, Host host) {
   return isWindows ? DrivesView(host: host) : ExplorerScreen(host: host);
 }
 
-/// A single host's dashboard card: status, agent version, active-network
-/// chip, storage gauges, and a quick actions row (Browse / Search /
-/// Transfers / ⋯).
+/// A single host's list row: icon, name, status dot + detail line, and a
+/// trailing Wake button (offline hosts only) / ⋯ menu for the rest of the
+/// actions.
 ///
 /// Pings the host's `/health` on mount to determine online/offline state and,
-/// when online, fetches `AgentClient.drives()` for the storage gauges
-/// (gracefully skipped if the agent predates that endpoint).
+/// when online, fetches `AgentClient.drives()` to know whether any drive is
+/// low on space (gracefully skipped if the agent predates that endpoint).
 class HostCard extends ConsumerStatefulWidget {
   const HostCard({
     super.key,
@@ -99,7 +94,6 @@ class HostCard extends ConsumerStatefulWidget {
 class _HostCardState extends ConsumerState<HostCard> {
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
-  Future<AgentStatus?>? _statusFuture;
 
   /// Address the most recent successful client used — drives the "LAN" vs
   /// "Tailscale" chip. `null` while unknown (offline / not yet pinged).
@@ -140,7 +134,6 @@ class _HostCardState extends ConsumerState<HostCard> {
         });
       }
       _drivesFuture = _loadDrives(client);
-      _statusFuture = _loadStatus(client);
       return health;
     } catch (_) {
       if (mounted) setState(() => _lastChecked = DateTime.now());
@@ -150,63 +143,15 @@ class _HostCardState extends ConsumerState<HostCard> {
     }
   }
 
-  /// Fetches drives for the gauges. Returns an empty list (no gauge section)
-  /// on any error — including a 404 from agents that predate `/system/drives`
-  /// — so a missing endpoint never produces an error card.
+  /// Fetches drives for the low-disk indicator. Returns an empty list on any
+  /// error — including a 404 from agents that predate `/system/drives` — so a
+  /// missing endpoint never produces an error state.
   Future<List<Drive>> _loadDrives(AgentClient client) async {
     try {
       return await client.drives();
     } catch (_) {
       return const [];
     }
-  }
-
-  /// Fetches agent status (uptime + disk summary). Returns null on any error
-  /// so the status row is silently omitted on older agents.
-  Future<AgentStatus?> _loadStatus(AgentClient client) async {
-    try {
-      return await client.fetchStatus();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Widget _buildStatusSection(BuildContext context) {
-    return FutureBuilder<AgentStatus?>(
-      future: _statusFuture,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.only(top: Spacing.sm),
-            child: Center(child: CircularProgressIndicator.adaptive()),
-          );
-        }
-        final status = snap.data;
-        if (status == null) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(top: Spacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Uptime: ${_formatUptime(status.uptimeSeconds)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: Spacing.xs),
-              StorageGauge(
-                drive: Drive(
-                  path: '/',
-                  totalBytes: status.totalBytes,
-                  freeBytes: status.freeBytes,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   /// Adopts any LAN/Tailscale address or MAC the agent reports that we don't
@@ -356,26 +301,31 @@ class _HostCardState extends ConsumerState<HostCard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return FutureBuilder<Health?>(
       future: _pingFuture,
       builder: (context, snap) {
         final online = snap.data != null;
         final checking = snap.connectionState == ConnectionState.waiting;
+        final canWake = !online && !checking && widget.host.macAddress != null;
 
-        // Renders as a divided row inside the host list's shared GroupedCard
-        // (see HostListScreen) rather than its own bordered/elevated card —
-        // the per-host accent now lives on the icon chip in [_HostHeader].
+        // Thin list row inside the host list's shared GroupedCard (see
+        // HostListScreen) — matches the Figma mockup's simple row instead of
+        // the old dashboard-style card. Dashboard-only content (uptime,
+        // per-drive gauges, full-width action buttons) has been demoted to
+        // the Storage/Diagnostics screens reachable from the ⋯ menu; see
+        // host_card.dart's redesign notes.
         return InkWell(
           onTap: () => _openExplorer(context),
           onLongPress: () => _confirmRemove(context),
           child: Padding(
-            padding: const EdgeInsets.all(Spacing.md3),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _HostHeader(
+                _HostRowContent(
                   host: widget.host,
                   snapshot: snap,
                   checking: checking,
@@ -383,42 +333,71 @@ class _HostCardState extends ConsumerState<HostCard> {
                   isTailscaleActive: _isTailscaleActive,
                   lastChecked: _lastChecked,
                   lastSeen: _lastSeen,
+                  drivesFuture: _drivesFuture,
+                  lowDiskThresholdBytes:
+                      ref
+                          .watch(settingsProvider)
+                          .valueOrNull
+                          ?.app
+                          .lowDiskThresholdBytes ??
+                      0,
                 ),
-                if (online && snap.data?.readOnly == true)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Spacing.sm),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lock_outline,
-                          size: 16,
-                          color: scheme.onSurfaceVariant,
+                const SizedBox(width: Spacing.sm),
+                if (canWake)
+                  IconButton.filledTonal(
+                    icon: const Icon(LucideIcons.power, size: 18),
+                    tooltip: context.l10n.wakeButton,
+                    onPressed: () => _sendWol(context),
+                  ),
+                PopupMenuButton<String>(
+                  icon: const Icon(LucideIcons.moreVertical),
+                  tooltip: context.l10n.moreTooltip,
+                  shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'search':
+                        _openSearch(context);
+                      case 'storage':
+                        _openStorage(context);
+                      case 'transfers':
+                        _openTransfers(context);
+                      case 'diagnostics':
+                        _openDiagnostics(context);
+                      case 'settings':
+                        _openSettings(context);
+                      case 'forget':
+                        _confirmRemove(context);
+                    }
+                  },
+                  itemBuilder:
+                      (ctx) => [
+                        PopupMenuItem(
+                          value: 'search',
+                          enabled: online,
+                          child: Text(ctx.l10n.searchButton),
                         ),
-                        const SizedBox(width: Spacing.xs),
-                        Text(
-                          'Read-only',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        if (online)
+                          PopupMenuItem(
+                            value: 'storage',
+                            child: Text(ctx.l10n.storageMenuItem),
+                          ),
+                        PopupMenuItem(
+                          value: 'transfers',
+                          child: Text(ctx.l10n.transfersMenuItem),
+                        ),
+                        PopupMenuItem(
+                          value: 'diagnostics',
+                          child: Text(ctx.l10n.diagnosticsMenuItem),
+                        ),
+                        PopupMenuItem(
+                          value: 'settings',
+                          child: Text(ctx.l10n.settingsMenuItem),
+                        ),
+                        PopupMenuItem(
+                          value: 'forget',
+                          child: Text(ctx.l10n.forgetComputerMenuItem),
                         ),
                       ],
-                    ),
-                  ),
-                if (online && _statusFuture != null)
-                  _buildStatusSection(context),
-                if (online) ..._buildGauges(context),
-                const SizedBox(height: Spacing.md),
-                _QuickActions(
-                  online: online,
-                  canWake:
-                      !online && !checking && widget.host.macAddress != null,
-                  onBrowse: () => _openExplorer(context),
-                  onSearch: () => _openSearch(context),
-                  onWake: () => _sendWol(context),
-                  onStorage: () => _openStorage(context),
-                  onTransfers: () => _openTransfers(context),
-                  onDiagnostics: () => _openDiagnostics(context),
-                  onSettings: () => _openSettings(context),
-                  onForget: () => _confirmRemove(context),
                 ),
               ],
             ),
@@ -427,70 +406,15 @@ class _HostCardState extends ConsumerState<HostCard> {
       },
     );
   }
-
-  /// Storage gauge rows (up to [_maxVisibleDrives], with a "+N more" expander)
-  /// for the drives reported by `AgentClient.drives()`. Renders nothing while
-  /// loading, on error, or if the agent reports no drives — never an error
-  /// block, per the graceful-fallback requirement.
-  List<Widget> _buildGauges(BuildContext context) {
-    final future = _drivesFuture;
-    if (future == null) return const [];
-
-    final threshold =
-        ref.read(settingsProvider).valueOrNull?.app.lowDiskThresholdBytes ?? 0;
-
-    return [
-      const SizedBox(height: Spacing.sm),
-      FutureBuilder<List<Drive>>(
-        future: future,
-        builder: (context, snap) {
-          final drives = snap.data ?? const <Drive>[];
-          if (drives.isEmpty) return const SizedBox.shrink();
-          final hasLowDisk =
-              threshold > 0 &&
-              drives.any(
-                (d) => d.freeBytes != null && d.freeBytes! < threshold,
-              );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (hasLowDisk)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Spacing.sm),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      const SizedBox(width: Spacing.xs),
-                      Text(
-                        context.l10n.lowDiskWarning,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              _DriveGauges(drives: drives),
-            ],
-          );
-        },
-      ),
-    ];
-  }
 }
 
 // ---------------------------------------------------------------------------
-// Header: icon block, name, status dot/label, version + network chip
+// Row content: icon chip, name (+ read-only / low-disk inline badges), and a
+// single status/detail line.
 // ---------------------------------------------------------------------------
 
-class _HostHeader extends StatelessWidget {
-  const _HostHeader({
+class _HostRowContent extends StatelessWidget {
+  const _HostRowContent({
     required this.host,
     required this.snapshot,
     required this.checking,
@@ -498,6 +422,8 @@ class _HostHeader extends StatelessWidget {
     required this.isTailscaleActive,
     required this.lastChecked,
     required this.lastSeen,
+    required this.drivesFuture,
+    required this.lowDiskThresholdBytes,
   });
 
   final Host host;
@@ -507,106 +433,128 @@ class _HostHeader extends StatelessWidget {
   final bool? isTailscaleActive;
   final DateTime? lastChecked;
   final DateTime? lastSeen;
+  final Future<List<Drive>>? drivesFuture;
+  final int lowDiskThresholdBytes;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final health = snapshot.data;
+    final readOnly = online && health?.readOnly == true;
 
-    // The host name always renders at full opacity, even when offline.
-    final nameText = Text(
-      host.label,
-      style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      overflow: TextOverflow.ellipsis,
-    );
+    // Offline hosts render dimmed to 60% opacity EXCEPT the host name, which
+    // always stays fully legible.
+    final dimmed = !online && !checking;
+    Widget maybeDim(Widget child) =>
+        dimmed ? Opacity(opacity: 0.6, child: child) : child;
 
-    // Colored rounded-square icon chip (Figma's per-item accent pattern) —
-    // stable per host via [hostAccentColor] so hosts stay visually
-    // distinguishable at a glance across the list.
-    final iconBlock = Container(
-      width: 48,
-      height: 48,
+    final iconChip = Container(
+      width: 40,
+      height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: hostAccentColor(host.id),
         borderRadius: Radii.chipR,
       ),
-      child: const Icon(Icons.computer_rounded, color: Colors.white),
+      child: const Icon(LucideIcons.monitor, color: Colors.white, size: 20),
     );
 
-    final statusLabel = _StatusLabel(checking: checking, online: online);
-
-    final subtitleText = Text(
-      _subtitle(context, health),
-      style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-      overflow: TextOverflow.ellipsis,
-    );
-
-    final detailText =
-        checking
-            ? null
-            : Text(
-              _statusDetail(context),
-              style: textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-              overflow: TextOverflow.ellipsis,
-            );
-
-    // Offline hosts render dimmed to 60% opacity EXCEPT the host name, which
-    // always stays fully legible. Everything else — the icon block, the
-    // status label, and the subtitle/detail lines — is individually wrapped
-    // in `Opacity(0.6)` when offline (and left untouched while
-    // online/checking).
-    final dimmed = !online && !checking;
-    Widget maybeDim(Widget child) =>
-        dimmed ? Opacity(opacity: 0.6, child: child) : child;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        maybeDim(iconBlock),
-        const SizedBox(width: Spacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: nameText),
-                  const SizedBox(width: Spacing.sm),
-                  maybeDim(statusLabel),
-                ],
-              ),
-              const SizedBox(height: Spacing.xs / 2),
-              maybeDim(subtitleText),
-              if (detailText != null) ...[
-                const SizedBox(height: Spacing.xs / 2),
-                maybeDim(detailText),
+    return Expanded(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          maybeDim(iconChip),
+          const SizedBox(width: Spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        host.label,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (readOnly) ...[
+                      const SizedBox(width: Spacing.xs),
+                      Tooltip(
+                        message: 'Read-only',
+                        child: Icon(
+                          LucideIcons.lock,
+                          size: 14,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (online && drivesFuture != null)
+                      _LowDiskBadge(
+                        drivesFuture: drivesFuture!,
+                        thresholdBytes: lowDiskThresholdBytes,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                maybeDim(
+                  checking
+                      ? Text(
+                        context.l10n.checkingStatus,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      )
+                      : Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: online ? Brand.online : Brand.offline,
+                            ),
+                          ),
+                          const SizedBox(width: Spacing.xs),
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: _statusWord(context),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          online
+                                              ? scheme.onSurface
+                                              : scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  TextSpan(text: ' · ${_subtitle(context)}'),
+                                ],
+                              ),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                ),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  /// "v1.1.0 · Tailscale" / "v1.1.0 · LAN" when online and we know which
-  /// address is active; falls back to the raw address when offline or
-  /// unknown.
-  String _subtitle(BuildContext context, Health? health) {
-    final l = context.l10n;
-    if (health != null) {
-      final network =
-          isTailscaleActive == true ? l.networkTailscale : l.networkLan;
-      if (health.version.isEmpty) return network;
-      return l.hostSubtitleVersionNetwork(health.version, network);
-    }
-    return host.address;
-  }
-
-  String _statusDetail(BuildContext context) {
+  String _statusWord(BuildContext context) {
     final l = context.l10n;
     if (online) {
       final relative = _relative(context, lastChecked);
@@ -618,6 +566,21 @@ class _HostHeader extends StatelessWidget {
     return relative == null
         ? l.offlineStatus
         : l.statusOfflineLastSeen(relative);
+  }
+
+  /// "v1.1.0 · Tailscale" / "v1.1.0 · LAN" when online and we know which
+  /// address is active; falls back to the raw address when offline or
+  /// unknown.
+  String _subtitle(BuildContext context) {
+    final l = context.l10n;
+    final health = snapshot.data;
+    if (health != null) {
+      final network =
+          isTailscaleActive == true ? l.networkTailscale : l.networkLan;
+      if (health.version.isEmpty) return network;
+      return l.hostSubtitleVersionNetwork(health.version, network);
+    }
+    return host.address;
   }
 
   String? _relative(BuildContext context, DateTime? at) {
@@ -632,224 +595,44 @@ class _HostHeader extends StatelessWidget {
   }
 }
 
-/// "● Online" / "● Offline" / "Checking…" status label with a coloured dot.
-class _StatusLabel extends StatelessWidget {
-  const _StatusLabel({required this.checking, required this.online});
-
-  final bool checking;
-  final bool online;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    if (checking) {
-      return Text(
-        context.l10n.checkingStatus,
-        style: textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
-      );
-    }
-
-    final color = online ? Brand.online : Brand.offline;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: Spacing.xs),
-        Text(
-          online ? context.l10n.onlineStatus : context.l10n.offlineStatus,
-          style: textTheme.labelLarge?.copyWith(
-            color: online ? scheme.onSurface : scheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Storage gauges (tertiaryContainer accent block — the card's one accent)
-// ---------------------------------------------------------------------------
-
-class _DriveGauges extends StatefulWidget {
-  const _DriveGauges({required this.drives});
-
-  final List<Drive> drives;
-
-  @override
-  State<_DriveGauges> createState() => _DriveGaugesState();
-}
-
-class _DriveGaugesState extends State<_DriveGauges> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final drives = widget.drives;
-    final visible =
-        _expanded ? drives : drives.take(_maxVisibleDrives).toList();
-    final remaining = drives.length - visible.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final drive in visible) StorageGauge(drive: drive),
-        if (remaining > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Spacing.xs),
-            child: InkWell(
-              borderRadius: Radii.chipR,
-              onTap: () => setState(() => _expanded = true),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: Spacing.xs / 2,
-                  horizontal: Spacing.xs,
-                ),
-                child: Text(
-                  context.l10n.nMoreDrives(remaining),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Quick actions row: Browse (filled), Search (tonal), ⋯ menu
-// ---------------------------------------------------------------------------
-
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.online,
-    required this.canWake,
-    required this.onBrowse,
-    required this.onSearch,
-    required this.onWake,
-    required this.onStorage,
-    required this.onTransfers,
-    required this.onDiagnostics,
-    required this.onSettings,
-    required this.onForget,
+/// Small inline warning dot (replacing the old full-width low-disk banner)
+/// shown next to the host name when any drive is under the configured
+/// threshold. The full per-drive detail lives in [StorageInsightsScreen],
+/// reachable from the row's ⋯ menu — the tooltip carries the same copy the
+/// banner used to show.
+class _LowDiskBadge extends StatelessWidget {
+  const _LowDiskBadge({
+    required this.drivesFuture,
+    required this.thresholdBytes,
   });
 
-  final bool online;
-  final bool canWake;
-  final VoidCallback onBrowse;
-  final VoidCallback onSearch;
-  final VoidCallback onWake;
-  final VoidCallback onStorage;
-  final VoidCallback onTransfers;
-  final VoidCallback onDiagnostics;
-  final VoidCallback onSettings;
-  final VoidCallback onForget;
+  final Future<List<Drive>> drivesFuture;
+  final int thresholdBytes;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Browse stays enabled offline — cached/offline browsing works.
-        // `Expanded` splits the row evenly between Browse and Search (the ⋯
-        // menu keeps its intrinsic width); ellipsis is kept as a fallback for
-        // extreme a11y text-scale values (1.3×–2.0×).
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onBrowse,
-            icon: const Icon(Icons.folder_open_rounded, size: 18),
-            label: Text(
-              context.l10n.browseButton,
-              overflow: TextOverflow.ellipsis,
+    return FutureBuilder<List<Drive>>(
+      future: drivesFuture,
+      builder: (context, snap) {
+        final drives = snap.data ?? const <Drive>[];
+        final hasLowDisk =
+            thresholdBytes > 0 &&
+            drives.any(
+              (d) => d.freeBytes != null && d.freeBytes! < thresholdBytes,
+            );
+        if (!hasLowDisk) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(left: Spacing.xs),
+          child: Tooltip(
+            message: context.l10n.lowDiskWarning,
+            child: Icon(
+              LucideIcons.triangleAlert,
+              size: 14,
+              color: Theme.of(context).colorScheme.error,
             ),
           ),
-        ),
-        const SizedBox(width: Spacing.sm),
-        if (canWake) ...[
-          Expanded(
-            child: FilledButton.tonalIcon(
-              onPressed: onWake,
-              icon: const Icon(Icons.power_settings_new_rounded, size: 18),
-              label: Text(
-                context.l10n.wakeButton,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-        ] else ...[
-          Expanded(
-            child: FilledButton.tonalIcon(
-              onPressed: online ? onSearch : null,
-              icon: const Icon(Icons.search_rounded, size: 18),
-              label: Text(
-                context.l10n.searchButton,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(width: Spacing.sm),
-        PopupMenuButton<String>(
-          tooltip: context.l10n.moreTooltip,
-          shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
-          onSelected: (v) {
-            switch (v) {
-              case 'wake':
-                onWake();
-              case 'storage':
-                onStorage();
-              case 'transfers':
-                onTransfers();
-              case 'diagnostics':
-                onDiagnostics();
-              case 'settings':
-                onSettings();
-              case 'forget':
-                onForget();
-            }
-          },
-          itemBuilder:
-              (ctx) => [
-                if (online)
-                  PopupMenuItem(
-                    value: 'storage',
-                    child: Text(ctx.l10n.storageMenuItem),
-                  ),
-                PopupMenuItem(
-                  value: 'transfers',
-                  child: Text(ctx.l10n.transfersMenuItem),
-                ),
-                PopupMenuItem(
-                  value: 'diagnostics',
-                  child: Text(ctx.l10n.diagnosticsMenuItem),
-                ),
-                PopupMenuItem(
-                  value: 'settings',
-                  child: Text(ctx.l10n.settingsMenuItem),
-                ),
-                PopupMenuItem(
-                  value: 'forget',
-                  child: Text(ctx.l10n.forgetComputerMenuItem),
-                ),
-              ],
-        ),
-      ],
+        );
+      },
     );
   }
-}
-
-// ponytail: int division, no dep
-String _formatUptime(int seconds) {
-  final h = seconds ~/ 3600;
-  final m = (seconds % 3600) ~/ 60;
-  return '${h}h ${m}m';
 }

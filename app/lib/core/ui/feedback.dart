@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// App-wide action feedback: one consistent surface for success / error / info,
 /// so every action gives the same legible, modern confirmation instead of the
@@ -97,15 +98,15 @@ void _show(
       // so the floating snackbar reads well in both light and dark.
       bg = isDark ? const Color(0xFF2E7D32) : const Color(0xFF1B5E20);
       fg = Colors.white;
-      icon = Icons.check_circle_outline;
+      icon = LucideIcons.circleCheck;
     case _Kind.error:
       bg = scheme.error;
       fg = scheme.onError;
-      icon = Icons.error_outline;
+      icon = LucideIcons.circleAlert;
     case _Kind.info:
       bg = scheme.inverseSurface;
       fg = scheme.onInverseSurface;
-      icon = Icons.info_outline;
+      icon = LucideIcons.info;
   }
 
   messenger

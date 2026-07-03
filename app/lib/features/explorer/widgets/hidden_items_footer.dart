@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HiddenItemsFooter extends StatelessWidget {
   const HiddenItemsFooter({
@@ -41,9 +42,7 @@ class HiddenItemsFooter extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  revealed
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
+                  revealed ? LucideIcons.eyeOff : LucideIcons.eye,
                   size: 20,
                   color: scheme.onSurfaceVariant,
                 ),
@@ -68,9 +67,7 @@ class HiddenItemsFooter extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              revealed
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
+              revealed ? LucideIcons.eyeOff : LucideIcons.eye,
               size: 18,
               color: scheme.onSurfaceVariant,
             ),

@@ -6,6 +6,7 @@ import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../home/home_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Full-screen list of all bookmarks, grouped by host.
 ///
@@ -30,7 +31,7 @@ class BookmarksScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.bookmark_outline_rounded,
+                  LucideIcons.bookmark,
                   size: 36,
                   color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
                 ),
@@ -81,7 +82,7 @@ class BookmarksScreen extends ConsumerWidget {
             ),
             for (final b in group.value)
               ListTile(
-                leading: const Icon(Icons.bookmark_rounded),
+                leading: const Icon(LucideIcons.bookmark),
                 title: Text(
                   b.remotePath
                       .split('/')
@@ -103,7 +104,7 @@ class BookmarksScreen extends ConsumerWidget {
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded),
+                      icon: const Icon(LucideIcons.trash2),
                       tooltip: 'Remove bookmark',
                       onPressed:
                           () => ref

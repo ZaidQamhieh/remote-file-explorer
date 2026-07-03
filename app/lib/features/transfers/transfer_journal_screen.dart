@@ -5,6 +5,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class TransferJournalScreen extends ConsumerWidget {
   const TransferJournalScreen({super.key});
@@ -19,7 +20,7 @@ class TransferJournalScreen extends ConsumerWidget {
         title: const Text('Transfer History'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined),
+            icon: const Icon(LucideIcons.trash2),
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
@@ -58,7 +59,7 @@ class TransferJournalScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.history_outlined,
+                    LucideIcons.history,
                     size: 64,
                     color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
                   ),
@@ -80,7 +81,7 @@ class TransferJournalScreen extends ConsumerWidget {
               final isUpload = r.kind == 'upload';
               return ListTile(
                 leading: Icon(
-                  isUpload ? Icons.upload_outlined : Icons.download_outlined,
+                  isUpload ? LucideIcons.upload : LucideIcons.download,
                   color: isUpload ? scheme.tertiary : scheme.primary,
                 ),
                 title: Text(

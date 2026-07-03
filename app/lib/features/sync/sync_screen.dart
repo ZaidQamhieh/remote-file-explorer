@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import 'sync_runner.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Screen listing sync rules with add / delete / toggle / sync-now actions.
 class SyncScreen extends ConsumerStatefulWidget {
@@ -170,7 +171,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _addRule,
         tooltip: 'Add Sync Rule',
-        child: const Icon(Icons.add),
+        child: const Icon(LucideIcons.plus),
       ),
       body:
           _loading
@@ -232,7 +233,7 @@ class _SyncRuleTile extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: Spacing.md),
         color: scheme.error,
-        child: Icon(Icons.delete, color: scheme.onError),
+        child: Icon(LucideIcons.trash2, color: scheme.onError),
       ),
       confirmDismiss: (_) async {
         onDelete();
@@ -288,7 +289,7 @@ class _SyncRuleTile extends StatelessWidget {
                   else
                     TextButton.icon(
                       onPressed: rule.enabled ? onSync : null,
-                      icon: const Icon(Icons.sync, size: 18),
+                      icon: const Icon(LucideIcons.refreshCw, size: 18),
                       label: const Text('Sync Now'),
                     ),
                 ],

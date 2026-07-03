@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/models/entry.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Wraps an entry [child] so it can be long-press dragged and (for folders)
 /// act as a drop target that moves the dropped entry into itself. In
@@ -35,7 +36,7 @@ Widget wrapDraggable({
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.drag_indicator),
+            const Icon(LucideIcons.gripVertical),
             const SizedBox(width: 4),
             Text(entry.name),
           ],

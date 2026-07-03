@@ -8,6 +8,7 @@ import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
 import 'transfer_speed.dart';
 import 'transfer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet listing all transfers, grouped into collapsible
 /// Active / Queued / Done / Failed sections with live per-task speed + ETA,
@@ -108,7 +109,7 @@ class TransferGroupedList extends ConsumerWidget {
               const Spacer(),
               if (doneAndFailed.isNotEmpty)
                 TextButton.icon(
-                  icon: const Icon(Icons.clear_all_rounded, size: 18),
+                  icon: const Icon(LucideIcons.listX, size: 18),
                   label: Text(context.l10n.clearCompletedButton),
                   onPressed: () {
                     for (final t in doneAndFailed) {
@@ -158,7 +159,7 @@ class _EmptyTransfers extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.swap_vert_rounded,
+            LucideIcons.arrowUpDown,
             size: 36,
             color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
           ),
@@ -258,8 +259,8 @@ class _TransferSectionState extends State<_TransferSection> {
                 const SizedBox(width: Spacing.xs),
                 Icon(
                   _expanded
-                      ? Icons.keyboard_arrow_down_rounded
-                      : Icons.keyboard_arrow_right_rounded,
+                      ? LucideIcons.chevronDown
+                      : LucideIcons.chevronRight,
                   size: 18,
                   color: scheme.onSurfaceVariant,
                 ),
@@ -372,10 +373,10 @@ class _TransferTile extends ConsumerWidget {
         removing ? scheme.onErrorContainer : scheme.onTertiaryContainer;
     final icon =
         removing
-            ? Icons.delete_outline_rounded
+            ? LucideIcons.trash2
             : (task.status == TransferStatus.paused
-                ? Icons.play_arrow_rounded
-                : Icons.pause_rounded);
+                ? LucideIcons.play
+                : LucideIcons.pause);
     return Container(
       color: color,
       alignment:
@@ -407,15 +408,18 @@ class _TransferTile extends ConsumerWidget {
         ),
       ),
       TransferStatus.completed => const Icon(
-        Icons.check_circle,
+        LucideIcons.circleCheck,
         color: Brand.online,
       ),
-      TransferStatus.failed => Icon(Icons.error_outline, color: scheme.error),
+      TransferStatus.failed => Icon(
+        LucideIcons.circleAlert,
+        color: scheme.error,
+      ),
       TransferStatus.paused => Icon(
-        Icons.pause_circle_outline,
+        LucideIcons.circlePause,
         color: directionColor,
       ),
-      TransferStatus.queued => Icon(Icons.schedule, color: directionColor),
+      TransferStatus.queued => Icon(LucideIcons.clock, color: directionColor),
     };
     return Container(
       width: 40,
@@ -514,13 +518,13 @@ class _TransferTile extends ConsumerWidget {
     switch (task.status) {
       case TransferStatus.running:
         return IconButton(
-          icon: const Icon(Icons.pause),
+          icon: const Icon(LucideIcons.pause),
           tooltip: context.l10n.pauseTooltip,
           onPressed: () => notifier.pause(task.id),
         );
       case TransferStatus.paused:
         return IconButton(
-          icon: const Icon(Icons.play_arrow),
+          icon: const Icon(LucideIcons.play),
           tooltip: context.l10n.resumeTooltip,
           onPressed: () => notifier.retry(task.id),
         );
@@ -529,12 +533,12 @@ class _TransferTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(LucideIcons.refreshCw),
               tooltip: context.l10n.retryButton,
               onPressed: () => notifier.retry(task.id),
             ),
             IconButton(
-              icon: const Icon(Icons.close),
+              icon: const Icon(LucideIcons.x),
               tooltip: context.l10n.removeTooltip,
               onPressed: () => notifier.remove(task.id),
             ),
@@ -542,13 +546,13 @@ class _TransferTile extends ConsumerWidget {
         );
       case TransferStatus.completed:
         return IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(LucideIcons.x),
           tooltip: context.l10n.removeTooltip,
           onPressed: () => notifier.remove(task.id),
         );
       case TransferStatus.queued:
         return IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(LucideIcons.x),
           tooltip: context.l10n.removeTooltip,
           onPressed: () => notifier.remove(task.id),
         );
@@ -583,7 +587,7 @@ class _VerifiedBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.verified_outlined,
+            LucideIcons.verified,
             size: 14,
             color: scheme.onTertiaryContainer,
           ),

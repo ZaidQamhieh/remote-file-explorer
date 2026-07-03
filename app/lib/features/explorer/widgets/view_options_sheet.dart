@@ -6,6 +6,7 @@ import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../explorer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Modal bottom sheet holding every "how should this listing look" control:
 /// list/grid mode, entry density, and sort (field + direction). Replaces the
@@ -74,12 +75,12 @@ class ViewOptionsSheet extends ConsumerWidget {
                 ButtonSegment(
                   value: false,
                   label: Text(context.l10n.listLabel),
-                  icon: const Icon(Icons.view_list_rounded),
+                  icon: const Icon(LucideIcons.list),
                 ),
                 ButtonSegment(
                   value: true,
                   label: Text(context.l10n.gridLabel),
-                  icon: const Icon(Icons.grid_view_rounded),
+                  icon: const Icon(LucideIcons.layoutGrid),
                 ),
               ],
               selected: {state.gridView},
@@ -95,12 +96,12 @@ class ViewOptionsSheet extends ConsumerWidget {
                 ButtonSegment(
                   value: EntryDensity.comfortable,
                   label: Text(context.l10n.comfortableLabel),
-                  icon: const Icon(Icons.density_medium_rounded),
+                  icon: const Icon(LucideIcons.rows3),
                 ),
                 ButtonSegment(
                   value: EntryDensity.compact,
                   label: Text(context.l10n.compactLabel),
-                  icon: const Icon(Icons.density_small_rounded),
+                  icon: const Icon(LucideIcons.rows4),
                 ),
               ],
               selected: {density},
@@ -136,8 +137,8 @@ class ViewOptionsSheet extends ConsumerWidget {
                           selected
                               ? Icon(
                                 state.sort.ascending
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
+                                    ? LucideIcons.arrowUp
+                                    : LucideIcons.arrowDown,
                                 size: 18,
                               )
                               : null,
@@ -177,7 +178,7 @@ class _ShowHiddenTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       secondary: Badge(
         label: Text('${state.hiddenCount}'),
-        child: const Icon(Icons.visibility_outlined),
+        child: const Icon(LucideIcons.eye),
       ),
       title: Text(context.l10n.showHiddenItems),
       subtitle: Text(context.l10n.nHiddenByVisibility(state.hiddenCount)),

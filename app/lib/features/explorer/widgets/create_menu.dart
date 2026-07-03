@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/ui/feedback.dart';
 import '../explorer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom-sheet menu for the "New" FAB: create a folder or an empty file in
 /// the current directory.
@@ -17,7 +18,7 @@ class CreateMenu extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.create_new_folder_outlined),
+            leading: const Icon(LucideIcons.folderPlus),
             title: Text(context.l10n.newFolderButton),
             onTap: () {
               Navigator.pop(context);
@@ -29,7 +30,7 @@ class CreateMenu extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.note_add_outlined),
+            leading: const Icon(LucideIcons.filePlus),
             title: Text(context.l10n.newFileButton),
             onTap: () {
               Navigator.pop(context);

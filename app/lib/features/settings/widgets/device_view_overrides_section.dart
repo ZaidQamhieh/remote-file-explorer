@@ -7,6 +7,7 @@ import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import 'settings_section.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Per-device view overrides (Wave 0). Each overridable view setting defaults
 /// to **"Use app default"** (inherit the global value set in App Settings) and
@@ -30,7 +31,7 @@ class DeviceViewOverridesSection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.displayDeviceSection,
-      icon: Icons.tune_rounded,
+      icon: LucideIcons.slidersHorizontal,
       trailing: TextButton(
         onPressed:
             settings.hasOverride(hostId)
@@ -193,9 +194,7 @@ class _SortControl extends StatelessWidget {
                   ? context.l10n.ascendingTooltip
                   : context.l10n.descendingTooltip,
           icon: Icon(
-            value.ascending
-                ? Icons.arrow_upward_rounded
-                : Icons.arrow_downward_rounded,
+            value.ascending ? LucideIcons.arrowUp : LucideIcons.arrowDown,
           ),
           onPressed:
               () => onChanged(value.copyWith(ascending: !value.ascending)),

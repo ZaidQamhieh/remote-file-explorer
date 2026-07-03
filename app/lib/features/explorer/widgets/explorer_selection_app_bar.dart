@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../explorer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ExplorerSelectionAppBar extends StatelessWidget {
   const ExplorerSelectionAppBar({
@@ -29,7 +30,7 @@ class ExplorerSelectionAppBar extends StatelessWidget {
     return AppBar(
       key: const ValueKey('selection_app_bar'),
       leading: IconButton(
-        icon: const Icon(Icons.close_rounded),
+        icon: const Icon(LucideIcons.x),
         tooltip: context.l10n.clearSelectionTooltip,
         onPressed: onClose,
       ),
@@ -43,13 +44,13 @@ class ExplorerSelectionAppBar extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.drive_file_rename_outline),
+          icon: const Icon(LucideIcons.filePen),
           tooltip: context.l10n.batchRenameTooltip,
           onPressed: onBatchRename,
         ),
         IconButton(
           icon: Icon(
-            allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+            allSelected ? LucideIcons.square : LucideIcons.checkSquare,
           ),
           tooltip:
               allSelected

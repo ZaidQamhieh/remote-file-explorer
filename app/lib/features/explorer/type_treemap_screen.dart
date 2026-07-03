@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/ui/format.dart';
 import '../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ---------------------------------------------------------------------------
 // Category colour mapping
@@ -336,7 +337,7 @@ class _ErrorView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.error_outline,
+              LucideIcons.circleAlert,
               size: 48,
               color: Theme.of(context).colorScheme.error,
             ),
@@ -361,7 +362,7 @@ class _EmptyView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.folder_open,
+            LucideIcons.folderOpen,
             size: 48,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),

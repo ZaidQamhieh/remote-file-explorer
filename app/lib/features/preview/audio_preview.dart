@@ -10,6 +10,7 @@ import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Audio preview: downloads the file to a temp cache file (showing progress),
 /// then plays it through `just_audio` behind a compact custom transport —
@@ -167,7 +168,7 @@ class _AudioTransport extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.music_note, size: 96, color: scheme.primary),
+            Icon(LucideIcons.music, size: 96, color: scheme.primary),
             const SizedBox(height: Spacing.lg),
             Text(
               title,
@@ -268,8 +269,8 @@ class _PlayPauseButton extends StatelessWidget {
           iconSize: 48,
           icon: Icon(
             completed
-                ? Icons.replay
-                : (playing ? Icons.pause : Icons.play_arrow),
+                ? LucideIcons.rotateCcw
+                : (playing ? LucideIcons.pause : LucideIcons.play),
           ),
           onPressed: () {
             if (completed) {

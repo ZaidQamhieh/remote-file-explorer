@@ -12,6 +12,7 @@ import 'package:remote_file_explorer/features/preview/text_editor.dart';
 import 'package:remote_file_explorer/features/preview/text_preview.dart';
 
 import 'l10n_helpers.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // TextPreviewScreen widget tests — headless (fake AgentClient, no real host).
 //
@@ -80,9 +81,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    expect(find.byIcon(LucideIcons.pencil), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.tap(find.byIcon(LucideIcons.pencil));
     await tester.pumpAndSettle();
 
     expect(find.byType(TextEditorScreen), findsOneWidget);
@@ -112,6 +113,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    expect(find.byIcon(LucideIcons.pencil), findsNothing);
   });
 }

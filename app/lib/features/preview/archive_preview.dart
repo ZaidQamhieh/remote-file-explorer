@@ -5,6 +5,7 @@ import '../../core/models/archive_entry.dart';
 import '../../core/models/entry.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Preview screen for archive files (zip, tar, etc.). Lists the archive's
 /// contents (files and directories) fetched via [AgentClient.archiveList],
@@ -94,13 +95,13 @@ class _ArchivePreviewScreenState extends State<ArchivePreviewScreen> {
             Material(
               child: ListTile(
                 dense: true,
-                leading: const Icon(Icons.subdirectory_arrow_right, size: 18),
+                leading: const Icon(LucideIcons.cornerDownRight, size: 18),
                 title: Text(
                   '/$_filter',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: const Icon(LucideIcons.x, size: 18),
                   onPressed: () => setState(() => _filter = ''),
                 ),
               ),
@@ -121,7 +122,7 @@ class _ArchivePreviewScreenState extends State<ArchivePreviewScreen> {
       itemBuilder: (ctx, i) {
         final e = entries[i];
         return ListTile(
-          leading: Icon(e.isDir ? Icons.folder : Icons.insert_drive_file),
+          leading: Icon(e.isDir ? LucideIcons.folder : LucideIcons.file),
           title: Text(e.path),
           subtitle: e.isDir ? null : Text(formatSize(e.size)),
           onTap: e.isDir ? () => setState(() => _filter = e.path) : null,

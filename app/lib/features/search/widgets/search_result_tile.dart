@@ -4,6 +4,7 @@ import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/format.dart';
 import '../search_logic.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class SearchResultTile extends StatelessWidget {
   const SearchResultTile({
@@ -39,7 +40,7 @@ class SearchResultTile extends StatelessWidget {
         maxLines: 2,
         style: Theme.of(context).textTheme.bodySmall,
       ),
-      trailing: entry.isDir ? const Icon(Icons.chevron_right) : null,
+      trailing: entry.isDir ? const Icon(LucideIcons.chevronRight) : null,
       onTap: onTap,
     );
   }
@@ -78,26 +79,26 @@ class SearchResultTile extends StatelessWidget {
 
 Icon resultIcon(Entry entry) {
   if (entry.isDir) {
-    return const Icon(Icons.folder, color: Colors.amber);
+    return const Icon(LucideIcons.folder, color: Colors.amber);
   }
   final mime = entry.mimeType ?? '';
   if (mime.startsWith('image/')) {
-    return const Icon(Icons.image, color: Colors.blue);
+    return const Icon(LucideIcons.image, color: Colors.blue);
   }
   if (mime.startsWith('video/')) {
-    return const Icon(Icons.movie, color: Colors.purple);
+    return const Icon(LucideIcons.video, color: Colors.purple);
   }
   if (mime.startsWith('audio/')) {
-    return const Icon(Icons.music_note, color: Colors.green);
+    return const Icon(LucideIcons.music, color: Colors.green);
   }
   if (mime.contains('pdf')) {
-    return const Icon(Icons.picture_as_pdf, color: Colors.red);
+    return const Icon(LucideIcons.fileText, color: Colors.red);
   }
   if (mime.contains('zip') || mime.contains('archive')) {
-    return const Icon(Icons.folder_zip, color: Colors.orange);
+    return const Icon(LucideIcons.fileArchive, color: Colors.orange);
   }
   if (mime.startsWith('text/') || mime.contains('json')) {
-    return const Icon(Icons.description, color: Colors.teal);
+    return const Icon(LucideIcons.fileText, color: Colors.teal);
   }
-  return const Icon(Icons.insert_drive_file);
+  return const Icon(LucideIcons.file);
 }

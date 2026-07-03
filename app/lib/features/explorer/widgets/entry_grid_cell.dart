@@ -7,6 +7,7 @@ import '../../../core/ui/entry_leading.dart';
 import '../../preview/image_preview.dart';
 import '../thumbnail_image.dart';
 import 'entry_drag.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single cell in the explorer's grid view: a square thumbnail (images) or
 /// tonal icon, with the entry name below.
@@ -167,7 +168,7 @@ class EntryGridCell extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons.check_rounded,
+                      LucideIcons.check,
                       size: 16,
                       color: scheme.onPrimary,
                     ),
@@ -186,7 +187,7 @@ class EntryGridCell extends StatelessWidget {
                     ),
                     alignment: Alignment.center,
                     child: const Icon(
-                      Icons.star_rounded,
+                      LucideIcons.star,
                       size: 13,
                       color: Colors.amber,
                     ),
@@ -205,7 +206,7 @@ class EntryGridCell extends StatelessWidget {
                     ),
                     alignment: Alignment.center,
                     child: Icon(
-                      Icons.push_pin_rounded,
+                      LucideIcons.pin,
                       size: 12,
                       color: scheme.primary,
                     ),

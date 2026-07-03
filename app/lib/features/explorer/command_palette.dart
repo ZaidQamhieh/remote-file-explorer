@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PaletteAction {
   const PaletteAction({
@@ -62,7 +63,7 @@ class _CommandPaletteState extends State<CommandPalette> {
               autofocus: true,
               decoration: const InputDecoration(
                 hintText: 'Type a command...',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(LucideIcons.search),
                 border: OutlineInputBorder(),
               ),
               onChanged: (v) => setState(() => _filter = v),

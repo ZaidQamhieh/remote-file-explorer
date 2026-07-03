@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Browser for the agent's trash: lists deleted items (newest first), restores
 /// them to their original location, deletes individual items forever, or empties
@@ -144,7 +145,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           actions: [
             if (items != null && items.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.delete_sweep_outlined),
+                icon: const Icon(LucideIcons.trash2),
                 tooltip: context.l10n.emptyTrashTooltip,
                 onPressed: _emptyAll,
               ),
@@ -180,7 +181,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.delete_outline_rounded, size: 64, color: c.outline),
+          Icon(LucideIcons.trash2, size: 64, color: c.outline),
           const SizedBox(height: 12),
           Text(
             context.l10n.trashIsEmpty,
@@ -208,7 +209,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     ].join(' · ');
     return ListTile(
       leading: Icon(
-        item.isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
+        item.isDir ? LucideIcons.folder : LucideIcons.file,
         color: item.isDir ? Colors.amber : scheme.onSurfaceVariant,
       ),
       title: Text(item.name, overflow: TextOverflow.ellipsis),
@@ -228,14 +229,14 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               PopupMenuItem(
                 value: 'restore',
                 child: ListTile(
-                  leading: const Icon(Icons.restore_rounded),
+                  leading: const Icon(LucideIcons.archiveRestore),
                   title: Text(ctx.l10n.restoreButton),
                 ),
               ),
               PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
-                  leading: const Icon(Icons.delete_forever_outlined),
+                  leading: const Icon(LucideIcons.trash2),
                   title: Text(ctx.l10n.deleteForeverButton),
                 ),
               ),

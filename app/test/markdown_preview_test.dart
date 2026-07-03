@@ -11,6 +11,7 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/markdown_preview.dart';
 
 import 'l10n_helpers.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
@@ -80,7 +81,7 @@ void main() {
     expect(find.byType(Markdown), findsOneWidget);
 
     // Tap the raw toggle (code icon).
-    await tester.tap(find.byIcon(Icons.article_outlined));
+    await tester.tap(find.byIcon(LucideIcons.fileText));
     await tester.pumpAndSettle();
 
     // Now shows raw source as SelectableText, not Markdown widget.

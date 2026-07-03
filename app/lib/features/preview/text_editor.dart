@@ -8,6 +8,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Decodes [bytes] as strict UTF-8. Throws [NotTextException] if the content
 /// looks binary / isn't valid UTF-8, so callers can show a friendly message
@@ -244,7 +245,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
               )
             else
               IconButton(
-                icon: const Icon(Icons.save_outlined),
+                icon: const Icon(LucideIcons.save),
                 tooltip: context.l10n.saveTooltip,
                 onPressed: _dirty ? () => _save() : null,
               ),

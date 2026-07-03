@@ -38,6 +38,7 @@ import '../explorer/widgets/destination_picker_sheet.dart';
 import '../home/home_state.dart';
 import '../transfers/transfer_manager.dart';
 import '../transfers/transfer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ---------------------------------------------------------------------------
 // Pure logic (unit-testable without the platform plugin)
@@ -243,7 +244,7 @@ class _ShareIntakeListenerState extends ConsumerState<ShareIntakeListener> {
               ),
               ...hosts.map(
                 (host) => ListTile(
-                  leading: const Icon(Icons.computer_rounded),
+                  leading: const Icon(LucideIcons.computer),
                   title: Text(host.label),
                   subtitle: Text(host.address),
                   onTap: () => Navigator.pop(sheetContext, host),

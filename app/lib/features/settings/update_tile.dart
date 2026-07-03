@@ -13,6 +13,7 @@ import '../../core/models/app_release.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A Settings tile that checks GitHub Releases for a newer APK and installs
 /// it, with clear feedback at every stage. Hidden on non-Android platforms.
@@ -205,7 +206,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     final scheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(
-        _statusIsError ? Icons.error_outline : Icons.system_update,
+        _statusIsError ? LucideIcons.circleAlert : LucideIcons.downloadCloud,
         color: _statusIsError ? scheme.error : null,
       ),
       title: Text(context.l10n.checkForUpdates),
@@ -222,7 +223,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
                 dimension: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-              : const Icon(Icons.chevron_right),
+              : const Icon(LucideIcons.chevronRight),
       onTap: _busy ? null : _checkAndInstall,
     );
   }

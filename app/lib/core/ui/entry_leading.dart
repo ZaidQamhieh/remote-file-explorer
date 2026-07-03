@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/entry.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Broad file-type categories used for icon selection, mirroring the
 /// server's category table (`folder`, `image`, `video`, `audio`, `document`,
@@ -140,31 +141,35 @@ const Color _otherBg = Color(0xFF27272A); // zinc-800
 
 _IconSpec _iconSpecFor(Entry entry) {
   if (entry.isDir) {
-    return const _IconSpec(Icons.folder, _folderColor, _folderBg);
+    return const _IconSpec(LucideIcons.folder, _folderColor, _folderBg);
   }
   final mime = entry.mimeType ?? '';
   switch (categoryOf(entry)) {
     case EntryCategory.folder:
-      return const _IconSpec(Icons.folder, _folderColor, _folderBg);
+      return const _IconSpec(LucideIcons.folder, _folderColor, _folderBg);
     case EntryCategory.image:
-      return const _IconSpec(Icons.image, _imageColor, _imageBg);
+      return const _IconSpec(LucideIcons.image, _imageColor, _imageBg);
     case EntryCategory.video:
-      return const _IconSpec(Icons.movie, _videoColor, _videoBg);
+      return const _IconSpec(LucideIcons.video, _videoColor, _videoBg);
     case EntryCategory.audio:
-      return const _IconSpec(Icons.music_note, _audioColor, _audioBg);
+      return const _IconSpec(LucideIcons.music, _audioColor, _audioBg);
     case EntryCategory.archive:
-      return const _IconSpec(Icons.folder_zip, _archiveColor, _archiveBg);
+      return const _IconSpec(
+        LucideIcons.fileArchive,
+        _archiveColor,
+        _archiveBg,
+      );
     case EntryCategory.document:
       if (mime.contains('pdf')) {
         return const _IconSpec(
-          Icons.picture_as_pdf,
+          LucideIcons.fileText,
           _documentColor,
           _documentBg,
         );
       }
-      return const _IconSpec(Icons.description, _documentColor, _documentBg);
+      return const _IconSpec(LucideIcons.fileText, _documentColor, _documentBg);
     case EntryCategory.other:
-      return const _IconSpec(Icons.insert_drive_file, null, _otherBg);
+      return const _IconSpec(LucideIcons.file, null, _otherBg);
   }
 }
 

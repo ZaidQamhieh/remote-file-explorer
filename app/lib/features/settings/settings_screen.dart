@@ -18,6 +18,7 @@ import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../sync/sync_screen.dart';
 import 'widgets/settings_section.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -261,13 +262,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.lg),
         SettingsSection(
           title: context.l10n.agentSection,
-          icon: Icons.dns_outlined,
+          icon: LucideIcons.server,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(context.l10n.agentNameLabel),
               subtitle: Text(s.agentName),
-              trailing: const Icon(Icons.edit_outlined),
+              trailing: const Icon(LucideIcons.pencil),
               onTap: _editName,
             ),
           ],
@@ -275,7 +276,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.accessSection,
-          icon: Icons.lock_outline,
+          icon: LucideIcons.lock,
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -326,9 +327,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.allowedFoldersSection,
-          icon: Icons.folder_outlined,
+          icon: LucideIcons.folder,
           trailing: IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(LucideIcons.plus),
             tooltip: context.l10n.addFolderTooltip,
             onPressed: _addRoot,
           ),
@@ -346,10 +347,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 (r) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  leading: const Icon(Icons.folder_outlined),
+                  leading: const Icon(LucideIcons.folder),
                   title: Text(r),
                   trailing: IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
+                    icon: const Icon(LucideIcons.circleMinus),
                     tooltip: context.l10n.removeFolderTooltip,
                     onPressed:
                         () => _patch(
@@ -366,7 +367,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.pairedDevicesSection,
-          icon: Icons.devices_outlined,
+          icon: LucideIcons.monitorSmartphone,
           children: [
             for (final d in _devices) _DeviceRow(device: d, screen: this),
           ],
@@ -374,14 +375,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: 'Sync Rules',
-          icon: Icons.sync_outlined,
+          icon: LucideIcons.refreshCw,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.sync),
+              leading: const Icon(LucideIcons.refreshCw),
               title: const Text('Manage Sync Rules'),
               subtitle: const Text('Download remote folders to local storage'),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(LucideIcons.chevronRight),
               onTap:
                   () => Navigator.push(
                     context,
@@ -395,7 +396,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.aboutSection,
-          icon: Icons.info_outline,
+          icon: LucideIcons.info,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -447,7 +448,7 @@ class _BandwidthSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SettingsSection(
       title: context.l10n.bandwidthSection,
-      icon: Icons.speed_outlined,
+      icon: LucideIcons.gauge,
       children: [
         _BandwidthDropdown(
           label: context.l10n.bandwidthUploadLimit,
@@ -523,7 +524,7 @@ class _SecurityWarningCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.shield_outlined, color: scheme.onSecondaryContainer),
+            Icon(LucideIcons.shield, color: scheme.onSecondaryContainer),
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(
@@ -650,7 +651,7 @@ class FileVisibilitySection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.fileVisibilitySection,
-      icon: Icons.visibility_outlined,
+      icon: LucideIcons.eye,
       children: [
         VisibilityEditor(prefs: settings.app.visibility, notifier: notifier),
       ],
@@ -679,7 +680,7 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.fileVisibilityDeviceSection,
-      icon: Icons.visibility_outlined,
+      icon: LucideIcons.eye,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: Spacing.xs),
@@ -810,7 +811,7 @@ class _AddExtensionFieldState extends State<_AddExtensionField> {
         prefixText: '.',
         hintText: context.l10n.addExtensionHint,
         suffixIcon: IconButton(
-          icon: const Icon(Icons.add),
+          icon: const Icon(LucideIcons.plus),
           tooltip: context.l10n.addExtensionTooltip,
           onPressed: _submit,
         ),
@@ -867,7 +868,7 @@ class _DeviceRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(
-        d.revoked ? Icons.phonelink_erase : Icons.smartphone,
+        d.revoked ? LucideIcons.unplug : LucideIcons.smartphone,
         color: d.revoked ? scheme.error : scheme.onSurfaceVariant,
       ),
       title: Text(d.label),
@@ -882,7 +883,7 @@ class _DeviceRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_outline, size: 14, color: scheme.tertiary),
+                  Icon(LucideIcons.lock, size: 14, color: scheme.tertiary),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -936,7 +937,7 @@ class _DriveRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(
-        drive.isOS ? Icons.memory : Icons.storage_outlined,
+        drive.isOS ? LucideIcons.memoryStick : LucideIcons.hardDrive,
         color: drive.isOS ? scheme.primary : scheme.onSurfaceVariant,
       ),
       title: Row(

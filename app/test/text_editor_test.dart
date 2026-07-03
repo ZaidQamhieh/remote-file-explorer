@@ -10,6 +10,7 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/text_editor.dart';
 
 import 'l10n_helpers.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // TextEditorScreen widget tests — headless (fake AgentClient, no real host).
 //
@@ -130,7 +131,7 @@ void main() {
       await _pumpEditor(tester, client);
 
       final saveButton = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.save_outlined),
+        find.widgetWithIcon(IconButton, LucideIcons.save),
       );
       expect(saveButton.onPressed, isNull);
     });
@@ -151,7 +152,7 @@ void main() {
         await tester.enterText(find.byType(TextField), 'hello world!');
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.tap(find.byIcon(LucideIcons.save));
         await tester.pumpAndSettle();
 
         expect(client.putCalls, hasLength(1));
@@ -188,13 +189,13 @@ void main() {
 
         await tester.enterText(find.byType(TextField), 'edit one');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.tap(find.byIcon(LucideIcons.save));
         await tester.pumpAndSettle();
 
         // Second edit + save should send the *updated* baseModified.
         await tester.enterText(find.byType(TextField), 'edit two');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.save_outlined));
+        await tester.tap(find.byIcon(LucideIcons.save));
         await tester.pumpAndSettle();
 
         expect(client.putCalls, hasLength(2));
@@ -211,7 +212,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       expect(find.text('File changed on disk'), findsOneWidget);
@@ -230,7 +231,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(TextButton, 'Reload'));
@@ -241,14 +242,14 @@ void main() {
 
       // Dirty flag cleared -> Save disabled again.
       final saveButton = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.save_outlined),
+        find.widgetWithIcon(IconButton, LucideIcons.save),
       );
       expect(saveButton.onPressed, isNull);
 
       // A subsequent edit + save should use the reloaded baseModified.
       await tester.enterText(find.byType(TextField), 'fresh from disk, edited');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       expect(client.putCalls, hasLength(2));
@@ -261,7 +262,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(FilledButton, 'Overwrite'));
@@ -283,7 +284,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('read-only'), findsOneWidget);
@@ -297,7 +298,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.save_outlined));
+      await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('too large'), findsOneWidget);

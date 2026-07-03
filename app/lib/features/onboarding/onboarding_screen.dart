@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _kOnboardingKey = 'onboarding_complete';
 
@@ -55,17 +56,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onPageChanged: (i) => setState(() => _page = i),
                 children: [
                   _Page(
-                    icon: Icons.devices_rounded,
+                    icon: LucideIcons.monitorSmartphone,
                     title: context.l10n.onboardingWelcomeTitle,
                     body: context.l10n.onboardingWelcomeBody,
                   ),
                   _Page(
-                    icon: Icons.wifi_rounded,
+                    icon: LucideIcons.wifi,
                     title: context.l10n.onboardingHowTitle,
                     body: context.l10n.onboardingHowBody,
                   ),
                   _Page(
-                    icon: Icons.rocket_launch_rounded,
+                    icon: LucideIcons.rocket,
                     title: context.l10n.onboardingReadyTitle,
                     body: context.l10n.onboardingReadyBody,
                   ),

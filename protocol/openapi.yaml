@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.10.0
+  version: 1.11.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -56,20 +56,22 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
 
-  /throughput:
+  /metrics:
     get:
-      summary: Cumulative bytes transferred (uploads received, downloads sent)
+      summary: Live host metrics (transfer byte counters, CPU %, RAM %)
       description: >
-        Process-lifetime running totals, not a rate. Clients poll this and
-        diff successive readings against tsMs to derive a live bytes/sec
-        figure — the agent keeps no history, so counters reset on restart.
+        rxBytes/txBytes are process-lifetime cumulative totals, not a rate —
+        clients diff successive readings against tsMs to derive live bytes/sec.
+        cpuPercent/ramPercent are instantaneous point reads (Linux /proc; 0 on
+        other platforms). The agent keeps no history, so all series reset on
+        restart. The web companion polls this every 2s.
       security: [{ deviceToken: [] }]
       responses:
         '200':
-          description: Cumulative transfer counters
+          description: Current host metrics
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Throughput' }
+              schema: { $ref: '#/components/schemas/Metrics' }
         '401': { $ref: '#/components/responses/Error' }
 
   /agent/restart:
@@ -1464,11 +1466,13 @@ components:
         freeBytes: { type: integer, format: int64 }
         totalBytes: { type: integer, format: int64 }
 
-    Throughput:
+    Metrics:
       type: object
       properties:
         rxBytes: { type: integer, format: int64 }
         txBytes: { type: integer, format: int64 }
+        cpuPercent: { type: number, format: double }
+        ramPercent: { type: number, format: double }
         tsMs: { type: integer, format: int64 }
 
     Error:

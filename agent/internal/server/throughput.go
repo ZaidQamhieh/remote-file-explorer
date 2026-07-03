@@ -8,24 +8,29 @@ import (
 
 // rxBytesTotal/txBytesTotal are process-lifetime cumulative counters for
 // bytes received (chunk uploads, whole-file content writes) and sent (file
-// downloads) through the agent. The web companion polls /throughput and
-// diffs successive readings client-side to draw a live bytes/sec chart — no
+// downloads) through the agent. The web companion polls /metrics and diffs
+// successive readings client-side to draw a live bytes/sec chart — no
 // server-side history is kept, so a reload just starts the chart over.
+// cpuPercent/ramPercent (metrics_linux.go) are instantaneous point reads.
 var rxBytesTotal atomic.Int64
 var txBytesTotal atomic.Int64
 
-type throughputResponse struct {
-	RxBytes int64 `json:"rxBytes"`
-	TxBytes int64 `json:"txBytes"`
-	TsMs    int64 `json:"tsMs"`
+type metricsResponse struct {
+	RxBytes    int64   `json:"rxBytes"`
+	TxBytes    int64   `json:"txBytes"`
+	CPUPercent float64 `json:"cpuPercent"`
+	RAMPercent float64 `json:"ramPercent"`
+	TsMs       int64   `json:"tsMs"`
 }
 
-func throughputHandler() http.HandlerFunc {
+func metricsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, throughputResponse{
-			RxBytes: rxBytesTotal.Load(),
-			TxBytes: txBytesTotal.Load(),
-			TsMs:    time.Now().UnixMilli(),
+		writeJSON(w, http.StatusOK, metricsResponse{
+			RxBytes:    rxBytesTotal.Load(),
+			TxBytes:    txBytesTotal.Load(),
+			CPUPercent: cpuPercent(),
+			RAMPercent: ramPercent(),
+			TsMs:       time.Now().UnixMilli(),
 		})
 	}
 }

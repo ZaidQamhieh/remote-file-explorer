@@ -27,6 +27,7 @@
     --primary: #3b82f6;
     --green: #34d399;
     --blue: #60a5fa;
+    --purple: #a78bfa;
     --amber: #fbbf24;
     --red: #f87171;
     --destructive: #ef4444;
@@ -119,7 +120,10 @@
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
   .stat-head { display: flex; align-items: center; gap: 7px; color: var(--dim); margin-bottom: 10px; }
   .stat-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
-  .stat-value { font-size: 24px; font-weight: 500; font-family: var(--mono); }
+  .stat-value { font-size: 24px; font-weight: 500; font-family: var(--mono); line-height: 1; }
+  .stat-value .unit { font-size: 12px; color: var(--dim); font-family: var(--sans); margin-left: 3px; }
+  .stat { overflow: hidden; }
+  .spark { width: calc(100% + 32px); height: 40px; display: block; margin: 8px -16px -16px; }
 
   /* ---------- Status text / tags ---------- */
   .status-text { font-size: 11px; font-weight: 500; font-family: var(--mono); }
@@ -320,6 +324,22 @@
             <div class="stat">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><span class="stat-label">Platform</span></div>
               <div class="stat-value" id="platform" style="font-size:16px"></div>
+            </div>
+            <div class="stat">
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><span class="stat-label">CPU</span></div>
+              <div class="stat-value"><span id="cpu-val">—</span><span class="unit">%</span></div>
+              <svg class="spark" id="cpu-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+                <path id="cpu-spark-fill" fill="rgba(59,130,246,.18)" stroke="none"></path>
+                <path id="cpu-spark-line" fill="none" stroke="var(--primary)" stroke-width="1.5"></path>
+              </svg>
+            </div>
+            <div class="stat">
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></svg><span class="stat-label">RAM</span></div>
+              <div class="stat-value"><span id="ram-val">—</span><span class="unit">%</span></div>
+              <svg class="spark" id="ram-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+                <path id="ram-spark-fill" fill="rgba(167,139,250,.18)" stroke="none"></path>
+                <path id="ram-spark-line" fill="none" stroke="var(--purple)" stroke-width="1.5"></path>
+              </svg>
             </div>
             <div class="stat">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg><span class="stat-label">Storage</span></div>
@@ -966,14 +986,19 @@
   // every 2s. No server-side history — the chart just starts over on reload,
   // which is honest about what the agent actually tracks.
   const NET_MAX_SAMPLES = 30;
+  const SPARK_MAX_SAMPLES = 40;
   let netSamples = [];
+  let cpuSamples = [];
+  let ramSamples = [];
   let netLast = null;
 
-  function svgPath(points, close) {
+  // svgPath maps points into a polyline; when close, drops to the given
+  // baseline y and back to form a fillable area.
+  function svgPath(points, close, baseline) {
     if (points.length === 0) return '';
     let d = 'M' + points[0][0] + ',' + points[0][1];
     for (let i = 1; i < points.length; i++) d += ' L' + points[i][0] + ',' + points[i][1];
-    if (close) d += ' L' + points[points.length - 1][0] + ',100 L' + points[0][0] + ',100 Z';
+    if (close) d += ' L' + points[points.length - 1][0] + ',' + baseline + ' L' + points[0][0] + ',' + baseline + ' Z';
     return d;
   }
 
@@ -986,15 +1011,33 @@
     const txPts = netSamples.map((s, i) => [(startI + i) * stepX, 100 - (s.txBps / maxBps) * 92]);
     $('net-rx-line').setAttribute('d', svgPath(rxPts, false));
     $('net-tx-line').setAttribute('d', svgPath(txPts, false));
-    $('net-rx-fill').setAttribute('d', svgPath(rxPts, true));
-    $('net-tx-fill').setAttribute('d', svgPath(txPts, true));
+    $('net-rx-fill').setAttribute('d', svgPath(rxPts, true, 100));
+    $('net-tx-fill').setAttribute('d', svgPath(txPts, true, 100));
   }
 
-  async function pollThroughput() {
+  // drawSpark renders a fixed 0-100% sparkline (CPU/RAM) into a 200x40 svg.
+  function drawSpark(prefix, samples) {
+    if (samples.length < 2) return;
+    const stepX = 200 / (SPARK_MAX_SAMPLES - 1);
+    const startI = SPARK_MAX_SAMPLES - samples.length;
+    const pts = samples.map((v, i) => [(startI + i) * stepX, 40 - (Math.min(100, v) / 100) * 38]);
+    $(prefix + '-line').setAttribute('d', svgPath(pts, false));
+    $(prefix + '-fill').setAttribute('d', svgPath(pts, true, 40));
+  }
+
+  async function pollMetrics() {
     try {
-      const t = await api('/throughput');
+      const t = await api('/metrics');
       $('net-rx').textContent = fmtBytes(t.rxBytes);
       $('net-tx').textContent = fmtBytes(t.txBytes);
+      $('cpu-val').textContent = t.cpuPercent.toFixed(1);
+      $('ram-val').textContent = t.ramPercent.toFixed(1);
+      cpuSamples.push(t.cpuPercent);
+      ramSamples.push(t.ramPercent);
+      if (cpuSamples.length > SPARK_MAX_SAMPLES) cpuSamples.shift();
+      if (ramSamples.length > SPARK_MAX_SAMPLES) ramSamples.shift();
+      drawSpark('cpu-spark', cpuSamples);
+      drawSpark('ram-spark', ramSamples);
       if (netLast) {
         const dt = Math.max(0.5, (t.tsMs - netLast.tsMs) / 1000);
         const rxBps = Math.max(0, (t.rxBytes - netLast.rxBytes) / dt);
@@ -1008,16 +1051,16 @@
     } catch (e) { /* page may have navigated away from the auth'd session */ }
   }
 
-  let netInterval = null;
+  let metricsInterval = null;
 
   function showDashboard() {
     pairView.classList.add('hidden');
     dashView.classList.remove('hidden');
     showPage('status');
     loadDashboard();
-    if (!netInterval) {
-      pollThroughput();
-      netInterval = setInterval(pollThroughput, 2000);
+    if (!metricsInterval) {
+      pollMetrics();
+      metricsInterval = setInterval(pollMetrics, 2000);
     }
   }
 

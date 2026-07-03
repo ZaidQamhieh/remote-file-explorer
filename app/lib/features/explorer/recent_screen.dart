@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import '../search/widgets/search_result_tile.dart';
+import '../search/widgets/truncation_banner.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Lists the most recently modified files across [host], newest first.
@@ -27,6 +28,7 @@ class RecentScreen extends ConsumerStatefulWidget {
 
 class _RecentScreenState extends ConsumerState<RecentScreen> {
   List<Entry>? _entries;
+  bool _timeBudgetHit = false;
   String? _error;
   bool _loading = true;
 
@@ -39,10 +41,11 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final entries = await widget.client.recent();
+      final result = await widget.client.recent();
       if (mounted) {
         setState(() {
-          _entries = entries;
+          _entries = result.entries;
+          _timeBudgetHit = result.timeBudgetHit;
           _error = null;
           _loading = false;
         });
@@ -79,20 +82,33 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
     if (entries == null || entries.isEmpty) {
       return _emptyView(context);
     }
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-        itemCount: entries.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder:
-            (_, i) => SearchResultTile(
-              entry: entries[i],
-              query: '',
-              highlight: false,
-              onTap: () => _openResult(entries[i]),
+    return Column(
+      children: [
+        if (_timeBudgetHit)
+          TruncationBanner(
+            truncated: false,
+            timeBudgetHit: true,
+            limit: entries.length,
+            message: context.l10n.recentTimedOut,
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _load,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+              itemCount: entries.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder:
+                  (_, i) => SearchResultTile(
+                    entry: entries[i],
+                    query: '',
+                    highlight: false,
+                    onTap: () => _openResult(entries[i]),
+                  ),
             ),
-      ),
+          ),
+        ),
+      ],
     );
   }
 

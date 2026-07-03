@@ -553,6 +553,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get recentEmptySubtitle => 'Files you edit will show up here.';
 
   @override
+  String get recentTimedOut => 'Scan timed out — showing partial results.';
+
+  @override
   String get patternLabel => 'نمط';
 
   @override

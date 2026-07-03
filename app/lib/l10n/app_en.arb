@@ -306,6 +306,7 @@
   "recentTitle": "Recent",
   "recentIsEmpty": "No recent files",
   "recentEmptySubtitle": "Files you edit will show up here.",
+  "recentTimedOut": "Scan timed out — showing partial results.",
 
   "patternLabel": "Pattern",
   "findAndReplaceLabel": "Find & replace",

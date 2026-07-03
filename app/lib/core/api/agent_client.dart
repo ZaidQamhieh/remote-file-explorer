@@ -720,12 +720,19 @@ class AgentClient {
   ///
   /// If [root] is provided the walk is constrained to that subtree.
   /// [limit] caps the number of results (server-side capped too).
-  Future<List<Entry>> recent({String? root, int limit = 100}) async {
-    final data = await _get<List<dynamic>>(
-      '/fs/recent',
-      queryParameters: {'limit': limit, if (root != null) 'root': root},
-    );
-    return data.map((e) => Entry.fromJson(e as Map<String, dynamic>)).toList();
+  ///
+  /// Like [search], the walk has a server-side time budget — check
+  /// [SearchResult.timeBudgetHit] before treating the list as complete.
+  Future<SearchResult> recent({String? root, int limit = 100}) async {
+    try {
+      final res = await _dio.get<List<dynamic>>(
+        '/fs/recent',
+        queryParameters: {'limit': limit, if (root != null) 'root': root},
+      );
+      return SearchResult.fromResponse(res.data ?? const [], res.headers.map);
+    } on DioException catch (e) {
+      _throwTransferError(e);
+    }
   }
 
   // ---------------------------------------------------------------------------

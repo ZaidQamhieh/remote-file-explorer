@@ -146,8 +146,8 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 		if h.Len() < limit {
 			heap.Push(h, entry)
 		} else if entry.Modified.After((*h)[0].Modified) {
-			heap.Pop(h)
-			heap.Push(h, entry)
+			(*h)[0] = entry
+			heap.Fix(h, 0)
 		}
 		return nil
 	})

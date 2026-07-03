@@ -1010,6 +1010,12 @@ abstract class AppLocalizations {
   /// **'Files you edit will show up here.'**
   String get recentEmptySubtitle;
 
+  /// No description provided for @recentTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan timed out — showing partial results.'**
+  String get recentTimedOut;
+
   /// No description provided for @patternLabel.
   ///
   /// In en, this message translates to:

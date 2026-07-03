@@ -10,19 +10,25 @@ class TruncationBanner extends StatelessWidget {
     required this.truncated,
     required this.timeBudgetHit,
     required this.limit,
+    this.message,
   });
 
   final bool truncated;
   final bool timeBudgetHit;
   final int limit;
 
+  /// Overrides the default truncated/timed-out wording — for callers whose
+  /// context isn't a search (e.g. Recents).
+  final String? message;
+
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final message =
-        truncated
+    final resolvedMessage =
+        message ??
+        (truncated
             ? context.l10n.showingFirstNResults(limit)
-            : context.l10n.searchTimedOut;
+            : context.l10n.searchTimedOut);
     return Material(
       color: c.tertiaryContainer,
       child: Padding(
@@ -36,7 +42,7 @@ class TruncationBanner extends StatelessWidget {
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(
-                message,
+                resolvedMessage,
                 style: TextStyle(color: c.onTertiaryContainer, fontSize: 13),
               ),
             ),

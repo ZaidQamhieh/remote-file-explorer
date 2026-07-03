@@ -49,6 +49,9 @@
   button.primary { background: var(--primary); color: var(--on-primary); }
   button.danger { background: var(--error); color: #2E0A0A; }
   button:disabled { opacity: .5; cursor: default; }
+  button { transition: transform .1s ease, filter .15s ease; }
+  button:active:not(:disabled) { transform: scale(.96); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.1); }
   input[type=text], input[type=number], input[type=password] {
     background: var(--surface-container-high);
     border: 1px solid var(--outline-variant);
@@ -56,6 +59,7 @@
     padding: 8px 12px;
     color: var(--on-surface);
     width: 100%;
+    transition: border-color .15s, box-shadow .15s;
   }
   input[type=text]:focus, input[type=number]:focus, input[type=password]:focus {
     outline: none;
@@ -87,14 +91,34 @@
   .hidden { display: none !important; }
 
   .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .auth-card { width: 100%; max-width: 380px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 16px; padding: 28px 24px; }
+  .auth-card { width: 100%; max-width: 380px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 16px; padding: 28px 24px; animation: cardIn .4s cubic-bezier(.2,.8,.2,1) both; }
   .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
   .auth-brand .mark { width: 32px; height: 32px; border-radius: 9px; background: var(--primary); color: var(--on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
   .auth-brand span { font-weight: 600; font-size: 15px; }
   .tabbar { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--outline-variant); }
-  .tab { background: transparent; padding: 0 0 12px; margin-bottom: -1px; font-size: 14px; font-weight: 600; color: var(--on-surface-variant); border-radius: 0; border-bottom: 2px solid transparent; }
+  .tab { background: transparent; padding: 0 0 12px; margin-bottom: -1px; font-size: 14px; font-weight: 600; color: var(--on-surface-variant); border-radius: 0; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; }
   .tab.tab-active { color: var(--on-surface); border-bottom-color: var(--primary); }
   .note { color: var(--on-surface-variant); font-size: 12px; margin-top: 16px; line-height: 1.5; }
+
+  #login-form, #code-form, #register-form { animation: fieldIn .3s ease both; }
+  .error-text:not(.hidden) { animation: shake .3s ease; }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(10px) scale(.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fieldIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shake {
+    20%, 60% { transform: translateX(-4px); }
+    40%, 80% { transform: translateX(4px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-card, #login-form, #code-form, #register-form, .error-text:not(.hidden) { animation: none; }
+    button, input[type=text], input[type=number], input[type=password] { transition: none; }
+  }
 </style>
 </head>
 <body>

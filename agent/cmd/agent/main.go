@@ -144,6 +144,34 @@ func newHTTPServer(addr string, handler http.Handler, cert tls.Certificate) *htt
 	}
 }
 
+// webListenAddr is a second, best-effort HTTPS listener sharing the primary
+// listener's handler and cert, so the agent is reachable at
+// https://<name>.local with no port suffix (browsers default to 443).
+// Binding a port below 1024 needs CAP_NET_BIND_SERVICE (or root); when that's
+// not set up, startWebListener fails soft and the agent keeps running on the
+// primary --addr listener only.
+const webListenAddr = ":443"
+
+// startWebListener attempts to bind webListenAddr. It returns nil if the bind
+// failed, so the caller can skip it in waitForShutdown.
+func startWebListener(handler http.Handler, cert tls.Certificate) *http.Server {
+	ln, err := net.Listen("tcp", webListenAddr)
+	if err != nil {
+		log.Printf("web listener on %s not started (%v) — the agent is still reachable on its "+
+			"primary port; run `sudo setcap cap_net_bind_service=+ep <agent binary>` to enable "+
+			"port-free https:// access", webListenAddr, err)
+		return nil
+	}
+	srv := newHTTPServer(webListenAddr, handler, cert)
+	go func() {
+		log.Printf("also listening on https://%s/v1  (no port needed)", webListenAddr)
+		if err := srv.ServeTLS(ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("web listener stopped: %v", err)
+		}
+	}()
+	return srv
+}
+
 // startMDNS advertises the agent over mDNS on addr's port, if resolvable. It
 // returns a stop func to be deferred by the caller, or nil if mDNS didn't
 // start (invalid port or start error, both logged and non-fatal).
@@ -188,16 +216,23 @@ func startWebAlias(lanAddr, version string) func() {
 	return aliasSvc.Stop
 }
 
-// waitForShutdown blocks until SIGINT/SIGTERM, then gracefully shuts srv down.
-func waitForShutdown(srv *http.Server) {
+// waitForShutdown blocks until SIGINT/SIGTERM, then gracefully shuts each of
+// srvs down. Nil entries (e.g. an optional listener that never started) are
+// skipped.
+func waitForShutdown(srvs ...*http.Server) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown: %v", err)
+	for _, srv := range srvs {
+		if srv == nil {
+			continue
+		}
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
 	}
 	log.Println("agent stopped")
 }
@@ -274,6 +309,8 @@ func runServe(args []string) {
 		}
 	}()
 
+	webSrv := startWebListener(handler, cert)
+
 	if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
 		defer stopMDNS()
 	}
@@ -281,7 +318,7 @@ func runServe(args []string) {
 		defer stopAlias()
 	}
 
-	waitForShutdown(srv)
+	waitForShutdown(srv, webSrv)
 }
 
 func hostName() string {

@@ -112,6 +112,8 @@
   .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--dim); }
   .panel-head .spacer { flex: 1; }
   .panel-head .meta { font-size: 11px; color: var(--dim); }
+  .legend { display: inline-flex; align-items: center; font-size: 10px; color: var(--dim); margin-left: 16px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
@@ -292,8 +294,8 @@
       <div class="sidebar-footer">
         <div class="who-avatar" id="who-avatar"></div>
         <div style="flex:1; min-width:0">
-          <div class="who-name" id="agent-name-2">RFE</div>
-          <div class="who-sub">Web session</div>
+          <div class="who-name" id="who-name"></div>
+          <div class="who-sub">This browser</div>
         </div>
       </div>
       <button id="forget-btn" style="width:100%; justify-content:center; margin-top:10px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Forget this browser</button>
@@ -324,6 +326,23 @@
               <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
               <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
             </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+              <h2 class="panel-title">Network I/O</h2>
+              <span class="spacer"></span>
+              <span class="legend"><span class="legend-dot" style="background:var(--blue)"></span>RX <span class="mono" id="net-rx"></span></span>
+              <span class="legend"><span class="legend-dot" style="background:var(--green)"></span>TX <span class="mono" id="net-tx"></span></span>
+            </div>
+            <svg id="net-chart" viewBox="0 0 600 100" preserveAspectRatio="none" style="width:100%; height:100px; display:block; overflow:visible">
+              <path id="net-rx-fill" fill="rgba(96,165,250,.15)" stroke="none"></path>
+              <path id="net-tx-fill" fill="rgba(52,211,153,.15)" stroke="none"></path>
+              <path id="net-rx-line" fill="none" stroke="var(--blue)" stroke-width="1.5"></path>
+              <path id="net-tx-line" fill="none" stroke="var(--green)" stroke-width="1.5"></path>
+            </svg>
+            <p class="dim" id="net-empty" style="margin:8px 0 0">Live since this page opened — no history is kept between visits.</p>
           </div>
         </div>
 
@@ -412,6 +431,7 @@
   const TOKEN_KEY = 'rfe_device_token';
   const FP_KEY = 'rfe_cert_fingerprint';
   const NAME_KEY = 'rfe_agent_name';
+  const WHO_KEY = 'rfe_who';
   const BROWSER_ID_KEY = 'rfe_browser_id';
 
   const $ = (id) => document.getElementById(id);
@@ -555,10 +575,11 @@
   $('tab-code').addEventListener('click', () => selectTab('code'));
   $('tab-register').addEventListener('click', () => selectTab('register'));
 
-  function storeSession(body) {
+  function storeSession(body, whoLabel) {
     localStorage.setItem(TOKEN_KEY, body.deviceToken);
     localStorage.setItem(FP_KEY, body.certFingerprint || '');
     localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+    localStorage.setItem(WHO_KEY, whoLabel);
   }
 
   // ---------- Login ----------
@@ -578,7 +599,7 @@
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'login failed');
-      storeSession(body);
+      storeSession(body, username);
       showDashboard();
     } catch (e) {
       errEl.textContent = e.message;
@@ -602,7 +623,7 @@
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'pairing failed');
-      storeSession(body);
+      storeSession(body, label);
       showDashboard();
     } catch (e) {
       errEl.textContent = e.message;
@@ -633,7 +654,7 @@
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'registration failed');
-      storeSession(body);
+      storeSession(body, username);
       showDashboard();
     } catch (e) {
       errEl.textContent = e.message;
@@ -646,6 +667,7 @@
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(FP_KEY);
     localStorage.removeItem(NAME_KEY);
+    localStorage.removeItem(WHO_KEY);
     location.reload();
   });
 
@@ -879,8 +901,9 @@
   async function loadDashboard() {
     const agentName = localStorage.getItem(NAME_KEY) || 'RFE';
     $('agent-name').textContent = agentName;
-    $('agent-name-2').textContent = agentName;
-    $('who-avatar').textContent = agentName.charAt(0).toUpperCase();
+    const who = localStorage.getItem(WHO_KEY) || 'This browser';
+    $('who-name').textContent = who;
+    $('who-avatar').textContent = who.charAt(0).toUpperCase();
     try {
       const [status, settings, bandwidth, devices] = await Promise.all([
         api('/status'), api('/settings'), api('/settings/bandwidth'), api('/devices'),
@@ -938,11 +961,64 @@
     a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });
   });
 
+  // ---------- Network I/O chart ----------
+  // Real bytes/sec, sampled by diffing GET /throughput's cumulative counters
+  // every 2s. No server-side history — the chart just starts over on reload,
+  // which is honest about what the agent actually tracks.
+  const NET_MAX_SAMPLES = 30;
+  let netSamples = [];
+  let netLast = null;
+
+  function svgPath(points, close) {
+    if (points.length === 0) return '';
+    let d = 'M' + points[0][0] + ',' + points[0][1];
+    for (let i = 1; i < points.length; i++) d += ' L' + points[i][0] + ',' + points[i][1];
+    if (close) d += ' L' + points[points.length - 1][0] + ',100 L' + points[0][0] + ',100 Z';
+    return d;
+  }
+
+  function drawNetChart() {
+    if (netSamples.length < 2) return;
+    const maxBps = Math.max(1, ...netSamples.map((s) => Math.max(s.rxBps, s.txBps)));
+    const stepX = 600 / (NET_MAX_SAMPLES - 1);
+    const startI = NET_MAX_SAMPLES - netSamples.length;
+    const rxPts = netSamples.map((s, i) => [(startI + i) * stepX, 100 - (s.rxBps / maxBps) * 92]);
+    const txPts = netSamples.map((s, i) => [(startI + i) * stepX, 100 - (s.txBps / maxBps) * 92]);
+    $('net-rx-line').setAttribute('d', svgPath(rxPts, false));
+    $('net-tx-line').setAttribute('d', svgPath(txPts, false));
+    $('net-rx-fill').setAttribute('d', svgPath(rxPts, true));
+    $('net-tx-fill').setAttribute('d', svgPath(txPts, true));
+  }
+
+  async function pollThroughput() {
+    try {
+      const t = await api('/throughput');
+      $('net-rx').textContent = fmtBytes(t.rxBytes);
+      $('net-tx').textContent = fmtBytes(t.txBytes);
+      if (netLast) {
+        const dt = Math.max(0.5, (t.tsMs - netLast.tsMs) / 1000);
+        const rxBps = Math.max(0, (t.rxBytes - netLast.rxBytes) / dt);
+        const txBps = Math.max(0, (t.txBytes - netLast.txBytes) / dt);
+        netSamples.push({ rxBps, txBps });
+        if (netSamples.length > NET_MAX_SAMPLES) netSamples.shift();
+        $('net-empty').classList.toggle('hidden', netSamples.length > 1);
+        drawNetChart();
+      }
+      netLast = t;
+    } catch (e) { /* page may have navigated away from the auth'd session */ }
+  }
+
+  let netInterval = null;
+
   function showDashboard() {
     pairView.classList.add('hidden');
     dashView.classList.remove('hidden');
     showPage('status');
     loadDashboard();
+    if (!netInterval) {
+      pollThroughput();
+      netInterval = setInterval(pollThroughput, 2000);
+    }
   }
 
   function showPairing() {

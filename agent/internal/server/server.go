@@ -58,6 +58,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
 			r.Get("/status", statusHandler(cfg))
+			r.Get("/throughput", throughputHandler())
 			r.Post("/agent/restart", restartHandler())
 		})
 

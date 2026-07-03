@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.9.0
+  version: 1.10.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -55,6 +55,22 @@ paths:
               schema: { $ref: '#/components/schemas/AgentStatus' }
         '401': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
+
+  /throughput:
+    get:
+      summary: Cumulative bytes transferred (uploads received, downloads sent)
+      description: >
+        Process-lifetime running totals, not a rate. Clients poll this and
+        diff successive readings against tsMs to derive a live bytes/sec
+        figure — the agent keeps no history, so counters reset on restart.
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Cumulative transfer counters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Throughput' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /agent/restart:
     post:
@@ -1447,6 +1463,13 @@ components:
         platform: { type: string }
         freeBytes: { type: integer, format: int64 }
         totalBytes: { type: integer, format: int64 }
+
+    Throughput:
+      type: object
+      properties:
+        rxBytes: { type: integer, format: int64 }
+        txBytes: { type: integer, format: int64 }
+        tsMs: { type: integer, format: int64 }
 
     Error:
       type: object

@@ -75,6 +75,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+		w = countingWriter{w}
 
 		// Apply download bandwidth throttle if configured.
 		var content io.ReadSeeker = f
@@ -169,6 +170,7 @@ func writeContentHandler(ops *fsops.Ops) http.HandlerFunc {
 			handleFsError(w, err)
 			return
 		}
+		rxBytesTotal.Add(int64(len(data)))
 		writeJSON(w, http.StatusOK, entry)
 	}
 }
@@ -311,6 +313,7 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+		rxBytesTotal.Add(int64(len(data)))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

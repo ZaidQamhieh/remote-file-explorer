@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.5.0
+  version: 1.6.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair and /health require
@@ -43,6 +43,26 @@ paths:
               schema: { $ref: '#/components/schemas/AgentStatus' }
         '401': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
+
+  /agent/restart:
+    post:
+      summary: Restart the agent's own service (Linux/systemd only)
+      description: >
+        Any paired device may trigger this — restart-only, no remote stop, so
+        there is nothing to get permanently stuck in. Shells out to
+        `systemctl --user restart rfe-agent.service`; the response is sent
+        before the command runs. Returns 501 on non-Linux agents.
+      security: [{ deviceToken: [] }]
+      responses:
+        '202':
+          description: Restart triggered
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '501':
+          description: Not supported on this platform. code=NOT_IMPLEMENTED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /pair:
     post:

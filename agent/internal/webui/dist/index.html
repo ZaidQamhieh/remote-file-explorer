@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFE Web Companion</title>
+<style>
+  :root {
+    --surface: #09090B;
+    --surface-container: #18181B;
+    --surface-container-high: #212125;
+    --surface-container-highest: #27272A;
+    --on-surface: #F4F4F5;
+    --on-surface-variant: #71717A;
+    --outline-variant: #27272A;
+    --primary: #60A5FA;
+    --on-primary: #0B1220;
+    --secondary: #34D399;
+    --error: #F87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--on-surface);
+    font-family: -apple-system, "Inter", Roboto, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 24px;
+    background: var(--surface-container);
+  }
+  .topbar h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  .topbar .spacer { flex: 1; }
+  button, input {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+  }
+  button.primary { background: var(--primary); color: var(--on-primary); }
+  button.danger { background: var(--error); color: #2E0A0A; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=text], input[type=number] {
+    background: var(--surface-container-high);
+    border: 1px solid var(--outline-variant);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: var(--on-surface);
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 24px; }
+  .card {
+    background: var(--surface-container);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--on-surface-variant); margin: 0 0 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+  .row + .row { border-top: 1px solid var(--outline-variant); }
+  .muted { color: var(--on-surface-variant); font-size: 13px; }
+  .error-text { color: var(--error); font-size: 13px; margin-top: 8px; }
+  .bar-track { height: 6px; border-radius: 3px; background: var(--surface-container-highest); overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--secondary); }
+  .switch { position: relative; width: 44px; height: 24px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track { position: absolute; inset: 0; background: var(--surface-container-highest); border-radius: 999px; transition: .15s; }
+  .switch .track::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: var(--on-surface-variant); border-radius: 50%; transition: .15s; }
+  .switch input:checked + .track { background: var(--primary); }
+  .switch input:checked + .track::before { transform: translateX(20px); background: var(--on-primary); }
+  #pair-view .card { max-width: 360px; margin: 80px auto 0; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--on-surface-variant); margin-bottom: 6px; }
+  .field input { width: 100%; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="pair-view">
+  <div class="container">
+    <div class="card">
+      <h2>Pair this browser</h2>
+      <div class="field">
+        <label>Pairing code (from <code>rfe-agent pair</code>)</label>
+        <input id="pair-code" type="text" placeholder="ABCD1234" autocomplete="off" autocapitalize="characters">
+      </div>
+      <div class="field">
+        <label>Label for this browser</label>
+        <input id="pair-label" type="text" placeholder="Chrome on laptop" autocomplete="off">
+      </div>
+      <button class="primary" id="pair-submit" style="width:100%">Pair</button>
+      <div class="error-text hidden" id="pair-error"></div>
+      <p class="muted" style="margin-top:16px">
+        This browser stores its access token in localStorage — a weaker
+        guarantee than the phone app's Keystore-backed pairing. Only pair
+        browsers you trust on this device.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div id="dashboard-view" class="hidden">
+  <div class="topbar">
+    <h1 id="agent-name">RFE</h1>
+    <span class="muted" id="agent-version"></span>
+    <span class="spacer"></span>
+    <button id="forget-btn">Forget this browser</button>
+  </div>
+  <div class="container">
+
+    <div class="card">
+      <h2>Status</h2>
+      <div class="row"><span>Uptime</span><span id="uptime" class="muted"></span></div>
+      <div class="row"><span>Platform</span><span id="platform" class="muted"></span></div>
+      <div class="row" style="display:block">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span>Storage</span><span id="storage-text" class="muted"></span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Agent control</h2>
+      <div class="row">
+        <span>Restart agent service</span>
+        <button class="danger" id="restart-btn">Restart</button>
+      </div>
+      <p class="muted" id="restart-status"></p>
+    </div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="row">
+        <span>Read-only mode</span>
+        <label class="switch"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
+      </div>
+      <div class="row" style="display:block">
+        <div class="field" style="margin:12px 0 0">
+          <label>Max upload (MB/s, 0 = unlimited)</label>
+          <input type="number" id="bw-upload" min="0">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Max download (MB/s, 0 = unlimited)</label>
+          <input type="number" id="bw-download" min="0">
+        </div>
+        <button class="primary" id="bw-save" style="margin-top:4px">Save bandwidth limits</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Paired devices</h2>
+      <div id="devices-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Files</h2>
+      <div class="row" style="gap:8px">
+        <div id="breadcrumb" class="muted" style="flex:1; overflow-wrap:anywhere"></div>
+        <button id="new-folder-btn">New folder</button>
+      </div>
+      <div id="files-list"></div>
+      <div id="file-preview" class="hidden" style="margin-top:12px; border-top:1px solid var(--outline-variant); padding-top:12px">
+        <div class="row"><strong id="preview-name"></strong>
+          <span>
+            <button id="preview-download">Download</button>
+            <button id="preview-close">Close</button>
+          </span>
+        </div>
+        <div id="preview-body" style="max-height:400px; overflow:auto; margin-top:8px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const TOKEN_KEY = 'rfe_device_token';
+  const FP_KEY = 'rfe_cert_fingerprint';
+  const NAME_KEY = 'rfe_agent_name';
+
+  const $ = (id) => document.getElementById(id);
+  const pairView = $('pair-view');
+  const dashView = $('dashboard-view');
+
+  function token() { return localStorage.getItem(TOKEN_KEY); }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers, {
+      'Authorization': 'Bearer ' + token(),
+      'Content-Type': 'application/json',
+    });
+    const res = await fetch('/v1' + path, opts);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || ('HTTP ' + res.status));
+    }
+    if (res.status === 204 || res.status === 202) return {};
+    return res.json().catch(() => ({}));
+  }
+
+  function fmtBytes(n) {
+    if (!n) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return n.toFixed(1) + ' ' + units[i];
+  }
+
+  function fmtUptime(s) {
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+  }
+
+  // ---------- Pairing ----------
+  $('pair-submit').addEventListener('click', async () => {
+    const code = $('pair-code').value.trim();
+    const label = $('pair-label').value.trim() || 'Web browser';
+    const errEl = $('pair-error');
+    errEl.classList.add('hidden');
+    if (!code) return;
+    try {
+      const res = await fetch('/v1/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairingCode: code, deviceLabel: label }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'pairing failed');
+      localStorage.setItem(TOKEN_KEY, body.deviceToken);
+      localStorage.setItem(FP_KEY, body.certFingerprint || '');
+      localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
+      showDashboard();
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+    }
+  });
+
+  // ---------- Dashboard ----------
+  $('forget-btn').addEventListener('click', () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(FP_KEY);
+    localStorage.removeItem(NAME_KEY);
+    location.reload();
+  });
+
+  $('restart-btn').addEventListener('click', async () => {
+    if (!confirm('Restart the agent service now? Active transfers will be interrupted.')) return;
+    const statusEl = $('restart-status');
+    try {
+      await api('/agent/restart', { method: 'POST' });
+      statusEl.textContent = 'Restarting… reconnecting automatically.';
+      pollUntilBack();
+    } catch (e) {
+      statusEl.textContent = 'Failed: ' + e.message;
+    }
+  });
+
+  function pollUntilBack() {
+    const statusEl = $('restart-status');
+    let tries = 0;
+    const iv = setInterval(async () => {
+      tries++;
+      try {
+        const res = await fetch('/v1/health');
+        if (res.ok) {
+          clearInterval(iv);
+          statusEl.textContent = 'Back online.';
+          loadDashboard();
+        }
+      } catch (e) { /* still down */ }
+      if (tries > 30) clearInterval(iv);
+    }, 2000);
+  }
+
+  $('readonly-toggle').addEventListener('change', async (e) => {
+    try {
+      await api('/settings', { method: 'PATCH', body: JSON.stringify({ readOnly: e.target.checked }) });
+    } catch (err) {
+      alert('Failed to update: ' + err.message);
+      e.target.checked = !e.target.checked;
+    }
+  });
+
+  $('bw-save').addEventListener('click', async () => {
+    const up = Math.max(0, parseFloat($('bw-upload').value) || 0) * 1024 * 1024;
+    const down = Math.max(0, parseFloat($('bw-download').value) || 0) * 1024 * 1024;
+    try {
+      await api('/settings/bandwidth', {
+        method: 'PUT',
+        body: JSON.stringify({ maxUploadBytesPerSec: up, maxDownloadBytesPerSec: down }),
+      });
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
+  });
+
+  // ---------- Files ----------
+  let currentPath = null;
+
+  function joinPath(dir, name) {
+    if (!dir) return name;
+    return dir.endsWith('/') || dir.endsWith('\\') ? dir + name : dir + '/' + name;
+  }
+
+  function parentPath(p) {
+    const sep = p.includes('\\') ? '\\' : '/';
+    const trimmed = p.replace(/[/\\]+$/, '');
+    const idx = trimmed.lastIndexOf(sep);
+    return idx > 0 ? trimmed.slice(0, idx) : trimmed.slice(0, idx + 1) || trimmed;
+  }
+
+  async function openFolder(path) {
+    currentPath = path;
+    $('file-preview').classList.add('hidden');
+    $('breadcrumb').textContent = path;
+    const list = $('files-list');
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const listing = await api('/fs?path=' + encodeURIComponent(path));
+      list.innerHTML = '';
+      const up = document.createElement('div');
+      up.className = 'row';
+      up.style.cursor = 'pointer';
+      up.innerHTML = '<span>⬅ .. (up)</span>';
+      up.addEventListener('click', () => openFolder(parentPath(path)));
+      list.appendChild(up);
+
+      (listing.entries || []).forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const left = document.createElement('span');
+        left.style.cursor = 'pointer';
+        left.textContent = (entry.isDir ? '📁 ' : '📄 ') + entry.name;
+        left.addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
+
+        const right = document.createElement('span');
+        right.style.display = 'flex';
+        right.style.gap = '6px';
+        right.style.alignItems = 'center';
+
+        const sizeSpan = document.createElement('span');
+        sizeSpan.className = 'muted';
+        sizeSpan.textContent = entry.isDir ? '' : fmtBytes(entry.size);
+        right.appendChild(sizeSpan);
+
+        const renameBtn = document.createElement('button');
+        renameBtn.textContent = 'Rename';
+        renameBtn.addEventListener('click', () => renameEntry(entry));
+        right.appendChild(renameBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', () => deleteEntry(entry));
+        right.appendChild(delBtn);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        list.appendChild(row);
+      });
+      if (!listing.entries || listing.entries.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = 'Empty folder.';
+        list.appendChild(empty);
+      }
+    } catch (e) {
+      list.innerHTML = '<p class="error-text">' + e.message + '</p>';
+    }
+  }
+
+  async function downloadFile(entry) {
+    const url = '/v1/content?path=' + encodeURIComponent(entry.path);
+    try {
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token() } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = entry.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      alert('Download failed: ' + e.message);
+    }
+  }
+
+  async function previewFile(entry) {
+    const box = $('file-preview');
+    box.classList.remove('hidden');
+    $('preview-name').textContent = entry.name;
+    const url = '/v1/content?path=' + encodeURIComponent(entry.path);
+    $('preview-download').onclick = () => downloadFile(entry);
+    const body = $('preview-body');
+    body.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token() } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const mime = entry.mimeType || res.headers.get('Content-Type') || '';
+      if (mime.startsWith('image/')) {
+        const blob = await res.blob();
+        body.innerHTML = '';
+        const img = document.createElement('img');
+        img.style.maxWidth = '100%';
+        img.src = URL.createObjectURL(blob);
+        body.appendChild(img);
+      } else if (mime.startsWith('text/') || mime === 'application/json') {
+        const text = await res.text();
+        body.innerHTML = '';
+        const pre = document.createElement('pre');
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.wordBreak = 'break-word';
+        pre.textContent = text;
+        body.appendChild(pre);
+      } else {
+        body.innerHTML = '<p class="muted">No inline preview for this file type — use Download.</p>';
+      }
+    } catch (e) {
+      body.innerHTML = '<p class="error-text">' + e.message + '</p>';
+    }
+  }
+
+  $('preview-close').addEventListener('click', () => $('file-preview').classList.add('hidden'));
+
+  async function deleteEntry(entry) {
+    if (!confirm('Delete "' + entry.name + '"? It will be moved to trash (recoverable).')) return;
+    try {
+      await api('/fs?path=' + encodeURIComponent(entry.path), { method: 'DELETE' });
+      openFolder(currentPath);
+    } catch (e) {
+      alert('Delete failed: ' + e.message);
+    }
+  }
+
+  async function renameEntry(entry) {
+    const newName = prompt('Rename to:', entry.name);
+    if (!newName || newName === entry.name) return;
+    const dst = joinPath(parentPath(entry.path), newName);
+    try {
+      await api('/fs/rename', { method: 'PATCH', body: JSON.stringify({ src: entry.path, dst }) });
+      openFolder(currentPath);
+    } catch (e) {
+      alert('Rename failed: ' + e.message);
+    }
+  }
+
+  $('new-folder-btn').addEventListener('click', async () => {
+    const name = prompt('New folder name:');
+    if (!name) return;
+    try {
+      await api('/fs/folder', { method: 'POST', body: JSON.stringify({ path: joinPath(currentPath, name) }) });
+      openFolder(currentPath);
+    } catch (e) {
+      alert('Create folder failed: ' + e.message);
+    }
+  });
+
+  async function loadFiles() {
+    try {
+      const drives = await api('/system/drives');
+      const start = (drives && drives[0] && drives[0].path) || '/';
+      openFolder(start);
+    } catch (e) {
+      $('files-list').innerHTML = '<p class="error-text">' + e.message + '</p>';
+    }
+  }
+
+  async function loadDashboard() {
+    $('agent-name').textContent = localStorage.getItem(NAME_KEY) || 'RFE';
+    try {
+      const [status, settings, bandwidth, devices] = await Promise.all([
+        api('/status'), api('/settings'), api('/settings/bandwidth'), api('/devices'),
+      ]);
+      loadFiles();
+
+      $('agent-version').textContent = 'v' + status.version;
+      $('uptime').textContent = fmtUptime(status.uptimeSeconds);
+      $('platform').textContent = status.platform;
+      const used = status.totalBytes - status.freeBytes;
+      const pct = status.totalBytes ? Math.round((used / status.totalBytes) * 100) : 0;
+      $('storage-bar').style.width = pct + '%';
+      $('storage-text').textContent = fmtBytes(used) + ' / ' + fmtBytes(status.totalBytes);
+
+      $('readonly-toggle').checked = !!settings.readOnly;
+      $('bw-upload').value = bandwidth.maxUploadBytesPerSec ? (bandwidth.maxUploadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
+      $('bw-download').value = bandwidth.maxDownloadBytesPerSec ? (bandwidth.maxDownloadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
+
+      const list = $('devices-list');
+      list.innerHTML = '';
+      (devices || []).forEach((d) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = '<span>' + (d.label || 'unnamed') + '</span><span class="muted">' + (d.lastAddress || '') + '</span>';
+        list.appendChild(row);
+      });
+    } catch (e) {
+      if (String(e.message).includes('401') || String(e.message).includes('UNAUTHORIZED')) {
+        localStorage.removeItem(TOKEN_KEY);
+        showPairing();
+      }
+    }
+  }
+
+  function showDashboard() {
+    pairView.classList.add('hidden');
+    dashView.classList.remove('hidden');
+    loadDashboard();
+  }
+
+  function showPairing() {
+    dashView.classList.add('hidden');
+    pairView.classList.remove('hidden');
+  }
+
+  if (token()) { showDashboard(); } else { showPairing(); }
+})();
+</script>
+</body>
+</html>

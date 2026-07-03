@@ -16,6 +16,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/webui"
 )
 
 // Config holds the runtime settings the server needs.
@@ -55,6 +56,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
 			r.Get("/status", statusHandler(cfg))
+			r.Post("/agent/restart", restartHandler())
 		})
 
 		// Authenticated sub-router.
@@ -78,6 +80,11 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			registerTransferRoutes(r, tm, cfg, ops)
 		})
 	})
+
+	// Web companion: browser-based agent control/status/settings UI, served
+	// at the root (distinct from the /v1 API tree — chi matches the more
+	// specific /v1 prefix first regardless of registration order).
+	r.Mount("/", webui.Handler())
 
 	return r, nil
 }

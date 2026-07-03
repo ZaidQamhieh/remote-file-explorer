@@ -164,6 +164,30 @@ func startMDNS(addr, version string) func() {
 	return mdnsSvc.Stop
 }
 
+// webAliasHost is the friendly mDNS hostname the web companion is also
+// reachable at (https://<webAliasHost>.local:<port>), independent of the
+// machine's own hostname.
+const webAliasHost = "rfedash"
+
+// startWebAlias advertises webAliasHost.local pointing at lanAddr's IP, if
+// lanAddr was resolved. Same non-fatal-on-failure shape as startMDNS.
+func startWebAlias(lanAddr, version string) func() {
+	ip, portStr, splitErr := net.SplitHostPort(lanAddr)
+	if splitErr != nil || ip == "" {
+		return nil
+	}
+	port, convErr := strconv.Atoi(portStr)
+	if convErr != nil {
+		return nil
+	}
+	aliasSvc, aliasErr := mdns.StartAlias(webAliasHost, port, ip, version)
+	if aliasErr != nil {
+		log.Printf("mDNS alias: failed to start: %v", aliasErr)
+		return nil
+	}
+	return aliasSvc.Stop
+}
+
 // waitForShutdown blocks until SIGINT/SIGTERM, then gracefully shuts srv down.
 func waitForShutdown(srv *http.Server) {
 	stop := make(chan os.Signal, 1)
@@ -252,6 +276,9 @@ func runServe(args []string) {
 
 	if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
 		defer stopMDNS()
+	}
+	if stopAlias := startWebAlias(lanAddr, version); stopAlias != nil {
+		defer stopAlias()
 	}
 
 	waitForShutdown(srv)

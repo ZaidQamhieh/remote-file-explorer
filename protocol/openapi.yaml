@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.11.0
+  version: 1.12.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -72,6 +72,69 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Metrics' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /transfers/list:
+    get:
+      summary: List recent upload transfer sessions (web companion Transfers page)
+      description: >
+        Read-only listing of the chunked-upload sessions the agent tracks.
+        The transfers array is capped at the most recent 200 rows (the table
+        accumulates every session ever opened); counts/total aggregate the
+        whole table so the summary cards stay accurate. progress is derived
+        from received-chunk count; "open" means started-but-never-finalized.
+        Distinct from GET /transfers/{id} (single-session status) and POST
+        /transfers (open a session).
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Recent transfer sessions plus whole-table status counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, description: Total transfer rows in the table }
+                  counts:
+                    type: object
+                    additionalProperties: { type: integer }
+                    description: Row count per status (e.g. open, completed, failed)
+                  transfers:
+                    type: array
+                    items: { $ref: '#/components/schemas/TransferSummary' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /users:
+    get:
+      summary: List login accounts (web companion Users page)
+      description: >
+        Usernames and creation times only — never password hashes. RFE has no
+        per-user roles or session tracking, so those Figma-style columns are
+        intentionally absent.
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Login accounts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/UserSummary' } }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /logs:
+    get:
+      summary: Tail the agent's own log output (web companion Logs page)
+      description: >
+        Last ~200 lines of the agent's journald output (Linux/systemd). Empty
+        array on non-systemd hosts. Exposes no more than a paired device can
+        already read from the filesystem. RFE logs are unstructured, so there
+        is no severity level field.
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Recent log lines
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/LogLine' } }
         '401': { $ref: '#/components/responses/Error' }
 
   /agent/restart:
@@ -1474,6 +1537,29 @@ components:
         cpuPercent: { type: number, format: double }
         ramPercent: { type: number, format: double }
         tsMs: { type: integer, format: int64 }
+
+    TransferSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, description: "basename of the target path" }
+        path: { type: string }
+        totalSize: { type: integer, format: int64 }
+        receivedBytes: { type: integer, format: int64 }
+        progress: { type: number, format: double, description: "0-100, from received-chunk count" }
+        status: { type: string, enum: [open, completed, failed] }
+
+    UserSummary:
+      type: object
+      properties:
+        username: { type: string }
+        created: { type: integer, format: int64, description: "unix seconds" }
+
+    LogLine:
+      type: object
+      properties:
+        ts: { type: string, description: "ISO-8601 timestamp from journald" }
+        message: { type: string }
 
     Error:
       type: object

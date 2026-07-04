@@ -515,6 +515,29 @@ func (s *DB) GetUserByUsername(username string) (*User, error) {
 	return &u, nil
 }
 
+// ListUsers returns all login accounts (never the password hash), newest
+// first. RFE has no per-user roles or session tracking, so only the real
+// fields — username and created — are returned.
+func (s *DB) ListUsers() ([]User, error) {
+	rows, err := s.db.Query(`SELECT username,created FROM users ORDER BY created DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []User
+	for rows.Next() {
+		var u User
+		var created int64
+		if err := rows.Scan(&u.Username, &created); err != nil {
+			return nil, err
+		}
+		u.Created = time.Unix(created, 0)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // --------- transfers ---------
 
 // Transfer is an in-progress or completed upload session.
@@ -596,6 +619,61 @@ func (s *DB) MarkChunkReceived(id string, n int) error {
 func (s *DB) SetTransferStatus(id, status string) error {
 	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
 	return err
+}
+
+// ListTransfers returns the most recent transfer rows, newest first (rowid
+// desc — the table has no created column, and rowid is monotonic with insert
+// order). Capped at limit because the table accumulates every upload session
+// ever opened (mostly stale "open" rows the client never finalized) — the
+// web companion only shows recent activity, and the summary counts come from
+// CountTransfersByStatus, not len() of this list.
+func (s *DB) ListTransfers(limit int) ([]Transfer, error) {
+	rows, err := s.db.Query(
+		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks
+         FROM transfers ORDER BY rowid DESC LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Transfer
+	for rows.Next() {
+		var t Transfer
+		var chunksJSON string
+		if err := rows.Scan(
+			&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
+			&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks,
+		); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(chunksJSON), &t.ReceivedChunks)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// CountTransfersByStatus returns how many transfer rows carry each status
+// value (e.g. {"open": 1986, "completed": 3}). Feeds the web companion's
+// summary cards so they reflect the whole table, not just the recent page
+// ListTransfers returns.
+func (s *DB) CountTransfersByStatus() (map[string]int, error) {
+	rows, err := s.db.Query(`SELECT status, COUNT(*) FROM transfers GROUP BY status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]int)
+	for rows.Next() {
+		var status string
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, err
+		}
+		out[status] = n
+	}
+	return out, rows.Err()
 }
 
 // --------- share tokens (R1) ---------

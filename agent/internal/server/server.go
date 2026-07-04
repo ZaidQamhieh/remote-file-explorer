@@ -59,6 +59,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			r.Use(authMiddleware(db))
 			r.Get("/status", statusHandler(cfg))
 			r.Get("/metrics", metricsHandler())
+			r.Get("/transfers/list", listTransfersHandler(db))
+			r.Get("/users", listUsersHandler(db))
+			r.Get("/logs", listLogsHandler())
 			r.Post("/agent/restart", restartHandler())
 		})
 

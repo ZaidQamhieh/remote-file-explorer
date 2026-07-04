@@ -97,7 +97,7 @@ class _DiagnosticsSection extends ConsumerWidget {
     final hosts = await ref.read(hostStoreProvider.future);
     final hostList = hosts.listHosts();
     final settings =
-        ref.read(settingsProvider).valueOrNull ?? SettingsState();
+        ref.read(settingsProvider).valueOrNull ?? const SettingsState();
 
     final buf =
         StringBuffer()

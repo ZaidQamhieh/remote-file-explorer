@@ -1466,6 +1466,42 @@ abstract class AppLocalizations {
   /// **'{count} photo(s) backed up'**
   String photosBackedUp(int count);
 
+  /// No description provided for @albumsToBackUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums to back up'**
+  String get albumsToBackUp;
+
+  /// No description provided for @allPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'All photos'**
+  String get allPhotos;
+
+  /// No description provided for @selectAlbums.
+  ///
+  /// In en, this message translates to:
+  /// **'Select albums'**
+  String get selectAlbums;
+
+  /// No description provided for @albumsSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} album(s) selected'**
+  String albumsSelected(int count);
+
+  /// No description provided for @albumPhotoCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} photo(s)'**
+  String albumPhotoCount(int count);
+
+  /// No description provided for @enableBackupFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable photo backup first'**
+  String get enableBackupFirst;
+
   /// No description provided for @shareTooltip.
   ///
   /// In en, this message translates to:

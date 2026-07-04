@@ -888,6 +888,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get albumsToBackUp => 'Albums to back up';
+
+  @override
+  String get allPhotos => 'All photos';
+
+  @override
+  String get selectAlbums => 'Select albums';
+
+  @override
+  String albumsSelected(int count) {
+    return '$count album(s) selected';
+  }
+
+  @override
+  String albumPhotoCount(int count) {
+    return '$count photo(s)';
+  }
+
+  @override
+  String get enableBackupFirst => 'Enable photo backup first';
+
+  @override
   String get shareTooltip => 'Share';
 
   @override

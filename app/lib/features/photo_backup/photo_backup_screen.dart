@@ -9,6 +9,7 @@ import '../../core/ui/feedback.dart';
 import 'photo_backup_controller.dart';
 import 'photo_backup_prefs.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 /// Settings + manual trigger for one-way photo backup (DCIM → a PC).
 class PhotoBackupScreen extends ConsumerStatefulWidget {
@@ -74,6 +75,8 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           showError(context, context.l10n.photoAccessDenied);
         case PhotoBackupOutcome.skipped:
           showInfo(context, result.message ?? 'Skipped');
+        case PhotoBackupOutcome.disabled:
+          showInfo(context, context.l10n.enableBackupFirst);
       }
       // Refresh the backed-up count.
       final store = await PhotoBackupStore.open();
@@ -100,6 +103,8 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
   }
 
   List<Widget> _buildItems(BuildContext context) {
+    // Master switch off => every other control is disabled (nothing backs up).
+    final on = _prefs.enabled;
     return [
       SwitchListTile(
         title: Text(context.l10n.enablePhotoBackup),
@@ -109,11 +114,12 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       ),
       const Divider(),
       ListTile(
+        enabled: on,
         leading: const Icon(LucideIcons.computer),
         title: Text(context.l10n.backUpTo),
         subtitle: Text(_hostLabel(context)),
         trailing: const Icon(LucideIcons.chevronRight),
-        onTap: _hosts.isEmpty ? null : _pickHost,
+        onTap: (!on || _hosts.isEmpty) ? null : _pickHost,
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -124,6 +130,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
         ),
         child: TextField(
           controller: _destCtrl,
+          enabled: on,
           decoration: InputDecoration(
             labelText: context.l10n.destinationFolderLabel,
             hintText: context.l10n.destinationFolderHint,
@@ -132,28 +139,37 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           onChanged: (v) => _update(_prefs.copyWith(destRoot: v.trim())),
         ),
       ),
+      ListTile(
+        enabled: on,
+        leading: const Icon(LucideIcons.images),
+        title: Text(context.l10n.albumsToBackUp),
+        subtitle: Text(_albumsLabel(context)),
+        trailing: const Icon(LucideIcons.chevronRight),
+        onTap: on ? _pickAlbums : null,
+      ),
       const Divider(),
       SwitchListTile(
         title: Text(context.l10n.onlyOnWifi),
         value: _prefs.wifiOnly,
-        onChanged: (v) => _update(_prefs.copyWith(wifiOnly: v)),
+        onChanged: on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
       ),
       SwitchListTile(
         title: Text(context.l10n.onlyWhileCharging),
         value: _prefs.chargingOnly,
-        onChanged: (v) => _update(_prefs.copyWith(chargingOnly: v)),
+        onChanged: on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
       ),
       const Divider(),
       ListTile(
+        enabled: on,
         leading: const Icon(LucideIcons.cloudCheck),
         title: Text(context.l10n.photosBackedUp(_doneCount)),
         subtitle: Text(context.l10n.resetBackupHint),
-        onTap: _doneCount == 0 ? null : _resetRecord,
+        onTap: (!on || _doneCount == 0) ? null : _resetRecord,
       ),
       Padding(
         padding: const EdgeInsets.all(Spacing.lg),
         child: FilledButton.icon(
-          onPressed: _running ? null : _backupNow,
+          onPressed: (!on || _running) ? null : _backupNow,
           icon:
               _running
                   ? const SizedBox(
@@ -199,6 +215,85 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           ),
     );
     if (picked != null) await _update(_prefs.copyWith(hostId: picked.id));
+  }
+
+  String _albumsLabel(BuildContext context) =>
+      _prefs.albumIds.isEmpty
+          ? context.l10n.allPhotos
+          : context.l10n.albumsSelected(_prefs.albumIds.length);
+
+  Future<void> _pickAlbums() async {
+    final perm = await PhotoManager.requestPermissionExtend();
+    if (!perm.isAuth && !perm.hasAccess) {
+      if (mounted) showError(context, context.l10n.photoAccessDenied);
+      return;
+    }
+    final albums = await PhotoManager.getAssetPathList(type: RequestType.image);
+    // Album id -> display name + count, sorted by name for a stable list.
+    final entries = <(String, String, int)>[];
+    for (final a in albums) {
+      entries.add((a.id, a.name, await a.assetCountAsync));
+    }
+    entries.sort((x, y) => x.$2.toLowerCase().compareTo(y.$2.toLowerCase()));
+    if (!mounted) return;
+
+    final selected = _prefs.albumIds.toSet();
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (_) => StatefulBuilder(
+            builder:
+                (ctx, setSheet) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(Spacing.lg),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ctx.l10n.selectAlbums,
+                                style: Theme.of(ctx).textTheme.titleMedium,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, selected),
+                              child: Text(ctx.l10n.applyButton),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final (id, name, count) in entries)
+                              CheckboxListTile(
+                                value: selected.contains(id),
+                                title: Text(name),
+                                subtitle: Text(ctx.l10n.albumPhotoCount(count)),
+                                onChanged:
+                                    (v) => setSheet(() {
+                                      if (v ?? false) {
+                                        selected.add(id);
+                                      } else {
+                                        selected.remove(id);
+                                      }
+                                    }),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+    );
+    if (result != null) {
+      await _update(_prefs.copyWith(albumIds: result.toList()));
+    }
   }
 
   Future<void> _resetRecord() async {

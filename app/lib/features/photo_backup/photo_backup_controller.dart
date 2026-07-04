@@ -16,6 +16,7 @@ enum PhotoBackupOutcome {
   notConfigured,
   permissionDenied,
   skipped,
+  disabled,
 }
 
 class PhotoBackupRunResult {
@@ -72,6 +73,10 @@ class PhotoBackupController {
   Future<PhotoBackupRunResult> backupNow() async {
     final store = await PhotoBackupStore.open();
     final prefs = store.load();
+    // Master switch: off means nothing backs up (manual runs included).
+    if (!prefs.enabled) {
+      return const PhotoBackupRunResult(PhotoBackupOutcome.disabled);
+    }
     if (!prefs.isConfigured) {
       return const PhotoBackupRunResult(PhotoBackupOutcome.notConfigured);
     }
@@ -105,16 +110,29 @@ class PhotoBackupController {
       return const PhotoBackupRunResult(PhotoBackupOutcome.notConfigured);
     }
 
+    final selected = prefs.albumIds.toSet();
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.image,
-      onlyAll: true,
+      onlyAll: selected.isEmpty,
     );
-    if (albums.isEmpty) {
+    // Filter to the user's chosen albums (empty selection = all photos, in
+    // which case onlyAll above already returned the single merged album).
+    final keep = albumsToScan([for (final a in albums) a.id], selected).toSet();
+    final chosen = albums.where((a) => keep.contains(a.id)).toList();
+    if (chosen.isEmpty) {
       return const PhotoBackupRunResult(PhotoBackupOutcome.upToDate);
     }
-    final all = albums.first;
-    final count = await all.assetCountAsync;
-    final assets = await all.getAssetListRange(start: 0, end: count);
+    // Gather assets across all chosen albums, de-duplicated by asset id (one
+    // photo can live in several albums).
+    final seen = <String>{};
+    final assets = <AssetEntity>[];
+    for (final album in chosen) {
+      final count = await album.assetCountAsync;
+      final range = await album.getAssetListRange(start: 0, end: count);
+      for (final a in range) {
+        if (seen.add(a.id)) assets.add(a);
+      }
+    }
 
     final done = store.doneIds();
     final pending = assets.where((a) => !done.contains(a.id)).toList();

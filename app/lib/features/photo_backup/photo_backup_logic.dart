@@ -32,6 +32,13 @@ String backupRemotePath({
 List<String> pendingIds(List<String> allIds, Set<String> backedUp) =>
     allIds.where((id) => !backedUp.contains(id)).toList();
 
+/// Which album ids to actually scan given the user's [selected] set and the
+/// [available] albums on the device. An empty [selected] means "all photos" →
+/// every available album; otherwise the selection filtered to albums that
+/// still exist (a selected album the user later deleted is silently dropped).
+List<String> albumsToScan(List<String> available, Set<String> selected) =>
+    selected.isEmpty ? available : available.where(selected.contains).toList();
+
 /// True once two reads of [readLength] taken [interval] apart agree and are
 /// non-zero.
 ///

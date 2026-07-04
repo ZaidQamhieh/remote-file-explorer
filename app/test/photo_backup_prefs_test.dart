@@ -15,6 +15,7 @@ void main() {
       destRoot: '/home/u/pics',
       wifiOnly: false,
       chargingOnly: true,
+      albumIds: ['alb-1', 'alb-2'],
     );
     await store.save(prefs);
 
@@ -25,6 +26,7 @@ void main() {
     expect(loaded.destRoot, '/home/u/pics');
     expect(loaded.wifiOnly, isFalse);
     expect(loaded.chargingOnly, isTrue);
+    expect(loaded.albumIds, ['alb-1', 'alb-2']);
     expect(loaded.isConfigured, isTrue);
   });
 
@@ -33,6 +35,7 @@ void main() {
     final p = store.load();
     expect(p.enabled, isFalse);
     expect(p.wifiOnly, isTrue); // wifi-only on by default
+    expect(p.albumIds, isEmpty); // empty = all photos (backward compatible)
     expect(p.isConfigured, isFalse);
   });
 

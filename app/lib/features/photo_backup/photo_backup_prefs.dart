@@ -9,15 +9,20 @@ class PhotoBackupPrefs {
     this.destRoot,
     this.wifiOnly = true,
     this.chargingOnly = false,
+    this.albumIds = const [],
   });
 
-  /// Master on/off. When off, "Back up now" still works manually but nothing
-  /// is implied to run on its own.
+  /// Master on/off. When off nothing backs up — the manual "Back up now"
+  /// action and all other options are disabled too.
   final bool enabled;
 
   /// Target host id (a paired PC) and the destination root folder on it.
   final String? hostId;
   final String? destRoot;
+
+  /// Which photo albums to back up, by album id. Empty means "all photos"
+  /// (the whole library) — the backward-compatible default.
+  final List<String> albumIds;
 
   /// Only back up while on Wi-Fi / while charging.
   final bool wifiOnly;
@@ -35,12 +40,14 @@ class PhotoBackupPrefs {
     String? destRoot,
     bool? wifiOnly,
     bool? chargingOnly,
+    List<String>? albumIds,
   }) => PhotoBackupPrefs(
     enabled: enabled ?? this.enabled,
     hostId: hostId ?? this.hostId,
     destRoot: destRoot ?? this.destRoot,
     wifiOnly: wifiOnly ?? this.wifiOnly,
     chargingOnly: chargingOnly ?? this.chargingOnly,
+    albumIds: albumIds ?? this.albumIds,
   );
 }
 
@@ -56,6 +63,7 @@ class PhotoBackupStore {
   static const _kDestRoot = 'rfe_photo_backup_dest';
   static const _kWifiOnly = 'rfe_photo_backup_wifi_only';
   static const _kChargingOnly = 'rfe_photo_backup_charging_only';
+  static const _kAlbums = 'rfe_photo_backup_albums';
   static const _kDone = 'rfe_photo_backup_done';
 
   static Future<PhotoBackupStore> open() async =>
@@ -67,12 +75,14 @@ class PhotoBackupStore {
     destRoot: _prefs.getString(_kDestRoot),
     wifiOnly: _prefs.getBool(_kWifiOnly) ?? true,
     chargingOnly: _prefs.getBool(_kChargingOnly) ?? false,
+    albumIds: _prefs.getStringList(_kAlbums) ?? const [],
   );
 
   Future<void> save(PhotoBackupPrefs p) async {
     await _prefs.setBool(_kEnabled, p.enabled);
     await _prefs.setBool(_kWifiOnly, p.wifiOnly);
     await _prefs.setBool(_kChargingOnly, p.chargingOnly);
+    await _prefs.setStringList(_kAlbums, p.albumIds);
     if (p.hostId != null) await _prefs.setString(_kHostId, p.hostId!);
     if (p.destRoot != null) await _prefs.setString(_kDestRoot, p.destRoot!);
   }

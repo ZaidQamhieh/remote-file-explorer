@@ -42,6 +42,20 @@ void main() {
     });
   });
 
+  group('albumsToScan', () {
+    test('empty selection means all photos (every available album)', () {
+      expect(albumsToScan(['x', 'y', 'z'], {}), ['x', 'y', 'z']);
+    });
+
+    test('filters to the selected albums, preserving available order', () {
+      expect(albumsToScan(['x', 'y', 'z'], {'z', 'x'}), ['x', 'z']);
+    });
+
+    test('drops a selected album that no longer exists on the device', () {
+      expect(albumsToScan(['x', 'y'], {'y', 'gone'}), ['y']);
+    });
+  });
+
   group('isFileStable', () {
     test('false immediately when the first read is zero-byte', () async {
       var waited = false;

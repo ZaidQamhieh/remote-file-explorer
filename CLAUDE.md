@@ -128,6 +128,32 @@ One-time after clone: `go install github.com/evilmartians/lefthook@latest && lef
 Config: `lefthook.yml` (+ `.lefthook-rc` puts go/flutter on PATH for IDE-launched hooks).
 Bypass once if needed: `LEFTHOOK=0 git commit …`.
 
+## Ops (host-side — moved from global ~/.claude/CLAUDE.md, 2026-07-02)
+
+- **Back up `~/.rfe-keystore/`** — losing it = un-updatable app.
+- Architecture Qs: `graphify query "..."` (graph at `graphify-out/`) before grepping. Never
+  `/graphify --update` on this repo (restores the unpruned hairball) — use `tools/rebuild-graph.sh`.
+- Agent redeploy only when `agent/` or `protocol/openapi.yaml` changes. Restart:
+  `systemctl --user restart rfe-agent.service` (needs `export XDG_RUNTIME_DIR=/run/user/$(id -u)`).
+
+## Cross-session handoff (`NEXT_SESSION.md`)
+
+`NEXT_SESSION.md` carries **unfinished work** across sessions. A `SessionStart`
+hook (`.claude/hooks/next-session-guard.sh`, wired in `.claude/settings.json`)
+auto-surfaces it — but only when line 1 reads `NEXT_SESSION_STATUS: HANDOFF`.
+The **read** is hook-enforced; the **write** is your job at the end of a turn:
+
+- **Task the user asked for is complete** → set line 1 to `CLEAR` and reset the
+  `## Open handoff` block to the "None" placeholder. Never leave a resolved
+  handoff sitting (that's what let the old file go stale).
+- **Task left unfinished** (you're stopping mid-work) → set line 1 to `HANDOFF`
+  and fill `## Open handoff`: goal, what's done, what's left, exact files/lines
+  to resume from, how to verify. Cold-session-resumable, zero re-derivation.
+
+Only touch it when the completion state actually changes — a fully-finished
+session leaves it `CLEAR`, so most sessions never write it. Durable backlog and
+architecture go in the Obsidian wiki, not here.
+
 ## Pointers
 
 - `docs/architecture.md` — **living code map** (file→responsibility). Read it instead of grepping.

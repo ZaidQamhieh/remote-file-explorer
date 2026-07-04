@@ -1,104 +1,25 @@
-# NEXT_SESSION — start here
+<!-- NEXT_SESSION_STATUS: CLEAR -->
+# NEXT_SESSION — cross-session handoff
 
-_Handoff updated 2026-06-15 (owner-notes session). Read this, then `CLAUDE.md`._
+Carryover for work **left unfinished** in a prior session. The `SessionStart`
+hook (`.claude/hooks/next-session-guard.sh`) surfaces this file automatically at
+the start of every session in this repo — but **only when the status marker on
+line 1 reads `HANDOFF`**. When it reads `CLEAR`, there is nothing to resume and
+the hook stays silent.
 
-## Latest: owner notes from `Desktop/NEXT WAVE/NOTES_BY_USER.md` (pushed to master, NOT yet released)
+This is repo-local, incomplete-work carryover only. Durable project state,
+architecture, and backlog live in the Obsidian wiki (`entities/rfe-backlog.md`),
+not here.
 
-Three commits on master (`2250eba`, `86bf1c5`, `68f276a`), all CI/lefthook green. Built by
-three parallel Sonnet workers (agent / updates+host-card / settings+about) under Opus review.
+## Contract (mirrored in `CLAUDE.md` §"Cross-session handoff")
+- **Task finished this session** → set line 1 to `CLEAR` and reset
+  `## Open handoff` to the "None" placeholder. Don't leave a resolved handoff to
+  rot (that's what made the old version stale).
+- **Task NOT finished** → set line 1 to `HANDOFF` and fill `## Open handoff`
+  with: the goal, what's done, what's left, exact files/lines to start from, and
+  how to verify. Write it so a cold session resumes with zero re-derivation.
 
-1. **Owner #1 — app-wide updates via GitHub Releases.** Per-PC update UI is gone (the
-   in-card update banner/button + the per-host Settings "Updates" section). A new
-   host-independent `core/update/github_update_source.dart` reads
-   `releases/latest/download/latest.json` (`ZaidQamhieh/remote-file-explorer`, schema
-   `{versionName,versionCode,size,url}`) and downloads the APK from `url` over standard TLS
-   (no agent pinning), mirroring `AgentClient.downloadApk` resilience. One "Check for
-   updates" now lives in the **global App Settings** screen. `AppRelease` gained `url`.
-   ⚠️ **Untested end-to-end:** no HTTP-level test (same gap as the agent downloader) and **no
-   GitHub release exists yet** — push a `v*` tag to cut the first one and validate (owner's
-   call; it's the public-artifact CD trigger `.github/workflows/release.yml`).
-2. **Owner #2 — decluttered per-host settings.** Removed the "Display (this device)"
-   per-device view-override section (Display defaults live only in App Settings now). The
-   "File visibility (this device)" override was **deliberately kept** (owner asked to keep it).
-3. **Owner #3/#4 — About shows storage.** Per-host Settings → About now shows the PC name and,
-   per drive, label + used/total/free, marking the OS drive. Needs the new agent field:
-   - **agent + openapi:** `/system/drives` `Drive` gained `isOS` (Linux `/`, Windows
-     `%SystemDrive%`). ⚠️ **AGENT REDEPLOY NEEDED** for the OS marker to appear — the running
-     `~/.local/bin/rfe-agent` predates this and returns no `isOS` (drives still list; marker
-     just won't show until rebuilt/restarted). Rebuild: `cd agent && go build -o
-     ~/.local/bin/rfe-agent ./cmd/agent` then restart the daemon.
-4. **Bug 2 fixed** — "Browse"/"Search" quick-action labels no longer truncate to "B…"/"S…"
-   (`Flexible`+`Spacer` → `Expanded`).
+---
 
-**Not yet released OTA / no version bump** — these are on master but no `release.sh` run.
-Decide release vehicle: a `v*` tag (GitHub CD, also validates #1) is now the preferred path.
-
-## Previously released: v1.12.0+20 OTA
-
-All on master, all CI-green, bundled into **v1.12.0 (build 20)** by `./release.sh 1.12.0+20`
-(published `~/.rfe-agent/updates/rfe-1.12.0-20.apk`, 78.4 MB). The phone will offer it on
-next launch / "Check for updates".
-
-**This session was purely client-side — no agent/openapi changes, so NO agent redeploy is
-needed.** The running agent already serves everything these waves use.
-
-Shipped this session, in order (each its own commit, CI-green before the next):
-
-1. **file-visibility folded into the two-tier settings model** (`12f0df4`). It was the last
-   global-only setting; now an app-default `VisibilityPrefs` + optional **wholesale**
-   per-device override, resolved `deviceOverride ?? appDefault`. Mutation API moved off the
-   old standalone notifier into `SettingsNotifier` (each method takes an optional `hostId`).
-   One-time `_migrateVisibility` folds the legacy globals into the app default. Consumers
-   (explorer/search/picker) re-pointed to `resolveVisibility(hostId)`. See memory.
-2. **Wave D — transfers center** (`23786b8`). Speed/ETA (pure `computeSpeedEta` + a
-   read-only `TransferSamplerNotifier` that only ticks while active — engine
-   `transfer_state.dart` is byte-for-byte UNCHANGED), grouped collapsible sections,
-   swipe pause/resume + remove-with-undo, a `MiniTransferBar` above the explorer bottom bar,
-   clear-completed, inline error + retry.
-3. **Wave E — preview & polish** (`9aea304`). Swipe between previewable siblings
-   (`PreviewPager` over the visible listing; single-entry path preserved when no `siblings`
-   passed), image tile→preview Hero, unified `PreviewTopBar` (Share/Save/Delete/Show-in-folder),
-   text line-numbers toggle. **New dep: `share_plus ^10.1.4`** (only way to drive the OS
-   share sheet — agent is pinned-TLS-only, no shareable URL).
-4. **Wave F — theme/a11y/tablet** (`853cbce`). App-global `themeMode` + `dynamicColor` in
-   `AppDefaults` (app-global, no per-device override); `main.dart` is now a ConsumerWidget
-   wrapping `DynamicColorBuilder` with seed-palette fallback; Appearance section in App
-   Settings; a11y/scaling hardening. **New dep: `dynamic_color ^1.7.0`.** Tablet two-pane
-   was explicitly CUT (the brief's first-to-cut stretch).
-5. **fix — moved the app-default file-visibility editor to the App Settings screen**
-   (`d8b0a70`). Wave-0 fold-in had mounted it on the per-host screen; it now sits with the
-   other app defaults (per-host screen keeps only the override section).
-
-Test baseline grew (each wave added tests); `flutter analyze` clean, full CI suite green.
-
-## Known follow-ups (not blockers)
-- **NDK warning at build time:** `dynamic_color`/`share_plus` (and ~10 pre-existing plugins)
-  request Android NDK 27.0.12077973; the project pins 26.3.11579264. **The release built
-  fine** (NDK is backward-compatible) — this is a pre-existing warning, not new. Silence it
-  if desired by setting `ndkVersion = "27.0.12077973"` in `app/android/app/build.gradle.kts`
-  (only if NDK 27 is installed, else it could break the local build).
-- `share_plus` 10.x: `Share.shareXFiles` is deprecated in favor of
-  `SharePlus.instance.share(ShareParams(...))`; works now, migrate when convenient.
-- Two near-duplicate extension tables still exist: `preview.dart`'s private sets vs the
-  public `core/ui/entry_leading.dart` — fold preview onto the public source (deferred from
-  the prior session).
-- `transfer_state.dart` header comment says "Riverpod 3.x" — stale, it's 2.x (untouched as
-  it's the sensitive engine file).
-
-## Then pick next (priority)
-1. **CD + auto-update bundle** (`docs/FUTURE_FEATURES.md` #1+#2): a GitHub Releases build job
-   + repoint the updater at it + auto-check/download. **Biggest token saver** — removes the
-   local `release.sh` Gradle build (~120s, 78 MB) from the loop. The resumable + CONNECTION
-   fix is already in, so this is the clean next infra step.
-2. **Wave H2/H3** (per-token path jail; post-transfer integrity check) — rest of the security
-   wave, agent-led (bump agent minor + openapi in the same commit). Or **Wave N1** (encrypted
-   config export) — small, removes the re-pair-everything-after-reinstall pain.
-3. **Wave G5** (batch/pattern rename) or **M1** (advanced search filters) — small client-side
-   power features.
-
-## Workflow notes (kept from last session — still true)
-Opus orchestrates + dispatches Sonnet workers per wave with disjoint file ownership, reviews
-each diff, commits per wave (`feat:` then a separate `fix:` for review fixes), pushes, and
-trusts CI for the full suite. Small/coupled fixes done inline (a cold worker re-reads context
-Opus already has). No usage-meter tool exists, so every change is committed+pushed in its own
-unit and this file kept current — an abrupt stop loses nothing.
+## Open handoff
+_None — last session closed clean._

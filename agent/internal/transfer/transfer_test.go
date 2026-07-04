@@ -278,3 +278,40 @@ func sha256hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
+
+// TestCopyAcross covers the cross-filesystem fallback path used by moveFile
+// when os.Rename fails with EXDEV (destination on a different mount). EXDEV
+// itself needs two real filesystems, but the copy+rename+remove logic runs on
+// one: content must land at dst verbatim and the source temp must be gone.
+func TestCopyAcross(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.tmp")
+	dst := filepath.Join(dir, "sub", "final.jpg")
+	want := []byte("photo bytes \x00\x01 across a mount")
+
+	if err := os.WriteFile(src, want, 0o600); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatalf("mkdir dst: %v", err)
+	}
+	if err := copyAcross(src, dst); err != nil {
+		t.Fatalf("copyAcross: %v", err)
+	}
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("dst content = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("src should be removed, stat err = %v", err)
+	}
+	// No stray temp files left behind in dst's directory.
+	entries, _ := os.ReadDir(filepath.Dir(dst))
+	if len(entries) != 1 {
+		t.Fatalf("expected only final.jpg in dest dir, got %d entries", len(entries))
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -183,8 +184,13 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 		return nil, "", err
 	}
 
-	// Atomic rename.
-	if err := os.Rename(t.TempPath, t.TargetPath); err != nil {
+	// Move temp → final. os.Rename is atomic when both are on the same
+	// filesystem; when the destination is on a different mount (e.g. an
+	// external backup drive) it fails with EXDEV, so fall back to a
+	// copy-into-dest-dir + atomic-rename-within-dest. Without this every
+	// cross-filesystem transfer's Complete failed here, leaving the row
+	// stuck "open" forever (see the photo-backup leak).
+	if err := moveFile(t.TempPath, t.TargetPath); err != nil {
 		return nil, "", fmt.Errorf("rename: %w", err)
 	}
 
@@ -195,4 +201,53 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 		return nil, t.TargetPath, nil
 	}
 	return info, t.TargetPath, nil
+}
+
+// moveFile moves src to dst atomically when possible. It tries os.Rename first
+// (atomic, same-filesystem); on a cross-device error (EXDEV — dst is on a
+// different mount than src) it copies src into dst's directory and atomically
+// renames within that directory, then removes src.
+func moveFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else if !errors.Is(err, syscall.EXDEV) {
+		return err
+	}
+	return copyAcross(src, dst)
+}
+
+// copyAcross copies src to a temp file in dst's own directory, fsyncs it, then
+// atomically renames it onto dst (both now on the same filesystem) and removes
+// src. A failure at any step leaves dst untouched and cleans up the temp.
+func copyAcross(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".rfe-move-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := func() { tmp.Close(); os.Remove(tmpName) }
+
+	if _, err := io.Copy(tmp, in); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Remove(src)
 }

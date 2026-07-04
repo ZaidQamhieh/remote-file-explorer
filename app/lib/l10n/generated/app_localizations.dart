@@ -1436,17 +1436,17 @@ abstract class AppLocalizations {
   /// **'Back up to'**
   String get backUpTo;
 
-  /// No description provided for @destinationFolderLabel.
+  /// No description provided for @deviceNicknameLabel.
   ///
   /// In en, this message translates to:
-  /// **'Destination folder on PC'**
-  String get destinationFolderLabel;
+  /// **'This phone\'s nickname'**
+  String get deviceNicknameLabel;
 
-  /// No description provided for @destinationFolderHint.
+  /// No description provided for @deviceNicknameHint.
   ///
   /// In en, this message translates to:
-  /// **'/home/you/PhoneBackup'**
-  String get destinationFolderHint;
+  /// **'e.g. Zaid\'s Phone'**
+  String get deviceNicknameHint;
 
   /// No description provided for @onlyOnWifi.
   ///
@@ -2357,8 +2357,14 @@ abstract class AppLocalizations {
   /// No description provided for @pickPcFirst.
   ///
   /// In en, this message translates to:
-  /// **'Pick a PC and destination folder first'**
+  /// **'Pick a PC first'**
   String get pickPcFirst;
+
+  /// No description provided for @serverDestNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'This PC hasn\'t set a photo backup destination yet — set one in its web companion Settings'**
+  String get serverDestNotConfigured;
 
   /// No description provided for @photoAccessDenied.
   ///
@@ -2396,11 +2402,11 @@ abstract class AppLocalizations {
   /// **'Tap to forget the record (re-backs-up everything)'**
   String get resetBackupHint;
 
-  /// No description provided for @destinationFolderHelper.
+  /// No description provided for @deviceNicknameHelper.
   ///
   /// In en, this message translates to:
-  /// **'Photos land in <folder>/YYYY/YYYY-MM/'**
-  String get destinationFolderHelper;
+  /// **'Optional. Tells your photos apart from other phones backing up to the same PC.'**
+  String get deviceNicknameHelper;
 
   /// No description provided for @preparingToShare.
   ///

@@ -12,7 +12,7 @@ void main() {
     const prefs = PhotoBackupPrefs(
       enabled: true,
       hostId: 'h1',
-      destRoot: '/home/u/pics',
+      deviceName: "Zaid's Phone",
       wifiOnly: false,
       chargingOnly: true,
       albumIds: ['alb-1', 'alb-2'],
@@ -23,7 +23,7 @@ void main() {
     final loaded = reopened.load();
     expect(loaded.enabled, isTrue);
     expect(loaded.hostId, 'h1');
-    expect(loaded.destRoot, '/home/u/pics');
+    expect(loaded.deviceName, "Zaid's Phone");
     expect(loaded.wifiOnly, isFalse);
     expect(loaded.chargingOnly, isTrue);
     expect(loaded.albumIds, ['alb-1', 'alb-2']);

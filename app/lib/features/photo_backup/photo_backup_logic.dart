@@ -6,14 +6,20 @@ library;
 /// Two-digit zero-padded string for the date-folder layout.
 String _two(int n) => n.toString().padLeft(2, '0');
 
-/// Builds the remote destination path for a photo: `<destRoot>/YYYY/YYYY-MM/<name>`,
-/// using [created] (the photo's capture date) for the date folders. The
-/// returned path always uses `/` separators (the agent normalizes per-OS) and
-/// avoids a leading double slash when [destRoot] is the filesystem root.
+/// Builds the remote destination path for a photo:
+/// `<destRoot>/[deviceSegment/]YYYY/YYYY-MM/<name>`, using [created] (the
+/// photo's capture date) for the date folders. The returned path always uses
+/// `/` separators (the agent normalizes per-OS) and avoids a leading double
+/// slash when [destRoot] is the filesystem root.
+///
+/// [deviceSegment], when non-empty, is inserted right after [destRoot] so
+/// multiple phones backing up to the same shared destRoot don't interleave
+/// their photos in one folder.
 String backupRemotePath({
   required String destRoot,
   required DateTime created,
   required String name,
+  String deviceSegment = '',
 }) {
   final year = created.year.toString();
   final month = '$year-${_two(created.month)}';
@@ -24,7 +30,9 @@ String backupRemotePath({
     root = root.substring(0, root.length - 1);
   }
   if (root == '/') root = '';
-  return '$root/$year/$month/$name';
+  final dateFolders =
+      deviceSegment.isEmpty ? '$year/$month' : '$deviceSegment/$year/$month';
+  return '$root/$dateFolders/$name';
 }
 
 /// Returns the subset of [allIds] (photo asset ids) not present in

@@ -55,19 +55,19 @@ func TestSettingsHandler_GetAndPatch(t *testing.T) {
 	}
 	var got map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
-	if got["readOnly"] != false || got["agentName"] != "test-pc" {
+	if got["readOnly"] != false || got["agentName"] != "test-pc" || got["photoBackupRoot"] != "" {
 		t.Fatalf("unexpected GET body: %v", got)
 	}
 
-	// PATCH toggles read-only and renames.
-	body := `{"readOnly":true,"agentName":"new-name"}`
+	// PATCH toggles read-only, renames, and sets the photo-backup root.
+	body := `{"readOnly":true,"agentName":"new-name","photoBackupRoot":"/home/pc/PhoneBackups"}`
 	rr2 := httptest.NewRecorder()
 	patchSettingsHandler(st)(rr2, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("PATCH code = %d", rr2.Code)
 	}
-	if !st.IsReadOnly() || st.AgentName() != "new-name" {
-		t.Fatalf("settings not applied: ro=%v name=%s", st.IsReadOnly(), st.AgentName())
+	if !st.IsReadOnly() || st.AgentName() != "new-name" || st.PhotoBackupRoot() != "/home/pc/PhoneBackups" {
+		t.Fatalf("settings not applied: ro=%v name=%s photoBackupRoot=%s", st.IsReadOnly(), st.AgentName(), st.PhotoBackupRoot())
 	}
 }
 

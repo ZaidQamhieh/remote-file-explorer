@@ -29,6 +29,26 @@ void main() {
       );
       expect(p, '/2024/2024-01/x.jpg');
     });
+
+    test('inserts deviceSegment between destRoot and the date folders', () {
+      final p = backupRemotePath(
+        destRoot: '/home/u/PhoneBackup',
+        created: DateTime(2026, 3, 7),
+        name: 'IMG_1.jpg',
+        deviceSegment: 'a1b2c3d4',
+      );
+      expect(p, '/home/u/PhoneBackup/a1b2c3d4/2026/2026-03/IMG_1.jpg');
+    });
+
+    test('empty deviceSegment behaves exactly like the old signature', () {
+      final p = backupRemotePath(
+        destRoot: '/',
+        created: DateTime(2024, 1, 9),
+        name: 'x.jpg',
+        deviceSegment: '',
+      );
+      expect(p, '/2024/2024-01/x.jpg');
+    });
   });
 
   group('pendingIds', () {

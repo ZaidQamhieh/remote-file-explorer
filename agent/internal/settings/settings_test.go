@@ -158,6 +158,34 @@ func TestAllowSharing_DefaultsFalseAndPersists(t *testing.T) {
 	}
 }
 
+// TestPhotoBackupRoot_DefaultsEmptyAndPersists mirrors AllowSharing: empty
+// (unconfigured) by default, and SetPhotoBackupRoot survives a reload.
+func TestPhotoBackupRoot_DefaultsEmptyAndPersists(t *testing.T) {
+	db := newDB(t)
+	s, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := s.PhotoBackupRoot(); got != "" {
+		t.Fatalf("expected photoBackupRoot to default empty, got %q", got)
+	}
+
+	if err := s.SetPhotoBackupRoot("/home/pc/PhoneBackups"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if got := s.PhotoBackupRoot(); got != "/home/pc/PhoneBackups" {
+		t.Fatalf("expected in-memory photoBackupRoot to be set, got %q", got)
+	}
+
+	s2, err := Load(db, false, nil, "pc")
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := s2.PhotoBackupRoot(); got != "/home/pc/PhoneBackups" {
+		t.Fatalf("expected persisted photoBackupRoot to survive reload, got %q", got)
+	}
+}
+
 func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 	db := newDB(t)
 	// First load seeds readOnly=true.

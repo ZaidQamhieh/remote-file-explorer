@@ -6,7 +6,7 @@ class PhotoBackupPrefs {
   const PhotoBackupPrefs({
     this.enabled = false,
     this.hostId,
-    this.destRoot,
+    this.deviceName,
     this.wifiOnly = true,
     this.chargingOnly = false,
     this.albumIds = const [],
@@ -16,9 +16,15 @@ class PhotoBackupPrefs {
   /// action and all other options are disabled too.
   final bool enabled;
 
-  /// Target host id (a paired PC) and the destination root folder on it.
+  /// Target host id (a paired PC). The destination *folder* is decided by
+  /// that PC (web companion Settings → Photo backup destination), fetched
+  /// live at backup time — never a phone-side setting.
   final String? hostId;
-  final String? destRoot;
+
+  /// User-editable label for this phone's destRoot subfolder (e.g. "Zaid's
+  /// Phone"), so backups from several phones onto one shared destRoot stay
+  /// tellable apart. Null/empty falls back to a short device-id.
+  final String? deviceName;
 
   /// Which photo albums to back up, by album id. Empty means "all photos"
   /// (the whole library) — the backward-compatible default.
@@ -28,23 +34,19 @@ class PhotoBackupPrefs {
   final bool wifiOnly;
   final bool chargingOnly;
 
-  bool get isConfigured =>
-      hostId != null &&
-      hostId!.isNotEmpty &&
-      destRoot != null &&
-      destRoot!.isNotEmpty;
+  bool get isConfigured => hostId != null && hostId!.isNotEmpty;
 
   PhotoBackupPrefs copyWith({
     bool? enabled,
     String? hostId,
-    String? destRoot,
+    String? deviceName,
     bool? wifiOnly,
     bool? chargingOnly,
     List<String>? albumIds,
   }) => PhotoBackupPrefs(
     enabled: enabled ?? this.enabled,
     hostId: hostId ?? this.hostId,
-    destRoot: destRoot ?? this.destRoot,
+    deviceName: deviceName ?? this.deviceName,
     wifiOnly: wifiOnly ?? this.wifiOnly,
     chargingOnly: chargingOnly ?? this.chargingOnly,
     albumIds: albumIds ?? this.albumIds,
@@ -60,7 +62,7 @@ class PhotoBackupStore {
 
   static const _kEnabled = 'rfe_photo_backup_enabled';
   static const _kHostId = 'rfe_photo_backup_host';
-  static const _kDestRoot = 'rfe_photo_backup_dest';
+  static const _kDeviceName = 'rfe_photo_backup_device_name';
   static const _kWifiOnly = 'rfe_photo_backup_wifi_only';
   static const _kChargingOnly = 'rfe_photo_backup_charging_only';
   static const _kAlbums = 'rfe_photo_backup_albums';
@@ -72,7 +74,7 @@ class PhotoBackupStore {
   PhotoBackupPrefs load() => PhotoBackupPrefs(
     enabled: _prefs.getBool(_kEnabled) ?? false,
     hostId: _prefs.getString(_kHostId),
-    destRoot: _prefs.getString(_kDestRoot),
+    deviceName: _prefs.getString(_kDeviceName),
     wifiOnly: _prefs.getBool(_kWifiOnly) ?? true,
     chargingOnly: _prefs.getBool(_kChargingOnly) ?? false,
     albumIds: _prefs.getStringList(_kAlbums) ?? const [],
@@ -84,7 +86,9 @@ class PhotoBackupStore {
     await _prefs.setBool(_kChargingOnly, p.chargingOnly);
     await _prefs.setStringList(_kAlbums, p.albumIds);
     if (p.hostId != null) await _prefs.setString(_kHostId, p.hostId!);
-    if (p.destRoot != null) await _prefs.setString(_kDestRoot, p.destRoot!);
+    if (p.deviceName != null) {
+      await _prefs.setString(_kDeviceName, p.deviceName!);
+    }
   }
 
   /// The set of photo asset ids already backed up (the dedupe record).

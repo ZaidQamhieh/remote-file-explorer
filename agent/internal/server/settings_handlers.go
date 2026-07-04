@@ -24,19 +24,21 @@ func deviceFromContext(r *http.Request) *store.Device {
 }
 
 type settingsBody struct {
-	ReadOnly     *bool     `json:"readOnly,omitempty"`
-	Roots        *[]string `json:"roots,omitempty"`
-	AgentName    *string   `json:"agentName,omitempty"`
-	AllowSharing *bool     `json:"allowSharing,omitempty"`
+	ReadOnly        *bool     `json:"readOnly,omitempty"`
+	Roots           *[]string `json:"roots,omitempty"`
+	AgentName       *string   `json:"agentName,omitempty"`
+	AllowSharing    *bool     `json:"allowSharing,omitempty"`
+	PhotoBackupRoot *string   `json:"photoBackupRoot,omitempty"`
 }
 
 func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":     st.IsReadOnly(),
-			"roots":        st.Roots(),
-			"agentName":    st.AgentName(),
-			"allowSharing": st.IsAllowSharing(),
+			"readOnly":        st.IsReadOnly(),
+			"roots":           st.Roots(),
+			"agentName":       st.AgentName(),
+			"allowSharing":    st.IsAllowSharing(),
+			"photoBackupRoot": st.PhotoBackupRoot(),
 		})
 	}
 }
@@ -72,11 +74,18 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
+		if b.PhotoBackupRoot != nil {
+			if err := st.SetPhotoBackupRoot(*b.PhotoBackupRoot); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":     st.IsReadOnly(),
-			"roots":        st.Roots(),
-			"agentName":    st.AgentName(),
-			"allowSharing": st.IsAllowSharing(),
+			"readOnly":        st.IsReadOnly(),
+			"roots":           st.Roots(),
+			"agentName":       st.AgentName(),
+			"allowSharing":    st.IsAllowSharing(),
+			"photoBackupRoot": st.PhotoBackupRoot(),
 		})
 	}
 }

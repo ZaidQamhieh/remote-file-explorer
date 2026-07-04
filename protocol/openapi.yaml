@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.12.0
+  version: 1.13.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -1276,6 +1276,12 @@ components:
           description: >
             Host-level gate for R1 one-time share links (default false).
             POST /share/mint returns 403 while this is false.
+        photoBackupRoot:
+          type: string
+          description: >
+            PC-side destination folder for phone photo backup, set from the
+            web companion Settings page only. Empty means not configured —
+            phones must refuse to back up rather than pick their own path.
     ShareLink:
       type: object
       properties:

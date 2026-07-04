@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../../core/api/providers.dart';
 import '../../core/models/host.dart';
+import '../../core/security/device_identity.dart';
 import '../../core/storage/host_store.dart';
 import '../transfers/transfer_state.dart';
 import 'photo_backup_logic.dart';
@@ -17,6 +22,11 @@ enum PhotoBackupOutcome {
   permissionDenied,
   skipped,
   disabled,
+
+  /// The PC hasn't set a photo-backup destination in its web companion
+  /// Settings yet — the phone never picks its own path, so this is a hard
+  /// stop rather than a fallback.
+  serverNotConfigured,
 }
 
 class PhotoBackupRunResult {
@@ -110,6 +120,25 @@ class PhotoBackupController {
       return const PhotoBackupRunResult(PhotoBackupOutcome.notConfigured);
     }
 
+    // The destination folder is the PC's call (web companion Settings), not
+    // the phone's — fetched fresh every run rather than cached, so a change
+    // on the PC takes effect on the very next backup without a phone update.
+    String photoBackupRoot;
+    final client = await buildClientForHost(_ref.read, host.id);
+    try {
+      photoBackupRoot = (await client.getSettings()).photoBackupRoot;
+    } catch (e) {
+      return PhotoBackupRunResult(
+        PhotoBackupOutcome.skipped,
+        message: 'Could not reach ${host.label} to check backup settings',
+      );
+    } finally {
+      client.close();
+    }
+    if (photoBackupRoot.isEmpty) {
+      return const PhotoBackupRunResult(PhotoBackupOutcome.serverNotConfigured);
+    }
+
     final selected = prefs.albumIds.toSet();
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.image,
@@ -140,6 +169,17 @@ class PhotoBackupController {
       return const PhotoBackupRunResult(PhotoBackupOutcome.upToDate);
     }
 
+    // Scopes this phone's uploads to their own subfolder under destRoot, so
+    // two phones backing up to the same host+folder don't interleave photos.
+    // Prefers the user's nickname (so "which phone is which" stays readable
+    // at the 3-8-device scale this app targets) and falls back to a stable
+    // per-install id only when nothing's been set.
+    final nickname = prefs.deviceName?.trim();
+    final deviceSegment =
+        (nickname != null && nickname.isNotEmpty)
+            ? _sanitizeSegment(nickname)
+            : await _deviceSegment();
+
     final queue = _ref.read(transferQueueProvider.notifier);
     var enqueued = 0;
     for (final a in pending) {
@@ -154,9 +194,10 @@ class PhotoBackupController {
         final title = await a.titleAsync;
         final name = title.isNotEmpty ? title : '${a.id}.jpg';
         final remote = backupRemotePath(
-          destRoot: prefs.destRoot!,
+          destRoot: photoBackupRoot,
           created: a.createDateTime,
           name: name,
+          deviceSegment: deviceSegment,
         );
         final task = TransferTask.upload(
           localPath: file.path,
@@ -178,6 +219,19 @@ class PhotoBackupController {
       enqueued: enqueued,
     );
   }
+
+  /// Short, stable per-install id derived from this device's pairing keypair
+  /// (already generated/persisted by [DeviceIdentity] — no new device-name
+  /// plugin needed). Used as a destRoot subfolder so backups from different
+  /// phones don't collide.
+  Future<String> _deviceSegment() async {
+    final pubKey = await DeviceIdentity.instance.publicKeyBase64();
+    return sha256.convert(utf8.encode(pubKey)).toString().substring(0, 8);
+  }
+
+  /// Keeps a user-typed device nickname safe as a single path segment.
+  static String _sanitizeSegment(String name) =>
+      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
   Future<bool> _onWifi() async {
     final results = await Connectivity().checkConnectivity();

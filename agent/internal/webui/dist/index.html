@@ -459,6 +459,17 @@
             </div>
           </div>
           <button class="primary" id="bw-save">Save bandwidth limits</button>
+
+          <div class="panel" style="margin-top:16px">
+            <div class="field-row">
+              <div>
+                <p class="field-label">Photo backup destination</p>
+                <p class="field-desc" id="photo-backup-warning">Not set — phone photo backup will fail until you set a folder here.</p>
+              </div>
+            </div>
+            <input type="text" id="photo-backup-root" class="mono control" style="width:100%" placeholder="/home/you/PhoneBackups">
+          </div>
+          <button class="primary" id="photo-backup-save">Save photo backup destination</button>
         </div>
 
         <div id="page-devices" class="page hidden">
@@ -879,6 +890,24 @@
     }
   });
 
+  function updatePhotoBackupWarning(root) {
+    const warn = $('photo-backup-warning');
+    warn.textContent = root
+      ? 'Phones back up their photos here, each in their own subfolder.'
+      : 'Not set — phone photo backup will fail until you set a folder here.';
+    warn.style.color = root ? '' : 'var(--danger, #e05555)';
+  }
+
+  $('photo-backup-save').addEventListener('click', async () => {
+    const root = $('photo-backup-root').value.trim();
+    try {
+      await api('/settings', { method: 'PATCH', body: JSON.stringify({ photoBackupRoot: root }) });
+      updatePhotoBackupWarning(root);
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
+  });
+
   // ---------- Files ----------
   let currentPath = null;
 
@@ -1082,6 +1111,8 @@
       $('readonly-toggle').checked = !!settings.readOnly;
       $('bw-upload').value = bandwidth.maxUploadBytesPerSec ? (bandwidth.maxUploadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
       $('bw-download').value = bandwidth.maxDownloadBytesPerSec ? (bandwidth.maxDownloadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
+      $('photo-backup-root').value = settings.photoBackupRoot || '';
+      updatePhotoBackupWarning(settings.photoBackupRoot || '');
 
       const list = $('devices-list');
       list.innerHTML = '';

@@ -26,7 +26,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
   int _doneCount = 0;
   bool _loading = true;
   bool _running = false;
-  final _destCtrl = TextEditingController();
+  final _nicknameCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -36,7 +36,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
 
   @override
   void dispose() {
-    _destCtrl.dispose();
+    _nicknameCtrl.dispose();
     super.dispose();
   }
 
@@ -47,7 +47,7 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
     setState(() {
       _store = store;
       _prefs = store.load();
-      _destCtrl.text = _prefs.destRoot ?? '';
+      _nicknameCtrl.text = _prefs.deviceName ?? '';
       _hosts = hostStore.listHosts();
       _doneCount = store.doneIds().length;
       _loading = false;
@@ -77,6 +77,8 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           showInfo(context, result.message ?? 'Skipped');
         case PhotoBackupOutcome.disabled:
           showInfo(context, context.l10n.enableBackupFirst);
+        case PhotoBackupOutcome.serverNotConfigured:
+          showError(context, context.l10n.serverDestNotConfigured);
       }
       // Refresh the backed-up count.
       final store = await PhotoBackupStore.open();
@@ -129,14 +131,14 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           Spacing.sm,
         ),
         child: TextField(
-          controller: _destCtrl,
+          controller: _nicknameCtrl,
           enabled: on,
           decoration: InputDecoration(
-            labelText: context.l10n.destinationFolderLabel,
-            hintText: context.l10n.destinationFolderHint,
-            helperText: context.l10n.destinationFolderHelper,
+            labelText: context.l10n.deviceNicknameLabel,
+            hintText: context.l10n.deviceNicknameHint,
+            helperText: context.l10n.deviceNicknameHelper,
           ),
-          onChanged: (v) => _update(_prefs.copyWith(destRoot: v.trim())),
+          onChanged: (v) => _update(_prefs.copyWith(deviceName: v.trim())),
         ),
       ),
       ListTile(

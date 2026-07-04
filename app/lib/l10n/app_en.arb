@@ -487,8 +487,8 @@
   "enablePhotoBackup": "Enable photo backup",
   "photoBackupSubtitle": "One-way: copies new photos to your PC",
   "backUpTo": "Back up to",
-  "destinationFolderLabel": "Destination folder on PC",
-  "destinationFolderHint": "/home/you/PhoneBackup",
+  "deviceNicknameLabel": "This phone's nickname",
+  "deviceNicknameHint": "e.g. Zaid's Phone",
   "onlyOnWifi": "Only on Wi-Fi",
   "onlyWhileCharging": "Only while charging",
   "photosBackedUp": "{count} photo(s) backed up",
@@ -774,7 +774,8 @@
     "placeholders": { "count": {"type": "int"} }
   },
   "alreadyUpToDate": "Already up to date",
-  "pickPcFirst": "Pick a PC and destination folder first",
+  "pickPcFirst": "Pick a PC first",
+  "serverDestNotConfigured": "This PC hasn't set a photo backup destination yet — set one in its web companion Settings",
   "photoAccessDenied": "Photo access denied — grant it in system settings",
   "backupFailed": "Backup failed: {error}",
   "@backupFailed": {
@@ -784,7 +785,7 @@
   "choosePc": "Choose a PC",
   "backupRecordCleared": "Backup record cleared",
   "resetBackupHint": "Tap to forget the record (re-backs-up everything)",
-  "destinationFolderHelper": "Photos land in <folder>/YYYY/YYYY-MM/",
+  "deviceNicknameHelper": "Optional. Tells your photos apart from other phones backing up to the same PC.",
   "preparingToShare": "Preparing {name} to share…",
   "@preparingToShare": {
     "placeholders": { "name": {"type": "String"} }

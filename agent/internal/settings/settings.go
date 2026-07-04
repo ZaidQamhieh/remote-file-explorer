@@ -13,12 +13,13 @@ import (
 )
 
 const (
-	keyReadOnly       = "readOnly"
-	keyRoots          = "roots"
-	keyAgentName      = "agentName"
-	keyMaxUploadBPS   = "maxUploadBytesPerSec"
-	keyMaxDownloadBPS = "maxDownloadBytesPerSec"
-	keyAllowSharing   = "allowSharing"
+	keyReadOnly        = "readOnly"
+	keyRoots           = "roots"
+	keyAgentName       = "agentName"
+	keyMaxUploadBPS    = "maxUploadBytesPerSec"
+	keyMaxDownloadBPS  = "maxDownloadBytesPerSec"
+	keyAllowSharing    = "allowSharing"
+	keyPhotoBackupRoot = "photoBackupRoot"
 )
 
 // Store is a concurrency-safe view over the agent's settings.
@@ -31,6 +32,12 @@ type Store struct {
 	maxUploadBytesPS   int64 // 0 = unlimited
 	maxDownloadBytesPS int64 // 0 = unlimited
 	allowSharing       bool  // R1 one-time share links; always seeds false
+
+	// photoBackupRoot is the PC-side destination folder for phone photo
+	// backup, set from the web companion Settings page only (never from a
+	// phone). Empty = not configured, in which case phones must refuse to
+	// back up rather than fall back to a client-picked path.
+	photoBackupRoot string
 }
 
 // Load builds a Store. Any config key that is unset is seeded from the
@@ -89,6 +96,14 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 		}
 	} else {
 		s.allowSharing = as == "true"
+	}
+
+	// No seed: empty means "not configured" (the owner sets it explicitly
+	// from the web companion), unlike the other keys above.
+	if v, err := db.GetConfig(keyPhotoBackupRoot); err != nil {
+		return nil, err
+	} else {
+		s.photoBackupRoot = v
 	}
 
 	// Bandwidth limits default to 0 (unlimited) and are only written on
@@ -179,6 +194,27 @@ func (s *Store) SetAgentName(name string) error {
 		return err
 	}
 	s.agentName = name
+	return nil
+}
+
+// PhotoBackupRoot returns the configured phone-photo-backup destination
+// folder, or "" if the owner hasn't set one yet.
+func (s *Store) PhotoBackupRoot() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.photoBackupRoot
+}
+
+// SetPhotoBackupRoot persists and applies the photo-backup destination
+// folder. Web-companion-only by convention (no phone-facing route calls this).
+func (s *Store) SetPhotoBackupRoot(v string) error {
+	v = strings.TrimSpace(v)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.SetConfig(keyPhotoBackupRoot, v); err != nil {
+		return err
+	}
+	s.photoBackupRoot = v
 	return nil
 }
 

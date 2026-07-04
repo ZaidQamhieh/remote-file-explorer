@@ -871,10 +871,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backUpTo => 'Back up to';
 
   @override
-  String get destinationFolderLabel => 'Destination folder on PC';
+  String get deviceNicknameLabel => 'This phone\'s nickname';
 
   @override
-  String get destinationFolderHint => '/home/you/PhoneBackup';
+  String get deviceNicknameHint => 'e.g. Zaid\'s Phone';
 
   @override
   String get onlyOnWifi => 'Only on Wi-Fi';
@@ -1412,7 +1412,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alreadyUpToDate => 'Already up to date';
 
   @override
-  String get pickPcFirst => 'Pick a PC and destination folder first';
+  String get pickPcFirst => 'Pick a PC first';
+
+  @override
+  String get serverDestNotConfigured =>
+      'This PC hasn\'t set a photo backup destination yet — set one in its web companion Settings';
 
   @override
   String get photoAccessDenied =>
@@ -1437,7 +1441,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Tap to forget the record (re-backs-up everything)';
 
   @override
-  String get destinationFolderHelper => 'Photos land in <folder>/YYYY/YYYY-MM/';
+  String get deviceNicknameHelper =>
+      'Optional. Tells your photos apart from other phones backing up to the same PC.';
 
   @override
   String preparingToShare(String name) {

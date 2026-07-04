@@ -878,10 +878,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backUpTo => 'نسخ إلى';
 
   @override
-  String get destinationFolderLabel => 'مجلد الوجهة على الحاسوب';
+  String get deviceNicknameLabel => 'This phone\'s nickname';
 
   @override
-  String get destinationFolderHint => '/home/you/PhoneBackup';
+  String get deviceNicknameHint => 'e.g. Zaid\'s Phone';
 
   @override
   String get onlyOnWifi => 'عبر Wi-Fi فقط';
@@ -1420,6 +1420,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pickPcFirst => 'اختر حاسوباً ومجلد وجهة أولاً';
 
   @override
+  String get serverDestNotConfigured =>
+      'This PC hasn\'t set a photo backup destination yet — set one in its web companion Settings';
+
+  @override
   String get photoAccessDenied =>
       'تم رفض الوصول للصور — امنح الإذن من إعدادات النظام';
 
@@ -1441,7 +1445,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get resetBackupHint => 'انقر لنسيان السجل (يعيد نسخ كل شيء احتياطياً)';
 
   @override
-  String get destinationFolderHelper => 'تُحفظ الصور في <مجلد>/YYYY/YYYY-MM/';
+  String get deviceNicknameHelper =>
+      'Optional. Tells your photos apart from other phones backing up to the same PC.';
 
   @override
   String preparingToShare(String name) {

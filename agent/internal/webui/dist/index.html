@@ -116,6 +116,20 @@
   .legend { display: inline-flex; align-items: center; font-size: 10px; color: var(--dim); margin-left: 16px; }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
+  /* ---------- Data table (Figma "Connected Clients") ---------- */
+  .table-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 14px; }
+  .table-head { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); color: var(--dim); }
+  .table-head .spacer { flex: 1; }
+  .table-head .meta { font-size: 10px; color: var(--dim); font-family: var(--mono); }
+  .table-scroll { overflow-x: auto; }
+  .dtable { width: 100%; border-collapse: collapse; }
+  .dtable th { text-align: left; padding: 8px 18px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .dtable td { padding: 10px 18px; font-size: 12px; font-family: var(--mono); color: var(--dim-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .dtable tbody tr:last-child td { border-bottom: none; }
+  .dtable tbody tr:hover { background: rgba(29,37,53,.3); }
+  .dtable td.ink { color: var(--ink); }
+  .dtable .empty-cell { text-align: center; color: var(--dim); padding: 24px; font-family: var(--sans); }
+
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
   .stat-head { display: flex; align-items: center; gap: 7px; color: var(--dim); margin-bottom: 10px; }
@@ -364,6 +378,23 @@
             </svg>
             <p class="dim" id="net-empty" style="margin:8px 0 0">Live since this page opened — no history is kept between visits.</p>
           </div>
+
+          <div class="table-panel">
+            <div class="table-head">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <h2 class="panel-title">Connected devices</h2>
+              <span class="spacer"></span>
+              <span class="meta" id="conn-count"></span>
+            </div>
+            <div class="table-scroll">
+              <table class="dtable">
+                <thead>
+                  <tr><th>Device</th><th>Address</th><th>Access</th><th>Path</th><th>Last seen</th><th>Status</th></tr>
+                </thead>
+                <tbody id="conn-tbody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <div id="page-control" class="page hidden">
@@ -504,6 +535,22 @@
     if (d > 0) return d + 'd ' + h + 'h';
     if (h > 0) return h + 'h ' + m + 'm';
     return m + 'm';
+  }
+
+  // Relative time from a unix-seconds timestamp (device lastSeen).
+  function timeAgo(unixSec) {
+    if (!unixSec) return '—';
+    const s = Math.max(0, Math.floor(Date.now() / 1000) - unixSec);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
   }
 
   // ---------- Device identity ----------
@@ -962,12 +1009,42 @@
       if (!devices || devices.length === 0) {
         list.innerHTML = '<p class="dim">No other devices paired.</p>';
       }
+
+      renderConnTable(devices || []);
     } catch (e) {
       if (String(e.message).includes('401') || String(e.message).includes('UNAUTHORIZED')) {
         localStorage.removeItem(TOKEN_KEY);
         showPairing();
       }
     }
+  }
+
+  // Renders the Status page's "Connected devices" table from /v1/devices.
+  // RFE speaks only HTTPS + bearer token, and has no per-device byte/path
+  // telemetry, so the Figma's Protocol/↓/↑ columns map to the real fields
+  // RFE actually has: transport (always HTTPS), jail path, last-seen, status.
+  function renderConnTable(devices) {
+    const tbody = $('conn-tbody');
+    $('conn-count').textContent = devices.length + (devices.length === 1 ? ' session' : ' sessions');
+    if (devices.length === 0) {
+      tbody.innerHTML = '<tr><td class="empty-cell" colspan="6">No devices paired yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = devices.map((d) => {
+      const label = esc(d.label || 'unnamed') + (d.current ? ' <span style="color:var(--dim)">· this browser</span>' : '');
+      const path = d.jailRoot ? esc(d.jailRoot) : '<span style="color:var(--dim)">Full access</span>';
+      let status = '<span class="status-text status-green dot">Active</span>';
+      if (d.revoked) status = '<span class="status-text status-red dot">Revoked</span>';
+      else if (d.readOnly) status = '<span class="status-text status-amber dot">Read-only</span>';
+      return '<tr>' +
+        '<td class="ink">' + label + '</td>' +
+        '<td>' + esc(d.lastAddress || '—') + '</td>' +
+        '<td><span class="type-tag">HTTPS</span></td>' +
+        '<td>' + path + '</td>' +
+        '<td>' + timeAgo(d.lastSeen) + '</td>' +
+        '<td>' + status + '</td>' +
+        '</tr>';
+    }).join('');
   }
 
   // ---------- Page routing (sidebar switches one section at a time) ----------

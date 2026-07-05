@@ -39,7 +39,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.text('Compress downloads on cellular'));
+    await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
     expect(

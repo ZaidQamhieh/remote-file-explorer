@@ -10,6 +10,7 @@ import '../photo_backup/photo_backup_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import 'widgets/backup_restore_section.dart';
 import 'widgets/settings_section.dart';
+import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Everything about moving/protecting data: photo backup, watched folders,
@@ -38,15 +39,12 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
         ),
         children: [
           SettingsSection(
-            title: context.l10n.photoBackupSection,
-            icon: LucideIcons.images,
-            padded: false,
+            title: 'Photo backup',
             children: [
-              ListTile(
-                leading: const Icon(LucideIcons.cloudUpload),
-                title: Text(context.l10n.photoBackupTitle),
-                subtitle: Text(context.l10n.copyPhonePhotos),
-                trailing: const Icon(LucideIcons.chevronRight),
+              SettingsTile.nav(
+                icon: LucideIcons.cloudUpload,
+                title: context.l10n.photoBackupTitle,
+                subtitle: context.l10n.copyPhonePhotos,
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -57,35 +55,30 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
-          const _WatchedFoldersSection(),
-          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Transfers',
-            icon: LucideIcons.arrowUpDown,
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Compress downloads on cellular'),
-                subtitle: const Text(
-                  'Sends Accept-Encoding: gzip on mobile data for '
-                  'compressible files (text, logs, source code)',
-                ),
+              SettingsTile.toggle(
+                icon: LucideIcons.arrowUpDown,
+                title: 'Compress downloads on cellular',
+                subtitle:
+                    'Sends Accept-Encoding: gzip on mobile data for '
+                    'compressible files (text, logs, source code)',
                 value: settings.app.compressDownloadsOnCellular,
                 onChanged: notifier.setCompressDownloadsOnCellular,
               ),
             ],
           ),
           const SizedBox(height: Spacing.md),
+          const _WatchedFoldersSection(),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Transfer History',
-            icon: LucideIcons.history,
-            padded: false,
+            title: 'History',
             children: [
-              ListTile(
-                leading: const Icon(LucideIcons.history),
-                title: const Text('View Transfer History'),
-                subtitle: const Text('Completed uploads and downloads'),
-                trailing: const Icon(LucideIcons.chevronRight),
+              SettingsTile.nav(
+                icon: LucideIcons.history,
+                title: 'View transfer history',
+                subtitle: 'Completed uploads and downloads',
                 onTap:
                     () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -96,7 +89,11 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
-          const BackupRestoreSection(),
+          SettingsSection(
+            title: 'Backup & restore',
+            padded: false,
+            children: const [BackupRestoreSection()],
+          ),
         ],
       ),
     );
@@ -120,7 +117,6 @@ class _WatchedFoldersSection extends ConsumerWidget {
 
     return SettingsSection(
       title: 'Watched folders',
-      icon: LucideIcons.folderHeart,
       padded: false,
       children: [
         if (folders.isEmpty)

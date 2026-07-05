@@ -16,6 +16,7 @@ import '../../core/ui/screen_header.dart';
 import 'about_screen.dart';
 import 'update_tile.dart';
 import 'widgets/settings_section.dart';
+import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Updates, diagnostics export, and About/Changelog — the "rarely touched,
@@ -48,21 +49,17 @@ class AboutSupportSettingsScreen extends StatelessWidget {
           const _DiagnosticsSection(),
           const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'About',
-            icon: LucideIcons.info,
-            padded: false,
+            title: 'ABOUT',
             children: [
-              ListTile(
-                leading: const Icon(LucideIcons.info),
-                title: const Text('About & Changelog'),
-                subtitle: const Text('Version info and what\'s new'),
-                trailing: const Icon(LucideIcons.chevronRight),
-                onTap:
-                    () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const AboutScreen(),
-                      ),
-                    ),
+              SettingsTile.nav(
+                icon: LucideIcons.info,
+                title: 'About & Changelog',
+                subtitle: 'Version info and what\'s new',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AboutScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -78,14 +75,12 @@ class _DiagnosticsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SettingsSection(
-      title: context.l10n.diagnosticsExportTitle,
-      icon: LucideIcons.bug,
-      padded: false,
+      title: 'DIAGNOSTICS',
       children: [
-        ListTile(
-          leading: const Icon(LucideIcons.share2),
-          title: Text(context.l10n.diagnosticsExportButton),
-          subtitle: Text(context.l10n.diagnosticsExportSubtitle),
+        SettingsTile.nav(
+          icon: LucideIcons.share2,
+          title: context.l10n.diagnosticsExportButton,
+          subtitle: context.l10n.diagnosticsExportSubtitle,
           onTap: () => _export(context, ref),
         ),
       ],

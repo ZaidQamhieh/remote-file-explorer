@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/screen_header.dart';
+import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -40,12 +41,11 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Security',
-            icon: LucideIcons.shieldCheck,
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('App Lock'),
-                subtitle: const Text('Require biometric or PIN to open'),
+              SettingsTile.toggle(
+                icon: LucideIcons.lock,
+                title: 'App Lock',
+                subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,
                 onChanged: notifier.setAppLockEnabled,
               ),

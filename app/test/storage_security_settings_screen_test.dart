@@ -30,7 +30,7 @@ void main() {
 
     expect(container.read(settingsProvider).valueOrNull!.app.appLockEnabled, isFalse);
 
-    await tester.tap(find.text('App Lock'));
+    await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
     expect(container.read(settingsProvider).valueOrNull!.app.appLockEnabled, isTrue);

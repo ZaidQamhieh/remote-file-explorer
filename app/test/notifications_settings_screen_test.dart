@@ -35,7 +35,12 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.text('Weekly storage digest'));
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(Row, 'Weekly storage digest').first,
+        matching: find.byType(Switch),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(

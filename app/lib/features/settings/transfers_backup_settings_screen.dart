@@ -39,7 +39,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
         ),
         children: [
           SettingsSection(
-            title: 'Photo backup',
+            title: context.l10n.photoBackupSection,
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.cloudUpload,

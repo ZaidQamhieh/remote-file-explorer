@@ -132,4 +132,28 @@ void main() {
 
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);
   });
+
+  // Guards the index-keyed nullable picker: selecting "Default" (a null Color)
+  // must call setSeedColor(null) and stay distinguishable from a dismissed
+  // sheet. Language uses the identical index-keyed mechanism.
+  testWidgets('Accent Color picker sets a colour, then resets to Default (null)',
+      (tester) async {
+    final c = await pump(tester);
+    expect(c.read(settingsProvider).valueOrNull!.app.seedColor, isNull);
+
+    await tester.tap(find.text('Accent Color'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue'));
+    await tester.pumpAndSettle();
+    expect(
+      c.read(settingsProvider).valueOrNull!.app.seedColor,
+      const Color(0xFF2196F3),
+    );
+
+    await tester.tap(find.text('Accent Color'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Default'));
+    await tester.pumpAndSettle();
+    expect(c.read(settingsProvider).valueOrNull!.app.seedColor, isNull);
+  });
 }

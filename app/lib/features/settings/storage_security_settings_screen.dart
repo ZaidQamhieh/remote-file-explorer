@@ -41,7 +41,6 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Security',
-            icon: LucideIcons.shieldCheck,
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.lock,

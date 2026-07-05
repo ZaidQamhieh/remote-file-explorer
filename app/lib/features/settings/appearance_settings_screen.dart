@@ -129,10 +129,11 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                 onTap: () async {
                   // Same null-ambiguity guard as accent color: key by index.
                   const locales = <Locale?>[null, Locale('en'), Locale('ar')];
+                  final currentIndex = locales.indexOf(app.locale);
                   final picked = await showSettingsPicker<int>(
                     context,
                     title: context.l10n.languageLabel,
-                    selected: locales.indexOf(app.locale),
+                    selected: currentIndex < 0 ? 0 : currentIndex,
                     options: [
                       SettingsOption(0, context.l10n.systemTheme),
                       const SettingsOption(1, 'English'),
@@ -238,10 +239,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
-          const SettingsSection(
-            title: 'File visibility',
-            children: [FileVisibilitySection()],
-          ),
+          const FileVisibilitySection(),
         ],
       ),
     );

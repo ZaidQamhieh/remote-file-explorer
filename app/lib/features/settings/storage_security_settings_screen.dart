@@ -20,7 +20,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings =
-        ref.watch(settingsProvider).valueOrNull ?? SettingsState();
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(

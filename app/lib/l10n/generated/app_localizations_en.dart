@@ -1357,9 +1357,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Material You — derive the palette from your wallpaper where supported';
 
   @override
-  String get languageLabel => 'Language';
-
-  @override
   String get sortFieldName => 'Name';
 
   @override

@@ -76,7 +76,6 @@ class RemoteFileExplorerApp extends ConsumerWidget {
         light: light,
         dark: maybePatchDark(dark),
         mode: app.themeMode,
-        locale: app.locale,
       );
     }
 
@@ -94,7 +93,6 @@ class RemoteFileExplorerApp extends ConsumerWidget {
           light: light,
           dark: maybePatchDark(dark),
           mode: app.themeMode,
-          locale: app.locale,
         );
       },
     );
@@ -104,7 +102,6 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     required ThemeData light,
     required ThemeData dark,
     required ThemeMode mode,
-    Locale? locale,
   }) {
     return MaterialApp(
       title: 'Remote File Explorer',
@@ -112,7 +109,6 @@ class RemoteFileExplorerApp extends ConsumerWidget {
       theme: light,
       darkTheme: dark,
       themeMode: mode,
-      locale: locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(

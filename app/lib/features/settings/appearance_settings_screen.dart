@@ -122,27 +122,6 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                   }
                 },
               ),
-              SettingsTile.value(
-                icon: LucideIcons.globe,
-                title: context.l10n.languageLabel,
-                value: _localeLabel(context, app.locale),
-                onTap: () async {
-                  // Same null-ambiguity guard as accent color: key by index.
-                  const locales = <Locale?>[null, Locale('en'), Locale('ar')];
-                  final currentIndex = locales.indexOf(app.locale);
-                  final picked = await showSettingsPicker<int>(
-                    context,
-                    title: context.l10n.languageLabel,
-                    selected: currentIndex < 0 ? 0 : currentIndex,
-                    options: [
-                      SettingsOption(0, context.l10n.systemTheme),
-                      const SettingsOption(1, 'English'),
-                      const SettingsOption(2, 'العربية'),
-                    ],
-                  );
-                  if (picked != null) notifier.setLocale(locales[picked]);
-                },
-              ),
             ],
           ),
           const SizedBox(height: Spacing.md),
@@ -286,10 +265,3 @@ String _accentLabel(Color? selected) =>
     _accentPresets
         .firstWhere((p) => p.$1 == selected, orElse: () => _accentPresets.first)
         .$2;
-
-String _localeLabel(BuildContext context, Locale? locale) => switch (locale) {
-  null => context.l10n.systemTheme,
-  Locale(languageCode: 'en') => 'English',
-  Locale(languageCode: 'ar') => 'العربية',
-  _ => locale.languageCode,
-};

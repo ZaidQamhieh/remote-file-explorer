@@ -754,7 +754,6 @@
   "defaultsApplyHint": "These defaults apply to every device. Override any of them for a single device from that device’s settings.",
   "themeLabel": "Theme",
   "wallpaperSubtitle": "Material You — derive the palette from your wallpaper where supported",
-  "languageLabel": "Language",
   "sortFieldName": "Name",
   "sortFieldSize": "Size",
   "sortFieldDate": "Date modified",

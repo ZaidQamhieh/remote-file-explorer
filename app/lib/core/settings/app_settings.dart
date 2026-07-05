@@ -1,4 +1,4 @@
-import 'dart:ui' show Color, Locale;
+import 'dart:ui' show Color;
 
 import 'package:flutter/material.dart' show ThemeMode;
 
@@ -27,7 +27,6 @@ class AppDefaults {
     this.visibility = const VisibilityPrefs(),
     this.themeMode = ThemeMode.system,
     this.dynamicColor = true,
-    this.locale,
     this.notificationsEnabled = true,
     this.lowDiskThresholdBytes = 1024 * 1024 * 1024,
     this.appLockEnabled = false,
@@ -62,9 +61,6 @@ class AppDefaults {
   /// app-global only. Defaults to `true`; falls back to the [Brand.seed]
   /// palette when off or when the platform has no dynamic scheme.
   final bool dynamicColor;
-
-  /// Explicit locale override, or `null` to follow the system locale.
-  final Locale? locale;
 
   /// Whether transfer notifications (foreground service + completion) are
   /// enabled. App-global only — no per-device override.
@@ -124,7 +120,6 @@ class AppDefaults {
     visibility: visibility ?? this.visibility,
     themeMode: themeMode ?? this.themeMode,
     dynamicColor: dynamicColor ?? this.dynamicColor,
-    locale: locale,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     lowDiskThresholdBytes: lowDiskThresholdBytes ?? this.lowDiskThresholdBytes,
     appLockEnabled: appLockEnabled ?? this.appLockEnabled,
@@ -138,25 +133,6 @@ class AppDefaults {
     weeklyDigestEnabled: weeklyDigestEnabled ?? this.weeklyDigestEnabled,
   );
 
-  AppDefaults copyWithLocale(Locale? value) => AppDefaults(
-    gridView: gridView,
-    density: density,
-    sort: sort,
-    visibility: visibility,
-    themeMode: themeMode,
-    dynamicColor: dynamicColor,
-    locale: value,
-    notificationsEnabled: notificationsEnabled,
-    lowDiskThresholdBytes: lowDiskThresholdBytes,
-    appLockEnabled: appLockEnabled,
-    amoledDark: amoledDark,
-    seedColor: seedColor,
-    watchedFolders: watchedFolders,
-    compressDownloadsOnCellular: compressDownloadsOnCellular,
-    preloadPreviewOnCellular: preloadPreviewOnCellular,
-    weeklyDigestEnabled: weeklyDigestEnabled,
-  );
-
   AppDefaults copyWithSeedColor(Color? value) => AppDefaults(
     gridView: gridView,
     density: density,
@@ -164,7 +140,6 @@ class AppDefaults {
     visibility: visibility,
     themeMode: themeMode,
     dynamicColor: dynamicColor,
-    locale: locale,
     notificationsEnabled: notificationsEnabled,
     lowDiskThresholdBytes: lowDiskThresholdBytes,
     appLockEnabled: appLockEnabled,
@@ -185,7 +160,6 @@ class AppDefaults {
       other.visibility == visibility &&
       other.themeMode == themeMode &&
       other.dynamicColor == dynamicColor &&
-      other.locale == locale &&
       other.notificationsEnabled == notificationsEnabled &&
       other.lowDiskThresholdBytes == lowDiskThresholdBytes &&
       other.appLockEnabled == appLockEnabled &&
@@ -205,7 +179,6 @@ class AppDefaults {
     visibility,
     themeMode,
     dynamicColor,
-    locale,
     notificationsEnabled,
     lowDiskThresholdBytes,
     appLockEnabled,

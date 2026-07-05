@@ -8,8 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
 
-// FileVisibilityScreen widget tests — the drill-in that replaced the inline
-// FileVisibilitySection card: hide-dotfiles toggle, one collapsed
+// FileVisibilityScreen widget tests — the drill-in that replaced the old
+// inline file-visibility card: hide-dotfiles toggle, one collapsed
 // ExpansionTile per category (with a hidden count + master switch), and the
 // "Custom" section (deletable chips + add field). Edits the app-DEFAULT
 // visibility (hostId null) via the two-tier settings controller.

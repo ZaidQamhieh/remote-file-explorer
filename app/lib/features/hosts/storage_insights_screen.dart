@@ -74,7 +74,10 @@ class _TotalCard extends StatelessWidget {
 
     return Card(
       color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.cardR,
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(Spacing.md),
         child: Column(

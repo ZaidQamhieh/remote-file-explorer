@@ -127,7 +127,10 @@ class _DriveTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: Spacing.sm),
       color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.cardR,
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
         leading: Container(

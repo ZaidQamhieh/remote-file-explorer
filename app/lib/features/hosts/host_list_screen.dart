@@ -13,7 +13,6 @@ import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
 import '../search/cross_host_search_screen.dart';
 import '../settings/update_banner.dart';
-import 'mdns_discovery.dart';
 import 'widgets/host_card.dart';
 
 /// Displays all paired hosts as a dashboard of [HostCard]s.
@@ -97,15 +96,6 @@ class HostListScreen extends ConsumerWidget {
                       vertical: Spacing.md,
                     ),
                     children: [
-                      _DiscoveredHostsSection(
-                        pairedAddresses: hosts.map((h) => h.address).toSet(),
-                        onAdd:
-                            (address) => _addComputer(
-                              context,
-                              ref,
-                              prefillAddress: address,
-                            ),
-                      ),
                       const SectionLabel('Your computers'),
                       GroupedCard(
                         padded: false,
@@ -260,62 +250,6 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Discovered agents section — mDNS `_rfe._tcp`
-// ---------------------------------------------------------------------------
-
-class _DiscoveredHostsSection extends ConsumerWidget {
-  const _DiscoveredHostsSection({
-    required this.pairedAddresses,
-    required this.onAdd,
-  });
-
-  final Set<String> pairedAddresses;
-  final ValueChanged<String> onAdd;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final discovered = ref.watch(mdnsDiscoveryProvider);
-    return discovered.when(
-      data: (agents) {
-        final unpaired =
-            agents
-                .where((a) => !pairedAddresses.contains(a.hostAddress))
-                .toList();
-        if (unpaired.isEmpty) return const SizedBox.shrink();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.xs,
-              ),
-              child: Text(
-                'Discovered on network',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-            for (final agent in unpaired)
-              ListTile(
-                leading: const Icon(Icons.computer_rounded),
-                title: Text(agent.name),
-                subtitle: Text(agent.hostAddress),
-                trailing: FilledButton.tonal(
-                  onPressed: () => onAdd(agent.hostAddress),
-                  child: const Text('Add'),
-                ),
-              ),
-            const Divider(),
-          ],
-        );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

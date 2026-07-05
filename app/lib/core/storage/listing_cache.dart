@@ -26,20 +26,28 @@ class ListingCache {
   final int maxEntries;
 
   /// Keys of the form `"$hostId:$path"` that the eviction pass must skip.
-  // ponytail: in-memory only; repopulated from PinStore on each app start via
-  // ExplorerNotifier.setPinnedListing. Survives the session but not restarts —
-  // Part B should wire up persistent re-hydration from PinStore on build.
+  /// In-memory only; [syncPinned] re-hydrates it from `PinStore` on every
+  /// build of `ExplorerNotifier` so it's correct again after a restart.
   final Set<String> _pinnedKeys = {};
 
   /// Mark or unmark a cached listing as pinned so the eviction pass skips it.
   /// [key] must be in the form `"$hostId:$path"` — same format used by
-  /// [ExplorerNotifier.setPinnedListing] and expected by Part B.
+  /// [ExplorerNotifier.setPinnedListing].
   void setPinned(String key, bool pinned) {
     if (pinned) {
       _pinnedKeys.add(key);
     } else {
       _pinnedKeys.remove(key);
     }
+  }
+
+  /// Replaces the pinned-path set for [hostId] with [paths] (bare remote
+  /// paths, not `"$hostId:$path"` keys) — used to hydrate pin state from
+  /// `PinStore` on notifier build, since [_pinnedKeys] is otherwise lost on
+  /// every restart.
+  void syncPinned(String hostId, Iterable<String> paths) {
+    _pinnedKeys.removeWhere((k) => k.startsWith('$hostId:'));
+    _pinnedKeys.addAll(paths.map((p) => '$hostId:$p'));
   }
 
   Future<Directory> _dir() async {

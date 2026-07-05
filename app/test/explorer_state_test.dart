@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/api/providers.dart';
+import 'package:remote_file_explorer/core/models/batch_result.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
@@ -864,7 +865,7 @@ class _FakeAgentClient extends AgentClient {
   }
 
   @override
-  Future<Map<String, dynamic>> copy(
+  Future<BatchResult> copy(
     List<String> sources,
     String destDir, {
     bool duplicate = false,
@@ -879,13 +880,13 @@ class _FakeAgentClient extends AgentClient {
         overwrite: overwrite,
       ),
     );
-    return {
-      'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
-    };
+    return BatchResult(
+      results: sources.map((s) => BatchItemResult(path: s, ok: true)).toList(),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> move(
+  Future<BatchResult> move(
     List<String> sources,
     String destDir, {
     bool duplicate = false,
@@ -900,9 +901,9 @@ class _FakeAgentClient extends AgentClient {
         overwrite: overwrite,
       ),
     );
-    return {
-      'results': sources.map((s) => {'path': s, 'ok': true}).toList(),
-    };
+    return BatchResult(
+      results: sources.map((s) => BatchItemResult(path: s, ok: true)).toList(),
+    );
   }
 }
 

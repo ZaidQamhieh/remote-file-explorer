@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
+import '../../core/models/batch_result.dart';
 import '../../core/models/entry.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/settings/settings_controller.dart';
@@ -252,6 +253,18 @@ class ExplorerNotifier
     final initialVisibilityPrefs = initialSettings?.resolveVisibility(
       arg.hostId,
     );
+
+    // Re-hydrate the listing cache's in-memory pinned-keys set from PinStore
+    // (the source of truth) so pinned folders keep skipping eviction across
+    // restarts, not just within a session.
+    ref.listen(pinStoreProvider, (_, next) {
+      final pins = next.valueOrNull;
+      if (pins == null) return;
+      _cache.syncPinned(
+        arg.hostId,
+        pins.where((p) => p.hostId == arg.hostId).map((p) => p.remotePath),
+      );
+    }, fireImmediately: true);
 
     // Dispose SSE listener and debounce timer when this provider is torn down.
     ref.onDispose(() {
@@ -524,7 +537,7 @@ class ExplorerNotifier
 
   /// Deletes the current selection. Reversible (to trash) by default; pass
   /// [permanent] `true` to hard-delete.
-  Future<Map<String, dynamic>> deleteSelected({bool permanent = false}) async {
+  Future<BatchResult> deleteSelected({bool permanent = false}) async {
     final client = await _client();
     final res = await client.delete(
       state.selected.toList(),
@@ -534,7 +547,7 @@ class ExplorerNotifier
     return res;
   }
 
-  Future<Map<String, dynamic>> moveSelected(
+  Future<BatchResult> moveSelected(
     String destDir, {
     List<String>? sources,
     bool duplicate = false,
@@ -551,7 +564,7 @@ class ExplorerNotifier
     return res;
   }
 
-  Future<Map<String, dynamic>> copySelected(
+  Future<BatchResult> copySelected(
     String destDir, {
     List<String>? sources,
     bool duplicate = false,
@@ -595,26 +608,26 @@ class ExplorerNotifier
   /// Batch-renames entries. [renames] maps each existing absolute path to its
   /// new basename. Done in two phases (each source first to a unique temp name,
   /// then to its final name) so a new name colliding with another source in the
-  /// same batch can't clobber it. Returns a `{results: [...]}` map compatible
-  /// with `reportBatchResult`.
-  Future<Map<String, dynamic>> batchRename(
+  /// same batch can't clobber it.
+  Future<BatchResult> batchRename(
     List<({String path, String newName})> renames,
   ) async {
     final client = await _client();
-    final results = <Map<String, dynamic>>[];
+    final results = <BatchItemResult>[];
     final pending = <String, String>{}; // finalPath -> tempPath
 
-    Map<String, dynamic> fail(String path, Object e) => {
-      'path': path,
-      'ok': false,
-      'error': {'code': 'RENAME_FAILED', 'message': e.toString()},
-    };
+    BatchItemResult fail(String path, Object e) => BatchItemResult(
+      path: path,
+      ok: false,
+      errorCode: 'RENAME_FAILED',
+      errorMessage: e.toString(),
+    );
 
     for (var i = 0; i < renames.length; i++) {
       final r = renames[i];
       final dst = renameDestination(r.path, r.newName);
       if (dst == r.path) {
-        results.add({'path': r.path, 'ok': true});
+        results.add(BatchItemResult(path: r.path, ok: true));
         continue;
       }
       final tmp = renameDestination(r.path, '.rfe-rn-$i-${r.newName}');
@@ -628,13 +641,13 @@ class ExplorerNotifier
     for (final e in pending.entries) {
       try {
         await client.rename(e.value, e.key);
-        results.add({'path': e.key, 'ok': true});
+        results.add(BatchItemResult(path: e.key, ok: true));
       } catch (err) {
         results.add(fail(e.value, err));
       }
     }
     await _load();
-    return {'results': results};
+    return BatchResult(results: results);
   }
 
   /// Lists [destDir] and returns the basenames of [sourcePaths] that already

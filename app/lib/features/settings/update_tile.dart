@@ -16,6 +16,71 @@ import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+// Native channel into MainActivity (shared with the downloads helper).
+const _kInstallChannel = MethodChannel('rfe/downloads');
+
+/// Hands [apk] to Android's package installer through the native channel.
+/// Throws on failure (handled by the caller).
+Future<void> launchInstaller(File apk) async {
+  await _kInstallChannel.invokeMethod<void>('installApk', {'path': apk.path});
+}
+
+/// Deletes stale `update-*.apk` files in [dir], keeping only [keep]. Best
+/// effort: failures (e.g. a file held open) are ignored.
+Future<void> pruneOldApks(Directory dir, {required File keep}) async {
+  try {
+    await for (final e in dir.list()) {
+      if (e is File &&
+          e.path != keep.path &&
+          e.uri.pathSegments.last.startsWith('update-') &&
+          e.path.endsWith('.apk')) {
+        try {
+          await e.delete();
+        } catch (_) {
+          /* ignore individual file errors */
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore: cleanup is best effort */
+  }
+}
+
+/// Downloads (joining any in-flight pre-download) or, if already cached,
+/// skips straight to installing [release] — showing the same progress
+/// dialog [UpdateTile] uses. Shared so the "Update" banner can trigger
+/// install directly instead of navigating to Settings → About & Support →
+/// tapping the update tile again. [onLaunchInstaller] defaults to handing
+/// the APK straight to the installer; [UpdateTile] passes its own wrapper
+/// to track "install launched" state for its resume-confirmation UI.
+Future<void> triggerUpdateInstall(
+  BuildContext context,
+  AppRelease release, {
+  Future<void> Function(File apk)? onLaunchInstaller,
+}) async {
+  final install = onLaunchInstaller ?? launchInstaller;
+  final apk = await apkCacheFileFor(release.versionCode);
+  await pruneOldApks(apk.parent, keep: apk);
+
+  if (await isApkReadyToInstall(release)) {
+    await install(apk);
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder:
+        (_) => _UpdateProgressDialog(
+          source: GithubUpdateSource(),
+          release: release,
+          apk: apk,
+          onLaunchInstaller: install,
+        ),
+  );
+}
+
 /// A Settings tile that checks GitHub Releases for a newer APK and installs
 /// it, with clear feedback at every stage. Hidden on non-Android platforms.
 ///
@@ -37,9 +102,6 @@ class UpdateTile extends ConsumerStatefulWidget {
 
 class _UpdateTileState extends ConsumerState<UpdateTile>
     with WidgetsBindingObserver {
-  // Native channel into MainActivity (shared with the downloads helper).
-  static const _platform = MethodChannel('rfe/downloads');
-
   String _status = '';
   bool _busy = false;
   bool _statusIsError = false;
@@ -114,53 +176,22 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
         return;
       }
 
-      // Destination file, shared with the silent background pre-download
-      // (covered by the FileProvider paths so the installer can read it).
-      final apk = await apkCacheFileFor(rel!.versionCode);
-
-      // Remove any previously downloaded APKs so updates don't pile up in the
-      // app's cache — only the one we're about to install is kept.
-      await _pruneOldApks(apk.parent, keep: apk);
-
       _preInstallBuild = installed;
-
-      // The background pre-download may have already finished this exact
-      // file — skip straight to the installer instead of re-downloading.
-      if (await isApkReadyToInstall(rel)) {
-        await _launchInstaller(apk);
-        if (!mounted) return;
-        setState(() {
-          _busy = true;
-          _status = context.l10n.openingInstallerConfirm;
-          _statusIsError = false;
-        });
-        return;
-      }
-
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (_) => _UpdateProgressDialog(
-              source: source,
-              release: rel,
-              apk: apk,
-              onLaunchInstaller: _launchInstaller,
-            ),
+      await triggerUpdateInstall(
+        context,
+        rel!,
+        onLaunchInstaller: _launchInstaller,
       );
-
       if (!mounted) return;
       // If the installer was handed off, reflect that and let resume confirm it.
-      if (_installLaunched) {
-        setState(() {
-          _busy = true;
+      setState(() {
+        _busy = _installLaunched;
+        if (_installLaunched) {
           _status = context.l10n.openingInstallerConfirm;
           _statusIsError = false;
-        });
-      } else {
-        setState(() => _busy = false);
-      }
+        }
+      });
     } catch (e) {
       setState(() {
         _busy = false;
@@ -170,33 +201,12 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     }
   }
 
-  /// Deletes stale `update-*.apk` files in [dir], keeping only [keep]. Best
-  /// effort: failures (e.g. a file held open) are ignored.
-  Future<void> _pruneOldApks(Directory dir, {required File keep}) async {
-    try {
-      await for (final e in dir.list()) {
-        if (e is File &&
-            e.path != keep.path &&
-            e.uri.pathSegments.last.startsWith('update-') &&
-            e.path.endsWith('.apk')) {
-          try {
-            await e.delete();
-          } catch (_) {
-            /* ignore individual file errors */
-          }
-        }
-      }
-    } catch (_) {
-      /* ignore: cleanup is best effort */
-    }
-  }
-
   /// Hands the APK to Android's package installer through the native channel.
   /// Records that an install was launched so the resume handler can confirm the
   /// outcome. Throws on failure (handled by the caller).
   Future<void> _launchInstaller(File apk) async {
     _installLaunched = true;
-    await _platform.invokeMethod<void>('installApk', {'path': apk.path});
+    await launchInstaller(apk);
   }
 
   @override

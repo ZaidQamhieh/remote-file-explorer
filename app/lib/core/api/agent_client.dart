@@ -13,6 +13,7 @@ import '../models/agent_settings.dart';
 import '../models/archive_entry.dart';
 import '../models/bandwidth_settings.dart';
 import '../models/app_release.dart';
+import '../models/batch_result.dart';
 import '../models/device.dart';
 import '../models/drive.dart';
 import '../models/entry.dart';
@@ -867,13 +868,13 @@ class AgentClient {
   /// items are auto-renamed ("keep both"); otherwise [overwrite] `true`
   /// replaces the existing item; otherwise a colliding item comes back as a
   /// per-item `CONFLICT` result in the response's `results` list.
-  Future<Map<String, dynamic>> copy(
+  Future<BatchResult> copy(
     List<String> sources,
     String destDir, {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    return _post<Map<String, dynamic>>(
+    final data = await _post<Map<String, dynamic>>(
       '/fs/copy',
       data: {
         'sources': sources,
@@ -882,17 +883,18 @@ class AgentClient {
         'overwrite': overwrite,
       },
     );
+    return BatchResult.fromJson(data);
   }
 
   /// Moves [sources] into [destDir]. See [copy] for the [duplicate] /
   /// [overwrite] collision precedence.
-  Future<Map<String, dynamic>> move(
+  Future<BatchResult> move(
     List<String> sources,
     String destDir, {
     bool duplicate = false,
     bool overwrite = false,
   }) async {
-    return _post<Map<String, dynamic>>(
+    final data = await _post<Map<String, dynamic>>(
       '/fs/move',
       data: {
         'sources': sources,
@@ -901,20 +903,22 @@ class AgentClient {
         'overwrite': overwrite,
       },
     );
+    return BatchResult.fromJson(data);
   }
 
   /// Deletes [paths]. By default this is **reversible** — the agent moves them
   /// to the trash (recoverable via [listTrash] / [restoreTrash]). Pass
   /// [permanent] `true` to hard-delete (recursive, irreversible).
-  Future<Map<String, dynamic>> delete(
+  Future<BatchResult> delete(
     List<String> paths, {
     bool permanent = false,
   }) async {
-    return _delete<Map<String, dynamic>>(
+    final data = await _delete<Map<String, dynamic>>(
       '/fs',
       queryParameters: permanent ? {'permanent': 'true'} : null,
       data: {'paths': paths},
     );
+    return BatchResult.fromJson(data);
   }
 
   /// Lists items currently in the trash, newest first.
@@ -926,16 +930,19 @@ class AgentClient {
         .toList();
   }
 
-  /// Restores trashed items (by [ids]) to their original locations. Returns the
-  /// batch-result map (`results`: per-id `{path, ok, error}`).
-  Future<Map<String, dynamic>> restoreTrash(List<String> ids) async {
-    return _post<Map<String, dynamic>>('/trash/restore', data: {'ids': ids});
+  /// Restores trashed items (by [ids]) to their original locations.
+  Future<BatchResult> restoreTrash(List<String> ids) async {
+    final data = await _post<Map<String, dynamic>>(
+      '/trash/restore',
+      data: {'ids': ids},
+    );
+    return BatchResult.fromJson(data);
   }
 
   /// Permanently empties the trash. With [ids] only those items are purged;
   /// otherwise the whole trash is emptied.
-  Future<Map<String, dynamic>> emptyTrash({List<String>? ids}) async {
-    return _delete<Map<String, dynamic>>(
+  Future<void> emptyTrash({List<String>? ids}) async {
+    await _delete<Map<String, dynamic>>(
       '/trash',
       data: ids == null ? null : {'ids': ids},
     );

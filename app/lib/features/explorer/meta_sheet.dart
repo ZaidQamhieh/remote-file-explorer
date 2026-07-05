@@ -290,155 +290,155 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
                   (f) => f.hostId == widget.host.id && f.path == _entry.path,
                 ) ??
             false);
-    return Wrap(
-      spacing: Spacing.sm,
-      runSpacing: Spacing.sm,
+
+    // Primary row: the everyday actions, at most 4 (Preview/Download/Share/
+    // Open with for files; Favorite is the only primary action for dirs).
+    // Everything else lives in the overflow menu below.
+    final primary = <Widget>[
+      if (_entry.isDir)
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: Icon(LucideIcons.star, color: isFav ? Colors.amber : null),
+          label: Text(
+            isFav ? context.l10n.unfavoriteButton : context.l10n.favoriteButton,
+          ),
+          onPressed: () => _toggleFavorite(context, isFav),
+        ),
+      if (!_entry.isDir && isPreviewable(_entry))
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: const Icon(LucideIcons.eye),
+          label: Text(context.l10n.previewButton),
+          onPressed: () => _preview(context),
+        ),
+      if (!_entry.isDir)
+        FilledButton.tonalIcon(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: const Icon(LucideIcons.download),
+          label: Text(context.l10n.downloadButton),
+          onPressed: () => _download(context),
+        ),
+      if (!_entry.isDir)
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: const Icon(LucideIcons.share),
+          label: Text(context.l10n.shareTooltip),
+          onPressed: () => _share(context),
+        ),
+      if (!_entry.isDir)
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
+          ),
+          icon: const Icon(LucideIcons.externalLink),
+          label: Text(context.l10n.openWithButton),
+          onPressed: () => _openWith(context),
+        ),
+    ];
+
+    final overflow = <PopupMenuEntry<_MetaAction>>[
+      PopupMenuItem(
+        value: _MetaAction.rename,
+        child: ListTile(
+          leading: const Icon(LucideIcons.filePen),
+          title: Text(context.l10n.renameButton),
+        ),
+      ),
+      PopupMenuItem(
+        value: _MetaAction.duplicate,
+        child: ListTile(
+          leading: const Icon(LucideIcons.copy),
+          title: Text(context.l10n.duplicateButton),
+        ),
+      ),
+      if (!_entry.isDir && isExtractableArchive(_entry.name))
+        PopupMenuItem(
+          value: _MetaAction.extract,
+          child: ListTile(
+            leading: const Icon(LucideIcons.archive),
+            title: Text(context.l10n.extractHereButton),
+          ),
+        ),
+      if (!_entry.isDir)
+        PopupMenuItem(
+          value: _MetaAction.shareLink,
+          child: ListTile(
+            leading: const Icon(LucideIcons.link),
+            title: Text(context.l10n.shareLinkButton),
+          ),
+        ),
+      if (!_entry.isDir)
+        PopupMenuItem(
+          value: _MetaAction.sendViaQr,
+          child: ListTile(
+            leading: const Icon(LucideIcons.qrCode),
+            title: Text(context.l10n.sendViaQrButton),
+          ),
+        ),
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: _MetaAction.delete,
+        child: ListTile(
+          leading: Icon(LucideIcons.trash2, color: scheme.error),
+          title: Text(
+            context.l10n.deleteButton,
+            style: TextStyle(color: scheme.error),
+          ),
+        ),
+      ),
+    ];
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_entry.isDir)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: Icon(LucideIcons.star, color: isFav ? Colors.amber : null),
-            label: Text(
-              isFav
-                  ? context.l10n.unfavoriteButton
-                  : context.l10n.favoriteButton,
-            ),
-            onPressed: () => _toggleFavorite(context, isFav),
+        Expanded(
+          child: Wrap(
+            spacing: Spacing.sm,
+            runSpacing: Spacing.sm,
+            children: primary,
           ),
-        if (!_entry.isDir && isPreviewable(_entry))
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.eye),
-            label: Text(context.l10n.previewButton),
-            onPressed: () => _preview(context),
-          ),
-        if (!_entry.isDir)
-          FilledButton.tonalIcon(
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.download),
-            label: Text(context.l10n.downloadButton),
-            onPressed: () => _download(context),
-          ),
-        if (!_entry.isDir)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.externalLink),
-            label: Text(context.l10n.openWithButton),
-            onPressed: () => _openWith(context),
-          ),
-        if (!_entry.isDir)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.share),
-            label: Text(context.l10n.shareTooltip),
-            onPressed: () => _share(context),
-          ),
-        if (!_entry.isDir)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.link),
-            label: Text(context.l10n.shareLinkButton),
-            onPressed: () => _shareLink(context),
-          ),
-        if (!_entry.isDir)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.qrCode),
-            label: Text(context.l10n.sendViaQrButton),
-            onPressed: () => _sendViaQr(context),
-          ),
-        if (!_entry.isDir && isExtractableArchive(_entry.name))
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.sm,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            ),
-            icon: const Icon(LucideIcons.archive),
-            label: Text(context.l10n.extractHereButton),
-            onPressed: () => _extract(context),
-          ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.filePen),
-          label: Text(context.l10n.renameButton),
-          onPressed: () => _rename(context),
         ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.copy),
-          label: Text(context.l10n.duplicateButton),
-          onPressed: () => _duplicate(context),
-        ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-            foregroundColor: scheme.error,
-            side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
-          ),
-          icon: const Icon(LucideIcons.trash2),
-          label: Text(context.l10n.deleteButton),
-          onPressed: () => _delete(context),
+        PopupMenuButton<_MetaAction>(
+          icon: const Icon(LucideIcons.moreVertical),
+          tooltip: context.l10n.moreTooltip,
+          onSelected:
+              (action) => switch (action) {
+                _MetaAction.rename => _rename(context),
+                _MetaAction.duplicate => _duplicate(context),
+                _MetaAction.extract => _extract(context),
+                _MetaAction.shareLink => _shareLink(context),
+                _MetaAction.sendViaQr => _sendViaQr(context),
+                _MetaAction.delete => _delete(context),
+              },
+          itemBuilder: (_) => overflow,
         ),
       ],
     );
@@ -656,11 +656,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       // duplicate:true makes an auto-renamed sibling ("name (1).ext"), so this
       // never collides with the original.
       final res = await widget.client.copy([path], parentDir, duplicate: true);
-      final results = (res['results'] as List?) ?? const [];
-      final ok =
-          results.isNotEmpty &&
-          results.first is Map &&
-          (results.first as Map)['ok'] == true;
+      final ok = res.results.isNotEmpty && res.results.first.ok;
       if (!ok) {
         if (context.mounted) {
           showError(context, context.l10n.couldNotDuplicate(_entry.name));
@@ -748,6 +744,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     }
   }
 }
+
+/// Overflow-menu actions in [_MetaSheetState._buildActions].
+enum _MetaAction { rename, duplicate, extract, shareLink, sendViaQr, delete }
 
 /// Whether [name] looks like an archive the agent can extract — matches the
 /// formats `/fs/extract` supports (`.zip`, `.tar.gz`, `.tgz`). Case-insensitive.

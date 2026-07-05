@@ -10,6 +10,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/download_saver.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/storage/transfer_journal.dart';
+import '../../core/storage/transfer_queue_store.dart';
 import 'chunk_planner.dart';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,24 @@ class TransferTask {
     host: host,
   );
 
+  /// Restores a task persisted by [TransferQueueStore] — see [toJson].
+  factory TransferTask.fromJson(Map<String, dynamic> j) => TransferTask._(
+    id: j['id'] as String,
+    kind: TransferKind.values.byName(j['kind'] as String),
+    localPath: j['localPath'] as String,
+    remotePath: j['remotePath'] as String,
+    host: Host.fromJson(j['host'] as Map<String, dynamic>),
+    totalBytes: j['totalBytes'] as int? ?? 0,
+    transferredBytes: j['transferredBytes'] as int? ?? 0,
+    status: TransferStatus.values.byName(j['status'] as String),
+    error: j['error'] as String?,
+    uploadSessionId: j['uploadSessionId'] as String?,
+    savedLocation: j['savedLocation'] as String?,
+    overwrite: j['overwrite'] as bool? ?? false,
+    verified: j['verified'] as bool? ?? false,
+    sha256: j['sha256'] as String?,
+  );
+
   final String id;
   final TransferKind kind;
   final String localPath;
@@ -119,6 +138,26 @@ class TransferTask {
   double get progress => totalBytes > 0 ? transferredBytes / totalBytes : 0.0;
 
   String get displayName => remotePath.split(RegExp(r'[/\\]')).last;
+
+  /// Serializes this task for [TransferQueueStore]. Completed tasks are
+  /// never persisted (see `TransferQueueNotifier._persist`), so this is only
+  /// ever called for queued/running/paused/failed tasks.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'kind': kind.name,
+    'localPath': localPath,
+    'remotePath': remotePath,
+    'host': host.toJson(),
+    'totalBytes': totalBytes,
+    'transferredBytes': transferredBytes,
+    'status': status.name,
+    'error': error,
+    'uploadSessionId': uploadSessionId,
+    'savedLocation': savedLocation,
+    'overwrite': overwrite,
+    'verified': verified,
+    'sha256': sha256,
+  };
 
   TransferTask copyWith({
     int? totalBytes,
@@ -189,14 +228,53 @@ class _DigestSink implements Sink<Digest> {
 class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   TransferQueueNotifier({
     AgentClient Function(Host host, {String? deviceToken})? clientFactory,
-  }) : _clientFactory = clientFactory ?? AgentClient.new;
+    TransferQueueStore? store,
+  }) : _clientFactory = clientFactory ?? AgentClient.new,
+       _store = store ?? TransferQueueStore();
 
   /// Builds the [AgentClient] used to run a transfer. Overridable so tests
   /// can substitute a fake client without spinning up real Dio/TLS/network.
   final AgentClient Function(Host host, {String? deviceToken}) _clientFactory;
 
+  final TransferQueueStore _store;
+
   @override
-  List<TransferTask> build() => [];
+  List<TransferTask> build() {
+    // Restore unfinished tasks from a prior session (best effort — see
+    // `TransferQueueStore`). `Notifier.build()` must return synchronously, so
+    // the queue starts empty and this fills it in once storage resolves,
+    // same pattern as `ExplorerNotifier`'s `Future.microtask(_load)`.
+    Future.microtask(_hydrate);
+    return [];
+  }
+
+  Future<void> _hydrate() async {
+    final raw = await _store.load();
+    if (raw.isEmpty) return;
+    final restored =
+        raw
+            .map((j) {
+              try {
+                return TransferTask.fromJson(j);
+              } catch (_) {
+                return null; // drop anything corrupt rather than crash.
+              }
+            })
+            .whereType<TransferTask>()
+            // A task persisted mid-flight was actually killed along with the
+            // process — it isn't really running, so surface it as paused
+            // (user taps Resume) instead of claiming false progress.
+            .map(
+              (t) =>
+                  t.status == TransferStatus.running
+                      ? t.copyWith(status: TransferStatus.paused)
+                      : t,
+            )
+            .toList();
+    if (restored.isEmpty) return;
+    state = [...state, ...restored];
+    _runNext();
+  }
 
   /// Cancel tokens for tasks currently executing, keyed by task id. Used by
   /// [pause] and [remove] to actually interrupt in-flight HTTP calls.
@@ -204,6 +282,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
   void enqueue(TransferTask task) {
     state = [...state, task];
+    _persist();
     _runNext();
   }
 
@@ -211,6 +290,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     _updateById(
       id,
       (t) => t.copyWith(status: TransferStatus.queued, error: null),
+      persist: true,
     );
     _runNext();
   }
@@ -229,7 +309,11 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         current.status != TransferStatus.queued) {
       return;
     }
-    _updateById(id, (t) => t.copyWith(status: TransferStatus.paused));
+    _updateById(
+      id,
+      (t) => t.copyWith(status: TransferStatus.paused),
+      persist: true,
+    );
     _cancelTokens[id]?.cancel('paused');
   }
 
@@ -237,16 +321,38 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   void remove(String id) {
     _cancelTokens[id]?.cancel('removed');
     state = state.where((t) => t.id != id).toList();
+    _persist();
   }
 
   // ---------------------------------------------------------------------------
 
-  void _updateById(String id, TransferTask Function(TransferTask) fn) {
+  /// Saves the unfinished (non-completed) tasks so [_hydrate] can restore
+  /// them after a restart. Fire-and-forget — [TransferQueueStore.save] is
+  /// itself best-effort and never throws.
+  void _persist() {
+    _store.save(
+      state
+          .where((t) => t.status != TransferStatus.completed)
+          .map((t) => t.toJson())
+          .toList(),
+    );
+  }
+
+  /// [persist] should be `true` for status transitions and other fields a
+  /// resume needs (e.g. `uploadSessionId`) — not for high-frequency,
+  /// non-critical progress ticks (`transferredBytes`/`totalBytes`), which
+  /// would otherwise write to disk on every chunk/byte callback.
+  void _updateById(
+    String id,
+    TransferTask Function(TransferTask) fn, {
+    bool persist = false,
+  }) {
     final idx = state.indexWhere((t) => t.id == id);
     if (idx == -1) return;
     final list = List<TransferTask>.from(state);
     list[idx] = fn(list[idx]);
     state = list;
+    if (persist) _persist();
   }
 
   /// Throws [_TaskStopped] if [id] is no longer running (paused or removed),
@@ -268,7 +374,11 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   }
 
   Future<void> _execute(String id) async {
-    _updateById(id, (t) => t.copyWith(status: TransferStatus.running));
+    _updateById(
+      id,
+      (t) => t.copyWith(status: TransferStatus.running),
+      persist: true,
+    );
 
     final task = state.firstWhere((t) => t.id == id);
     final cancelToken = CancelToken();
@@ -299,7 +409,11 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       // await above was settling.
       final current = state.firstWhereOrNull((t) => t.id == id);
       if (current != null && current.status == TransferStatus.running) {
-        _updateById(id, (t) => t.copyWith(status: TransferStatus.completed));
+        _updateById(
+          id,
+          (t) => t.copyWith(status: TransferStatus.completed),
+          persist: true,
+        );
         _logToJournal(task);
       }
     } on _TaskStopped {
@@ -315,6 +429,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         _updateById(
           id,
           (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+          persist: true,
         );
       }
     } on AgentApiException catch (e) {
@@ -331,11 +446,13 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
                   ? '${t.displayName} already exists at the destination'
                   : e.toString(),
         ),
+        persist: true,
       );
     } catch (e) {
       _updateById(
         id,
         (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+        persist: true,
       );
     } finally {
       client?.close();
@@ -440,7 +557,11 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         overwrite: task.overwrite,
       );
       sessionId = session.id;
-      _updateById(id, (t) => t.copyWith(uploadSessionId: sessionId));
+      _updateById(
+        id,
+        (t) => t.copyWith(uploadSessionId: sessionId),
+        persist: true,
+      );
     }
 
     int bytesSent = received.fold(0, (acc, ci) {

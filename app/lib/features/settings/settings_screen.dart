@@ -60,21 +60,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // after an error).
       _client?.close();
       final client = await buildClientForHost(ref.read, widget.host.id);
-      final settings = await client.getSettings();
-      final devices = await client.listDevices();
-      final drives = await client.drives();
-      BandwidthSettings bw = const BandwidthSettings();
-      try {
-        bw = await client.getBandwidth();
-      } catch (_) {
-        // Agent may not support bandwidth endpoint yet — use defaults.
-      }
+      final results = await Future.wait<dynamic>([
+        client.getSettings(),
+        client.listDevices(),
+        client.drives(),
+        // Agent may not support the bandwidth endpoint yet — use defaults.
+        client.getBandwidth().catchError((_) => const BandwidthSettings()),
+      ]);
       setState(() {
         _client = client;
-        _settings = settings;
-        _bandwidth = bw;
-        _devices = devices;
-        _drives = drives;
+        _settings = results[0] as AgentSettings;
+        _devices = results[1] as List<Device>;
+        _drives = results[2] as List<Drive>;
+        _bandwidth = results[3] as BandwidthSettings;
         _loading = false;
       });
     } catch (e) {

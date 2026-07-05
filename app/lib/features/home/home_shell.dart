@@ -114,8 +114,28 @@ class _FilesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(activeHostProvider);
     if (active == null) {
-      return const Scaffold(
-        body: Center(child: Text('Select a server from the Servers tab')),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.server,
+                size: 56,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 12),
+              const Text('Select a server to browse its files'),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed:
+                    () => ref.read(selectedTabIndexProvider.notifier).state = 0,
+                icon: const Icon(LucideIcons.server),
+                label: const Text('Go to Servers'),
+              ),
+            ],
+          ),
+        ),
       );
     }
     final body =

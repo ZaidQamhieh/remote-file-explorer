@@ -21,7 +21,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings =
-        ref.watch(settingsProvider).valueOrNull ?? SettingsState();
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
@@ -114,7 +114,7 @@ class _WatchedFoldersSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings =
-        ref.watch(settingsProvider).valueOrNull ?? SettingsState();
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
     final notifier = ref.read(settingsProvider.notifier);
     final folders = settings.app.watchedFolders.toList()..sort();
 

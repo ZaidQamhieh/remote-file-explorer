@@ -10,6 +10,10 @@ import 'l10n_helpers.dart';
 
 // Relocated from app_settings_screen_test.dart (Settings Overhaul, Task 5):
 // these controls now live on AppearanceSettingsScreen, not the top-level nav.
+//
+// Restyled onto the shared row system (SettingsTile.value + showSettingsPicker):
+// choice interactions are now tap-row -> pumpAndSettle -> tap-sheet-option ->
+// pumpAndSettle, asserting the same provider-state transitions as before.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -17,8 +21,8 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   Future<ProviderContainer> pump(WidgetTester tester) async {
-    // A tall surface so the Appearance + Display sections all fit without
-    // scrolling (the sort chips sit near the bottom of the list).
+    // A tall surface so the Theme + Display sections all fit without
+    // scrolling.
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -44,6 +48,8 @@ void main() {
     final c = await pump(tester);
     expect(c.read(settingsProvider).valueOrNull!.app.gridView, isFalse);
 
+    await tester.tap(find.text('Layout'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Grid'));
     await tester.pumpAndSettle();
 
@@ -53,6 +59,8 @@ void main() {
   testWidgets('changing Density sets the app default', (tester) async {
     final c = await pump(tester);
 
+    await tester.tap(find.text('Density'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Compact'));
     await tester.pumpAndSettle();
 
@@ -67,7 +75,9 @@ void main() {
   ) async {
     final c = await pump(tester);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Size'));
+    await tester.tap(find.text('Sort by'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Size'));
     await tester.pumpAndSettle();
 
     final sort = c.read(settingsProvider).valueOrNull!.app.sort;
@@ -81,7 +91,9 @@ void main() {
     final c = await pump(tester);
 
     // Name is the default active field; tapping it flips to descending.
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Name'));
+    await tester.tap(find.text('Sort by'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Name'));
     await tester.pumpAndSettle();
 
     final sort = c.read(settingsProvider).valueOrNull!.app.sort;
@@ -96,6 +108,8 @@ void main() {
       ThemeMode.system,
     );
 
+    await tester.tap(find.text('Theme'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
 
@@ -108,7 +122,12 @@ void main() {
     final c = await pump(tester);
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
 
-    await tester.tap(find.text('Use wallpaper colors'));
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(Row, 'Use wallpaper colors').first,
+        matching: find.byType(Switch),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);

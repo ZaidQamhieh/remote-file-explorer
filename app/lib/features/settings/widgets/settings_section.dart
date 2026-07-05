@@ -68,9 +68,6 @@ class SettingsSection extends StatelessWidget {
           ),
         ),
         Card(
-          elevation: Elevations.card,
-          color: scheme.surfaceContainer,
-          shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
           clipBehavior: Clip.antiAlias,
           child:
               padded

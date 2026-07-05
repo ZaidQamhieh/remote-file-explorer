@@ -60,10 +60,10 @@ class AppTheme {
     final scheme = dark.colorScheme.copyWith(
       surface: Colors.black,
       surfaceContainerLowest: Colors.black,
-      surfaceContainerLow: const Color(0xFF09090B), // zinc-950
-      surfaceContainer: const Color(0xFF18181B), // zinc-900
-      surfaceContainerHigh: const Color(0xFF27272A), // zinc-800
-      surfaceContainerHighest: const Color(0xFF3F3F46), // zinc-700
+      surfaceContainerLow: Colors.black,
+      surfaceContainer: Colors.black,
+      surfaceContainerHigh: const Color(0xFF18181B), // zinc-900
+      surfaceContainerHighest: const Color(0xFF27272A), // zinc-800
     );
     return dark.copyWith(
       colorScheme: scheme,
@@ -111,7 +111,7 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: Elevations.card,
+        elevation: 0,
         color: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.black.withValues(alpha: 0.12),
@@ -119,7 +119,10 @@ class AppTheme {
           horizontal: Spacing.md,
           vertical: Spacing.sm,
         ),
-        shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.cardR,
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
       ),
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(

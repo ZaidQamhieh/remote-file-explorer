@@ -6,8 +6,9 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/screen_header.dart';
-import 'widgets/settings_section.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'widgets/settings_section.dart';
+import 'widgets/settings_tile.dart';
 
 /// Transfer notifications, low-disk alerts, and the weekly storage digest
 /// (Settings Overhaul, group 3 of 5).
@@ -35,34 +36,30 @@ class NotificationsSettingsScreen extends ConsumerWidget {
         ),
         children: [
           SettingsSection(
-            title: context.l10n.notificationsSection,
-            icon: LucideIcons.bell,
+            title: 'ALERTS',
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(context.l10n.transferNotifications),
-                subtitle: Text(context.l10n.transferNotificationsSubtitle),
+              SettingsTile.toggle(
+                icon: LucideIcons.bell,
+                title: context.l10n.transferNotifications,
+                subtitle: context.l10n.transferNotificationsSubtitle,
                 value: app.notificationsEnabled,
                 onChanged: notifier.setNotificationsEnabled,
               ),
-              const Divider(height: Spacing.lg),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(context.l10n.lowDiskAlerts),
-                subtitle: Text(context.l10n.lowDiskAlertsSubtitle),
+              SettingsTile.toggle(
+                icon: LucideIcons.hardDrive,
+                title: context.l10n.lowDiskAlerts,
+                subtitle: context.l10n.lowDiskAlertsSubtitle,
                 value: app.lowDiskThresholdBytes > 0,
                 onChanged:
                     (on) => notifier.setLowDiskThreshold(
                       on ? 1024 * 1024 * 1024 : 0,
                     ),
               ),
-              const Divider(height: Spacing.lg),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Weekly storage digest'),
-                subtitle: const Text(
-                  'Once a week, notify me how free space is trending on my hosts',
-                ),
+              SettingsTile.toggle(
+                icon: LucideIcons.calendarClock,
+                title: 'Weekly storage digest',
+                subtitle:
+                    'Once a week, notify me how free space is trending on my hosts',
                 value: app.weeklyDigestEnabled,
                 onChanged: notifier.setWeeklyDigestEnabled,
               ),

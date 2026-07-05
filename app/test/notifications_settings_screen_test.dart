@@ -35,7 +35,7 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.text('Weekly storage digest'));
+    await tester.tap(find.byType(Switch).at(2));
     await tester.pumpAndSettle();
 
     expect(

@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
@@ -11,6 +9,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
+import 'video_loopback_proxy.dart';
 
 /// SharedPreferences key where we persist `{filePath: positionMs}` pairs
 /// so users can resume playback where they left off.
@@ -19,13 +18,10 @@ const String kVideoPositionsKey = 'rfe_video_positions';
 /// Seek delta applied on double-tap (seconds).
 const int _kSeekDeltaSeconds = 10;
 
-/// Video preview: downloads the file to a temp cache file (showing progress),
-/// then hands the local path to `video_player`/`chewie` for playback with
-/// standard controls.
-///
-/// We can't stream straight from the agent because `video_player` needs a
-/// local file or a plain network URL — and the agent requires TLS pinning +
-/// bearer auth that a raw `VideoPlayerController.networkUrl` can't provide.
+/// Video preview: streams the file through a local [VideoLoopbackProxy]
+/// (which relays Range requests to the agent over its pinned/authed
+/// connection) so `video_player`/`chewie` can start playback immediately
+/// instead of waiting for a full download.
 class VideoPreviewScreen extends StatefulWidget {
   const VideoPreviewScreen({
     super.key,
@@ -49,9 +45,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   late Future<ChewieController> _future;
   ChewieController? _chewie;
   VideoPlayerController? _video;
-  File? _tempFile;
-
-  double _progress = 0;
+  VideoLoopbackProxy? _proxy;
 
   /// Which side showed the seek indicator last (null = hidden).
   _SeekSide? _seekSide;
@@ -72,36 +66,15 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     // be used across async gaps.
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final size = widget.entry.size;
-    if (size != null && size > kMaxVideoPreviewBytes) {
-      throw _TooLarge(size);
-    }
-
-    final dir = await getTemporaryDirectory();
-    final previewDir = Directory('${dir.path}/preview_cache');
-    if (!await previewDir.exists()) {
-      await previewDir.create(recursive: true);
-    }
-    final safeName = widget.entry.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
-    final file = File('${previewDir.path}/$safeName');
-    _tempFile = file;
-
-    if (await file.exists()) {
-      await file.delete();
-    }
-
-    await widget.client.downloadFile(
-      remotePath: widget.entry.path,
-      localFile: file,
-      onProgress: (received, total) {
-        if (!mounted) return;
-        if (total > 0) {
-          setState(() => _progress = received / total);
-        }
-      },
+    final proxy = await VideoLoopbackProxy.start(
+      widget.client,
+      widget.entry.path,
     );
+    _proxy = proxy;
 
-    final video = VideoPlayerController.file(file);
+    final video = VideoPlayerController.networkUrl(
+      Uri.parse('http://127.0.0.1:${proxy.port}/video'),
+    );
     _video = video;
     await video.initialize();
 
@@ -201,7 +174,6 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   void _retry() {
     setState(() {
-      _progress = 0;
       _disposeControllers();
       _future = _load();
     });
@@ -215,13 +187,14 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     _chewie = null;
     _video?.dispose();
     _video = null;
+    _proxy?.close();
+    _proxy = null;
   }
 
   @override
   void dispose() {
     _savePosition();
     _disposeControllers();
-    _tempFile?.delete().catchError((_) => _tempFile!);
     super.dispose();
   }
 
@@ -254,20 +227,11 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return PreviewLoading(
-              message:
-                  'Downloading video for preview… '
-                  '${(_progress * 100).toStringAsFixed(0)}%',
-              progress: _progress > 0 ? _progress : null,
-            );
+            return const PreviewLoading(message: 'Loading video…');
           }
           if (snapshot.hasError) {
-            final err = snapshot.error;
-            if (err is _TooLarge) {
-              return PreviewTooLarge(sizeLabel: formatSize(err.size));
-            }
             return PreviewError(
-              message: 'Could not load this video.\n$err',
+              message: 'Could not load this video.\n${snapshot.error}',
               onRetry: _retry,
             );
           }
@@ -432,9 +396,4 @@ void _writePosition(SharedPreferences prefs, String filePath, int posMs) {
 /// Clear the saved position for [filePath] (video completed).
 void _clearPosition(SharedPreferences prefs, String filePath) {
   prefs.remove('${kVideoPositionsKey}_$filePath');
-}
-
-class _TooLarge implements Exception {
-  _TooLarge(this.size);
-  final int size;
 }

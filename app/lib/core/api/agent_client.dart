@@ -1063,6 +1063,27 @@ class AgentClient {
     }
   }
 
+  /// Opens a streaming GET to `/content` for [remotePath], forwarding
+  /// [rangeHeader] verbatim if given.
+  ///
+  /// Used by the video-preview loopback proxy ([VideoLoopbackProxy]) so
+  /// `video_player` can request byte ranges over a plain local HTTP
+  /// connection without knowing about this client's TLS pinning or bearer
+  /// auth — the proxy does that dance here and just relays bytes.
+  Future<Response<ResponseBody>> openContentStream(
+    String remotePath, {
+    String? rangeHeader,
+  }) {
+    return _dio.get<ResponseBody>(
+      '/content',
+      queryParameters: {'path': remotePath},
+      options: Options(
+        headers: {if (rangeHeader != null) 'Range': rangeHeader},
+        responseType: ResponseType.stream,
+      ),
+    );
+  }
+
   /// Fetch the full contents of [remotePath] into memory as raw bytes.
   ///
   /// Intended for small-ish files (previews of images/text/PDFs). Callers

@@ -9,11 +9,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// "too large to preview" state and suggest downloading instead.
 const int kMaxInMemoryPreviewBytes = 50 * 1024 * 1024; // 50 MB
 
-/// Maximum size (in bytes) we'll download to a temp cache file for video
-/// preview playback. Beyond this we suggest downloading via the transfer
-/// queue instead of streaming a full local copy just to preview it.
-const int kMaxVideoPreviewBytes = 300 * 1024 * 1024; // 300 MB
-
 /// Maximum size (in bytes) we'll download to a temp cache file for audio
 /// preview playback. Audio files are far smaller than video, so the cap is
 /// lower; beyond it we suggest downloading via the transfer queue instead.

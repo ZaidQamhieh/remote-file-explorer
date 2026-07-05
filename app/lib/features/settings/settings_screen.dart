@@ -628,32 +628,9 @@ class VisibilityEditor extends StatelessWidget {
             ],
           ),
         const SizedBox(height: Spacing.xs),
-        _AddExtensionField(
+        AddExtensionField(
           onSubmit: (e) => notifier.addExtension(e, hostId: hostId),
         ),
-      ],
-    );
-  }
-}
-
-/// "File visibility" App Settings card: edits the **app-default**
-/// [VisibilityPrefs] (`hostId: null`) — the global default every host inherits
-/// unless it carries its own override (set per-device in
-/// [DeviceVisibilityOverrideSection]).
-class FileVisibilitySection extends ConsumerWidget {
-  const FileVisibilitySection({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settings =
-        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
-    final notifier = ref.read(settingsProvider.notifier);
-
-    return SettingsSection(
-      title: context.l10n.fileVisibilitySection,
-      icon: LucideIcons.eye,
-      children: [
-        VisibilityEditor(prefs: settings.app.visibility, notifier: notifier),
       ],
     );
   }
@@ -777,16 +754,16 @@ class _PresetGroup extends StatelessWidget {
 /// Text field for adding a custom hidden extension (e.g. "tmp"), submitted
 /// via the keyboard action or the trailing add button. [onSubmit] normalizes
 /// (strips dots, lowercases) and persists via the settings controller.
-class _AddExtensionField extends StatefulWidget {
-  const _AddExtensionField({required this.onSubmit});
+class AddExtensionField extends StatefulWidget {
+  const AddExtensionField({super.key, required this.onSubmit});
 
   final ValueChanged<String> onSubmit;
 
   @override
-  State<_AddExtensionField> createState() => _AddExtensionFieldState();
+  State<AddExtensionField> createState() => AddExtensionFieldState();
 }
 
-class _AddExtensionFieldState extends State<_AddExtensionField> {
+class AddExtensionFieldState extends State<AddExtensionField> {
   final _controller = TextEditingController();
 
   void _submit() {

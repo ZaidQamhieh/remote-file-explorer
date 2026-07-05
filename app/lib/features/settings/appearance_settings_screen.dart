@@ -7,7 +7,7 @@ import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/screen_header.dart';
-import 'settings_screen.dart' show FileVisibilitySection;
+import 'file_visibility_screen.dart';
 import 'widgets/settings_picker.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
@@ -153,7 +153,9 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                 icon: LucideIcons.layoutGrid,
                 title: context.l10n.layoutLabel,
                 value:
-                    app.gridView ? context.l10n.gridLabel : context.l10n.listLabel,
+                    app.gridView
+                        ? context.l10n.gridLabel
+                        : context.l10n.listLabel,
                 onTap: () async {
                   final picked = await showSettingsPicker<bool>(
                     context,
@@ -239,7 +241,22 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
-          const FileVisibilitySection(),
+          SettingsSection(
+            title: 'File visibility',
+            children: [
+              SettingsTile.nav(
+                icon: LucideIcons.eyeOff,
+                title: 'File visibility',
+                subtitle: 'Hidden file types & dotfiles',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const FileVisibilityScreen(),
+                      ),
+                    ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -265,9 +282,10 @@ const _accentPresets = <(Color?, String)>[
   (Color(0xFF009688), 'Teal'),
 ];
 
-String _accentLabel(Color? selected) => _accentPresets
-    .firstWhere((p) => p.$1 == selected, orElse: () => _accentPresets.first)
-    .$2;
+String _accentLabel(Color? selected) =>
+    _accentPresets
+        .firstWhere((p) => p.$1 == selected, orElse: () => _accentPresets.first)
+        .$2;
 
 String _localeLabel(BuildContext context, Locale? locale) => switch (locale) {
   null => context.l10n.systemTheme,

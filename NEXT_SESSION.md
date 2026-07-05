@@ -22,4 +22,9 @@ not here.
 ---
 
 ## Open handoff
-_None — last session closed clean._
+
+_None — critical-review fixes + mDNS removal + English-only l10n + MetaSheet redesign +
+video streaming proxy all shipped this session (v1.41.0+61). Closed clean._
+
+Remaining durable backlog: Obsidian wiki `plans/next-update-backlog.md` — real
+background auto-update (needs a new WorkManager-style dependency, owner-gated).

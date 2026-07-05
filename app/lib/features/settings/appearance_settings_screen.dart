@@ -8,7 +8,9 @@ import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/screen_header.dart';
 import 'settings_screen.dart' show FileVisibilitySection;
+import 'widgets/settings_picker.dart';
 import 'widgets/settings_section.dart';
+import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Theme, layout, density, sort, and file-visibility defaults — everything
@@ -24,6 +26,12 @@ class AppearanceSettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
     final app = settings.app;
 
+    String themeLabel(ThemeMode m) => switch (m) {
+      ThemeMode.system => context.l10n.systemTheme,
+      ThemeMode.light => context.l10n.lightTheme,
+      ThemeMode.dark => context.l10n.darkTheme,
+    };
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 72,
@@ -38,198 +46,202 @@ class AppearanceSettingsScreen extends ConsumerWidget {
         ),
         children: [
           SettingsSection(
-            title: context.l10n.appearanceSection,
-            icon: LucideIcons.palette,
+            title: 'Theme',
             children: [
-              _LabeledControl(
-                label: context.l10n.themeLabel,
-                control: SegmentedButton<ThemeMode>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      label: Text(context.l10n.systemTheme),
-                      icon: const Icon(LucideIcons.sunMoon),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      label: Text(context.l10n.lightTheme),
-                      icon: const Icon(LucideIcons.sun),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      label: Text(context.l10n.darkTheme),
-                      icon: const Icon(LucideIcons.moon),
-                    ),
-                  ],
-                  selected: {app.themeMode},
-                  onSelectionChanged: (s) => notifier.setThemeMode(s.first),
-                ),
+              SettingsTile.value(
+                icon: LucideIcons.palette,
+                title: context.l10n.themeLabel,
+                value: themeLabel(app.themeMode),
+                onTap: () async {
+                  final picked = await showSettingsPicker<ThemeMode>(
+                    context,
+                    title: context.l10n.themeLabel,
+                    selected: app.themeMode,
+                    options: [
+                      SettingsOption(
+                        ThemeMode.system,
+                        context.l10n.systemTheme,
+                        icon: LucideIcons.sunMoon,
+                      ),
+                      SettingsOption(
+                        ThemeMode.light,
+                        context.l10n.lightTheme,
+                        icon: LucideIcons.sun,
+                      ),
+                      SettingsOption(
+                        ThemeMode.dark,
+                        context.l10n.darkTheme,
+                        icon: LucideIcons.moon,
+                      ),
+                    ],
+                  );
+                  if (picked != null) notifier.setThemeMode(picked);
+                },
               ),
-              const Divider(height: Spacing.lg),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(context.l10n.useWallpaperColors),
-                subtitle: Text(context.l10n.wallpaperSubtitle),
+              SettingsTile.toggle(
+                icon: LucideIcons.image,
+                title: context.l10n.useWallpaperColors,
+                subtitle: context.l10n.wallpaperSubtitle,
                 value: app.dynamicColor,
                 onChanged: notifier.setDynamicColor,
               ),
-              const Divider(height: Spacing.lg),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('AMOLED Dark'),
-                subtitle: const Text('Pure black background in dark mode'),
+              SettingsTile.toggle(
+                icon: LucideIcons.moon,
+                title: 'AMOLED Dark',
+                subtitle: 'Pure black background in dark mode',
                 value: app.amoledDark,
                 onChanged: notifier.setAmoledDark,
               ),
-              const Divider(height: Spacing.lg),
-              _LabeledControl(
-                label: 'Accent Color',
-                control: _AccentColorPicker(
-                  selected: app.seedColor,
-                  onChanged: notifier.setSeedColor,
-                ),
+              SettingsTile.value(
+                icon: LucideIcons.swatchBook,
+                title: 'Accent Color',
+                value: _accentLabel(app.seedColor),
+                leadingDot: app.seedColor ?? Brand.seed,
+                onTap: () async {
+                  // Picker is keyed by preset index, not Color?, so picking
+                  // "Default" (a null Color) can't be confused with the
+                  // sheet being dismissed (both would otherwise read null).
+                  final currentIndex = _accentPresets.indexWhere(
+                    (p) => p.$1 == app.seedColor,
+                  );
+                  final picked = await showSettingsPicker<int>(
+                    context,
+                    title: 'Accent Color',
+                    selected: currentIndex < 0 ? 0 : currentIndex,
+                    options: [
+                      for (var i = 0; i < _accentPresets.length; i++)
+                        SettingsOption(
+                          i,
+                          _accentPresets[i].$2,
+                          color: _accentPresets[i].$1 ?? Brand.seed,
+                        ),
+                    ],
+                  );
+                  if (picked != null) {
+                    notifier.setSeedColor(_accentPresets[picked].$1);
+                  }
+                },
               ),
-              const Divider(height: Spacing.lg),
-              _LabeledControl(
-                label: context.l10n.languageLabel,
-                control: SegmentedButton<Locale?>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: null,
-                      label: Text(context.l10n.systemTheme),
-                    ),
-                    const ButtonSegment(
-                      value: Locale('en'),
-                      label: Text('English'),
-                    ),
-                    const ButtonSegment(
-                      value: Locale('ar'),
-                      label: Text('العربية'),
-                    ),
-                  ],
-                  selected: {app.locale},
-                  onSelectionChanged: (s) => notifier.setLocale(s.first),
-                ),
+              SettingsTile.value(
+                icon: LucideIcons.globe,
+                title: context.l10n.languageLabel,
+                value: _localeLabel(context, app.locale),
+                onTap: () async {
+                  // Same null-ambiguity guard as accent color: key by index.
+                  const locales = <Locale?>[null, Locale('en'), Locale('ar')];
+                  final picked = await showSettingsPicker<int>(
+                    context,
+                    title: context.l10n.languageLabel,
+                    selected: locales.indexOf(app.locale),
+                    options: [
+                      SettingsOption(0, context.l10n.systemTheme),
+                      const SettingsOption(1, 'English'),
+                      const SettingsOption(2, 'العربية'),
+                    ],
+                  );
+                  if (picked != null) notifier.setLocale(locales[picked]);
+                },
               ),
             ],
           ),
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.displaySection,
-            icon: LucideIcons.layoutGrid,
             children: [
-              _LabeledControl(
-                label: context.l10n.layoutLabel,
-                control: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: false,
-                      label: Text(context.l10n.listLabel),
-                      icon: const Icon(LucideIcons.list),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text(context.l10n.gridLabel),
-                      icon: const Icon(LucideIcons.layoutGrid),
-                    ),
-                  ],
-                  selected: {app.gridView},
-                  onSelectionChanged: (s) => notifier.setAppGridView(s.first),
-                ),
-              ),
-              const Divider(height: Spacing.lg),
-              _LabeledControl(
-                label: context.l10n.densityLabel,
-                control: SegmentedButton<EntryDensity>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: EntryDensity.comfortable,
-                      label: Text(context.l10n.comfortableLabel),
-                    ),
-                    ButtonSegment(
-                      value: EntryDensity.compact,
-                      label: Text(context.l10n.compactLabel),
-                    ),
-                  ],
-                  selected: {app.density},
-                  onSelectionChanged: (s) => notifier.setAppDensity(s.first),
-                ),
-              ),
-              const Divider(height: Spacing.lg),
-              _LabeledControl(
-                label: context.l10n.sortByLabel,
-                control: Wrap(
-                  spacing: Spacing.sm,
-                  runSpacing: Spacing.sm,
-                  children: [
-                    for (final field in SortField.values)
-                      ChoiceChip(
-                        label: Text(_sortFieldLabel(context, field)),
-                        selected: app.sort.field == field,
-                        avatar:
-                            app.sort.field == field
-                                ? Icon(
-                                  app.sort.ascending
-                                      ? LucideIcons.arrowUp
-                                      : LucideIcons.arrowDown,
-                                  size: 18,
-                                )
-                                : null,
-                        onSelected: (_) {
-                          if (app.sort.field == field) {
-                            notifier.setAppSort(
-                              app.sort.copyWith(ascending: !app.sort.ascending),
-                            );
-                          } else {
-                            notifier.setAppSort(SortOrder(field: field));
-                          }
-                        },
+              SettingsTile.value(
+                icon: LucideIcons.layoutGrid,
+                title: context.l10n.layoutLabel,
+                value:
+                    app.gridView ? context.l10n.gridLabel : context.l10n.listLabel,
+                onTap: () async {
+                  final picked = await showSettingsPicker<bool>(
+                    context,
+                    title: context.l10n.layoutLabel,
+                    selected: app.gridView,
+                    options: [
+                      SettingsOption(
+                        false,
+                        context.l10n.listLabel,
+                        icon: LucideIcons.list,
                       ),
-                  ],
-                ),
+                      SettingsOption(
+                        true,
+                        context.l10n.gridLabel,
+                        icon: LucideIcons.layoutGrid,
+                      ),
+                    ],
+                  );
+                  if (picked != null) notifier.setAppGridView(picked);
+                },
               ),
-              const Divider(height: Spacing.lg),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Preload previews on cellular'),
-                subtitle: const Text(
-                  'Warm neighbouring images while swiping the preview, even '
-                  'off Wi-Fi',
-                ),
+              SettingsTile.value(
+                icon: LucideIcons.rows3,
+                title: context.l10n.densityLabel,
+                value:
+                    app.density == EntryDensity.compact
+                        ? context.l10n.compactLabel
+                        : context.l10n.comfortableLabel,
+                onTap: () async {
+                  final picked = await showSettingsPicker<EntryDensity>(
+                    context,
+                    title: context.l10n.densityLabel,
+                    selected: app.density,
+                    options: [
+                      SettingsOption(
+                        EntryDensity.comfortable,
+                        context.l10n.comfortableLabel,
+                      ),
+                      SettingsOption(
+                        EntryDensity.compact,
+                        context.l10n.compactLabel,
+                      ),
+                    ],
+                  );
+                  if (picked != null) notifier.setAppDensity(picked);
+                },
+              ),
+              SettingsTile.value(
+                icon: LucideIcons.arrowUpDown,
+                title: context.l10n.sortByLabel,
+                value:
+                    '${_sortFieldLabel(context, app.sort.field)} '
+                    '${app.sort.ascending ? '↑' : '↓'}',
+                onTap: () async {
+                  final picked = await showSettingsPicker<SortField>(
+                    context,
+                    title: context.l10n.sortByLabel,
+                    selected: app.sort.field,
+                    options: [
+                      for (final field in SortField.values)
+                        SettingsOption(field, _sortFieldLabel(context, field)),
+                    ],
+                  );
+                  if (picked == null) return;
+                  if (app.sort.field == picked) {
+                    notifier.setAppSort(
+                      app.sort.copyWith(ascending: !app.sort.ascending),
+                    );
+                  } else {
+                    notifier.setAppSort(SortOrder(field: picked));
+                  }
+                },
+              ),
+              SettingsTile.toggle(
+                icon: LucideIcons.wifi,
+                title: 'Preload previews on cellular',
+                subtitle:
+                    'Warm neighbouring images while swiping the preview, even '
+                    'off Wi-Fi',
                 value: app.preloadPreviewOnCellular,
                 onChanged: notifier.setPreloadPreviewOnCellular,
               ),
             ],
           ),
           const SizedBox(height: Spacing.md),
-          const FileVisibilitySection(),
-        ],
-      ),
-    );
-  }
-}
-
-/// A stacked label-over-control row for the App Settings cards.
-class _LabeledControl extends StatelessWidget {
-  const _LabeledControl({required this.label, required this.control});
-
-  final String label;
-  final Widget control;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: Spacing.sm),
-          Align(alignment: AlignmentDirectional.centerStart, child: control),
+          const SettingsSection(
+            title: 'File visibility',
+            children: [FileVisibilitySection()],
+          ),
         ],
       ),
     );
@@ -244,56 +256,24 @@ String _sortFieldLabel(BuildContext context, SortField field) =>
       SortField.type => context.l10n.sortFieldType,
     };
 
-class _AccentColorPicker extends StatelessWidget {
-  const _AccentColorPicker({required this.selected, required this.onChanged});
+const _accentPresets = <(Color?, String)>[
+  (null, 'Default'),
+  (Color(0xFF2196F3), 'Blue'),
+  (Color(0xFF4CAF50), 'Green'),
+  (Color(0xFFFF5722), 'Deep orange'),
+  (Color(0xFF9C27B0), 'Purple'),
+  (Color(0xFFFF9800), 'Orange'),
+  (Color(0xFFE91E63), 'Pink'),
+  (Color(0xFF009688), 'Teal'),
+];
 
-  final Color? selected;
-  final ValueChanged<Color?> onChanged;
+String _accentLabel(Color? selected) => _accentPresets
+    .firstWhere((p) => p.$1 == selected, orElse: () => _accentPresets.first)
+    .$2;
 
-  static const _presets = <Color?>[
-    null,
-    Color(0xFF2196F3),
-    Color(0xFF4CAF50),
-    Color(0xFFFF5722),
-    Color(0xFF9C27B0),
-    Color(0xFFFF9800),
-    Color(0xFFE91E63),
-    Color(0xFF009688),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: Spacing.sm,
-      runSpacing: Spacing.sm,
-      children: [
-        for (final preset in _presets)
-          GestureDetector(
-            onTap: () => onChanged(preset),
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: preset ?? Brand.seed,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color:
-                      selected == preset ? scheme.primary : Colors.transparent,
-                  width: 3,
-                ),
-              ),
-              child:
-                  selected == preset
-                      ? const Icon(
-                        LucideIcons.check,
-                        size: 18,
-                        color: Colors.white,
-                      )
-                      : null,
-            ),
-          ),
-      ],
-    );
-  }
-}
+String _localeLabel(BuildContext context, Locale? locale) => switch (locale) {
+  null => context.l10n.systemTheme,
+  Locale(languageCode: 'en') => 'English',
+  Locale(languageCode: 'ar') => 'العربية',
+  _ => locale.languageCode,
+};

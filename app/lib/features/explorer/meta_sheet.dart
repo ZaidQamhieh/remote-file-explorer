@@ -75,55 +75,63 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.55,
-      maxChildSize: 0.9,
-      builder:
-          (_, controller) => Container(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: Radii.sheetTopR,
-            ),
-            child: CustomScrollView(
-              controller: controller,
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.lg,
-                      Spacing.md,
-                      Spacing.lg,
-                      Spacing.sm,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _buildGrabber(context),
-                        const SizedBox(height: Spacing.md),
-                        _buildHeader(context),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Spacing.lg,
-                    0,
-                    Spacing.lg,
-                    Spacing.xl,
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildMetaSection(context),
-                      const SizedBox(height: Spacing.lg),
-                      _buildActions(context),
-                    ]),
-                  ),
-                ),
-              ],
-            ),
+    // Sized to content, not a fixed screen fraction — the old
+    // DraggableScrollableSheet always claimed 55-90% of the screen even
+    // though the action list is short, which is what made the sheet feel
+    // oversized. Metadata now lives behind "Details" (see _showDetails), so
+    // this sheet is just header + actions and naturally stays compact.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final heroTint = isDark ? figmaIconBg(_entry) : scheme.primary;
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: Radii.sheetTopR,
           ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg,
+                  Spacing.md,
+                  Spacing.lg,
+                  Spacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.topLeft,
+                    radius: 1.4,
+                    colors: [
+                      heroTint.withValues(alpha: 0.28),
+                      scheme.surfaceContainerLow.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildGrabber(context),
+                    const SizedBox(height: Spacing.md),
+                    _buildHeader(context),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg,
+                  0,
+                  Spacing.lg,
+                  Spacing.xl,
+                ),
+                child: _buildActions(context),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -317,11 +325,11 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
                 ) ??
             false);
 
-    // 3-column icon grid, matching the Figma FileActionSheet mockup. Same
-    // per-entry-type gating as before (dirs only get Favorite/Rename/
-    // Duplicate; extract is archive-only) — just laid out as grid cells
-    // instead of a chip row + overflow menu.
-    final cells = <_ActionCell>[
+    // Quick-action circle row (the 4 most common taps) + a plain list below
+    // for everything else — the Google Photos/WhatsApp file-sheet shape.
+    // Metadata isn't in here at all; it's behind the "Details" row.
+    final previewable = !_entry.isDir && isPreviewable(_entry);
+    final quick = <_ActionCell>[
       if (_entry.isDir)
         _ActionCell(
           icon: LucideIcons.star,
@@ -329,28 +337,62 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               isFav
                   ? context.l10n.unfavoriteButton
                   : context.l10n.favoriteButton,
-          tint: isFav ? Colors.amber : null,
+          circleGradient: const [Colors.amber, Color(0xFFB8860B)],
           onTap: () => _toggleFavorite(context, isFav),
-        ),
-      if (!_entry.isDir && isPreviewable(_entry))
+        )
+      else if (previewable)
         _ActionCell(
           icon: LucideIcons.eye,
           label: context.l10n.previewButton,
+          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
           onTap: () => _preview(context),
+        )
+      else if (!_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.externalLink,
+          label: context.l10n.openWithButton,
+          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
+          onTap: () => _openWith(context),
         ),
-      if (!_entry.isDir)
+      if (_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.filePen,
+          label: context.l10n.renameButton,
+          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
+          onTap: () => _rename(context),
+        )
+      else
         _ActionCell(
           icon: LucideIcons.download,
           label: context.l10n.downloadButton,
+          circleGradient: [Colors.green.shade400, Colors.green.shade800],
           onTap: () => _download(context),
         ),
-      if (!_entry.isDir)
+      if (_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.copy,
+          label: context.l10n.duplicateButton,
+          circleGradient: [Colors.purple.shade300, Colors.purple.shade700],
+          onTap: () => _duplicate(context),
+        )
+      else
         _ActionCell(
           icon: LucideIcons.share,
           label: context.l10n.shareTooltip,
+          circleGradient: [Colors.purple.shade300, Colors.purple.shade700],
           onTap: () => _share(context),
         ),
-      if (!_entry.isDir)
+      _ActionCell(
+        icon: LucideIcons.trash2,
+        label: context.l10n.deleteButton,
+        tint: scheme.error,
+        circleGradient: [Colors.red.shade400, Colors.red.shade800],
+        onTap: () => _delete(context),
+      ),
+    ];
+
+    final more = <_ActionCell>[
+      if (previewable)
         _ActionCell(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
@@ -374,15 +416,22 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           label: context.l10n.extractHereButton,
           onTap: () => _extract(context),
         ),
+      if (!_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.filePen,
+          label: context.l10n.renameButton,
+          onTap: () => _rename(context),
+        ),
+      if (!_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.copy,
+          label: context.l10n.duplicateButton,
+          onTap: () => _duplicate(context),
+        ),
       _ActionCell(
-        icon: LucideIcons.filePen,
-        label: context.l10n.renameButton,
-        onTap: () => _rename(context),
-      ),
-      _ActionCell(
-        icon: LucideIcons.copy,
-        label: context.l10n.duplicateButton,
-        onTap: () => _duplicate(context),
+        icon: LucideIcons.info,
+        label: context.l10n.detailsButton,
+        onTap: () => _showDetails(context),
       ),
     ];
 
@@ -390,80 +439,147 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
+          padding: const EdgeInsets.symmetric(
+            vertical: Spacing.md,
+            horizontal: Spacing.xs,
+          ),
           decoration: BoxDecoration(
-            color: scheme.outlineVariant,
+            color: scheme.surfaceContainerHigh,
             borderRadius: Radii.cardR,
           ),
-          child: ClipRRect(
-            borderRadius: Radii.cardR,
-            child: GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 1,
-              mainAxisSpacing: 1,
-              childAspectRatio: 1.1,
-              children: [for (final c in cells) _buildActionCell(context, c)],
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [for (final c in quick) _buildQuickAction(context, c)],
           ),
         ),
         const SizedBox(height: Spacing.md),
-        Material(
-          color: scheme.errorContainer.withValues(alpha: 0.5),
-          borderRadius: Radii.cardR,
-          child: InkWell(
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
             borderRadius: Radii.cardR,
-            onTap: () => _delete(context),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Spacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(LucideIcons.trash2, color: scheme.error, size: 20),
-                  const SizedBox(width: Spacing.sm),
-                  Text(
-                    context.l10n.deleteButton,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < more.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: scheme.outlineVariant.withValues(alpha: 0.5),
                   ),
-                ],
-              ),
-            ),
+                _buildActionRow(context, more[i]),
+              ],
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActionCell(BuildContext context, _ActionCell cell) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surface,
-      child: InkWell(
-        onTap: cell.onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.xs,
-            vertical: Spacing.sm,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(cell.icon, color: cell.tint ?? scheme.onSurfaceVariant),
-              const SizedBox(height: Spacing.xs),
-              Text(
-                cell.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall,
+  Widget _buildQuickAction(BuildContext context, _ActionCell cell) {
+    return InkResponse(
+      onTap: cell.onTap,
+      radius: 40,
+      child: SizedBox(
+        width: 68,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: cell.circleGradient!,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cell.circleGradient!.last.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
+              child: Icon(cell.icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(height: Spacing.xs),
+            Text(
+              cell.label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildActionRow(BuildContext context, _ActionCell cell) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = cell.tint ?? scheme.onSurfaceVariant;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+      visualDensity: VisualDensity.compact,
+      leading: Icon(cell.icon, color: color),
+      title: Text(
+        cell.label,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(color: cell.tint),
+      ),
+      trailing: Icon(
+        LucideIcons.chevronRight,
+        size: 16,
+        color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+      ),
+      onTap: cell.onTap,
+    );
+  }
+
+  /// Metadata is a secondary destination, not part of the primary action
+  /// sheet — matches Google Drive/Files' "File info" pattern so the main
+  /// sheet never needs scrolling to reach Preview/Download/etc.
+  void _showDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (sheetContext) => SafeArea(
+            child: SingleChildScrollView(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(sheetContext).colorScheme.surfaceContainerLow,
+                  borderRadius: Radii.sheetTopR,
+                ),
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg,
+                  Spacing.md,
+                  Spacing.lg,
+                  Spacing.xl,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: _buildGrabber(sheetContext)),
+                    const SizedBox(height: Spacing.md),
+                    Text(
+                      context.l10n.detailsButton,
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    _buildMetaSection(sheetContext),
+                  ],
+                ),
+              ),
+            ),
+          ),
     );
   }
 
@@ -775,12 +891,16 @@ class _ActionCell {
     required this.label,
     required this.onTap,
     this.tint,
+    this.circleGradient,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final Color? tint;
+
+  /// Quick-action circle background (top row only); unused by list rows.
+  final List<Color>? circleGradient;
 }
 
 /// Whether [name] looks like an archive the agent can extract — matches the

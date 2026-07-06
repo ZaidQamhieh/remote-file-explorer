@@ -896,6 +896,7 @@
   "pausedStatus": "Paused",
   "verifiedLabel": "Verified",
 
+  "detailsButton": "Details",
   "metaPath": "Path",
   "metaSize": "Size",
   "metaType": "Type",
@@ -1033,6 +1034,7 @@
   "savedSearchName": "Name",
   "noSavedSearches": "No saved searches yet",
   "deleteSavedSearch": "Delete saved search",
+  "searchModeLabel": "Search mode",
   "searchModeSubstring": "Contains",
   "searchModeGlob": "Glob",
   "searchModeRegex": "Regex",

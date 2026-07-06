@@ -2734,6 +2734,12 @@ abstract class AppLocalizations {
   /// **'Verified'**
   String get verifiedLabel;
 
+  /// No description provided for @detailsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get detailsButton;
+
   /// No description provided for @metaPath.
   ///
   /// In en, this message translates to:
@@ -3243,6 +3249,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete saved search'**
   String get deleteSavedSearch;
+
+  /// No description provided for @searchModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search mode'**
+  String get searchModeLabel;
 
   /// No description provided for @searchModeSubstring.
   ///

@@ -1651,6 +1651,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get verifiedLabel => 'Verified';
 
   @override
+  String get detailsButton => 'Details';
+
+  @override
   String get metaPath => 'Path';
 
   @override
@@ -1950,6 +1953,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteSavedSearch => 'Delete saved search';
+
+  @override
+  String get searchModeLabel => 'Search mode';
 
   @override
   String get searchModeSubstring => 'Contains';

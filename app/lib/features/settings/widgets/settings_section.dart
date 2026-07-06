@@ -74,7 +74,7 @@ class SettingsSection extends StatelessWidget {
                   ? Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: Spacing.md,
-                      vertical: Spacing.xs,
+                      vertical: Spacing.sm,
                     ),
                     child: Column(children: children),
                   )

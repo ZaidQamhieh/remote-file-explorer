@@ -55,7 +55,7 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
   Widget build(BuildContext context) {
     final preview = _compute();
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         Spacing.lg,
         Spacing.lg,

@@ -226,7 +226,7 @@ class _UpdateTileState extends ConsumerState<UpdateTile>
     } catch (e) {
       setState(() {
         _busy = false;
-        _status = context.l10n.updateFailed('$e');
+        _status = context.l10n.updateFailed(humanizeError(e));
         _statusIsError = true;
       });
     }
@@ -384,7 +384,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
         _errorMsg =
             e is PlatformException
                 ? (e.message ?? context.l10n.couldNotOpenInstaller)
-                : '$e';
+                : humanizeError(e);
       });
     }
   }

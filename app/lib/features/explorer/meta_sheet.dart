@@ -631,7 +631,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       final sum = await widget.client.checksum(_entry.path);
       if (mounted) setState(() => _checksum = sum);
     } catch (e) {
-      if (mounted) showError(context, 'Checksum failed: $e');
+      if (mounted) showError(context, 'Checksum failed: ${humanizeError(e)}');
     } finally {
       if (mounted) setState(() => _checksumLoading = false);
     }
@@ -719,7 +719,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       );
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.shareLinkFailed(e.toString()));
+        showError(context, context.l10n.shareLinkFailed(humanizeError(e)));
       }
     }
   }
@@ -780,7 +780,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.renameFailed(e.toString()));
+        showError(context, context.l10n.renameFailed(humanizeError(e)));
       }
     }
   }
@@ -809,7 +809,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.duplicateFailed(e.toString()));
+        showError(context, context.l10n.duplicateFailed(humanizeError(e)));
       }
     }
   }
@@ -830,7 +830,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.extractFailed(e.toString()));
+        showError(context, context.l10n.extractFailed(humanizeError(e)));
       }
     }
   }
@@ -878,7 +878,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.deleteFailed(e.toString()));
+        showError(context, context.l10n.deleteFailed(humanizeError(e)));
       }
     }
   }

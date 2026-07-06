@@ -8,6 +8,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../handoff/qr_generate_screen.dart';
@@ -139,31 +140,56 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Widget _buildHeader(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final badgeBg =
+        isDark
+            ? figmaIconBg(_entry)
+            : _entry.isDir
+            ? scheme.primary.withValues(alpha: 0.16)
+            : scheme.surfaceContainerHighest;
+    final subtitle = [
+      if (_entry.size != null) formatSize(_entry.size),
+      if (_entry.modified != null) formatDate(_entry.modified!.toLocal()),
+    ].join(' · ');
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 56,
           height: 56,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: Radii.chipR,
-          ),
+          decoration: BoxDecoration(color: badgeBg, borderRadius: Radii.cardR),
           alignment: Alignment.center,
-          child: Icon(
-            _entry.isDir ? LucideIcons.folder : LucideIcons.file,
-            size: 30,
-            color: _entry.isDir ? Colors.amber : scheme.onSurfaceVariant,
-          ),
+          child: EntryLeading(entry: _entry, size: 30),
         ),
         const SizedBox(width: Spacing.md),
         Expanded(
-          child: Text(
-            _entry.name,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _entry.name,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: Spacing.xs),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
           ),
+        ),
+        IconButton(
+          icon: const Icon(LucideIcons.x),
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: () => Navigator.pop(context),
         ),
       ],
     );
@@ -291,156 +317,153 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
                 ) ??
             false);
 
-    // Primary row: the everyday actions, at most 4 (Preview/Download/Share/
-    // Open with for files; Favorite is the only primary action for dirs).
-    // Everything else lives in the overflow menu below.
-    final primary = <Widget>[
+    // 3-column icon grid, matching the Figma FileActionSheet mockup. Same
+    // per-entry-type gating as before (dirs only get Favorite/Rename/
+    // Duplicate; extract is archive-only) — just laid out as grid cells
+    // instead of a chip row + overflow menu.
+    final cells = <_ActionCell>[
       if (_entry.isDir)
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: Icon(LucideIcons.star, color: isFav ? Colors.amber : null),
-          label: Text(
-            isFav ? context.l10n.unfavoriteButton : context.l10n.favoriteButton,
-          ),
-          onPressed: () => _toggleFavorite(context, isFav),
+        _ActionCell(
+          icon: LucideIcons.star,
+          label:
+              isFav
+                  ? context.l10n.unfavoriteButton
+                  : context.l10n.favoriteButton,
+          tint: isFav ? Colors.amber : null,
+          onTap: () => _toggleFavorite(context, isFav),
         ),
       if (!_entry.isDir && isPreviewable(_entry))
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.eye),
-          label: Text(context.l10n.previewButton),
-          onPressed: () => _preview(context),
+        _ActionCell(
+          icon: LucideIcons.eye,
+          label: context.l10n.previewButton,
+          onTap: () => _preview(context),
         ),
       if (!_entry.isDir)
-        FilledButton.tonalIcon(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.download),
-          label: Text(context.l10n.downloadButton),
-          onPressed: () => _download(context),
+        _ActionCell(
+          icon: LucideIcons.download,
+          label: context.l10n.downloadButton,
+          onTap: () => _download(context),
         ),
       if (!_entry.isDir)
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.share),
-          label: Text(context.l10n.shareTooltip),
-          onPressed: () => _share(context),
+        _ActionCell(
+          icon: LucideIcons.share,
+          label: context.l10n.shareTooltip,
+          onTap: () => _share(context),
         ),
       if (!_entry.isDir)
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-          ),
-          icon: const Icon(LucideIcons.externalLink),
-          label: Text(context.l10n.openWithButton),
-          onPressed: () => _openWith(context),
+        _ActionCell(
+          icon: LucideIcons.externalLink,
+          label: context.l10n.openWithButton,
+          onTap: () => _openWith(context),
         ),
-    ];
-
-    final overflow = <PopupMenuEntry<_MetaAction>>[
-      PopupMenuItem(
-        value: _MetaAction.rename,
-        child: ListTile(
-          leading: const Icon(LucideIcons.filePen),
-          title: Text(context.l10n.renameButton),
+      if (!_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.link,
+          label: context.l10n.shareLinkButton,
+          onTap: () => _shareLink(context),
         ),
-      ),
-      PopupMenuItem(
-        value: _MetaAction.duplicate,
-        child: ListTile(
-          leading: const Icon(LucideIcons.copy),
-          title: Text(context.l10n.duplicateButton),
+      if (!_entry.isDir)
+        _ActionCell(
+          icon: LucideIcons.qrCode,
+          label: context.l10n.sendViaQrButton,
+          onTap: () => _sendViaQr(context),
         ),
-      ),
       if (!_entry.isDir && isExtractableArchive(_entry.name))
-        PopupMenuItem(
-          value: _MetaAction.extract,
-          child: ListTile(
-            leading: const Icon(LucideIcons.archive),
-            title: Text(context.l10n.extractHereButton),
-          ),
+        _ActionCell(
+          icon: LucideIcons.archive,
+          label: context.l10n.extractHereButton,
+          onTap: () => _extract(context),
         ),
-      if (!_entry.isDir)
-        PopupMenuItem(
-          value: _MetaAction.shareLink,
-          child: ListTile(
-            leading: const Icon(LucideIcons.link),
-            title: Text(context.l10n.shareLinkButton),
-          ),
-        ),
-      if (!_entry.isDir)
-        PopupMenuItem(
-          value: _MetaAction.sendViaQr,
-          child: ListTile(
-            leading: const Icon(LucideIcons.qrCode),
-            title: Text(context.l10n.sendViaQrButton),
-          ),
-        ),
-      const PopupMenuDivider(),
-      PopupMenuItem(
-        value: _MetaAction.delete,
-        child: ListTile(
-          leading: Icon(LucideIcons.trash2, color: scheme.error),
-          title: Text(
-            context.l10n.deleteButton,
-            style: TextStyle(color: scheme.error),
-          ),
-        ),
+      _ActionCell(
+        icon: LucideIcons.filePen,
+        label: context.l10n.renameButton,
+        onTap: () => _rename(context),
+      ),
+      _ActionCell(
+        icon: LucideIcons.copy,
+        label: context.l10n.duplicateButton,
+        onTap: () => _duplicate(context),
       ),
     ];
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Wrap(
-            spacing: Spacing.sm,
-            runSpacing: Spacing.sm,
-            children: primary,
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.outlineVariant,
+            borderRadius: Radii.cardR,
+          ),
+          child: ClipRRect(
+            borderRadius: Radii.cardR,
+            child: GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 1,
+              mainAxisSpacing: 1,
+              childAspectRatio: 1.1,
+              children: [for (final c in cells) _buildActionCell(context, c)],
+            ),
           ),
         ),
-        PopupMenuButton<_MetaAction>(
-          icon: const Icon(LucideIcons.moreVertical),
-          tooltip: context.l10n.moreTooltip,
-          onSelected:
-              (action) => switch (action) {
-                _MetaAction.rename => _rename(context),
-                _MetaAction.duplicate => _duplicate(context),
-                _MetaAction.extract => _extract(context),
-                _MetaAction.shareLink => _shareLink(context),
-                _MetaAction.sendViaQr => _sendViaQr(context),
-                _MetaAction.delete => _delete(context),
-              },
-          itemBuilder: (_) => overflow,
+        const SizedBox(height: Spacing.md),
+        Material(
+          color: scheme.errorContainer.withValues(alpha: 0.5),
+          borderRadius: Radii.cardR,
+          child: InkWell(
+            borderRadius: Radii.cardR,
+            onTap: () => _delete(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.trash2, color: scheme.error, size: 20),
+                  const SizedBox(width: Spacing.sm),
+                  Text(
+                    context.l10n.deleteButton,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: scheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionCell(BuildContext context, _ActionCell cell) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: InkWell(
+        onTap: cell.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.xs,
+            vertical: Spacing.sm,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(cell.icon, color: cell.tint ?? scheme.onSurfaceVariant),
+              const SizedBox(height: Spacing.xs),
+              Text(
+                cell.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -745,8 +768,20 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   }
 }
 
-/// Overflow-menu actions in [_MetaSheetState._buildActions].
-enum _MetaAction { rename, duplicate, extract, shareLink, sendViaQr, delete }
+/// A single cell in the action grid built by [_MetaSheetState._buildActions].
+class _ActionCell {
+  const _ActionCell({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.tint,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? tint;
+}
 
 /// Whether [name] looks like an archive the agent can extract — matches the
 /// formats `/fs/extract` supports (`.zip`, `.tar.gz`, `.tgz`). Case-insensitive.

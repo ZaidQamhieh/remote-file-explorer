@@ -415,12 +415,22 @@ func tryDirectPathLookup(ops *fsops.Ops, q string, roots []string, filters *sear
 	return fsops.Entry{}, false
 }
 
-// virtualLinuxDirs are pseudo-filesystem mount points that are enormous,
-// mostly irrelevant to a file search, and slow enough to walk (especially
-// /proc) that they were the actual cause of "search is slow" on an unscoped
-// (root-jailed) search. Skipped only when they show up mid-walk, not when
-// explicitly given as the search root.
-var virtualLinuxDirs = map[string]bool{"/proc": true, "/sys": true, "/dev": true}
+// virtualLinuxDirs are pseudo-filesystem mount points and ostree/rpm-ostree
+// internals that are enormous, mostly irrelevant to a file search, and slow
+// enough to walk that they were the actual cause of "search is slow" on an
+// unscoped (root-jailed) search. /sysroot in particular: on an ostree-based
+// system (Fedora Silverblue/Kinoite) the live "/" is bind-mounted *from*
+// /sysroot/ostree/deploy/<hash>/, so walking "/" already covers that content
+// once — /sysroot then re-exposes the same tree again (often several
+// historical deployments plus the raw content-addressed object store),
+// multiplying the walk cost for zero user-relevant results. Skipped only
+// when they show up mid-walk, not when explicitly given as the search root.
+var virtualLinuxDirs = map[string]bool{
+	"/proc":    true,
+	"/sys":     true,
+	"/dev":     true,
+	"/sysroot": true,
+}
 
 // shouldSkipVirtualDir reports whether path is a Linux pseudo-filesystem
 // mount point that walkForMatches/walkForRecent should prune.

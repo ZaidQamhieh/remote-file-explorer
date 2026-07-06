@@ -8,6 +8,12 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.2', [
+      'File-action sheet: redesigned as quick-action row + list, no more layout gaps',
+      'Accent color picker (and other option sheets) now scroll properly',
+      'Search: faster on unscoped searches, path queries resolve instantly',
+      'Search: decluttered filters, skeleton loading instead of a spinner',
+    ]),
     _ChangelogEntry('v1.41.1', [
       'Redesigned file-action sheet to match the Figma mockup',
       'Clearer error messages instead of raw technical dumps',

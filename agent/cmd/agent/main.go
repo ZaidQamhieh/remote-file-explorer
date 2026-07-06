@@ -309,20 +309,13 @@ func runServe(args []string) {
 		}
 	}()
 
-	var webSrv *http.Server
-	if st.IsWebAliasPort443Enabled() {
-		webSrv = startWebListener(handler, cert)
-	}
+	webSrv := startWebListener(handler, cert)
 
-	if st.IsMDNSEnabled() {
-		if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
-			defer stopMDNS()
-		}
+	if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
+		defer stopMDNS()
 	}
-	if st.IsWebAliasEnabled() {
-		if stopAlias := startWebAlias(lanAddr, version); stopAlias != nil {
-			defer stopAlias()
-		}
+	if stopAlias := startWebAlias(lanAddr, version); stopAlias != nil {
+		defer stopAlias()
 	}
 
 	waitForShutdown(srv, webSrv)

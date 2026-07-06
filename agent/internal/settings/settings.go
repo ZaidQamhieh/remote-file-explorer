@@ -20,9 +20,6 @@ const (
 	keyMaxDownloadBPS  = "maxDownloadBytesPerSec"
 	keyAllowSharing    = "allowSharing"
 	keyPhotoBackupRoot = "photoBackupRoot"
-	keyWebAliasPort443 = "webAliasPort443Enabled"
-	keyMDNSEnabled     = "mdnsEnabled"
-	keyWebAliasEnabled = "webAliasEnabled"
 )
 
 // Store is a concurrency-safe view over the agent's settings.
@@ -41,13 +38,6 @@ type Store struct {
 	// phone). Empty = not configured, in which case phones must refuse to
 	// back up rather than fall back to a client-picked path.
 	photoBackupRoot string
-
-	// Network reachability toggles, all read at startup only (main.go's
-	// runServe) — changing them takes effect on the next agent restart, not
-	// live. All three default true (today's unconditional behavior).
-	webAliasPort443Enabled bool // startWebListener: the :443 no-port-needed listener
-	mdnsEnabled            bool // startMDNS: advertises the primary port over mDNS
-	webAliasEnabled        bool // startWebAlias: the rfedash.local friendly-hostname alias
 }
 
 // Load builds a Store. Any config key that is unset is seeded from the
@@ -116,16 +106,6 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 		s.photoBackupRoot = v
 	}
 
-	if err := s.loadBoolDefaultTrue(db, keyWebAliasPort443, &s.webAliasPort443Enabled); err != nil {
-		return nil, err
-	}
-	if err := s.loadBoolDefaultTrue(db, keyMDNSEnabled, &s.mdnsEnabled); err != nil {
-		return nil, err
-	}
-	if err := s.loadBoolDefaultTrue(db, keyWebAliasEnabled, &s.webAliasEnabled); err != nil {
-		return nil, err
-	}
-
 	// Bandwidth limits default to 0 (unlimited) and are only written on
 	// first explicit set — no seed needed.
 	if v, err := db.GetConfig(keyMaxUploadBPS); err != nil {
@@ -163,77 +143,6 @@ func (s *Store) AgentName() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.agentName
-}
-
-// loadBoolDefaultTrue seeds key to "true" if unset, then loads it into out.
-func (s *Store) loadBoolDefaultTrue(db *store.DB, key string, out *bool) error {
-	v, err := db.GetConfig(key)
-	if err != nil {
-		return err
-	}
-	if v == "" {
-		*out = true
-		return db.SetConfig(key, boolToStr(true))
-	}
-	*out = v == "true"
-	return nil
-}
-
-// IsWebAliasPort443Enabled reports whether the :443 no-port-needed web
-// listener should be started. Takes effect on next agent restart.
-func (s *Store) IsWebAliasPort443Enabled() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.webAliasPort443Enabled
-}
-
-// SetWebAliasPort443Enabled persists the :443 listener toggle.
-func (s *Store) SetWebAliasPort443Enabled(v bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.db.SetConfig(keyWebAliasPort443, boolToStr(v)); err != nil {
-		return err
-	}
-	s.webAliasPort443Enabled = v
-	return nil
-}
-
-// IsMDNSEnabled reports whether the agent should advertise its primary port
-// over mDNS. Takes effect on next agent restart.
-func (s *Store) IsMDNSEnabled() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.mdnsEnabled
-}
-
-// SetMDNSEnabled persists the mDNS advertisement toggle.
-func (s *Store) SetMDNSEnabled(v bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.db.SetConfig(keyMDNSEnabled, boolToStr(v)); err != nil {
-		return err
-	}
-	s.mdnsEnabled = v
-	return nil
-}
-
-// IsWebAliasEnabled reports whether the rfedash.local friendly-hostname mDNS
-// alias should be started. Takes effect on next agent restart.
-func (s *Store) IsWebAliasEnabled() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.webAliasEnabled
-}
-
-// SetWebAliasEnabled persists the rfedash.local alias toggle.
-func (s *Store) SetWebAliasEnabled(v bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.db.SetConfig(keyWebAliasEnabled, boolToStr(v)); err != nil {
-		return err
-	}
-	s.webAliasEnabled = v
-	return nil
 }
 
 // IsAllowSharing reports whether R1 one-time share links are enabled.

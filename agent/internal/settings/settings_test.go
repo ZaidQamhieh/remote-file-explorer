@@ -186,50 +186,6 @@ func TestPhotoBackupRoot_DefaultsEmptyAndPersists(t *testing.T) {
 	}
 }
 
-// TestNetworkToggles_DefaultTrueAndPersist verifies the 3 reachability
-// toggles all default true (today's unconditional behavior) and that each
-// setter persists across a reload.
-func TestNetworkToggles_DefaultTrueAndPersist(t *testing.T) {
-	db := newDB(t)
-	s, err := Load(db, false, nil, "pc")
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if !s.IsWebAliasPort443Enabled() {
-		t.Fatal("expected webAliasPort443Enabled to default true")
-	}
-	if !s.IsMDNSEnabled() {
-		t.Fatal("expected mdnsEnabled to default true")
-	}
-	if !s.IsWebAliasEnabled() {
-		t.Fatal("expected webAliasEnabled to default true")
-	}
-
-	if err := s.SetWebAliasPort443Enabled(false); err != nil {
-		t.Fatalf("set port443: %v", err)
-	}
-	if err := s.SetMDNSEnabled(false); err != nil {
-		t.Fatalf("set mdns: %v", err)
-	}
-	if err := s.SetWebAliasEnabled(false); err != nil {
-		t.Fatalf("set alias: %v", err)
-	}
-
-	s2, err := Load(db, false, nil, "pc")
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if s2.IsWebAliasPort443Enabled() {
-		t.Fatal("expected persisted webAliasPort443Enabled=false to survive reload")
-	}
-	if s2.IsMDNSEnabled() {
-		t.Fatal("expected persisted mdnsEnabled=false to survive reload")
-	}
-	if s2.IsWebAliasEnabled() {
-		t.Fatal("expected persisted webAliasEnabled=false to survive reload")
-	}
-}
-
 func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 	db := newDB(t)
 	// First load seeds readOnly=true.

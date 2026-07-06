@@ -35,27 +35,21 @@ func isAdminDevice(d *store.Device) bool {
 }
 
 type settingsBody struct {
-	ReadOnly               *bool     `json:"readOnly,omitempty"`
-	Roots                  *[]string `json:"roots,omitempty"`
-	AgentName              *string   `json:"agentName,omitempty"`
-	AllowSharing           *bool     `json:"allowSharing,omitempty"`
-	PhotoBackupRoot        *string   `json:"photoBackupRoot,omitempty"`
-	WebAliasPort443Enabled *bool     `json:"webAliasPort443Enabled,omitempty"`
-	MDNSEnabled            *bool     `json:"mdnsEnabled,omitempty"`
-	WebAliasEnabled        *bool     `json:"webAliasEnabled,omitempty"`
+	ReadOnly        *bool     `json:"readOnly,omitempty"`
+	Roots           *[]string `json:"roots,omitempty"`
+	AgentName       *string   `json:"agentName,omitempty"`
+	AllowSharing    *bool     `json:"allowSharing,omitempty"`
+	PhotoBackupRoot *string   `json:"photoBackupRoot,omitempty"`
 }
 
 func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":               st.IsReadOnly(),
-			"roots":                  st.Roots(),
-			"agentName":              st.AgentName(),
-			"allowSharing":           st.IsAllowSharing(),
-			"photoBackupRoot":        st.PhotoBackupRoot(),
-			"webAliasPort443Enabled": st.IsWebAliasPort443Enabled(),
-			"mdnsEnabled":            st.IsMDNSEnabled(),
-			"webAliasEnabled":        st.IsWebAliasEnabled(),
+			"readOnly":        st.IsReadOnly(),
+			"roots":           st.Roots(),
+			"agentName":       st.AgentName(),
+			"allowSharing":    st.IsAllowSharing(),
+			"photoBackupRoot": st.PhotoBackupRoot(),
 		})
 	}
 }
@@ -97,33 +91,12 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
-		if b.WebAliasPort443Enabled != nil {
-			if err := st.SetWebAliasPort443Enabled(*b.WebAliasPort443Enabled); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-				return
-			}
-		}
-		if b.MDNSEnabled != nil {
-			if err := st.SetMDNSEnabled(*b.MDNSEnabled); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-				return
-			}
-		}
-		if b.WebAliasEnabled != nil {
-			if err := st.SetWebAliasEnabled(*b.WebAliasEnabled); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-				return
-			}
-		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":               st.IsReadOnly(),
-			"roots":                  st.Roots(),
-			"agentName":              st.AgentName(),
-			"allowSharing":           st.IsAllowSharing(),
-			"photoBackupRoot":        st.PhotoBackupRoot(),
-			"webAliasPort443Enabled": st.IsWebAliasPort443Enabled(),
-			"mdnsEnabled":            st.IsMDNSEnabled(),
-			"webAliasEnabled":        st.IsWebAliasEnabled(),
+			"readOnly":        st.IsReadOnly(),
+			"roots":           st.Roots(),
+			"agentName":       st.AgentName(),
+			"allowSharing":    st.IsAllowSharing(),
+			"photoBackupRoot": st.PhotoBackupRoot(),
 		})
 	}
 }

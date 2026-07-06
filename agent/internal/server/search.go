@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -329,6 +330,15 @@ func searchHandler(ops *fsops.Ops) http.HandlerFunc {
 			}
 		}
 
+		// Fast path: a query containing a path separator is a path lookup, not
+		// a name search — under matchName's current semantics (matched against
+		// the bare basename) a "/" in q could never match anything anyway, so
+		// this only turns guaranteed-empty results into an instant real one.
+		if entry, ok := tryDirectPathLookup(ops, q, roots, filters); ok {
+			writeJSON(w, http.StatusOK, []fsops.Entry{entry})
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), searchTimeBudget)
 		defer cancel()
 
@@ -350,6 +360,51 @@ func searchHandler(ops *fsops.Ops) http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, results)
 	}
+}
+
+// tryDirectPathLookup resolves q directly as a path (absolute, or relative to
+// one of roots) and stats it, instead of walking the tree for it. Returns
+// ok=false if q has no path separator, or doesn't resolve to a real entry
+// matching filters.
+func tryDirectPathLookup(ops *fsops.Ops, q string, roots []string, filters *searchFilters) (fsops.Entry, bool) {
+	if !strings.ContainsAny(q, "/\\") {
+		return fsops.Entry{}, false
+	}
+	candidates := []string{q}
+	if !filepath.IsAbs(q) {
+		candidates = candidates[:0]
+		for _, root := range roots {
+			candidates = append(candidates, filepath.Join(root, q))
+		}
+	}
+	for _, c := range candidates {
+		resolved, err := ops.Resolve(filepath.Clean(c))
+		if err != nil {
+			continue
+		}
+		info, err := os.Lstat(resolved)
+		if err != nil {
+			continue
+		}
+		entry := fsops.EntryFromInfo(info, resolved)
+		if filters.matchEntry(&entry) {
+			return entry, true
+		}
+	}
+	return fsops.Entry{}, false
+}
+
+// virtualLinuxDirs are pseudo-filesystem mount points that are enormous,
+// mostly irrelevant to a file search, and slow enough to walk (especially
+// /proc) that they were the actual cause of "search is slow" on an unscoped
+// (root-jailed) search. Skipped only when they show up mid-walk, not when
+// explicitly given as the search root.
+var virtualLinuxDirs = map[string]bool{"/proc": true, "/sys": true, "/dev": true}
+
+// shouldSkipVirtualDir reports whether path is a Linux pseudo-filesystem
+// mount point that walkForMatches/walkForRecent should prune.
+func shouldSkipVirtualDir(path string) bool {
+	return runtime.GOOS == "linux" && virtualLinuxDirs[filepath.Clean(path)]
 }
 
 // walkForMatches recursively walks root, appending entries that satisfy
@@ -375,6 +430,9 @@ func walkForMatches(ctx context.Context, root string, filters *searchFilters, li
 				return fs.SkipDir
 			}
 			return nil
+		}
+		if d.IsDir() && entryPath != root && shouldSkipVirtualDir(entryPath) {
+			return fs.SkipDir
 		}
 
 		// Don't match the root itself — only its contents.

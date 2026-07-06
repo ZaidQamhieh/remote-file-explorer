@@ -134,6 +134,9 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 			return nil
 		}
 		if d.IsDir() {
+			if entryPath != root && shouldSkipVirtualDir(entryPath) {
+				return fs.SkipDir
+			}
 			return nil
 		}
 

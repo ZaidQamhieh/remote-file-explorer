@@ -32,7 +32,7 @@ class SearchResultTile extends StatelessWidget {
         horizontal: Spacing.md,
         vertical: Spacing.xs,
       ),
-      leading: resultIcon(entry),
+      leading: _resultIconTile(entry),
       title: _highlightedName(context),
       subtitle: Text(
         subtitleParts.where((s) => s.isNotEmpty).join('  ·  '),
@@ -75,6 +75,24 @@ class SearchResultTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Wraps [resultIcon] in a tinted rounded tile (same treatment as the
+/// explorer's own entry tiles) so a result list scans by color instead of
+/// requiring every icon to be read individually.
+Widget _resultIconTile(Entry entry) {
+  final icon = resultIcon(entry);
+  final color = icon.color ?? Colors.grey;
+  return Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.15),
+      borderRadius: Radii.cardR,
+    ),
+    alignment: Alignment.center,
+    child: Icon(icon.icon, color: color, size: 20),
+  );
 }
 
 Icon resultIcon(Entry entry) {

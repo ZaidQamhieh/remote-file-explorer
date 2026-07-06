@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import '../search_logic.dart' show SearchMode;
 import '../search_types.dart';
 
 class FilterSheetResult {
@@ -10,12 +11,14 @@ class FilterSheetResult {
     required this.datePreset,
     required this.searchFromHere,
     required this.includeHidden,
+    required this.searchMode,
   });
 
   final SizePreset sizePreset;
   final DatePreset datePreset;
   final bool searchFromHere;
   final bool includeHidden;
+  final SearchMode searchMode;
 }
 
 class FilterSheet extends StatefulWidget {
@@ -26,6 +29,7 @@ class FilterSheet extends StatefulWidget {
     required this.searchFromHere,
     required this.includeHidden,
     required this.currentPath,
+    required this.searchMode,
   });
 
   final SizePreset sizePreset;
@@ -33,6 +37,7 @@ class FilterSheet extends StatefulWidget {
   final bool searchFromHere;
   final bool includeHidden;
   final String currentPath;
+  final SearchMode searchMode;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -43,6 +48,7 @@ class _FilterSheetState extends State<FilterSheet> {
   late DatePreset _datePreset = widget.datePreset;
   late bool _searchFromHere = widget.searchFromHere;
   late bool _includeHidden = widget.includeHidden;
+  late SearchMode _searchMode = widget.searchMode;
 
   void _apply() {
     Navigator.of(context).pop(
@@ -51,6 +57,7 @@ class _FilterSheetState extends State<FilterSheet> {
         datePreset: _datePreset,
         searchFromHere: _searchFromHere,
         includeHidden: _includeHidden,
+        searchMode: _searchMode,
       ),
     );
   }
@@ -61,8 +68,15 @@ class _FilterSheetState extends State<FilterSheet> {
       _datePreset = DatePreset.any;
       _searchFromHere = true;
       _includeHidden = false;
+      _searchMode = SearchMode.substring;
     });
   }
+
+  String _modeLabel(SearchMode m) => switch (m) {
+    SearchMode.substring => context.l10n.searchModeSubstring,
+    SearchMode.glob => context.l10n.searchModeGlob,
+    SearchMode.regex => context.l10n.searchModeRegex,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +104,23 @@ class _FilterSheetState extends State<FilterSheet> {
                   onPressed: _reset,
                   child: Text(context.l10n.resetButton),
                 ),
+              ],
+            ),
+            const SizedBox(height: Spacing.md),
+            Text(
+              context.l10n.searchModeLabel,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: Spacing.xs),
+            Wrap(
+              spacing: Spacing.xs,
+              children: [
+                for (final mode in SearchMode.values)
+                  ChoiceChip(
+                    label: Text(_modeLabel(mode)),
+                    selected: _searchMode == mode,
+                    onSelected: (_) => setState(() => _searchMode = mode),
+                  ),
               ],
             ),
             const SizedBox(height: Spacing.md),

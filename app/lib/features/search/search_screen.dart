@@ -12,9 +12,10 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/recent_searches.dart';
 import '../../core/storage/saved_searches.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
-import '../explorer/explorer_state.dart' show buildPathStack;
+import '../explorer/explorer_state.dart' show buildPathStack, folderLabel;
 import 'search_logic.dart';
 import 'search_types.dart';
 import 'widgets/category_chips_row.dart';
@@ -226,9 +227,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             searchFromHere: _searchFromHere,
             includeHidden: _includeHidden,
             currentPath: widget.currentPath,
+            searchMode: _searchMode,
           ),
     );
     if (result == null) return;
+    setState(() => _searchMode = result.searchMode);
     _applyFilters(
       sizePreset: result.sizePreset,
       datePreset: result.datePreset,
@@ -288,16 +291,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       body: Column(
         children: [
-          CategoryChipsRow(
-            selected: _selectedCategories,
-            onToggle: _toggleCategory,
-          ),
-          _SearchModeChips(
-            mode: _searchMode,
-            onChanged: (m) {
-              setState(() => _searchMode = m);
-              if (_query.isNotEmpty) _runSearch(_query);
-            },
+          Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: Spacing.md),
+                child: _ScopePill(
+                  searchFromHere: _searchFromHere,
+                  currentPath: widget.currentPath,
+                  onTap: _openFiltersSheet,
+                ),
+              ),
+              Expanded(
+                child: CategoryChipsRow(
+                  selected: _selectedCategories,
+                  onToggle: _toggleCategory,
+                ),
+              ),
+            ],
           ),
           if (_isGlob) const GlobIndicator(),
           if (_truncated || _timeBudgetHit)
@@ -354,12 +364,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
     if (_loading) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 28,
-          child: CircularProgressIndicator(strokeWidth: 3),
-        ),
-      );
+      return const _SearchSkeletonList();
     }
     if (_error != null) {
       return ErrorRetryCard(
@@ -388,37 +393,133 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-class _SearchModeChips extends StatelessWidget {
-  const _SearchModeChips({required this.mode, required this.onChanged});
+/// Tappable pill showing the active search scope (opens the filter sheet) —
+/// keeps the "where am I actually searching" cost visible up front instead
+/// of buried in the filter sheet, since an unnoticed wide scope was the main
+/// driver behind "search feels slow".
+class _ScopePill extends StatelessWidget {
+  const _ScopePill({
+    required this.searchFromHere,
+    required this.currentPath,
+    required this.onTap,
+  });
 
-  final SearchMode mode;
-  final ValueChanged<SearchMode> onChanged;
+  final bool searchFromHere;
+  final String currentPath;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: [
-          for (final m in SearchMode.values)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(_label(context, m)),
-                selected: mode == m,
-                onSelected: (_) => onChanged(m),
-              ),
-            ),
-        ],
+    final scheme = Theme.of(context).colorScheme;
+    final label =
+        searchFromHere
+            ? folderLabel(currentPath)
+            : context.l10n.searchingEverywhere;
+    return ActionChip(
+      avatar: Icon(
+        searchFromHere ? LucideIcons.folder : LucideIcons.globe,
+        size: 16,
+        color: scheme.onSecondaryContainer,
       ),
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      backgroundColor: scheme.secondaryContainer,
+      labelStyle: TextStyle(color: scheme.onSecondaryContainer),
+      onPressed: onTap,
     );
   }
+}
 
-  String _label(BuildContext context, SearchMode m) => switch (m) {
-    SearchMode.substring => context.l10n.searchModeSubstring,
-    SearchMode.glob => context.l10n.searchModeGlob,
-    SearchMode.regex => context.l10n.searchModeRegex,
-  };
+/// Placeholder rows shown while a search is in flight, replacing a bare
+/// centered spinner — the screen keeps its list shape instead of going
+/// blank, which reads as "working" rather than "frozen" on a slow search.
+class _SearchSkeletonList extends StatefulWidget {
+  const _SearchSkeletonList();
+
+  @override
+  State<_SearchSkeletonList> createState() => _SearchSkeletonListState();
+}
+
+class _SearchSkeletonListState extends State<_SearchSkeletonList>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+  late final _opacity = Tween(
+    begin: 0.35,
+    end: 0.85,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _opacity,
+      builder:
+          (context, _) => ListView.builder(
+            itemCount: 8,
+            itemBuilder:
+                (context, i) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Opacity(
+                        opacity: _opacity.value,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest,
+                            borderRadius: Radii.cardR,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: Spacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Opacity(
+                              opacity: _opacity.value,
+                              child: Container(
+                                height: 12,
+                                width: i.isEven ? 180 : 130,
+                                decoration: BoxDecoration(
+                                  color: scheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: Spacing.xs),
+                            Opacity(
+                              opacity: _opacity.value * 0.7,
+                              child: Container(
+                                height: 10,
+                                width: 90,
+                                decoration: BoxDecoration(
+                                  color: scheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+    );
+  }
 }
 
 class _RecentAndSavedSearches extends ConsumerWidget {

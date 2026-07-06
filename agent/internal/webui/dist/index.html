@@ -473,6 +473,34 @@
 
           <div class="panel" style="margin-top:16px">
             <div class="panel-head">
+              <h2 class="panel-title">Network</h2>
+            </div>
+            <p class="field-desc">Choose how this agent is reachable. Changes apply after an agent restart.</p>
+            <div class="field-row">
+              <div>
+                <p class="field-label">Port-free access (:443)</p>
+                <p class="field-desc">Reach the web companion at https://host/ with no :8765 needed.</p>
+              </div>
+              <label class="switch control"><input type="checkbox" id="net-port443-toggle"><span class="track"></span></label>
+            </div>
+            <div class="field-row">
+              <div>
+                <p class="field-label">mDNS discovery</p>
+                <p class="field-desc">Advertise this agent on the LAN so the phone app can auto-discover it.</p>
+              </div>
+              <label class="switch control"><input type="checkbox" id="net-mdns-toggle"><span class="track"></span></label>
+            </div>
+            <div class="field-row">
+              <div>
+                <p class="field-label">rfedash.local alias</p>
+                <p class="field-desc">Advertise a friendly hostname alias for the web companion.</p>
+              </div>
+              <label class="switch control"><input type="checkbox" id="net-alias-toggle"><span class="track"></span></label>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-head">
               <h2 class="panel-title">Allowed folders</h2>
             </div>
             <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
@@ -904,6 +932,20 @@
     }
   });
 
+  function networkToggleHandler(id, field) {
+    $(id).addEventListener('change', async (e) => {
+      try {
+        await api('/settings', { method: 'PATCH', body: JSON.stringify({ [field]: e.target.checked }) });
+      } catch (err) {
+        alert('Failed to update: ' + err.message);
+        e.target.checked = !e.target.checked;
+      }
+    });
+  }
+  networkToggleHandler('net-port443-toggle', 'webAliasPort443Enabled');
+  networkToggleHandler('net-mdns-toggle', 'mdnsEnabled');
+  networkToggleHandler('net-alias-toggle', 'webAliasEnabled');
+
   $('bw-save').addEventListener('click', async () => {
     const up = Math.max(0, parseFloat($('bw-upload').value) || 0) * 1024 * 1024;
     const down = Math.max(0, parseFloat($('bw-download').value) || 0) * 1024 * 1024;
@@ -1240,6 +1282,9 @@
       $('bw-download').value = bandwidth.maxDownloadBytesPerSec ? (bandwidth.maxDownloadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
       $('photo-backup-root').value = settings.photoBackupRoot || '';
       updatePhotoBackupWarning(settings.photoBackupRoot || '');
+      $('net-port443-toggle').checked = settings.webAliasPort443Enabled !== false;
+      $('net-mdns-toggle').checked = settings.mdnsEnabled !== false;
+      $('net-alias-toggle').checked = settings.webAliasEnabled !== false;
       currentRoots = settings.roots || [];
       renderRoots();
 

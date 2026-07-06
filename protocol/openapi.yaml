@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.14.0
+  version: 1.15.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -1344,6 +1344,23 @@ components:
             PC-side destination folder for phone photo backup, set from the
             web companion Settings page only. Empty means not configured —
             phones must refuse to back up rather than pick their own path.
+        webAliasPort443Enabled:
+          type: boolean
+          description: >
+            Whether the agent binds a second, port-free HTTPS listener on
+            :443. Default true. Takes effect on next agent restart.
+        mdnsEnabled:
+          type: boolean
+          description: >
+            Whether the agent advertises its primary port over mDNS so the
+            phone app can auto-discover it. Default true. Takes effect on
+            next agent restart.
+        webAliasEnabled:
+          type: boolean
+          description: >
+            Whether the agent advertises the rfedash.local friendly-hostname
+            mDNS alias for the web companion. Default true. Takes effect on
+            next agent restart.
     ShareLink:
       type: object
       properties:

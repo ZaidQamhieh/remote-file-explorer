@@ -64,7 +64,9 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
     _tabs = TabController(
       length: 4,
       vsync: this,
-      initialIndex: widget.prefillAddress != null ? 1 : 0,
+      // Manual is the default landing tab (works with no camera); mDNS
+      // prefill already targeted Manual too, so this is now unconditional.
+      initialIndex: 1,
     );
   }
 

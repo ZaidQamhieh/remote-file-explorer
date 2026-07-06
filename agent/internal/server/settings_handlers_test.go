@@ -141,6 +141,24 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	if gone == nil || gone.Revoked {
 		t.Fatal("expected id-gone to remain unrevoked")
 	}
+
+	// An admin device (via_login=true) MAY revoke another device.
+	adminID, err := db.UpsertDevice("", "admin-session", "tok-admin", "", true)
+	if err != nil {
+		t.Fatalf("upsert admin: %v", err)
+	}
+	admin, _ := db.GetDeviceByID(adminID)
+	rrAdmin := httptest.NewRecorder()
+	reqAdmin := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-gone", nil)
+	reqAdmin = reqAdmin.WithContext(withDevice(reqAdmin.Context(), admin))
+	revokeDeviceHandler(db)(rrAdmin, reqAdmin, "id-gone")
+	if rrAdmin.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on admin revoking other, got %d: %s", rrAdmin.Code, rrAdmin.Body.String())
+	}
+	goneAfterAdmin, _ := db.GetDeviceByID("id-gone")
+	if goneAfterAdmin == nil || !goneAfterAdmin.Revoked {
+		t.Fatal("expected id-gone to be revoked by admin device")
+	}
 }
 
 // TestDeleteDeviceHandler_SelfOnly verifies DELETE /v1/devices/{id}?purge=true
@@ -183,53 +201,59 @@ func TestDeleteDeviceHandler_SelfOnly(t *testing.T) {
 	}
 }
 
-// TestSetDeviceJailHandler_AlwaysForbidden verifies PATCH /v1/devices/{id}
-// returns 403 FORBIDDEN for every authenticated app caller — including a
-// device targeting itself — and leaves the device's jailRoot untouched.
-// Per-device jails are now configured exclusively via the `rfe-agent jail`
-// admin CLI (see TestValidateJailRoot* and TestSetDeviceJail below for the
-// validation/persistence logic it shares with the old handler).
-func TestSetDeviceJailHandler_AlwaysForbidden(t *testing.T) {
-	db, _ := newTestDeps(t)
+// TestSetDeviceJailHandler_AdminOnly verifies PATCH /v1/devices/{id}: an
+// ordinary (non-admin, i.e. paired via /pair) caller gets 403 FORBIDDEN even
+// targeting itself, while an admin device (authenticated via /login or
+// /register — see isAdminDevice) can set another device's jailRoot/readOnly.
+func TestSetDeviceJailHandler_AdminOnly(t *testing.T) {
+	root := t.TempDir()
+	db, st := newTestDepsWithRoots(t, []string{root})
 	if err := db.CreateDevice("id-1", "phone-a", "tok-a"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	cur, _ := db.DeviceByToken("tok-a")
+	nonAdmin, _ := db.DeviceByToken("tok-a")
 
-	for _, tc := range []struct {
-		name string
-		id   string
-		body string
-	}{
-		{"self with jailRoot", "id-1", `{"jailRoot":"/tmp/whatever"}`},
-		{"self clearing jailRoot", "id-1", `{"jailRoot":""}`},
-		{"other device", "id-other", `{"jailRoot":"/tmp/whatever"}`},
-		{"missing body", "id-1", `{}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPatch, "/v1/devices/"+tc.id, strings.NewReader(tc.body))
-			req = req.WithContext(withDevice(req.Context(), cur))
-			req = withURLParam(req, map[string]string{"id": tc.id})
-			rr := httptest.NewRecorder()
-			setDeviceJailHandler()(rr, req)
-			if rr.Code != http.StatusForbidden {
-				t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
-			}
-			var got apiError
-			_ = json.Unmarshal(rr.Body.Bytes(), &got)
-			if got.Code != "FORBIDDEN" {
-				t.Fatalf("expected FORBIDDEN error code, got %+v", got)
-			}
-		})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/devices/id-1", strings.NewReader(`{"jailRoot":""}`))
+	req = req.WithContext(withDevice(req.Context(), nonAdmin))
+	req = withURLParam(req, map[string]string{"id": "id-1"})
+	rr := httptest.NewRecorder()
+	setDeviceJailHandler(db, st)(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin caller, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	// jailRoot must remain unset on the device that exists.
+	// An admin device (via_login=true) can set another device's jailRoot.
+	adminID, err := db.UpsertDevice("", "admin-session", "tok-admin", "", true)
+	if err != nil {
+		t.Fatalf("upsert admin: %v", err)
+	}
+	admin, _ := db.GetDeviceByID(adminID)
+
+	reqAdmin := httptest.NewRequest(http.MethodPatch, "/v1/devices/id-1", strings.NewReader(`{"jailRoot":"`+root+`","readOnly":true}`))
+	reqAdmin = reqAdmin.WithContext(withDevice(reqAdmin.Context(), admin))
+	reqAdmin = withURLParam(reqAdmin, map[string]string{"id": "id-1"})
+	rrAdmin := httptest.NewRecorder()
+	setDeviceJailHandler(db, st)(rrAdmin, reqAdmin)
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin caller, got %d: %s", rrAdmin.Code, rrAdmin.Body.String())
+	}
 	d, err := db.GetDeviceByID("id-1")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if d == nil || d.JailRoot != "" {
-		t.Fatalf("expected jailRoot to remain empty, got %+v", d)
+	if d == nil || d.JailRoot != filepath.Clean(root) || !d.ReadOnly {
+		t.Fatalf("expected jailRoot/readOnly applied, got %+v", d)
+	}
+
+	// An invalid jailRoot (outside the global roots) is rejected with 400 and
+	// leaves the device untouched.
+	reqBad := httptest.NewRequest(http.MethodPatch, "/v1/devices/id-1", strings.NewReader(`{"jailRoot":"`+t.TempDir()+`"}`))
+	reqBad = reqBad.WithContext(withDevice(reqBad.Context(), admin))
+	reqBad = withURLParam(reqBad, map[string]string{"id": "id-1"})
+	rrBad := httptest.NewRecorder()
+	setDeviceJailHandler(db, st)(rrBad, reqBad)
+	if rrBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for jailRoot outside global roots, got %d: %s", rrBad.Code, rrBad.Body.String())
 	}
 }
 

@@ -492,7 +492,22 @@
               <span class="spacer"></span>
               <span class="meta mono" id="devices-count"></span>
             </div>
-            <div id="devices-list"></div>
+            <div class="field-row hidden" id="pairing-generate-row">
+              <div>
+                <p class="field-label">Pair a new device</p>
+                <p class="field-desc">Mints a one-time code, same as `rfe-agent pair` on the PC. Admin sessions (logged in with the account password) only.</p>
+              </div>
+              <button id="pairing-generate-btn">Generate code</button>
+            </div>
+            <p class="dim mono" id="pairing-generate-result" style="margin:0 0 12px"></p>
+            <div class="table-scroll">
+              <table class="dtable">
+                <thead>
+                  <tr><th>Device</th><th>Address</th><th>Jail path</th><th>Read-only</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="devices-list"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -920,6 +935,13 @@
     }
   });
 
+  // Whether this browser's device is an admin device (viaLogin=true, i.e.
+  // authenticated with the account password via /login or /register) — set
+  // from the /devices response in loadDashboard. Gates the per-device
+  // jail/read-only controls and pairing-code generation in the UI; the
+  // server enforces the same rule independently (see isAdminDevice).
+  let isAdmin = false;
+
   // ---------- Allowed folders (roots) ----------
   let currentRoots = [];
 
@@ -962,6 +984,55 @@
     if (!path || currentRoots.includes(path)) return;
     input.value = '';
     saveRoots([...currentRoots, path]);
+  });
+
+  // ---------- Paired devices (admin management + pairing-code generation) ----------
+  // The server independently enforces isAdmin/self-only for every one of
+  // these calls — the isAdmin gate here only controls which controls the UI
+  // renders (see the devices-list render block in loadDashboard).
+
+  $('pairing-generate-btn').addEventListener('click', async () => {
+    const resultEl = $('pairing-generate-result');
+    resultEl.textContent = 'Generating…';
+    try {
+      const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify({}) });
+      const mins = Math.round(res.expiresInSeconds / 60);
+      resultEl.textContent = 'Code: ' + res.pairingCode + ' (expires in ' + mins + ' min)';
+    } catch (err) {
+      resultEl.textContent = 'Failed: ' + err.message;
+    }
+  });
+
+  $('devices-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    try {
+      if (btn.dataset.action === 'revoke') {
+        if (!confirm('Revoke this device? It will be disconnected immediately.')) return;
+        await api('/devices/' + id, { method: 'DELETE' });
+      } else if (btn.dataset.action === 'purge') {
+        if (!confirm('Permanently remove this device from the list?')) return;
+        await api('/devices/' + id + '?purge=true', { method: 'DELETE' });
+      } else if (btn.dataset.action === 'jail-save') {
+        const jailInput = btn.closest('tr').querySelector('.jail-input');
+        await api('/devices/' + id, { method: 'PATCH', body: JSON.stringify({ jailRoot: jailInput.value.trim() }) });
+      }
+      loadDashboard();
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    }
+  });
+
+  $('devices-list').addEventListener('change', async (e) => {
+    const cb = e.target.closest('.readonly-input');
+    if (!cb) return;
+    try {
+      await api('/devices/' + cb.dataset.id, { method: 'PATCH', body: JSON.stringify({ readOnly: cb.checked }) });
+    } catch (err) {
+      alert('Failed: ' + err.message);
+      cb.checked = !cb.checked;
+    }
   });
 
   // ---------- Files ----------
@@ -1172,22 +1243,44 @@
       currentRoots = settings.roots || [];
       renderRoots();
 
+      const curDevice = (devices || []).find((d) => d.current);
+      isAdmin = !!(curDevice && curDevice.viaLogin);
+      $('pairing-generate-row').classList.toggle('hidden', !isAdmin);
+
       const list = $('devices-list');
       list.innerHTML = '';
       $('devices-count').textContent = (devices || []).length + ' paired';
       $('nav-badge-devices').textContent = (devices || []).length || '';
       (devices || []).forEach((d) => {
-        const label = d.label || 'unnamed';
-        const row = document.createElement('div');
-        row.className = 'list-row';
-        row.innerHTML =
-          '<div class="avatar">' + label.charAt(0).toUpperCase() + '</div>' +
-          '<span class="info"><span class="name">' + label + '</span><br><span class="sub mono">' + (d.lastAddress || '') + '</span></span>' +
-          '<span class="status-text status-green dot">Paired</span>';
-        list.appendChild(row);
+        const label = esc(d.label || 'unnamed') + (d.current ? ' <span class="dim">· this device</span>' : '');
+        let status = '<span class="status-text status-green dot">Paired</span>';
+        if (d.revoked) status = '<span class="status-text status-red dot">Revoked</span>';
+        else if (d.readOnly) status = '<span class="status-text status-amber dot">Read-only</span>';
+        const canManage = isAdmin || d.current;
+        let actions = '';
+        if (canManage) {
+          actions = d.revoked
+            ? '<button data-action="purge" data-id="' + d.id + '">Remove</button>'
+            : '<button class="danger" data-action="revoke" data-id="' + d.id + '">Revoke</button>';
+        }
+        const jailCell = isAdmin
+          ? '<div class="row" style="gap:4px"><input type="text" class="mono control jail-input" data-id="' + d.id + '" value="' + esc(d.jailRoot || '') + '" placeholder="Full access" style="width:140px"><button data-action="jail-save" data-id="' + d.id + '">Save</button></div>'
+          : (d.jailRoot ? esc(d.jailRoot) : '<span class="dim">Full access</span>');
+        const readOnlyCell = isAdmin
+          ? '<label class="switch control"><input type="checkbox" class="readonly-input" data-id="' + d.id + '" ' + (d.readOnly ? 'checked' : '') + '><span class="track"></span></label>'
+          : (d.readOnly ? 'Yes' : 'No');
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td class="ink">' + label + '</td>' +
+          '<td class="mono">' + esc(d.lastAddress || '—') + '</td>' +
+          '<td>' + jailCell + '</td>' +
+          '<td>' + readOnlyCell + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td>' + actions + '</td>';
+        list.appendChild(tr);
       });
       if (!devices || devices.length === 0) {
-        list.innerHTML = '<p class="dim">No other devices paired.</p>';
+        list.innerHTML = '<tr><td class="empty-cell" colspan="6">No devices paired yet.</td></tr>';
       }
 
       renderConnTable(devices || []);

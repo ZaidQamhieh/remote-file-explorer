@@ -74,7 +74,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			// in context) and before any handler that resolves paths.
 			r.Use(deviceJailMiddleware(ops))
 
-			registerSettingsAndDeviceRoutes(r, cfg, db)
+			registerSettingsAndDeviceRoutes(r, cfg, db, pm)
 			registerShareRoutes(r, cfg, db, ops)
 			r.Get("/system/drives", drivesHandler())
 			r.Get("/search", searchHandler(ops, searchIndex))
@@ -110,14 +110,15 @@ func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Ma
 }
 
 // registerSettingsAndDeviceRoutes wires agent settings, bandwidth limits, and
-// paired-device management (list/jail/revoke/purge).
-func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB) {
+// paired-device management (list/jail/readonly/revoke/purge/pairing-code
+// generation).
+func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager) {
 	r.Get("/settings", getSettingsHandler(cfg.Settings))
 	r.Patch("/settings", patchSettingsHandler(cfg.Settings))
 	r.Get("/settings/bandwidth", getBandwidthHandler(cfg.Settings))
 	r.Put("/settings/bandwidth", putBandwidthHandler(cfg.Settings))
 	r.Get("/devices", listDevicesHandler(db))
-	r.Patch("/devices/{id}", setDeviceJailHandler())
+	r.Patch("/devices/{id}", setDeviceJailHandler(db, cfg.Settings))
 	r.Delete("/devices/{id}", func(w http.ResponseWriter, req *http.Request) {
 		id := chi.URLParam(req, "id")
 		// ?purge=true permanently removes the row (used to clear revoked
@@ -129,6 +130,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB) {
 		revokeDeviceHandler(db)(w, req, id)
 	})
 	r.Post("/wol", wolRelayHandler())
+	r.Post("/pairing/generate", generatePairingHandler(pm))
 }
 
 // registerShareRoutes wires the authenticated R1 share-link management

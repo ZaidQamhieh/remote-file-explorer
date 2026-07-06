@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
@@ -21,6 +23,15 @@ func withDevice(ctx context.Context, d *store.Device) context.Context {
 func deviceFromContext(r *http.Request) *store.Device {
 	d, _ := r.Context().Value(deviceCtxKey).(*store.Device)
 	return d
+}
+
+// isAdminDevice reports whether d authenticated via /login or /register
+// (the single account's password) rather than /pair (a one-time code for an
+// ordinary device like the phone app) — see the via_login column comment in
+// store.migrate. Only admin devices may manage OTHER devices: mint pairing
+// codes, and toggle another device's jail/read-only/revoked state.
+func isAdminDevice(d *store.Device) bool {
+	return d != nil && d.ViaLogin
 }
 
 type settingsBody struct {
@@ -146,6 +157,7 @@ func deviceJSON(d store.Device, cur *store.Device) map[string]any {
 		"lastVersion": d.LastVersion,
 		"jailRoot":    d.JailRoot,
 		"readOnly":    d.ReadOnly,
+		"viaLogin":    d.ViaLogin,
 	}
 }
 
@@ -168,14 +180,16 @@ func listDevicesHandler(db *store.DB) http.HandlerFunc {
 // revokeDeviceHandler revokes device `id`. The third arg is the URL path param
 // (the route wrapper passes chi.URLParam so this stays unit-testable).
 //
-// A paired device may only manage ITSELF: targeting any other device id is
-// rejected with 403 FORBIDDEN. Managing other devices is a PC-side operation
-// (the `rfe-agent revoke`/`remove` admin CLI).
+// A device may always revoke ITSELF. Revoking another device additionally
+// requires cur to be an admin device (authenticated via /login or /register —
+// see isAdminDevice) — an ordinary paired device (e.g. the phone app, paired
+// via /pair) still gets 403 FORBIDDEN. The `rfe-agent revoke`/`remove` admin
+// CLI remains available regardless, for headless/PC-side use.
 func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, string) {
 	return func(w http.ResponseWriter, r *http.Request, id string) {
 		cur := deviceFromContext(r)
-		if cur == nil || cur.ID != id {
-			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices must be done on the PC")
+		if cur == nil || (cur.ID != id && !isAdminDevice(cur)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices requires an admin (login) session or the PC")
 			return
 		}
 		if err := db.RevokeDevice(id); err != nil {
@@ -189,14 +203,12 @@ func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 // deleteDeviceHandler permanently removes device `id` (used to clear revoked
 // devices from the list; reached via DELETE /v1/devices/{id}?purge=true).
 //
-// A paired device may only manage ITSELF: targeting any other device id is
-// rejected with 403 FORBIDDEN. Managing other devices is a PC-side operation
-// (the `rfe-agent remove` admin CLI).
+// Same admin-or-self rule as revokeDeviceHandler.
 func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, string) {
 	return func(w http.ResponseWriter, r *http.Request, id string) {
 		cur := deviceFromContext(r)
-		if cur == nil || cur.ID != id {
-			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices must be done on the PC")
+		if cur == nil || (cur.ID != id && !isAdminDevice(cur)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "managing other devices requires an admin (login) session or the PC")
 			return
 		}
 		if err := db.DeleteDevice(id); err != nil {
@@ -207,16 +219,59 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 	}
 }
 
-// setDeviceJailHandler implements PATCH /v1/devices/{id}.
-//
-// Per-device path jails are a PC-side configuration concern (see
-// `rfe-agent jail <device-id> <path>`): every authenticated app caller gets
-// 403 FORBIDDEN, regardless of which device — including itself — it targets.
-// The route stays registered (403, not 405) so the app can detect the
-// capability is unavailable rather than getting a generic "no such route".
-func setDeviceJailHandler() http.HandlerFunc {
+// deviceJailBody is the PATCH /v1/devices/{id} request body: partial updates
+// to another device's per-device path jail and/or read-only flag, mirroring
+// settingsBody's pointer-field pattern (only fields present are changed).
+type deviceJailBody struct {
+	JailRoot *string `json:"jailRoot"`
+	ReadOnly *bool   `json:"readOnly"`
+}
+
+// setDeviceJailHandler implements PATCH /v1/devices/{id}: sets a target
+// device's per-device path jail and/or read-only flag. This is an admin-only
+// operation (see isAdminDevice) — an ordinary paired device gets 403
+// FORBIDDEN, same as before this endpoint had a real implementation. The
+// `rfe-agent jail`/`readonly` admin CLI remains available for PC-side use.
+func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusForbidden, "FORBIDDEN", "device access limits are configured on the PC")
+		cur := deviceFromContext(r)
+		if !isAdminDevice(cur) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "device access limits require an admin (login) session or the PC")
+			return
+		}
+		id := chi.URLParam(r, "id")
+		target, err := db.GetDeviceByID(id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		if target == nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such device")
+			return
+		}
+		var b deviceJailBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+			return
+		}
+		if b.JailRoot != nil {
+			if _, err := SetDeviceJail(db, id, *b.JailRoot, st.Roots(), st.IsReadOnly()); err != nil {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+				return
+			}
+		}
+		if b.ReadOnly != nil {
+			if err := db.SetDeviceReadOnly(id, *b.ReadOnly); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
+		updated, err := db.GetDeviceByID(id)
+		if err != nil || updated == nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", "device vanished mid-update")
+			return
+		}
+		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
 	}
 }
 
@@ -260,9 +315,8 @@ func ValidateJailRoot(jailRoot string, roots []string, readOnly bool) (string, e
 // per-device path jail (db.SetDeviceJail). Returns the cleaned jailRoot that
 // was stored.
 //
-// This is the reusable core that previously lived in setDeviceJailHandler
-// (PATCH /v1/devices/{id}, now PC-only/403); it is exported so the
-// `rfe-agent jail <device-id> <path>` admin CLI command can reuse the same
+// Shared by setDeviceJailHandler (PATCH /v1/devices/{id}, admin-only) and the
+// `rfe-agent jail <device-id> <path>` CLI command, so both enforce the same
 // validation and persistence logic.
 func SetDeviceJail(db *store.DB, id, jailRoot string, roots []string, readOnly bool) (string, error) {
 	clean, err := ValidateJailRoot(jailRoot, roots, readOnly)

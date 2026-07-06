@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.13.0
+  version: 1.14.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -11,6 +11,13 @@ info:
     "1.10.0+18") on every authenticated request; the agent records this plus the
     caller's network address against the device row and surfaces both via GET /devices
     (see Device.lastAddress / Device.lastVersion).
+
+    A device's token is "admin" (Device.viaLogin=true) if it was obtained via /login or
+    /register (proof of the single account's password) rather than /pair (a one-time
+    code meant for an ordinary device like the phone app). Admin devices may manage
+    OTHER devices: POST /pairing/generate, and PATCH/DELETE /devices/{id} targeting a
+    device other than themselves. An ordinary (non-admin) device may still manage only
+    ITSELF via DELETE /devices/{id}.
 
     Pair, register, and login all require device-identity proof-of-possession: fetch a
     nonce from POST /auth/challenge, sign it with the device's permanent Ed25519 key,
@@ -1154,15 +1161,15 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
   /devices/{id}:
     patch:
-      summary: Set or clear a device's per-device path jail (H2) — PC-only
+      summary: Set a device's per-device path jail (H2) and/or read-only flag (#8) — admin-only
       description: >
-        Per-device path jails are configured on the PC via the
-        `rfe-agent jail <device-id> <path>` admin CLI command, not from the
-        app. This route remains registered so the app can detect the
-        capability is unavailable (403), but it always rejects every
-        authenticated app caller — including a device targeting itself —
-        with 403 FORBIDDEN, code=FORBIDDEN, message "device access limits are
-        configured on the PC".
+        Requires the CALLER to be an admin device (Device.viaLogin=true — see
+        the top-level description). An ordinary (non-admin) device gets 403
+        FORBIDDEN regardless of `{id}`, including targeting itself. Both
+        fields are optional and independently applied (only fields present in
+        the body are changed), mirroring PATCH /settings. Equivalent to the
+        `rfe-agent jail <device-id> <path>` / `rfe-agent readonly <id>
+        <on|off>` admin CLI commands, which remain available for PC-side use.
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -1172,33 +1179,45 @@ paths:
           application/json:
             schema:
               type: object
-              required: [jailRoot]
               properties:
                 jailRoot:
                   type: string
                   description: Absolute path, or "" to clear the per-device jail.
+                readOnly:
+                  type: boolean
       responses:
+        '200':
+          description: Updated device
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        '400':
+          description: >
+            Invalid JSON body, or jailRoot is not absolute / does not resolve
+            within the agent's configured global roots. code=BAD_REQUEST.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
         '403':
           description: >
-            Always returned. Device access limits are configured on the PC.
-            code=FORBIDDEN.
+            Caller is not an admin device. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        '404':
+          description: No device with that id. code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
-      summary: Revoke or permanently remove the CALLER'S OWN device, with ?purge=true for the latter
+      summary: Revoke or permanently remove a device, with ?purge=true for the latter
       description: >
-        A paired device may only manage ITSELF: `{id}` must equal the calling
-        device's own id (from its bearer token). By default this revokes the
-        caller's device (its token is rejected thereafter, 204). With
-        purge=true the caller's device row is permanently deleted instead
-        (204) — used by a device to remove itself from the paired-devices
-        list.
+        A device may always manage ITSELF (`{id}` equal to the calling
+        device's own id). Managing another device additionally requires the
+        caller to be an admin device (Device.viaLogin=true — see the
+        top-level description); an ordinary (non-admin) device targeting
+        another id is rejected. By default this revokes the target device
+        (its token is rejected thereafter, 204). With purge=true the target
+        device row is permanently deleted instead (204).
 
 
-        Targeting any OTHER device id — to revoke, remove, or otherwise
-        manage it — is rejected with 403 FORBIDDEN, code=FORBIDDEN, message
-        "managing other devices must be done on the PC". Use the
-        `rfe-agent revoke`/`remove` admin CLI on the PC for that.
+        The `rfe-agent revoke`/`remove` admin CLI remains available on the PC
+        regardless of caller type.
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -1206,14 +1225,57 @@ paths:
           in: query
           required: false
           schema: { type: boolean }
-          description: When true, permanently delete the caller's device instead of revoking it.
+          description: When true, permanently delete the target device instead of revoking it.
       responses:
-        '204': { description: Caller's own device revoked or removed }
+        '204': { description: Target device revoked or removed }
         '401': { $ref: '#/components/responses/Error' }
         '403':
           description: >
-            `{id}` is not the calling device's own id. code=FORBIDDEN,
-            message "managing other devices must be done on the PC".
+            `{id}` is not the calling device's own id, and the caller is not
+            an admin device. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /pairing/generate:
+    post:
+      summary: Mint a new one-time pairing code from an authenticated session — admin-only
+      description: >
+        Lets a new device be paired without a trip to the PC terminal
+        (`rfe-agent pair`). Requires the caller to be an admin device
+        (Device.viaLogin=true — see the top-level description); an ordinary
+        (non-admin) device is rejected, since minting fresh codes for
+        arbitrary new devices is a materially bigger privilege than the
+        read-only web-companion endpoints.
+      security: [{ deviceToken: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ttlSeconds:
+                  type: integer
+                  description: How long the code stays valid. Defaults to 3600 (1 hour) if omitted or <= 0.
+      responses:
+        '200':
+          description: Pairing code minted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pairingCode: { type: string }
+                  expiresInSeconds: { type: integer }
+                  qrPayload:
+                    type: object
+                    description: Same payload shape embedded in the PC-printed QR code.
+                    properties:
+                      address: { type: string }
+                      tailscaleAddress: { type: string }
+                      certFingerprint: { type: string }
+                      pairingCode: { type: string }
+        '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Caller is not an admin device. code=FORBIDDEN.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /app/latest:
     get:
@@ -1334,8 +1396,16 @@ components:
             Per-device read-only flag (#8). When true, the device may browse and
             download but every filesystem write (create/upload/rename/move/
             delete/compress/extract/write-content) is rejected with 403
-            READ_ONLY, independent of the agent's global read-only mode. Set from
-            the PC only via `rfe-agent readonly <id> <on|off>` (no app route).
+            READ_ONLY, independent of the agent's global read-only mode. Set
+            via `rfe-agent readonly <id> <on|off>` on the PC, or by an admin
+            device via PATCH /devices/{id}.
+        viaLogin:
+          type: boolean
+          description: >
+            True if this device's current token was obtained via /login or
+            /register (the account password) rather than /pair (a one-time
+            code). Admin devices (viaLogin=true) may manage OTHER devices —
+            see the top-level description.
     AppRelease:
       type: object
       properties:
@@ -1591,6 +1661,7 @@ components:
             - DELETE_FAILED
             - RATE_LIMITED
             - PAYLOAD_TOO_LARGE
+            - NOT_FOUND
             - INTERNAL
           description: >
             - `BAD_REQUEST` (400): malformed or missing required fields.
@@ -1599,11 +1670,11 @@ components:
               read-only mode OR the calling device has the per-device read-only
               flag set (#8).
             - `FORBIDDEN` (403): path escapes the configured root jail; or a
-              /devices/{id} DELETE targets a device other than the caller's
-              own ("managing other devices must be done on the PC"); or any
-              /devices/{id} PATCH ("device access limits are configured on
-              the PC").
+              /devices/{id} DELETE/PATCH or /pairing/generate call that
+              requires an admin device (Device.viaLogin=true) came from a
+              non-admin device.
             - `PATH_NOT_FOUND` (404): path does not exist.
+            - `NOT_FOUND` (404): PATCH /devices/{id} — no device with that id.
             - `CONFLICT` (409): destination already exists.
             - `CHUNK_HASH_MISMATCH` (409): per-chunk SHA-256 did not match
               X-Chunk-Sha256.

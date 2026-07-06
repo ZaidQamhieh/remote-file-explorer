@@ -96,7 +96,7 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	defer db.Close()
 
 	// First pairing of a phone with a stable client id.
-	id1, err := db.UpsertDevice("android-abc", "Mobile App", "tok-1", "")
+	id1, err := db.UpsertDevice("android-abc", "Mobile App", "tok-1", "", false)
 	if err != nil {
 		t.Fatalf("upsert 1: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	if err := db.RevokeDevice(id1); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	id2, err := db.UpsertDevice("android-abc", "Mobile App", "tok-2", "")
+	id2, err := db.UpsertDevice("android-abc", "Mobile App", "tok-2", "", false)
 	if err != nil {
 		t.Fatalf("upsert 2: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	}
 
 	// A different phone (distinct client id) still gets its own row.
-	if _, err := db.UpsertDevice("android-xyz", "Mobile App", "tok-3", ""); err != nil {
+	if _, err := db.UpsertDevice("android-xyz", "Mobile App", "tok-3", "", false); err != nil {
 		t.Fatalf("upsert other: %v", err)
 	}
 	if list, _ := db.ListDevices(); len(list) != 2 {
@@ -137,8 +137,8 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	}
 
 	// Empty client id (legacy/non-Android) never dedups — each call is new.
-	a, _ := db.UpsertDevice("", "Legacy", "tok-4", "")
-	b, _ := db.UpsertDevice("", "Legacy", "tok-5", "")
+	a, _ := db.UpsertDevice("", "Legacy", "tok-4", "", false)
+	b, _ := db.UpsertDevice("", "Legacy", "tok-5", "", false)
 	if a == b {
 		t.Fatalf("empty client id must not dedup")
 	}

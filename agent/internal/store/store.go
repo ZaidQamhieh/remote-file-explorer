@@ -157,6 +157,18 @@ CREATE TABLE IF NOT EXISTS users (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add the via_login column: set when a device's current token was
+	// obtained via /login or /register (proof of the single account's
+	// password) rather than /pair (a one-time code meant for ordinary
+	// devices like the phone app). Devices with via_login=1 are treated as
+	// the owner and may administer OTHER devices (mint pairing codes,
+	// revoke/jail/read-only-toggle); existing rows default to 0, preserving
+	// today's self-only behavior.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN via_login INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -175,6 +187,7 @@ type Device struct {
 	JailRoot    string
 	ReadOnly    bool
 	PublicKey   string
+	ViaLogin    bool
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -213,10 +226,16 @@ func (s *DB) DevicePublicKeyByClientID(clientID string) (string, error) {
 // device with a new UUID is inserted. Returns the device id to hand back to the
 // client. publicKey is pinned on the row (callers must have already checked
 // it against DevicePublicKeyByClientID for a mismatch — this does not
-// re-check).
-func (s *DB) UpsertDevice(clientID, label, token, publicKey string) (string, error) {
+// re-check). viaLogin marks the resulting token as owner-trusted (minted by
+// /login or /register, i.e. the account password) vs an ordinary /pair
+// device — see the via_login column comment in migrate().
+func (s *DB) UpsertDevice(clientID, label, token, publicKey string, viaLogin bool) (string, error) {
 	hash := hashToken(token)
 	now := time.Now().Unix()
+	viaLoginInt := 0
+	if viaLogin {
+		viaLoginInt = 1
+	}
 
 	if clientID != "" {
 		var existingID string
@@ -226,8 +245,8 @@ func (s *DB) UpsertDevice(clientID, label, token, publicKey string) (string, err
 		if err == nil {
 			// Same phone re-pairing: rotate token, clear revoked, refresh label.
 			if _, err := s.db.Exec(
-				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=? WHERE id=?`,
-				hash, label, now, publicKey, existingID,
+				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=?, via_login=? WHERE id=?`,
+				hash, label, now, publicKey, viaLoginInt, existingID,
 			); err != nil {
 				return "", err
 			}
@@ -240,8 +259,8 @@ func (s *DB) UpsertDevice(clientID, label, token, publicKey string) (string, err
 
 	id := uuid.New().String()
 	if _, err := s.db.Exec(
-		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key) VALUES (?,?,?,?,?,0,?,?)`,
-		id, label, hash, now, now, clientID, publicKey,
+		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key,via_login) VALUES (?,?,?,?,?,0,?,?,?)`,
+		id, label, hash, now, now, clientID, publicKey, viaLoginInt,
 	); err != nil {
 		return "", err
 	}
@@ -253,7 +272,7 @@ func (s *DB) UpsertDevice(clientID, label, token, publicKey string) (string, err
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices WHERE token_hash=?`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -276,8 +295,8 @@ func (s *DB) TouchDevice(id, address, version string) error {
 func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked, readOnly int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey)
+	var revoked, readOnly, viaLogin int
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin)
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +304,7 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	d.LastSeen = time.Unix(lastSeen, 0)
 	d.Revoked = revoked != 0
 	d.ReadOnly = readOnly != 0
+	d.ViaLogin = viaLogin != 0
 	return &d, nil
 }
 
@@ -296,21 +316,22 @@ type rowScanner interface {
 func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked, readOnly int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey); err != nil {
+	var revoked, readOnly, viaLogin int
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
 	d.LastSeen = time.Unix(lastSeen, 0)
 	d.Revoked = revoked != 0
 	d.ReadOnly = readOnly != 0
+	d.ViaLogin = viaLogin != 0
 	return &d, nil
 }
 
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +394,7 @@ func (s *DB) DeleteDevice(id string) error {
 // GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
 func (s *DB) GetDeviceByID(id string) (*Device, error) {
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key FROM devices WHERE id=?`, id,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices WHERE id=?`, id,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {

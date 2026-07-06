@@ -79,7 +79,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 			return
 		}
 
-		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey)
+		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, false)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
@@ -92,6 +92,40 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 			CertFingerprint:  cfg.CertFingerprint,
 			Address:          cfg.Address,
 			TailscaleAddress: cfg.TailscaleAddress,
+		})
+	}
+}
+
+// generatePairingHandler implements POST /v1/pairing/generate: mints a new
+// one-time pairing code from an authenticated session, so a new device can be
+// paired without a trip to the PC terminal (`rfe-agent pair`). Admin-only
+// (see isAdminDevice) — an ordinary paired device (e.g. the phone app)
+// minting fresh codes for arbitrary new devices is a materially bigger
+// privilege than the read-only web-companion endpoints, so it is gated the
+// same as managing other devices.
+func generatePairingHandler(pm *pairing.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "minting pairing codes requires an admin (login) session or the PC")
+			return
+		}
+		var req struct {
+			TTLSeconds int `json:"ttlSeconds"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req) // body is optional; default TTL below
+		ttl := pairing.DefaultTTL
+		if req.TTLSeconds > 0 {
+			ttl = time.Duration(req.TTLSeconds) * time.Second
+		}
+		code, payload, err := pm.Mint(ttl)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"pairingCode":      code,
+			"expiresInSeconds": int(ttl.Seconds()),
+			"qrPayload":        payload,
 		})
 	}
 }

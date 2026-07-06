@@ -38,6 +38,10 @@ func runAdmin(cmd string, args []string) error {
 		return cmdStatus(args)
 	case "adduser":
 		return cmdAddUser(args)
+	case "install":
+		return cmdInstall(args)
+	case "uninstall":
+		return cmdUninstall(args)
 	case "help", "-h", "--help":
 		printAdminUsage(os.Stdout)
 		return nil
@@ -65,6 +69,11 @@ Usage:
                                   the Register tab in the app/web companion
                                   with a code from "rfe-agent pair" to do
                                   this without the terminal.
+  rfe-agent install              set up per-user auto-start at login
+                                  (systemd --user unit on Linux, launchd
+                                  LaunchAgent on macOS, Scheduled Task on
+                                  Windows — no root/admin required)
+  rfe-agent uninstall            remove whatever "install" set up
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
 `)

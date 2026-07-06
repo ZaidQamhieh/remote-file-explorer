@@ -28,11 +28,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(container.read(settingsProvider).valueOrNull!.app.appLockEnabled, isFalse);
+    expect(
+      container.read(settingsProvider).valueOrNull!.app.appLockEnabled,
+      isFalse,
+    );
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
-    expect(container.read(settingsProvider).valueOrNull!.app.appLockEnabled, isTrue);
+    expect(
+      container.read(settingsProvider).valueOrNull!.app.appLockEnabled,
+      isTrue,
+    );
   });
 }

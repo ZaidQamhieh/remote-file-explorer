@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
+import '../../core/notifications/notification_service.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/update/auto_update.dart';
@@ -80,6 +81,35 @@ Future<void> triggerUpdateInstall(
           onLaunchInstaller: install,
         ),
   );
+}
+
+/// Wires the "Update ready" notification's tap action to the installer.
+/// Registered once at app root (kept alive by [RemoteFileExplorerApp]
+/// watching it for the app's lifetime) so tapping the notification while the
+/// app process is alive installs immediately — the background download
+/// already finished, so there's nothing left to do but hand the cached APK
+/// to [launchInstaller].
+final updateNotificationTapProvider = Provider<void>((ref) {
+  ref
+      .watch(notificationServiceProvider)
+      .init(onTap: (response) => installFromNotificationTap(response.payload));
+});
+
+/// Installs the APK cached under [payload] (the release's `versionCode` as a
+/// string). Shared by [updateNotificationTapProvider] (tap while the app
+/// process is already alive) and `main()`'s cold-launch check (tap brought a
+/// fully-killed app back up — the common case, since the background download
+/// runs precisely while the app isn't open).
+Future<void> installFromNotificationTap(String? payload) async {
+  final versionCode = int.tryParse(payload ?? '');
+  if (versionCode == null) return;
+  final apk = await apkCacheFileFor(versionCode);
+  if (!await apk.exists()) return;
+  try {
+    await launchInstaller(apk);
+  } catch (_) {
+    // Best effort — matches this file's other swallow-all install paths.
+  }
 }
 
 /// A Settings tile that checks GitHub Releases for a newer APK and installs

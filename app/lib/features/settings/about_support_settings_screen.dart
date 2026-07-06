@@ -55,11 +55,12 @@ class AboutSupportSettingsScreen extends StatelessWidget {
                 icon: LucideIcons.info,
                 title: 'About & Changelog',
                 subtitle: 'Version info and what\'s new',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AboutScreen(),
-                  ),
-                ),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AboutScreen(),
+                      ),
+                    ),
               ),
             ],
           ),

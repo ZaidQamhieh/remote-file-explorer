@@ -15,12 +15,12 @@ class SettingsTile extends StatelessWidget {
     this.subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-  })  : _kind = _Kind.toggle,
-        _value = value,
-        _onChanged = onChanged,
-        valueLabel = null,
-        leadingDot = null,
-        onTap = null;
+  }) : _kind = _Kind.toggle,
+       _value = value,
+       _onChanged = onChanged,
+       valueLabel = null,
+       leadingDot = null,
+       onTap = null;
 
   const SettingsTile.value({
     super.key,
@@ -30,10 +30,10 @@ class SettingsTile extends StatelessWidget {
     required String value,
     this.leadingDot,
     required VoidCallback this.onTap,
-  })  : _kind = _Kind.value,
-        valueLabel = value,
-        _value = false,
-        _onChanged = null;
+  }) : _kind = _Kind.value,
+       valueLabel = value,
+       _value = false,
+       _onChanged = null;
 
   const SettingsTile.nav({
     super.key,
@@ -41,11 +41,11 @@ class SettingsTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     required VoidCallback this.onTap,
-  })  : _kind = _Kind.nav,
-        valueLabel = null,
-        leadingDot = null,
-        _value = false,
-        _onChanged = null;
+  }) : _kind = _Kind.nav,
+       valueLabel = null,
+       leadingDot = null,
+       _value = false,
+       _onChanged = null;
 
   final IconData icon;
   final String title;
@@ -72,19 +72,17 @@ class SettingsTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(fontWeight: FontWeight.w500),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ],
@@ -114,8 +112,11 @@ class SettingsTile extends StatelessWidget {
       case _Kind.toggle:
         return Switch(value: _value, onChanged: _onChanged);
       case _Kind.nav:
-        return Icon(LucideIcons.chevronRight,
-            size: 20, color: scheme.onSurfaceVariant);
+        return Icon(
+          LucideIcons.chevronRight,
+          size: 20,
+          color: scheme.onSurfaceVariant,
+        );
       case _Kind.value:
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -124,22 +125,26 @@ class SettingsTile extends StatelessWidget {
               Container(
                 width: 14,
                 height: 14,
-                decoration:
-                    BoxDecoration(color: leadingDot, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: leadingDot,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: Spacing.sm),
             ],
             Text(
               valueLabel!,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             const SizedBox(width: Spacing.xs),
-            Icon(LucideIcons.chevronRight,
-                size: 20,
-                color: scheme.onSurfaceVariant.withValues(alpha: 0.6)),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 20,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
           ],
         );
     }

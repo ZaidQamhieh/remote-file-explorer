@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:remote_file_explorer/features/settings/widgets/settings_tile.dart';
 
-Future<void> _pump(WidgetTester tester, Widget child) => tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: child)),
-    );
+Future<void> _pump(WidgetTester tester, Widget child) =>
+    tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
 
 void main() {
-  testWidgets('toggle variant renders a Switch and reports changes',
-      (tester) async {
+  testWidgets('toggle variant renders a Switch and reports changes', (
+    tester,
+  ) async {
     bool? changed;
     await _pump(
       tester,
@@ -42,8 +42,9 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('nav variant fires onTap and shows no value text',
-      (tester) async {
+  testWidgets('nav variant fires onTap and shows no value text', (
+    tester,
+  ) async {
     var tapped = false;
     await _pump(
       tester,

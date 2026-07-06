@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'core/app_info.dart';
 import 'core/platform/transfer_notifications.dart';
@@ -14,12 +18,80 @@ import 'features/home/home_shell.dart';
 import 'features/hosts/host_open_listener.dart';
 import 'features/hosts/weekly_digest_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/settings/update_tile.dart';
 import 'features/share/share_intake.dart';
+
+/// WorkManager's unique + task name for the periodic background update check
+/// (see [callbackDispatcher]). Same string for both since this app only ever
+/// schedules one such task.
+const _kUpdateCheckTask = 'rfe_update_check';
+
+/// Entry point WorkManager relaunches in a headless background isolate to
+/// run scheduled tasks — has no widget tree/`ProviderScope`, hence
+/// [checkAndDownloadUpdateInBackground] being ref-free. Must stay a top-level
+/// (or static) function annotated `@pragma('vm:entry-point')` so it survives
+/// tree-shaking/obfuscation.
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    if (task == _kUpdateCheckTask) {
+      await checkAndDownloadUpdateInBackground();
+    }
+    return true;
+  });
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final info = await PackageInfo.fromPlatform();
   appClientVersion = '${info.version}+${info.buildNumber}';
+  if (Platform.isAndroid) {
+    // Cold-launch case: the app process was killed (the common case, since
+    // the background check runs precisely while it's not open) and the user
+    // tapped the "Update ready" notification, which launched this process.
+    // [updateNotificationTapProvider]'s onDidReceiveNotificationResponse only
+    // fires for taps while the process is already alive, so this is the only
+    // place a cold-launch tap can be observed — flutter_local_notifications
+    // buffers it for `getNotificationAppLaunchDetails()` instead.
+    try {
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      final launchDetails = await plugin.getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp == true) {
+        await installFromNotificationTap(
+          launchDetails!.notificationResponse?.payload,
+        );
+      }
+    } catch (_) {
+      /* best effort */
+    }
+
+    // Best effort: WorkManager setup failing (e.g. OEM quirk) shouldn't block
+    // app startup — the passive in-app check ([latestUpdateProvider]) still
+    // covers updates whenever the app is opened.
+    try {
+      await Workmanager().initialize(callbackDispatcher);
+      await Workmanager().registerPeriodicTask(
+        _kUpdateCheckTask,
+        _kUpdateCheckTask,
+        // ponytail: 6h/unmetered+not-low-battery are reasonable defaults, not
+        // a spec'd requirement — revisit if the owner wants a tighter check
+        // interval or to allow metered networks.
+        frequency: const Duration(hours: 6),
+        constraints: Constraints(
+          networkType: NetworkType.unmetered,
+          requiresBatteryNotLow: true,
+        ),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      );
+    } catch (_) {
+      /* best effort — see comment above */
+    }
+  }
   runApp(const ProviderScope(child: RemoteFileExplorerApp()));
 }
 
@@ -50,6 +122,9 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     // Silently pre-download an available update's APK so tapping "Update" in
     // Settings is instant instead of waiting through the full download.
     ref.watch(backgroundApkDownloadProvider);
+    // Wire the "Update ready" notification's tap action to the installer
+    // (see checkAndDownloadUpdateInBackground / callbackDispatcher above).
+    ref.watch(updateNotificationTapProvider);
 
     final settings = ref.watch(settingsProvider).valueOrNull;
 

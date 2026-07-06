@@ -17,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_release.dart';
+import '../notifications/notification_service.dart';
 import 'github_update_source.dart';
 import 'update_service.dart';
 
@@ -192,3 +193,38 @@ final backgroundApkDownloadProvider = FutureProvider<void>((ref) async {
     // Best effort — see doc comment above.
   }
 });
+
+/// Same check-and-download as [backgroundApkDownloadProvider], but callable
+/// from WorkManager's headless background isolate (see `callbackDispatcher`
+/// in `main.dart`), which has no widget tree/`ProviderScope` to `ref.watch`.
+/// On a successful download, posts the "Update ready" notification so the
+/// user can 1-tap install without reopening the app. Best-effort throughout —
+/// any failure (no network, storage full, check itself failing) is swallowed
+/// so a background run never surfaces an error.
+Future<void> checkAndDownloadUpdateInBackground() async {
+  if (!Platform.isAndroid) return;
+  try {
+    final source = GithubUpdateSource();
+    final release = await source.latestRelease();
+    final info = await PackageInfo.fromPlatform();
+    final installed = int.tryParse(info.buildNumber) ?? 0;
+    if (!isUpdateAvailable(installedBuild: installed, release: release)) {
+      return;
+    }
+
+    final file = await apkCacheFileFor(release!.versionCode);
+    if (!await isApkReadyToInstall(release)) {
+      await sharedDownloadApk(
+        source: source,
+        release: release,
+        localFile: file,
+      );
+    }
+    await NotificationService().showUpdateReadyNotification(
+      release.versionCode,
+      release.versionName,
+    );
+  } catch (_) {
+    // Best effort — see doc comment above.
+  }
+}

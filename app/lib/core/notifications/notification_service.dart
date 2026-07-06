@@ -12,13 +12,18 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   bool _ready = false;
 
-  /// Initialises the plugin (idempotent). Called lazily by [showNewFileNotification].
-  Future<void> init() async {
+  /// Initialises the plugin (idempotent — only the first call's [onTap] is
+  /// wired up). Called lazily by [showNewFileNotification] etc.; pass [onTap]
+  /// when you need to react to a notification being tapped while the app is
+  /// running (e.g. [RemoteFileExplorerApp] wiring the update-ready tap before
+  /// anything else can call [init] without one).
+  Future<void> init({void Function(NotificationResponse)? onTap}) async {
     if (_ready) return;
     await _plugin.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
+      onDidReceiveNotificationResponse: onTap,
     );
     _ready = true;
   }
@@ -70,9 +75,35 @@ class NotificationService {
       ),
     );
   }
+
+  /// Shows "Update ready — tap to install" for a background-downloaded APK
+  /// ([versionCode]/[versionName]). Payload carries [versionCode] as a string
+  /// so a tap handler can locate the cached APK via `apkCacheFileFor`.
+  Future<void> showUpdateReadyNotification(
+    int versionCode,
+    String versionName,
+  ) async {
+    await init();
+    await _plugin.show(
+      _updateReadyNotificationId,
+      'Update ready',
+      'Version $versionName downloaded — tap to install',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'rfe_update_ready',
+          'App update ready',
+          channelDescription: 'A downloaded app update is ready to install',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      payload: '$versionCode',
+    );
+  }
 }
 
 const _weeklyDigestNotificationId = 0x57446967; // 'WDig'
+const _updateReadyNotificationId = 0x55706452; // 'UpdR'
 
 final notificationServiceProvider = Provider<NotificationService>(
   (ref) => NotificationService(),

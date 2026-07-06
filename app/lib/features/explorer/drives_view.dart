@@ -55,7 +55,7 @@ class DrivesView extends ConsumerWidget {
         loading: () => const ListingSkeleton(),
         error:
             (e, _) => ErrorRetryCard(
-              message: context.l10n.couldNotLoadDrives('$e'),
+              message: context.l10n.couldNotLoadDrives(humanizeError(e)),
               onRetry: () => ref.invalidate(drivesProvider(host.id)),
             ),
         data: (drives) {

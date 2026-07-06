@@ -194,7 +194,7 @@ class SelectionBar extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.compressFailed('$e'));
+        showError(context, context.l10n.compressFailed(humanizeError(e)));
       }
     }
   }
@@ -267,7 +267,9 @@ class SelectionBar extends ConsumerWidget {
         );
       }
     } catch (e) {
-      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
+      if (context.mounted) {
+        showError(context, context.l10n.deleteFailed(humanizeError(e)));
+      }
     }
   }
 }

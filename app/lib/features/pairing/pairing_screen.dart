@@ -225,10 +225,14 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
       }
     } on CertPinMismatch catch (e) {
       if (mounted) {
-        setState(() => _error = context.l10n.fingerprintMismatch('$e'));
+        setState(
+          () => _error = context.l10n.fingerprintMismatch(humanizeError(e)),
+        );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = context.l10n.pairingFailed('$e'));
+      if (mounted) {
+        setState(() => _error = context.l10n.pairingFailed(humanizeError(e)));
+      }
     } finally {
       client.close();
       if (mounted) setState(() => _processing = false);
@@ -375,7 +379,9 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
         Navigator.of(context).pop(host);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = context.l10n.pairingFailed('$e'));
+      if (mounted) {
+        setState(() => _error = context.l10n.pairingFailed(humanizeError(e)));
+      }
     } finally {
       client.close();
       if (mounted) setState(() => _loading = false);
@@ -529,7 +535,9 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
         Navigator.of(context).pop(host);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = context.l10n.loginFailed('$e'));
+      if (mounted) {
+        setState(() => _error = context.l10n.loginFailed(humanizeError(e)));
+      }
     } finally {
       client.close();
       if (mounted) setState(() => _loading = false);
@@ -715,7 +723,9 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
         Navigator.of(context).pop(host);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = context.l10n.registerFailed('$e'));
+      if (mounted) {
+        setState(() => _error = context.l10n.registerFailed(humanizeError(e)));
+      }
     } finally {
       client.close();
       if (mounted) setState(() => _loading = false);

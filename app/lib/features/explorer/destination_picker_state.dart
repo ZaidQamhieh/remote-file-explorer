@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/entry.dart';
 import '../../core/settings/app_settings.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/visibility_prefs.dart';
 import 'explorer_state.dart' show buildPathStack;
@@ -118,7 +119,7 @@ class DestinationPickerNotifier
       );
     } catch (e) {
       if (state.currentPath != path) return;
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: humanizeError(e));
     }
   }
 

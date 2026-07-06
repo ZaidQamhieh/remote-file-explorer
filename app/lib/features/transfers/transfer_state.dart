@@ -11,6 +11,7 @@ import '../../core/storage/download_saver.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/storage/transfer_journal.dart';
 import '../../core/storage/transfer_queue_store.dart';
+import '../../core/ui/feedback.dart';
 import 'chunk_planner.dart';
 
 // ---------------------------------------------------------------------------
@@ -428,7 +429,10 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         // raw DioException too in case that ever changes.
         _updateById(
           id,
-          (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+          (t) => t.copyWith(
+            status: TransferStatus.failed,
+            error: humanizeError(e),
+          ),
           persist: true,
         );
       }
@@ -444,14 +448,15 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
           error:
               e.code == 'CONFLICT'
                   ? '${t.displayName} already exists at the destination'
-                  : e.toString(),
+                  : humanizeError(e),
         ),
         persist: true,
       );
     } catch (e) {
       _updateById(
         id,
-        (t) => t.copyWith(status: TransferStatus.failed, error: e.toString()),
+        (t) =>
+            t.copyWith(status: TransferStatus.failed, error: humanizeError(e)),
         persist: true,
       );
     } finally {

@@ -6,6 +6,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import '../search/widgets/search_result_tile.dart';
@@ -53,7 +54,7 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = humanizeError(e);
           _loading = false;
         });
       }

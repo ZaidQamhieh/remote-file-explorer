@@ -84,7 +84,9 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       final store = await PhotoBackupStore.open();
       if (mounted) setState(() => _doneCount = store.doneIds().length);
     } catch (e) {
-      if (mounted) showError(context, context.l10n.backupFailed('$e'));
+      if (mounted) {
+        showError(context, context.l10n.backupFailed(humanizeError(e)));
+      }
     } finally {
       if (mounted) setState(() => _running = false);
     }

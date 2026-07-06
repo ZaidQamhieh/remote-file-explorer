@@ -252,7 +252,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.renameFailed(e.toString()));
+        showError(context, context.l10n.renameFailed(humanizeError(e)));
       }
     }
   }
@@ -901,7 +901,9 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         );
       }
     } catch (e) {
-      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
+      if (context.mounted) {
+        showError(context, context.l10n.deleteFailed(humanizeError(e)));
+      }
     }
   }
 
@@ -1099,7 +1101,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           context,
           context.l10n.couldNotCheckFolder(
             folderLabel(destFolder),
-            e.toString(),
+            humanizeError(e),
           ),
         );
       }
@@ -1122,7 +1124,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       if (context.mounted) {
         showError(
           context,
-          context.l10n.moveFailed(e.toString()),
+          context.l10n.moveFailed(humanizeError(e)),
           onRetry: () => _moveInto(context, client, dragged, destFolder),
         );
       }
@@ -1293,7 +1295,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       if (context.mounted) {
         showError(
           context,
-          context.l10n.couldNotCheckFolder(folderLabel(dest), e.toString()),
+          context.l10n.couldNotCheckFolder(folderLabel(dest), humanizeError(e)),
           onRetry: () => _paste(context, state, clipboard),
         );
       }
@@ -1332,7 +1334,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
           context,
           context.l10n.operationFailed(
             isCut ? context.l10n.moveLabel : context.l10n.copyLabel,
-            e.toString(),
+            humanizeError(e),
           ),
           onRetry: () => _paste(context, state, clipboard),
         );

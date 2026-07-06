@@ -103,7 +103,7 @@ class BackupRestoreSection extends ConsumerWidget {
       envelope = await File(path).readAsString();
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.couldNotReadFile('$e'));
+        showError(context, context.l10n.couldNotReadFile(humanizeError(e)));
       }
       return;
     }

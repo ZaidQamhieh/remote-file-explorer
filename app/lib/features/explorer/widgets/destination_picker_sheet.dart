@@ -283,7 +283,7 @@ class DestinationPickerSheet extends ConsumerWidget {
       if (context.mounted) showSuccess(context, context.l10n.createdName(name));
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.createFailed(name, '$e'));
+        showError(context, context.l10n.createFailed(name, humanizeError(e)));
       }
     }
   }

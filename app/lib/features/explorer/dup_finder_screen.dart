@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 
 class DupFinderScreen extends StatefulWidget {
@@ -81,7 +82,7 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = '$e';
+        _error = humanizeError(e);
         _scanning = false;
       });
     }

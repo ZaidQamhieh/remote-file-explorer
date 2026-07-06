@@ -7,6 +7,7 @@ import '../../core/api/providers.dart';
 import '../../core/models/batch_result.dart';
 import '../../core/models/entry.dart';
 import '../../core/notifications/notification_service.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
 import '../../core/storage/offline_body_cache.dart';
@@ -346,7 +347,7 @@ class ExplorerNotifier
         // Keep cached entries; mark offline rather than erroring out.
         state = state.copyWith(loading: false, stale: true, offline: true);
       } else {
-        state = state.copyWith(loading: false, error: e.toString());
+        state = state.copyWith(loading: false, error: humanizeError(e));
       }
     }
   }
@@ -620,7 +621,7 @@ class ExplorerNotifier
       path: path,
       ok: false,
       errorCode: 'RENAME_FAILED',
-      errorMessage: e.toString(),
+      errorMessage: humanizeError(e),
     );
 
     for (var i = 0; i < renames.length; i++) {

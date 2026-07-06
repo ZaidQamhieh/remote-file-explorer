@@ -151,7 +151,9 @@ class PreviewActions {
       }
       return true;
     } catch (e) {
-      if (context.mounted) showError(context, context.l10n.deleteFailed('$e'));
+      if (context.mounted) {
+        showError(context, context.l10n.deleteFailed(humanizeError(e)));
+      }
       return false;
     }
   }

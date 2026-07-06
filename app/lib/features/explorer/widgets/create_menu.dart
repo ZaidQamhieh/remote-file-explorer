@@ -83,7 +83,10 @@ class CreateMenu extends StatelessWidget {
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      showError(context, context.l10n.createFailed(name, '$e'));
+                      showError(
+                        context,
+                        context.l10n.createFailed(name, humanizeError(e)),
+                      );
                     }
                   }
                 },

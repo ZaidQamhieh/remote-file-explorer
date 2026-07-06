@@ -1,6 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import '../api/agent_client.dart';
 
 /// App-wide action feedback: one consistent surface for success / error / info,
 /// so every action gives the same legible, modern confirmation instead of the
@@ -13,6 +16,28 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// try/catch + showSnackBar boilerplate at call sites.
 
 enum _Kind { success, error, info }
+
+/// Turns [e] into a short, user-facing message instead of a raw exception
+/// dump (type name, stack noise, or — for a dropped APK download — a full
+/// signed GitHub asset URL).
+String humanizeError(Object e) {
+  if (e is AgentApiException) return e.message;
+  if (e is PlatformException) return e.message ?? e.code;
+  if (e is DioException) {
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Connection lost — check your network and try again.';
+      case DioExceptionType.cancel:
+        return 'Cancelled.';
+      default:
+        return e.message ?? 'Network error.';
+    }
+  }
+  return e.toString();
+}
 
 /// Shows a success confirmation (green, check icon) with a light haptic.
 /// Pass [action] to offer an inline button (e.g. Undo).
@@ -67,7 +92,7 @@ Future<T?> runWithFeedback<T>(
   } catch (e) {
     messenger?.hideCurrentSnackBar();
     if (context.mounted) {
-      showError(context, '$error: $e', onRetry: onRetry);
+      showError(context, '$error: ${humanizeError(e)}', onRetry: onRetry);
     }
     return null;
   }

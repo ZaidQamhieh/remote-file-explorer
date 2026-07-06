@@ -12,6 +12,7 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/recent_searches.dart';
 import '../../core/storage/saved_searches.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import 'search_logic.dart';
@@ -177,13 +178,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (!mounted || _query != q) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = humanizeError(e);
       });
     } catch (e) {
       if (!mounted || _query != q) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = humanizeError(e);
       });
     }
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/archive_entry.dart';
 import '../../core/models/entry.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import 'preview_common.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -42,7 +43,7 @@ class _ArchivePreviewScreenState extends State<ArchivePreviewScreen> {
       final entries = await widget.client.archiveList(widget.entry.path);
       if (mounted) setState(() => _entries = entries);
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = humanizeError(e));
     }
   }
 

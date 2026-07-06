@@ -77,7 +77,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = humanizeError(e);
         _loading = false;
       });
     }
@@ -113,7 +113,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted && successMsg != null) showSuccess(context, successMsg);
     } catch (e) {
       setState(() => _settings = prev); // rollback
-      if (mounted) showError(context, context.l10n.updateFailed('$e'));
+      if (mounted) {
+        showError(context, context.l10n.updateFailed(humanizeError(e)));
+      }
     }
   }
 
@@ -161,7 +163,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       await client.deleteDevice(self.id);
     } catch (e) {
-      if (mounted) showError(context, context.l10n.disconnectFailed('$e'));
+      if (mounted) {
+        showError(context, context.l10n.disconnectFailed(humanizeError(e)));
+      }
       return;
     }
 
@@ -317,7 +321,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             } catch (e) {
               setState(() => _bandwidth = prev);
               if (mounted) {
-                showError(this.context, this.context.l10n.updateFailed('$e'));
+                showError(
+                  this.context,
+                  this.context.l10n.updateFailed(humanizeError(e)),
+                );
               }
             }
           },

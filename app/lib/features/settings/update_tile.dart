@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/github_update_source.dart';
@@ -321,13 +322,13 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
       }
       setState(() {
         _stage = _Stage.error;
-        _errorMsg = '$e';
+        _errorMsg = humanizeError(e);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _stage = _Stage.error;
-        _errorMsg = '$e';
+        _errorMsg = humanizeError(e);
       });
     }
   }

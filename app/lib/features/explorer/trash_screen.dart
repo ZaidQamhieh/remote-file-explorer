@@ -53,7 +53,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = humanizeError(e);
           _loading = false;
         });
       }
@@ -67,7 +67,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       if (mounted) showSuccess(context, context.l10n.restoredItem(item.name));
       await _load();
     } catch (e) {
-      if (mounted) showError(context, context.l10n.restoreFailed(e.toString()));
+      if (mounted) {
+        showError(context, context.l10n.restoreFailed(humanizeError(e)));
+      }
     }
   }
 
@@ -83,7 +85,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       if (mounted) showSuccess(context, context.l10n.deletedForever(item.name));
       await _load();
     } catch (e) {
-      if (mounted) showError(context, context.l10n.deleteFailed(e.toString()));
+      if (mounted) {
+        showError(context, context.l10n.deleteFailed(humanizeError(e)));
+      }
     }
   }
 
@@ -99,7 +103,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       if (mounted) showSuccess(context, context.l10n.trashEmptied);
       await _load();
     } catch (e) {
-      if (mounted) showError(context, context.l10n.emptyFailed(e.toString()));
+      if (mounted) {
+        showError(context, context.l10n.emptyFailed(humanizeError(e)));
+      }
     }
   }
 

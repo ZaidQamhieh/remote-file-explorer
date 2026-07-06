@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/theme/tokens.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -236,7 +237,7 @@ class _TypeTreemapScreenState extends State<TypeTreemapScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = humanizeError(e);
         _scanning = false;
       });
     }

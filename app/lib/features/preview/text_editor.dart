@@ -129,7 +129,11 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(context, context.l10n.couldNotSaveFile('$e'), onRetry: _save);
+      showError(
+        context,
+        context.l10n.couldNotSaveFile(humanizeError(e)),
+        onRetry: _save,
+      );
     }
   }
 
@@ -190,7 +194,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
       if (!mounted) return;
       showError(
         context,
-        context.l10n.couldNotReloadFile('$e'),
+        context.l10n.couldNotReloadFile(humanizeError(e)),
         onRetry: _reload,
       );
     }

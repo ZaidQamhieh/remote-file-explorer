@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/update_service.dart';
 import 'update_tile.dart' show triggerUpdateInstall;
@@ -32,9 +33,9 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
       await triggerUpdateInstall(context, release);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.updateFailed('$e'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.updateFailed(humanizeError(e)))),
+      );
     } finally {
       if (mounted) setState(() => _installing = false);
     }

@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/drives_view.dart' show drivesProvider;
@@ -36,7 +37,7 @@ class StorageInsightsScreen extends ConsumerWidget {
         loading: () => const ListingSkeleton(),
         error:
             (e, _) => ErrorRetryCard(
-              message: context.l10n.couldNotLoadStorage('$e'),
+              message: context.l10n.couldNotLoadStorage(humanizeError(e)),
               onRetry: () => ref.invalidate(drivesProvider(host.id)),
             ),
         data: (drives) {

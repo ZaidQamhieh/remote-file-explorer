@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
@@ -79,7 +80,9 @@ class HostListScreen extends ConsumerWidget {
             child: storeAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error:
-                  (e, _) => Center(child: Text(context.l10n.errorLabel('$e'))),
+                  (e, _) => Center(
+                    child: Text(context.l10n.errorLabel(humanizeError(e))),
+                  ),
               data: (store) {
                 final hosts = store.listHosts();
                 if (hosts.isEmpty) {

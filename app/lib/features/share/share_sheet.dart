@@ -64,7 +64,7 @@ class _ShareSheetState extends State<ShareSheet> {
       if (context.mounted) showInfo(context, context.l10n.shareLinkRevoked);
     } catch (e) {
       if (context.mounted) {
-        showError(context, context.l10n.shareLinkFailed(e.toString()));
+        showError(context, context.l10n.shareLinkFailed(humanizeError(e)));
       }
     }
   }

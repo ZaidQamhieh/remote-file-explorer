@@ -157,7 +157,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
         showSuccess(context, 'Synced $count files');
       }
     } catch (e) {
-      if (mounted) showError(context, '$e');
+      if (mounted) showError(context, humanizeError(e));
     } finally {
       client?.close();
       if (mounted) setState(() => _syncing.remove(rule.id));

@@ -7,6 +7,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/feedback.dart';
 
 class ConnectionDiagnosticsSheet extends StatefulWidget {
   const ConnectionDiagnosticsSheet({
@@ -77,7 +78,7 @@ class _ConnectionDiagnosticsSheetState
       final msg =
           e is TimeoutException
               ? 'Timed out'
-              : e.toString().replaceFirst('Exception: ', '');
+              : humanizeError(e).replaceFirst('Exception: ', '');
       return _ProbeResult(address: address, label: label, error: msg);
     } finally {
       client.close();
@@ -112,7 +113,7 @@ class _ConnectionDiagnosticsSheetState
     final textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.lg,
           Spacing.md,

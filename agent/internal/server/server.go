@@ -38,6 +38,7 @@ type Config struct {
 // New builds the v1 router and wires all routes.
 func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hub *EventHub) (http.Handler, error) {
 	ops := fsops.NewWithSettings(cfg.Settings)
+	searchIndex := NewSearchIndex(ops)
 
 	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
 	if err != nil {
@@ -76,7 +77,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			registerSettingsAndDeviceRoutes(r, cfg, db)
 			registerShareRoutes(r, cfg, db, ops)
 			r.Get("/system/drives", drivesHandler())
-			r.Get("/search", searchHandler(ops))
+			r.Get("/search", searchHandler(ops, searchIndex))
 			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
 			registerUpdateRoutes(r, cfg)
 			registerFsRoutes(r, cfg, ops)

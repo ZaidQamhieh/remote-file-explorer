@@ -1,11 +1,14 @@
 // Package server — search handler.
 //
-// Search is implemented as a live recursive directory walk rather than a
-// persistent index: this is a personal-use agent over a normal-sized home
-// folder, so the cost/complexity of a background-indexed FTS5 store
-// (indexing, watchers, staleness handling) isn't worth it. We simply walk
-// the tree, matching entry names case-insensitively, and bail out once we
-// hit the result limit or a time budget.
+// Search is served from an in-memory index (see search_index.go) built once
+// at startup and refreshed periodically — the same fundamental approach as
+// Everything/Spotlight (build once, query memory) minus a live filesystem
+// watcher, which is the upgrade path if periodic-refresh staleness ever
+// becomes a real problem. Building a full-text/FTS store on disk isn't worth
+// it for a personal-use agent over a normal-sized home folder; a plain slice
+// scanned linearly is already ~instant at that scale. A live recursive walk
+// (walkForMatches) remains as the fallback for the brief window before the
+// index finishes its first build.
 package server
 
 import (
@@ -118,7 +121,13 @@ func isGlobPattern(q string) bool {
 // matchName reports whether entryName (as returned by fs.DirEntry.Name)
 // matches the q filter (glob or substring, both case-insensitive).
 func (f *searchFilters) matchName(entryName string) bool {
-	lower := strings.ToLower(entryName)
+	return f.matchLower(strings.ToLower(entryName))
+}
+
+// matchLower is matchName for a name that's already lowercased — lets the
+// index (search_index.go) precompute each entry's lowercase name once at
+// build time instead of re-lowercasing it on every query.
+func (f *searchFilters) matchLower(lower string) bool {
 	if f.glob != "" {
 		ok, err := path.Match(f.glob, lower)
 		return err == nil && ok
@@ -283,7 +292,7 @@ func (f *searchFilters) applyModifiedBounds(q url.Values) (code, message string)
 
 // --------- /search GET ---------
 
-func searchHandler(ops *fsops.Ops) http.HandlerFunc {
+func searchHandler(ops *fsops.Ops, idx *SearchIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()
@@ -336,6 +345,18 @@ func searchHandler(ops *fsops.Ops) http.HandlerFunc {
 		// this only turns guaranteed-empty results into an instant real one.
 		if entry, ok := tryDirectPathLookup(ops, q, roots, filters); ok {
 			writeJSON(w, http.StatusOK, []fsops.Entry{entry})
+			return
+		}
+
+		// Fast path: the index is a warm in-memory copy of the whole tree
+		// (see search_index.go) — query it directly instead of touching disk.
+		// Only unavailable in the brief window before its first build
+		// finishes, when the live walk below is still needed.
+		if results, truncated, ok := idx.query(filters, roots, limit); ok {
+			if truncated {
+				w.Header().Set(headerSearchTruncated, "1")
+			}
+			writeJSON(w, http.StatusOK, results)
 			return
 		}
 

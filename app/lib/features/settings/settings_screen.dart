@@ -85,7 +85,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _patch({
     bool? readOnly,
-    List<String>? roots,
     String? name,
     bool? allowSharing,
     String? successMsg,
@@ -97,7 +96,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() {
       _settings = _settings?.copyWith(
         readOnly: readOnly,
-        roots: roots,
         agentName: name,
         allowSharing: allowSharing,
       );
@@ -105,7 +103,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final updated = await client.updateSettings(
         readOnly: readOnly,
-        roots: roots,
         agentName: name,
         allowSharing: allowSharing,
       );
@@ -177,36 +174,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!mounted) return;
     ref.invalidate(hostStoreProvider);
     Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  Future<void> _addRoot() async {
-    final ctrl = TextEditingController();
-    final path = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(ctx.l10n.addAllowedFolder),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: InputDecoration(hintText: ctx.l10n.allowedFolderHint),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(ctx.l10n.cancelButton),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: Text(ctx.l10n.addButton),
-              ),
-            ],
-          ),
-    );
-    if (path != null && path.isNotEmpty && mounted) {
-      final roots = [...?_settings?.roots, path];
-      await _patch(roots: roots, successMsg: context.l10n.addedFolder(path));
-    }
   }
 
   Future<void> _editName() async {
@@ -333,11 +300,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SettingsSection(
           title: context.l10n.allowedFoldersSection,
           icon: LucideIcons.folder,
-          trailing: IconButton(
-            icon: const Icon(LucideIcons.plus),
-            tooltip: context.l10n.addFolderTooltip,
-            onPressed: _addRoot,
-          ),
           children: [
             if (s.roots.isEmpty)
               Padding(
@@ -354,17 +316,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   dense: true,
                   leading: const Icon(LucideIcons.folder),
                   title: Text(r),
-                  trailing: IconButton(
-                    icon: const Icon(LucideIcons.circleMinus),
-                    tooltip: context.l10n.removeFolderTooltip,
-                    onPressed:
-                        () => _patch(
-                          roots: s.roots.where((x) => x != r).toList(),
-                          successMsg: context.l10n.removedFolder(r),
-                        ),
-                  ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.xs),
+              child: Text(
+                context.l10n.managedOnPc,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: Spacing.md),

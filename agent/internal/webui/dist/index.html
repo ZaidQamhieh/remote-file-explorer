@@ -470,6 +470,18 @@
             <input type="text" id="photo-backup-root" class="mono control" style="width:100%" placeholder="/home/you/PhoneBackups">
           </div>
           <button class="primary" id="photo-backup-save">Save photo backup destination</button>
+
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-head">
+              <h2 class="panel-title">Allowed folders</h2>
+            </div>
+            <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
+            <div id="roots-list"></div>
+            <div class="row" style="gap:8px; margin-top:8px">
+              <input type="text" id="root-add-input" class="mono control" style="flex:1" placeholder="/home/you/Shared">
+              <button id="root-add-btn">Add folder</button>
+            </div>
+          </div>
         </div>
 
         <div id="page-devices" class="page hidden">
@@ -908,6 +920,50 @@
     }
   });
 
+  // ---------- Allowed folders (roots) ----------
+  let currentRoots = [];
+
+  function renderRoots() {
+    const list = $('roots-list');
+    if (!currentRoots.length) {
+      list.innerHTML = '<p class="dim">No folders configured — phones can\'t browse anything yet.</p>';
+      return;
+    }
+    list.innerHTML = '';
+    currentRoots.forEach((root) => {
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = '<span class="info"><span class="name">' + esc(root) + '</span></span>';
+      const actions = document.createElement('span');
+      actions.className = 'actions';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'danger';
+      delBtn.textContent = 'Remove';
+      delBtn.addEventListener('click', () => saveRoots(currentRoots.filter((r) => r !== root)));
+      actions.appendChild(delBtn);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  async function saveRoots(next) {
+    try {
+      await api('/settings', { method: 'PATCH', body: JSON.stringify({ roots: next }) });
+      currentRoots = next;
+      renderRoots();
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    }
+  }
+
+  $('root-add-btn').addEventListener('click', () => {
+    const input = $('root-add-input');
+    const path = input.value.trim();
+    if (!path || currentRoots.includes(path)) return;
+    input.value = '';
+    saveRoots([...currentRoots, path]);
+  });
+
   // ---------- Files ----------
   let currentPath = null;
 
@@ -1113,6 +1169,8 @@
       $('bw-download').value = bandwidth.maxDownloadBytesPerSec ? (bandwidth.maxDownloadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
       $('photo-backup-root').value = settings.photoBackupRoot || '';
       updatePhotoBackupWarning(settings.photoBackupRoot || '');
+      currentRoots = settings.roots || [];
+      renderRoots();
 
       const list = $('devices-list');
       list.innerHTML = '';

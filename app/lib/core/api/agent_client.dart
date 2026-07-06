@@ -747,7 +747,6 @@ class AgentClient {
 
   Future<AgentSettings> updateSettings({
     bool? readOnly,
-    List<String>? roots,
     String? agentName,
     bool? allowSharing,
   }) async {
@@ -755,7 +754,6 @@ class AgentClient {
       '/settings',
       data: {
         if (readOnly != null) 'readOnly': readOnly,
-        if (roots != null) 'roots': roots,
         if (agentName != null) 'agentName': agentName,
         if (allowSharing != null) 'allowSharing': allowSharing,
       },

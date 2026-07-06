@@ -8,6 +8,9 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.4', [
+      'Allowed folders are now managed from the web companion, not the phone',
+    ]),
     _ChangelogEntry('v1.41.3', [
       'Search: visual polish pass — gradient scope pill, shimmer loading, tinted app bar',
     ]),

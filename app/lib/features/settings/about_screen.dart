@@ -8,6 +8,9 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.3', [
+      'Search: visual polish pass — gradient scope pill, shimmer loading, tinted app bar',
+    ]),
     _ChangelogEntry('v1.41.2', [
       'File-action sheet: redesigned as quick-action row + list, no more layout gaps',
       'Accent color picker (and other option sheets) now scroll properly',

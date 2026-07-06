@@ -254,8 +254,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.topLeft,
+              radius: 1.6,
+              colors: [
+                scheme.primary.withValues(alpha: 0.22),
+                scheme.surface.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
         title: TextField(
           controller: _controller,
           autofocus: true,
@@ -410,21 +424,57 @@ class _ScopePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final label =
         searchFromHere
             ? folderLabel(currentPath)
             : context.l10n.searchingEverywhere;
-    return ActionChip(
-      avatar: Icon(
-        searchFromHere ? LucideIcons.folder : LucideIcons.globe,
-        size: 16,
-        color: scheme.onSecondaryContainer,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md,
+            vertical: Spacing.sm,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.blue.shade400, Colors.blue.shade800],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.shade900.withValues(alpha: 0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                searchFromHere ? LucideIcons.folder : LucideIcons.globe,
+                size: 15,
+                color: Colors.white,
+              ),
+              const SizedBox(width: Spacing.xs),
+              Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      label: Text(label, overflow: TextOverflow.ellipsis),
-      backgroundColor: scheme.secondaryContainer,
-      labelStyle: TextStyle(color: scheme.onSecondaryContainer),
-      onPressed: onTap,
     );
   }
 }
@@ -439,16 +489,57 @@ class _SearchSkeletonList extends StatefulWidget {
   State<_SearchSkeletonList> createState() => _SearchSkeletonListState();
 }
 
-class _SearchSkeletonListState extends State<_SearchSkeletonList>
+class _SearchSkeletonListState extends State<_SearchSkeletonList> {
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: 8,
+      itemBuilder:
+          (context, i) => Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            child: Row(
+              children: [
+                const _ShimmerBox(width: 40, height: 40),
+                const SizedBox(width: Spacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ShimmerBox(height: 12, width: i.isEven ? 180 : 130),
+                      const SizedBox(height: Spacing.xs),
+                      const _ShimmerBox(height: 10, width: 90),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+}
+
+/// A single placeholder block with a moving highlight sweep — the standard
+/// skeleton-loading treatment (LinkedIn/YouTube-style), which reads as
+/// "actively working" far more than a static gray block or opacity pulse.
+class _ShimmerBox extends StatefulWidget {
+  const _ShimmerBox({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
     with SingleTickerProviderStateMixin {
   late final _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat(reverse: true);
-  late final _opacity = Tween(
-    begin: 0.35,
-    end: 0.85,
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    duration: const Duration(milliseconds: 1300),
+  )..repeat();
 
   @override
   void dispose() {
@@ -459,65 +550,26 @@ class _SearchSkeletonListState extends State<_SearchSkeletonList>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+    final highlight = scheme.surfaceContainerHigh;
     return AnimatedBuilder(
-      animation: _opacity,
-      builder:
-          (context, _) => ListView.builder(
-            itemCount: 8,
-            itemBuilder:
-                (context, i) => Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Spacing.md,
-                    vertical: Spacing.sm,
-                  ),
-                  child: Row(
-                    children: [
-                      Opacity(
-                        opacity: _opacity.value,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: scheme.surfaceContainerHighest,
-                            borderRadius: Radii.cardR,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: Spacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Opacity(
-                              opacity: _opacity.value,
-                              child: Container(
-                                height: 12,
-                                width: i.isEven ? 180 : 130,
-                                decoration: BoxDecoration(
-                                  color: scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: Spacing.xs),
-                            Opacity(
-                              opacity: _opacity.value * 0.7,
-                              child: Container(
-                                height: 10,
-                                width: 90,
-                                decoration: BoxDecoration(
-                                  color: scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      animation: _controller,
+      builder: (context, _) {
+        final shift = _controller.value * 3 - 1.5;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + shift, 0),
+              end: Alignment(1 + shift, 0),
+              colors: [base, highlight, base],
+              stops: const [0.35, 0.5, 0.65],
+            ),
           ),
+        );
+      },
     );
   }
 }

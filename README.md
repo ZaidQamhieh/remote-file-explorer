@@ -1,18 +1,17 @@
 # Remote File Explorer
 
-A mobile app that turns your phone into a full graphical file explorer for your Windows and Linux
-computers — browse, manage, and transfer files over a Finder/Explorer-style GUI, with no SSH or
-terminal required.
+A mobile app that turns your phone into a full graphical file explorer for your Windows, macOS, and
+Linux computers — browse, manage, and transfer files over a Finder/Explorer-style GUI, with no SSH
+or terminal required.
 
 - **`app/`** — Flutter mobile app (Android-focused; v1.5+)
-- **`agent/`** — Go host service that runs on each Windows/Linux computer
+- **`agent/`** — Go host service that runs on each Windows/macOS/Linux computer
 - **`protocol/`** — OpenAPI 3 contract shared by both sides (source of truth)
 - **`docs/`** — architecture and setup guides
 
 Remote access is handled by **Tailscale** (both phone and computer join the same tailnet), so there
 is no cloud server and no cloud database. The agent is reachable on the LAN or over Tailscale by
-IP/hostname; **mDNS auto-discovery is not implemented** (the `agent/internal/discovery` package is
-a placeholder). See `docs/` for the full architecture.
+IP/hostname, and auto-discoverable via mDNS. See `docs/` for the full architecture.
 
 ## Status
 
@@ -42,3 +41,17 @@ go run ./cmd/agent            # serves https://<host>:8765/v1/health
 The first run generates a self-signed TLS certificate and prints its SHA-256 fingerprint (the value
 the phone pins when pairing). Then run `rfe-agent pair` (or `go run ./cmd/agent pair`) to add a
 device — see `docs/development.md` for the full dev workflow.
+
+## Server setup (auto-start)
+
+To have the agent start automatically on login instead of running it manually every time:
+
+```sh
+rfe-agent install      # registers a per-user auto-start entry, no admin/root needed
+rfe-agent uninstall    # removes it
+```
+
+This sets up a systemd `--user` service on Linux, a launchd agent on macOS, or a Scheduled Task on
+Windows — whichever matches the OS it's run on. The web companion (status, transfers, users, logs,
+device management) is served by the same agent process at `https://<host>:8765/`, so there's
+nothing else to install.

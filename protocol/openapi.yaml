@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.14.0
+  version: 1.15.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -1255,6 +1255,17 @@ paths:
                 ttlSeconds:
                   type: integer
                   description: How long the code stays valid. Defaults to 3600 (1 hour) if omitted or <= 0.
+                guest:
+                  type: boolean
+                  description: >
+                    Mint a Guest code instead: the device created when this
+                    code is redeemed is forced read-only and jailed to
+                    jailRoot from creation, and (like every device) can't
+                    change its own jail/read-only state — only an admin can.
+                    Requires jailRoot.
+                jailRoot:
+                  type: string
+                  description: Required when guest=true. Validated the same way as PATCH /devices/{id}'s jailRoot.
       responses:
         '200':
           description: Pairing code minted
@@ -1273,6 +1284,9 @@ paths:
                       tailscaleAddress: { type: string }
                       certFingerprint: { type: string }
                       pairingCode: { type: string }
+        '400':
+          description: guest=true without a valid jailRoot. code=BAD_REQUEST.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
         '403':
           description: Caller is not an admin device. code=FORBIDDEN.

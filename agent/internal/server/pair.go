@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
@@ -65,7 +66,8 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
-		if !pm.Consume(req.PairingCode) {
+		codeInfo := pm.Consume(req.PairingCode)
+		if !codeInfo.Valid {
 			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code")
 			return
 		}
@@ -83,6 +85,21 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
+		}
+		// Apply the pairing code's guest-mode defaults, if any, to the new
+		// device. A normal (non-guest) code has JailRoot=="" and ReadOnly==
+		// false, so this is a no-op for the common path.
+		if codeInfo.JailRoot != "" {
+			if err := db.SetDeviceJail(deviceID, codeInfo.JailRoot); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
+		}
+		if codeInfo.ReadOnly {
+			if err := db.SetDeviceReadOnly(deviceID, true); err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				return
+			}
 		}
 
 		writeJSON(w, http.StatusOK, pairResponse{
@@ -103,21 +120,42 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 // minting fresh codes for arbitrary new devices is a materially bigger
 // privilege than the read-only web-companion endpoints, so it is gated the
 // same as managing other devices.
-func generatePairingHandler(pm *pairing.Manager) http.HandlerFunc {
+func generatePairingHandler(pm *pairing.Manager, st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isAdminDevice(deviceFromContext(r)) {
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "minting pairing codes requires an admin (login) session or the PC")
 			return
 		}
 		var req struct {
-			TTLSeconds int `json:"ttlSeconds"`
+			TTLSeconds int    `json:"ttlSeconds"`
+			Guest      bool   `json:"guest"`
+			JailRoot   string `json:"jailRoot"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req) // body is optional; default TTL below
 		ttl := pairing.DefaultTTL
 		if req.TTLSeconds > 0 {
 			ttl = time.Duration(req.TTLSeconds) * time.Second
 		}
-		code, payload, err := pm.Mint(ttl)
+
+		var (
+			code    string
+			payload pairing.QRPayload
+			err     error
+		)
+		if req.Guest {
+			jailRoot, verr := ValidateJailRoot(req.JailRoot, st.Roots(), true)
+			if verr != nil {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", verr.Error())
+				return
+			}
+			if jailRoot == "" {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "guest pairing codes require a jailRoot")
+				return
+			}
+			code, payload, err = pm.MintGuest(ttl, jailRoot)
+		} else {
+			code, payload, err = pm.Mint(ttl)
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return

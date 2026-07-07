@@ -130,7 +130,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 		revokeDeviceHandler(db)(w, req, id)
 	})
 	r.Post("/wol", wolRelayHandler())
-	r.Post("/pairing/generate", generatePairingHandler(pm))
+	r.Post("/pairing/generate", generatePairingHandler(pm, cfg.Settings))
 }
 
 // registerShareRoutes wires the authenticated R1 share-link management

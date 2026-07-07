@@ -152,27 +152,36 @@ func TestPairingCodeLifecycle(t *testing.T) {
 	defer db.Close()
 
 	// A valid code can be consumed exactly once.
-	if err := db.CreatePairingCode("ABC123", time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreatePairingCode("ABC123", time.Now().Add(time.Hour), "", false); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !db.ConsumePairingCode("ABC123") {
+	if !db.ConsumePairingCode("ABC123").Valid {
 		t.Fatalf("expected first consume to succeed")
 	}
-	if db.ConsumePairingCode("ABC123") {
+	if db.ConsumePairingCode("ABC123").Valid {
 		t.Fatalf("expected second consume to fail (single-use)")
 	}
 
 	// An expired code is rejected.
-	if err := db.CreatePairingCode("OLD999", time.Now().Add(-time.Minute)); err != nil {
+	if err := db.CreatePairingCode("OLD999", time.Now().Add(-time.Minute), "", false); err != nil {
 		t.Fatalf("create expired: %v", err)
 	}
-	if db.ConsumePairingCode("OLD999") {
+	if db.ConsumePairingCode("OLD999").Valid {
 		t.Fatalf("expected expired code to be rejected")
 	}
 
 	// An unknown code is rejected.
-	if db.ConsumePairingCode("NOPE") {
+	if db.ConsumePairingCode("NOPE").Valid {
 		t.Fatalf("expected unknown code to be rejected")
+	}
+
+	// A guest code carries its jailRoot/readOnly defaults through to Consume.
+	if err := db.CreatePairingCode("GUEST01", time.Now().Add(time.Hour), "/home/pc/Shared", true); err != nil {
+		t.Fatalf("create guest: %v", err)
+	}
+	info := db.ConsumePairingCode("GUEST01")
+	if !info.Valid || info.JailRoot != "/home/pc/Shared" || !info.ReadOnly {
+		t.Fatalf("expected guest defaults to round-trip, got %+v", info)
 	}
 }
 

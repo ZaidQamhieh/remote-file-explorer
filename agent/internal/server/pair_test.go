@@ -34,7 +34,7 @@ func TestPairHandler_BadDeviceProofDoesNotBurnPairingCode(t *testing.T) {
 		t.Fatalf("expected 400 DEVICE_KEY_REQUIRED, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	if !pm.Consume(code) {
+	if !pm.Consume(code).Valid {
 		t.Fatal("pairing code should still be valid after a missing-device-proof rejection")
 	}
 }

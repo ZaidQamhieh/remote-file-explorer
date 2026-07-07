@@ -421,7 +421,7 @@
           </div>
         </div>
 
-        <div id="page-control" class="page hidden">
+        <div id="page-settings" class="page hidden">
           <div class="panel">
             <div class="field-row">
               <div>
@@ -432,9 +432,6 @@
             </div>
             <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
           </div>
-        </div>
-
-        <div id="page-settings" class="page hidden">
           <div class="panel">
             <div class="field-row">
               <div>
@@ -498,6 +495,16 @@
                 <p class="field-desc">Mints a one-time code, same as `rfe-agent pair` on the PC. Admin sessions (logged in with the account password) only.</p>
               </div>
               <button id="pairing-generate-btn">Generate code</button>
+            </div>
+            <div class="field-row hidden" id="pairing-guest-row">
+              <div>
+                <p class="field-label">Guest device</p>
+                <p class="field-desc">Forces the new device read-only and jailed to a folder. Only an admin can change this later.</p>
+              </div>
+              <label class="switch control"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
+            </div>
+            <div class="field-row hidden" id="pairing-guest-jail-row">
+              <input type="text" id="pairing-guest-jail" class="mono control" style="width:100%" placeholder="/home/you/SharedWithGuests">
             </div>
             <p class="dim mono" id="pairing-generate-result" style="margin:0 0 12px"></p>
             <div class="table-scroll">
@@ -991,13 +998,24 @@
   // these calls — the isAdmin gate here only controls which controls the UI
   // renders (see the devices-list render block in loadDashboard).
 
+  $('pairing-guest-toggle').addEventListener('change', (e) => {
+    $('pairing-guest-jail-row').classList.toggle('hidden', !e.target.checked);
+  });
+
   $('pairing-generate-btn').addEventListener('click', async () => {
     const resultEl = $('pairing-generate-result');
+    const guest = $('pairing-guest-toggle').checked;
+    const jailRoot = $('pairing-guest-jail').value.trim();
+    if (guest && !jailRoot) {
+      resultEl.textContent = 'Guest devices need a folder.';
+      return;
+    }
     resultEl.textContent = 'Generating…';
     try {
-      const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify({}) });
+      const body = guest ? { guest: true, jailRoot } : {};
+      const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify(body) });
       const mins = Math.round(res.expiresInSeconds / 60);
-      resultEl.textContent = 'Code: ' + res.pairingCode + ' (expires in ' + mins + ' min)';
+      resultEl.textContent = 'Code: ' + res.pairingCode + ' (expires in ' + mins + ' min)' + (guest ? ' — guest, read-only, jailed' : '');
     } catch (err) {
       resultEl.textContent = 'Failed: ' + err.message;
     }
@@ -1246,6 +1264,7 @@
       const curDevice = (devices || []).find((d) => d.current);
       isAdmin = !!(curDevice && curDevice.viaLogin);
       $('pairing-generate-row').classList.toggle('hidden', !isAdmin);
+      $('pairing-guest-row').classList.toggle('hidden', !isAdmin);
 
       const list = $('devices-list');
       list.innerHTML = '';

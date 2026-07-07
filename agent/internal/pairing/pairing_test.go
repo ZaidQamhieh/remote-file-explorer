@@ -54,7 +54,7 @@ func TestMintNonPositiveTTLFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Mint: %v", err)
 	}
-	if !m.Consume(code) {
+	if !m.Consume(code).Valid {
 		t.Error("code minted with ttl=0 was not valid; expected DefaultTTL fallback")
 	}
 }
@@ -67,14 +67,38 @@ func TestConsumeIsSingleUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Mint: %v", err)
 	}
-	if !m.Consume(code) {
+	if !m.Consume(code).Valid {
 		t.Fatal("first Consume should succeed")
 	}
-	if m.Consume(code) {
+	if m.Consume(code).Valid {
 		t.Error("second Consume should fail (single-use)")
 	}
-	if m.Consume("NEVERMINTED") {
+	if m.Consume("NEVERMINTED").Valid {
 		t.Error("unknown code should not be consumable")
+	}
+}
+
+// A code minted via Mint (non-guest) carries no jail/read-only defaults.
+// A code minted via MintGuest carries the given jailRoot and forces read-only.
+func TestMintGuestCarriesDefaults(t *testing.T) {
+	m := newTestManager(t)
+
+	normalCode, _, err := m.Mint(DefaultTTL)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	info := m.Consume(normalCode)
+	if !info.Valid || info.JailRoot != "" || info.ReadOnly {
+		t.Errorf("expected non-guest code with no defaults, got %+v", info)
+	}
+
+	guestCode, _, err := m.MintGuest(DefaultTTL, "/home/pc/Shared")
+	if err != nil {
+		t.Fatalf("MintGuest: %v", err)
+	}
+	info = m.Consume(guestCode)
+	if !info.Valid || info.JailRoot != "/home/pc/Shared" || !info.ReadOnly {
+		t.Errorf("expected guest code to carry jailRoot+readOnly, got %+v", info)
 	}
 }
 

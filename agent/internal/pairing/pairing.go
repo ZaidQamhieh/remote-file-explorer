@@ -55,6 +55,18 @@ func New(db *store.DB, lanAddress, tailscaleAddress, fingerprint string) *Manage
 // Mint generates a new single-use pairing code valid for ttl, persists it, and
 // returns the code together with the QR payload the phone should scan.
 func (m *Manager) Mint(ttl time.Duration) (string, QRPayload, error) {
+	return m.mint(ttl, "", false)
+}
+
+// MintGuest generates a single-use pairing code that pre-configures the
+// device created when it's redeemed as read-only and jailed to jailRoot —
+// the Guest role: the resulting device can never be full-access, and (like
+// every device) can't change its own jail/read-only state, only an admin can.
+func (m *Manager) MintGuest(ttl time.Duration, jailRoot string) (string, QRPayload, error) {
+	return m.mint(ttl, jailRoot, true)
+}
+
+func (m *Manager) mint(ttl time.Duration, jailRoot string, readOnly bool) (string, QRPayload, error) {
 	if ttl <= 0 {
 		ttl = DefaultTTL
 	}
@@ -62,7 +74,7 @@ func (m *Manager) Mint(ttl time.Duration) (string, QRPayload, error) {
 	if err != nil {
 		return "", QRPayload{}, err
 	}
-	if err := m.db.CreatePairingCode(code, time.Now().Add(ttl)); err != nil {
+	if err := m.db.CreatePairingCode(code, time.Now().Add(ttl), jailRoot, readOnly); err != nil {
 		return "", QRPayload{}, err
 	}
 	return code, m.Payload(code), nil
@@ -84,8 +96,9 @@ func (p QRPayload) JSON() string {
 	return string(b)
 }
 
-// Consume validates code and clears it (single-use). Returns true on success.
-func (m *Manager) Consume(code string) bool {
+// Consume validates code and clears it (single-use), returning its guest-mode
+// defaults (if any) to apply to the device created on success.
+func (m *Manager) Consume(code string) store.PairingCodeInfo {
 	return m.db.ConsumePairingCode(code)
 }
 

@@ -51,7 +51,7 @@ func TestRegisterHandler_WeakPasswordRejected(t *testing.T) {
 	// A recoverable mistake (weak password) must NOT burn the one-time
 	// pairing code — the user should be able to fix the password and retry
 	// with the same code, no trip back to the terminal required.
-	if !pm.Consume(code) {
+	if !pm.Consume(code).Valid {
 		t.Fatal("pairing code should still be valid after a weak-password rejection")
 	}
 }
@@ -98,7 +98,7 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 
 	// The pairing code itself was consumed by the successful registration
 	// above (single-use, can't be reused for anything else).
-	if pm.Consume(code) {
+	if pm.Consume(code).Valid {
 		t.Fatal("pairing code should have been consumed by the successful registration")
 	}
 
@@ -127,7 +127,7 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 	}
 	// And that fresh pairing code is untouched, since the request never
 	// got far enough to consume it.
-	if !pm.Consume(code2) {
+	if !pm.Consume(code2).Valid {
 		t.Fatal("second pairing code should still be valid — request was rejected before reaching pairing-code consumption")
 	}
 }

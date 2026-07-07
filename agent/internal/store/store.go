@@ -169,6 +169,20 @@ CREATE TABLE IF NOT EXISTS users (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add guest-mode defaults to pairing_codes: an admin minting a "guest"
+	// pairing code sets these so the resulting device is created already
+	// read-only and jailed, instead of needing a second admin PATCH after
+	// pairing. Empty/0 means "no guest defaults" (today's behavior).
+	if _, err := s.db.Exec(
+		`ALTER TABLE pairing_codes ADD COLUMN jail_root TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(
+		`ALTER TABLE pairing_codes ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	return nil
 }
 
@@ -428,32 +442,51 @@ func (s *DB) SetDeviceReadOnly(id string, ro bool) error {
 // CreatePairingCode stores a one-time pairing code valid until expires. Stored
 // in the DB (not daemon memory) so the `rfe-agent pair` CLI can mint a code the
 // running daemon will accept, without a restart. Opportunistically clears
-// already-expired codes.
-func (s *DB) CreatePairingCode(code string, expires time.Time) error {
+// already-expired codes. jailRoot/readOnly are guest-mode defaults applied to
+// the device created when this code is redeemed; pass "", false for a normal
+// (non-guest) code.
+func (s *DB) CreatePairingCode(code string, expires time.Time, jailRoot string, readOnly bool) error {
 	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE expires < ?`, time.Now().Unix())
+	ro := 0
+	if readOnly {
+		ro = 1
+	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO pairing_codes (code, expires) VALUES (?, ?)`,
-		code, expires.Unix(),
+		`INSERT OR REPLACE INTO pairing_codes (code, expires, jail_root, read_only) VALUES (?, ?, ?, ?)`,
+		code, expires.Unix(), jailRoot, ro,
 	)
 	return err
 }
 
-// ConsumePairingCode validates code and removes it (single-use). Returns true
-// only if the code exists and has not expired.
-func (s *DB) ConsumePairingCode(code string) bool {
+// PairingCodeInfo describes a validated one-time pairing code: whether it was
+// valid, and any guest-mode defaults (jailRoot/readOnly) to apply to the
+// device created when redeeming it.
+type PairingCodeInfo struct {
+	Valid    bool
+	JailRoot string
+	ReadOnly bool
+}
+
+// ConsumePairingCode validates code and removes it (single-use).
+func (s *DB) ConsumePairingCode(code string) PairingCodeInfo {
 	if code == "" {
-		return false
+		return PairingCodeInfo{}
 	}
 	var expires int64
+	var jailRoot string
+	var readOnly int
 	err := s.db.QueryRow(
-		`SELECT expires FROM pairing_codes WHERE code=?`, code,
-	).Scan(&expires)
+		`SELECT expires, jail_root, read_only FROM pairing_codes WHERE code=?`, code,
+	).Scan(&expires, &jailRoot, &readOnly)
 	if err != nil {
-		return false
+		return PairingCodeInfo{}
 	}
 	// Remove it regardless (single-use); only accept if still valid.
 	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE code=?`, code)
-	return time.Now().Unix() <= expires
+	if time.Now().Unix() > expires {
+		return PairingCodeInfo{}
+	}
+	return PairingCodeInfo{Valid: true, JailRoot: jailRoot, ReadOnly: readOnly != 0}
 }
 
 func hashToken(token string) string {

@@ -79,7 +79,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
-		if !pm.Consume(req.PairingCode) {
+		if !pm.Consume(req.PairingCode).Valid {
 			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair` on the computer to mint one")
 			return
 		}

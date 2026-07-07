@@ -288,11 +288,38 @@
     padding-top: 10px; border-top: 1px solid var(--border); }
   .empty-cell-card { text-align: center; color: var(--dim); padding: 24px; grid-column: 1 / -1; }
 
+  .qa-tile { flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px 12px;
+    border-radius: var(--radius-lg); text-align: center; }
+  .qa-tile span { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .qa-tile:hover { border-color: var(--primary); background: var(--accent); transform: translateY(-1px); }
+
+  /* ---------- Devices mini-stat row (Total / Active / Guests / Storage) ---------- */
+  .mini-stat-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .mini-stat { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
+    border-radius: var(--radius-lg); padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    transition: border-color .15s, transform .15s; }
+  .mini-stat:hover { transform: translateY(-1px); }
+  .mini-stat.blue { border-top-color: var(--primary); }
+  .mini-stat.green { border-top-color: var(--green); }
+  .mini-stat.amber { border-top-color: var(--amber); }
+  .mini-stat.purple { border-top-color: var(--purple); }
+  .mini-stat .icon-badge { width: 34px; height: 34px; }
+  .mini-stat .v { font-size: 19px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+  .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-top: 3px; }
+
   /* ---------- Logs level filter ---------- */
   .log-filter { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .log-filter .dim { flex-shrink: 0; }
   .log-filter button.active { background: var(--accent); color: var(--ink); }
   .log-line.hidden { display: none; }
+
+  /* ---------- Files page: Browse/Recent/Trash/Shares tabs (same look as .log-filter) ---------- */
+  .tab-bar { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .tab-bar button.active { background: var(--accent); color: var(--ink); }
+  .file-row .select { flex-shrink: 0; }
+  .bulk-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 8px;
+    background: var(--accent); border-radius: var(--radius-md); }
+  .bulk-toolbar.hidden { display: none; }
 
   /* ---------- Generated pairing-code display (big letters, animated in) ---------- */
   .gen-otp { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
@@ -399,6 +426,7 @@
       <div class="status-chip">Agent running</div>
       <div class="nav">
         <a href="#" data-page="status" class="nav-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Overview</span></a>
+        <a href="#" data-page="files"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span>Files</span></a>
         <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Clients</span><span class="nav-badge" id="nav-badge-devices"></span></a>
         <a href="#" data-page="transfers"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Transfers</span><span class="nav-badge" id="nav-badge-transfers"></span></a>
         <a href="#" data-page="users"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Users</span></a>
@@ -464,6 +492,36 @@
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg><span class="stat-label">Storage</span></div>
               <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
               <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2 class="panel-title">Quick actions</h2></div>
+            <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+              <button class="qa-tile" data-qa-page="devices">
+                <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+                <span>Pair device</span>
+              </button>
+              <button class="qa-tile" data-qa-page="files">
+                <div class="icon-badge amber" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                <span>New folder</span>
+              </button>
+              <button class="qa-tile" id="qa-upload">
+                <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></div>
+                <span>Upload file</span>
+              </button>
+              <button class="qa-tile" id="qa-share">
+                <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                <span>Share link</span>
+              </button>
+              <button class="qa-tile" id="qa-wake">
+                <div class="icon-badge green" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
+                <span>Wake device</span>
+              </button>
+              <button class="qa-tile" data-qa-page="settings">
+                <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6L21 3"/><path d="M21 3v6h-6"/></svg></div>
+                <span>Restart agent</span>
+              </button>
             </div>
           </div>
 
@@ -556,6 +614,24 @@
         </div>
 
         <div id="page-devices" class="page hidden">
+          <div class="mini-stat-row">
+            <div class="mini-stat blue">
+              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+              <div><div class="v" id="ds-total">0</div><div class="l">Total devices</div></div>
+            </div>
+            <div class="mini-stat green">
+              <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
+              <div><div class="v" id="ds-active">0</div><div class="l">Active</div></div>
+            </div>
+            <div class="mini-stat amber">
+              <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <div><div class="v" id="ds-guests">0</div><div class="l">Guests</div></div>
+            </div>
+            <div class="mini-stat purple">
+              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+              <div><div class="v" id="ds-storage">0</div><div class="l">Storage used</div></div>
+            </div>
+          </div>
           <div class="panel" style="border-top:2px solid var(--primary)">
             <div class="panel-head">
               <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
@@ -597,19 +673,60 @@
               <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
               <h2 class="panel-title">Files</h2>
             </div>
-            <div class="row" style="gap:8px">
-              <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
-              <button id="new-folder-btn">New folder</button>
+            <div class="tab-bar">
+              <button id="files-tab-browse" class="active" data-tab="browse">Browse</button>
+              <button id="files-tab-recent" data-tab="recent">Recent</button>
+              <button id="files-tab-trash" data-tab="trash">Trash</button>
+              <button id="files-tab-shares" data-tab="shares">Shares</button>
             </div>
-            <div id="files-list"></div>
-            <div id="file-preview" class="hidden" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px">
-              <div class="row"><strong id="preview-name"></strong>
-                <span>
-                  <button id="preview-download">Download</button>
-                  <button id="preview-close">Close</button>
-                </span>
+
+            <div id="files-browse-tab">
+              <div class="row" style="gap:8px">
+                <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
+                <input id="folder-search" type="text" placeholder="Search this folder…" style="width:180px">
+                <input id="upload-input" type="file" multiple class="hidden">
+                <button id="upload-btn" title="Files over 5 MiB aren't supported by this upload path">Upload</button>
+                <button id="new-folder-btn">New folder</button>
               </div>
-              <div id="preview-body" style="max-height:400px; overflow:auto; margin-top:8px"></div>
+              <div id="bulk-toolbar" class="bulk-toolbar hidden">
+                <span class="mono" id="bulk-count"></span>
+                <span class="spacer"></span>
+                <button id="bulk-move">Move</button>
+                <button id="bulk-copy">Copy</button>
+                <button id="bulk-compress">Compress</button>
+                <button id="bulk-checksum">Checksum</button>
+                <button id="bulk-chmod">Chmod</button>
+                <button id="bulk-delete" class="danger">Delete</button>
+              </div>
+              <div id="search-results" class="hidden"></div>
+              <div id="files-list"></div>
+              <div id="file-preview" class="hidden" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px">
+                <div class="row"><strong id="preview-name"></strong>
+                  <span>
+                    <button id="preview-download">Download</button>
+                    <button id="preview-close">Close</button>
+                  </span>
+                </div>
+                <div id="preview-body" style="max-height:400px; overflow:auto; margin-top:8px"></div>
+              </div>
+            </div>
+
+            <div id="files-recent-tab" class="hidden">
+              <div id="recent-list"></div>
+            </div>
+
+            <div id="files-trash-tab" class="hidden">
+              <div class="row" style="gap:8px">
+                <span class="dim" id="trash-count"></span>
+                <span class="spacer"></span>
+                <button id="trash-restore-selected">Restore selected</button>
+                <button id="trash-empty-btn" class="danger">Empty trash</button>
+              </div>
+              <div id="trash-list"></div>
+            </div>
+
+            <div id="files-shares-tab" class="hidden">
+              <div id="shares-list"></div>
             </div>
           </div>
         </div>
@@ -1151,8 +1268,22 @@
     return idx > 0 ? trimmed.slice(0, idx) : trimmed.slice(0, idx + 1) || trimmed;
   }
 
+  const selectedPaths = new Set();
+
+  function updateBulkToolbar() {
+    const bar = $('bulk-toolbar');
+    if (selectedPaths.size === 0) {
+      bar.classList.add('hidden');
+      return;
+    }
+    bar.classList.remove('hidden');
+    $('bulk-count').textContent = selectedPaths.size + ' selected';
+  }
+
   async function openFolder(path) {
     currentPath = path;
+    selectedPaths.clear();
+    updateBulkToolbar();
     $('file-preview').classList.add('hidden');
     $('breadcrumb').textContent = path;
     const list = $('files-list');
@@ -1169,6 +1300,16 @@
       (listing.entries || []).forEach((entry) => {
         const row = document.createElement('div');
         row.className = 'list-row file-row';
+
+        const select = document.createElement('input');
+        select.type = 'checkbox';
+        select.className = 'select';
+        select.addEventListener('click', (e) => e.stopPropagation());
+        select.addEventListener('change', () => {
+          if (select.checked) selectedPaths.add(entry.path);
+          else selectedPaths.delete(entry.path);
+          updateBulkToolbar();
+        });
 
         const icon = document.createElement('div');
         icon.className = 'file-icon ' + (entry.isDir ? 'file-icon-dir' : 'file-icon-file');
@@ -1188,6 +1329,20 @@
         const actions = document.createElement('span');
         actions.className = 'actions';
 
+        if (!entry.isDir) {
+          const shareBtn = document.createElement('button');
+          shareBtn.textContent = 'Share';
+          shareBtn.addEventListener('click', () => shareEntry(entry));
+          actions.appendChild(shareBtn);
+        }
+
+        if (!entry.isDir && /\.(zip|tar|tar\.gz|tgz|tar\.bz2)$/i.test(entry.name)) {
+          const extractBtn = document.createElement('button');
+          extractBtn.textContent = 'Extract';
+          extractBtn.addEventListener('click', () => extractEntry(entry));
+          actions.appendChild(extractBtn);
+        }
+
         const renameBtn = document.createElement('button');
         renameBtn.textContent = 'Rename';
         renameBtn.addEventListener('click', () => renameEntry(entry));
@@ -1199,6 +1354,7 @@
         delBtn.addEventListener('click', () => deleteEntry(entry));
         actions.appendChild(delBtn);
 
+        row.appendChild(select);
         row.appendChild(icon);
         row.appendChild(info);
         row.appendChild(size);
@@ -1304,10 +1460,368 @@
     }
   });
 
+  async function shareEntry(entry) {
+    const minutesStr = prompt('Share link expiry in minutes (blank = 15m default, max 1440):', '');
+    if (minutesStr === null) return;
+    const expiresInSeconds = minutesStr.trim() === '' ? 0 : Math.round(parseFloat(minutesStr) * 60);
+    try {
+      const res = await api('/share/mint', { method: 'POST', body: JSON.stringify({ path: entry.path, expiresInSeconds }) });
+      prompt('Share link (copy it now — shown only once):', res.url);
+    } catch (e) {
+      alert('Share failed: ' + e.message);
+    }
+  }
+
+  async function extractEntry(entry) {
+    try {
+      await api('/fs/extract', { method: 'POST', body: JSON.stringify({ archive: entry.path, destDir: currentPath }) });
+      openFolder(currentPath);
+    } catch (e) {
+      alert('Extract failed: ' + e.message);
+    }
+  }
+
+  // Uploads via PUT /content — capped at 5 MiB per the agent's content-write
+  // limit. Larger transfers need the resumable /transfers chunk-upload flow,
+  // which this pass doesn't wire (bigger feature, not just a missing button).
+  const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+  async function uploadFiles(files, destDir) {
+    for (const file of files) {
+      if (file.size > UPLOAD_MAX_BYTES) {
+        alert(file.name + ' is ' + fmtBytes(file.size) + ' — over the 5 MiB limit for this upload path. Skipped.');
+        continue;
+      }
+      try {
+        const res = await fetch('/v1/content?path=' + encodeURIComponent(joinPath(destDir, file.name)), {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/octet-stream' },
+          body: file,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || ('HTTP ' + res.status));
+        }
+      } catch (e) {
+        alert('Upload failed for ' + file.name + ': ' + e.message);
+      }
+    }
+  }
+
+  $('upload-btn').addEventListener('click', () => $('upload-input').click());
+  $('upload-input').addEventListener('change', async () => {
+    const files = Array.from($('upload-input').files || []);
+    if (files.length === 0) return;
+    await uploadFiles(files, currentPath);
+    $('upload-input').value = '';
+    openFolder(currentPath);
+  });
+
+  $('qa-upload').addEventListener('click', () => { showPage('files'); filesTab('browse'); $('upload-input').click(); });
+
+  $('qa-share').addEventListener('click', async () => {
+    const path = prompt('Path of the file to share (e.g. /home/user/report.pdf):');
+    if (!path) return;
+    await shareEntry({ path });
+  });
+
+  $('qa-wake').addEventListener('click', async () => {
+    const mac = prompt('MAC address to wake (e.g. aa:bb:cc:dd:ee:ff):');
+    if (!mac) return;
+    try {
+      await api('/wol', { method: 'POST', body: JSON.stringify({ mac }) });
+      alert('Wake-on-LAN packet sent.');
+    } catch (e) {
+      alert('Wake failed: ' + e.message);
+    }
+  });
+
+  // Search scopes to the current Browse folder — swaps #files-list for
+  // #search-results while a query is active, restores on clear.
+  let searchDebounce = null;
+  $('folder-search').addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    const q = $('folder-search').value.trim();
+    if (!q) {
+      $('search-results').classList.add('hidden');
+      $('files-list').classList.remove('hidden');
+      return;
+    }
+    searchDebounce = setTimeout(() => runFolderSearch(q), 300);
+  });
+
+  async function runFolderSearch(q) {
+    const box = $('search-results');
+    $('files-list').classList.add('hidden');
+    box.classList.remove('hidden');
+    box.innerHTML = '<p class="dim">Searching…</p>';
+    try {
+      const results = await api('/search?q=' + encodeURIComponent(q) + '&root=' + encodeURIComponent(currentPath));
+      box.innerHTML = '';
+      (results || []).forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'list-row file-row';
+        row.innerHTML = '<span class="info"><span class="name">' + esc(entry.name) + '</span>' +
+          '<div class="sub mono">' + esc(entry.path) + '</div></span>' +
+          '<span class="dim mono">' + (entry.isDir ? '' : fmtBytes(entry.size)) + '</span>';
+        row.addEventListener('click', () => {
+          $('folder-search').value = '';
+          box.classList.add('hidden');
+          $('files-list').classList.remove('hidden');
+          entry.isDir ? openFolder(entry.path) : previewFile(entry);
+        });
+        box.appendChild(row);
+      });
+      if (!results || results.length === 0) box.innerHTML = '<p class="dim">No matches.</p>';
+    } catch (e) {
+      box.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';
+    }
+  }
+
+  // --------- Files: Browse/Recent/Trash/Shares tabs ---------
+
+  function filesTab(name) {
+    ['browse', 'recent', 'trash', 'shares'].forEach((t) => {
+      $('files-' + t + '-tab').classList.toggle('hidden', t !== name);
+      $('files-tab-' + t).classList.toggle('active', t === name);
+    });
+    if (name === 'recent') loadRecent();
+    else if (name === 'trash') loadTrash();
+    else if (name === 'shares') loadShares();
+  }
+  document.querySelectorAll('#page-files .tab-bar button').forEach((btn) => {
+    btn.addEventListener('click', () => filesTab(btn.dataset.tab));
+  });
+
+  async function loadRecent() {
+    const list = $('recent-list');
+    list.innerHTML = '<p class="dim">Loading…</p>';
+    try {
+      const entries = await api('/fs/recent');
+      list.innerHTML = '';
+      (entries || []).forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'list-row';
+        row.innerHTML = '<span class="info"><span class="name">' + esc(entry.name) + '</span>' +
+          '<div class="sub mono">' + esc(entry.path) + ' · ' + timeAgo(Math.floor(new Date(entry.modified).getTime() / 1000)) + '</div></span>' +
+          '<span class="dim mono">' + fmtBytes(entry.size) + '</span>';
+        const actions = document.createElement('span');
+        actions.className = 'actions';
+
+        const previewBtn = document.createElement('button');
+        previewBtn.textContent = 'Preview';
+        previewBtn.addEventListener('click', () => { filesTab('browse'); openFolder(parentPath(entry.path)).then(() => previewFile(entry)); });
+        actions.appendChild(previewBtn);
+
+        const dlBtn = document.createElement('button');
+        dlBtn.textContent = 'Download';
+        dlBtn.addEventListener('click', () => downloadFile(entry));
+        actions.appendChild(dlBtn);
+
+        const shareBtn = document.createElement('button');
+        shareBtn.textContent = 'Share';
+        shareBtn.addEventListener('click', () => shareEntry(entry));
+        actions.appendChild(shareBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', async () => {
+          if (!confirm('Delete "' + entry.name + '"? It will be moved to trash (recoverable).')) return;
+          try {
+            await api('/fs?path=' + encodeURIComponent(entry.path), { method: 'DELETE' });
+            loadRecent();
+          } catch (e) { alert('Delete failed: ' + e.message); }
+        });
+        actions.appendChild(delBtn);
+
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+      if (!entries || entries.length === 0) list.innerHTML = '<p class="dim">No recent files.</p>';
+    } catch (e) {
+      list.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';
+    }
+  }
+
+  const selectedTrashIds = new Set();
+
+  async function loadTrash() {
+    const list = $('trash-list');
+    list.innerHTML = '<p class="dim">Loading…</p>';
+    selectedTrashIds.clear();
+    try {
+      const res = await api('/trash');
+      const items = res.items || [];
+      $('trash-count').textContent = items.length + ' item(s)';
+      list.innerHTML = '';
+      items.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'list-row';
+
+        const select = document.createElement('input');
+        select.type = 'checkbox';
+        select.addEventListener('change', () => {
+          if (select.checked) selectedTrashIds.add(item.id);
+          else selectedTrashIds.delete(item.id);
+        });
+        row.appendChild(select);
+
+        row.insertAdjacentHTML('beforeend', '<span class="info"><span class="name">' + esc(item.name) + '</span>' +
+          '<div class="sub mono">' + esc(item.originalPath) + ' · deleted ' + timeAgo(Math.floor(new Date(item.deletedAt).getTime() / 1000)) + '</div></span>' +
+          '<span class="dim mono">' + (item.isDir ? '' : fmtBytes(item.size)) + '</span>');
+
+        const actions = document.createElement('span');
+        actions.className = 'actions';
+        const restoreBtn = document.createElement('button');
+        restoreBtn.textContent = 'Restore';
+        restoreBtn.addEventListener('click', async () => {
+          try {
+            await api('/trash/restore', { method: 'POST', body: JSON.stringify({ ids: [item.id] }) });
+            loadTrash();
+          } catch (e) { alert('Restore failed: ' + e.message); }
+        });
+        actions.appendChild(restoreBtn);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.textContent = 'Delete forever';
+        delBtn.addEventListener('click', async () => {
+          if (!confirm('Permanently delete "' + item.name + '"? This cannot be undone.')) return;
+          try {
+            await api('/trash', { method: 'DELETE', body: JSON.stringify({ ids: [item.id] }) });
+            loadTrash();
+          } catch (e) { alert('Delete failed: ' + e.message); }
+        });
+        actions.appendChild(delBtn);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+      if (items.length === 0) list.innerHTML = '<p class="dim">Trash is empty.</p>';
+    } catch (e) {
+      list.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';
+    }
+  }
+
+  $('trash-empty-btn').addEventListener('click', async () => {
+    if (!confirm('Permanently empty the trash? This cannot be undone.')) return;
+    try {
+      await api('/trash', { method: 'DELETE' });
+      loadTrash();
+    } catch (e) {
+      alert('Empty trash failed: ' + e.message);
+    }
+  });
+
+  $('trash-restore-selected').addEventListener('click', async () => {
+    if (selectedTrashIds.size === 0) { alert('Select at least one item to restore.'); return; }
+    try {
+      await api('/trash/restore', { method: 'POST', body: JSON.stringify({ ids: Array.from(selectedTrashIds) }) });
+      loadTrash();
+    } catch (e) {
+      alert('Restore failed: ' + e.message);
+    }
+  });
+
+  async function loadShares() {
+    const list = $('shares-list');
+    list.innerHTML = '<p class="dim">Loading…</p>';
+    try {
+      const shares = await api('/share');
+      list.innerHTML = '';
+      (shares || []).forEach((s) => {
+        const row = document.createElement('div');
+        row.className = 'list-row';
+        const secsLeft = s.expiresAt - Math.floor(Date.now() / 1000);
+        const expiryText = secsLeft <= 0 ? '<span class="error-text">expired</span>'
+          : secsLeft < 3600 ? 'expires in ' + Math.floor(secsLeft / 60) + 'm'
+          : secsLeft < 86400 ? 'expires in ' + Math.floor(secsLeft / 3600) + 'h'
+          : 'expires in ' + Math.floor(secsLeft / 86400) + 'd';
+        row.innerHTML = '<span class="info"><span class="name mono">' + esc(s.path) + '</span>' +
+          '<div class="sub">' + expiryText + '</div></span>';
+        const actions = document.createElement('span');
+        actions.className = 'actions';
+        const revokeBtn = document.createElement('button');
+        revokeBtn.className = 'danger';
+        revokeBtn.textContent = 'Revoke';
+        revokeBtn.addEventListener('click', async () => {
+          try {
+            await api('/share/' + s.tokenHash, { method: 'DELETE' });
+            loadShares();
+          } catch (e) { alert('Revoke failed: ' + e.message); }
+        });
+        actions.appendChild(revokeBtn);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+      if (!shares || shares.length === 0) list.innerHTML = '<p class="dim">No active share links.</p>';
+    } catch (e) {
+      list.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';
+    }
+  }
+
+  // --------- Bulk actions (Browse tab, multi-select toolbar) ---------
+
+  $('bulk-move').addEventListener('click', async () => {
+    const destDir = prompt('Move selected item(s) to folder:', currentPath);
+    if (!destDir) return;
+    try {
+      await api('/fs/move', { method: 'POST', body: JSON.stringify({ sources: Array.from(selectedPaths), destDir }) });
+      openFolder(currentPath);
+    } catch (e) { alert('Move failed: ' + e.message); }
+  });
+
+  $('bulk-copy').addEventListener('click', async () => {
+    const destDir = prompt('Copy selected item(s) to folder:', currentPath);
+    if (!destDir) return;
+    try {
+      await api('/fs/copy', { method: 'POST', body: JSON.stringify({ sources: Array.from(selectedPaths), destDir }) });
+      openFolder(currentPath);
+    } catch (e) { alert('Copy failed: ' + e.message); }
+  });
+
+  $('bulk-compress').addEventListener('click', async () => {
+    const name = prompt('Archive name (e.g. archive.zip):', 'archive.zip');
+    if (!name) return;
+    try {
+      await api('/fs/compress', { method: 'POST', body: JSON.stringify({ sources: Array.from(selectedPaths), dest: joinPath(currentPath, name) }) });
+      openFolder(currentPath);
+    } catch (e) { alert('Compress failed: ' + e.message); }
+  });
+
+  $('bulk-checksum').addEventListener('click', async () => {
+    try {
+      const res = await api('/fs/checksums', { method: 'POST', body: JSON.stringify({ paths: Array.from(selectedPaths), algo: 'sha256' }) });
+      const lines = (res.checksums || []).map((c) => c.path + '\n  ' + (c.hash || 'ERROR: ' + c.error));
+      alert('SHA-256 checksums:\n\n' + lines.join('\n\n'));
+    } catch (e) { alert('Checksum failed: ' + e.message); }
+  });
+
+  $('bulk-chmod').addEventListener('click', async () => {
+    const mode = prompt('Octal mode to apply to selected item(s) (e.g. 755):', '644');
+    if (!mode) return;
+    try {
+      for (const path of selectedPaths) {
+        await api('/fs/chmod', { method: 'POST', body: JSON.stringify({ path, mode }) });
+      }
+      openFolder(currentPath);
+    } catch (e) { alert('Chmod failed: ' + e.message); }
+  });
+
+  $('bulk-delete').addEventListener('click', async () => {
+    if (!confirm('Delete ' + selectedPaths.size + ' item(s)? They will be moved to trash (recoverable).')) return;
+    try {
+      await api('/fs', { method: 'DELETE', body: JSON.stringify({ paths: Array.from(selectedPaths) }) });
+      openFolder(currentPath);
+    } catch (e) { alert('Delete failed: ' + e.message); }
+  });
+
   async function loadFiles() {
     try {
       const drives = await api('/system/drives');
-      const start = (drives && drives[0] && drives[0].path) || '/';
+      // Skip OS-flagged drives (e.g. bare "/") for the default folder — a
+      // jailed or read-restricted device can't list those, so picking one
+      // blindly left Browse permanently stuck on a permission error.
+      const pick = (drives || []).find((d) => !d.isOS) || (drives || [])[0];
+      const start = (pick && pick.path) || '/';
       openFolder(start);
     } catch (e) {
       $('files-list').innerHTML = '<p class="error-text">' + e.message + '</p>';
@@ -1345,6 +1859,13 @@
       updatePhotoBackupWarning(settings.photoBackupRoot || '');
       currentRoots = settings.roots || [];
       renderRoots();
+
+      $('ds-total').textContent = (devices || []).length;
+      $('ds-active').textContent = (devices || []).filter((d) => !d.revoked).length;
+      // "Guest" isn't a stored flag — the backend only records the readOnly+jailRoot
+      // it produced at pairing time, so a device reads as guest-like when both are set.
+      $('ds-guests').textContent = (devices || []).filter((d) => d.readOnly && d.jailRoot).length;
+      $('ds-storage').textContent = fmtBytes(used);
 
       const curDevice = (devices || []).find((d) => d.current);
       isAdmin = !!(curDevice && curDevice.viaLogin);
@@ -1414,8 +1935,13 @@
       let accent = 'accent-green', status = '<span class="status-text status-green dot">Active</span>';
       if (d.revoked) { accent = 'accent-red'; status = '<span class="status-text status-red dot">Revoked</span>'; }
       else if (d.readOnly) { accent = 'accent-amber'; status = '<span class="status-text status-amber dot">Read-only</span>'; }
+      // Role isn't a stored field — derived the same way as the Devices-page
+      // guest stat: viaLogin means it authenticated with an account password
+      // (Admin); readOnly+jailRoot together means a guest pairing code minted
+      // it that way; anything else is a plain paired device (User).
+      const role = d.viaLogin ? 'Admin' : (d.readOnly && d.jailRoot ? 'Guest' : 'User');
       return '<div class="rfe-card ' + accent + '">' +
-        '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span><span class="type-tag">HTTPS</span></div>' +
+        '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span><span class="type-tag">' + role + '</span></div>' +
         '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + ' · ' + timeAgo(d.lastSeen) + '</div>' +
         '<div class="rfe-card-row"><span class="k">Path</span><span class="mono" style="font-size:11px">' + path + '</span></div>' +
         '<div class="rfe-card-row"><span class="k">Status</span>' + status + '</div>' +
@@ -1532,6 +2058,9 @@
   $('logs-refresh').addEventListener('click', loadLogs);
   document.querySelectorAll('.nav a').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });
+  });
+  document.querySelectorAll('.qa-tile').forEach((btn) => {
+    btn.addEventListener('click', () => showPage(btn.dataset.qaPage));
   });
 
   // ---------- Network I/O chart ----------

@@ -37,6 +37,25 @@
     --sans: 'Inter', -apple-system, system-ui, sans-serif;
     --mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
+  /* Theme system: swapped by [data-app-theme] on <body>. Dark (above) is the default. */
+  body[data-app-theme="light"] {
+    --bg:#f3f4f7; --sidebar:#eceef3; --surface:#fff; --surface-2:#f0f1f5;
+    --accent:#e6ebf7; --border:rgba(20,25,40,.09); --ink:#1c2030; --dim:#8891ab;
+    --dim-2:#5b6480; --primary:#2563eb; --green:#16a34a; --blue:#2563eb;
+    --purple:#7c3aed; --amber:#d97706; --red:#dc2626; --destructive:#dc2626;
+  }
+  body[data-app-theme="dracula"] {
+    --bg:#282a36; --sidebar:#21222c; --surface:#282a36; --surface-2:#343746;
+    --accent:#44475a; --border:rgba(248,248,242,.09); --ink:#f8f8f2; --dim:#6272a4;
+    --dim-2:#b3b9d6; --primary:#bd93f9; --green:#50fa7b; --blue:#8be9fd;
+    --purple:#ff79c6; --amber:#f1fa8c; --red:#ff5555; --destructive:#ff5555;
+  }
+  body[data-app-theme="nord"] {
+    --bg:#2e3440; --sidebar:#282c36; --surface:#2e3440; --surface-2:#3b4252;
+    --accent:#434c5e; --border:rgba(216,222,233,.08); --ink:#eceff4; --dim:#4c566a;
+    --dim-2:#9aa5b8; --primary:#88c0d0; --green:#a3be8c; --blue:#81a1c1;
+    --purple:#b48ead; --amber:#ebcb8b; --red:#bf616a; --destructive:#bf616a;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -213,6 +232,11 @@
   .sidebar-footer .who-name { font-size: 12px; color: var(--ink); }
   .sidebar-footer .who-sub { font-size: 10px; color: var(--dim); }
   .sidebar-footer button { width: 100%; margin-top: 10px; justify-content: center; }
+  .theme-switcher { border-top: 1px solid var(--border); padding: 12px 8px 0; margin-top: 8px; }
+  .theme-switcher .label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-bottom: 8px; }
+  .theme-swatches { display: flex; gap: 8px; }
+  .theme-swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; padding: 0; box-shadow: inset 0 0 0 1px var(--border); }
+  .theme-swatch.active { border-color: var(--primary); }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .topbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
@@ -234,6 +258,54 @@
   .file-icon-file { background: var(--surface-2); color: var(--dim); }
   .file-row { cursor: pointer; }
   .file-row:hover .name { color: var(--primary); }
+
+  /* ---------- Panel-head accent icon badge (colored circle behind the panel icon) ---------- */
+  .panel-head .icon-badge, .table-head .icon-badge { width: 26px; height: 26px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .panel-head .icon-badge .icon, .table-head .icon-badge .icon { color: inherit; }
+  .icon-badge.blue { background: rgba(59,130,246,.12); color: var(--primary); }
+  .icon-badge.green { background: rgba(52,211,153,.12); color: var(--green); }
+  .icon-badge.amber { background: rgba(251,191,36,.12); color: var(--amber); }
+  .icon-badge.purple { background: rgba(167,139,250,.12); color: var(--purple); }
+
+  /* ---------- Card grid (replaces plain .dtable rows on Devices/Transfers/Users/Overview) ---------- */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .rfe-card { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
+    border-radius: var(--radius-lg); padding: 14px 16px; transition: border-color .15s, transform .15s; }
+  .rfe-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .rfe-card.accent-green { border-top-color: var(--green); }
+  .rfe-card.accent-amber { border-top-color: var(--amber); }
+  .rfe-card.accent-red { border-top-color: var(--red); }
+  .rfe-card.accent-blue { border-top-color: var(--primary); }
+  .rfe-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .rfe-card-name { font-weight: 500; font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+  .rfe-card-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .rfe-card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border); }
+  .rfe-card-row:first-of-type { margin-top: 8px; }
+  .rfe-card-row .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  .rfe-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border); }
+  .empty-cell-card { text-align: center; color: var(--dim); padding: 24px; grid-column: 1 / -1; }
+
+  /* ---------- Logs level filter ---------- */
+  .log-filter { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .log-filter .dim { flex-shrink: 0; }
+  .log-filter button.active { background: var(--accent); color: var(--ink); }
+  .log-line.hidden { display: none; }
+
+  /* ---------- Generated pairing-code display (big letters, animated in) ---------- */
+  .gen-otp { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
+  .gen-otp span { font-family: var(--mono); font-size: 26px; font-weight: 700; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius-md); width: 38px; height: 46px;
+    display: flex; align-items: center; justify-content: center;
+    animation: gen-otp-in .3s cubic-bezier(.2,.8,.3,1) backwards; }
+  .gen-otp span:nth-child(1) { animation-delay: .02s; } .gen-otp span:nth-child(2) { animation-delay: .06s; }
+  .gen-otp span:nth-child(3) { animation-delay: .10s; } .gen-otp span:nth-child(4) { animation-delay: .14s; }
+  .gen-otp span:nth-child(5) { animation-delay: .18s; } .gen-otp span:nth-child(6) { animation-delay: .22s; }
+  .gen-otp span:nth-child(7) { animation-delay: .26s; } .gen-otp span:nth-child(8) { animation-delay: .30s; }
+  @keyframes gen-otp-in { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
+  .gen-meta { font-size: 11px; color: var(--dim); }
 </style>
 </head>
 <body>
@@ -333,6 +405,15 @@
         <a href="#" data-page="logs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span>Logs</span></a>
         <a href="#" data-page="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></a>
       </div>
+      <div class="theme-switcher">
+        <div class="label">Theme</div>
+        <div class="theme-swatches">
+          <button id="theme-dark" class="theme-swatch active" title="Dark" style="background:linear-gradient(135deg,#0e1017 50%,#3b82f6 50%)"></button>
+          <button id="theme-light" class="theme-swatch" title="Light" style="background:linear-gradient(135deg,#ffffff 50%,#2563eb 50%)"></button>
+          <button id="theme-dracula" class="theme-swatch" title="Dracula" style="background:linear-gradient(135deg,#282a36 50%,#bd93f9 50%)"></button>
+          <button id="theme-nord" class="theme-swatch" title="Nord" style="background:linear-gradient(135deg,#2e3440 50%,#88c0d0 50%)"></button>
+        </div>
+      </div>
       <div class="sidebar-footer">
         <div class="who-avatar" id="who-avatar"></div>
         <div style="flex:1; min-width:0">
@@ -403,21 +484,14 @@
             <p class="dim" id="net-empty" style="margin:8px 0 0">Live since this page opened — no history is kept between visits.</p>
           </div>
 
-          <div class="table-panel">
-            <div class="table-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <h2 class="panel-title">Connected devices</h2>
               <span class="spacer"></span>
               <span class="meta" id="conn-count"></span>
             </div>
-            <div class="table-scroll">
-              <table class="dtable">
-                <thead>
-                  <tr><th>Device</th><th>Address</th><th>Access</th><th>Path</th><th>Last seen</th><th>Status</th></tr>
-                </thead>
-                <tbody id="conn-tbody"></tbody>
-              </table>
-            </div>
+            <div class="card-grid" id="conn-tbody"></div>
           </div>
         </div>
 
@@ -482,19 +556,17 @@
         </div>
 
         <div id="page-devices" class="page hidden">
-          <div class="panel">
+          <div class="panel" style="border-top:2px solid var(--primary)">
             <div class="panel-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <h2 class="panel-title">Paired devices</h2>
-              <span class="spacer"></span>
-              <span class="meta mono" id="devices-count"></span>
+              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <h2 class="panel-title">Pair a new device</h2>
             </div>
             <div class="field-row hidden" id="pairing-generate-row">
               <div>
                 <p class="field-label">Pair a new device</p>
                 <p class="field-desc">Mints a one-time code, same as `rfe-agent pair` on the PC. Admin sessions (logged in with the account password) only.</p>
               </div>
-              <button id="pairing-generate-btn">Generate code</button>
+              <button class="primary" id="pairing-generate-btn">Generate code</button>
             </div>
             <div class="field-row hidden" id="pairing-guest-row">
               <div>
@@ -506,22 +578,23 @@
             <div class="field-row hidden" id="pairing-guest-jail-row">
               <input type="text" id="pairing-guest-jail" class="mono control" style="width:100%" placeholder="/home/you/SharedWithGuests">
             </div>
-            <p class="dim mono" id="pairing-generate-result" style="margin:0 0 12px"></p>
-            <div class="table-scroll">
-              <table class="dtable">
-                <thead>
-                  <tr><th>Device</th><th>Address</th><th>Jail path</th><th>Read-only</th><th>Status</th><th>Actions</th></tr>
-                </thead>
-                <tbody id="devices-list"></tbody>
-              </table>
+            <div id="pairing-generate-result" style="margin:0 0 4px"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+              <h2 class="panel-title">Paired devices</h2>
+              <span class="spacer"></span>
+              <span class="meta mono" id="devices-count"></span>
             </div>
+            <div class="card-grid" id="devices-list"></div>
           </div>
         </div>
 
         <div id="page-files" class="page hidden">
           <div class="panel">
             <div class="panel-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
               <h2 class="panel-title">Files</h2>
             </div>
             <div class="row" style="gap:8px">
@@ -543,54 +616,40 @@
 
         <div id="page-transfers" class="page hidden">
           <div class="stat-grid">
-            <div class="stat">
+            <div class="stat" style="border-top:2px solid var(--primary)">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg><span class="stat-label">Open</span></div>
               <div class="stat-value"><span id="tr-active">0</span></div>
             </div>
-            <div class="stat">
+            <div class="stat" style="border-top:2px solid var(--green)">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg><span class="stat-label">Completed</span></div>
               <div class="stat-value"><span id="tr-done">0</span></div>
             </div>
-            <div class="stat">
+            <div class="stat" style="border-top:2px solid var(--red)">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg><span class="stat-label">Failed</span></div>
               <div class="stat-value"><span id="tr-failed">0</span></div>
             </div>
           </div>
-          <div class="table-panel">
-            <div class="table-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></svg>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></svg></div>
               <h2 class="panel-title">Transfers</h2>
               <span class="spacer"></span>
               <span class="meta" id="transfers-count"></span>
             </div>
-            <div class="table-scroll">
-              <table class="dtable">
-                <thead>
-                  <tr><th>File</th><th>Size</th><th>Progress</th><th>Status</th></tr>
-                </thead>
-                <tbody id="transfers-tbody"></tbody>
-              </table>
-            </div>
+            <div class="card-grid" id="transfers-tbody"></div>
           </div>
           <p class="dim" id="transfers-note" style="margin:12px 0 0"></p>
         </div>
 
         <div id="page-users" class="page hidden">
-          <div class="table-panel">
-            <div class="table-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <h2 class="panel-title">Users</h2>
               <span class="spacer"></span>
               <span class="meta" id="users-count"></span>
             </div>
-            <div class="table-scroll">
-              <table class="dtable">
-                <thead>
-                  <tr><th>User</th><th>Created</th></tr>
-                </thead>
-                <tbody id="users-tbody"></tbody>
-              </table>
-            </div>
+            <div class="card-grid" id="users-tbody"></div>
           </div>
           <p class="dim" style="margin:12px 0 0">Password-login accounts are managed from the host: <span class="mono">rfe-agent adduser &lt;name&gt;</span>. Devices paired by QR/code appear under Paired devices.</p>
         </div>
@@ -602,6 +661,13 @@
               <span class="term-title mono">rfe-agent.service — journald</span>
               <span class="spacer"></span>
               <button id="logs-refresh">Refresh</button>
+            </div>
+            <div class="log-filter">
+              <span class="dim">Level:</span>
+              <button id="log-filter-all" class="active" data-lvl="all">All</button>
+              <button id="log-filter-info" data-lvl="info">Info</button>
+              <button id="log-filter-warn" data-lvl="warn">Warn</button>
+              <button id="log-filter-error" data-lvl="error">Error</button>
             </div>
             <div class="term-body" id="logs-body"></div>
           </div>
@@ -619,10 +685,25 @@
   const NAME_KEY = 'rfe_agent_name';
   const WHO_KEY = 'rfe_who';
   const BROWSER_ID_KEY = 'rfe_browser_id';
+  const THEME_KEY = 'rfe_app_theme';
 
   const $ = (id) => document.getElementById(id);
   const pairView = $('pair-view');
   const dashView = $('dashboard-view');
+
+  function applyTheme(name) {
+    if (name === 'dark') { delete document.body.dataset.appTheme; }
+    else { document.body.dataset.appTheme = name; }
+    document.querySelectorAll('.theme-swatch').forEach((b) => b.classList.toggle('active', b.id === 'theme-' + name));
+  }
+  applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
+  document.querySelectorAll('.theme-swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.id.replace('theme-', '');
+      applyTheme(name);
+      localStorage.setItem(THEME_KEY, name);
+    });
+  });
 
   function token() { return localStorage.getItem(TOKEN_KEY); }
 
@@ -1007,17 +1088,19 @@
     const guest = $('pairing-guest-toggle').checked;
     const jailRoot = $('pairing-guest-jail').value.trim();
     if (guest && !jailRoot) {
-      resultEl.textContent = 'Guest devices need a folder.';
+      resultEl.innerHTML = '<p class="dim mono" style="margin:0">Guest devices need a folder.</p>';
       return;
     }
-    resultEl.textContent = 'Generating…';
+    resultEl.innerHTML = '<p class="dim mono" style="margin:0">Generating…</p>';
     try {
       const body = guest ? { guest: true, jailRoot } : {};
       const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify(body) });
       const mins = Math.round(res.expiresInSeconds / 60);
-      resultEl.textContent = 'Code: ' + res.pairingCode + ' (expires in ' + mins + ' min)' + (guest ? ' — guest, read-only, jailed' : '');
+      const letters = String(res.pairingCode).split('').map((c) => '<span>' + esc(c) + '</span>').join('');
+      resultEl.innerHTML = '<div class="gen-otp">' + letters + '</div>' +
+        '<p class="gen-meta">expires in ' + mins + ' min' + (guest ? ' — guest, read-only, jailed' : '') + '</p>';
     } catch (err) {
-      resultEl.textContent = 'Failed: ' + err.message;
+      resultEl.innerHTML = '<p class="error-text" style="margin:0">Failed: ' + esc(err.message) + '</p>';
     }
   });
 
@@ -1089,7 +1172,9 @@
 
         const icon = document.createElement('div');
         icon.className = 'file-icon ' + (entry.isDir ? 'file-icon-dir' : 'file-icon-file');
-        icon.textContent = entry.isDir ? '📁' : '📄';
+        icon.innerHTML = entry.isDir
+          ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>'
+          : '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>';
 
         const info = document.createElement('span');
         info.className = 'info';
@@ -1288,18 +1373,19 @@
         const readOnlyCell = isAdmin
           ? '<label class="switch control"><input type="checkbox" class="readonly-input" data-id="' + d.id + '" ' + (d.readOnly ? 'checked' : '') + '><span class="track"></span></label>'
           : (d.readOnly ? 'Yes' : 'No');
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-          '<td class="ink">' + label + '</td>' +
-          '<td class="mono">' + esc(d.lastAddress || '—') + '</td>' +
-          '<td>' + jailCell + '</td>' +
-          '<td>' + readOnlyCell + '</td>' +
-          '<td>' + status + '</td>' +
-          '<td>' + actions + '</td>';
-        list.appendChild(tr);
+        const accent = d.revoked ? 'accent-red' : (d.readOnly ? 'accent-amber' : 'accent-green');
+        const card = document.createElement('div');
+        card.className = 'rfe-card ' + accent;
+        card.innerHTML =
+          '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span>' + status + '</div>' +
+          '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + '</div>' +
+          '<div class="rfe-card-row"><span class="k">Jail path</span>' + jailCell + '</div>' +
+          '<div class="rfe-card-row"><span class="k">Read-only</span>' + readOnlyCell + '</div>' +
+          (actions ? '<div class="rfe-card-foot">' + actions + '</div>' : '');
+        list.appendChild(card);
       });
       if (!devices || devices.length === 0) {
-        list.innerHTML = '<tr><td class="empty-cell" colspan="6">No devices paired yet.</td></tr>';
+        list.innerHTML = '<p class="empty-cell-card">No devices paired yet.</p>';
       }
 
       renderConnTable(devices || []);
@@ -1316,26 +1402,24 @@
   // telemetry, so the Figma's Protocol/↓/↑ columns map to the real fields
   // RFE actually has: transport (always HTTPS), jail path, last-seen, status.
   function renderConnTable(devices) {
-    const tbody = $('conn-tbody');
+    const grid = $('conn-tbody');
     $('conn-count').textContent = devices.length + (devices.length === 1 ? ' session' : ' sessions');
     if (devices.length === 0) {
-      tbody.innerHTML = '<tr><td class="empty-cell" colspan="6">No devices paired yet.</td></tr>';
+      grid.innerHTML = '<p class="empty-cell-card">No devices paired yet.</p>';
       return;
     }
-    tbody.innerHTML = devices.map((d) => {
+    grid.innerHTML = devices.map((d) => {
       const label = esc(d.label || 'unnamed') + (d.current ? ' <span style="color:var(--dim)">· this browser</span>' : '');
       const path = d.jailRoot ? esc(d.jailRoot) : '<span style="color:var(--dim)">Full access</span>';
-      let status = '<span class="status-text status-green dot">Active</span>';
-      if (d.revoked) status = '<span class="status-text status-red dot">Revoked</span>';
-      else if (d.readOnly) status = '<span class="status-text status-amber dot">Read-only</span>';
-      return '<tr>' +
-        '<td class="ink">' + label + '</td>' +
-        '<td>' + esc(d.lastAddress || '—') + '</td>' +
-        '<td><span class="type-tag">HTTPS</span></td>' +
-        '<td>' + path + '</td>' +
-        '<td>' + timeAgo(d.lastSeen) + '</td>' +
-        '<td>' + status + '</td>' +
-        '</tr>';
+      let accent = 'accent-green', status = '<span class="status-text status-green dot">Active</span>';
+      if (d.revoked) { accent = 'accent-red'; status = '<span class="status-text status-red dot">Revoked</span>'; }
+      else if (d.readOnly) { accent = 'accent-amber'; status = '<span class="status-text status-amber dot">Read-only</span>'; }
+      return '<div class="rfe-card ' + accent + '">' +
+        '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span><span class="type-tag">HTTPS</span></div>' +
+        '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + ' · ' + timeAgo(d.lastSeen) + '</div>' +
+        '<div class="rfe-card-row"><span class="k">Path</span><span class="mono" style="font-size:11px">' + path + '</span></div>' +
+        '<div class="rfe-card-row"><span class="k">Status</span>' + status + '</div>' +
+        '</div>';
     }).join('');
   }
 
@@ -1366,23 +1450,22 @@
         ? 'Showing the ' + rows.length + ' most recent of ' + total + ' sessions. "Open" sessions were started but never finalized by the client.'
         : '';
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td class="empty-cell" colspan="4">No transfers yet.</td></tr>';
+        tbody.innerHTML = '<p class="empty-cell-card">No transfers yet.</p>';
         return;
       }
       tbody.innerHTML = rows.map((t) => {
         const pct = Math.round(t.progress || 0);
-        let cls = '', label = '<span class="status-text status-blue dot">Open</span>';
-        if (t.status === 'completed') { cls = 'done'; label = '<span class="status-text status-green dot">Completed</span>'; }
-        else if (t.status === 'failed') { cls = 'fail'; label = '<span class="status-text status-red dot">Failed</span>'; }
-        return '<tr>' +
-          '<td class="ink fname" title="' + esc(t.path || '') + '">' + esc(t.name || '—') + '</td>' +
-          '<td class="mono">' + fmtBytes(t.totalSize || 0) + '</td>' +
-          '<td><span class="prog"><span class="prog-track"><span class="prog-fill ' + cls + '" style="width:' + pct + '%"></span></span><span class="prog-pct mono">' + pct + '%</span></span></td>' +
-          '<td>' + label + '</td>' +
-          '</tr>';
+        let cls = '', accent = 'accent-blue', label = '<span class="status-text status-blue dot">Open</span>';
+        if (t.status === 'completed') { cls = 'done'; accent = 'accent-green'; label = '<span class="status-text status-green dot">Completed</span>'; }
+        else if (t.status === 'failed') { cls = 'fail'; accent = 'accent-red'; label = '<span class="status-text status-red dot">Failed</span>'; }
+        return '<div class="rfe-card ' + accent + '">' +
+          '<div class="rfe-card-top"><span class="rfe-card-name fname" title="' + esc(t.path || '') + '">' + esc(t.name || '—') + '</span>' + label + '</div>' +
+          '<div class="rfe-card-sub mono">' + fmtBytes(t.totalSize || 0) + '</div>' +
+          '<div class="rfe-card-row"><span class="prog" style="flex:1"><span class="prog-track" style="flex:1;width:auto"><span class="prog-fill ' + cls + '" style="width:' + pct + '%"></span></span><span class="prog-pct mono">' + pct + '%</span></span></div>' +
+          '</div>';
       }).join('');
     } catch (e) {
-      tbody.innerHTML = '<tr><td class="empty-cell" colspan="4">' + esc(e.message) + '</td></tr>';
+      tbody.innerHTML = '<p class="empty-cell-card">' + esc(e.message) + '</p>';
     }
   }
 
@@ -1392,16 +1475,41 @@
       const rows = await api('/users');
       $('users-count').textContent = (rows || []).length + (rows && rows.length === 1 ? ' account' : ' accounts');
       if (!rows || rows.length === 0) {
-        tbody.innerHTML = '<tr><td class="empty-cell" colspan="2">No password accounts. Devices pair by code — see Paired devices.</td></tr>';
+        tbody.innerHTML = '<p class="empty-cell-card">No password accounts. Devices pair by code — see Paired devices.</p>';
         return;
       }
       tbody.innerHTML = rows.map((u) =>
-        '<tr><td class="ink mono">' + esc(u.username) + '</td><td>' + timeAgo(u.created) + '</td></tr>'
+        '<div class="rfe-card accent-blue"><div class="rfe-card-top"><span class="rfe-card-name mono">' + esc(u.username) + '</span></div>' +
+        '<div class="rfe-card-sub">Created ' + timeAgo(u.created) + '</div></div>'
       ).join('');
     } catch (e) {
-      tbody.innerHTML = '<tr><td class="empty-cell" colspan="2">' + esc(e.message) + '</td></tr>';
+      tbody.innerHTML = '<p class="empty-cell-card">' + esc(e.message) + '</p>';
     }
   }
+
+  // journald gives us free-text lines, not a structured level field — this
+  // is a best-effort client-side classification from common log wording,
+  // not an authoritative severity (the agent doesn't emit one).
+  function guessLogLevel(message) {
+    const m = message.toLowerCase();
+    if (/\berror\b|\bfatal\b|panic:/.test(m)) return 'error';
+    if (/\bwarn(ing)?\b/.test(m)) return 'warn';
+    return 'info';
+  }
+  let activeLogLevel = 'all';
+  function applyLogFilter() {
+    document.querySelectorAll('#logs-body .log-line[data-lvl]').forEach((el) => {
+      el.classList.toggle('hidden', activeLogLevel !== 'all' && el.dataset.lvl !== activeLogLevel);
+    });
+  }
+  document.querySelectorAll('.log-filter button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.log-filter button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeLogLevel = btn.dataset.lvl;
+      applyLogFilter();
+    });
+  });
 
   async function loadLogs() {
     const body = $('logs-body');
@@ -1411,9 +1519,11 @@
         body.innerHTML = '<p class="dim">No journal output (agent not running under systemd).</p>';
         return;
       }
-      body.innerHTML = rows.map((l) =>
-        '<div class="log-line"><span class="log-ts">' + esc(l.ts) + '</span><span class="log-msg">' + esc(l.message) + '</span></div>'
-      ).join('') + '<div class="log-line"><span class="log-cursor"></span></div>';
+      body.innerHTML = rows.map((l) => {
+        const lvl = guessLogLevel(l.message || '');
+        return '<div class="log-line" data-lvl="' + lvl + '"><span class="log-ts">' + esc(l.ts) + '</span><span class="log-msg">' + esc(l.message) + '</span></div>';
+      }).join('') + '<div class="log-line"><span class="log-cursor"></span></div>';
+      applyLogFilter();
       body.scrollTop = body.scrollHeight;
     } catch (e) {
       body.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';

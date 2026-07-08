@@ -302,6 +302,10 @@
     border-radius: var(--radius-lg); text-align: center; }
   .qa-tile span { font-size: 12.5px; font-weight: 600; color: var(--ink); }
   .qa-tile:hover { border-color: var(--primary); background: var(--accent); transform: translateY(-1px); }
+  .qa-tile.qa-primary { background: var(--primary); border-color: var(--primary); }
+  .qa-tile.qa-primary span { color: #fff; }
+  .qa-tile.qa-primary .icon-badge { background: rgba(255,255,255,.18); color: #fff; }
+  .qa-tile.qa-primary:hover { background: var(--primary); filter: brightness(1.12); border-color: var(--primary); }
 
   /* ---------- Devices mini-stat row (Total / Active / Guests / Storage) ---------- */
   .mini-stat-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -508,7 +512,7 @@
           <div class="panel">
             <div class="panel-head"><h2 class="panel-title">Quick actions</h2></div>
             <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-              <button class="qa-tile" data-qa-page="devices">
+              <button class="qa-tile qa-primary" data-qa-page="devices">
                 <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
                 <span>Pair device</span>
               </button>
@@ -663,6 +667,17 @@
             </div>
             <div class="field-row hidden" id="pairing-guest-jail-row">
               <input type="text" id="pairing-guest-jail" class="mono control" style="width:100%" placeholder="/home/you/SharedWithGuests">
+            </div>
+            <div class="field-row hidden" id="pairing-ttl-row">
+              <div>
+                <p class="field-label">Code expires in</p>
+                <p class="field-desc">How long the one-time code stays valid before it must be regenerated.</p>
+              </div>
+              <div class="tab-bar control" id="pairing-ttl" style="border:0;padding:0;margin:0">
+                <button type="button" data-ttl="300">5 min</button>
+                <button type="button" data-ttl="900" class="active">15 min</button>
+                <button type="button" data-ttl="3600">1 hour</button>
+              </div>
             </div>
             <div id="pairing-generate-result" style="margin:0 0 4px"></div>
           </div>
@@ -1233,6 +1248,12 @@
     $('pairing-guest-jail-row').classList.toggle('hidden', !e.target.checked);
   });
 
+  $('pairing-ttl').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-ttl]');
+    if (!btn) return;
+    $('pairing-ttl').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+  });
+
   $('pairing-generate-btn').addEventListener('click', async () => {
     const resultEl = $('pairing-generate-result');
     const guest = $('pairing-guest-toggle').checked;
@@ -1243,7 +1264,8 @@
     }
     resultEl.innerHTML = '<p class="dim mono" style="margin:0">Generating…</p>';
     try {
-      const body = guest ? { guest: true, jailRoot } : {};
+      const ttlSeconds = Number(($('pairing-ttl').querySelector('button.active') || {}).dataset?.ttl) || 900;
+      const body = guest ? { guest: true, jailRoot, ttlSeconds } : { ttlSeconds };
       const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify(body) });
       const mins = Math.round(res.expiresInSeconds / 60);
       const letters = String(res.pairingCode).split('').map((c) => '<span>' + esc(c) + '</span>').join('');
@@ -1904,6 +1926,7 @@
       isAdmin = !!(curDevice && curDevice.viaLogin);
       $('pairing-generate-row').classList.toggle('hidden', !isAdmin);
       $('pairing-guest-row').classList.toggle('hidden', !isAdmin);
+      $('pairing-ttl-row').classList.toggle('hidden', !isAdmin);
 
       const list = $('devices-list');
       list.innerHTML = '';

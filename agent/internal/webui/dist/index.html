@@ -167,6 +167,13 @@
   .log-line .log-ts { color: var(--dim); flex-shrink: 0; }
   .log-line .log-msg { color: rgba(221,225,237,.8); word-break: break-word; }
   .log-cursor { display: inline-block; width: 7px; height: 14px; background: var(--green); vertical-align: middle; animation: pulse-dot 1.1s steps(2) infinite; }
+  .log-line { padding-left: 8px; border-left: 2px solid transparent; }
+  .log-line[data-lvl="warn"] { border-left-color: var(--amber); background: rgba(251,191,36,.04); }
+  .log-line[data-lvl="error"] { border-left-color: var(--red); background: rgba(248,113,113,.05); }
+  .log-lvl { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: var(--radius-sm); flex-shrink: 0;
+    text-transform: uppercase; background: var(--surface-2); color: var(--dim); align-self: center; }
+  .log-lvl.warn { background: rgba(251,191,36,.15); color: var(--amber); }
+  .log-lvl.error { background: rgba(248,113,113,.15); color: var(--red); }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
@@ -800,6 +807,7 @@
               <h2 class="panel-title">Users</h2>
               <span class="spacer"></span>
               <span class="meta" id="users-count"></span>
+              <button class="primary" id="add-user-btn" style="margin-left:12px">+ Add user <span class="mono" style="opacity:.7;font-weight:400;margin-left:4px">rfe-agent adduser</span></button>
             </div>
             <div class="card-grid" id="users-tbody"></div>
           </div>
@@ -2132,7 +2140,7 @@
       }
       body.innerHTML = rows.map((l) => {
         const lvl = guessLogLevel(l.message || '');
-        return '<div class="log-line" data-lvl="' + lvl + '"><span class="log-ts">' + esc(l.ts) + '</span><span class="log-msg">' + esc(l.message) + '</span></div>';
+        return '<div class="log-line" data-lvl="' + lvl + '"><span class="log-lvl ' + lvl + '">' + lvl + '</span><span class="log-ts">' + esc(l.ts) + '</span><span class="log-msg">' + esc(l.message) + '</span></div>';
       }).join('') + '<div class="log-line"><span class="log-cursor"></span></div>';
       applyLogFilter();
       body.scrollTop = body.scrollHeight;
@@ -2141,6 +2149,7 @@
     }
   }
   $('logs-refresh').addEventListener('click', loadLogs);
+  $('add-user-btn').addEventListener('click', () => alert('Add a login account from the host machine:\n\n  rfe-agent adduser <name>\n\nWeb sessions can\'t create accounts — this keeps password setup off the network.'));
   document.querySelectorAll('.nav a').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });
   });

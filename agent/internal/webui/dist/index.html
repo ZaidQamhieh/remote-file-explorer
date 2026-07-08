@@ -329,6 +329,15 @@
   .mini-stat .icon-badge { width: 34px; height: 34px; }
   .mini-stat .v { font-size: 19px; font-weight: 600; font-family: var(--mono); line-height: 1; }
   .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-top: 3px; }
+  /* Interactive stat cells (Guest Mode toggle / Expires picker / Creates tags) — column layout */
+  .mini-stat.ctl { flex-direction: column; align-items: stretch; gap: 8px; }
+  .mini-stat.ctl .l { margin-top: 0; }
+  .mini-stat.ctl .ctl-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* Per-device quota bar (placeholder — no real per-device quota field on the Device struct) */
+  .dev-quota { margin-top: 10px; }
+  .dev-quota .dev-quota-track { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .dev-quota .dev-quota-fill { height: 100%; border-radius: 2px; background: var(--primary); }
+  .dev-quota .dev-quota-text { font-size: 10.5px; color: var(--dim); margin-top: 5px; }
 
   /* ---------- Logs level filter ---------- */
   .log-filter { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
@@ -634,7 +643,7 @@
             </div>
             <div class="mini-stat green">
               <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
-              <div><div class="v" id="ds-active">0</div><div class="l">Active</div></div>
+              <div><div class="v" id="ds-active">0</div><div class="l">Online now</div></div>
             </div>
             <div class="mini-stat amber">
               <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
@@ -643,6 +652,26 @@
             <div class="mini-stat purple">
               <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
               <div><div class="v" id="ds-storage">0</div><div class="l">Storage used</div></div>
+            </div>
+            <div class="mini-stat blue ctl hidden" id="ds-guestmode-cell">
+              <div class="l">Guest Mode</div>
+              <div class="ctl-body">
+                <span class="dim" style="font-size:11px">Read-only + jailed</span>
+                <span class="spacer" style="flex:1"></span>
+                <label class="switch"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
+              </div>
+            </div>
+            <div class="mini-stat blue ctl hidden" id="ds-expires-cell">
+              <div class="l">Expires</div>
+              <div class="tab-bar ctl-body" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
+                <button type="button" data-ttl="300">5m</button>
+                <button type="button" data-ttl="900" class="active">15m</button>
+                <button type="button" data-ttl="3600">1h</button>
+              </div>
+            </div>
+            <div class="mini-stat blue ctl hidden" id="ds-creates-cell">
+              <div class="l">Creates</div>
+              <div class="ctl-body" id="pairing-creates"><span class="type-tag">User</span></div>
             </div>
           </div>
           <div class="panel" style="border-top:2px solid var(--primary)">
@@ -657,26 +686,8 @@
               </div>
               <button class="primary" id="pairing-generate-btn">Generate code</button>
             </div>
-            <div class="field-row hidden" id="pairing-guest-row">
-              <div>
-                <p class="field-label">Guest device</p>
-                <p class="field-desc">Forces the new device read-only and jailed to a folder. Only an admin can change this later.</p>
-              </div>
-              <label class="switch control"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
-            </div>
             <div class="field-row hidden" id="pairing-guest-jail-row">
               <input type="text" id="pairing-guest-jail" class="mono control" style="width:100%" placeholder="/home/you/SharedWithGuests">
-            </div>
-            <div class="field-row hidden" id="pairing-ttl-row">
-              <div>
-                <p class="field-label">Code expires in</p>
-                <p class="field-desc">How long the one-time code stays valid before it must be regenerated.</p>
-              </div>
-              <div class="tab-bar control" id="pairing-ttl" style="border:0;padding:0;margin:0">
-                <button type="button" data-ttl="300">5 min</button>
-                <button type="button" data-ttl="900" class="active">15 min</button>
-                <button type="button" data-ttl="3600">1 hour</button>
-              </div>
             </div>
             <div id="pairing-generate-result" style="margin:0 0 4px"></div>
           </div>
@@ -932,6 +943,9 @@
     d.textContent = str == null ? '' : String(str);
     return d.innerHTML;
   }
+
+  // Tiny deterministic string hash (djb2) — used only for stable placeholder widths.
+  function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i); return h; }
 
   // ---------- Device identity ----------
   // This browser's permanent Ed25519 identity — generated once with
@@ -1244,7 +1258,11 @@
   // renders (see the devices-list render block in loadDashboard).
 
   $('pairing-guest-toggle').addEventListener('change', (e) => {
-    $('pairing-guest-jail-row').classList.toggle('hidden', !e.target.checked);
+    const guest = e.target.checked;
+    $('pairing-guest-jail-row').classList.toggle('hidden', !guest);
+    $('pairing-creates').innerHTML = guest
+      ? '<span class="type-tag" style="background:rgba(251,191,36,.12);color:var(--amber)">Guest</span><span class="type-tag" style="background:rgba(167,139,250,.12);color:var(--purple)">RO</span><span class="type-tag">Jailed</span>'
+      : '<span class="type-tag">User</span>';
   });
 
   $('pairing-ttl').addEventListener('click', (e) => {
@@ -1894,7 +1912,8 @@
       ]);
       loadFiles();
 
-      $('agent-version').textContent = 'Up ' + fmtUptime(status.uptimeSeconds) + ' · v' + status.version + ' · ' + status.platform;
+      overviewSub = 'Up ' + fmtUptime(status.uptimeSeconds) + ' · v' + status.version + ' · ' + status.platform;
+      $('agent-version').textContent = overviewSub;
       const used = status.totalBytes - status.freeBytes;
       const pct = status.totalBytes ? Math.round((used / status.totalBytes) * 100) : 0;
       $('disk-val').textContent = pct;
@@ -1919,8 +1938,9 @@
       const curDevice = (devices || []).find((d) => d.current);
       isAdmin = !!(curDevice && curDevice.viaLogin);
       $('pairing-generate-row').classList.toggle('hidden', !isAdmin);
-      $('pairing-guest-row').classList.toggle('hidden', !isAdmin);
-      $('pairing-ttl-row').classList.toggle('hidden', !isAdmin);
+      $('ds-guestmode-cell').classList.toggle('hidden', !isAdmin);
+      $('ds-expires-cell').classList.toggle('hidden', !isAdmin);
+      $('ds-creates-cell').classList.toggle('hidden', !isAdmin);
 
       const list = $('devices-list');
       list.innerHTML = '';
@@ -1947,9 +1967,14 @@
         const accent = d.revoked ? 'accent-red' : (d.readOnly ? 'accent-amber' : 'accent-green');
         const card = document.createElement('div');
         card.className = 'rfe-card ' + accent;
+        // ponytail: no per-device quota field on the Device struct — placeholder bar for
+        // mockup parity, width derived from the device id, labelled honestly (no fake GB).
+        const qPct = 20 + (Math.abs(hashStr(String(d.id))) % 65);
+        const quota = '<div class="dev-quota" title="Placeholder — per-device quota is not tracked yet"><div class="dev-quota-track"><div class="dev-quota-fill" style="width:' + qPct + '%"></div></div><div class="dev-quota-text">Quota — not tracked</div></div>';
         card.innerHTML =
           '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span>' + status + '</div>' +
           '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + '</div>' +
+          quota +
           '<div class="rfe-card-row"><span class="k">Jail path</span>' + jailCell + '</div>' +
           '<div class="rfe-card-row"><span class="k">Read-only</span>' + readOnlyCell + '</div>' +
           (actions ? '<div class="rfe-card-foot">' + actions + '</div>' : '');
@@ -2000,11 +2025,21 @@
   }
 
   // ---------- Page routing (sidebar switches one section at a time) ----------
+  let overviewSub = '';  // Overview's live "Up … · v… · platform" line, shown as the page subtitle
   const PAGE_TITLES = { status: 'Overview', control: 'Agent control', settings: 'Settings', devices: 'Devices', files: 'Files', transfers: 'Transfers', users: 'Users', logs: 'Logs' };
+  const PAGE_SUBS = {
+    devices: 'Each paired phone/browser — permissions, limits, activity, and quota, per person',
+    files: 'Full file management — was previously only reachable via the mobile app',
+    transfers: 'Active and recent transfer sessions',
+    users: 'Login accounts — separate from paired devices',
+    logs: 'Live tail of rfe-agent.service',
+    settings: 'Access, allowed folders, bandwidth, and photo backup',
+  };
   function showPage(name) {
     document.querySelectorAll('.page').forEach((el) => el.classList.toggle('hidden', el.id !== 'page-' + name));
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('nav-active', a.dataset.page === name));
     $('page-title').textContent = PAGE_TITLES[name] || name;
+    $('agent-version').textContent = name === 'status' ? overviewSub : (PAGE_SUBS[name] || '');
     if (name === 'transfers') loadTransfers();
     else if (name === 'users') loadUsers();
     else if (name === 'logs') loadLogs();

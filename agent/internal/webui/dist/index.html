@@ -288,6 +288,16 @@
     padding-top: 10px; border-top: 1px solid var(--border); }
   .empty-cell-card { text-align: center; color: var(--dim); padding: 24px; grid-column: 1 / -1; }
 
+  /* ---------- Device avatar + online-pulse dot (Overview + Devices cards) ---------- */
+  .dev-avatar { width: 34px; height: 34px; border-radius: var(--radius-md); display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; }
+  .dev-avatar.blue { background: rgba(59,130,246,.12); color: var(--primary); }
+  .dev-avatar.purple { background: rgba(167,139,250,.12); color: var(--purple); }
+  .dev-avatar.amber { background: rgba(251,191,36,.12); color: var(--amber); }
+  .dev-pulse { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--dim-2, var(--dim)); }
+  .dev-pulse.on { background: var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+  .dev-pulse.off { background: var(--red); }
+
   .qa-tile { flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px 12px;
     border-radius: var(--radius-lg); text-align: center; }
   .qa-tile span { font-size: 12.5px; font-weight: 600; color: var(--ink); }
@@ -878,6 +888,29 @@
     if (s < 3600) return Math.floor(s / 60) + 'm ago';
     if (s < 86400) return Math.floor(s / 3600) + 'h ago';
     return Math.floor(s / 86400) + 'd ago';
+  }
+
+  // Device kind isn't a stored field (no `kind` column on devices) — sniffed
+  // from the label text the phone app / browser send at pair/login time.
+  // Falls back to a generic device glyph rather than guessing wrong.
+  function deviceAvatarHtml(d) {
+    const label = (d.label || '').toLowerCase();
+    let icon, color;
+    if (/mobile|phone|android|ios|pixel|iphone/.test(label)) {
+      icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="13" height="19" x="5.5" y="2.5" rx="2"/><path d="M11 18h2"/></svg>';
+      color = 'blue';
+    } else if (/browser|chrome|firefox|safari|edge/.test(label)) {
+      icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M2 20h20"/></svg>';
+      color = 'purple';
+    } else {
+      icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>';
+      color = 'amber';
+    }
+    // "Online" has no live presence signal (no websocket/heartbeat) — proxied
+    // from lastSeen recency, same honesty tradeoff as the Devices guest stat.
+    const secsSinceSeen = Math.floor(Date.now() / 1000) - (d.lastSeen || 0);
+    const pulseClass = d.revoked ? 'off' : (secsSinceSeen < 300 ? 'on' : '');
+    return '<div class="dev-avatar ' + color + '">' + icon + '</div><span class="dev-pulse ' + pulseClass + '"></span>';
   }
 
   function esc(str) {
@@ -1898,7 +1931,7 @@
         const card = document.createElement('div');
         card.className = 'rfe-card ' + accent;
         card.innerHTML =
-          '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span>' + status + '</div>' +
+          '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span>' + status + '</div>' +
           '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + '</div>' +
           '<div class="rfe-card-row"><span class="k">Jail path</span>' + jailCell + '</div>' +
           '<div class="rfe-card-row"><span class="k">Read-only</span>' + readOnlyCell + '</div>' +
@@ -1941,7 +1974,7 @@
       // it that way; anything else is a plain paired device (User).
       const role = d.viaLogin ? 'Admin' : (d.readOnly && d.jailRoot ? 'Guest' : 'User');
       return '<div class="rfe-card ' + accent + '">' +
-        '<div class="rfe-card-top"><span class="rfe-card-name">' + label + '</span><span class="type-tag">' + role + '</span></div>' +
+        '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span><span class="type-tag">' + role + '</span></div>' +
         '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + ' · ' + timeAgo(d.lastSeen) + '</div>' +
         '<div class="rfe-card-row"><span class="k">Path</span><span class="mono" style="font-size:11px">' + path + '</span></div>' +
         '<div class="rfe-card-row"><span class="k">Status</span>' + status + '</div>' +

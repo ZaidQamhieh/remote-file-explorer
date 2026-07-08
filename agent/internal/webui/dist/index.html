@@ -306,6 +306,15 @@
   .qa-tile.qa-primary span { color: #fff; }
   .qa-tile.qa-primary .icon-badge { background: rgba(255,255,255,.18); color: #fff; }
   .qa-tile.qa-primary:hover { background: var(--primary); filter: brightness(1.12); border-color: var(--primary); }
+  .qa-tile .qa-endpoint { font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 400; }
+  .qa-tile.qa-primary .qa-endpoint { display: none; }
+
+  /* ---------- Overview "New" tip callout (matches mockup) ---------- */
+  .tip { display: flex; align-items: center; gap: 8px; padding: 12px 16px; margin-bottom: 14px;
+    border: 1px dashed var(--border); border-radius: var(--radius-lg); background: var(--surface);
+    font-size: 12px; color: var(--dim-2); }
+  .tip b { color: var(--primary); font-weight: 600; }
+  .tip .icon { color: var(--amber); }
 
   /* ---------- Devices mini-stat row (Total / Active / Guests / Storage) ---------- */
   .mini-stat-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -424,10 +433,6 @@
 </div>
 
 <div id="dashboard-view" class="hidden">
-  <div class="topstrip">
-    <span><span id="strip-platform"></span></span>
-    <span><span id="strip-uptime"></span><span class="divider">|</span><span class="version" id="strip-version"></span></span>
-  </div>
   <div class="shell">
     <div class="sidebar">
       <div class="brand">
@@ -441,7 +446,7 @@
       <div class="nav">
         <a href="#" data-page="status" class="nav-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Overview</span></a>
         <a href="#" data-page="files"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span>Files</span></a>
-        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Clients</span><span class="nav-badge" id="nav-badge-devices"></span></a>
+        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Devices</span><span class="nav-badge" id="nav-badge-devices"></span></a>
         <a href="#" data-page="transfers"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Transfers</span><span class="nav-badge" id="nav-badge-transfers"></span></a>
         <a href="#" data-page="users"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Users</span></a>
         <a href="#" data-page="logs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span>Logs</span></a>
@@ -479,14 +484,6 @@
         <div id="page-status" class="page">
           <div class="stat-grid">
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span class="stat-label">Uptime</span></div>
-              <div class="stat-value" id="uptime"></div>
-            </div>
-            <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><span class="stat-label">Platform</span></div>
-              <div class="stat-value" id="platform" style="font-size:16px"></div>
-            </div>
-            <div class="stat">
               <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><span class="stat-label">CPU</span></div>
               <div class="stat-value"><span id="cpu-val">—</span><span class="unit">%</span></div>
               <svg class="spark" id="cpu-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
@@ -503,10 +500,24 @@
               </svg>
             </div>
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg><span class="stat-label">Storage</span></div>
-              <div class="dim mono" id="storage-text" style="margin-bottom:8px"></div>
-              <div class="bar-track"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span class="stat-label">Network I/O</span></div>
+              <div class="stat-value"><span id="net-val">—</span><span class="unit">MB/s</span></div>
+              <svg class="spark" id="net-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+                <path id="net-spark-fill" fill="rgba(96,165,250,.18)" stroke="none"></path>
+                <path id="net-spark-line" fill="none" stroke="var(--blue)" stroke-width="1.5"></path>
+              </svg>
             </div>
+            <div class="stat">
+              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg><span class="stat-label">Disk</span></div>
+              <div class="stat-value"><span id="disk-val">—</span><span class="unit">%</span></div>
+              <div class="bar-track" style="margin-top:10px"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
+              <div class="dim mono" id="storage-text" style="margin-top:6px;font-size:11px"></div>
+            </div>
+          </div>
+
+          <div class="tip">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+            <span><b>New:</b> quick actions row + live device cards replace the old static dashboard — every action is one click instead of a page hop.</span>
           </div>
 
           <div class="panel">
@@ -519,41 +530,29 @@
               <button class="qa-tile" data-qa-page="files">
                 <div class="icon-badge amber" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
                 <span>New folder</span>
+                <span class="qa-endpoint">POST /fs/folder</span>
               </button>
               <button class="qa-tile" id="qa-upload">
                 <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></div>
                 <span>Upload file</span>
+                <span class="qa-endpoint">POST /fs/file</span>
               </button>
               <button class="qa-tile" id="qa-share">
                 <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
                 <span>Share link</span>
+                <span class="qa-endpoint">POST /share/mint</span>
               </button>
               <button class="qa-tile" id="qa-wake">
                 <div class="icon-badge green" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
                 <span>Wake device</span>
+                <span class="qa-endpoint">POST /wol</span>
               </button>
               <button class="qa-tile" data-qa-page="settings">
                 <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6L21 3"/><path d="M21 3v6h-6"/></svg></div>
                 <span>Restart agent</span>
+                <span class="qa-endpoint">POST /agent/restart</span>
               </button>
             </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
-              <h2 class="panel-title">Network I/O</h2>
-              <span class="spacer"></span>
-              <span class="legend"><span class="legend-dot" style="background:var(--blue)"></span>RX <span class="mono" id="net-rx"></span></span>
-              <span class="legend"><span class="legend-dot" style="background:var(--green)"></span>TX <span class="mono" id="net-tx"></span></span>
-            </div>
-            <svg id="net-chart" viewBox="0 0 600 100" preserveAspectRatio="none" style="width:100%; height:100px; display:block; overflow:visible">
-              <path id="net-rx-fill" fill="rgba(96,165,250,.15)" stroke="none"></path>
-              <path id="net-tx-fill" fill="rgba(52,211,153,.15)" stroke="none"></path>
-              <path id="net-rx-line" fill="none" stroke="var(--blue)" stroke-width="1.5"></path>
-              <path id="net-tx-line" fill="none" stroke="var(--green)" stroke-width="1.5"></path>
-            </svg>
-            <p class="dim" id="net-empty" style="margin:8px 0 0">Live since this page opened — no history is kept between visits.</p>
           </div>
 
           <div class="panel">
@@ -1895,17 +1894,12 @@
       ]);
       loadFiles();
 
-      $('agent-version').textContent = 'v' + status.version;
-      $('uptime').textContent = fmtUptime(status.uptimeSeconds);
-      $('platform').textContent = status.platform;
+      $('agent-version').textContent = 'Up ' + fmtUptime(status.uptimeSeconds) + ' · v' + status.version + ' · ' + status.platform;
       const used = status.totalBytes - status.freeBytes;
       const pct = status.totalBytes ? Math.round((used / status.totalBytes) * 100) : 0;
+      $('disk-val').textContent = pct;
       $('storage-bar').style.width = pct + '%';
       $('storage-text').textContent = fmtBytes(used) + ' / ' + fmtBytes(status.totalBytes);
-
-      $('strip-platform').textContent = status.platform;
-      $('strip-uptime').textContent = 'Up ' + fmtUptime(status.uptimeSeconds);
-      $('strip-version').textContent = 'v' + status.version;
 
       $('readonly-toggle').checked = !!settings.readOnly;
       $('bw-upload').value = bandwidth.maxUploadBytesPerSec ? (bandwidth.maxUploadBytesPerSec / 1024 / 1024).toFixed(0) : 0;
@@ -2006,7 +2000,7 @@
   }
 
   // ---------- Page routing (sidebar switches one section at a time) ----------
-  const PAGE_TITLES = { status: 'Overview', control: 'Agent control', settings: 'Settings', devices: 'Clients', files: 'Files', transfers: 'Transfers', users: 'Users', logs: 'Server logs' };
+  const PAGE_TITLES = { status: 'Overview', control: 'Agent control', settings: 'Settings', devices: 'Devices', files: 'Files', transfers: 'Transfers', users: 'Users', logs: 'Logs' };
   function showPage(name) {
     document.querySelectorAll('.page').forEach((el) => el.classList.toggle('hidden', el.id !== 'page-' + name));
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('nav-active', a.dataset.page === name));
@@ -2140,17 +2134,15 @@
     return d;
   }
 
-  function drawNetChart() {
+  function drawNetSpark() {
     if (netSamples.length < 2) return;
-    const maxBps = Math.max(1, ...netSamples.map((s) => Math.max(s.rxBps, s.txBps)));
-    const stepX = 600 / (NET_MAX_SAMPLES - 1);
+    const tot = netSamples.map((s) => s.rxBps + s.txBps);
+    const maxBps = Math.max(1, ...tot);
+    const stepX = 200 / (NET_MAX_SAMPLES - 1);
     const startI = NET_MAX_SAMPLES - netSamples.length;
-    const rxPts = netSamples.map((s, i) => [(startI + i) * stepX, 100 - (s.rxBps / maxBps) * 92]);
-    const txPts = netSamples.map((s, i) => [(startI + i) * stepX, 100 - (s.txBps / maxBps) * 92]);
-    $('net-rx-line').setAttribute('d', svgPath(rxPts, false));
-    $('net-tx-line').setAttribute('d', svgPath(txPts, false));
-    $('net-rx-fill').setAttribute('d', svgPath(rxPts, true, 100));
-    $('net-tx-fill').setAttribute('d', svgPath(txPts, true, 100));
+    const pts = tot.map((v, i) => [(startI + i) * stepX, 40 - (v / maxBps) * 38]);
+    $('net-spark-line').setAttribute('d', svgPath(pts, false));
+    $('net-spark-fill').setAttribute('d', svgPath(pts, true, 40));
   }
 
   // drawSpark renders a fixed 0-100% sparkline (CPU/RAM) into a 200x40 svg.
@@ -2167,8 +2159,6 @@
     if (document.hidden) return; // don't poll (or make the agent read /proc) for a backgrounded tab
     try {
       const t = await api('/metrics');
-      $('net-rx').textContent = fmtBytes(t.rxBytes);
-      $('net-tx').textContent = fmtBytes(t.txBytes);
       $('cpu-val').textContent = t.cpuPercent.toFixed(1);
       $('ram-val').textContent = t.ramPercent.toFixed(1);
       cpuSamples.push(t.cpuPercent);
@@ -2183,8 +2173,8 @@
         const txBps = Math.max(0, (t.txBytes - netLast.txBytes) / dt);
         netSamples.push({ rxBps, txBps });
         if (netSamples.length > NET_MAX_SAMPLES) netSamples.shift();
-        $('net-empty').classList.toggle('hidden', netSamples.length > 1);
-        drawNetChart();
+        $('net-val').textContent = ((rxBps + txBps) / 1048576).toFixed(1);
+        drawNetSpark();
       }
       netLast = t;
     } catch (e) { /* page may have navigated away from the auth'd session */ }

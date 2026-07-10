@@ -584,6 +584,14 @@
 
         <div id="page-settings" class="page hidden">
           <div class="panel">
+            <div class="panel-head"><h2 class="panel-title">Access</h2></div>
+            <div class="field-row">
+              <div>
+                <p class="field-label">Read-only mode</p>
+                <p class="field-desc">Block writes; browsing and downloads still work.</p>
+              </div>
+              <label class="switch control"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
+            </div>
             <div class="field-row">
               <div>
                 <p class="field-label">Restart agent service</p>
@@ -593,14 +601,21 @@
             </div>
             <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
           </div>
-          <div class="panel">
-            <div class="field-row">
-              <div>
-                <p class="field-label">Read-only mode</p>
-                <p class="field-desc">Block writes; browsing and downloads still work.</p>
-              </div>
-              <label class="switch control"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
+
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-head">
+              <h2 class="panel-title">Allowed folders</h2>
             </div>
+            <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
+            <div id="roots-list"></div>
+            <div class="row" style="gap:8px; margin-top:8px">
+              <input type="text" id="root-add-input" class="mono control" style="flex:1" placeholder="/home/you/Shared">
+              <button id="root-add-btn">Add folder</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-head"><h2 class="panel-title">Bandwidth</h2></div>
             <div class="field-row">
               <div>
                 <p class="field-label">Max upload</p>
@@ -619,6 +634,7 @@
           <button class="primary" id="bw-save">Save bandwidth limits</button>
 
           <div class="panel" style="margin-top:16px">
+            <div class="panel-head"><h2 class="panel-title">Photo backup</h2></div>
             <div class="field-row">
               <div>
                 <p class="field-label">Photo backup destination</p>
@@ -628,18 +644,6 @@
             <input type="text" id="photo-backup-root" class="mono control" style="width:100%" placeholder="/home/you/PhoneBackups">
           </div>
           <button class="primary" id="photo-backup-save">Save photo backup destination</button>
-
-          <div class="panel" style="margin-top:16px">
-            <div class="panel-head">
-              <h2 class="panel-title">Allowed folders</h2>
-            </div>
-            <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
-            <div id="roots-list"></div>
-            <div class="row" style="gap:8px; margin-top:8px">
-              <input type="text" id="root-add-input" class="mono control" style="flex:1" placeholder="/home/you/Shared">
-              <button id="root-add-btn">Add folder</button>
-            </div>
-          </div>
         </div>
 
         <div id="page-devices" class="page hidden">

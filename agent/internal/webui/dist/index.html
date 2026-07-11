@@ -178,7 +178,7 @@
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
   .stat-head { display: flex; align-items: center; gap: 7px; color: var(--dim); margin-bottom: 10px; }
-  .stat-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
+  .stat-label { font-size: 11px; font-weight: 500; color: var(--dim); }
   .stat-value { font-size: 24px; font-weight: 500; font-family: var(--mono); line-height: 1; }
   .stat-value .unit { font-size: 12px; color: var(--dim); font-family: var(--sans); margin-left: 3px; }
   .stat { overflow: hidden; }
@@ -248,7 +248,7 @@
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .topbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
   .topbar h1 { font-size: 18px; font-weight: 600; margin: 0; }
-  .topbar .sub { font-size: 12px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+  .topbar .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
   .topbar .spacer { flex: 1; }
   .content { padding: 24px; }
 
@@ -277,13 +277,9 @@
 
   /* ---------- Card grid (replaces plain .dtable rows on Devices/Transfers/Users/Overview) ---------- */
   .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-  .rfe-card { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
+  .rfe-card { background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 14px 16px; transition: border-color .15s, transform .15s; }
   .rfe-card:hover { border-color: var(--primary); transform: translateY(-1px); }
-  .rfe-card.accent-green { border-top-color: var(--green); }
-  .rfe-card.accent-amber { border-top-color: var(--amber); }
-  .rfe-card.accent-red { border-top-color: var(--red); }
-  .rfe-card.accent-blue { border-top-color: var(--primary); }
   .rfe-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
   .rfe-card-name { font-weight: 500; font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
   .rfe-card-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
@@ -372,6 +368,52 @@
   .gen-otp span:nth-child(7) { animation-delay: .26s; } .gen-otp span:nth-child(8) { animation-delay: .30s; }
   @keyframes gen-otp-in { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
   .gen-meta { font-size: 11px; color: var(--dim); }
+
+  /* ---------- .grid was referenced by Quick Actions but never defined — the
+     inline grid-template-columns did nothing and tiles overflowed. ---------- */
+  .grid { display: grid; gap: 12px; }
+
+  /* ---------- Files: mockup data table (NAME/SIZE/MODIFIED/SHA-256) ---------- */
+  .crumb { flex: 1; min-width: 160px; font-size: 12.5px; color: var(--dim-2); overflow-wrap: anywhere; }
+  .crumb b { color: var(--ink); font-weight: 600; }
+  .crumb .sep { margin: 0 6px; color: var(--dim); }
+  .dtable td.fcell { font-family: var(--sans); }
+  .dtable .fname-cell { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--ink); cursor: pointer; }
+  .dtable tr:hover .fname-cell { color: var(--primary); }
+  .dtable input.select { accent-color: var(--destructive); width: 14px; height: 14px; cursor: pointer; }
+  .dtable .row-actions { display: flex; gap: 4px; justify-content: flex-end; opacity: 0; transition: opacity .15s; }
+  .dtable tbody tr:hover .row-actions { opacity: 1; }
+  .dtable .row-actions button { padding: 3px 9px; font-size: 11px; }
+  .tab-bar .tab-ep { font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 400; margin-left: 5px; }
+  .bulk-toolbar .tab-ep { font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 400; margin-left: 5px; }
+  #files-view-list.active, #files-view-grid.active { background: var(--accent); color: var(--ink); }
+  .files-grid-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 8px 0; }
+  .files-grid-view .gcell { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 10px 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: pointer;
+    font-size: 11.5px; font-weight: 500; color: var(--ink); text-align: center; overflow-wrap: anywhere;
+    transition: border-color .15s, transform .15s; }
+  .files-grid-view .gcell:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .files-grid-view .gcell .icon { width: 26px; height: 26px; }
+
+  /* ---------- Transfers: mockup icon rows ---------- */
+  .trow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 10px; transition: border-color .15s; }
+  .trow:hover { border-color: var(--accent); }
+  .trow .t-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: rgba(59,130,246,.12);
+    color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .trow .t-icon.done { background: rgba(52,211,153,.12); color: var(--green); }
+  .trow .t-icon.fail { background: rgba(248,113,113,.12); color: var(--red); }
+  .trow .t-info { flex: 1; min-width: 0; }
+  .trow .t-name { font-weight: 600; font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+  .trow .t-sub { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+  .trow .prog-track { width: 170px; }
+  .trow .t-status { width: 130px; text-align: right; flex-shrink: 0; }
+
+  /* ---------- Device / user card meta line (mockup: tag + access under name) ---------- */
+  .dev-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--dim-2); }
+  .type-tag.admin { background: rgba(167,139,250,.12); color: var(--purple); }
+  .type-tag.guest { background: rgba(251,191,36,.12); color: var(--amber); }
+  .type-tag.ro { background: var(--surface-2); color: var(--dim-2); }
 </style>
 </head>
 <body>
@@ -452,18 +494,17 @@
   <div class="shell">
     <div class="sidebar">
       <div class="brand">
-        <div class="mark"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></div>
+        <span class="dev-pulse on" style="margin-top:4px" title="Agent running"></span>
         <div>
           <div class="name" id="agent-name">RFE</div>
-          <div class="sub">Control Panel</div>
+          <div class="sub" id="agent-host">rfedash.local</div>
         </div>
       </div>
-      <div class="status-chip">Agent running</div>
       <div class="nav">
         <a href="#" data-page="status" class="nav-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Overview</span></a>
         <a href="#" data-page="files"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span>Files</span><span class="nav-badge" style="background:rgba(59,130,246,.2);color:var(--primary)">NEW</span></a>
-        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Devices</span><span class="nav-badge" id="nav-badge-devices"></span></a>
         <a href="#" data-page="transfers"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Transfers</span><span class="nav-badge" id="nav-badge-transfers"></span></a>
+        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Devices</span><span class="nav-badge" id="nav-badge-devices"></span></a>
         <a href="#" data-page="users"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Users</span><span class="nav-badge" style="background:rgba(59,130,246,.2);color:var(--primary)">NEW</span></a>
         <a href="#" data-page="logs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span>Logs</span></a>
         <a href="#" data-page="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></a>
@@ -491,7 +532,7 @@
       <div class="topbar">
         <div>
           <h1 id="page-title">Overview</h1>
-          <div class="sub mono" id="agent-version"></div>
+          <div class="sub" id="agent-version"></div>
         </div>
         <span class="spacer"></span>
       </div>
@@ -500,7 +541,7 @@
         <div id="page-status" class="page">
           <div class="stat-grid">
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg><span class="stat-label">CPU</span></div>
+              <div class="stat-head"><span class="stat-label">CPU</span></div>
               <div class="stat-value"><span id="cpu-val">—</span><span class="unit">%</span></div>
               <svg class="spark" id="cpu-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
                 <path id="cpu-spark-fill" fill="rgba(59,130,246,.18)" stroke="none"></path>
@@ -508,7 +549,7 @@
               </svg>
             </div>
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></svg><span class="stat-label">RAM</span></div>
+              <div class="stat-head"><span class="stat-label">RAM</span></div>
               <div class="stat-value"><span id="ram-val">—</span><span class="unit">%</span></div>
               <svg class="spark" id="ram-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
                 <path id="ram-spark-fill" fill="rgba(167,139,250,.18)" stroke="none"></path>
@@ -516,7 +557,7 @@
               </svg>
             </div>
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span class="stat-label">Network I/O</span></div>
+              <div class="stat-head"><span class="stat-label">Network I/O</span></div>
               <div class="stat-value"><span id="net-val">—</span><span class="unit">MB/s</span></div>
               <svg class="spark" id="net-spark" viewBox="0 0 200 40" preserveAspectRatio="none">
                 <path id="net-spark-fill" fill="rgba(96,165,250,.18)" stroke="none"></path>
@@ -524,7 +565,7 @@
               </svg>
             </div>
             <div class="stat">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg><span class="stat-label">Disk</span></div>
+              <div class="stat-head"><span class="stat-label">Disk</span></div>
               <div class="stat-value"><span id="disk-val">—</span><span class="unit">%</span></div>
               <div class="bar-track" style="margin-top:10px"><div class="bar-fill" id="storage-bar" style="width:0%"></div></div>
               <div class="dim mono" id="storage-text" style="margin-top:6px;font-size:11px"></div>
@@ -536,7 +577,7 @@
             <span><b>New:</b> quick actions row + live device cards replace the old static dashboard — every action is one click instead of a page hop.</span>
           </div>
 
-          <div class="panel">
+          <div style="margin-bottom:24px">
             <div class="panel-head"><h2 class="panel-title">Quick actions</h2></div>
             <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
               <button class="qa-tile qa-primary" data-qa-page="devices">
@@ -571,12 +612,12 @@
             </div>
           </div>
 
-          <div class="panel">
+          <div>
             <div class="panel-head">
-              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <h2 class="panel-title">Connected devices</h2>
               <span class="spacer"></span>
               <span class="meta" id="conn-count"></span>
+              <a href="#" id="conn-view-all" style="font-size:11px;color:var(--ink);text-decoration:none;margin-left:12px">View all &rarr;</a>
             </div>
             <div class="card-grid" id="conn-tbody"></div>
           </div>
@@ -702,9 +743,8 @@
             </div>
             <div id="pairing-generate-result" style="margin:0 0 4px"></div>
           </div>
-          <div class="panel">
+          <div>
             <div class="panel-head">
-              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
               <h2 class="panel-title">Paired devices</h2>
               <span class="spacer"></span>
               <span class="meta mono" id="devices-count"></span>
@@ -714,34 +754,32 @@
         </div>
 
         <div id="page-files" class="page hidden">
-          <div class="panel">
-            <div class="panel-head">
-              <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
-              <h2 class="panel-title">Files</h2>
-            </div>
+          <div>
             <div class="tab-bar">
               <button id="files-tab-browse" class="active" data-tab="browse">Browse</button>
-              <button id="files-tab-recent" data-tab="recent">Recent</button>
-              <button id="files-tab-trash" data-tab="trash">Trash</button>
-              <button id="files-tab-shares" data-tab="shares">Shares</button>
+              <button id="files-tab-recent" data-tab="recent">Recent<span class="tab-ep">/fs/recent</span></button>
+              <button id="files-tab-trash" data-tab="trash">Trash<span class="tab-ep">/trash</span></button>
+              <button id="files-tab-shares" data-tab="shares">Share links<span class="tab-ep">/share</span></button>
             </div>
 
             <div id="files-browse-tab">
               <div class="row" style="gap:8px">
-                <div id="breadcrumb" class="dim mono" style="flex:1; overflow-wrap:anywhere"></div>
+                <div id="breadcrumb" class="crumb"></div>
                 <input id="folder-search" type="text" placeholder="Search this folder…" style="width:180px">
+                <button id="files-view-list" class="active" title="List view" aria-label="List view"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+                <button id="files-view-grid" title="Grid view" aria-label="Grid view"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/></svg></button>
+                <button id="new-folder-btn" title="New folder" aria-label="New folder"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></button>
                 <input id="upload-input" type="file" multiple class="hidden">
-                <button id="upload-btn" title="Files over 5 MiB aren't supported by this upload path">Upload</button>
-                <button id="new-folder-btn">New folder</button>
+                <button id="upload-btn" class="primary" title="Files over 5 MiB aren't supported by this upload path">Upload</button>
               </div>
               <div id="bulk-toolbar" class="bulk-toolbar hidden">
-                <span class="mono" id="bulk-count"></span>
+                <span id="bulk-count" style="color:var(--ink);font-weight:600"></span>
+                <button id="bulk-move">Move<span class="tab-ep">/fs/move</span></button>
+                <button id="bulk-copy">Copy<span class="tab-ep">/fs/copy</span></button>
+                <button id="bulk-compress">Compress<span class="tab-ep">/fs/compress</span></button>
+                <button id="bulk-checksum">Checksum<span class="tab-ep">/fs/checksums</span></button>
+                <button id="bulk-chmod">Chmod<span class="tab-ep">/fs/chmod</span></button>
                 <span class="spacer"></span>
-                <button id="bulk-move">Move</button>
-                <button id="bulk-copy">Copy</button>
-                <button id="bulk-compress">Compress</button>
-                <button id="bulk-checksum">Checksum</button>
-                <button id="bulk-chmod">Chmod</button>
                 <button id="bulk-delete" class="danger">Delete</button>
               </div>
               <div id="search-results" class="hidden"></div>
@@ -779,35 +817,27 @@
 
         <div id="page-transfers" class="page hidden">
           <div class="stat-grid">
-            <div class="stat" style="border-top:2px solid var(--primary)">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg><span class="stat-label">Open</span></div>
-              <div class="stat-value"><span id="tr-active">0</span></div>
+            <div class="stat">
+              <div class="stat-head"><span class="stat-label">Open</span></div>
+              <div class="stat-value" style="color:var(--amber)"><span id="tr-active">0</span></div>
             </div>
-            <div class="stat" style="border-top:2px solid var(--green)">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg><span class="stat-label">Completed</span></div>
-              <div class="stat-value"><span id="tr-done">0</span></div>
+            <div class="stat">
+              <div class="stat-head"><span class="stat-label">Completed</span></div>
+              <div class="stat-value" style="color:var(--green)"><span id="tr-done">0</span></div>
             </div>
-            <div class="stat" style="border-top:2px solid var(--red)">
-              <div class="stat-head"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg><span class="stat-label">Failed</span></div>
+            <div class="stat">
+              <div class="stat-head"><span class="stat-label">Failed</span></div>
               <div class="stat-value"><span id="tr-failed">0</span></div>
             </div>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></svg></div>
-              <h2 class="panel-title">Transfers</h2>
-              <span class="spacer"></span>
-              <span class="meta" id="transfers-count"></span>
-            </div>
-            <div class="card-grid" id="transfers-tbody"></div>
-          </div>
+          <div class="row" style="padding:0 0 10px"><span class="dim mono" id="transfers-count"></span></div>
+          <div id="transfers-tbody"></div>
           <p class="dim" id="transfers-note" style="margin:12px 0 0"></p>
         </div>
 
         <div id="page-users" class="page hidden">
-          <div class="panel">
+          <div>
             <div class="panel-head">
-              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <h2 class="panel-title">Users</h2>
               <span class="spacer"></span>
               <span class="meta" id="users-count"></span>
@@ -819,22 +849,16 @@
         </div>
 
         <div id="page-logs" class="page hidden">
-          <div class="logview">
-            <div class="term-bar">
-              <span class="term-dots"><span style="background:var(--red)"></span><span style="background:var(--amber)"></span><span style="background:var(--green)"></span></span>
-              <span class="term-title mono">rfe-agent.service — journald</span>
-              <span class="spacer"></span>
-              <button id="logs-refresh">Refresh</button>
-            </div>
-            <div class="log-filter">
-              <span class="dim">Level:</span>
-              <button id="log-filter-all" class="active" data-lvl="all">All</button>
-              <button id="log-filter-info" data-lvl="info">Info</button>
-              <button id="log-filter-warn" data-lvl="warn">Warn</button>
-              <button id="log-filter-error" data-lvl="error">Error</button>
-            </div>
-            <div class="term-body" id="logs-body"></div>
+          <div class="log-filter" style="padding-left:0;padding-right:0">
+            <span class="dim">Level:</span>
+            <button id="log-filter-all" class="active" data-lvl="all">All</button>
+            <button id="log-filter-info" data-lvl="info">Info</button>
+            <button id="log-filter-warn" data-lvl="warn">Warn</button>
+            <button id="log-filter-error" data-lvl="error">Error</button>
+            <span class="spacer" style="flex:1"></span>
+            <button id="logs-refresh">Refresh</button>
           </div>
+          <div class="term-body" id="logs-body" style="padding-left:0;padding-right:0"></div>
         </div>
 
       </div>
@@ -1364,97 +1388,176 @@
     $('bulk-count').textContent = selectedPaths.size + ' selected';
   }
 
+  // Browse state — entries cached so the list/grid view toggle can re-render
+  // without refetching.
+  let browseEntries = [];
+  let filesView = 'list';
+
+  function crumbHtml(path) {
+    const parts = String(path || '/').split('/').filter(Boolean);
+    if (parts.length === 0) return '<b>/</b>';
+    return '<b>/' + esc(parts[0]) + '</b>' + parts.slice(1).map((p) => '<span class="sep">/</span>' + esc(p)).join('');
+  }
+
+  // Display-only file-kind glyph, sniffed from the extension (no kind field on /fs entries).
+  function fileGlyph(entry) {
+    if (entry.isDir) return { color: 'var(--amber)', svg: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>' };
+    const n = (entry.name || '').toLowerCase();
+    if (/\.(png|jpe?g|gif|webp|svg|bmp|heic)$/.test(n)) return { color: 'var(--green)', svg: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="14" x="3" y="5" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m5 17 4.5-4.5L13 16l3-3 3 4"/></svg>' };
+    if (/\.(zip|tar|gz|tgz|bz2|7z|rar)$/.test(n)) return { color: 'var(--purple)', svg: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 11h18M12 7v4"/></svg>' };
+    if (/\.(mp4|mkv|webm|avi|mov)$/.test(n)) return { color: 'var(--blue)', svg: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="12" height="12" x="3" y="6" rx="2"/><path d="m15.5 10.5 5-2.7v8.4l-5-2.7z"/></svg>' };
+    return { color: 'var(--primary)', svg: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>' };
+  }
+
+  function entryActions(entry) {
+    const actions = document.createElement('span');
+    actions.className = 'row-actions';
+    if (!entry.isDir) {
+      const shareBtn = document.createElement('button');
+      shareBtn.textContent = 'Share';
+      shareBtn.addEventListener('click', () => shareEntry(entry));
+      actions.appendChild(shareBtn);
+    }
+    if (!entry.isDir && /\.(zip|tar|tar\.gz|tgz|tar\.bz2)$/i.test(entry.name)) {
+      const extractBtn = document.createElement('button');
+      extractBtn.textContent = 'Extract';
+      extractBtn.addEventListener('click', () => extractEntry(entry));
+      actions.appendChild(extractBtn);
+    }
+    const renameBtn = document.createElement('button');
+    renameBtn.textContent = 'Rename';
+    renameBtn.addEventListener('click', () => renameEntry(entry));
+    actions.appendChild(renameBtn);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'danger';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => deleteEntry(entry));
+    actions.appendChild(delBtn);
+    return actions;
+  }
+
   async function openFolder(path) {
     currentPath = path;
     selectedPaths.clear();
     updateBulkToolbar();
     $('file-preview').classList.add('hidden');
-    $('breadcrumb').textContent = path;
+    $('breadcrumb').innerHTML = crumbHtml(path);
     const list = $('files-list');
     list.innerHTML = '<p class="dim">Loading…</p>';
     try {
       const listing = await api('/fs?path=' + encodeURIComponent(path));
-      list.innerHTML = '';
-      const up = document.createElement('div');
-      up.className = 'list-row file-row';
-      up.innerHTML = '<div class="file-icon file-icon-dir">‹</div><span class="info"><span class="name">.. (up)</span></span>';
-      up.addEventListener('click', () => openFolder(parentPath(path)));
-      list.appendChild(up);
-
-      (listing.entries || []).forEach((entry) => {
-        const row = document.createElement('div');
-        row.className = 'list-row file-row';
-
-        const select = document.createElement('input');
-        select.type = 'checkbox';
-        select.className = 'select';
-        select.addEventListener('click', (e) => e.stopPropagation());
-        select.addEventListener('change', () => {
-          if (select.checked) selectedPaths.add(entry.path);
-          else selectedPaths.delete(entry.path);
-          updateBulkToolbar();
-        });
-
-        const icon = document.createElement('div');
-        icon.className = 'file-icon ' + (entry.isDir ? 'file-icon-dir' : 'file-icon-file');
-        icon.innerHTML = entry.isDir
-          ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>'
-          : '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>';
-
-        const info = document.createElement('span');
-        info.className = 'info';
-        info.innerHTML = '<span class="name">' + entry.name + '</span>';
-        info.addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
-
-        const size = document.createElement('span');
-        size.className = 'dim mono';
-        size.textContent = entry.isDir ? '' : fmtBytes(entry.size);
-
-        const actions = document.createElement('span');
-        actions.className = 'actions';
-
-        if (!entry.isDir) {
-          const shareBtn = document.createElement('button');
-          shareBtn.textContent = 'Share';
-          shareBtn.addEventListener('click', () => shareEntry(entry));
-          actions.appendChild(shareBtn);
-        }
-
-        if (!entry.isDir && /\.(zip|tar|tar\.gz|tgz|tar\.bz2)$/i.test(entry.name)) {
-          const extractBtn = document.createElement('button');
-          extractBtn.textContent = 'Extract';
-          extractBtn.addEventListener('click', () => extractEntry(entry));
-          actions.appendChild(extractBtn);
-        }
-
-        const renameBtn = document.createElement('button');
-        renameBtn.textContent = 'Rename';
-        renameBtn.addEventListener('click', () => renameEntry(entry));
-        actions.appendChild(renameBtn);
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'danger';
-        delBtn.textContent = 'Delete';
-        delBtn.addEventListener('click', () => deleteEntry(entry));
-        actions.appendChild(delBtn);
-
-        row.appendChild(select);
-        row.appendChild(icon);
-        row.appendChild(info);
-        row.appendChild(size);
-        row.appendChild(actions);
-        list.appendChild(row);
-      });
-      if (!listing.entries || listing.entries.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'dim';
-        empty.textContent = 'Empty folder.';
-        list.appendChild(empty);
-      }
+      browseEntries = listing.entries || [];
+      renderBrowse();
     } catch (e) {
       list.innerHTML = '<p class="error-text">' + e.message + '</p>';
     }
   }
+
+  function renderBrowse() {
+    const list = $('files-list');
+    list.innerHTML = '';
+    if (filesView === 'grid') { renderBrowseGrid(list); return; }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    const table = document.createElement('table');
+    table.className = 'dtable';
+    table.innerHTML = '<thead><tr><th style="width:30px"></th><th>Name</th><th>Size</th><th>Modified</th><th>SHA-256</th><th></th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    const up = document.createElement('tr');
+    up.innerHTML = '<td></td><td class="fcell"><span class="fname-cell"><div class="file-icon file-icon-dir">‹</div>.. (up)</span></td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td></td>';
+    up.querySelector('.fname-cell').addEventListener('click', () => openFolder(parentPath(currentPath)));
+    tbody.appendChild(up);
+
+    browseEntries.forEach((entry) => {
+      const tr = document.createElement('tr');
+      const g = fileGlyph(entry);
+
+      const selTd = document.createElement('td');
+      const select = document.createElement('input');
+      select.type = 'checkbox';
+      select.className = 'select';
+      select.checked = selectedPaths.has(entry.path);
+      select.addEventListener('change', () => {
+        if (select.checked) selectedPaths.add(entry.path);
+        else selectedPaths.delete(entry.path);
+        updateBulkToolbar();
+      });
+      selTd.appendChild(select);
+
+      const nameTd = document.createElement('td');
+      nameTd.className = 'fcell';
+      nameTd.innerHTML = '<span class="fname-cell"><span style="color:' + g.color + ';display:inline-flex">' + g.svg + '</span>' + esc(entry.name) + '</span>';
+      nameTd.querySelector('.fname-cell').addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
+
+      const sizeTd = document.createElement('td');
+      sizeTd.textContent = entry.isDir ? '—' : fmtBytes(entry.size);
+
+      const modTd = document.createElement('td');
+      modTd.className = 'dim';
+      modTd.textContent = entry.modified ? timeAgo(Math.floor(Date.parse(entry.modified) / 1000)) : '—';
+
+      // No checksum in /fs listings — computed on demand via bulk Checksum (/fs/checksums).
+      const shaTd = document.createElement('td');
+      shaTd.className = 'dim';
+      shaTd.title = 'Select the row and run Checksum to compute';
+      shaTd.textContent = '—';
+
+      const actTd = document.createElement('td');
+      actTd.appendChild(entryActions(entry));
+
+      tr.append(selTd, nameTd, sizeTd, modTd, shaTd, actTd);
+      tbody.appendChild(tr);
+    });
+    if (browseEntries.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" class="empty-cell">Empty folder.</td>';
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    list.appendChild(wrap);
+  }
+
+  function renderBrowseGrid(list) {
+    const grid = document.createElement('div');
+    grid.className = 'files-grid-view';
+    const up = document.createElement('div');
+    up.className = 'gcell';
+    up.innerHTML = '<div class="file-icon file-icon-dir">‹</div>.. (up)';
+    up.addEventListener('click', () => openFolder(parentPath(currentPath)));
+    grid.appendChild(up);
+    browseEntries.forEach((entry) => {
+      const g = fileGlyph(entry);
+      const cell = document.createElement('div');
+      cell.className = 'gcell';
+      cell.innerHTML = '<span style="color:' + g.color + ';display:inline-flex">' + g.svg + '</span>' + esc(entry.name);
+      cell.addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
+      grid.appendChild(cell);
+    });
+    if (browseEntries.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'dim';
+      empty.style.gridColumn = '1/-1';
+      empty.textContent = 'Empty folder.';
+      grid.appendChild(empty);
+    }
+    list.appendChild(grid);
+  }
+
+  $('files-view-list').addEventListener('click', () => {
+    filesView = 'list';
+    $('files-view-list').classList.add('active');
+    $('files-view-grid').classList.remove('active');
+    renderBrowse();
+  });
+  $('files-view-grid').addEventListener('click', () => {
+    filesView = 'grid';
+    $('files-view-grid').classList.add('active');
+    $('files-view-list').classList.remove('active');
+    renderBrowse();
+  });
 
   async function downloadFile(entry) {
     const url = '/v1/content?path=' + encodeURIComponent(entry.path);
@@ -1960,9 +2063,13 @@
       $('nav-badge-devices').textContent = (devices || []).length || '';
       (devices || []).forEach((d) => {
         const label = esc(d.label || 'unnamed') + (d.current ? ' <span class="dim">· this device</span>' : '');
-        let status = '<span class="status-text status-green dot">Paired</span>';
-        if (d.revoked) status = '<span class="status-text status-red dot">Revoked</span>';
-        else if (d.readOnly) status = '<span class="status-text status-amber dot">Read-only</span>';
+        // Same role derivation as the Overview card and the Devices-page guest stat.
+        const role = d.viaLogin ? 'Admin' : (d.readOnly && d.jailRoot ? 'Guest' : 'User');
+        const roleTagCls = role === 'Admin' ? 'admin' : (role === 'Guest' ? 'guest' : '');
+        const accessText = d.readOnly ? '<span class="type-tag ro">RO</span>' : 'Full access';
+        let statusTag = '<span class="status-text status-green dot">Paired</span>';
+        if (d.revoked) statusTag = '<span class="status-text status-red dot">Revoked</span>';
+        else if (d.readOnly) statusTag = '<span class="status-text status-amber dot">Read-only</span>';
         const canManage = isAdmin || d.current;
         let actions = '';
         if (canManage) {
@@ -1984,8 +2091,8 @@
         const qPct = 20 + (Math.abs(hashStr(String(d.id))) % 65);
         const quota = '<div class="dev-quota" title="Placeholder — per-device quota is not tracked yet"><div class="dev-quota-track"><div class="dev-quota-fill" style="width:' + qPct + '%"></div></div><div class="dev-quota-text">Quota — not tracked</div></div>';
         card.innerHTML =
-          '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span>' + status + '</div>' +
-          '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + '</div>' +
+          '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span>' + statusTag + '</div>' +
+          '<div class="dev-meta"><span class="type-tag ' + roleTagCls + '">' + role + '</span>' + accessText + '</div>' +
           quota +
           '<div class="rfe-card-row"><span class="k">Jail path</span>' + jailCell + '</div>' +
           '<div class="rfe-card-row"><span class="k">Read-only</span>' + readOnlyCell + '</div>' +
@@ -2017,21 +2124,22 @@
       return;
     }
     grid.innerHTML = devices.map((d) => {
-      const label = esc(d.label || 'unnamed') + (d.current ? ' <span style="color:var(--dim)">· this browser</span>' : '');
-      const path = d.jailRoot ? esc(d.jailRoot) : '<span style="color:var(--dim)">Full access</span>';
-      let accent = 'accent-green', status = '<span class="status-text status-green dot">Active</span>';
-      if (d.revoked) { accent = 'accent-red'; status = '<span class="status-text status-red dot">Revoked</span>'; }
-      else if (d.readOnly) { accent = 'accent-amber'; status = '<span class="status-text status-amber dot">Read-only</span>'; }
+      const label = esc(d.label || 'unnamed');
+      let accent = 'accent-green';
+      if (d.revoked) accent = 'accent-red';
+      else if (d.readOnly) accent = 'accent-amber';
       // Role isn't a stored field — derived the same way as the Devices-page
       // guest stat: viaLogin means it authenticated with an account password
       // (Admin); readOnly+jailRoot together means a guest pairing code minted
       // it that way; anything else is a plain paired device (User).
       const role = d.viaLogin ? 'Admin' : (d.readOnly && d.jailRoot ? 'Guest' : 'User');
+      const roleTagCls = role === 'Admin' ? 'admin' : (role === 'Guest' ? 'guest' : '');
+      const accessText = d.jailRoot ? '<span class="mono" style="font-size:11px">' + esc(d.jailRoot) + '</span>' : 'Full access';
+      const footLeft = d.current ? 'Current session' : (d.revoked ? '<span class="status-text status-red dot">Revoked</span>' : (d.readOnly ? '<span class="status-text status-amber dot">Read-only</span>' : '<span class="status-text status-green dot">Active</span>'));
       return '<div class="rfe-card ' + accent + '">' +
-        '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span><span class="type-tag">' + role + '</span></div>' +
-        '<div class="rfe-card-sub mono">' + esc(d.lastAddress || '—') + ' · ' + timeAgo(d.lastSeen) + '</div>' +
-        '<div class="rfe-card-row"><span class="k">Path</span><span class="mono" style="font-size:11px">' + path + '</span></div>' +
-        '<div class="rfe-card-row"><span class="k">Status</span>' + status + '</div>' +
+        '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span></div>' +
+        '<div class="dev-meta"><span class="type-tag ' + roleTagCls + '">' + role + '</span>' + accessText + '</div>' +
+        '<div class="rfe-card-foot"><span style="font-size:11.5px">' + footLeft + '</span><span class="dim mono" style="font-size:11px">' + (d.current ? 'now' : timeAgo(d.lastSeen)) + '</span></div>' +
         '</div>';
     }).join('');
   }
@@ -2045,7 +2153,6 @@
     transfers: 'Active and recent transfer sessions',
     users: 'Login accounts — separate from paired devices',
     logs: 'Live tail of rfe-agent.service',
-    settings: 'Access, allowed folders, bandwidth, and photo backup',
   };
   function showPage(name) {
     document.querySelectorAll('.page').forEach((el) => el.classList.toggle('hidden', el.id !== 'page-' + name));
@@ -2076,15 +2183,23 @@
         tbody.innerHTML = '<p class="empty-cell-card">No transfers yet.</p>';
         return;
       }
+      // No device or direction field on transfer rows (confirmed: ListTransfers has
+      // neither) — sub-line honestly shows size only, not a fabricated "device · Upload".
       tbody.innerHTML = rows.map((t) => {
         const pct = Math.round(t.progress || 0);
-        let cls = '', accent = 'accent-blue', label = '<span class="status-text status-blue dot">Open</span>';
-        if (t.status === 'completed') { cls = 'done'; accent = 'accent-green'; label = '<span class="status-text status-green dot">Completed</span>'; }
-        else if (t.status === 'failed') { cls = 'fail'; accent = 'accent-red'; label = '<span class="status-text status-red dot">Failed</span>'; }
-        return '<div class="rfe-card ' + accent + '">' +
-          '<div class="rfe-card-top"><span class="rfe-card-name fname" title="' + esc(t.path || '') + '">' + esc(t.name || '—') + '</span>' + label + '</div>' +
-          '<div class="rfe-card-sub mono">' + fmtBytes(t.totalSize || 0) + '</div>' +
-          '<div class="rfe-card-row"><span class="prog" style="flex:1"><span class="prog-track" style="flex:1;width:auto"><span class="prog-fill ' + cls + '" style="width:' + pct + '%"></span></span><span class="prog-pct mono">' + pct + '%</span></span></div>' +
+        const n = (t.name || '').toLowerCase();
+        let iconCls = '', icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>';
+        if (/\.(zip|tar|gz|tgz|bz2)$/.test(n)) icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 11h18M12 7v4"/></svg>';
+        else if (/\.(mp4|mkv|webm|avi|mov)$/.test(n)) icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="12" height="12" x="3" y="6" rx="2"/><path d="m15.5 10.5 5-2.7v8.4l-5-2.7z"/></svg>';
+        let cls = '', label = '<span class="status-text status-blue dot">Open</span>';
+        if (t.status === 'completed') { cls = 'done'; iconCls = 'done'; label = '<span class="status-text status-green dot">Completed</span>'; }
+        else if (t.status === 'failed') { cls = 'fail'; iconCls = 'fail'; label = '<span class="status-text status-red dot">Failed</span>'; }
+        return '<div class="trow">' +
+          '<div class="t-icon ' + iconCls + '">' + icon + '</div>' +
+          '<div class="t-info"><div class="t-name" title="' + esc(t.path || '') + '">' + esc(t.name || '—') + '</div>' +
+          '<div class="t-sub">' + fmtBytes(t.totalSize || 0) + '</div></div>' +
+          '<span class="prog-track"><span class="prog-fill ' + cls + '" style="width:' + pct + '%"></span></span>' +
+          '<span class="t-status">' + (t.status === 'open' ? pct + '%' : label) + '</span>' +
           '</div>';
       }).join('');
     } catch (e) {
@@ -2160,6 +2275,7 @@
   document.querySelectorAll('.qa-tile').forEach((btn) => {
     btn.addEventListener('click', () => showPage(btn.dataset.qaPage));
   });
+  $('conn-view-all').addEventListener('click', (e) => { e.preventDefault(); showPage('devices'); });
 
   // ---------- Network I/O chart ----------
   // Real bytes/sec, sampled by diffing GET /throughput's cumulative counters

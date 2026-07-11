@@ -320,27 +320,34 @@
   .tip .icon { color: var(--amber); }
 
   /* ---------- Devices mini-stat row (Total / Active / Guests / Storage) ---------- */
-  .mini-stat-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .mini-stat { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
-    border-radius: var(--radius-lg); padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+  /* Sized to keep all 7 cells (4 counters + Guest Mode/Expires/Creates) on one
+     row at 1440 CSS px, including the 3-chip Creates state — see min-content
+     math in the Devices reskin notes. */
+  .mini-stat-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
+    border-radius: var(--radius-lg); padding: 10px 12px; display: flex; align-items: center; gap: 10px;
     transition: border-color .15s, transform .15s; }
   .mini-stat:hover { transform: translateY(-1px); }
-  .mini-stat.blue { border-top-color: var(--primary); }
-  .mini-stat.green { border-top-color: var(--green); }
-  .mini-stat.amber { border-top-color: var(--amber); }
-  .mini-stat.purple { border-top-color: var(--purple); }
-  .mini-stat .icon-badge { width: 34px; height: 34px; }
-  .mini-stat .v { font-size: 19px; font-weight: 600; font-family: var(--mono); line-height: 1; }
-  .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-top: 3px; }
+  .mini-stat.blue { border-color: var(--primary); }
+  .mini-stat.green { border-color: var(--green); }
+  .mini-stat.amber { border-color: var(--amber); }
+  .mini-stat.purple { border-color: var(--purple); }
+  .mini-stat .icon-badge { width: 30px; height: 30px; }
+  .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  .mini-stat .v { font-size: 19px; font-weight: 600; font-family: var(--mono); line-height: 1; margin-top: 3px; }
   /* Interactive stat cells (Guest Mode toggle / Expires picker / Creates tags) — column layout */
   .mini-stat.ctl { flex-direction: column; align-items: stretch; gap: 8px; }
-  .mini-stat.ctl .l { margin-top: 0; }
-  .mini-stat.ctl .ctl-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mini-stat.ctl .ctl-body { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   /* Per-device quota bar (placeholder — no real per-device quota field on the Device struct) */
   .dev-quota { margin-top: 10px; }
   .dev-quota .dev-quota-track { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
   .dev-quota .dev-quota-fill { height: 100%; border-radius: 2px; background: var(--primary); }
-  .dev-quota .dev-quota-text { font-size: 10.5px; color: var(--dim); margin-top: 5px; }
+  .dev-quota-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; }
+  .dev-quota-text { font-size: 10.5px; color: var(--dim); }
+  /* Devices card face: bold name + dim kind, expand-on-click detail below the fold */
+  .dev-card { cursor: pointer; }
+  .dev-card .rfe-card-name { display: block; font-size: 13px; margin-top: 8px; }
+  .dev-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 
   /* ---------- Logs level filter ---------- */
   .log-filter { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
@@ -367,7 +374,15 @@
   .gen-otp span:nth-child(5) { animation-delay: .18s; } .gen-otp span:nth-child(6) { animation-delay: .22s; }
   .gen-otp span:nth-child(7) { animation-delay: .26s; } .gen-otp span:nth-child(8) { animation-delay: .30s; }
   @keyframes gen-otp-in { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
+  .gen-otp span.ph { opacity: .35; animation: none; }
+  .gen-otp .dash { color: var(--dim); font-size: 20px; animation: none; background: none; border: none; width: auto; }
+  .gen-otp .otp-copy { padding: 6px 8px; margin-left: 4px; align-self: center; animation: none; }
   .gen-meta { font-size: 11px; color: var(--dim); }
+
+  /* ---------- Devices: Jail path / Pair new device cards (replaces the old prose panel) ---------- */
+  .pairing-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: stretch; }
+  .pairing-jail-card { flex: 0 0 260px; display: flex; flex-direction: column; align-items: center; text-align: center; border-color: var(--amber); }
+  .pairing-otp-card { flex: 1; text-align: center; border-color: var(--primary); }
 
   /* ---------- .grid was referenced by Quick Actions but never defined — the
      inline grid-template-columns did nothing and tiles overflowed. ---------- */
@@ -691,21 +706,21 @@
           <div class="mini-stat-row">
             <div class="mini-stat blue">
               <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
-              <div><div class="v" id="ds-total">0</div><div class="l">Total devices</div></div>
+              <div><div class="l">Total devices</div><div class="v" id="ds-total">0</div></div>
             </div>
             <div class="mini-stat green">
               <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
-              <div><div class="v" id="ds-active">0</div><div class="l">Online now</div></div>
+              <div><div class="l">Online now</div><div class="v" id="ds-active">0</div></div>
             </div>
             <div class="mini-stat amber">
               <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-              <div><div class="v" id="ds-guests">0</div><div class="l">Guests</div></div>
+              <div><div class="l">Guests</div><div class="v" id="ds-guests">0</div></div>
             </div>
             <div class="mini-stat purple">
               <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
-              <div><div class="v" id="ds-storage">0</div><div class="l">Storage used</div></div>
+              <div><div class="l">Storage used</div><div class="v" id="ds-storage">0</div></div>
             </div>
-            <div class="mini-stat blue ctl hidden" id="ds-guestmode-cell">
+            <div class="mini-stat amber ctl hidden" id="ds-guestmode-cell">
               <div class="l">Guest Mode</div>
               <div class="ctl-body">
                 <span class="dim" style="font-size:11px">Read-only + jailed</span>
@@ -721,27 +736,24 @@
                 <button type="button" data-ttl="3600">1h</button>
               </div>
             </div>
-            <div class="mini-stat blue ctl hidden" id="ds-creates-cell">
+            <div class="mini-stat purple ctl hidden" id="ds-creates-cell">
               <div class="l">Creates</div>
               <div class="ctl-body" id="pairing-creates"><span class="type-tag">User</span></div>
             </div>
           </div>
-          <div class="panel" style="border-top:2px solid var(--primary)">
-            <div class="panel-head">
-              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-              <h2 class="panel-title">Pair a new device</h2>
+          <div class="pairing-row hidden" id="pairing-area">
+            <div class="panel pairing-jail-card">
+              <div class="l">Jail path</div>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--amber);margin-top:10px"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+              <input type="text" id="pairing-guest-jail" class="mono" style="width:100%;margin-top:10px;text-align:center;background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:0 0 8px" placeholder="/media/shared">
+              <a href="#" id="pairing-browse-link" class="dim" style="font-size:12px;margin-top:10px">Browse</a>
             </div>
-            <div class="field-row hidden" id="pairing-generate-row">
-              <div>
-                <p class="field-label">Pair a new device</p>
-                <p class="field-desc">Mints a one-time code, same as `rfe-agent pair` on the PC. Admin sessions (logged in with the account password) only.</p>
-              </div>
-              <button class="primary" id="pairing-generate-btn">Generate code</button>
+            <div class="panel pairing-otp-card">
+              <div class="l">Pair new device</div>
+              <div class="gen-otp" id="pairing-otp-tiles" style="justify-content:center"></div>
+              <p class="gen-meta" id="pairing-expires-line" style="display:inline-block;border-bottom:1px solid var(--border);padding-bottom:4px"></p>
+              <div><button class="primary" id="pairing-generate-btn">Generate new code</button></div>
             </div>
-            <div class="field-row hidden" id="pairing-guest-jail-row">
-              <input type="text" id="pairing-guest-jail" class="mono control" style="width:100%" placeholder="/home/you/SharedWithGuests">
-            </div>
-            <div id="pairing-generate-result" style="margin:0 0 4px"></div>
           </div>
           <div>
             <div class="panel-head">
@@ -1244,6 +1256,13 @@
   // server enforces the same rule independently (see isAdminDevice).
   let isAdmin = false;
 
+  // Id of the device card whose .dev-detail is expanded, or null. jail-save/
+  // revoke/purge all end in a full loadDashboard() (to refresh derived state
+  // like role tags and the guest count), which rebuilds every card from
+  // scratch — without this, that rebuild would always re-collapse the card
+  // the user was just mid-edit on.
+  let expandedDeviceId = null;
+
   // ---------- Allowed folders (roots) ----------
   let currentRoots = [];
 
@@ -1295,9 +1314,8 @@
 
   $('pairing-guest-toggle').addEventListener('change', (e) => {
     const guest = e.target.checked;
-    $('pairing-guest-jail-row').classList.toggle('hidden', !guest);
     $('pairing-creates').innerHTML = guest
-      ? '<span class="type-tag" style="background:rgba(251,191,36,.12);color:var(--amber)">Guest</span><span class="type-tag" style="background:rgba(167,139,250,.12);color:var(--purple)">RO</span><span class="type-tag">Jailed</span>'
+      ? '<span class="type-tag guest">Guest</span><span class="type-tag ro">RO</span><span class="type-tag">Jailed</span>'
       : '<span class="type-tag">User</span>';
   });
 
@@ -1307,25 +1325,68 @@
     $('pairing-ttl').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
   });
 
+  $('pairing-browse-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    const path = $('pairing-guest-jail').value.trim();
+    if (!path) return;
+    showPage('files');
+    filesTab('browse');
+    openFolder(path);
+  });
+
+  const COPY_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+
+  // Pairing-code countdown — ticks the "expires in mm:ss" line from the real TTL
+  // the server returned, independent of the 5m/15m/1h picker (which only sets
+  // the TTL for the *next* code minted).
+  let pairingCountdownIv = null;
+  function stopPairingCountdown() { if (pairingCountdownIv) { clearInterval(pairingCountdownIv); pairingCountdownIv = null; } }
+  function startPairingCountdown(seconds) {
+    stopPairingCountdown();
+    let remaining = Math.max(0, Math.round(seconds));
+    const line = $('pairing-expires-line');
+    const render = () => { line.textContent = 'expires in ' + Math.floor(remaining / 60) + ':' + String(remaining % 60).padStart(2, '0'); };
+    render();
+    pairingCountdownIv = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) { stopPairingCountdown(); line.textContent = 'expired'; return; }
+      render();
+    }, 1000);
+  }
+
+  // Dimmed placeholder tiles shown before the first code of the session is minted.
+  function renderOtpPlaceholder() {
+    stopPairingCountdown();
+    $('pairing-otp-tiles').innerHTML = '<span class="ph">•</span><span class="ph">•</span><span class="ph">•</span><span class="ph">•</span>' +
+      '<span class="dash">–</span><span class="ph">•</span><span class="ph">•</span><span class="ph">•</span><span class="ph">•</span>';
+    $('pairing-expires-line').textContent = '';
+  }
+  renderOtpPlaceholder();
+
   $('pairing-generate-btn').addEventListener('click', async () => {
-    const resultEl = $('pairing-generate-result');
+    const tiles = $('pairing-otp-tiles');
+    const line = $('pairing-expires-line');
     const guest = $('pairing-guest-toggle').checked;
     const jailRoot = $('pairing-guest-jail').value.trim();
     if (guest && !jailRoot) {
-      resultEl.innerHTML = '<p class="dim mono" style="margin:0">Guest devices need a folder.</p>';
+      line.textContent = 'Guest devices need a folder.';
       return;
     }
-    resultEl.innerHTML = '<p class="dim mono" style="margin:0">Generating…</p>';
+    line.textContent = 'Generating…';
     try {
       const ttlSeconds = Number(($('pairing-ttl').querySelector('button.active') || {}).dataset?.ttl) || 900;
       const body = guest ? { guest: true, jailRoot, ttlSeconds } : { ttlSeconds };
       const res = await api('/pairing/generate', { method: 'POST', body: JSON.stringify(body) });
-      const mins = Math.round(res.expiresInSeconds / 60);
-      const letters = String(res.pairingCode).split('').map((c) => '<span>' + esc(c) + '</span>').join('');
-      resultEl.innerHTML = '<div class="gen-otp">' + letters + '</div>' +
-        '<p class="gen-meta">expires in ' + mins + ' min' + (guest ? ' — guest, read-only, jailed' : '') + '</p>';
+      const code = String(res.pairingCode);
+      const mid = Math.ceil(code.length / 2);
+      const letters = code.slice(0, mid).split('').map((c) => '<span>' + esc(c) + '</span>').join('') +
+        '<span class="dash">-</span>' +
+        code.slice(mid).split('').map((c) => '<span>' + esc(c) + '</span>').join('');
+      tiles.innerHTML = letters + '<button type="button" class="otp-copy" id="pairing-copy-btn" title="Copy code">' + COPY_ICON + '</button>';
+      $('pairing-copy-btn').addEventListener('click', () => navigator.clipboard?.writeText(code));
+      startPairingCountdown(res.expiresInSeconds);
     } catch (err) {
-      resultEl.innerHTML = '<p class="error-text" style="margin:0">Failed: ' + esc(err.message) + '</p>';
+      line.textContent = 'Failed: ' + err.message;
     }
   });
 
@@ -1341,13 +1402,26 @@
         if (!confirm('Permanently remove this device from the list?')) return;
         await api('/devices/' + id + '?purge=true', { method: 'DELETE' });
       } else if (btn.dataset.action === 'jail-save') {
-        const jailInput = btn.closest('tr').querySelector('.jail-input');
+        const jailInput = btn.closest('.rfe-card').querySelector('.jail-input');
         await api('/devices/' + id, { method: 'PATCH', body: JSON.stringify({ jailRoot: jailInput.value.trim() }) });
       }
       loadDashboard();
     } catch (err) {
       alert('Failed: ' + err.message);
     }
+  });
+
+  // Click-to-expand: toggles the .dev-detail section (jail path / read-only /
+  // revoke controls) below a device card's compact face. Clicks inside the
+  // detail area itself (inputs, Save, the read-only switch, Revoke) must not
+  // re-toggle it shut before their own handlers above get to run — both
+  // listeners fire on the same click since they're on the same element.
+  $('devices-list').addEventListener('click', (e) => {
+    if (e.target.closest('.dev-detail')) return;
+    const card = e.target.closest('.dev-card');
+    if (!card) return;
+    const nowHidden = card.querySelector('.dev-detail').classList.toggle('hidden');
+    expandedDeviceId = nowHidden ? null : card.dataset.id;
   });
 
   $('devices-list').addEventListener('change', async (e) => {
@@ -2052,7 +2126,7 @@
 
       const curDevice = (devices || []).find((d) => d.current);
       isAdmin = !!(curDevice && curDevice.viaLogin);
-      $('pairing-generate-row').classList.toggle('hidden', !isAdmin);
+      $('pairing-area').classList.toggle('hidden', !isAdmin);
       $('ds-guestmode-cell').classList.toggle('hidden', !isAdmin);
       $('ds-expires-cell').classList.toggle('hidden', !isAdmin);
       $('ds-creates-cell').classList.toggle('hidden', !isAdmin);
@@ -2062,14 +2136,17 @@
       $('devices-count').textContent = (devices || []).length + ' paired';
       $('nav-badge-devices').textContent = (devices || []).length || '';
       (devices || []).forEach((d) => {
-        const label = esc(d.label || 'unnamed') + (d.current ? ' <span class="dim">· this device</span>' : '');
+        const label = esc(d.label || 'unnamed');
         // Same role derivation as the Overview card and the Devices-page guest stat.
         const role = d.viaLogin ? 'Admin' : (d.readOnly && d.jailRoot ? 'Guest' : 'User');
         const roleTagCls = role === 'Admin' ? 'admin' : (role === 'Guest' ? 'guest' : '');
-        const accessText = d.readOnly ? '<span class="type-tag ro">RO</span>' : 'Full access';
-        let statusTag = '<span class="status-text status-green dot">Paired</span>';
-        if (d.revoked) statusTag = '<span class="status-text status-red dot">Revoked</span>';
-        else if (d.readOnly) statusTag = '<span class="status-text status-amber dot">Read-only</span>';
+        const accessText = d.readOnly
+          ? '<span class="type-tag ro">RO</span>'
+          : (d.jailRoot ? '<span class="dim mono" style="font-size:11px">' + esc(d.jailRoot) + '</span>' : '<span class="dim">Full access</span>');
+        // "Kind" isn't a stored field — sniffed the same way as the avatar icon,
+        // and only surfaced for phones (mirrors the mockup; browser/desktop
+        // labels already say what they are, so a suffix there would be noise).
+        const kind = /mobile|phone|android|ios|pixel|iphone/.test((d.label || '').toLowerCase()) ? ' <span class="dim">(phone)</span>' : '';
         const canManage = isAdmin || d.current;
         let actions = '';
         if (canManage) {
@@ -2085,18 +2162,31 @@
           : (d.readOnly ? 'Yes' : 'No');
         const accent = d.revoked ? 'accent-red' : (d.readOnly ? 'accent-amber' : 'accent-green');
         const card = document.createElement('div');
-        card.className = 'rfe-card ' + accent;
+        card.className = 'rfe-card dev-card ' + accent;
+        card.dataset.id = d.id;
         // ponytail: no per-device quota field on the Device struct — placeholder bar for
         // mockup parity, width derived from the device id, labelled honestly (no fake GB).
-        const qPct = 20 + (Math.abs(hashStr(String(d.id))) % 65);
-        const quota = '<div class="dev-quota" title="Placeholder — per-device quota is not tracked yet"><div class="dev-quota-track"><div class="dev-quota-fill" style="width:' + qPct + '%"></div></div><div class="dev-quota-text">Quota — not tracked</div></div>';
+        // The current browser's own session has no meaningful quota reading at all,
+        // so it gets a plain "Current session / now" foot row instead of a fake bar.
+        let quota;
+        if (d.current) {
+          quota = '<div class="dev-quota-foot" style="margin-top:10px"><span class="dim" style="font-size:11px">Current session</span><span class="dim mono" style="font-size:11px">now</span></div>';
+        } else {
+          const qPct = 20 + (Math.abs(hashStr(String(d.id))) % 65);
+          quota = '<div class="dev-quota" title="Placeholder — per-device quota is not tracked yet"><div class="dev-quota-track"><div class="dev-quota-fill" style="width:' + qPct + '%"></div></div>' +
+            '<div class="dev-quota-foot"><span class="dev-quota-text">Quota — not tracked</span><span class="dim mono" style="font-size:10.5px">' + timeAgo(d.lastSeen) + '</span></div></div>';
+        }
         card.innerHTML =
-          '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '<span class="rfe-card-name" style="flex:1">' + label + '</span>' + statusTag + '</div>' +
+          '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '</div>' +
+          '<div class="rfe-card-name">' + label + kind + '</div>' +
           '<div class="dev-meta"><span class="type-tag ' + roleTagCls + '">' + role + '</span>' + accessText + '</div>' +
           quota +
+          '<div class="dev-detail hidden">' +
           '<div class="rfe-card-row"><span class="k">Jail path</span>' + jailCell + '</div>' +
           '<div class="rfe-card-row"><span class="k">Read-only</span>' + readOnlyCell + '</div>' +
-          (actions ? '<div class="rfe-card-foot">' + actions + '</div>' : '');
+          (actions ? '<div class="rfe-card-foot">' + actions + '</div>' : '') +
+          '</div>';
+        if (String(d.id) === expandedDeviceId) card.querySelector('.dev-detail').classList.remove('hidden');
         list.appendChild(card);
       });
       if (!devices || devices.length === 0) {

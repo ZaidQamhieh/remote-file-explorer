@@ -37,7 +37,7 @@ func TestOpenSession(t *testing.T) {
 	content := []byte("hello world")
 	hash := sha256hex(content)
 
-	sess, err := tm.OpenSession(id, target, int64(len(content)), 64, hash, false)
+	sess, err := tm.OpenSession(id, target, int64(len(content)), 64, hash, false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestOpenSession_DestinationExists(t *testing.T) {
 
 	content := []byte("hello world")
 	id := uuid.New().String()
-	_, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), false)
+	_, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), false, "")
 	if !errors.Is(err, ErrDestinationExists) {
 		t.Fatalf("expected ErrDestinationExists, got %v", err)
 	}
@@ -87,7 +87,7 @@ func TestOpenSession_OverwriteAllowsExistingDestination(t *testing.T) {
 
 	content := []byte("hello world")
 	id := uuid.New().String()
-	if _, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), true); err != nil {
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 64, sha256hex(content), true, ""); err != nil {
 		t.Fatalf("OpenSession with overwrite: %v", err)
 	}
 }
@@ -100,7 +100,7 @@ func TestSingleChunkUploadComplete(t *testing.T) {
 	hash := sha256hex(content)
 	id := uuid.New().String()
 
-	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, hash, false)
+	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, hash, false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestMultiChunkResume(t *testing.T) {
 	fileHash := sha256hex(content)
 	id := uuid.New().String()
 
-	_, err := tm.OpenSession(id, target, 30, 10, fileHash, false)
+	_, err := tm.OpenSession(id, target, 30, 10, fileHash, false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestHashMismatch(t *testing.T) {
 	wrongHash := sha256hex([]byte("wrong content"))
 	id := uuid.New().String()
 
-	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, wrongHash, false)
+	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, wrongHash, false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestHashMismatchRemovesTempFile(t *testing.T) {
 	wrongHash := sha256hex([]byte("wrong content"))
 	id := uuid.New().String()
 
-	sess, err := tm.OpenSession(id, target, int64(len(content)), 1024, wrongHash, false)
+	sess, err := tm.OpenSession(id, target, int64(len(content)), 1024, wrongHash, false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestChunkHashMismatch(t *testing.T) {
 	content := []byte("some data")
 	id := uuid.New().String()
 
-	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), false)
+	_, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}

@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RFE Web Companion</title>
+<style>@layer properties, legacy, theme, components, utilities;</style>
+<link rel="stylesheet" href="/tailwind.css">
 <style>
+@layer legacy {
   /* Fonts vendored from the Figma source (Inter + JetBrains Mono, OFL-1.1), served
      locally out of dist/fonts/ — no CDN fetch, works fully offline on the LAN. */
   @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/inter-latin-400-normal.woff2') format('woff2'); }
@@ -84,7 +87,6 @@
   }
   button:hover { background: var(--accent); color: var(--ink); }
   button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-  button.primary:hover { background: var(--primary); filter: brightness(1.12); }
   button.danger { background: transparent; border-color: transparent; color: var(--red); }
   button.danger:hover { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.2); }
   button:disabled { opacity: .5; cursor: default; }
@@ -144,7 +146,8 @@
   .table-scroll { overflow-x: auto; }
   .dtable { width: 100%; border-collapse: collapse; }
   .dtable th { text-align: left; padding: 8px 18px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .dtable td { padding: 10px 18px; font-size: 12px; font-family: var(--mono); color: var(--dim-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .dtable td { padding: 10px 18px; font-size: 12px; color: var(--dim-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .dtable td:nth-child(5) { font-family: var(--mono); }
   .dtable tbody tr:last-child td { border-bottom: none; }
   .dtable tbody tr:hover { background: rgba(29,37,53,.3); }
   .dtable td.ink { color: var(--ink); }
@@ -182,6 +185,9 @@
   .stat-label { font-size: 11px; font-weight: 500; color: var(--dim); }
   .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -.01em; line-height: 1; }
   .stat-value .unit { font-size: 12px; color: var(--dim); font-family: var(--sans); margin-left: 3px; }
+  .device-chip { border: none; background: transparent; color: var(--dim-2); font-size: 12px; font-weight: 500; padding: 7px 12px; border-radius: var(--radius-md); cursor: pointer; }
+  .device-chip:hover { color: var(--ink); }
+  .device-chip.active { background: var(--surface-2); color: var(--ink); }
   .stat { overflow: hidden; }
   .spark { width: calc(100% + 32px); height: 40px; display: block; margin: 8px -16px -16px; }
 
@@ -196,21 +202,65 @@
   .type-tag { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-sm); background: rgba(59,130,246,.1); color: var(--primary); font-family: var(--mono); }
 
   /* ---------- Icons ---------- */
-  .icon { width: 14px; height: 14px; flex-shrink: 0; }
+  .icon { width: 17px; height: 17px; flex-shrink: 0; }
 
   /* ---------- Avatar with status dot ---------- */
   .avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(59,130,246,.1); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-family: var(--mono); color: var(--primary); position: relative; flex-shrink: 0; }
   .avatar::after { content: ""; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--green); border: 2px solid var(--surface); }
 
   /* ---------- Auth screen ---------- */
-  .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .auth-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 24px; }
-  .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
-  .auth-brand .mark { width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
-  .auth-brand span { font-weight: 600; font-size: 15px; }
-  .tabbar { display: flex; gap: 8px; margin-bottom: 20px; background: var(--surface-2); border-radius: var(--radius-md); padding: 4px; }
-  .tab { flex: 1; background: transparent; border: none; border-radius: var(--radius-sm); padding: 8px; font-size: 12px; font-weight: 500; color: var(--dim); }
-  .tab.tab-active { background: var(--primary); color: #fff; }
+  .auth-split { min-height: 100vh; display: flex; }
+  .auth-hero {
+    flex: 1 1 46%; display: flex; flex-direction: column; justify-content: center; padding: 64px;
+    background: linear-gradient(160deg, var(--sidebar) 0%, color-mix(in srgb, var(--primary) 16%, var(--sidebar)) 100%);
+    border-right: 1px solid var(--border);
+  }
+  .auth-brand { display: flex; align-items: center; gap: 16px; margin-bottom: 36px; }
+  .auth-brand .mark { width: 128px; height: 128px; object-fit: contain; flex-shrink: 0; }
+  .auth-brand span { font-weight: 700; font-size: 19px; letter-spacing: -.01em; color: var(--ink); }
+  .auth-hero h1 { font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 12px; }
+  .auth-hero .lead { font-size: 14px; color: var(--dim-2); line-height: 1.6; max-width: 380px; margin: 0 0 40px; }
+  .auth-features { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 18px; }
+  .auth-features li { display: flex; align-items: center; gap: 12px; font-size: 13.5px; color: var(--ink); }
+  .auth-features .icon-wrap {
+    width: 32px; height: 32px; border-radius: var(--radius-md); flex-shrink: 0;
+    background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .auth-panel { flex: 1 1 54%; display: flex; align-items: center; justify-content: center; padding: 40px; }
+  .auth-form-wrap { width: 100%; max-width: 340px; }
+  @media (max-width: 860px) { .auth-hero { display: none; } }
+
+  .tabbar { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface-2); border-radius: var(--radius-md); padding: 4px; }
+  .tab {
+    flex: 1; background: transparent; border: none; border-radius: var(--radius-sm); padding: 8px; font-size: 12.5px; font-weight: 500; color: var(--dim);
+    transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.tab-active { background: var(--primary); color: #fff; box-shadow: 0 2px 10px -3px color-mix(in srgb, var(--primary) 60%, transparent); }
+
+  .auth-panel .field { margin-bottom: 14px; }
+  .auth-panel .field label { font-size: 12.5px; margin-bottom: 6px; }
+  .auth-panel input[type=text], .auth-panel input[type=password] {
+    padding: 10px 13px; font-size: 14px; border-radius: var(--radius-md);
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .auth-panel input[type=text]:hover, .auth-panel input[type=password]:hover { border-color: var(--dim); }
+  .auth-panel input[type=text]:focus, .auth-panel input[type=password]:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+  .auth-panel button.primary {
+    padding: 11px; font-size: 14px; font-weight: 600; border-radius: var(--radius-md);
+    transition: background-color .15s ease, filter .15s ease, transform .1s ease, box-shadow .15s ease;
+  }
+  .auth-panel button.primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--primary) 60%, transparent); }
+  .auth-panel button.primary:active { transform: translateY(0); }
+  .field-label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .field-label-row label { margin-bottom: 0; }
+  .auth-link { font-size: 12px; color: var(--primary); text-decoration: none; }
+  .auth-link:hover { text-decoration: underline; }
+  .auth-callout { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; font-size: 12px; color: var(--dim); line-height: 1.6; margin-top: 14px; }
+  .auth-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--dim); line-height: 1.6; text-align: center; }
 
   /* ---------- Dashboard shell ---------- */
   .topstrip { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--dim); font-family: var(--mono); }
@@ -226,13 +276,13 @@
   .status-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s ease-in-out infinite; }
   @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
   .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; padding: 0 8px; }
-  .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); color: var(--dim-2); font-size: 12px; font-weight: 500; text-decoration: none; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); color: var(--dim-2); font-size: 12px; font-weight: 500; text-decoration: none; transition: background-color .15s ease-out, color .15s ease-out; }
   .nav a .icon { color: var(--dim); }
   .nav a span:first-of-type { flex: 1; }
   .nav-badge { font-size: 10px; padding: 1px 6px; border-radius: var(--radius-sm); font-family: var(--mono); background: var(--surface-2); color: var(--dim); }
   .nav-badge:empty { display: none; }
   .nav a.nav-active .nav-badge { background: rgba(59,130,246,.2); color: var(--primary); }
-  .nav a:hover { background: rgba(22,25,35,.5); color: var(--ink); }
+  .nav a:hover { background: var(--accent); color: var(--ink); }
   .nav a.nav-active { background: var(--surface-2); color: var(--ink); }
   .nav a.nav-active .icon { color: var(--primary); }
   .sidebar-footer { border-top: 1px solid var(--border); padding: 12px 8px 0; margin-top: 8px; display: flex; align-items: center; gap: 8px; }
@@ -267,14 +317,15 @@
   .file-row { cursor: pointer; }
   .file-row:hover .name { color: var(--primary); }
 
-  /* ---------- Panel-head accent icon badge (colored circle behind the panel icon) ---------- */
-  .panel-head .icon-badge, .table-head .icon-badge { width: 26px; height: 26px; border-radius: var(--radius-md);
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  /* ---------- Accent icon badge (colored box behind an icon) ---------- */
+  .icon-badge { border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .panel-head .icon-badge, .table-head .icon-badge { width: 26px; height: 26px; }
   .panel-head .icon-badge .icon, .table-head .icon-badge .icon { color: inherit; }
-  .icon-badge.blue { background: rgba(59,130,246,.12); color: var(--primary); }
-  .icon-badge.green { background: rgba(52,211,153,.12); color: var(--green); }
-  .icon-badge.amber { background: rgba(251,191,36,.12); color: var(--amber); }
-  .icon-badge.purple { background: rgba(167,139,250,.12); color: var(--purple); }
+  .icon-badge.blue { background: rgba(59,130,246,.22); color: var(--primary); }
+  .icon-badge.green { background: rgba(52,211,153,.22); color: var(--green); }
+  .icon-badge.amber { background: rgba(251,191,36,.22); color: var(--amber); }
+  .icon-badge.purple { background: rgba(167,139,250,.22); color: var(--purple); }
+  .icon-badge.red { background: rgba(248,113,113,.22); color: var(--red); }
 
   /* ---------- Card grid (replaces plain .dtable rows on Devices/Transfers/Users/Overview) ---------- */
   .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
@@ -295,11 +346,11 @@
   /* ---------- Device avatar + online-pulse dot (Overview + Devices cards) ---------- */
   .dev-avatar { width: 34px; height: 34px; border-radius: var(--radius-md); display: flex; align-items: center;
     justify-content: center; flex-shrink: 0; }
-  .dev-avatar.blue { background: rgba(59,130,246,.12); color: var(--primary); }
-  .dev-avatar.purple { background: rgba(167,139,250,.12); color: var(--purple); }
-  .dev-avatar.amber { background: rgba(251,191,36,.12); color: var(--amber); }
+  .dev-avatar.blue { background: rgba(59,130,246,.22); color: var(--primary); }
+  .dev-avatar.purple { background: rgba(167,139,250,.22); color: var(--purple); }
+  .dev-avatar.amber { background: rgba(251,191,36,.22); color: var(--amber); }
   .dev-pulse { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--dim-2, var(--dim)); }
-  .dev-pulse.on { background: var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+  .dev-pulse.on { background: var(--green); }
   .dev-pulse.off { background: var(--red); }
 
   .qa-tile { flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px 12px;
@@ -308,8 +359,10 @@
   .qa-tile:hover { border-color: var(--primary); background: var(--accent); transform: translateY(-1px); }
   .qa-tile.qa-primary { background: var(--primary); border-color: var(--primary); }
   .qa-tile.qa-primary span { color: #fff; }
-  .qa-tile.qa-primary .icon-badge { background: rgba(255,255,255,.18); color: #fff; }
+  .qa-tile.qa-primary .icon-badge { color: #fff; }
   .qa-tile.qa-primary:hover { background: var(--primary); filter: brightness(1.12); border-color: var(--primary); }
+  .qa-tile .icon-badge { background: none; width: 40px; height: 40px; }
+  .qa-tile .icon-badge .icon { width: 30px; height: 30px; }
   .qa-tile .qa-endpoint { font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 400; }
   .qa-tile.qa-primary .qa-endpoint { display: none; }
 
@@ -325,15 +378,16 @@
      row at 1440 CSS px, including the 3-chip Creates state — see min-content
      math in the Devices reskin notes. */
   .mini-stat-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border);
-    border-radius: var(--radius-lg); padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+  .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border);
+    border-top-width: 2px; border-radius: var(--radius-lg); padding: 20px 14px; display: flex; align-items: center; gap: 10px;
     transition: border-color .15s, transform .15s; }
   .mini-stat:hover { transform: translateY(-1px); }
-  .mini-stat.blue { border-top-color: var(--primary); }
-  .mini-stat.green { border-top-color: var(--green); }
-  .mini-stat.amber { border-top-color: var(--amber); }
-  .mini-stat.purple { border-top-color: var(--purple); }
-  .mini-stat .icon-badge { width: 30px; height: 30px; }
+  .mini-stat.blue { border-top-color: var(--primary); background: linear-gradient(to bottom, rgba(59,130,246,.10), transparent 65%), var(--surface); }
+  .mini-stat.green { border-top-color: var(--green); background: linear-gradient(to bottom, rgba(52,211,153,.10), transparent 65%), var(--surface); }
+  .mini-stat.amber { border-top-color: var(--amber); background: linear-gradient(to bottom, rgba(251,191,36,.10), transparent 65%), var(--surface); }
+  .mini-stat.purple { border-top-color: var(--purple); background: linear-gradient(to bottom, rgba(167,139,250,.10), transparent 65%), var(--surface); }
+  .mini-stat .icon-badge { width: 35px; height: 35px; }
+  .mini-stat .icon-badge .icon { width: 20px; height: 20px; }
   .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
   .mini-stat .v { font-size: 19px; font-weight: 600; font-family: var(--mono); line-height: 1; margin-top: 3px; }
   /* Interactive stat cells (Guest Mode toggle / Expires picker / Creates tags) — column layout */
@@ -354,16 +408,15 @@
   .log-filter { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .log-filter .dim { flex-shrink: 0; }
   .log-filter button.active { background: var(--accent); color: var(--ink); }
-  .log-line.hidden { display: none; }
-
-  /* ---------- Files page: Browse/Recent/Trash/Shares tabs (same look as .log-filter) ---------- */
-  .tab-bar { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
-  .tab-bar button.active { background: var(--accent); color: var(--ink); }
+  
+  /* ---------- Files page: Browse/Recent/Trash/Shares tabs (flat underline tabs, not buttons) ---------- */
+  .tab-bar { display: flex; align-items: center; gap: 28px; padding: 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .tab-bar button { border: none; border-radius: 0; background: transparent; padding: 10px 0; color: var(--dim); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab-bar button.active { background: transparent; color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
   .file-row .select { flex-shrink: 0; }
   .bulk-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 8px;
     background: var(--accent); border-radius: var(--radius-md); }
-  .bulk-toolbar.hidden { display: none; }
-
+  
   /* ---------- Generated pairing-code display (big letters, animated in) ---------- */
   .gen-otp { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
   .gen-otp span { font-family: var(--mono); font-size: 26px; font-weight: 700; background: var(--surface-2);
@@ -382,8 +435,12 @@
 
   /* ---------- Devices: Jail path / Pair new device cards (replaces the old prose panel) ---------- */
   .pairing-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: stretch; }
-  .pairing-jail-card { flex: 0 0 260px; display: flex; flex-direction: column; align-items: center; text-align: center; border-color: var(--amber); }
-  .pairing-otp-card { flex: 1; text-align: center; border-color: var(--primary); }
+  .pairing-jail-card { flex: 0 0 260px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    border-top-width: 2px; border-top-color: var(--amber);
+    background: linear-gradient(to bottom, rgba(251,191,36,.08), transparent 50%), var(--surface); }
+  .pairing-otp-card { flex: 1; text-align: center;
+    border-top-width: 2px; border-top-color: var(--primary);
+    background: linear-gradient(to bottom, rgba(59,130,246,.08), transparent 50%), var(--surface); }
 
   /* ---------- .grid was referenced by Quick Actions but never defined — the
      inline grid-template-columns did nothing and tiles overflowed. ---------- */
@@ -410,6 +467,7 @@
     transition: border-color .15s, transform .15s; }
   .files-grid-view .gcell:hover { border-color: var(--primary); transform: translateY(-1px); }
   .files-grid-view .gcell .icon { width: 26px; height: 26px; }
+  .files-grid-view .gcell-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-md); }
 
   /* ---------- Transfers: mockup icon rows ---------- */
   .trow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border);
@@ -430,18 +488,29 @@
   .type-tag.admin { background: rgba(167,139,250,.12); color: var(--purple); }
   .type-tag.guest { background: rgba(251,191,36,.12); color: var(--amber); }
   .type-tag.ro { background: var(--surface-2); color: var(--dim-2); }
+}
 </style>
 </head>
 <body>
 
 <div id="pair-view">
-  <div class="auth-shell">
-    <div class="auth-card">
+  <div class="auth-split">
+    <div class="auth-hero">
       <div class="auth-brand">
-        <div class="mark">R</div>
+        <img class="mark" src="/logo.png" alt="RFE">
         <span>RFE Web Companion</span>
       </div>
+      <h1>Your PC,<br>from anywhere.</h1>
+      <p class="lead">Browse, transfer, and manage files on this machine from your phone or any browser. No cloud in between.</p>
+      <ul class="auth-features">
+        <li><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>Full file access — browse, move, share</li>
+        <li><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span>Resumable uploads &amp; downloads</li>
+        <li><span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="18" x="3" y="3" rx="1"/><rect width="7" height="18" x="14" y="3" rx="1"/></svg></span>Per-device permissions &amp; quotas</li>
+      </ul>
+    </div>
 
+    <div class="auth-panel">
+    <div class="auth-form-wrap">
       <div class="tabbar">
         <button id="tab-login" class="tab tab-active">Log in</button>
         <button id="tab-code" class="tab">Pair with code</button>
@@ -454,7 +523,10 @@
           <input id="login-username" type="text" autocomplete="username">
         </div>
         <div class="field">
-          <label>Password</label>
+          <div class="field-label-row">
+            <label for="login-password">Password</label>
+            <a href="#" id="login-forgot-link" class="auth-link">Forgot password?</a>
+          </div>
           <input id="login-password" type="password" autocomplete="current-password">
         </div>
         <div class="field">
@@ -463,6 +535,7 @@
         </div>
         <button class="primary" id="login-submit" style="width:100%">Log in</button>
         <div class="error-text hidden" id="login-error"></div>
+        <p class="auth-callout hidden" id="login-forgot-note">No self-service reset — this agent can't rename or remove an existing account yet. Ask whoever manages this PC to pick a new username with <code>rfe-agent adduser</code>.</p>
         <p class="note">No account? Switch to <b>Register</b>, or run <code>rfe-agent adduser</code> on the PC.</p>
       </div>
 
@@ -501,7 +574,8 @@
         <p class="note">Uses the same one-time code as "Pair with code" — creates your account and pairs this browser together.</p>
       </div>
 
-      <p class="note">Token stored in this browser's localStorage — less secure than the phone app's Keystore. Only use trusted browsers.</p>
+      <p class="auth-footer">Token stored in this browser's localStorage — less secure than the phone app's Keystore. Only use trusted browsers.</p>
+    </div>
     </div>
   </div>
 </div>
@@ -510,7 +584,10 @@
   <div class="shell">
     <div class="sidebar">
       <div class="brand">
-        <span class="dev-pulse on" style="margin-top:4px" title="Agent running"></span>
+        <span class="relative inline-flex h-2 w-2" style="margin-top:4px" title="Agent running">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--green)] opacity-75"></span>
+          <span class="dev-pulse on"></span>
+        </span>
         <div>
           <div class="name" id="agent-name">RFE</div>
           <div class="sub" id="agent-host">rfedash.local</div>
@@ -519,10 +596,10 @@
       <div class="nav">
         <a href="#" data-page="status" class="nav-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Overview</span></a>
         <a href="#" data-page="files"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span>Files</span><span class="nav-badge" style="background:rgba(59,130,246,.2);color:var(--primary)">NEW</span></a>
-        <a href="#" data-page="transfers"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Transfers</span><span class="nav-badge" id="nav-badge-transfers"></span></a>
-        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg><span>Devices</span><span class="nav-badge" id="nav-badge-devices"></span></a>
+        <a href="#" data-page="transfers"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Transfers</span><span class="nav-badge" id="nav-badge-transfers"></span></a>
+        <a href="#" data-page="devices"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="18" x="3" y="3" rx="1"/><rect width="7" height="18" x="14" y="3" rx="1"/></svg><span>Devices</span><span class="nav-badge" id="nav-badge-devices"></span></a>
         <a href="#" data-page="users"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Users</span><span class="nav-badge" style="background:rgba(59,130,246,.2);color:var(--primary)">NEW</span></a>
-        <a href="#" data-page="logs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span>Logs</span></a>
+        <a href="#" data-page="logs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><line x1="7" x2="13" y1="9" y2="9"/><line x1="7" x2="11" y1="13" y2="13"/></svg><span>Logs</span></a>
         <a href="#" data-page="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></a>
       </div>
       <div class="theme-switcher">
@@ -597,31 +674,31 @@
             <div class="panel-head"><h2 class="panel-title">Quick actions</h2></div>
             <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
               <button class="qa-tile qa-primary" data-qa-page="devices">
-                <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+                <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
                 <span>Pair device</span>
               </button>
               <button class="qa-tile" data-qa-page="files">
-                <div class="icon-badge amber" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
                 <span>New folder</span>
                 <span class="qa-endpoint">POST /fs/folder</span>
               </button>
               <button class="qa-tile" id="qa-upload">
-                <div class="icon-badge blue" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></div>
+                <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></div>
                 <span>Upload file</span>
                 <span class="qa-endpoint">POST /fs/file</span>
               </button>
               <button class="qa-tile" id="qa-share">
-                <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
                 <span>Share link</span>
                 <span class="qa-endpoint">POST /share/mint</span>
               </button>
               <button class="qa-tile" id="qa-wake">
-                <div class="icon-badge green" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
+                <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
                 <span>Wake device</span>
                 <span class="qa-endpoint">POST /wol</span>
               </button>
               <button class="qa-tile" data-qa-page="settings">
-                <div class="icon-badge purple" style="width:40px;height:40px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6L21 3"/><path d="M21 3v6h-6"/></svg></div>
+                <div class="icon-badge red"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6L21 3"/><path d="M21 3v6h-6"/></svg></div>
                 <span>Restart agent</span>
                 <span class="qa-endpoint">POST /agent/restart</span>
               </button>
@@ -778,7 +855,10 @@
             <div id="files-browse-tab">
               <div class="row" style="gap:8px">
                 <div id="breadcrumb" class="crumb"></div>
-                <input id="folder-search" type="text" placeholder="Search this folder…" style="width:180px">
+                <span style="position:relative; display:inline-flex; align-items:center">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; left:9px; pointer-events:none; opacity:.6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input id="folder-search" type="text" placeholder="Search this folder…" style="width:180px; padding-left:30px">
+                </span>
                 <button id="files-view-list" class="active" title="List view" aria-label="List view"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
                 <button id="files-view-grid" title="Grid view" aria-label="Grid view"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/></svg></button>
                 <button id="new-folder-btn" title="New folder" aria-label="New folder"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6M9 13h6"/><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></button>
@@ -839,10 +919,11 @@
               <div class="stat-value" style="color:var(--green)"><span id="tr-done">0</span></div>
             </div>
             <div class="stat">
-              <div class="stat-head"><span class="stat-label">Failed</span></div>
-              <div class="stat-value"><span id="tr-failed">0</span></div>
+              <div class="stat-head"><span class="stat-label">Active now</span></div>
+              <div class="stat-value"><span id="tr-active-now">0</span></div>
             </div>
           </div>
+          <div class="row" id="transfers-device-filter" style="gap:8px;padding:0 0 14px;flex-wrap:wrap;justify-content:flex-start"></div>
           <div class="row" style="padding:0 0 10px"><span class="dim mono" id="transfers-count"></span></div>
           <div id="transfers-tbody"></div>
           <p class="dim" id="transfers-note" style="margin:12px 0 0"></p>
@@ -977,14 +1058,21 @@
       icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M2 20h20"/></svg>';
       color = 'purple';
     } else {
-      icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>';
+      icon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>';
       color = 'amber';
     }
     // "Online" has no live presence signal (no websocket/heartbeat) — proxied
     // from lastSeen recency, same honesty tradeoff as the Devices guest stat.
     const secsSinceSeen = Math.floor(Date.now() / 1000) - (d.lastSeen || 0);
     const pulseClass = d.revoked ? 'off' : (secsSinceSeen < 300 ? 'on' : '');
-    return '<div class="dev-avatar ' + color + '">' + icon + '</div><span class="dev-pulse ' + pulseClass + '"></span>';
+    return '<div class="dev-avatar ' + color + '">' + icon + '</div>' + pulseDotHtml(pulseClass);
+  }
+
+  function pulseDotHtml(state) {
+    const ring = state === 'on'
+      ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--green)] opacity-75"></span>'
+      : '';
+    return '<span class="relative inline-flex h-2 w-2">' + ring + '<span class="dev-pulse ' + state + '"></span></span>';
   }
 
   function esc(str) {
@@ -1084,6 +1172,11 @@
   $('tab-login').addEventListener('click', () => selectTab('login'));
   $('tab-code').addEventListener('click', () => selectTab('code'));
   $('tab-register').addEventListener('click', () => selectTab('register'));
+
+  $('login-forgot-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('login-forgot-note').classList.toggle('hidden');
+  });
 
   function storeSession(body, whoLabel) {
     localStorage.setItem(TOKEN_KEY, body.deviceToken);
@@ -1237,7 +1330,7 @@
     warn.textContent = root
       ? 'Phones back up their photos here, each in their own subfolder.'
       : 'Not set — phone photo backup will fail until you set a folder here.';
-    warn.style.color = root ? '' : 'var(--danger, #e05555)';
+    warn.style.color = root ? '' : 'var(--red, #e05555)';
   }
 
   $('photo-backup-save').addEventListener('click', async () => {
@@ -1499,6 +1592,10 @@
       extractBtn.addEventListener('click', () => extractEntry(entry));
       actions.appendChild(extractBtn);
     }
+    const infoBtn = document.createElement('button');
+    infoBtn.textContent = 'Info';
+    infoBtn.addEventListener('click', () => infoEntry(entry));
+    actions.appendChild(infoBtn);
     const renameBtn = document.createElement('button');
     renameBtn.textContent = 'Rename';
     renameBtn.addEventListener('click', () => renameEntry(entry));
@@ -1595,6 +1692,20 @@
     list.appendChild(wrap);
   }
 
+  // Server renders real JPEG/PNG/GIF thumbnails (/v1/thumb); other image
+  // extensions (webp/svg/etc.) and any decode failure just keep the glyph.
+  async function loadGridThumb(iconSpan, entry) {
+    try {
+      const res = await fetch('/v1/thumb?path=' + encodeURIComponent(entry.path) + '&size=140', { headers: { Authorization: 'Bearer ' + token() } });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const img = document.createElement('img');
+      img.className = 'gcell-thumb';
+      img.src = URL.createObjectURL(blob);
+      iconSpan.replaceWith(img);
+    } catch (e) { /* keep glyph fallback */ }
+  }
+
   function renderBrowseGrid(list) {
     const grid = document.createElement('div');
     grid.className = 'files-grid-view';
@@ -1607,9 +1718,15 @@
       const g = fileGlyph(entry);
       const cell = document.createElement('div');
       cell.className = 'gcell';
-      cell.innerHTML = '<span style="color:' + g.color + ';display:inline-flex">' + g.svg + '</span>' + esc(entry.name);
+      const iconSpan = document.createElement('span');
+      iconSpan.style.color = g.color;
+      iconSpan.style.display = 'inline-flex';
+      iconSpan.innerHTML = g.svg;
+      cell.appendChild(iconSpan);
+      cell.appendChild(document.createTextNode(entry.name));
       cell.addEventListener('click', () => entry.isDir ? openFolder(entry.path) : previewFile(entry));
       grid.appendChild(cell);
+      if (!entry.isDir && /\.(png|jpe?g|gif)$/i.test(entry.name)) loadGridThumb(iconSpan, entry);
     });
     if (browseEntries.length === 0) {
       const empty = document.createElement('p');
@@ -1696,6 +1813,25 @@
       openFolder(currentPath);
     } catch (e) {
       alert('Delete failed: ' + e.message);
+    }
+  }
+
+  async function infoEntry(entry) {
+    try {
+      const m = await api('/fs/meta?path=' + encodeURIComponent(entry.path));
+      const lines = [
+        'Name: ' + m.name,
+        'Path: ' + m.path,
+        'Type: ' + (m.isDir ? 'Folder' : (m.mimeType || 'File')),
+        m.isDir ? null : 'Size: ' + fmtBytes(m.size),
+        'Mode: ' + m.mode,
+        'Modified: ' + new Date(m.modified).toLocaleString(),
+        'Created: ' + new Date(m.created).toLocaleString(),
+        m.isSymlink ? 'Symlink to: ' + m.symlinkTarget : null,
+      ].filter(Boolean);
+      alert(lines.join('\n'));
+    } catch (e) {
+      alert('Info failed: ' + e.message);
     }
   }
 
@@ -2255,16 +2391,24 @@
     else if (name === 'logs') loadLogs();
   }
 
+  let transferDeviceFilter = '';
+
   async function loadTransfers() {
     const tbody = $('transfers-tbody');
     try {
-      const res = await api('/transfers/list');
+      const qs = transferDeviceFilter ? '?device=' + encodeURIComponent(transferDeviceFilter) : '';
+      const res = await api('/transfers/list' + qs);
       const rows = res.transfers || [];
       const counts = res.counts || {};
       const total = res.total || 0;
       $('tr-active').textContent = counts.open || 0;
       $('tr-done').textContent = counts.completed || 0;
-      $('tr-failed').textContent = counts.failed || 0;
+      $('tr-active-now').textContent = res.activeNow || 0;
+      const devices = res.devices || [];
+      $('transfers-device-filter').innerHTML = '<span class="dim">Device:</span>' +
+        '<button class="device-chip' + (transferDeviceFilter === '' ? ' active' : '') + '" data-device="">All</button>' +
+        devices.map((d) => '<button class="device-chip' + (transferDeviceFilter === d.id ? ' active' : '') +
+          '" data-device="' + esc(d.id) + '">' + esc(d.label) + '</button>').join('');
       $('transfers-count').textContent = total + (total === 1 ? ' session' : ' sessions');
       $('nav-badge-transfers').textContent = total || '';
       $('transfers-note').textContent = total > rows.length
@@ -2298,6 +2442,13 @@
     }
   }
 
+  $('transfers-device-filter').addEventListener('click', (e) => {
+    const btn = e.target.closest('.device-chip');
+    if (!btn) return;
+    transferDeviceFilter = btn.dataset.device || '';
+    loadTransfers();
+  });
+
   async function loadUsers() {
     const tbody = $('users-tbody');
     try {
@@ -2308,13 +2459,29 @@
         return;
       }
       tbody.innerHTML = rows.map((u) =>
-        '<div class="rfe-card accent-blue"><div class="rfe-card-top"><span class="rfe-card-name mono">' + esc(u.username) + '</span></div>' +
-        '<div class="rfe-card-sub">Created ' + timeAgo(u.created) + '</div></div>'
+        '<div class="rfe-card accent-blue">' +
+        '<div class="icon-badge purple" style="width:30px;height:30px;margin-bottom:10px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg></div>' +
+        '<div class="rfe-card-top"><span class="rfe-card-name mono">' + esc(u.username) + '</span><span class="type-tag admin">Admin</span></div>' +
+        '<div class="rfe-card-sub">Created ' + timeAgo(u.created) + '</div>' +
+        '<div class="rfe-card-foot"><button class="danger" data-action="remove-user" data-username="' + esc(u.username) + '">Remove</button></div></div>'
       ).join('');
     } catch (e) {
       tbody.innerHTML = '<p class="empty-cell-card">' + esc(e.message) + '</p>';
     }
   }
+
+  $('users-tbody').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action="remove-user"]');
+    if (!btn) return;
+    const username = btn.dataset.username;
+    if (!confirm('Remove user "' + username + '"?')) return;
+    try {
+      await api('/users/' + encodeURIComponent(username), { method: 'DELETE' });
+      loadUsers();
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    }
+  });
 
   // journald gives us free-text lines, not a structured level field — this
   // is a best-effort client-side classification from common log wording,

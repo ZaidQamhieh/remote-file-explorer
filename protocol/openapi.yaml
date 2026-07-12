@@ -93,6 +93,15 @@ paths:
         Distinct from GET /transfers/{id} (single-session status) and POST
         /transfers (open a session).
       security: [{ deviceToken: [] }]
+      parameters:
+        - name: device
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Restrict results to transfers opened by this device ID. Omit or
+            pass empty for all devices. Values come from the devices list in
+            this endpoint's own response.
       responses:
         '200':
           description: Recent transfer sessions plus whole-table status counts
@@ -106,6 +115,17 @@ paths:
                     type: object
                     additionalProperties: { type: integer }
                     description: Row count per status (e.g. open, completed, failed)
+                  activeNow:
+                    type: integer
+                    description: Open transfers that received a chunk in the last 30s
+                  devices:
+                    type: array
+                    description: Distinct devices with at least one transfer, for the filter-chip row
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
                   transfers:
                     type: array
                     items: { $ref: '#/components/schemas/TransferSummary' }
@@ -126,6 +146,30 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/UserSummary' } }
         '401': { $ref: '#/components/responses/Error' }
+
+  /users/{username}:
+    delete:
+      summary: Permanently remove a login account (web companion Users page)
+      description: >
+        Every login account is a full admin today (see the /users GET note) —
+        there's no self-vs-other distinction like device management has, so
+        any authenticated caller may remove any account. The one exception:
+        the LAST remaining account can't be deleted (code=LAST_USER), since
+        that would brick password login entirely (no way to obtain a device
+        token except an existing pairing code).
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Account removed }
+        '400':
+          description: >
+            username is the only remaining account. code=LAST_USER.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404':
+          description: No account with that username. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /logs:
     get:

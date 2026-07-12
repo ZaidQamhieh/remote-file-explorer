@@ -47,8 +47,10 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 	return &Manager{db: db, tempDir: tempDir}, nil
 }
 
-// OpenSession creates a new upload session.
-func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool) (*store.Transfer, error) {
+// OpenSession creates a new upload session. deviceID is the requesting
+// device's ID (empty if unknown, e.g. no device context) — recorded on the
+// transfer so the web companion's Transfers page can filter by device.
+func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string) (*store.Transfer, error) {
 	if !overwrite {
 		if _, err := os.Stat(targetPath); err == nil {
 			return nil, ErrDestinationExists
@@ -82,6 +84,7 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 		TotalChunks: totalChunks,
 		TempPath:    tempPath,
 		Status:      "open",
+		DeviceID:    deviceID,
 	}
 	if err := m.db.CreateTransfer(t); err != nil {
 		os.Remove(tempPath)

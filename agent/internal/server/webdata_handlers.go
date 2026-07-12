@@ -1,15 +1,19 @@
-// Package server — read-only list endpoints backing the web companion's
-// Transfers, Users, and Logs pages. All three surface data RFE genuinely
-// has (upload sessions, login accounts, the agent's own journald output) —
-// none is synthesized.
+// Package server — list endpoints (plus user removal) backing the web
+// companion's Transfers, Users, and Logs pages. All three surface data RFE
+// genuinely has (upload sessions, login accounts, the agent's own journald
+// output) — none is synthesized.
 package server
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"os/exec"
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -29,7 +33,8 @@ const maxTransferRows = 200
 
 func listTransfersHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		transfers, err := db.ListTransfers(maxTransferRows)
+		deviceFilter := r.URL.Query().Get("device")
+		transfers, err := db.ListTransfers(maxTransferRows, deviceFilter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
@@ -38,6 +43,20 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
+		}
+		activeNow, err := db.CountActiveTransfers()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		transferDevices, err := db.ListTransferDevices()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		devices := make([]map[string]any, 0, len(transferDevices))
+		for _, d := range transferDevices {
+			devices = append(devices, map[string]any{"id": d.ID, "label": d.Label})
 		}
 		total := 0
 		for _, n := range counts {
@@ -68,8 +87,10 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"total":     total,
-			"counts":    counts, // status -> count, whole table
-			"transfers": rows,   // most recent maxTransferRows only
+			"counts":    counts,    // status -> count, whole table
+			"transfers": rows,      // most recent maxTransferRows only
+			"activeNow": activeNow, // open transfers that received a chunk recently
+			"devices":   devices,   // distinct devices with at least one transfer, for the filter-chip row
 		})
 	}
 }
@@ -91,6 +112,30 @@ func listUsersHandler(db *store.DB) http.HandlerFunc {
 			})
 		}
 		writeJSON(w, http.StatusOK, out)
+	}
+}
+
+// --------- DELETE /users/{username} ---------
+
+// deleteUserHandler removes a login account. Every account is a full admin
+// today (see store.User), so there's no self-vs-other distinction like
+// device management has — any authenticated caller may remove any account,
+// except the last one (see store.ErrLastUser), which would brick password
+// login entirely.
+func deleteUserHandler(db *store.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := chi.URLParam(r, "username")
+		err := db.DeleteUser(username)
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, store.ErrLastUser):
+			writeError(w, http.StatusBadRequest, "LAST_USER", "cannot delete the only remaining login account")
+		case errors.Is(err, sql.ErrNoRows):
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such user")
+		default:
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		}
 	}
 }
 

@@ -215,8 +215,13 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 			return
 		}
 
+		var deviceID string
+		if d := deviceFromContext(r); d != nil {
+			deviceID = d.ID
+		}
+
 		id := uuid.New().String()
-		t, err := tm.OpenSession(id, resolved, req.Size, req.ChunkSize, req.SHA256, req.Overwrite)
+		t, err := tm.OpenSession(id, resolved, req.Size, req.ChunkSize, req.SHA256, req.Overwrite, deviceID)
 		if err != nil {
 			if errors.Is(err, transfer.ErrDestinationExists) {
 				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")

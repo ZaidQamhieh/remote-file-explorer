@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -180,6 +181,25 @@ CREATE TABLE IF NOT EXISTS users (
 	}
 	if _, err := s.db.Exec(
 		`ALTER TABLE pairing_codes ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	// Add the owning device to transfers, so the web companion's Transfers
+	// page can filter by device. Empty means "no device recorded" (rows
+	// created before this feature). Populated from the auth-context device
+	// at session-open time — see OpenSession's caller.
+	if _, err := s.db.Exec(
+		`ALTER TABLE transfers ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	// Add a last-write timestamp to transfers, stamped on every received
+	// chunk. Lets the web companion distinguish "genuinely in-flight right
+	// now" from the thousands of stale never-finalized "open" rows that
+	// accumulate over time (see CountActiveTransfers). 0 means never written
+	// since this column was added.
+	if _, err := s.db.Exec(
+		`ALTER TABLE transfers ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
@@ -592,6 +612,35 @@ func (s *DB) ListUsers() ([]User, error) {
 	return out, rows.Err()
 }
 
+// ErrLastUser is returned by DeleteUser when username is the only remaining
+// login account — deleting it would brick password login entirely (there'd
+// be no way to obtain a device token except an existing pairing code).
+var ErrLastUser = errors.New("cannot delete the last remaining user")
+
+// DeleteUser permanently removes a login account. Returns ErrLastUser if
+// username is the only account, or sql.ErrNoRows if no such account exists.
+func (s *DB) DeleteUser(username string) error {
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return err
+	}
+	if count <= 1 {
+		return ErrLastUser
+	}
+	res, err := s.db.Exec(`DELETE FROM users WHERE username=?`, username)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // --------- transfers ---------
 
 // Transfer is an in-progress or completed upload session.
@@ -605,16 +654,18 @@ type Transfer struct {
 	Status         string // open | completed | failed
 	TempPath       string
 	TotalChunks    int
+	DeviceID       string
+	UpdatedAt      int64 // unix seconds, stamped on each received chunk; 0 = never
 }
 
 // CreateTransfer inserts a new transfer row.
 func (s *DB) CreateTransfer(t *Transfer) error {
 	chunks, _ := json.Marshal([]int{})
 	_, err := s.db.Exec(
-		`INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.TargetPath, t.TotalSize, t.ChunkSize, t.SHA256,
-		string(chunks), "open", t.TempPath, t.TotalChunks,
+		string(chunks), "open", t.TempPath, t.TotalChunks, t.DeviceID,
 	)
 	return err
 }
@@ -622,7 +673,7 @@ func (s *DB) CreateTransfer(t *Transfer) error {
 // GetTransfer retrieves a transfer by ID.
 func (s *DB) GetTransfer(id string) (*Transfer, error) {
 	row := s.db.QueryRow(
-		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks
+		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at
          FROM transfers WHERE id=?`, id,
 	)
 	return scanTransfer(row)
@@ -663,7 +714,10 @@ func (s *DB) MarkChunkReceived(id string, n int) error {
 	// Sort for determinism.
 	slices.Sort(updated)
 	b, _ := json.Marshal(updated)
-	if _, err := tx.Exec(`UPDATE transfers SET received_chunks=? WHERE id=?`, string(b), id); err != nil {
+	if _, err := tx.Exec(
+		`UPDATE transfers SET received_chunks=?, updated_at=? WHERE id=?`,
+		string(b), time.Now().Unix(), id,
+	); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -680,12 +734,20 @@ func (s *DB) SetTransferStatus(id, status string) error {
 // order). Capped at limit because the table accumulates every upload session
 // ever opened (mostly stale "open" rows the client never finalized) — the
 // web companion only shows recent activity, and the summary counts come from
-// CountTransfersByStatus, not len() of this list.
-func (s *DB) ListTransfers(limit int) ([]Transfer, error) {
-	rows, err := s.db.Query(
-		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks
-         FROM transfers ORDER BY rowid DESC LIMIT ?`, limit,
-	)
+// CountTransfersByStatus, not len() of this list. deviceID, if non-empty,
+// restricts the rows to that device; pass "" for no filter.
+func (s *DB) ListTransfers(limit int, deviceID string) ([]Transfer, error) {
+	query := `SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at
+         FROM transfers`
+	args := []any{}
+	if deviceID != "" {
+		query += ` WHERE device_id=?`
+		args = append(args, deviceID)
+	}
+	query += ` ORDER BY rowid DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +759,7 @@ func (s *DB) ListTransfers(limit int) ([]Transfer, error) {
 		var chunksJSON string
 		if err := rows.Scan(
 			&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
-			&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks,
+			&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -726,6 +788,57 @@ func (s *DB) CountTransfersByStatus() (map[string]int, error) {
 			return nil, err
 		}
 		out[status] = n
+	}
+	return out, rows.Err()
+}
+
+// activeTransferWindow bounds how recently a chunk must have landed for an
+// "open" transfer to count as genuinely in-flight right now, as opposed to
+// one of the thousands of stale never-finalized rows the table accumulates.
+// ponytail: fixed window heuristic, not a decay/heartbeat model — revisit if
+// slow (multi-minute-per-chunk) transfers need to still read as "active".
+const activeTransferWindow = 30 * time.Second
+
+// CountActiveTransfers returns the number of "open" transfers that received
+// a chunk within activeTransferWindow — the web companion's "Active now" stat.
+func (s *DB) CountActiveTransfers() (int, error) {
+	cutoff := time.Now().Add(-activeTransferWindow).Unix()
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM transfers WHERE status='open' AND updated_at >= ?`,
+		cutoff,
+	).Scan(&n)
+	return n, err
+}
+
+// TransferDevice is one entry in the Transfers page's device filter-chip row.
+type TransferDevice struct {
+	ID    string
+	Label string
+}
+
+// ListTransferDevices returns the distinct devices that own at least one
+// transfer row, labeled via a join against devices (falling back to the raw
+// ID if the device was since removed). Rows with no recorded device_id
+// (pre-migration transfers) are excluded — the "All" chip already covers them.
+func (s *DB) ListTransferDevices() ([]TransferDevice, error) {
+	rows, err := s.db.Query(`
+        SELECT DISTINCT t.device_id, COALESCE(d.label, t.device_id)
+        FROM transfers t LEFT JOIN devices d ON d.id = t.device_id
+        WHERE t.device_id != ''
+        ORDER BY 2`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []TransferDevice
+	for rows.Next() {
+		var d TransferDevice
+		if err := rows.Scan(&d.ID, &d.Label); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
 	}
 	return out, rows.Err()
 }
@@ -853,7 +966,7 @@ func scanTransfer(row *sql.Row) (*Transfer, error) {
 	var chunksJSON string
 	err := row.Scan(
 		&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
-		&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks,
+		&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

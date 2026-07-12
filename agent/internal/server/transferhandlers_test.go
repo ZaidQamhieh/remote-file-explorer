@@ -182,7 +182,7 @@ func TestUploadChunkHandler_OversizedBodyIs413(t *testing.T) {
 	const chunkSize = 16
 	content := make([]byte, chunkSize*2)
 	id := uuid.New().String()
-	sess, err := tm.OpenSession(id, target, int64(len(content)), chunkSize, sha256hex(content), false)
+	sess, err := tm.OpenSession(id, target, int64(len(content)), chunkSize, sha256hex(content), false, "")
 	if err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "out.bin")
 
 	id := uuid.New().String()
-	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, wantSHA256, false); err != nil {
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, wantSHA256, false, ""); err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestUploadChunkHandler_ExactSizeIsAccepted(t *testing.T) {
 		content[i] = byte(i)
 	}
 	id := uuid.New().String()
-	if _, err := tm.OpenSession(id, target, int64(len(content)), chunkSize, sha256hex(content), false); err != nil {
+	if _, err := tm.OpenSession(id, target, int64(len(content)), chunkSize, sha256hex(content), false, ""); err != nil {
 		t.Fatalf("OpenSession: %v", err)
 	}
 

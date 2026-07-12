@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -34,7 +35,8 @@ const maxTransferRows = 200
 func listTransfersHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceFilter := r.URL.Query().Get("device")
-		transfers, err := db.ListTransfers(maxTransferRows, deviceFilter)
+		userFilter := r.URL.Query().Get("user")
+		transfers, err := db.ListTransfers(maxTransferRows, deviceFilter, userFilter)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
@@ -58,6 +60,16 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		for _, d := range transferDevices {
 			devices = append(devices, map[string]any{"id": d.ID, "label": d.Label})
 		}
+		accounts, err := db.ListUsers()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
+		users := make([]string, 0, len(accounts))
+		for _, u := range accounts {
+			users = append(users, u.Username)
+		}
+		sort.Strings(users)
 		total := 0
 		for _, n := range counts {
 			total += n
@@ -82,7 +94,9 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 				"totalSize":     t.TotalSize,
 				"receivedBytes": receivedBytes,
 				"progress":      progress,
-				"status":        t.Status, // open | completed | failed
+				"status":        t.Status,    // open | completed | failed
+				"deviceId":      t.DeviceID,  // "" on rows created before the device_id migration
+				"updatedAt":     t.UpdatedAt, // unix seconds, stamped per received chunk; 0 = never
 			})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -91,6 +105,7 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 			"transfers": rows,      // most recent maxTransferRows only
 			"activeNow": activeNow, // open transfers that received a chunk recently
 			"devices":   devices,   // distinct devices with at least one transfer, for the filter-chip row
+			"users":     users,     // distinct login accounts with at least one transfer, for the user filter-chip row
 		})
 	}
 }

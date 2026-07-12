@@ -170,6 +170,15 @@ CREATE TABLE IF NOT EXISTS users (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	// Add the username column: which login account authenticated this device,
+	// stamped by /login and /register (empty for /pair devices and rows
+	// created before this column — they get stamped on their next login).
+	// Feeds the Transfers page's user filter via the device_id join.
+	if _, err := s.db.Exec(
+		`ALTER TABLE devices ADD COLUMN username TEXT NOT NULL DEFAULT ''`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
 	// Add guest-mode defaults to pairing_codes: an admin minting a "guest"
 	// pairing code sets these so the resulting device is created already
 	// read-only and jailed, instead of needing a second admin PATCH after
@@ -299,6 +308,14 @@ func (s *DB) UpsertDevice(clientID, label, token, publicKey string, viaLogin boo
 		return "", err
 	}
 	return id, nil
+}
+
+// SetDeviceUsername stamps which login account authenticated the device.
+// Called by loginHandler/registerHandler right after UpsertDevice (kept out
+// of UpsertDevice itself — pair-flow callers have no username).
+func (s *DB) SetDeviceUsername(deviceID, username string) error {
+	_, err := s.db.Exec(`UPDATE devices SET username=? WHERE id=?`, username, deviceID)
+	return err
 }
 
 // DeviceByToken returns the device whose token matches the given raw token,
@@ -735,14 +752,23 @@ func (s *DB) SetTransferStatus(id, status string) error {
 // ever opened (mostly stale "open" rows the client never finalized) — the
 // web companion only shows recent activity, and the summary counts come from
 // CountTransfersByStatus, not len() of this list. deviceID, if non-empty,
-// restricts the rows to that device; pass "" for no filter.
-func (s *DB) ListTransfers(limit int, deviceID string) ([]Transfer, error) {
+// restricts the rows to that device; username, if non-empty, restricts them
+// to devices stamped with that login account; pass "" for no filter.
+func (s *DB) ListTransfers(limit int, deviceID, username string) ([]Transfer, error) {
 	query := `SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at
          FROM transfers`
 	args := []any{}
+	var where []string
 	if deviceID != "" {
-		query += ` WHERE device_id=?`
+		where = append(where, `device_id=?`)
 		args = append(args, deviceID)
+	}
+	if username != "" {
+		where = append(where, `device_id IN (SELECT id FROM devices WHERE username=?)`)
+		args = append(args, username)
+	}
+	if len(where) > 0 {
+		query += ` WHERE ` + strings.Join(where, ` AND `)
 	}
 	query += ` ORDER BY rowid DESC LIMIT ?`
 	args = append(args, limit)

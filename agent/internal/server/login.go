@@ -81,6 +81,10 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
 
 		writeJSON(w, http.StatusOK, pairResponse{
 			DeviceToken:      token,

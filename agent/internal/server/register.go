@@ -114,6 +114,10 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
+		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			return
+		}
 
 		writeJSON(w, http.StatusOK, pairResponse{
 			DeviceToken:      token,

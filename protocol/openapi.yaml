@@ -102,6 +102,16 @@ paths:
             Restrict results to transfers opened by this device ID. Omit or
             pass empty for all devices. Values come from the devices list in
             this endpoint's own response.
+        - name: user
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Restrict results to transfers opened by devices authenticated as
+            this login account (devices are stamped with a username at
+            /login and /register; pair-flow devices are unattributed). Values
+            come from the users list in this endpoint's own response.
+            Combines with the device filter (AND).
       responses:
         '200':
           description: Recent transfer sessions plus whole-table status counts
@@ -126,6 +136,10 @@ paths:
                       properties:
                         id: { type: string }
                         label: { type: string }
+                  users:
+                    type: array
+                    description: Distinct login accounts with at least one transfer, for the user filter-chip row
+                    items: { type: string }
                   transfers:
                     type: array
                     items: { $ref: '#/components/schemas/TransferSummary' }
@@ -1682,6 +1696,8 @@ components:
         receivedBytes: { type: integer, format: int64 }
         progress: { type: number, format: double, description: "0-100, from received-chunk count" }
         status: { type: string, enum: [open, completed, failed] }
+        deviceId: { type: string, description: "opening device id; may be empty for pre-migration rows" }
+        updatedAt: { type: integer, format: int64, description: "unix seconds, stamped per received chunk; 0 = never" }
 
     UserSummary:
       type: object

@@ -3275,7 +3275,7 @@
   document.querySelectorAll('.nav a').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });
   });
-  document.querySelectorAll('.qa-tile').forEach((btn) => {
+  document.querySelectorAll('.qa-tile[data-qa-page]').forEach((btn) => {
     btn.addEventListener('click', () => showPage(btn.dataset.qaPage));
   });
   $('conn-view-all').addEventListener('click', (e) => { e.preventDefault(); showPage('devices'); });

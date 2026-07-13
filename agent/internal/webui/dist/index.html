@@ -135,6 +135,7 @@
   .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--dim); }
   .panel-head .spacer { flex: 1; }
   .panel-head .meta { font-size: 11px; color: var(--dim); }
+  .panel-foot { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .legend { display: inline-flex; align-items: center; font-size: 10px; color: var(--dim); margin-left: 16px; }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
@@ -902,7 +903,10 @@
 
         <div id="page-settings" class="page hidden">
           <div class="panel">
-            <div class="panel-head"><h2 class="panel-title">Access</h2></div>
+            <div class="panel-head">
+              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+              <h2 class="panel-title">Access</h2>
+            </div>
             <div class="field-row">
               <div>
                 <p class="field-label">Read-only mode</p>
@@ -922,6 +926,7 @@
 
           <div class="panel" style="margin-top:16px">
             <div class="panel-head">
+              <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
               <h2 class="panel-title">Allowed folders</h2>
             </div>
             <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
@@ -933,7 +938,10 @@
           </div>
 
           <div class="panel" style="margin-top:16px">
-            <div class="panel-head"><h2 class="panel-title">Bandwidth</h2></div>
+            <div class="panel-head">
+              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
+              <h2 class="panel-title">Bandwidth</h2>
+            </div>
             <div class="field-row">
               <div>
                 <p class="field-label">Max upload</p>
@@ -948,20 +956,21 @@
               </div>
               <input type="number" id="bw-download" min="0" class="mono control" style="width:120px">
             </div>
+            <div class="panel-foot"><button class="primary" id="bw-save">Save bandwidth limits</button></div>
           </div>
-          <button class="primary" id="bw-save">Save bandwidth limits</button>
 
           <div class="panel" style="margin-top:16px">
-            <div class="panel-head"><h2 class="panel-title">Photo backup</h2></div>
-            <div class="field-row">
-              <div>
-                <p class="field-label">Photo backup destination</p>
-                <p class="field-desc" id="photo-backup-warning">Not set — phone photo backup will fail until you set a folder here.</p>
-              </div>
+            <div class="panel-head">
+              <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
+              <h2 class="panel-title">Photo backup</h2>
             </div>
-            <input type="text" id="photo-backup-root" class="mono control" style="width:100%" placeholder="/home/you/PhoneBackups">
+            <div class="field">
+              <label for="photo-backup-root">Destination folder</label>
+              <input type="text" id="photo-backup-root" class="mono control" placeholder="/home/you/PhoneBackups">
+            </div>
+            <p class="field-desc" id="photo-backup-warning">Not set — phone photo backup will fail until you set a folder here.</p>
+            <div class="panel-foot"><button class="primary" id="photo-backup-save">Save photo backup destination</button></div>
           </div>
-          <button class="primary" id="photo-backup-save">Save photo backup destination</button>
         </div>
 
         <div id="page-devices" class="page hidden">

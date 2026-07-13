@@ -596,17 +596,16 @@
   .gen-otp .dash { color: var(--dim); font-size: 20px; animation: none; background: none; border: none; width: auto; }
   .gen-otp .otp-copy { padding: 6px 8px; margin-left: 4px; align-self: center; animation: none; }
   .gen-meta { font-size: 11px; color: var(--dim); }
+  .gen-meta:not(:empty) { display: inline-block; background: var(--surface-2); border-radius: var(--radius-sm); padding: 3px 9px; margin: 8px 0 14px; }
 
   /* ---------- Devices: Jail path / Pair new device cards (replaces the old prose panel) ---------- */
   .pairing-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: stretch; }
-  .pairing-jail-card { flex: 0 0 260px; display: flex; flex-direction: column; align-items: center; text-align: center;
-    border: none; border-left: 2px solid var(--amber); border-top: 2px solid var(--amber);
-    box-shadow: 2px 2px 6px rgba(0,0,0,.15); padding-top: 34px; padding-bottom: 34px;
-    background: linear-gradient(to bottom, rgba(251,191,36,.08), transparent 50%), var(--surface); }
-  .pairing-otp-card { flex: 1; text-align: center;
-    border: none; border-left: 2px solid var(--primary); border-top: 2px solid var(--primary);
-    box-shadow: 2px 2px 6px rgba(0,0,0,.15); padding-top: 34px; padding-bottom: 34px;
-    background: linear-gradient(to bottom, rgba(59,130,246,.08), transparent 50%), var(--surface); }
+  .pairing-jail-card, .pairing-otp-card { background: var(--surface); border: 1px solid var(--border); }
+  .pairing-jail-card { flex: 0 0 260px; }
+  .pairing-otp-card { flex: 1; }
+  .pairing-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .pairing-card-head .l { margin: 0; }
+  .pairing-jail-card .browse-btn { width: 100%; justify-content: center; margin-top: 10px; }
 
   /* ---------- .grid was referenced by Quick Actions but never defined — the
      inline grid-template-columns did nothing and tiles overflowed. ---------- */
@@ -984,15 +983,22 @@
           </div>
           <div class="pairing-row hidden" id="pairing-area">
             <div class="panel pairing-jail-card">
-              <div class="l">Jail path</div>
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--amber);margin-top:10px"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-              <input type="text" id="pairing-guest-jail" class="mono" style="width:100%;margin-top:10px;text-align:center;background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:0 0 8px" placeholder="/media/shared">
-              <a href="#" id="pairing-browse-link" class="dim" style="font-size:12px;margin-top:10px">Browse</a>
+              <div class="pairing-card-head">
+                <div class="icon-badge amber" style="width:36px;height:36px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                <div class="l">Jail path</div>
+              </div>
+              <input type="text" id="pairing-guest-jail" class="mono" placeholder="/media/shared">
+              <button type="button" id="pairing-browse-link" class="browse-btn">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg> Browse
+              </button>
             </div>
             <div class="panel pairing-otp-card">
-              <div class="l">Pair new device</div>
-              <div class="gen-otp" id="pairing-otp-tiles" style="justify-content:center"></div>
-              <p class="gen-meta" id="pairing-expires-line" style="display:inline-block;border-bottom:1px solid var(--border);padding-bottom:4px"></p>
+              <div class="pairing-card-head">
+                <div class="icon-badge blue" style="width:36px;height:36px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+                <div class="l">Pair new device</div>
+              </div>
+              <div class="gen-otp" id="pairing-otp-tiles"></div>
+              <p class="gen-meta mono" id="pairing-expires-line"></p>
               <div><button class="primary" id="pairing-generate-btn">Generate new code</button></div>
             </div>
           </div>

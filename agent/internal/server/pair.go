@@ -3,11 +3,14 @@ package server
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
+	"github.com/skip2/go-qrcode"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
@@ -160,11 +163,17 @@ func generatePairingHandler(pm *pairing.Manager, st *settings.Store) http.Handle
 			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"pairingCode":      code,
 			"expiresInSeconds": int(ttl.Seconds()),
 			"qrPayload":        payload,
-		})
+		}
+		if png, qrErr := qrcode.Encode(payload.JSON(), qrcode.Medium, 240); qrErr == nil {
+			resp["qrPngBase64"] = base64.StdEncoding.EncodeToString(png)
+		} else {
+			log.Printf("pairing: QR encode failed (non-fatal, code still valid): %v", qrErr)
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

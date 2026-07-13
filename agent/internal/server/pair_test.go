@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
 // TestPairHandler_BadDeviceProofDoesNotBurnPairingCode verifies a recoverable
@@ -131,6 +134,47 @@ func TestPairHandler_ValidPairing(t *testing.T) {
 	}
 	if resp.AgentName != "test-pc" {
 		t.Fatalf("expected agentName test-pc, got %s", resp.AgentName)
+	}
+}
+
+// TestGeneratePairingHandler_IncludesScannableQR verifies POST /pairing/generate
+// (admin-only) returns a decodable QR PNG alongside the text code, so the web
+// companion can offer the same scan-to-pair path as `rfe-agent pair`'s
+// terminal QR — previously the endpoint only ever returned the text code.
+func TestGeneratePairingHandler_IncludesScannableQR(t *testing.T) {
+	db, _ := newTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "", "sha256-fp")
+	st, err := settings.Load(db, false, nil, "test-pc")
+	if err != nil {
+		t.Fatalf("settings.Load: %v", err)
+	}
+	handler := generatePairingHandler(pm, st)
+
+	admin := &store.Device{ID: "admin-1", ViaLogin: true}
+	req := httptest.NewRequest(http.MethodPost, "/v1/pairing/generate", strings.NewReader(`{}`))
+	req = req.WithContext(withDevice(req.Context(), admin))
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		PairingCode string `json:"pairingCode"`
+		QRPngBase64 string `json:"qrPngBase64"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.PairingCode == "" {
+		t.Fatal("expected non-empty pairingCode")
+	}
+	png, err := base64.StdEncoding.DecodeString(resp.QRPngBase64)
+	if err != nil {
+		t.Fatalf("qrPngBase64 did not decode: %v", err)
+	}
+	if len(png) < 8 || string(png[1:4]) != "PNG" {
+		t.Fatalf("qrPngBase64 did not decode to a PNG (got %d bytes)", len(png))
 	}
 }
 

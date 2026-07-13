@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.15.0
+  version: 1.16.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -1356,6 +1356,13 @@ paths:
                       tailscaleAddress: { type: string }
                       certFingerprint: { type: string }
                       pairingCode: { type: string }
+                  qrPngBase64:
+                    type: string
+                    description: >
+                      Base64-encoded PNG (240px) of a QR code encoding qrPayload as JSON —
+                      lets the web companion show a scannable code, same as `rfe-agent pair`'s
+                      terminal QR. Omitted (not an error) if QR encoding fails; the text code
+                      alone is always sufficient to pair.
         '400':
           description: guest=true without a valid jailRoot. code=BAD_REQUEST.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

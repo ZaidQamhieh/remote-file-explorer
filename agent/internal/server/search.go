@@ -432,10 +432,31 @@ var virtualLinuxDirs = map[string]bool{
 	"/sysroot": true,
 }
 
+// noisyDirNames are directory basenames that are near-universally
+// dependency/package-manager caches (Steam, Gradle, npm, cargo, IDE caches,
+// git internals, node_modules — anything with a leading dot lands here too,
+// see shouldSkipVirtualDir) rather than user files worth searching or
+// indexing. Found via: on an unjailed root (falls back to the home
+// directory), SearchIndex's periodic rebuild walked several million entries
+// under hidden dirs like ~/.local/share/Steam, ~/.cache, ~/.gradle, ~/.npm —
+// taking longer than the 5-minute rebuild interval, so the background
+// indexer never actually went idle (~30% of a CPU core, continuously, all
+// in stat/readdir syscalls — starved foreground apps, e.g. games, of
+// scheduler time). Pruned only mid-walk, same as virtualLinuxDirs.
+var noisyDirNames = map[string]bool{
+	"node_modules": true,
+}
+
 // shouldSkipVirtualDir reports whether path is a Linux pseudo-filesystem
-// mount point that walkForMatches/walkForRecent should prune.
+// mount point, a hidden (dot-prefixed) directory, or a known dependency/
+// package-cache directory that walkForMatches/walkForRecent/SearchIndex
+// should prune while walking.
 func shouldSkipVirtualDir(path string) bool {
-	return runtime.GOOS == "linux" && virtualLinuxDirs[filepath.Clean(path)]
+	if runtime.GOOS == "linux" && virtualLinuxDirs[filepath.Clean(path)] {
+		return true
+	}
+	name := filepath.Base(path)
+	return (len(name) > 1 && name[0] == '.') || noisyDirNames[name]
 }
 
 // walkForMatches recursively walks root, appending entries that satisfy

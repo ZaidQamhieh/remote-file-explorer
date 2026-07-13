@@ -373,16 +373,10 @@
      row at 1440 CSS px, including the 3-chip Creates state — see min-content
      math in the Devices reskin notes. */
   .mini-stat-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .mini-stat { flex: 1 1 150px; background: var(--surface); border: none;
-    border-left: 2px solid var(--border); border-top: 2px solid var(--border);
-    border-radius: var(--radius-lg); padding: 26px 14px; min-height: 88px; display: flex; align-items: center; gap: 10px;
-    box-shadow: 2px 2px 6px rgba(0,0,0,.15);
+  .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 14px; min-height: 88px; display: flex; align-items: center; gap: 10px;
     transition: border-color .15s, transform .15s; }
-  .mini-stat:hover { transform: translateY(-1px); }
-  .mini-stat.blue { border-left-color: var(--primary); border-top-color: var(--primary); background: linear-gradient(to bottom, rgba(59,130,246,.10), transparent 65%), var(--surface); }
-  .mini-stat.green { border-left-color: var(--green); border-top-color: var(--green); background: linear-gradient(to bottom, rgba(52,211,153,.10), transparent 65%), var(--surface); }
-  .mini-stat.amber { border-left-color: var(--amber); border-top-color: var(--amber); background: linear-gradient(to bottom, rgba(251,191,36,.10), transparent 65%), var(--surface); }
-  .mini-stat.purple { border-left-color: var(--purple); border-top-color: var(--purple); background: linear-gradient(to bottom, rgba(167,139,250,.10), transparent 65%), var(--surface); }
+  .mini-stat:hover { border-color: var(--primary); transform: translateY(-1px); }
   .mini-stat .icon-badge { width: 35px; height: 35px; }
   .mini-stat .icon-badge .icon { width: 20px; height: 20px; }
   .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
@@ -951,23 +945,23 @@
 
         <div id="page-devices" class="page hidden">
           <div class="mini-stat-row">
-            <div class="mini-stat blue">
+            <div class="mini-stat">
               <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
-              <div><div class="l">Total devices</div><div class="v" id="ds-total">0</div></div>
+              <div><div class="l">Total devices</div><div class="v" id="ds-total" style="color:var(--primary)">0</div></div>
             </div>
-            <div class="mini-stat green">
+            <div class="mini-stat">
               <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
-              <div><div class="l">Online now</div><div class="v" id="ds-active">0</div></div>
+              <div><div class="l">Online now</div><div class="v" id="ds-active" style="color:var(--green)">0</div></div>
             </div>
-            <div class="mini-stat amber">
+            <div class="mini-stat">
               <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-              <div><div class="l">Guests</div><div class="v" id="ds-guests">0</div></div>
+              <div><div class="l">Guests</div><div class="v" id="ds-guests" style="color:var(--amber)">0</div></div>
             </div>
-            <div class="mini-stat purple">
+            <div class="mini-stat">
               <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
-              <div><div class="l">Storage used</div><div class="v" id="ds-storage">0</div></div>
+              <div><div class="l">Storage used</div><div class="v" id="ds-storage" style="color:var(--purple)">0</div></div>
             </div>
-            <div class="mini-stat amber ctl hidden" id="ds-guestmode-cell">
+            <div class="mini-stat ctl hidden" id="ds-guestmode-cell">
               <div class="l">Guest Mode</div>
               <div class="ctl-body">
                 <span class="dim" style="font-size:11px">Read-only + jailed</span>
@@ -975,7 +969,7 @@
                 <label class="switch"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
               </div>
             </div>
-            <div class="mini-stat blue ctl hidden" id="ds-expires-cell">
+            <div class="mini-stat ctl hidden" id="ds-expires-cell">
               <div class="l">Expires</div>
               <div class="tab-bar ctl-body" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
                 <button type="button" data-ttl="300">5m</button>
@@ -983,7 +977,7 @@
                 <button type="button" data-ttl="3600">1h</button>
               </div>
             </div>
-            <div class="mini-stat purple ctl hidden" id="ds-creates-cell">
+            <div class="mini-stat ctl hidden" id="ds-creates-cell">
               <div class="l">Creates</div>
               <div class="ctl-body" id="pairing-creates"><span class="type-tag">User</span></div>
             </div>

@@ -593,14 +593,24 @@ func EntryFromInfo(info os.FileInfo, fullPath string) Entry {
 
 func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 	isSymlink := info.Mode()&os.ModeSymlink != 0
+	// info comes from Lstat/Readdir, which never follows symlinks — a symlink
+	// to a directory would otherwise report IsDir=false and become permanently
+	// unnavigable in the UI. Stat (follows) to get the real target type;
+	// a broken link falls back to the symlink's own (non-dir) info.
+	isDir := info.IsDir()
+	if isSymlink {
+		if target, err := os.Stat(fullPath); err == nil {
+			isDir = target.IsDir()
+		}
+	}
 	mtype := ""
-	if !info.IsDir() {
+	if !isDir {
 		mtype = mimeForPath(fullPath, info)
 	}
 	e := Entry{
 		Name:      info.Name(),
 		Path:      fullPath,
-		IsDir:     info.IsDir(),
+		IsDir:     isDir,
 		Size:      info.Size(),
 		MimeType:  mtype,
 		Mode:      info.Mode().String(),

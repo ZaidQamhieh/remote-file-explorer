@@ -369,9 +369,6 @@
   .tip .icon { color: var(--amber); }
 
   /* ---------- Devices mini-stat row (Total / Active / Guests / Storage) ---------- */
-  /* Sized to keep all 7 cells (4 counters + Guest Mode/Expires/Creates) on one
-     row at 1440 CSS px, including the 3-chip Creates state — see min-content
-     math in the Devices reskin notes. */
   .mini-stat-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 16px 14px; min-height: 88px; display: flex; align-items: center; gap: 10px;
@@ -598,14 +595,23 @@
   .gen-meta { font-size: 11px; color: var(--dim); }
   .gen-meta:not(:empty) { display: inline-block; background: var(--surface-2); border-radius: var(--radius-sm); padding: 3px 9px; margin: 8px 0 14px; }
 
-  /* ---------- Devices: Jail path / Pair new device cards (replaces the old prose panel) ---------- */
-  .pairing-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: stretch; }
-  .pairing-jail-card, .pairing-otp-card { background: var(--surface); border: 1px solid var(--border); }
-  .pairing-jail-card { flex: 0 0 260px; }
-  .pairing-otp-card { flex: 1; }
-  .pairing-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .pairing-card-head .l { margin: 0; }
-  .pairing-jail-card .browse-btn { width: 100%; justify-content: center; margin-top: 10px; }
+  /* ---------- Devices: Pair new device modal (was two always-visible cards
+     cramped into the mini-stat row — moved behind a "+ Pair device" button so
+     the Devices page stays clean until you actually want to pair something) ---------- */
+  .pairing-modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.5);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+    display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .pairing-modal-backdrop.open { opacity: 1; pointer-events: auto; }
+  .pairing-modal { width: min(520px, 100%); max-height: 90vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px -12px rgba(0,0,0,.55);
+    transform: scale(.96) translateY(8px); opacity: 0; transition: transform .2s cubic-bezier(.2,.8,.3,1), opacity .2s; }
+  .pairing-modal-backdrop.open .pairing-modal { transform: none; opacity: 1; }
+  .pairing-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .pairing-modal-head button { border: none; background: transparent; color: var(--dim-2); padding: 4px 8px; border-radius: var(--radius-sm); }
+  .pairing-modal-head button:hover { background: var(--surface-2); color: var(--ink); }
+  .pairing-modal-body { padding: 18px; overflow-y: auto; }
+  .pairing-modal-settings { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--border); }
   .pairing-otp-body { display: flex; gap: 18px; align-items: flex-start; }
   .pairing-qr-box { flex: 0 0 104px; width: 104px; height: 104px; background: #fff; border-radius: var(--radius-md);
     display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -843,7 +849,7 @@
           <div style="margin-bottom:24px">
             <div class="panel-head"><h2 class="panel-title">Quick actions</h2></div>
             <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-              <button class="qa-tile qa-primary" data-qa-page="devices">
+              <button class="qa-tile qa-primary" id="qa-pair-device" data-qa-page="devices">
                 <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
                 <span>Pair device</span>
               </button>
@@ -968,43 +974,27 @@
               <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
               <div><div class="l">Storage used</div><div class="v" id="ds-storage" style="color:var(--purple)">0</div></div>
             </div>
-            <div class="mini-stat ctl hidden" id="ds-guestmode-cell">
-              <div class="l">Guest Mode</div>
-              <div class="ctl-body">
-                <span class="dim" style="font-size:11px">Read-only + jailed</span>
-                <span class="spacer" style="flex:1"></span>
-                <label class="switch"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
-              </div>
-            </div>
-            <div class="mini-stat ctl hidden" id="ds-expires-cell">
-              <div class="l">Expires</div>
-              <div class="tab-bar ctl-body" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
-                <button type="button" data-ttl="300">5m</button>
-                <button type="button" data-ttl="900" class="active">15m</button>
-                <button type="button" data-ttl="3600">1h</button>
-              </div>
-            </div>
-            <div class="mini-stat ctl hidden" id="ds-creates-cell">
-              <div class="l">Creates</div>
-              <div class="ctl-body" id="pairing-creates"><span class="type-tag">User</span></div>
-            </div>
           </div>
-          <div class="pairing-row hidden" id="pairing-area">
-            <div class="panel pairing-jail-card">
-              <div class="pairing-card-head">
-                <div class="icon-badge amber" style="width:36px;height:36px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
-                <div class="l">Jail path</div>
-              </div>
-              <input type="text" id="pairing-guest-jail" class="mono" placeholder="/media/shared">
-              <button type="button" id="pairing-browse-link" class="browse-btn">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg> Browse
-              </button>
+          <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:18px">
+            <div class="panel-head">
+              <h2 class="panel-title">Paired devices</h2>
+              <span class="spacer"></span>
+              <span class="meta mono" id="devices-count"></span>
+              <button class="primary hidden" id="open-pairing-btn" style="margin-left:12px">+ Pair device</button>
             </div>
-            <div class="panel pairing-otp-card">
-              <div class="pairing-card-head">
-                <div class="icon-badge blue" style="width:36px;height:36px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
-                <div class="l">Pair new device</div>
-              </div>
+            <div class="card-grid" id="devices-list"></div>
+          </div>
+        </div>
+
+        <div class="pairing-modal-backdrop" id="pairing-modal-backdrop">
+          <div class="pairing-modal" role="dialog" aria-modal="true" aria-label="Pair new device">
+            <div class="pairing-modal-head">
+              <div class="icon-badge blue" style="width:36px;height:36px"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="12" x="3" y="6" rx="1"/><rect width="7" height="14" x="14" y="5" rx="1"/></svg></div>
+              <h2 class="panel-title" style="font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)">Pair new device</h2>
+              <span class="spacer"></span>
+              <button type="button" id="pairing-modal-close" aria-label="Close">✕</button>
+            </div>
+            <div class="pairing-modal-body">
               <div class="pairing-otp-body">
                 <div class="pairing-qr-box" id="pairing-qr-box">
                   <img id="pairing-qr-img" alt="Pairing QR code" class="hidden">
@@ -1017,15 +1007,39 @@
                   <p class="pairing-hint dim">Scan with the RFE app, or enter the code manually.</p>
                 </div>
               </div>
+              <div class="pairing-modal-settings">
+                <div class="field-row">
+                  <div>
+                    <p class="field-label">Guest device</p>
+                    <p class="field-desc">Read-only, jailed to a folder</p>
+                  </div>
+                  <label class="switch control"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
+                </div>
+                <div class="field-row" id="pairing-jail-row" style="display:none">
+                  <div style="flex:1">
+                    <p class="field-label">Jail path</p>
+                    <div class="row" style="gap:8px; margin-top:8px">
+                      <input type="text" id="pairing-guest-jail" class="mono control" style="flex:1" placeholder="/media/shared">
+                      <button type="button" id="pairing-browse-link" class="control">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg> Browse
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div><p class="field-label">Expires</p></div>
+                  <div class="tab-bar control" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
+                    <button type="button" data-ttl="300">5m</button>
+                    <button type="button" data-ttl="900" class="active">15m</button>
+                    <button type="button" data-ttl="3600">1h</button>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div><p class="field-label">Creates</p></div>
+                  <div class="control" id="pairing-creates"><span class="type-tag">User</span></div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:18px">
-            <div class="panel-head">
-              <h2 class="panel-title">Paired devices</h2>
-              <span class="spacer"></span>
-              <span class="meta mono" id="devices-count"></span>
-            </div>
-            <div class="card-grid" id="devices-list"></div>
           </div>
         </div>
 
@@ -1631,9 +1645,30 @@
 
   $('pairing-guest-toggle').addEventListener('change', (e) => {
     const guest = e.target.checked;
+    $('pairing-jail-row').style.display = guest ? '' : 'none';
     $('pairing-creates').innerHTML = guest
       ? '<span class="type-tag guest">Guest</span><span class="type-tag ro">RO</span><span class="type-tag">Jailed</span>'
       : '<span class="type-tag">User</span>';
+  });
+
+  function openPairingModal() {
+    $('pairing-modal-backdrop').classList.add('open');
+  }
+  function closePairingModal() {
+    $('pairing-modal-backdrop').classList.remove('open');
+    $('pairing-guest-toggle').checked = false;
+    $('pairing-jail-row').style.display = 'none';
+    $('pairing-creates').innerHTML = '<span class="type-tag">User</span>';
+    renderOtpPlaceholder();
+  }
+  $('open-pairing-btn').addEventListener('click', openPairingModal);
+  $('qa-pair-device').addEventListener('click', openPairingModal);
+  $('pairing-modal-close').addEventListener('click', closePairingModal);
+  $('pairing-modal-backdrop').addEventListener('click', (e) => {
+    if (e.target === $('pairing-modal-backdrop')) closePairingModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('pairing-modal-backdrop').classList.contains('open')) closePairingModal();
   });
 
   $('pairing-ttl').addEventListener('click', (e) => {
@@ -1646,6 +1681,7 @@
     e.preventDefault();
     const path = $('pairing-guest-jail').value.trim();
     if (!path) return;
+    closePairingModal();
     showPage('files');
     filesTab('browse');
     openFolder(path);
@@ -2724,10 +2760,7 @@
 
       const curDevice = (devices || []).find((d) => d.current);
       isAdmin = !!(curDevice && curDevice.viaLogin);
-      $('pairing-area').classList.toggle('hidden', !isAdmin);
-      $('ds-guestmode-cell').classList.toggle('hidden', !isAdmin);
-      $('ds-expires-cell').classList.toggle('hidden', !isAdmin);
-      $('ds-creates-cell').classList.toggle('hidden', !isAdmin);
+      $('open-pairing-btn').classList.toggle('hidden', !isAdmin);
 
       const list = $('devices-list');
       list.innerHTML = '';

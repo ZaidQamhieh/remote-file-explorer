@@ -40,6 +40,7 @@ class NotificationsSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.bell,
+                badgeColor: Colors.amber,
                 title: context.l10n.transferNotifications,
                 subtitle: context.l10n.transferNotificationsSubtitle,
                 value: app.notificationsEnabled,
@@ -47,6 +48,7 @@ class NotificationsSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.toggle(
                 icon: LucideIcons.hardDrive,
+                badgeColor: Colors.amber,
                 title: context.l10n.lowDiskAlerts,
                 subtitle: context.l10n.lowDiskAlertsSubtitle,
                 value: app.lowDiskThresholdBytes > 0,
@@ -57,6 +59,7 @@ class NotificationsSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.toggle(
                 icon: LucideIcons.calendarClock,
+                badgeColor: Colors.amber,
                 title: 'Weekly storage digest',
                 subtitle:
                     'Once a week, notify me how free space is trending on my hosts',

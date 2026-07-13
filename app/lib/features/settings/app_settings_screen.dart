@@ -7,11 +7,16 @@ import 'appearance_settings_screen.dart';
 import 'notifications_settings_screen.dart';
 import 'storage_security_settings_screen.dart';
 import 'transfers_backup_settings_screen.dart';
+import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Global **App Settings** — thin top-level nav into 5 grouped categories
 /// (Settings Overhaul). Each row pushes its own sub-screen; this file owns
 /// no settings state or controls itself.
+///
+/// Each category gets a dedicated badge colour, reused by every
+/// [SettingsTile] inside that category's sub-screen — same "one colour per
+/// section" convention the web companion's Settings redesign established.
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key});
 
@@ -22,66 +27,67 @@ class AppSettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
         children: [
-          _CategoryTile(
+          SettingsTile.nav(
             icon: LucideIcons.palette,
             title: 'Appearance',
             subtitle: 'Theme, layout, sort, file visibility',
-            builder: (_) => const AppearanceSettingsScreen(),
+            badgeColor: Colors.purple,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AppearanceSettingsScreen(),
+                  ),
+                ),
           ),
-          _CategoryTile(
+          SettingsTile.nav(
             icon: LucideIcons.arrowUpDown,
             title: 'Transfers & Backup',
             subtitle: 'Photo backup, watched folders, history',
-            builder: (_) => const TransfersBackupSettingsScreen(),
+            badgeColor: Colors.green,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TransfersBackupSettingsScreen(),
+                  ),
+                ),
           ),
-          _CategoryTile(
+          SettingsTile.nav(
             icon: LucideIcons.bell,
             title: 'Notifications & Alerts',
             subtitle: 'Transfers, low disk, weekly digest',
-            builder: (_) => const NotificationsSettingsScreen(),
+            badgeColor: Colors.amber,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const NotificationsSettingsScreen(),
+                  ),
+                ),
           ),
-          _CategoryTile(
+          SettingsTile.nav(
             icon: LucideIcons.shieldCheck,
             title: 'Storage & Security',
             subtitle: 'Cache, App Lock',
-            builder: (_) => const StorageSecuritySettingsScreen(),
+            badgeColor: Colors.blue,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const StorageSecuritySettingsScreen(),
+                  ),
+                ),
           ),
-          _CategoryTile(
+          SettingsTile.nav(
             icon: LucideIcons.info,
             title: 'About & Support',
             subtitle: 'Updates, diagnostics, changelog',
-            builder: (_) => const AboutSupportSettingsScreen(),
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AboutSupportSettingsScreen(),
+                  ),
+                ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.builder,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final WidgetBuilder builder;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(LucideIcons.chevronRight),
-      onTap:
-          () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: builder)),
     );
   }
 }

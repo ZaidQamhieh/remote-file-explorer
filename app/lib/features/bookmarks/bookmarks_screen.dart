@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
@@ -83,52 +84,53 @@ class BookmarksScreen extends ConsumerWidget {
               children: [
                 for (final (i, b) in group.value.indexed) ...[
                   if (i > 0) const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(LucideIcons.bookmark),
-                    title: Text(
-                      b.remotePath
-                          .split('/')
-                          .lastWhere(
-                            (s) => s.isNotEmpty,
-                            orElse: () => b.remotePath,
+                  AppearListItem(
+                    index: i,
+                    child: ListTile(
+                      leading: const Icon(LucideIcons.bookmark),
+                      title: Text(
+                        b.remotePath
+                            .split('/')
+                            .lastWhere(
+                              (s) => s.isNotEmpty,
+                              orElse: () => b.remotePath,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        b.remotePath,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (b.tag != null)
+                            Chip(
+                              label: Text(b.tag!),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          IconButton(
+                            icon: const Icon(LucideIcons.trash2),
+                            tooltip: 'Remove bookmark',
+                            onPressed:
+                                () => ref
+                                    .read(bookmarkStoreProvider.notifier)
+                                    .removeBookmark(b.hostId, b.remotePath),
                           ),
-                      overflow: TextOverflow.ellipsis,
+                        ],
+                      ),
+                      onTap: () {
+                        final host = hostMap[b.hostId];
+                        if (host == null) return;
+                        ref.read(activeHostProvider.notifier).state =
+                            ActiveHost(host: host, initialPath: b.remotePath);
+                        ref.read(selectedTabIndexProvider.notifier).state = 1;
+                        Navigator.of(context).pop();
+                      },
                     ),
-                    subtitle: Text(
-                      b.remotePath,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (b.tag != null)
-                          Chip(
-                            label: Text(b.tag!),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        IconButton(
-                          icon: const Icon(LucideIcons.trash2),
-                          tooltip: 'Remove bookmark',
-                          onPressed:
-                              () => ref
-                                  .read(bookmarkStoreProvider.notifier)
-                                  .removeBookmark(b.hostId, b.remotePath),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      final host = hostMap[b.hostId];
-                      if (host == null) return;
-                      ref.read(activeHostProvider.notifier).state = ActiveHost(
-                        host: host,
-                        initialPath: b.remotePath,
-                      );
-                      ref.read(selectedTabIndexProvider.notifier).state = 1;
-                      Navigator.of(context).pop();
-                    },
                   ),
                 ],
               ],

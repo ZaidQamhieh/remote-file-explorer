@@ -50,6 +50,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.value(
                 icon: LucideIcons.palette,
+                badgeColor: Colors.purple,
                 title: context.l10n.themeLabel,
                 value: themeLabel(app.themeMode),
                 onTap: () async {
@@ -80,6 +81,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.toggle(
                 icon: LucideIcons.image,
+                badgeColor: Colors.purple,
                 title: context.l10n.useWallpaperColors,
                 subtitle: context.l10n.wallpaperSubtitle,
                 value: app.dynamicColor,
@@ -87,6 +89,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.toggle(
                 icon: LucideIcons.moon,
+                badgeColor: Colors.purple,
                 title: 'AMOLED Dark',
                 subtitle: 'Pure black background in dark mode',
                 value: app.amoledDark,
@@ -94,6 +97,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.value(
                 icon: LucideIcons.swatchBook,
+                badgeColor: Colors.purple,
                 title: 'Accent Color',
                 value: _accentLabel(app.seedColor),
                 leadingDot: app.seedColor ?? Brand.seed,
@@ -130,6 +134,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.value(
                 icon: LucideIcons.layoutGrid,
+                badgeColor: Colors.purple,
                 title: context.l10n.layoutLabel,
                 value:
                     app.gridView
@@ -158,6 +163,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.value(
                 icon: LucideIcons.rows3,
+                badgeColor: Colors.purple,
                 title: context.l10n.densityLabel,
                 value:
                     app.density == EntryDensity.compact
@@ -184,6 +190,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.value(
                 icon: LucideIcons.arrowUpDown,
+                badgeColor: Colors.purple,
                 title: context.l10n.sortByLabel,
                 value:
                     '${_sortFieldLabel(context, app.sort.field)} '
@@ -210,6 +217,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.toggle(
                 icon: LucideIcons.wifi,
+                badgeColor: Colors.purple,
                 title: 'Preload previews on cellular',
                 subtitle:
                     'Warm neighbouring images while swiping the preview, even '
@@ -225,6 +233,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.eyeOff,
+                badgeColor: Colors.purple,
                 title: 'File visibility',
                 subtitle: 'Hidden file types & dotfiles',
                 onTap:

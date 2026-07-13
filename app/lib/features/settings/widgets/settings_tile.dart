@@ -13,6 +13,7 @@ class SettingsTile extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
+    this.badgeColor,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) : _kind = _Kind.toggle,
@@ -27,6 +28,7 @@ class SettingsTile extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
+    this.badgeColor,
     required String value,
     this.leadingDot,
     required VoidCallback this.onTap,
@@ -40,6 +42,7 @@ class SettingsTile extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
+    this.badgeColor,
     required VoidCallback this.onTap,
   }) : _kind = _Kind.nav,
        valueLabel = null,
@@ -53,6 +56,11 @@ class SettingsTile extends StatelessWidget {
   final String? valueLabel;
   final Color? leadingDot;
   final VoidCallback? onTap;
+
+  /// Tint for the icon's tonal badge. Defaults to [ColorScheme.onSurfaceVariant]
+  /// (a flat neutral icon) when unset, for tiles that don't warrant a category
+  /// colour (e.g. a lone toggle with no siblings to distinguish from).
+  final Color? badgeColor;
   final _Kind _kind;
   final bool _value;
   final ValueChanged<bool>? _onChanged;
@@ -60,11 +68,21 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tint = badgeColor ?? scheme.onSurfaceVariant;
     final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: Spacing.md2 - 2),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: scheme.onSurfaceVariant),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.16),
+              borderRadius: Radii.smR,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: tint),
+          ),
           const SizedBox(width: Spacing.md),
           Expanded(
             child: Column(

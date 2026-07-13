@@ -43,6 +43,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.cloudUpload,
+                badgeColor: Colors.green,
                 title: context.l10n.photoBackupTitle,
                 subtitle: context.l10n.copyPhonePhotos,
                 onTap:
@@ -60,6 +61,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.arrowUpDown,
+                badgeColor: Colors.green,
                 title: 'Compress downloads on cellular',
                 subtitle:
                     'Sends Accept-Encoding: gzip on mobile data for '
@@ -77,6 +79,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.history,
+                badgeColor: Colors.green,
                 title: 'View transfer history',
                 subtitle: 'Completed uploads and downloads',
                 onTap:

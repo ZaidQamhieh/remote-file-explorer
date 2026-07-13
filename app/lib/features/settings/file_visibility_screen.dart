@@ -56,6 +56,7 @@ class FileVisibilityScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.eyeOff,
+                badgeColor: Colors.purple,
                 title: context.l10n.hideDotfiles,
                 subtitle: context.l10n.hideDotfilesSubtitle,
                 value: prefs.hideDotfiles,

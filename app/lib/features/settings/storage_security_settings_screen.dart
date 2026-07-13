@@ -44,6 +44,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.lock,
+                badgeColor: Colors.blue,
                 title: 'App Lock',
                 subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,

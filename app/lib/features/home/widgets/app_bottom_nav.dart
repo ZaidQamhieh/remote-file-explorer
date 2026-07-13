@@ -95,19 +95,36 @@ class _NavButton extends StatelessWidget {
                     : null,
           ),
           const SizedBox(height: Spacing.xs),
-          Icon(
-            selected
-                ? (destination.selectedIcon ?? destination.icon)
-                : destination.icon,
-            color: tint,
-            size: 22,
+          AnimatedContainer(
+            duration: MotionDuration.short,
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md2,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color:
+                  selected
+                      ? scheme.primary.withValues(alpha: 0.16)
+                      : Colors.transparent,
+              borderRadius: Radii.stadiumR,
+            ),
+            child: Icon(
+              selected
+                  ? (destination.selectedIcon ?? destination.icon)
+                  : destination.icon,
+              color: tint,
+              size: 22,
+            ),
           ),
           const SizedBox(height: Spacing.xs),
           Text(
             destination.label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: tint, fontSize: 10),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: tint,
+              fontSize: 10,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
         ],
       ),

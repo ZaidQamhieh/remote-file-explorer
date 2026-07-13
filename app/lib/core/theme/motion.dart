@@ -16,17 +16,39 @@ Route<T> fadeThroughPageRoute<T>(
     transitionDuration: const Duration(milliseconds: 260),
     reverseTransitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (context, animation, secondary) => builder(context),
-    transitionsBuilder: (context, animation, secondary, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: Transform.scale(scale: 0.98 + 0.02 * curved.value, child: child),
-      );
-    },
+    transitionsBuilder:
+        (context, animation, secondary, child) =>
+            fadeThroughTransition(animation, child),
   );
+}
+
+/// The cross-fade + slight-scale transition shared by [fadeThroughPageRoute]
+/// and [AppPageTransitionsBuilder] — factored out so both stay in sync.
+Widget fadeThroughTransition(Animation<double> animation, Widget child) {
+  final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+  return FadeTransition(
+    opacity: curved,
+    child: Transform.scale(scale: 0.98 + 0.02 * curved.value, child: child),
+  );
+}
+
+/// Applies [fadeThroughTransition] to every plain [MaterialPageRoute]/
+/// [PageRoute] push app-wide (wired via [ThemeData.pageTransitionsTheme]) so
+/// screens that don't explicitly opt into [fadeThroughPageRoute] still get
+/// the calmer transition instead of the platform's default slide.
+class AppPageTransitionsBuilder extends PageTransitionsBuilder {
+  const AppPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return fadeThroughTransition(animation, child);
+  }
 }
 
 /// Wraps a list/grid item so it gently fades and slides up the first time it is

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'motion.dart';
 import 'tokens.dart';
 
 /// The app's light and dark themes for the "distinctive modern" look.
@@ -140,6 +141,8 @@ class AppTheme {
             vertical: Spacing.sm + 2,
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          elevation: 2,
+          shadowColor: scheme.primary.withValues(alpha: 0.45),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -154,6 +157,8 @@ class AppTheme {
       chipTheme: base.chipTheme.copyWith(
         shape: const RoundedRectangleBorder(borderRadius: Radii.chipR),
         side: BorderSide(color: scheme.outlineVariant),
+        selectedColor: scheme.primary.withValues(alpha: 0.18),
+        secondarySelectedColor: scheme.primary.withValues(alpha: 0.18),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -190,6 +195,12 @@ class AppTheme {
         color: scheme.outlineVariant,
         space: Spacing.md,
         thickness: 1,
+      ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: AppPageTransitionsBuilder(),
+          TargetPlatform.iOS: AppPageTransitionsBuilder(),
+        },
       ),
     );
   }

@@ -10,6 +10,10 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.7', [
+      'Bottom nav, buttons/chips, and Settings rows now carry the same visual language as the rest of the app',
+      'Screen transitions and list entrances get a subtle fade/slide everywhere, not just Files and Servers',
+    ]),
     _ChangelogEntry('v1.41.6', [
       'New app icon — the real RFE mark instead of the default Flutter icon',
       'MetaSheet\'s look (gradient header + quick actions) rolled out across the whole app',

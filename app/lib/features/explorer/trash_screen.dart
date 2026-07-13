@@ -5,6 +5,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/models/trash_entry.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
@@ -193,7 +194,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     endIndent: Spacing.md,
                     color: scheme.outlineVariant,
                   ),
-                _tile(context, items[i]),
+                AppearListItem(index: i, child: _tile(context, items[i])),
               ],
             ],
           ),

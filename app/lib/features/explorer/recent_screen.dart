@@ -5,6 +5,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/grouped_card.dart';
@@ -111,11 +112,14 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
                   children: [
                     for (int i = 0; i < entries.length; i++) ...[
                       if (i > 0) const Divider(height: 1),
-                      SearchResultTile(
-                        entry: entries[i],
-                        query: '',
-                        highlight: false,
-                        onTap: () => _openResult(entries[i]),
+                      AppearListItem(
+                        index: i,
+                        child: SearchResultTile(
+                          entry: entries[i],
+                          query: '',
+                          highlight: false,
+                          onTap: () => _openResult(entries[i]),
+                        ),
                       ),
                     ],
                   ],

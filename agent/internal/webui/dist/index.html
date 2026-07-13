@@ -2871,6 +2871,7 @@
   function showPage(name) {
     document.querySelectorAll('.page').forEach((el) => el.classList.toggle('hidden', el.id !== 'page-' + name));
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('nav-active', a.dataset.page === name));
+    if (location.hash.slice(1) !== name) location.hash = name;
     $('page-title').textContent = PAGE_TITLES[name] || name;
     $('agent-version').textContent = name === 'status' ? overviewSub : (PAGE_SUBS[name] || '');
     $('logs-export').classList.toggle('hidden', name !== 'logs');
@@ -3276,7 +3277,7 @@
   function showDashboard() {
     pairView.classList.add('hidden');
     dashView.classList.remove('hidden');
-    showPage('status');
+    showPage(PAGE_TITLES[location.hash.slice(1)] ? location.hash.slice(1) : 'status');
     loadDashboard();
     loadTransfers();  // populate the Transfers nav badge up front
     if (!metricsInterval) {

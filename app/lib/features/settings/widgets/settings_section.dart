@@ -76,11 +76,33 @@ class SettingsSection extends StatelessWidget {
                       horizontal: Spacing.md,
                       vertical: Spacing.sm,
                     ),
-                    child: Column(children: children),
+                    child: Column(children: _divided(children, scheme, 50)),
                   )
-                  : Column(children: children),
+                  : Column(children: _divided(children, scheme, 56)),
         ),
       ],
     );
   }
+}
+
+/// Interleaves a hairline divider between rows, indented past the leading
+/// icon badge so it only underlines the text — matches [ActionListCard]'s
+/// row separation instead of leaving stacked toggles/rows visually fused.
+List<Widget> _divided(
+  List<Widget> children,
+  ColorScheme scheme,
+  double indent,
+) {
+  if (children.length < 2) return children;
+  return [
+    for (var i = 0; i < children.length; i++) ...[
+      if (i > 0)
+        Divider(
+          height: 1,
+          indent: indent,
+          color: scheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      children[i],
+    ],
+  ];
 }

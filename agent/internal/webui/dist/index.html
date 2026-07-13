@@ -136,6 +136,31 @@
   .panel-head .spacer { flex: 1; }
   .panel-head .meta { font-size: 11px; color: var(--dim); }
   .panel-foot { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+  /* ---------- Settings: category rail + detail pane ---------- */
+  .settings-shell { display: grid; grid-template-columns: 220px 1fr; gap: 0; align-items: start; }
+  .settings-rail { border-right: 1px solid var(--border); padding-right: 6px; position: sticky; top: 0; }
+  .settings-rail-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 2px; border-left: 2px solid transparent; }
+  .settings-rail-item .icon-badge { width: 30px; height: 30px; }
+  .settings-rail-item .icon-badge .icon { width: 16px; height: 16px; }
+  .settings-rail-item .label { font-size: 12.5px; color: var(--dim-2); font-weight: 500; }
+  .settings-rail-item .meta { font-size: 10.5px; color: var(--dim); margin-top: 1px; }
+  .settings-rail-item.active { background: var(--surface); border-left-color: var(--primary); }
+  .settings-rail-item.active .label { color: var(--ink); }
+  .settings-detail { padding-left: 28px; }
+  .settings-section { display: none; }
+  .settings-section.active { display: block; }
+  .settings-detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .settings-detail-head .icon-badge { width: 38px; height: 38px; }
+  .settings-detail-head .icon-badge .icon { width: 20px; height: 20px; }
+  .settings-detail-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .settings-detail-head p { font-size: 12px; color: var(--dim); margin: 2px 0 0; }
+  @media (max-width: 760px) {
+    .settings-shell { grid-template-columns: 1fr; }
+    .settings-rail { display: flex; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); padding-bottom: 8px; gap: 4px; position: static; }
+    .settings-rail-item { flex-shrink: 0; }
+    .settings-detail { padding-left: 0; padding-top: 16px; }
+  }
   .legend { display: inline-flex; align-items: center; font-size: 10px; color: var(--dim); margin-left: 16px; }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
@@ -902,74 +927,104 @@
         </div>
 
         <div id="page-settings" class="page hidden">
-          <div class="panel">
-            <div class="panel-head">
-              <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-              <h2 class="panel-title">Access</h2>
-            </div>
-            <div class="field-row">
-              <div>
-                <p class="field-label">Read-only mode</p>
-                <p class="field-desc">Block writes; browsing and downloads still work.</p>
+          <div class="settings-shell">
+            <div class="settings-rail">
+              <div class="settings-rail-item active" data-settings-cat="access">
+                <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                <div><span class="label">Access</span><div class="meta" id="rail-meta-access">—</div></div>
               </div>
-              <label class="switch control"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
-            </div>
-            <div class="field-row">
-              <div>
-                <p class="field-label">Restart agent service</p>
-                <p class="field-desc">Interrupts active transfers; devices reconnect automatically.</p>
+              <div class="settings-rail-item" data-settings-cat="folders">
+                <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                <div><span class="label">Allowed folders</span><div class="meta" id="rail-meta-folders">—</div></div>
               </div>
-              <button class="danger control" id="restart-btn">Restart</button>
+              <div class="settings-rail-item" data-settings-cat="bandwidth">
+                <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
+                <div><span class="label">Bandwidth</span><div class="meta" id="rail-meta-bandwidth">—</div></div>
+              </div>
+              <div class="settings-rail-item" data-settings-cat="backup">
+                <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
+                <div><span class="label">Photo backup</span><div class="meta" id="rail-meta-backup">—</div></div>
+              </div>
             </div>
-            <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
-          </div>
 
-          <div class="panel" style="margin-top:16px">
-            <div class="panel-head">
-              <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
-              <h2 class="panel-title">Allowed folders</h2>
-            </div>
-            <p class="field-desc">Phones can only browse the folders listed here. Managed from this web companion only.</p>
-            <div id="roots-list"></div>
-            <div class="row" style="gap:8px; margin-top:8px">
-              <input type="text" id="root-add-input" class="mono control" style="flex:1" placeholder="/home/you/Shared">
-              <button id="root-add-btn">Add folder</button>
-            </div>
-          </div>
-
-          <div class="panel" style="margin-top:16px">
-            <div class="panel-head">
-              <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
-              <h2 class="panel-title">Bandwidth</h2>
-            </div>
-            <div class="field-row">
-              <div>
-                <p class="field-label">Max upload</p>
-                <p class="field-desc">MB/s, 0 = unlimited</p>
+            <div class="settings-detail">
+              <div class="settings-section active" data-settings-section="access">
+                <div class="settings-detail-head">
+                  <div class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                  <div><h2>Access</h2><p>Control what phones can do on this PC.</p></div>
+                </div>
+                <div class="panel">
+                  <div class="field-row">
+                    <div>
+                      <p class="field-label">Read-only mode</p>
+                      <p class="field-desc">Block writes; browsing and downloads still work.</p>
+                    </div>
+                    <label class="switch control"><input type="checkbox" id="readonly-toggle"><span class="track"></span></label>
+                  </div>
+                  <div class="field-row">
+                    <div>
+                      <p class="field-label">Restart agent service</p>
+                      <p class="field-desc">Interrupts active transfers; devices reconnect automatically.</p>
+                    </div>
+                    <button class="danger control" id="restart-btn">Restart</button>
+                  </div>
+                  <p class="dim" id="restart-status" style="margin:8px 0 0"></p>
+                </div>
               </div>
-              <input type="number" id="bw-upload" min="0" class="mono control" style="width:120px">
-            </div>
-            <div class="field-row">
-              <div>
-                <p class="field-label">Max download</p>
-                <p class="field-desc">MB/s, 0 = unlimited</p>
-              </div>
-              <input type="number" id="bw-download" min="0" class="mono control" style="width:120px">
-            </div>
-            <div class="panel-foot"><button class="primary" id="bw-save">Save bandwidth limits</button></div>
-          </div>
 
-          <div class="panel" style="margin-top:16px">
-            <div class="panel-head">
-              <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
-              <h2 class="panel-title">Photo backup</h2>
+              <div class="settings-section" data-settings-section="folders">
+                <div class="settings-detail-head">
+                  <div class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                  <div><h2>Allowed folders</h2><p>Phones can only browse the folders listed here. Managed from this web companion only.</p></div>
+                </div>
+                <div class="panel">
+                  <div id="roots-list"></div>
+                  <div class="row" style="gap:8px; margin-top:8px">
+                    <input type="text" id="root-add-input" class="mono control" style="flex:1" placeholder="/home/you/Shared">
+                    <button id="root-add-btn">Add folder</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-section" data-settings-section="bandwidth">
+                <div class="settings-detail-head">
+                  <div class="icon-badge purple"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
+                  <div><h2>Bandwidth</h2><p>Cap transfer speed per direction. 0 = unlimited.</p></div>
+                </div>
+                <div class="panel">
+                  <div class="field-row">
+                    <div>
+                      <p class="field-label">Max upload</p>
+                      <p class="field-desc">MB/s, 0 = unlimited</p>
+                    </div>
+                    <input type="number" id="bw-upload" min="0" class="mono control" style="width:120px">
+                  </div>
+                  <div class="field-row">
+                    <div>
+                      <p class="field-label">Max download</p>
+                      <p class="field-desc">MB/s, 0 = unlimited</p>
+                    </div>
+                    <input type="number" id="bw-download" min="0" class="mono control" style="width:120px">
+                  </div>
+                  <div class="panel-foot"><button class="primary" id="bw-save">Save bandwidth limits</button></div>
+                </div>
+              </div>
+
+              <div class="settings-section" data-settings-section="backup">
+                <div class="settings-detail-head">
+                  <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
+                  <div><h2>Photo backup</h2><p>Where phone photo backups land on this PC.</p></div>
+                </div>
+                <div class="panel">
+                  <div class="field">
+                    <label for="photo-backup-root">Destination folder</label>
+                    <input type="text" id="photo-backup-root" class="mono control" placeholder="/home/you/PhoneBackups">
+                  </div>
+                  <p class="field-desc" id="photo-backup-warning">Not set — phone photo backup will fail until you set a folder here.</p>
+                  <div class="panel-foot"><button class="primary" id="photo-backup-save">Save photo backup destination</button></div>
+                </div>
+              </div>
             </div>
-            <div class="field">
-              <label for="photo-backup-root">Destination folder</label>
-              <input type="text" id="photo-backup-root" class="mono control" placeholder="/home/you/PhoneBackups">
-            </div>
-            <p class="field-desc" id="photo-backup-warning">Not set — phone photo backup will fail until you set a folder here.</p>
-            <div class="panel-foot"><button class="primary" id="photo-backup-save">Save photo backup destination</button></div>
           </div>
         </div>
 
@@ -1562,9 +1617,32 @@
     }, 2000);
   }
 
+  // ---------- Settings: category rail switching ----------
+  document.querySelectorAll('.settings-rail-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.settings-rail-item').forEach((i) => i.classList.remove('active'));
+      document.querySelectorAll('.settings-section').forEach((s) => s.classList.remove('active'));
+      item.classList.add('active');
+      document.querySelector('[data-settings-section="' + item.dataset.settingsCat + '"]').classList.add('active');
+    });
+  });
+
+  function updateRailMeta() {
+    $('rail-meta-access').textContent = $('readonly-toggle').checked ? 'Read-only' : 'Writes allowed';
+    const n = currentRoots.length;
+    $('rail-meta-folders').textContent = n ? (n + ' folder' + (n === 1 ? '' : 's')) : 'None configured';
+    const up = parseFloat($('bw-upload').value) || 0;
+    const down = parseFloat($('bw-download').value) || 0;
+    $('rail-meta-bandwidth').textContent = (up || down) ? ('↑' + up + ' ↓' + down + ' MB/s') : 'Unlimited';
+    const backupSet = !!$('photo-backup-root').value.trim();
+    $('rail-meta-backup').textContent = backupSet ? 'Configured' : 'Not set';
+    $('rail-meta-backup').style.color = backupSet ? '' : 'var(--amber, #d9a441)';
+  }
+
   $('readonly-toggle').addEventListener('change', async (e) => {
     try {
       await api('/settings', { method: 'PATCH', body: JSON.stringify({ readOnly: e.target.checked }) });
+      updateRailMeta();
     } catch (err) {
       alert('Failed to update: ' + err.message);
       e.target.checked = !e.target.checked;
@@ -1579,6 +1657,7 @@
         method: 'PUT',
         body: JSON.stringify({ maxUploadBytesPerSec: up, maxDownloadBytesPerSec: down }),
       });
+      updateRailMeta();
     } catch (err) {
       alert('Failed to save: ' + err.message);
     }
@@ -1590,6 +1669,7 @@
       ? 'Phones back up their photos here, each in their own subfolder.'
       : 'Not set — phone photo backup will fail until you set a folder here.';
     warn.style.color = root ? '' : 'var(--red, #e05555)';
+    updateRailMeta();
   }
 
   $('photo-backup-save').addEventListener('click', async () => {
@@ -1623,6 +1703,7 @@
     const list = $('roots-list');
     if (!currentRoots.length) {
       list.innerHTML = '<p class="dim">No folders configured — phones can\'t browse anything yet.</p>';
+      updateRailMeta();
       return;
     }
     list.innerHTML = '';
@@ -1640,6 +1721,7 @@
       row.appendChild(actions);
       list.appendChild(row);
     });
+    updateRailMeta();
   }
 
   async function saveRoots(next) {

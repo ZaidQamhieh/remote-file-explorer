@@ -17,6 +17,8 @@ import '../../core/storage/favorites.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import 'explorer_screen.dart';
 import 'explorer_state.dart' show buildPathStack, folderLabel;
@@ -50,7 +52,7 @@ class DrivesView extends ConsumerWidget {
         const [];
 
     return Scaffold(
-      appBar: AppBar(title: Text(host.label)),
+      appBar: AppBar(toolbarHeight: 72, title: ScreenHeader(host.label)),
       body: drivesAsync.when(
         loading: () => const ListingSkeleton(),
         error:
@@ -71,11 +73,26 @@ class DrivesView extends ConsumerWidget {
                   onRemove: (fav) => _removeFavorite(context, ref, fav),
                 ),
               Expanded(
-                child: ListView.builder(
+                child: ListView(
                   padding: const EdgeInsets.all(Spacing.md),
-                  itemCount: drives.length,
-                  itemBuilder:
-                      (context, i) => _DriveTile(drive: drives[i], host: host),
+                  children: [
+                    GroupedCard(
+                      padded: false,
+                      children: [
+                        for (int i = 0; i < drives.length; i++) ...[
+                          if (i > 0)
+                            Divider(
+                              height: 1,
+                              indent: Spacing.md,
+                              endIndent: Spacing.md,
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                          _DriveTile(drive: drives[i], host: host),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -124,41 +141,31 @@ class _DriveTile extends StatelessWidget {
     final free = drive.freeBytes;
     final hasCapacity = total != null && free != null;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: Spacing.sm),
-      color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: Radii.cardR,
-        side: BorderSide(color: scheme.outlineVariant),
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: Radii.smR,
+        ),
+        alignment: Alignment.center,
+        child: Icon(LucideIcons.hardDrive, color: scheme.onSurfaceVariant),
       ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: Radii.smR,
-          ),
-          alignment: Alignment.center,
-          child: Icon(LucideIcons.hardDrive, color: scheme.onSurfaceVariant),
-        ),
-        title: Text(label, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          hasCapacity
-              ? '${formatSize(free)} free of ${formatSize(total)}  ·  ${drive.path}'
-              : drive.path,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: const Icon(LucideIcons.chevronRight),
-        onTap:
-            () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder:
-                    (_) => ExplorerScreen(host: host, rootPath: drive.path),
-              ),
+      title: Text(label, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        hasCapacity
+            ? '${formatSize(free)} free of ${formatSize(total)}  ·  ${drive.path}'
+            : drive.path,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const Icon(LucideIcons.chevronRight),
+      onTap:
+          () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ExplorerScreen(host: host, rootPath: drive.path),
             ),
-      ),
+          ),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../../core/security/device_identity.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Fetches a fresh challenge nonce from [client] and signs it with this
@@ -80,7 +81,8 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.addComputerTitle),
+        toolbarHeight: 72,
+        title: ScreenHeader(context.l10n.addComputerTitle),
         bottom: TabBar(
           controller: _tabs,
           tabs: [

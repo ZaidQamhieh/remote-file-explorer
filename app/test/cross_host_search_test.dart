@@ -5,6 +5,8 @@ import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/search/cross_host_search_screen.dart';
 
+import 'l10n_helpers.dart';
+
 void main() {
   const hosts = [
     Host(id: 'h1', label: 'Desktop', address: '192.168.1.10:8765'),
@@ -13,7 +15,10 @@ void main() {
 
   Widget buildApp({List<Host> hostList = hosts}) {
     return ProviderScope(
-      child: MaterialApp(home: CrossHostSearchScreen(hosts: hostList)),
+      child: MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: CrossHostSearchScreen(hosts: hostList),
+      ),
     );
   }
 

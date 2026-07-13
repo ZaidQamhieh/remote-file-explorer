@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/sheet_chrome.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet showing a QR code that hands one file off to another phone
@@ -32,33 +33,24 @@ class QrGenerateSheet extends StatelessWidget {
       'name': name,
     });
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(LucideIcons.qrCode),
-                const SizedBox(width: Spacing.sm),
-                Text(
-                  context.l10n.qrHandoffSheetTitle,
-                  style: const TextStyle(fontSize: 18),
-                ),
-              ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SheetHero(
+            badge: const Icon(LucideIcons.qrCode),
+            title: name,
+            subtitle: context.l10n.qrHandoffSheetTitle,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.lg,
+              0,
+              Spacing.lg,
+              Spacing.lg,
             ),
-            const SizedBox(height: Spacing.lg),
-            Center(child: QrImageView(data: payload, size: 240)),
-            const SizedBox(height: Spacing.md),
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
+            child: Center(child: QrImageView(data: payload, size: 240)),
+          ),
+        ],
       ),
     );
   }

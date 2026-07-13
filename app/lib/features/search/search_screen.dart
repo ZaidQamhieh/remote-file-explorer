@@ -14,6 +14,7 @@ import '../../core/storage/recent_searches.dart';
 import '../../core/storage/saved_searches.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/grouped_card.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack, folderLabel;
 import 'search_logic.dart';
@@ -392,17 +393,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         message: context.l10n.noResultsFor(_query),
       );
     }
-    return ListView.builder(
-      itemCount: _results.length,
-      itemBuilder: (context, i) {
-        final entry = _results[i];
-        return SearchResultTile(
-          entry: entry,
-          query: _query,
-          highlight: !_isGlob,
-          onTap: () => _openResult(entry),
-        );
-      },
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(Spacing.md),
+      children: [
+        GroupedCard(
+          padded: false,
+          children: [
+            for (int i = 0; i < _results.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: Spacing.md,
+                  endIndent: Spacing.md,
+                  color: scheme.outlineVariant,
+                ),
+              SearchResultTile(
+                entry: _results[i],
+                query: _query,
+                highlight: !_isGlob,
+                onTap: () => _openResult(_results[i]),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }

@@ -7,6 +7,8 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
 import '../search/widgets/search_result_tile.dart';
@@ -70,7 +72,10 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.recentTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: ScreenHeader(context.l10n.recentTitle),
+      ),
       body: _buildBody(context, _entries),
     );
   }
@@ -95,17 +100,27 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-              itemCount: entries.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder:
-                  (_, i) => SearchResultTile(
-                    entry: entries[i],
-                    query: '',
-                    highlight: false,
-                    onTap: () => _openResult(entries[i]),
-                  ),
+            child: ListView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.sm,
+                vertical: Spacing.md,
+              ),
+              children: [
+                GroupedCard(
+                  padded: false,
+                  children: [
+                    for (int i = 0; i < entries.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      SearchResultTile(
+                        entry: entries[i],
+                        query: '',
+                        highlight: false,
+                        onTap: () => _openResult(entries[i]),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
         ),

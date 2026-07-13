@@ -8,6 +8,8 @@ import '../../core/models/trash_entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -147,7 +149,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(context.l10n.trashTitle),
+          toolbarHeight: 72,
+          title: ScreenHeader(context.l10n.trashTitle),
           actions: [
             if (items != null && items.isNotEmpty)
               IconButton(
@@ -170,13 +173,31 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (items == null || items.isEmpty) {
       return _emptyView(context);
     }
+    final scheme = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) => _tile(context, items[i]),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm,
+          vertical: Spacing.md,
+        ),
+        children: [
+          GroupedCard(
+            padded: false,
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: Spacing.md,
+                    endIndent: Spacing.md,
+                    color: scheme.outlineVariant,
+                  ),
+                _tile(context, items[i]),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

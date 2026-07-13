@@ -33,6 +33,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/sheet_chrome.dart';
 import '../explorer/explorer_state.dart' show basenameOf;
 import '../explorer/widgets/destination_picker_sheet.dart';
 import '../home/home_state.dart';
@@ -224,34 +225,30 @@ class _ShareIntakeListenerState extends ConsumerState<ShareIntakeListener> {
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTopR),
       builder: (sheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg,
-                  Spacing.md,
-                  Spacing.lg,
-                  Spacing.sm,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: Spacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SheetHero(
+                  badge: Icon(LucideIcons.computer),
+                  title: 'Share to which PC?',
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Share to which PC?',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+                  child: ActionListCard(
+                    children: [
+                      for (final host in hosts)
+                        ActionListTile(
+                          icon: LucideIcons.computer,
+                          label: '${host.label} • ${host.address}',
+                          onTap: () => Navigator.pop(sheetContext, host),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              ...hosts.map(
-                (host) => ListTile(
-                  leading: const Icon(LucideIcons.computer),
-                  title: Text(host.label),
-                  subtitle: Text(host.address),
-                  onTap: () => Navigator.pop(sheetContext, host),
-                ),
-              ),
-              const SizedBox(height: Spacing.sm),
-            ],
+              ],
+            ),
           ),
         );
       },

@@ -151,7 +151,15 @@ class _Page extends StatelessWidget {
           const SizedBox(height: Spacing.xl),
           Text(
             title,
-            style: Theme.of(context).textTheme.headlineSmall,
+            // Matches ScreenHeader's scale (28px / w700 / -0.5 tracking) so
+            // onboarding's headline reads at the same weight as top-level
+            // screen titles, even though this page has no AppBar to host
+            // ScreenHeader itself.
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: Spacing.md),

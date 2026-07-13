@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/sheet_chrome.dart';
 import 'transfer_speed.dart';
 import 'transfer_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -46,16 +47,9 @@ class TransferManagerSheet extends StatelessWidget {
   }
 
   Widget _buildHandle(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-      child: Container(
-        width: 36,
-        height: 4,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: Spacing.sm),
+      child: SheetGrabber(),
     );
   }
 }

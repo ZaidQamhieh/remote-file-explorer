@@ -8,6 +8,8 @@ import '../../core/storage/sync_rules.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import 'sync_runner.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -166,8 +168,12 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Sync Rules')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: const ScreenHeader('Sync Rules'),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addRule,
         tooltip: 'Add Sync Rule',
@@ -178,20 +184,33 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               ? const Center(child: CircularProgressIndicator())
               : _rules.isEmpty
               ? const Center(child: Text('No sync rules yet'))
-              : ListView.builder(
+              : ListView(
                 padding: const EdgeInsets.all(Spacing.md),
-                itemCount: _rules.length,
-                itemBuilder: (context, index) {
-                  final rule = _rules[index];
-                  return _SyncRuleTile(
-                    rule: rule,
-                    progress: _syncing[rule.id],
-                    isSyncing: _syncing.containsKey(rule.id),
-                    onToggle: () => _toggleEnabled(rule),
-                    onSync: () => _syncNow(rule),
-                    onDelete: () => _deleteRule(rule),
-                  );
-                },
+                children: [
+                  const SectionLabel('Sync rules'),
+                  GroupedCard(
+                    padded: false,
+                    children: [
+                      for (int i = 0; i < _rules.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            indent: Spacing.md,
+                            endIndent: Spacing.md,
+                            color: scheme.outlineVariant,
+                          ),
+                        _SyncRuleTile(
+                          rule: _rules[i],
+                          progress: _syncing[_rules[i].id],
+                          isSyncing: _syncing.containsKey(_rules[i].id),
+                          onToggle: () => _toggleEnabled(_rules[i]),
+                          onSync: () => _syncNow(_rules[i]),
+                          onDelete: () => _deleteRule(_rules[i]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
     );
   }
@@ -239,63 +258,62 @@ class _SyncRuleTile extends StatelessWidget {
         onDelete();
         return false; // we handle deletion in the callback
       },
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          rule.remotePath,
-                          style: Theme.of(context).textTheme.titleSmall,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rule.remotePath,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        rule.localPath,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          rule.localPath,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Switch(value: rule.enabled, onChanged: (_) => onToggle()),
-                ],
-              ),
-              const SizedBox(height: Spacing.xs),
-              Row(
-                children: [
-                  Text(
-                    progressText ?? lastSyncText,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                ),
+                Switch(value: rule.enabled, onChanged: (_) => onToggle()),
+              ],
+            ),
+            const SizedBox(height: Spacing.xs),
+            Row(
+              children: [
+                Text(
+                  progressText ?? lastSyncText,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
-                  const Spacer(),
-                  if (isSyncing)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    TextButton.icon(
-                      onPressed: rule.enabled ? onSync : null,
-                      icon: const Icon(LucideIcons.refreshCw, size: 18),
-                      label: const Text('Sync Now'),
-                    ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const Spacer(),
+                if (isSyncing)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: rule.enabled ? onSync : null,
+                    icon: const Icon(LucideIcons.refreshCw, size: 18),
+                    label: const Text('Sync Now'),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );

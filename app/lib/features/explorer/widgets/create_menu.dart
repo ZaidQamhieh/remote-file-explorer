@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -14,34 +16,50 @@ class CreateMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(LucideIcons.folderPlus),
-            title: Text(context.l10n.newFolderButton),
-            onTap: () {
-              Navigator.pop(context);
-              _showNameDialog(
-                context,
-                context.l10n.newFolderButton,
-                isFolder: true,
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(LucideIcons.filePlus),
-            title: Text(context.l10n.newFileButton),
-            onTap: () {
-              Navigator.pop(context);
-              _showNameDialog(
-                context,
-                context.l10n.newFileButton,
-                isFolder: false,
-              );
-            },
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.lg,
+          Spacing.md,
+          Spacing.lg,
+          Spacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SheetGrabber(),
+            const SizedBox(height: Spacing.md),
+            QuickActionRow(
+              actions: [
+                GradientActionCircle(
+                  icon: LucideIcons.folderPlus,
+                  label: context.l10n.newFolderButton,
+                  gradient: [Colors.blue.shade400, Colors.blue.shade800],
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showNameDialog(
+                      context,
+                      context.l10n.newFolderButton,
+                      isFolder: true,
+                    );
+                  },
+                ),
+                GradientActionCircle(
+                  icon: LucideIcons.filePlus,
+                  label: context.l10n.newFileButton,
+                  gradient: [Colors.green.shade400, Colors.green.shade800],
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showNameDialog(
+                      context,
+                      context.l10n.newFileButton,
+                      isFolder: false,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

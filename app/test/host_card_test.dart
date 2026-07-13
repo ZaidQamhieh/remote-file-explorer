@@ -99,20 +99,15 @@ void main() {
       expect(find.byType(LinearProgressIndicator), findsNothing);
 
       // The whole row browses on tap (no separate "Browse" button anymore);
-      // Search moved into the ⋯ menu and stays disabled while offline.
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      // Search only appears in the ⋯ sheet while online, so it's simply
+      // absent (not disabled) while offline.
+      await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      final searchItem = tester.widget<PopupMenuItem<String>>(
-        find.ancestor(
-          of: find.text('Search'),
-          matching: find.byType(PopupMenuItem<String>),
-        ),
-      );
-      expect(searchItem.enabled, isFalse);
+      expect(find.text('Search'), findsNothing);
     },
   );
 
-  testWidgets('renders the ⋯ menu with the row actions', (tester) async {
+  testWidgets('renders the ⋯ sheet with the row actions', (tester) async {
     final store = await buildStore();
 
     await tester.runAsync(() async {
@@ -130,17 +125,18 @@ void main() {
       }
     });
 
-    expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+    expect(find.byTooltip('More'), findsOneWidget);
 
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('main-pc'), findsWidgets); // sheet title + row name
     expect(find.text('Transfers'), findsOneWidget);
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Forget this computer'), findsOneWidget);
-    // Offline host (no /system/drives data): Storage is omitted.
+    // Offline host (no /system/drives data): Search and Storage are omitted.
+    expect(find.text('Search'), findsNothing);
     expect(find.text('Storage'), findsNothing);
   });
 }

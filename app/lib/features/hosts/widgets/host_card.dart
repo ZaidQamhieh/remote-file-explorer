@@ -12,6 +12,7 @@ import '../../../core/platform/wol.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../home/home_state.dart';
@@ -299,6 +300,111 @@ class _HostCardState extends ConsumerState<HostCard> {
     }
   }
 
+  /// The host's action sheet (⋯ menu), restyled with the shared MetaSheet
+  /// chrome: a [SheetHero] tinted [Brand.online]/[Brand.offline], a
+  /// [QuickActionRow] for the most-used actions, and an [ActionListCard] for
+  /// the rest. Replaces the old [PopupMenuButton] — same actions, same
+  /// handlers, just presented as a sheet instead of a dropdown.
+  void _openActions(BuildContext context, {required bool online}) {
+    final l = context.l10n;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+
+        void run(void Function(BuildContext) action) {
+          Navigator.pop(sheetContext);
+          action(context);
+        }
+
+        final quick = <GradientActionCircle>[
+          if (online)
+            GradientActionCircle(
+              icon: LucideIcons.search,
+              label: l.searchButton,
+              gradient: [Colors.blue.shade400, Colors.blue.shade800],
+              onTap: () => run(_openSearch),
+            ),
+          if (online)
+            GradientActionCircle(
+              icon: LucideIcons.hardDrive,
+              label: l.storageMenuItem,
+              gradient: [Colors.green.shade400, Colors.green.shade800],
+              onTap: () => run(_openStorage),
+            ),
+          GradientActionCircle(
+            icon: LucideIcons.settings,
+            label: l.settingsMenuItem,
+            gradient: [Colors.purple.shade300, Colors.purple.shade700],
+            onTap: () => run(_openSettings),
+          ),
+          GradientActionCircle(
+            icon: LucideIcons.userX,
+            label: l.forgetComputerMenuItem,
+            gradient: [Colors.red.shade400, Colors.red.shade800],
+            onTap: () => run(_confirmRemove),
+          ),
+        ];
+
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: Radii.sheetTopR,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SheetHero(
+                    badge: const Icon(LucideIcons.monitor),
+                    tint: online ? Brand.online : Brand.offline,
+                    title: widget.host.label,
+                    subtitle:
+                        '${online ? l.onlineStatus : l.offlineStatus} · '
+                        '${widget.host.address}',
+                    onClose: () => Navigator.pop(sheetContext),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.lg,
+                      0,
+                      Spacing.lg,
+                      Spacing.xl,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        QuickActionRow(actions: quick),
+                        const SizedBox(height: Spacing.md),
+                        ActionListCard(
+                          children: [
+                            ActionListTile(
+                              icon: LucideIcons.arrowLeftRight,
+                              label: l.transfersMenuItem,
+                              onTap: () => run(_openTransfers),
+                            ),
+                            ActionListTile(
+                              icon: LucideIcons.activity,
+                              label: l.diagnosticsMenuItem,
+                              onTap: () => run(_openDiagnostics),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Health?>(
@@ -349,55 +455,10 @@ class _HostCardState extends ConsumerState<HostCard> {
                     tooltip: context.l10n.wakeButton,
                     onPressed: () => _sendWol(context),
                   ),
-                PopupMenuButton<String>(
+                IconButton(
                   icon: const Icon(LucideIcons.moreVertical),
                   tooltip: context.l10n.moreTooltip,
-                  shape: const RoundedRectangleBorder(borderRadius: Radii.smR),
-                  onSelected: (v) {
-                    switch (v) {
-                      case 'search':
-                        _openSearch(context);
-                      case 'storage':
-                        _openStorage(context);
-                      case 'transfers':
-                        _openTransfers(context);
-                      case 'diagnostics':
-                        _openDiagnostics(context);
-                      case 'settings':
-                        _openSettings(context);
-                      case 'forget':
-                        _confirmRemove(context);
-                    }
-                  },
-                  itemBuilder:
-                      (ctx) => [
-                        PopupMenuItem(
-                          value: 'search',
-                          enabled: online,
-                          child: Text(ctx.l10n.searchButton),
-                        ),
-                        if (online)
-                          PopupMenuItem(
-                            value: 'storage',
-                            child: Text(ctx.l10n.storageMenuItem),
-                          ),
-                        PopupMenuItem(
-                          value: 'transfers',
-                          child: Text(ctx.l10n.transfersMenuItem),
-                        ),
-                        PopupMenuItem(
-                          value: 'diagnostics',
-                          child: Text(ctx.l10n.diagnosticsMenuItem),
-                        ),
-                        PopupMenuItem(
-                          value: 'settings',
-                          child: Text(ctx.l10n.settingsMenuItem),
-                        ),
-                        PopupMenuItem(
-                          value: 'forget',
-                          child: Text(ctx.l10n.forgetComputerMenuItem),
-                        ),
-                      ],
+                  onPressed: () => _openActions(context, online: online),
                 ),
               ],
             ),

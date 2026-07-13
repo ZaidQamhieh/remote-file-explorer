@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -118,7 +120,7 @@ class AboutScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('About')),
       body: FutureBuilder<PackageInfo>(
         future: PackageInfo.fromPlatform(),
         builder: (context, snap) {
@@ -170,35 +172,49 @@ class AboutScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: Spacing.xl),
-              Text(
-                'Changelog',
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+              const SectionLabel('Changelog'),
+              GroupedCard(
+                padded: false,
+                children: [
+                  for (int i = 0; i < _changelog.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        indent: Spacing.md,
+                        endIndent: Spacing.md,
+                        color: scheme.outlineVariant,
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(Spacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _changelog[i].version,
+                            style: textTheme.labelLarge?.copyWith(
+                              color: scheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: Spacing.xs),
+                          for (final item in _changelog[i].items)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: Spacing.xs,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('  •  ', style: textTheme.bodyMedium),
+                                  Expanded(child: Text(item)),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: Spacing.md),
-              for (final entry in _changelog) ...[
-                Text(
-                  entry.version,
-                  style: textTheme.labelLarge?.copyWith(color: scheme.primary),
-                ),
-                const SizedBox(height: Spacing.xs),
-                for (final item in entry.items)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: Spacing.md,
-                      bottom: Spacing.xs,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('  •  ', style: textTheme.bodyMedium),
-                        Expanded(child: Text(item)),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: Spacing.md),
-              ],
             ],
           );
         },

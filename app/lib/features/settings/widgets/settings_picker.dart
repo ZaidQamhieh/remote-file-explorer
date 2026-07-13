@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
 
 /// One selectable option in a [showSettingsPicker] sheet. Provide [icon] for a
 /// leading glyph, or [color] for a leading colour dot (accent-colour picker).
@@ -12,7 +13,8 @@ class SettingsOption<T> {
   final Color? color;
 }
 
-/// A single-choice M3 bottom sheet: grabber, title, one radio row per option.
+/// A single-choice M3 bottom sheet: [SheetHero] header + one row per option
+/// in an [ActionListCard], selected option marked with a trailing checkmark.
 /// Resolves to the tapped option's value, or null if dismissed.
 Future<T?> showSettingsPicker<T>(
   BuildContext context, {
@@ -23,87 +25,91 @@ Future<T?> showSettingsPicker<T>(
   final scheme = Theme.of(context).colorScheme;
   return showModalBottomSheet<T>(
     context: context,
-    showDragHandle: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet)),
-    ),
+    isScrollControlled: true,
     builder: (sheetContext) {
       return SafeArea(
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg,
-                  0,
-                  Spacing.lg,
-                  Spacing.sm,
-                ),
-                child: Text(
-                  title,
-                  style: Theme.of(sheetContext).textTheme.titleMedium,
-                ),
-              ),
-              for (final o in options)
-                InkWell(
-                  onTap: () => Navigator.of(sheetContext).pop(o.value),
-                  child: Container(
-                    color:
-                        o.value == selected
-                            ? scheme.primary.withValues(alpha: 0.12)
-                            : null,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.lg,
-                      vertical: Spacing.md,
-                    ),
-                    child: Row(
-                      children: [
-                        if (o.color != null)
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: o.color,
-                              shape: BoxShape.circle,
-                            ),
-                          )
-                        else if (o.icon != null)
-                          Icon(
-                            o.icon,
-                            size: 22,
-                            color:
-                                o.value == selected
-                                    ? scheme.primary
-                                    : scheme.onSurfaceVariant,
-                          ),
-                        const SizedBox(width: Spacing.md),
-                        Expanded(
-                          child: Text(
-                            o.label,
-                            style: Theme.of(
-                              sheetContext,
-                            ).textTheme.bodyLarge?.copyWith(
-                              color:
-                                  o.value == selected ? scheme.primary : null,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: Radii.sheetTopR,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SheetHero(badge: const Icon(Icons.tune), title: title),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg,
+                    0,
+                    Spacing.lg,
+                    Spacing.xl,
+                  ),
+                  child: ActionListCard(
+                    children: [
+                      for (final o in options)
+                        _optionTile(
+                          sheetContext,
+                          scheme,
+                          o,
+                          o.value == selected,
                         ),
-                        if (o.value == selected)
-                          Icon(Icons.check, size: 22, color: scheme.primary)
-                        else
-                          const SizedBox(width: 22),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: Spacing.sm),
-            ],
+              ],
+            ),
           ),
         ),
       );
     },
+  );
+}
+
+/// One option row. Options with an [SettingsOption.icon] render as an
+/// [ActionListTile]; the accent-colour picker's swatch options (no icon, a
+/// [SettingsOption.color] instead) and plain text-only options (density,
+/// sort field) fall back to a bare [ListTile] since [ActionListTile] always
+/// wants a leading icon.
+Widget _optionTile<T>(
+  BuildContext sheetContext,
+  ColorScheme scheme,
+  SettingsOption<T> o,
+  bool isSelected,
+) {
+  final check =
+      isSelected
+          ? Icon(Icons.check, size: 20, color: scheme.primary)
+          : const SizedBox(width: 20);
+  if (o.icon != null) {
+    return ActionListTile(
+      icon: o.icon!,
+      label: o.label,
+      tint: isSelected ? scheme.primary : null,
+      trailing: check,
+      onTap: () => Navigator.of(sheetContext).pop(o.value),
+    );
+  }
+  return ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+    visualDensity: VisualDensity.compact,
+    leading:
+        o.color == null
+            ? null
+            : Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(color: o.color, shape: BoxShape.circle),
+            ),
+    title: Text(
+      o.label,
+      style: Theme.of(sheetContext).textTheme.bodyLarge?.copyWith(
+        color: isSelected ? scheme.primary : null,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+    trailing: check,
+    onTap: () => Navigator.of(sheetContext).pop(o.value),
   );
 }

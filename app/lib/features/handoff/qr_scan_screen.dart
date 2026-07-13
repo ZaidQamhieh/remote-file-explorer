@@ -9,6 +9,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/screen_header.dart';
 import '../transfers/transfer_state.dart';
 
 /// Decoded payload from a device-to-device hand-off QR (see
@@ -117,7 +118,10 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.receiveFileTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: ScreenHeader(context.l10n.receiveFileTitle),
+      ),
       body: Stack(
         children: [
           MobileScanner(onDetect: _onBarcodeDetected),

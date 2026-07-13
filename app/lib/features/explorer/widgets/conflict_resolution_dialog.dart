@@ -11,6 +11,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The user's choice for resolving one or more name collisions.
 enum ConflictResolution {
@@ -43,29 +46,62 @@ Future<ConflictResolution> showConflictResolutionDialog(
   final result = await showDialog<ConflictResolution>(
     context: context,
     builder:
-        (ctx) => AlertDialog(
-          title: Text(ctx.l10n.nameConflictTitle),
-          content: Text(
-            ctx.l10n.nameConflictBody(collidingCount, totalCount, destLabel),
+        (ctx) => Dialog(
+          shape: const RoundedRectangleBorder(borderRadius: Radii.lgR),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SheetHero(
+                showGrabber: false,
+                badge: const Icon(LucideIcons.triangleAlert),
+                badgeColor: Colors.amber.withValues(alpha: 0.2),
+                tint: Colors.amber,
+                title: ctx.l10n.nameConflictTitle,
+                subtitle: ctx.l10n.nameConflictBody(
+                  collidingCount,
+                  totalCount,
+                  destLabel,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg,
+                  0,
+                  Spacing.lg,
+                  Spacing.lg,
+                ),
+                child: ActionListCard(
+                  children: [
+                    ActionListTile(
+                      icon: LucideIcons.skipForward,
+                      label: ctx.l10n.skipTheseButton,
+                      onTap: () => Navigator.pop(ctx, ConflictResolution.skip),
+                    ),
+                    ActionListTile(
+                      icon: LucideIcons.copyPlus,
+                      label: ctx.l10n.keepBothButton,
+                      onTap:
+                          () => Navigator.pop(ctx, ConflictResolution.keepBoth),
+                    ),
+                    ActionListTile(
+                      icon: LucideIcons.refreshCw,
+                      label: ctx.l10n.overwriteButton,
+                      tint: Theme.of(ctx).colorScheme.error,
+                      onTap:
+                          () =>
+                              Navigator.pop(ctx, ConflictResolution.overwrite),
+                    ),
+                    ActionListTile(
+                      icon: LucideIcons.x,
+                      label: ctx.l10n.cancelButton,
+                      onTap:
+                          () => Navigator.pop(ctx, ConflictResolution.cancel),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ConflictResolution.cancel),
-              child: Text(ctx.l10n.cancelButton),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ConflictResolution.skip),
-              child: Text(ctx.l10n.skipTheseButton),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ConflictResolution.keepBoth),
-              child: Text(ctx.l10n.keepBothButton),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, ConflictResolution.overwrite),
-              child: Text(ctx.l10n.overwriteButton),
-            ),
-          ],
         ),
   );
   return result ?? ConflictResolution.cancel;

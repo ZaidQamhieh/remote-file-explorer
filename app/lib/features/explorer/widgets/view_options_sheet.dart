@@ -5,6 +5,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -48,105 +49,119 @@ class ViewOptionsSheet extends ConsumerWidget {
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.md,
-          Spacing.md,
-          Spacing.md,
-          Spacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.viewOptionsTitle,
-              style: theme.textTheme.titleLarge,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SheetHero(
+            badge: const Icon(LucideIcons.slidersHorizontal),
+            title: context.l10n.viewOptionsTitle,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.md,
+              0,
+              Spacing.md,
+              Spacing.lg,
             ),
-            const SizedBox(height: Spacing.md),
-            if (state.hiddenCount > 0) ...[
-              _ShowHiddenTile(state: state, notifier: notifier),
-              const SizedBox(height: Spacing.lg),
-            ],
-            Text(context.l10n.layoutLabel, style: theme.textTheme.labelLarge),
-            const SizedBox(height: Spacing.sm),
-            SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  label: Text(context.l10n.listLabel),
-                  icon: const Icon(LucideIcons.list),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (state.hiddenCount > 0) ...[
+                  _ShowHiddenTile(state: state, notifier: notifier),
+                  const SizedBox(height: Spacing.lg),
+                ],
+                Text(
+                  context.l10n.layoutLabel,
+                  style: theme.textTheme.labelLarge,
                 ),
-                ButtonSegment(
-                  value: true,
-                  label: Text(context.l10n.gridLabel),
-                  icon: const Icon(LucideIcons.layoutGrid),
+                const SizedBox(height: Spacing.sm),
+                SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: Text(context.l10n.listLabel),
+                      icon: const Icon(LucideIcons.list),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text(context.l10n.gridLabel),
+                      icon: const Icon(LucideIcons.layoutGrid),
+                    ),
+                  ],
+                  selected: {state.gridView},
+                  onSelectionChanged: (sel) {
+                    if (sel.first != state.gridView) notifier.toggleView();
+                  },
+                ),
+                const SizedBox(height: Spacing.lg),
+                Text(
+                  context.l10n.densityLabel,
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: Spacing.sm),
+                SegmentedButton<EntryDensity>(
+                  segments: [
+                    ButtonSegment(
+                      value: EntryDensity.comfortable,
+                      label: Text(context.l10n.comfortableLabel),
+                      icon: const Icon(LucideIcons.rows3),
+                    ),
+                    ButtonSegment(
+                      value: EntryDensity.compact,
+                      label: Text(context.l10n.compactLabel),
+                      icon: const Icon(LucideIcons.rows4),
+                    ),
+                  ],
+                  selected: {density},
+                  onSelectionChanged:
+                      (sel) => ref
+                          .read(settingsProvider.notifier)
+                          .setAppDensity(sel.first),
+                ),
+                const SizedBox(height: Spacing.lg),
+                Text(
+                  context.l10n.sortByLabel,
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: Spacing.sm),
+                Wrap(
+                  spacing: Spacing.sm,
+                  runSpacing: Spacing.sm,
+                  children:
+                      SortField.values.map((field) {
+                        final selected = state.sort.field == field;
+                        return ChoiceChip(
+                          label: Text(_sortFieldLabel(context, field)),
+                          selected: selected,
+                          onSelected: (_) {
+                            if (selected) {
+                              notifier.setSort(
+                                state.sort.copyWith(
+                                  ascending: !state.sort.ascending,
+                                ),
+                              );
+                            } else {
+                              notifier.setSort(SortOrder(field: field));
+                            }
+                          },
+                          avatar:
+                              selected
+                                  ? Icon(
+                                    state.sort.ascending
+                                        ? LucideIcons.arrowUp
+                                        : LucideIcons.arrowDown,
+                                    size: 18,
+                                  )
+                                  : null,
+                        );
+                      }).toList(),
                 ),
               ],
-              selected: {state.gridView},
-              onSelectionChanged: (sel) {
-                if (sel.first != state.gridView) notifier.toggleView();
-              },
             ),
-            const SizedBox(height: Spacing.lg),
-            Text(context.l10n.densityLabel, style: theme.textTheme.labelLarge),
-            const SizedBox(height: Spacing.sm),
-            SegmentedButton<EntryDensity>(
-              segments: [
-                ButtonSegment(
-                  value: EntryDensity.comfortable,
-                  label: Text(context.l10n.comfortableLabel),
-                  icon: const Icon(LucideIcons.rows3),
-                ),
-                ButtonSegment(
-                  value: EntryDensity.compact,
-                  label: Text(context.l10n.compactLabel),
-                  icon: const Icon(LucideIcons.rows4),
-                ),
-              ],
-              selected: {density},
-              onSelectionChanged:
-                  (sel) => ref
-                      .read(settingsProvider.notifier)
-                      .setAppDensity(sel.first),
-            ),
-            const SizedBox(height: Spacing.lg),
-            Text(context.l10n.sortByLabel, style: theme.textTheme.labelLarge),
-            const SizedBox(height: Spacing.sm),
-            Wrap(
-              spacing: Spacing.sm,
-              runSpacing: Spacing.sm,
-              children:
-                  SortField.values.map((field) {
-                    final selected = state.sort.field == field;
-                    return ChoiceChip(
-                      label: Text(_sortFieldLabel(context, field)),
-                      selected: selected,
-                      onSelected: (_) {
-                        if (selected) {
-                          notifier.setSort(
-                            state.sort.copyWith(
-                              ascending: !state.sort.ascending,
-                            ),
-                          );
-                        } else {
-                          notifier.setSort(SortOrder(field: field));
-                        }
-                      },
-                      avatar:
-                          selected
-                              ? Icon(
-                                state.sort.ascending
-                                    ? LucideIcons.arrowUp
-                                    : LucideIcons.arrowDown,
-                                size: 18,
-                              )
-                              : null,
-                    );
-                  }).toList(),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

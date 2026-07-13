@@ -8,8 +8,11 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 
 class DupFinderScreen extends StatefulWidget {
   const DupFinderScreen({
@@ -107,7 +110,10 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Duplicate Finder')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: const ScreenHeader('Duplicate Finder'),
+      ),
       body:
           _scanning
               ? Center(
@@ -150,24 +156,37 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _groups!.length,
-            itemBuilder: (ctx, i) {
-              final group = _groups![i];
-              final size = _sizes?[group.first] ?? 0;
-              return ExpansionTile(
-                title: Text(
-                  '${group.length} copies (${formatSize(size)} each)',
-                ),
+          child: ListView(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm,
+            ),
+            children: [
+              GroupedCard(
+                padded: false,
                 children: [
-                  for (final path in group)
-                    ListTile(
-                      dense: true,
-                      title: Text(path, style: const TextStyle(fontSize: 13)),
+                  for (int i = 0; i < _groups!.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ExpansionTile(
+                      title: Text(
+                        '${_groups![i].length} copies '
+                        '(${formatSize(_sizes?[_groups![i].first] ?? 0)} each)',
+                      ),
+                      children: [
+                        for (final path in _groups![i])
+                          ListTile(
+                            dense: true,
+                            title: Text(
+                              path,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                      ],
                     ),
+                  ],
                 ],
-              );
-            },
+              ),
+            ],
           ),
         ),
       ],

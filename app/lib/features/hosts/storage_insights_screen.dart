@@ -13,6 +13,8 @@ import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/drives_view.dart' show drivesProvider;
 import 'widgets/storage_gauge.dart';
@@ -28,10 +30,8 @@ class StorageInsightsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          context.l10n.hostStorageTitle(host.label),
-          overflow: TextOverflow.ellipsis,
-        ),
+        toolbarHeight: 72,
+        title: ScreenHeader(context.l10n.hostStorageTitle(host.label)),
       ),
       body: drivesAsync.when(
         loading: () => const ListingSkeleton(),
@@ -50,7 +50,11 @@ class StorageInsightsScreen extends ConsumerWidget {
             children: [
               _TotalCard(usage: total, driveCount: withCapacity.length),
               const SizedBox(height: Spacing.md),
-              for (final drive in withCapacity) StorageGauge(drive: drive),
+              GroupedCard(
+                children: [
+                  for (final drive in withCapacity) StorageGauge(drive: drive),
+                ],
+              ),
             ],
           );
         },
@@ -73,15 +77,9 @@ class _TotalCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final l10n = context.l10n;
 
-    return Card(
-      color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: Radii.cardR,
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.md),
-        child: Column(
+    return GroupedCard(
+      children: [
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(l10n.allDrives, style: textTheme.titleMedium),
@@ -108,7 +106,7 @@ class _TotalCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }

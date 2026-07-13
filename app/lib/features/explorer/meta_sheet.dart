@@ -11,6 +11,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/sheet_chrome.dart';
 import '../handoff/qr_generate_screen.dart';
 import '../preview/preview.dart';
 import '../preview/preview_actions.dart';
@@ -82,6 +83,16 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     // this sheet is just header + actions and naturally stays compact.
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final heroTint = isDark ? figmaIconBg(_entry) : scheme.primary;
+    final badgeBg =
+        isDark
+            ? figmaIconBg(_entry)
+            : _entry.isDir
+            ? scheme.primary.withValues(alpha: 0.16)
+            : scheme.surfaceContainerHighest;
+    final subtitle = [
+      if (_entry.size != null) formatSize(_entry.size),
+      if (_entry.modified != null) formatDate(_entry.modified!.toLocal()),
+    ].join(' · ');
     return SafeArea(
       child: SingleChildScrollView(
         child: Container(
@@ -93,31 +104,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg,
-                  Spacing.md,
-                  Spacing.lg,
-                  Spacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.topLeft,
-                    radius: 1.4,
-                    colors: [
-                      heroTint.withValues(alpha: 0.28),
-                      scheme.surfaceContainerLow.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildGrabber(context),
-                    const SizedBox(height: Spacing.md),
-                    _buildHeader(context),
-                  ],
-                ),
+              SheetHero(
+                badge: EntryLeading(entry: _entry, size: 30),
+                badgeColor: badgeBg,
+                tint: heroTint,
+                title: _entry.name,
+                subtitle: subtitle,
+                onClose: () => Navigator.pop(context),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -132,74 +125,6 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildGrabber(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.outlineVariant,
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final badgeBg =
-        isDark
-            ? figmaIconBg(_entry)
-            : _entry.isDir
-            ? scheme.primary.withValues(alpha: 0.16)
-            : scheme.surfaceContainerHighest;
-    final subtitle = [
-      if (_entry.size != null) formatSize(_entry.size),
-      if (_entry.modified != null) formatDate(_entry.modified!.toLocal()),
-    ].join(' · ');
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(color: badgeBg, borderRadius: Radii.cardR),
-          alignment: Alignment.center,
-          child: EntryLeading(entry: _entry, size: 30),
-        ),
-        const SizedBox(width: Spacing.md),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _entry.name,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: Spacing.xs),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        IconButton(
-          icon: const Icon(LucideIcons.x),
-          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ],
     );
   }
 
@@ -314,7 +239,6 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   }
 
   Widget _buildActions(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final isFav =
         _entry.isDir &&
         (ref
@@ -329,106 +253,105 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     // for everything else — the Google Photos/WhatsApp file-sheet shape.
     // Metadata isn't in here at all; it's behind the "Details" row.
     final previewable = !_entry.isDir && isPreviewable(_entry);
-    final quick = <_ActionCell>[
+    final quick = <GradientActionCircle>[
       if (_entry.isDir)
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.star,
           label:
               isFav
                   ? context.l10n.unfavoriteButton
                   : context.l10n.favoriteButton,
-          circleGradient: const [Colors.amber, Color(0xFFB8860B)],
+          gradient: const [Colors.amber, Color(0xFFB8860B)],
           onTap: () => _toggleFavorite(context, isFav),
         )
       else if (previewable)
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.eye,
           label: context.l10n.previewButton,
-          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Colors.blue.shade400, Colors.blue.shade800],
           onTap: () => _preview(context),
         )
       else if (!_entry.isDir)
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
-          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Colors.blue.shade400, Colors.blue.shade800],
           onTap: () => _openWith(context),
         ),
       if (_entry.isDir)
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.filePen,
           label: context.l10n.renameButton,
-          circleGradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Colors.blue.shade400, Colors.blue.shade800],
           onTap: () => _rename(context),
         )
       else
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.download,
           label: context.l10n.downloadButton,
-          circleGradient: [Colors.green.shade400, Colors.green.shade800],
+          gradient: [Colors.green.shade400, Colors.green.shade800],
           onTap: () => _download(context),
         ),
       if (_entry.isDir)
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.copy,
           label: context.l10n.duplicateButton,
-          circleGradient: [Colors.purple.shade300, Colors.purple.shade700],
+          gradient: [Colors.purple.shade300, Colors.purple.shade700],
           onTap: () => _duplicate(context),
         )
       else
-        _ActionCell(
+        GradientActionCircle(
           icon: LucideIcons.share,
           label: context.l10n.shareTooltip,
-          circleGradient: [Colors.purple.shade300, Colors.purple.shade700],
+          gradient: [Colors.purple.shade300, Colors.purple.shade700],
           onTap: () => _share(context),
         ),
-      _ActionCell(
+      GradientActionCircle(
         icon: LucideIcons.trash2,
         label: context.l10n.deleteButton,
-        tint: scheme.error,
-        circleGradient: [Colors.red.shade400, Colors.red.shade800],
+        gradient: [Colors.red.shade400, Colors.red.shade800],
         onTap: () => _delete(context),
       ),
     ];
 
-    final more = <_ActionCell>[
+    final more = <ActionListTile>[
       if (previewable)
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
           onTap: () => _openWith(context),
         ),
       if (!_entry.isDir)
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.link,
           label: context.l10n.shareLinkButton,
           onTap: () => _shareLink(context),
         ),
       if (!_entry.isDir)
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.qrCode,
           label: context.l10n.sendViaQrButton,
           onTap: () => _sendViaQr(context),
         ),
       if (!_entry.isDir && isExtractableArchive(_entry.name))
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.archive,
           label: context.l10n.extractHereButton,
           onTap: () => _extract(context),
         ),
       if (!_entry.isDir)
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.filePen,
           label: context.l10n.renameButton,
           onTap: () => _rename(context),
         ),
       if (!_entry.isDir)
-        _ActionCell(
+        ActionListTile(
           icon: LucideIcons.copy,
           label: context.l10n.duplicateButton,
           onTap: () => _duplicate(context),
         ),
-      _ActionCell(
+      ActionListTile(
         icon: LucideIcons.info,
         label: context.l10n.detailsButton,
         onTap: () => _showDetails(context),
@@ -438,107 +361,10 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: Spacing.md,
-            horizontal: Spacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: Radii.cardR,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [for (final c in quick) _buildQuickAction(context, c)],
-          ),
-        ),
+        QuickActionRow(actions: quick),
         const SizedBox(height: Spacing.md),
-        Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: Radii.cardR,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (var i = 0; i < more.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: 1,
-                    indent: 56,
-                    color: scheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                _buildActionRow(context, more[i]),
-              ],
-            ],
-          ),
-        ),
+        ActionListCard(children: more),
       ],
-    );
-  }
-
-  Widget _buildQuickAction(BuildContext context, _ActionCell cell) {
-    return InkResponse(
-      onTap: cell.onTap,
-      radius: 40,
-      child: SizedBox(
-        width: 68,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: cell.circleGradient!,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: cell.circleGradient!.last.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Icon(cell.icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(height: Spacing.xs),
-            Text(
-              cell.label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionRow(BuildContext context, _ActionCell cell) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = cell.tint ?? scheme.onSurfaceVariant;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-      visualDensity: VisualDensity.compact,
-      leading: Icon(cell.icon, color: color),
-      title: Text(
-        cell.label,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyLarge?.copyWith(color: cell.tint),
-      ),
-      trailing: Icon(
-        LucideIcons.chevronRight,
-        size: 16,
-        color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
-      ),
-      onTap: cell.onTap,
     );
   }
 
@@ -567,7 +393,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(child: _buildGrabber(sheetContext)),
+                    const Center(child: SheetGrabber()),
                     const SizedBox(height: Spacing.md),
                     Text(
                       context.l10n.detailsButton,
@@ -882,25 +708,6 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       }
     }
   }
-}
-
-/// A single cell in the action grid built by [_MetaSheetState._buildActions].
-class _ActionCell {
-  const _ActionCell({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.tint,
-    this.circleGradient,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? tint;
-
-  /// Quick-action circle background (top row only); unused by list rows.
-  final List<Color>? circleGradient;
 }
 
 /// Whether [name] looks like an archive the agent can extract — matches the

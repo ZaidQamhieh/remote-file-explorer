@@ -5,6 +5,8 @@ import '../../core/models/host.dart';
 import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../home/home_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -23,7 +25,10 @@ class BookmarksScreen extends ConsumerWidget {
 
     if (bookmarks.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Bookmarks')),
+        appBar: AppBar(
+          toolbarHeight: 72,
+          title: const ScreenHeader('Bookmarks'),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(Spacing.xl),
@@ -64,66 +69,71 @@ class BookmarksScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bookmarks')),
+      appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('Bookmarks')),
       body: ListView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm,
+          vertical: Spacing.md,
+        ),
         children: [
           for (final group in grouped.entries) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Spacing.md,
-                Spacing.md,
-                Spacing.md,
-                Spacing.xs,
-              ),
-              child: Text(
-                hostMap[group.key]?.label ?? group.key,
-                style: textTheme.labelLarge?.copyWith(color: scheme.primary),
-              ),
-            ),
-            for (final b in group.value)
-              ListTile(
-                leading: const Icon(LucideIcons.bookmark),
-                title: Text(
-                  b.remotePath
-                      .split('/')
-                      .lastWhere(
-                        (s) => s.isNotEmpty,
-                        orElse: () => b.remotePath,
-                      ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(b.remotePath, overflow: TextOverflow.ellipsis),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (b.tag != null)
-                      Chip(
-                        label: Text(b.tag!),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.trash2),
-                      tooltip: 'Remove bookmark',
-                      onPressed:
-                          () => ref
-                              .read(bookmarkStoreProvider.notifier)
-                              .removeBookmark(b.hostId, b.remotePath),
+            SectionLabel(hostMap[group.key]?.label ?? group.key),
+            GroupedCard(
+              padded: false,
+              children: [
+                for (final (i, b) in group.value.indexed) ...[
+                  if (i > 0) const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(LucideIcons.bookmark),
+                    title: Text(
+                      b.remotePath
+                          .split('/')
+                          .lastWhere(
+                            (s) => s.isNotEmpty,
+                            orElse: () => b.remotePath,
+                          ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
-                onTap: () {
-                  final host = hostMap[b.hostId];
-                  if (host == null) return;
-                  ref.read(activeHostProvider.notifier).state = ActiveHost(
-                    host: host,
-                    initialPath: b.remotePath,
-                  );
-                  ref.read(selectedTabIndexProvider.notifier).state = 1;
-                  Navigator.of(context).pop();
-                },
-              ),
+                    subtitle: Text(
+                      b.remotePath,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (b.tag != null)
+                          Chip(
+                            label: Text(b.tag!),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.trash2),
+                          tooltip: 'Remove bookmark',
+                          onPressed:
+                              () => ref
+                                  .read(bookmarkStoreProvider.notifier)
+                                  .removeBookmark(b.hostId, b.remotePath),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      final host = hostMap[b.hostId];
+                      if (host == null) return;
+                      ref.read(activeHostProvider.notifier).state = ActiveHost(
+                        host: host,
+                        initialPath: b.remotePath,
+                      );
+                      ref.read(selectedTabIndexProvider.notifier).state = 1;
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: Spacing.md),
           ],
         ],
       ),

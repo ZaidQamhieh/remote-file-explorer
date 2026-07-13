@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../search_logic.dart' show SearchMode;
 import '../search_types.dart';
 
@@ -80,128 +82,145 @@ class _FilterSheetState extends State<FilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.md,
-          Spacing.md,
-          Spacing.md,
-          Spacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.l10n.searchFiltersTooltip,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton(
-                  onPressed: _reset,
-                  child: Text(context.l10n.resetButton),
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.searchModeLabel,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              children: [
-                for (final mode in SearchMode.values)
-                  ChoiceChip(
-                    label: Text(_modeLabel(mode)),
-                    selected: _searchMode == mode,
-                    onSelected: (_) => setState(() => _searchMode = mode),
-                  ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.fileSize,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              children: [
-                for (final preset in SizePreset.values)
-                  ChoiceChip(
-                    label: Text(preset.localizedLabel(context)),
-                    selected: _sizePreset == preset,
-                    onSelected: (_) => setState(() => _sizePreset = preset),
-                  ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.sortFieldDate,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              children: [
-                for (final preset in DatePreset.values)
-                  ChoiceChip(
-                    label: Text(preset.localizedLabel(context)),
-                    selected: _datePreset == preset,
-                    onSelected: (_) => setState(() => _datePreset = preset),
-                  ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              context.l10n.searchScope,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: Spacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _searchFromHere
-                        ? context.l10n.searchingIn(widget.currentPath)
-                        : context.l10n.searchingEverywhere,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                const SizedBox(width: Spacing.sm),
-                Text(context.l10n.fromHere),
-                Switch(
-                  value: !_searchFromHere,
-                  onChanged:
-                      (everywhere) =>
-                          setState(() => _searchFromHere = !everywhere),
-                ),
-                Text(context.l10n.everywhere),
-              ],
-            ),
-            const SizedBox(height: Spacing.sm),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.l10n.includeHiddenItems),
-              subtitle: Text(context.l10n.includeHiddenSubtitle),
-              value: _includeHidden,
-              onChanged: (v) => setState(() => _includeHidden = v),
-            ),
-            const SizedBox(height: Spacing.md),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _apply,
-                child: Text(context.l10n.applyButton),
+      child: SingleChildScrollView(
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: Radii.sheetTopR,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SheetHero(
+                badge: const Icon(LucideIcons.filter),
+                title: context.l10n.searchFiltersTooltip,
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg,
+                  0,
+                  Spacing.lg,
+                  Spacing.xl,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.searchModeLabel,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Spacing.xs),
+                    Wrap(
+                      spacing: Spacing.xs,
+                      children: [
+                        for (final mode in SearchMode.values)
+                          ChoiceChip(
+                            label: Text(_modeLabel(mode)),
+                            selected: _searchMode == mode,
+                            onSelected:
+                                (_) => setState(() => _searchMode = mode),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    Text(
+                      context.l10n.fileSize,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Spacing.xs),
+                    Wrap(
+                      spacing: Spacing.xs,
+                      children: [
+                        for (final preset in SizePreset.values)
+                          ChoiceChip(
+                            label: Text(preset.localizedLabel(context)),
+                            selected: _sizePreset == preset,
+                            onSelected:
+                                (_) => setState(() => _sizePreset = preset),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    Text(
+                      context.l10n.sortFieldDate,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Spacing.xs),
+                    Wrap(
+                      spacing: Spacing.xs,
+                      children: [
+                        for (final preset in DatePreset.values)
+                          ChoiceChip(
+                            label: Text(preset.localizedLabel(context)),
+                            selected: _datePreset == preset,
+                            onSelected:
+                                (_) => setState(() => _datePreset = preset),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    Text(
+                      context.l10n.searchScope,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Spacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _searchFromHere
+                                ? context.l10n.searchingIn(widget.currentPath)
+                                : context.l10n.searchingEverywhere,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        Text(context.l10n.fromHere),
+                        Switch(
+                          value: !_searchFromHere,
+                          onChanged:
+                              (everywhere) =>
+                                  setState(() => _searchFromHere = !everywhere),
+                        ),
+                        Text(context.l10n.everywhere),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.sm),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(context.l10n.includeHiddenItems),
+                      subtitle: Text(context.l10n.includeHiddenSubtitle),
+                      value: _includeHidden,
+                      onChanged: (v) => setState(() => _includeHidden = v),
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    ActionListCard(
+                      children: [
+                        ActionListTile(
+                          icon: LucideIcons.rotateCcw,
+                          label: context.l10n.resetButton,
+                          onTap: _reset,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Spacing.md),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _apply,
+                        child: Text(context.l10n.applyButton),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

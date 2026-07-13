@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/share_link.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/sheet_chrome.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet shown after minting an R1 one-time share link: the URL with
@@ -74,50 +76,65 @@ class _ShareSheetState extends State<ShareSheet> {
     final scheme = Theme.of(context).colorScheme;
     final expired = _remaining == Duration.zero;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: Radii.sheetTopR,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(LucideIcons.link),
-                const SizedBox(width: 8),
-                Text(
-                  context.l10n.shareLinkSheetTitle,
-                  style: const TextStyle(fontSize: 18),
-                ),
-              ],
+            SheetHero(
+              badge: const Icon(LucideIcons.link),
+              title: context.l10n.shareLinkSheetTitle,
+              subtitle: widget.link.url,
+              onClose: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: SelectableText(widget.link.url, maxLines: 2)),
-                IconButton(
-                  icon: const Icon(LucideIcons.copy),
-                  tooltip: context.l10n.copyButton,
-                  onPressed: () => _copy(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              expired
-                  ? context.l10n.shareLinkExpired
-                  : context.l10n.shareLinkExpiresIn(_format(_remaining)),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: expired ? scheme.error : null,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.lg,
+                0,
+                Spacing.lg,
+                Spacing.xl,
               ),
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                icon: const Icon(LucideIcons.unlink),
-                label: Text(context.l10n.shareLinkRevokeButton),
-                onPressed: () => _revoke(context),
-                style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  QuickActionRow(
+                    actions: [
+                      GradientActionCircle(
+                        icon: LucideIcons.copy,
+                        label: context.l10n.copyButton,
+                        gradient: [Colors.blue.shade400, Colors.blue.shade800],
+                        onTap: () => _copy(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  ActionListCard(
+                    children: [
+                      ActionListTile(
+                        icon: LucideIcons.clock,
+                        label:
+                            expired
+                                ? context.l10n.shareLinkExpired
+                                : context.l10n.shareLinkExpiresIn(
+                                  _format(_remaining),
+                                ),
+                        tint: expired ? scheme.error : null,
+                        trailing: const SizedBox.shrink(),
+                        onTap: () {},
+                      ),
+                      ActionListTile(
+                        icon: LucideIcons.unlink,
+                        label: context.l10n.shareLinkRevokeButton,
+                        tint: scheme.error,
+                        onTap: () => _revoke(context),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],

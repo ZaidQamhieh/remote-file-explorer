@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/models/entry.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/sheet_chrome.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Dialog with a 3x3 checkbox grid (owner/group/other x read/write/execute)
 /// for editing POSIX file permissions. Calls [AgentClient.chmod] on apply.
@@ -79,60 +82,87 @@ class _ChmodDialogState extends State<ChmodDialog> {
   Widget build(BuildContext context) {
     const labels = ['Owner', 'Group', 'Other'];
     const perms = ['R', 'W', 'X'];
-    return AlertDialog(
-      title: const Text('Permissions'),
-      content: Column(
+    return Dialog(
+      shape: const RoundedRectangleBorder(borderRadius: Radii.lgR),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            _symbolic,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontFamily: 'monospace'),
+          SheetHero(
+            showGrabber: false,
+            badge: const Icon(LucideIcons.lock),
+            title: 'Permissions',
           ),
-          const SizedBox(height: 4),
-          Text(_octal, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 16),
-          for (var row = 0; row < 3; row++)
-            Row(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(width: 60, child: Text(labels[row])),
-                for (var col = 0; col < 3; col++)
+                Text(
+                  _symbolic,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(fontFamily: 'monospace'),
+                ),
+                const SizedBox(height: 4),
+                Text(_octal, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 16),
+                for (var row = 0; row < 3; row++)
                   Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Checkbox(
-                        value: _bits[row * 3 + col],
-                        onChanged:
-                            _applying
-                                ? null
-                                : (v) {
-                                  setState(() => _bits[row * 3 + col] = v!);
-                                },
-                      ),
-                      Text(perms[col]),
+                      SizedBox(width: 60, child: Text(labels[row])),
+                      for (var col = 0; col < 3; col++)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: _bits[row * 3 + col],
+                              onChanged:
+                                  _applying
+                                      ? null
+                                      : (v) {
+                                        setState(
+                                          () => _bits[row * 3 + col] = v!,
+                                        );
+                                      },
+                            ),
+                            Text(perms[col]),
+                          ],
+                        ),
                     ],
                   ),
               ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.md,
+              Spacing.sm,
+              Spacing.md,
+              Spacing.md,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _applying ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: Spacing.sm),
+                FilledButton(
+                  onPressed: _applying ? null : _apply,
+                  child:
+                      _applying
+                          ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('Apply'),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _applying ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _applying ? null : _apply,
-          child:
-              _applying
-                  ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Text('Apply'),
-        ),
-      ],
     );
   }
 }

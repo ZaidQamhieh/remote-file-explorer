@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../batch_rename.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -56,87 +57,103 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
     final preview = _compute();
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        Spacing.lg,
-        Spacing.lg,
-        Spacing.lg,
-        Spacing.lg + viewInsets,
-      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            context.l10n.renameNItemsTitle(widget.names.length),
-            style: Theme.of(context).textTheme.titleLarge,
+          SheetHero(
+            badge: const Icon(LucideIcons.filePen),
+            title: context.l10n.renameNItemsTitle(widget.names.length),
+            subtitle:
+                _mode == BatchRenameMode.pattern
+                    ? context.l10n.patternLabel
+                    : context.l10n.findAndReplaceLabel,
+            onClose: () => Navigator.pop(context),
           ),
-          const SizedBox(height: Spacing.md),
-          SegmentedButton<BatchRenameMode>(
-            segments: [
-              ButtonSegment(
-                value: BatchRenameMode.pattern,
-                label: Text(context.l10n.patternLabel),
-                icon: const Icon(LucideIcons.listOrdered),
-              ),
-              ButtonSegment(
-                value: BatchRenameMode.findReplace,
-                label: Text(context.l10n.findAndReplaceLabel),
-                icon: const Icon(LucideIcons.replace),
-              ),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.first),
-          ),
-          const SizedBox(height: Spacing.md),
-          if (_mode == BatchRenameMode.pattern) ...[
-            TextField(
-              controller: _base,
-              decoration: InputDecoration(
-                labelText: context.l10n.baseNameLabel,
-                helperText: context.l10n.baseNameHelperText,
-              ),
-              onChanged: (_) => setState(() {}),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              Spacing.lg,
+              0,
+              Spacing.lg,
+              Spacing.lg + viewInsets,
             ),
-            const SizedBox(height: Spacing.sm),
-            TextField(
-              controller: _start,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.l10n.startNumberLabel,
-              ),
-              onChanged: (_) => setState(() {}),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<BatchRenameMode>(
+                  segments: [
+                    ButtonSegment(
+                      value: BatchRenameMode.pattern,
+                      label: Text(context.l10n.patternLabel),
+                      icon: const Icon(LucideIcons.listOrdered),
+                    ),
+                    ButtonSegment(
+                      value: BatchRenameMode.findReplace,
+                      label: Text(context.l10n.findAndReplaceLabel),
+                      icon: const Icon(LucideIcons.replace),
+                    ),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: (s) => setState(() => _mode = s.first),
+                ),
+                const SizedBox(height: Spacing.md),
+                if (_mode == BatchRenameMode.pattern) ...[
+                  TextField(
+                    controller: _base,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.baseNameLabel,
+                      helperText: context.l10n.baseNameHelperText,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  TextField(
+                    controller: _start,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.startNumberLabel,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: _find,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.findLabel,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  TextField(
+                    controller: _replace,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.replaceWithLabel,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+                const SizedBox(height: Spacing.md),
+                _PreviewList(oldNames: widget.names, newNames: preview),
+                const SizedBox(height: Spacing.md),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(context.l10n.cancelButton),
+                    ),
+                    const SizedBox(width: Spacing.sm),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, preview),
+                      child: Text(
+                        context.l10n.renameNItems(widget.names.length),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ] else ...[
-            TextField(
-              controller: _find,
-              decoration: InputDecoration(labelText: context.l10n.findLabel),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: Spacing.sm),
-            TextField(
-              controller: _replace,
-              decoration: InputDecoration(
-                labelText: context.l10n.replaceWithLabel,
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-          ],
-          const SizedBox(height: Spacing.md),
-          _PreviewList(oldNames: widget.names, newNames: preview),
-          const SizedBox(height: Spacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n.cancelButton),
-              ),
-              const SizedBox(width: Spacing.sm),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, preview),
-                child: Text(context.l10n.renameNItems(widget.names.length)),
-              ),
-            ],
           ),
         ],
       ),

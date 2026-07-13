@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/screen_header.dart';
 import '../../core/theme/tokens.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -273,7 +275,10 @@ class _TypeTreemapScreenState extends State<TypeTreemapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Storage by type')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: const ScreenHeader('Storage by type'),
+      ),
       body:
           _scanning
               ? _ScanningView(fileCount: _scannedFiles)
@@ -441,20 +446,33 @@ class _ResultView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        const Divider(),
-        const SizedBox(height: Spacing.sm),
 
         // Detail list
-        for (final entry in sorted)
-          _ExtensionRow(
-            ext: entry.key,
-            totalBytes: entry.value,
-            fileCount: result.countByExt[entry.key] ?? 0,
-            percentage:
-                result.totalSize > 0 ? entry.value / result.totalSize * 100 : 0,
-            selected: selectedExt == entry.key,
-            onTap: () => onSelect(entry.key),
-          ),
+        GroupedCard(
+          padded: false,
+          children: [
+            for (int i = 0; i < sorted.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: Spacing.md,
+                  endIndent: Spacing.md,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              _ExtensionRow(
+                ext: sorted[i].key,
+                totalBytes: sorted[i].value,
+                fileCount: result.countByExt[sorted[i].key] ?? 0,
+                percentage:
+                    result.totalSize > 0
+                        ? sorted[i].value / result.totalSize * 100
+                        : 0,
+                selected: selectedExt == sorted[i].key,
+                onTap: () => onSelect(sorted[i].key),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }

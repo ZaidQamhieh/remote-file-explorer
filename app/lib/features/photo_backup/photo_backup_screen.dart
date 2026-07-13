@@ -6,6 +6,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/sheet_chrome.dart';
 import 'photo_backup_controller.dart';
 import 'photo_backup_prefs.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -202,19 +203,35 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
     final picked = await showModalBottomSheet<Host>(
       context: context,
       builder:
-          (_) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final h in _hosts)
-                  ListTile(
-                    leading: const Icon(LucideIcons.computer),
-                    title: Text(h.label),
-                    subtitle: Text(h.address),
-                    selected: h.id == _prefs.hostId,
-                    onTap: () => Navigator.pop(context, h),
+          (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: Spacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SheetHero(
+                    badge: const Icon(LucideIcons.computer),
+                    title: ctx.l10n.choosePc,
                   ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+                    child: ActionListCard(
+                      children: [
+                        for (final h in _hosts)
+                          ActionListTile(
+                            icon: LucideIcons.computer,
+                            label: '${h.label} • ${h.address}',
+                            onTap: () => Navigator.pop(ctx, h),
+                            trailing:
+                                h.id == _prefs.hostId
+                                    ? const Icon(LucideIcons.check)
+                                    : null,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
     );
@@ -252,41 +269,50 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(Spacing.lg),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                ctx.l10n.selectAlbums,
-                                style: Theme.of(ctx).textTheme.titleMedium,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, selected),
-                              child: Text(ctx.l10n.applyButton),
-                            ),
-                          ],
-                        ),
+                      SheetHero(
+                        badge: const Icon(LucideIcons.images),
+                        title: ctx.l10n.selectAlbums,
+                        subtitle:
+                            selected.isEmpty
+                                ? null
+                                : ctx.l10n.albumsSelected(selected.length),
+                        onClose: () => Navigator.pop(ctx, selected),
                       ),
                       Flexible(
                         child: ListView(
                           shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(
+                            Spacing.lg,
+                            0,
+                            Spacing.lg,
+                            Spacing.lg,
+                          ),
                           children: [
-                            for (final (id, name, count) in entries)
-                              CheckboxListTile(
-                                value: selected.contains(id),
-                                title: Text(name),
-                                subtitle: Text(ctx.l10n.albumPhotoCount(count)),
-                                onChanged:
-                                    (v) => setSheet(() {
-                                      if (v ?? false) {
-                                        selected.add(id);
-                                      } else {
-                                        selected.remove(id);
-                                      }
-                                    }),
-                              ),
+                            ActionListCard(
+                              children: [
+                                for (final (id, name, count) in entries)
+                                  ActionListTile(
+                                    icon: LucideIcons.image,
+                                    label:
+                                        '$name (${ctx.l10n.albumPhotoCount(count)})',
+                                    onTap:
+                                        () => setSheet(() {
+                                          if (selected.contains(id)) {
+                                            selected.remove(id);
+                                          } else {
+                                            selected.add(id);
+                                          }
+                                        }),
+                                    trailing:
+                                        selected.contains(id)
+                                            ? const Icon(LucideIcons.check)
+                                            : const Icon(
+                                              LucideIcons.circle,
+                                              size: 16,
+                                            ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

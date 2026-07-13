@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/providers.dart';
+import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/state_views.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single search result tagged with the [Host] it came from.
@@ -92,8 +96,8 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
           controller: _controller,
           autofocus: true,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: 'Search all hosts...',
+          decoration: InputDecoration(
+            hintText: context.l10n.crossHostSearchHint,
             border: InputBorder.none,
           ),
           onChanged: _onQueryChanged,
@@ -111,14 +115,14 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 12),
-            Text('Searching ${widget.hosts.length} hosts...'),
+            Text(context.l10n.crossHostSearching(widget.hosts.length)),
           ],
         ),
       );
     }
 
     if (_controller.text.trim().length < 2) {
-      return const Center(child: Text('Type to search across all hosts'));
+      return Center(child: Text(context.l10n.crossHostTypeToSearch));
     }
 
     if (_results.isEmpty) {
@@ -126,7 +130,7 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('No results'),
+            const EmptyFolderView(kind: EmptyStateKind.noMatches),
             if (_failedHosts.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -142,6 +146,7 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
       );
     }
 
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         if (_failedHosts.isNotEmpty)
@@ -155,22 +160,39 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _results.length,
-            itemBuilder: (ctx, i) {
-              final r = _results[i];
-              return ListTile(
-                leading: Icon(
-                  r.entry.isDir ? LucideIcons.folder : LucideIcons.file,
-                ),
-                title: Text(r.entry.name),
-                subtitle: Text('${r.host.label} · ${r.entry.path}'),
-                trailing:
-                    r.entry.size != null
-                        ? Text(formatSize(r.entry.size))
-                        : null,
-              );
-            },
+          child: ListView(
+            padding: const EdgeInsets.all(Spacing.md),
+            children: [
+              GroupedCard(
+                padded: false,
+                children: [
+                  for (int i = 0; i < _results.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        indent: Spacing.md,
+                        endIndent: Spacing.md,
+                        color: scheme.outlineVariant,
+                      ),
+                    ListTile(
+                      leading: Icon(
+                        _results[i].entry.isDir
+                            ? LucideIcons.folder
+                            : LucideIcons.file,
+                      ),
+                      title: Text(_results[i].entry.name),
+                      subtitle: Text(
+                        '${_results[i].host.label} · ${_results[i].entry.path}',
+                      ),
+                      trailing:
+                          _results[i].entry.size != null
+                              ? Text(formatSize(_results[i].entry.size))
+                              : null,
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
         ),
       ],

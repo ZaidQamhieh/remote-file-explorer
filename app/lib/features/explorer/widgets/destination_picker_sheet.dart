@@ -13,8 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
-import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/sheet_chrome.dart';
 import '../../../core/ui/state_views.dart';
 import '../destination_picker_state.dart';
 import 'breadcrumb_bar.dart';
@@ -93,7 +93,12 @@ class DestinationPickerSheet extends ConsumerWidget {
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                _buildHeader(context, headerText),
+                SheetHero(
+                  badge: Icon(LucideIcons.folder, color: scheme.primary),
+                  title: headerText,
+                  subtitle: originPath,
+                  onClose: () => Navigator.pop(context),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
                   child: Align(
@@ -119,33 +124,6 @@ class DestinationPickerSheet extends ConsumerWidget {
               ],
             ),
           ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Spacing.lg,
-        Spacing.md,
-        Spacing.sm,
-        Spacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.headlineSmall,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.x),
-            tooltip: context.l10n.cancelTooltip,
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
     );
   }
 
@@ -192,20 +170,23 @@ class DestinationPickerSheet extends ConsumerWidget {
           );
         }
         final folder = folders[i];
-        return ListTile(
-          leading: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: Radii.smR,
-            ),
-            alignment: Alignment.center,
-            child: EntryLeading(entry: folder, size: 22),
-          ),
-          title: Text(folder.name, overflow: TextOverflow.ellipsis),
-          trailing: const Icon(LucideIcons.chevronRight),
+        final tile = ActionListTile(
+          icon: LucideIcons.folder,
+          label: folder.name,
           onTap: () => notifier.navigate(folder.path),
+        );
+        if (i == 0) return tile;
+        return Column(
+          children: [
+            Divider(
+              height: 1,
+              indent: 56,
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+            tile,
+          ],
         );
       },
     );

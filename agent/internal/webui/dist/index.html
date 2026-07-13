@@ -973,6 +973,13 @@
                   </div>
                   <div class="field-row">
                     <div>
+                      <p class="field-label">Show hidden files</p>
+                      <p class="field-desc">Show dot-files (e.g. .config) in Browse. Off by default.</p>
+                    </div>
+                    <label class="switch control"><input type="checkbox" id="show-hidden-toggle"><span class="track"></span></label>
+                  </div>
+                  <div class="field-row">
+                    <div>
                       <p class="field-label">Restart agent service</p>
                       <p class="field-desc">Interrupts active transfers; devices reconnect automatically.</p>
                     </div>
@@ -2093,17 +2100,24 @@
     try {
       const listing = await api('/fs?path=' + encodeURIComponent(path));
       browseEntries = listing.entries || [];
-      const dirs = browseEntries.filter((e) => e.isDir).length;
-      $('crumb-stats').textContent = browseEntries.length ? (browseEntries.length + ' items · ' + dirs + ' folders') : '';
       renderBrowse();
     } catch (e) {
       list.innerHTML = '<p class="error-text">' + e.message + '</p>';
     }
   }
 
+  const SHOW_HIDDEN_KEY = 'rfe_show_hidden_v1';
+  let showHiddenFiles = localStorage.getItem(SHOW_HIDDEN_KEY) === '1';
+  $('show-hidden-toggle').checked = showHiddenFiles;
+  $('show-hidden-toggle').addEventListener('change', (e) => {
+    showHiddenFiles = e.target.checked;
+    localStorage.setItem(SHOW_HIDDEN_KEY, showHiddenFiles ? '1' : '0');
+    renderBrowse();
+  });
+
   let sortKey = 'name', sortDir = 1;
   function sortedEntries() {
-    const arr = browseEntries.slice();
+    const arr = browseEntries.filter((e) => showHiddenFiles || !e.name.startsWith('.'));
     arr.sort((a, b) => {
       if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
       let av, bv;
@@ -2118,6 +2132,10 @@
   }
 
   function renderBrowse() {
+    const visible = sortedEntries();
+    const dirs = visible.filter((e) => e.isDir).length;
+    $('crumb-stats').textContent = visible.length ? (visible.length + ' items · ' + dirs + ' folders') : '';
+
     const list = $('files-list');
     list.innerHTML = '';
     if (filesView === 'grid') { renderBrowseGrid(list); return; }

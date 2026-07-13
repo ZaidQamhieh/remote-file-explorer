@@ -1121,6 +1121,7 @@
             <div class="files-seg" role="tablist" aria-label="Files sections">
               <button id="files-tab-browse" class="active" data-tab="browse" role="tab">Browse</button>
               <button id="files-tab-recent" data-tab="recent" role="tab">Recent</button>
+              <button id="files-tab-favorites" data-tab="favorites" role="tab">Favorites</button>
               <button id="files-tab-trash" data-tab="trash" role="tab">Trash<span id="trash-badge" class="seg-badge hidden"></span></button>
               <button id="files-tab-shares" data-tab="shares" role="tab">Share links</button>
             </div>
@@ -1168,6 +1169,10 @@
 
             <div id="files-recent-tab" class="hidden">
               <div id="recent-list"></div>
+            </div>
+
+            <div id="files-favorites-tab" class="hidden">
+              <div id="favorites-list"></div>
             </div>
 
             <div id="files-trash-tab" class="hidden">
@@ -1910,12 +1915,21 @@
   const selectedPaths = new Set();
 
   const FAV_KEY = 'rfe_favorites_v1';
-  const favoritePaths = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
-  function toggleFavorite(path) {
-    if (favoritePaths.has(path)) favoritePaths.delete(path);
-    else favoritePaths.add(path);
-    localStorage.setItem(FAV_KEY, JSON.stringify([...favoritePaths]));
+  const favoriteEntries = new Map(
+    JSON.parse(localStorage.getItem(FAV_KEY) || '[]')
+      .filter((e) => e && typeof e === 'object' && e.path) // drop legacy path-string-only favorites
+      .map((e) => [e.path, e])
+  );
+  const favoritePaths = favoriteEntries; // Map.has() doubles as Set.has() for the existing star-state checks
+  function persistFavorites() {
+    localStorage.setItem(FAV_KEY, JSON.stringify([...favoriteEntries.values()]));
+  }
+  function toggleFavorite(entry) {
+    if (favoriteEntries.has(entry.path)) favoriteEntries.delete(entry.path);
+    else favoriteEntries.set(entry.path, entry);
+    persistFavorites();
     renderBrowse();
+    if (!$('files-favorites-tab').classList.contains('hidden')) loadFavorites();
   }
   const FAV_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
 
@@ -1992,6 +2006,8 @@
       title: 'This folder is empty', sub: 'Upload files or create a folder to get started.', cta: true },
     recent: { icon: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
       title: 'No recent files', sub: 'Files you open or edit will show up here.' },
+    favorites: { icon: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>',
+      title: 'No favorites yet', sub: 'Star a file or folder in Browse to pin it here.' },
     trash: { icon: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6"/></svg>',
       title: 'Trash is empty', sub: 'Deleted files land here and can be restored.' },
     shares: { icon: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
@@ -2190,7 +2206,7 @@
       fav.className = 'ft-fav' + (favoritePaths.has(entry.path) ? ' active' : '');
       fav.setAttribute('aria-label', favoritePaths.has(entry.path) ? 'Remove from favorites' : 'Add to favorites');
       fav.innerHTML = FAV_ICON;
-      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry.path); });
+      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry); });
       actTd.appendChild(fav);
       const kebab = document.createElement('button');
       kebab.className = 'ft-kebab';
@@ -2266,7 +2282,7 @@
       fav.className = 'gcell-fav' + (favoritePaths.has(entry.path) ? ' active' : '');
       fav.setAttribute('aria-label', favoritePaths.has(entry.path) ? 'Remove from favorites' : 'Add to favorites');
       fav.innerHTML = FAV_ICON;
-      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry.path); });
+      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry); });
       cell.appendChild(fav);
 
       const nameDiv = document.createElement('div');
@@ -2561,11 +2577,12 @@
   // --------- Files: Browse/Recent/Trash/Shares tabs ---------
 
   function filesTab(name) {
-    ['browse', 'recent', 'trash', 'shares'].forEach((t) => {
+    ['browse', 'recent', 'favorites', 'trash', 'shares'].forEach((t) => {
       $('files-' + t + '-tab').classList.toggle('hidden', t !== name);
       $('files-tab-' + t).classList.toggle('active', t === name);
     });
     if (name === 'recent') loadRecent();
+    else if (name === 'favorites') loadFavorites();
     else if (name === 'trash') loadTrash();
     else if (name === 'shares') loadShares();
   }
@@ -2624,6 +2641,53 @@
     } catch (e) {
       list.innerHTML = '<p class="error-text">' + esc(e.message) + '</p>';
     }
+  }
+
+  function loadFavorites() {
+    const list = $('favorites-list');
+    list.innerHTML = '';
+    const entries = [...favoriteEntries.values()].sort((a, b) => a.name.localeCompare(b.name));
+    entries.forEach((entry) => {
+      const g = fileGlyph(entry);
+      const row = document.createElement('div');
+      row.className = 'frow';
+      row.innerHTML = '<span class="frow-icon" style="color:' + g.color + '">' + g.svg + '</span>' +
+        '<span class="frow-info"><span class="frow-name">' + esc(entry.name) + '</span>' +
+        '<span class="frow-sub">' + esc(entry.path) + '</span></span>' +
+        '<span class="frow-meta">' + (entry.isDir ? 'Folder' : fmtBytes(entry.size)) + '</span>';
+      const actions = document.createElement('span');
+      actions.className = 'frow-actions';
+
+      const openBtn = document.createElement('button');
+      openBtn.textContent = entry.isDir ? 'Open' : 'Preview';
+      openBtn.addEventListener('click', () => {
+        filesTab('browse');
+        if (entry.isDir) openFolder(entry.path);
+        else openFolder(parentPath(entry.path)).then(() => previewFile(entry));
+      });
+      actions.appendChild(openBtn);
+
+      if (!entry.isDir) {
+        const dlBtn = document.createElement('button');
+        dlBtn.textContent = 'Download';
+        dlBtn.addEventListener('click', () => downloadFile(entry));
+        actions.appendChild(dlBtn);
+
+        const shareBtn = document.createElement('button');
+        shareBtn.textContent = 'Share';
+        shareBtn.addEventListener('click', () => shareEntry(entry));
+        actions.appendChild(shareBtn);
+      }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => toggleFavorite(entry));
+      actions.appendChild(removeBtn);
+
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+    if (entries.length === 0) list.appendChild(emptyState('favorites'));
   }
 
   const selectedTrashIds = new Set();

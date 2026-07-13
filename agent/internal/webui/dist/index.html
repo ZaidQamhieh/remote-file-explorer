@@ -454,6 +454,12 @@
   .ft-viewseg button + button { border-left: 1px solid var(--border); }
   .ft-viewseg button.active { background: rgba(59,130,246,.15); color: var(--primary); }
   .ft-crumbbar { display: flex; align-items: center; gap: 12px; padding: 8px 2px 12px; }
+  .ft-nav-group { display: inline-flex; gap: 2px; }
+  .ft-nav-btn { border: none; background: transparent; color: var(--ink); padding: 4px 6px;
+    border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; }
+  .ft-nav-btn .icon { width: 16px; height: 16px; display: block; }
+  .ft-nav-btn:hover:not(:disabled) { background: var(--accent); }
+  .ft-nav-btn:disabled { color: var(--dim); opacity: .4; cursor: default; }
   .ft-crumb { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 12.5px; }
   .ft-crumb .crumb-seg { border: none; background: transparent; padding: 3px 7px; border-radius: var(--radius-sm);
     color: var(--dim-2); font-size: 12.5px; cursor: pointer; }
@@ -1149,6 +1155,10 @@
                 <button id="upload-btn" class="primary" title="Files over 5 MiB aren't supported by this upload path"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M6 9l6-6 6 6"/><path d="M5 21h14"/></svg> Upload</button>
               </div>
               <div class="ft-crumbbar">
+                <span class="ft-nav-group">
+                  <button id="nav-back" class="ft-nav-btn" title="Back" aria-label="Back" disabled><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></button>
+                  <button id="nav-forward" class="ft-nav-btn" title="Forward" aria-label="Forward" disabled><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                </span>
                 <div id="breadcrumb" class="ft-crumb"></div>
                 <span id="crumb-stats" class="ft-crumb-stats"></span>
               </div>
@@ -2089,7 +2099,38 @@
     if ($('file-preview').classList.contains('open')) closePreviewDrawer();
   });
 
-  async function openFolder(path) {
+  // Back/forward history, browser-address-bar style: navHistory is the full
+  // stack, navIndex the current position. Real navigation truncates anything
+  // ahead of navIndex and pushes; back/forward just move navIndex without
+  // touching the stack; re-opening the same path (refresh after an action
+  // like delete/rename) does neither.
+  let navHistory = [];
+  let navIndex = -1;
+  function updateNavButtons() {
+    $('nav-back').disabled = navIndex <= 0;
+    $('nav-forward').disabled = navIndex >= navHistory.length - 1;
+  }
+  function navBack() {
+    if (navIndex <= 0) return;
+    navIndex--;
+    openFolder(navHistory[navIndex], { fromHistory: true });
+  }
+  function navForward() {
+    if (navIndex >= navHistory.length - 1) return;
+    navIndex++;
+    openFolder(navHistory[navIndex], { fromHistory: true });
+  }
+  $('nav-back').addEventListener('click', navBack);
+  $('nav-forward').addEventListener('click', navForward);
+
+  async function openFolder(path, opts) {
+    opts = opts || {};
+    if (!opts.fromHistory && navHistory[navIndex] !== path) {
+      navHistory = navHistory.slice(0, navIndex + 1);
+      navHistory.push(path);
+      navIndex = navHistory.length - 1;
+    }
+    updateNavButtons();
     currentPath = path;
     selectedPaths.clear();
     updateBulkToolbar();

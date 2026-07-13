@@ -2883,8 +2883,11 @@
       const drives = await api('/system/drives');
       // Skip OS-flagged drives (e.g. bare "/") for the default folder — a
       // jailed or read-restricted device can't list those, so picking one
-      // blindly left Browse permanently stuck on a permission error.
-      const pick = (drives || []).find((d) => !d.isOS) || (drives || [])[0];
+      // blindly left Browse permanently stuck on a permission error. Prefer
+      // /var over whatever mount happens to sort first (e.g. /etc on
+      // ostree-style systems) since it's where real user/app data lives.
+      const nonOS = (drives || []).filter((d) => !d.isOS);
+      const pick = nonOS.find((d) => d.path === '/var') || nonOS[0] || (drives || [])[0];
       const start = (pick && pick.path) || '/';
       openFolder(start);
     } catch (e) {

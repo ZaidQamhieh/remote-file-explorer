@@ -80,9 +80,11 @@ downloads use HTTP Range with resume from last offset. Both support parallelism.
 app/lib/core/      api client, models, storage, theme, ui, update
 app/lib/features/  hosts, explorer, transfers, preview, pairing, search, settings
 agent/cmd/agent/   main daemon + admin.go (CLI subcommands)
-agent/internal/    server, fsops, transfer, search, thumbs, pairing, store, security,
-                   settings, updates
-agent/internal/discovery/   EMPTY placeholder — mDNS is NOT implemented
+agent/internal/    server (incl. search), fsops, transfer, thumbs, pairing, store,
+                   security, settings, updates, mdns, netinfo
+agent/internal/mdns/    mDNS/DNS-SD advertise + discover (zeroconf) — implemented
+agent/internal/webui/   web companion — dist/index.html is the served single-file UI
+                        (edit it directly); src/ + package.json = Tailwind tooling only
 protocol/openapi.yaml        shared REST contract
 ```
 
@@ -135,6 +137,9 @@ Bypass once if needed: `LEFTHOOK=0 git commit …`.
   `/graphify --update` on this repo (restores the unpruned hairball) — use `tools/rebuild-graph.sh`.
 - Agent redeploy only when `agent/` or `protocol/openapi.yaml` changes. Restart:
   `systemctl --user restart rfe-agent.service` (needs `export XDG_RUNTIME_DIR=/run/user/$(id -u)`).
+- After copying new binary: re-run `sudo setcap cap_net_bind_service=+ep`. Note
+  `/proc/<pid>/exe` md5 check is Permission-denied on setcap'd binaries — verify via
+  disk checksum + restart timing instead.
 
 ## Cross-session handoff (`NEXT_SESSION.md`)
 

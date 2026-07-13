@@ -373,14 +373,16 @@
      row at 1440 CSS px, including the 3-chip Creates state — see min-content
      math in the Devices reskin notes. */
   .mini-stat-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .mini-stat { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border);
-    border-top-width: 2px; border-radius: var(--radius-lg); padding: 20px 14px; display: flex; align-items: center; gap: 10px;
+  .mini-stat { flex: 1 1 150px; background: var(--surface); border: none;
+    border-left: 2px solid var(--border); border-top: 2px solid var(--border);
+    border-radius: var(--radius-lg); padding: 26px 14px; min-height: 88px; display: flex; align-items: center; gap: 10px;
+    box-shadow: 2px 2px 6px rgba(0,0,0,.15);
     transition: border-color .15s, transform .15s; }
   .mini-stat:hover { transform: translateY(-1px); }
-  .mini-stat.blue { border-top-color: var(--primary); background: linear-gradient(to bottom, rgba(59,130,246,.10), transparent 65%), var(--surface); }
-  .mini-stat.green { border-top-color: var(--green); background: linear-gradient(to bottom, rgba(52,211,153,.10), transparent 65%), var(--surface); }
-  .mini-stat.amber { border-top-color: var(--amber); background: linear-gradient(to bottom, rgba(251,191,36,.10), transparent 65%), var(--surface); }
-  .mini-stat.purple { border-top-color: var(--purple); background: linear-gradient(to bottom, rgba(167,139,250,.10), transparent 65%), var(--surface); }
+  .mini-stat.blue { border-left-color: var(--primary); border-top-color: var(--primary); background: linear-gradient(to bottom, rgba(59,130,246,.10), transparent 65%), var(--surface); }
+  .mini-stat.green { border-left-color: var(--green); border-top-color: var(--green); background: linear-gradient(to bottom, rgba(52,211,153,.10), transparent 65%), var(--surface); }
+  .mini-stat.amber { border-left-color: var(--amber); border-top-color: var(--amber); background: linear-gradient(to bottom, rgba(251,191,36,.10), transparent 65%), var(--surface); }
+  .mini-stat.purple { border-left-color: var(--purple); border-top-color: var(--purple); background: linear-gradient(to bottom, rgba(167,139,250,.10), transparent 65%), var(--surface); }
   .mini-stat .icon-badge { width: 35px; height: 35px; }
   .mini-stat .icon-badge .icon { width: 20px; height: 20px; }
   .mini-stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
@@ -604,10 +606,12 @@
   /* ---------- Devices: Jail path / Pair new device cards (replaces the old prose panel) ---------- */
   .pairing-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: stretch; }
   .pairing-jail-card { flex: 0 0 260px; display: flex; flex-direction: column; align-items: center; text-align: center;
-    border-top-width: 2px; border-top-color: var(--amber);
+    border: none; border-left: 2px solid var(--amber); border-top: 2px solid var(--amber);
+    box-shadow: 2px 2px 6px rgba(0,0,0,.15); padding-top: 34px; padding-bottom: 34px;
     background: linear-gradient(to bottom, rgba(251,191,36,.08), transparent 50%), var(--surface); }
   .pairing-otp-card { flex: 1; text-align: center;
-    border-top-width: 2px; border-top-color: var(--primary);
+    border: none; border-left: 2px solid var(--primary); border-top: 2px solid var(--primary);
+    box-shadow: 2px 2px 6px rgba(0,0,0,.15); padding-top: 34px; padding-bottom: 34px;
     background: linear-gradient(to bottom, rgba(59,130,246,.08), transparent 50%), var(--surface); }
 
   /* ---------- .grid was referenced by Quick Actions but never defined — the
@@ -998,7 +1002,7 @@
               <div><button class="primary" id="pairing-generate-btn">Generate new code</button></div>
             </div>
           </div>
-          <div>
+          <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:18px">
             <div class="panel-head">
               <h2 class="panel-title">Paired devices</h2>
               <span class="spacer"></span>

@@ -11,9 +11,9 @@ Two components plus a shared contract:
 
 The app talks to the agent over **HTTPS (HTTP/2) + TLS**, reachable on the LAN by IP or, from
 anywhere, via the computer's **Tailscale** address — same code path. mDNS auto-discovery on the
-LAN is not implemented (`agent/internal/discovery` is an empty placeholder package). Because
-Tailscale (WireGuard) already provides NAT traversal, stable addressing, and encryption, there is
-**no cloud server and no cloud database**.
+LAN is implemented (`agent/internal/mdns`) so the phone can find an agent without manual IP
+entry. Because Tailscale (WireGuard) already provides NAT traversal, stable addressing, and
+encryption, there is **no cloud server and no cloud database**.
 
 ## Key decisions
 
@@ -21,7 +21,7 @@ Tailscale (WireGuard) already provides NAT traversal, stable addressing, and enc
 |------|----------|
 | Mobile framework | Flutter (Riverpod, dio, flutter_secure_storage) |
 | Backend | Custom Go host agent — single static binary, runs as a service |
-| Remote access | Tailscale (already in use) + LAN by IP/hostname; mDNS planned, not implemented |
+| Remote access | Tailscale (already in use) + LAN by IP/hostname; mDNS auto-discovery |
 | Transport security | TLS with self-signed cert; phone pins the SHA-256 fingerprint at pairing (TOFU) |
 | Storage | SQLite on the agent; local DB + Keychain/Keystore on the phone |
 
@@ -116,7 +116,8 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/store/store.go` | SQLite store: devices, tokens, pairing codes, transfer bitmaps. Busy-timeout DSN for daemon+CLI concurrency. |
 | `internal/updates/updates.go` | Update-channel management (the `updates/` dir). |
 | `internal/netinfo/netinfo.go` | LAN + Tailscale address detection. |
-| `internal/discovery/` | **EMPTY placeholder — mDNS NOT implemented.** Don't claim it works. |
+| `internal/mdns/mdns.go` | mDNS/DNS-SD advertisement (`_rfe._tcp`) so the phone can discover an agent on the LAN without typing an IP. |
+| `internal/webui/` (`webui.go` + `src/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. Tailwind CSS built from `src/input.css` via `npm run build:css`; markup (`dist/index.html`) is vanilla, no build step. |
 
 ## Test → source map (used by `scripts/test-affected.sh`)
 

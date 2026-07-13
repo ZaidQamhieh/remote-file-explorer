@@ -597,24 +597,31 @@
 
   /* ---------- Devices: Pair new device card — split QR/code (left) + settings
      (below divider), always visible for admins, sits inline on the page. ---------- */
-  .pairing-panel .panel-head { margin-bottom: 16px; }
-  .pairing-settings { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--border); }
-  .pairing-otp-body { display: flex; gap: 56px; align-items: center; justify-content: center; max-width: 880px; margin: 8px auto 0; }
-  .pairing-qr-box { flex: 0 0 210px; width: 210px; height: 210px; background: #fff; border-radius: var(--radius-lg);
+  .pairing-panel .panel-head { margin-bottom: 20px; }
+  .pairing-panel .panel-head .panel-title { font-size: 13px; }
+  .pairing-panel .panel-head .icon-badge { width: 40px !important; height: 40px !important; }
+  .pairing-settings { margin-top: 26px; padding-top: 4px; border-top: 1px solid var(--border); }
+  .pairing-otp-body { display: flex; gap: 72px; align-items: center; justify-content: center; max-width: 1120px; margin: 12px auto 0; }
+  .pairing-qr-box { flex: 0 0 320px; width: 320px; height: 320px; background: #fff; border-radius: var(--radius-lg);
     display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .pairing-qr-box img { width: 100%; height: 100%; display: block; }
-  .pairing-qr-box .pairing-qr-placeholder { width: 82px; height: 82px; color: #c4c4c4; }
+  .pairing-qr-box .pairing-qr-placeholder { width: 120px; height: 120px; color: #c4c4c4; }
   .pairing-otp-col { flex: 0 1 auto; min-width: 0; }
-  .pairing-otp-col .gen-otp span { width: 50px; height: 60px; font-size: 34px; }
-  .pairing-hint { font-size: 13px; margin-top: 12px; }
-  .pairing-settings .field-label { font-size: 15px; }
+  .pairing-otp-col .gen-otp span { width: 66px; height: 78px; font-size: 44px; }
+  .pairing-otp-col .gen-otp { gap: 10px; }
+  .pairing-otp-col .gen-meta { font-size: 15px; padding: 6px 14px; }
+  .pairing-otp-col #pairing-generate-btn { font-size: 15px; padding: 12px 22px; }
+  .pairing-hint { font-size: 14px; margin-top: 16px; }
+  .pairing-settings-row { display: flex; align-items: center; justify-content: center; gap: 64px; padding: 8px 0; }
+  .ps-item { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .pairing-settings .field-label { font-size: 16px; margin: 0; }
   .pairing-settings .field-desc { font-size: 13px; }
-  .pairing-settings .type-tag { font-size: 12px; padding: 3px 10px; }
-  .pairing-settings .tab-bar button { font-size: 13px; padding: 8px 12px; }
-  .pairing-settings .switch { width: 46px; height: 26px; }
-  .pairing-settings .switch .track::before { width: 20px; height: 20px; left: 3px; top: 3px; }
-  .pairing-settings .switch input:checked + .track::before { transform: translateX(20px); }
-  @media (max-width: 640px) { .pairing-otp-body { flex-direction: column; align-items: center; text-align: center; } }
+  .pairing-settings .type-tag { font-size: 13px; padding: 4px 12px; }
+  .pairing-settings .tab-bar button { font-size: 14px; padding: 9px 14px; }
+  .pairing-settings .switch { width: 54px; height: 30px; }
+  .pairing-settings .switch .track::before { width: 24px; height: 24px; left: 3px; top: 3px; }
+  .pairing-settings .switch input:checked + .track::before { transform: translateX(24px); }
+  @media (max-width: 900px) { .pairing-otp-body { flex-direction: column; } .pairing-settings-row { flex-direction: column; gap: 24px; } }
 
   /* ---------- .grid was referenced by Quick Actions but never defined — the
      inline grid-template-columns did nothing and tiles overflowed. ---------- */
@@ -988,12 +995,23 @@
               </div>
             </div>
             <div class="pairing-settings">
-              <div class="field-row">
-                <div>
+              <div class="pairing-settings-row">
+                <div class="ps-item">
                   <p class="field-label">Guest device</p>
-                  <p class="field-desc">Read-only, jailed to a folder</p>
+                  <label class="switch control"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
                 </div>
-                <label class="switch control"><input type="checkbox" id="pairing-guest-toggle"><span class="track"></span></label>
+                <div class="ps-item">
+                  <p class="field-label">Expires</p>
+                  <div class="tab-bar control" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
+                    <button type="button" data-ttl="300">5m</button>
+                    <button type="button" data-ttl="900" class="active">15m</button>
+                    <button type="button" data-ttl="3600">1h</button>
+                  </div>
+                </div>
+                <div class="ps-item">
+                  <p class="field-label">Creates</p>
+                  <div class="control" id="pairing-creates"><span class="type-tag">User</span></div>
+                </div>
               </div>
               <div class="field-row" id="pairing-jail-row" style="display:none">
                 <div style="flex:1">
@@ -1005,18 +1023,6 @@
                     </button>
                   </div>
                 </div>
-              </div>
-              <div class="field-row">
-                <div><p class="field-label">Expires</p></div>
-                <div class="tab-bar control" id="pairing-ttl" style="border:0;padding:0;margin:0;gap:6px">
-                  <button type="button" data-ttl="300">5m</button>
-                  <button type="button" data-ttl="900" class="active">15m</button>
-                  <button type="button" data-ttl="3600">1h</button>
-                </div>
-              </div>
-              <div class="field-row">
-                <div><p class="field-label">Creates</p></div>
-                <div class="control" id="pairing-creates"><span class="type-tag">User</span></div>
               </div>
             </div>
           </div>

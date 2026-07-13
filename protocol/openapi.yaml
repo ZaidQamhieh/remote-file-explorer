@@ -130,12 +130,13 @@ paths:
                     description: Open transfers that received a chunk in the last 30s
                   devices:
                     type: array
-                    description: Distinct devices with at least one transfer, for the filter-chip row
+                    description: Distinct devices with at least one transfer, for the filter-chip row and the table's Device/User columns
                     items:
                       type: object
                       properties:
                         id: { type: string }
                         label: { type: string }
+                        username: { type: string, description: "\"\" if the device paired by code rather than login" }
                   users:
                     type: array
                     description: Distinct login accounts with at least one transfer, for the user filter-chip row
@@ -938,6 +939,19 @@ paths:
         "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Remove a transfer row from history (web companion Transfers page)
+      description: >
+        Deletes only the session record, not the uploaded file — for clearing
+        stale "open" rows the client never finalized, or "failed" ones.
+      security: [{ deviceToken: [] }]
+      parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+      responses:
+        '204': { description: Transfer row removed }
+        '401': { $ref: '#/components/responses/Error' }
+        '404':
+          description: No transfer with that ID. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}/chunks/{n}:
     put:

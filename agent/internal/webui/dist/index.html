@@ -582,9 +582,7 @@
     .ft-search { max-width: none; }
     .preview-drawer { width: 100vw; }
     .frow-meta { display: none; }
-    .trow .prog-track { display: none; }
-    .trow .t-stat { width: auto; }
-    .tr-controls .files-seg button { padding: 6px 9px; }
+    .tr-toolbar .files-seg button { padding: 6px 9px; }
   }
 
   /* ---------- Generated pairing-code display (big letters, animated in) ---------- */
@@ -617,46 +615,38 @@
   .grid { display: grid; gap: 12px; }
 
 
-  /* ---------- Transfers: mockup icon rows ---------- */
+  /* ---------- Transfers ---------- */
   #page-transfers .stat { padding: 20px 22px; }
   #page-transfers .stat-head { margin-bottom: 12px; }
+  #page-transfers .stat-head .icon-badge { width: 22px; height: 22px; }
+  #page-transfers .stat-head .icon-badge .icon { width: 13px; height: 13px; color: inherit; }
   #page-transfers .stat-value { font-family: var(--mono); font-size: 26px; font-variant-numeric: tabular-nums; }
-  .trow { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 15px 18px; margin-bottom: 12px; transition: border-color .15s; }
-  .trow:hover { border-color: var(--accent); }
-  .trow .t-icon { width: 40px; height: 40px; border-radius: var(--radius-md); background: rgba(59,130,246,.12);
-    color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .trow .t-icon.done { background: rgba(52,211,153,.12); color: var(--green); }
-  .trow .t-icon.fail { background: rgba(248,113,113,.12); color: var(--red); }
-  .trow .t-info { flex: 1; min-width: 0; }
-  .trow .t-name { font-weight: 600; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
-  .trow .t-sub { font-size: 11.5px; color: var(--dim); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
-  .trow .t-sub .icon { width: 12px; height: 12px; }
-  .trow .prog-track { width: 130px; flex-shrink: 0; }
-  .trow .prog-fill { display: block; }
-  .trow .prog-fill.stale { background: var(--border); }
-  .trow .t-stat { width: 150px; text-align: right; flex-shrink: 0; font-size: 12px; font-weight: 600;
-    font-variant-numeric: tabular-nums; }
-  .trow .t-stat.blue { color: var(--primary); }
-  .trow .t-stat.green { color: var(--green); }
-  .trow .t-stat.red { color: var(--red); }
-  .trow .t-stat.dim { color: var(--dim); font-weight: 400; }
-  .trow.live .prog-fill { animation: live-pulse 1.4s ease-in-out infinite alternate; }
+  .tr-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .tr-toolbar .files-seg { margin-bottom: 0; }
+  .tr-toolbar .ft-search { max-width: 220px; }
+  .tr-user-select { background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 6px 10px; font-size: 12px; color: var(--ink);
+    font-family: var(--sans); cursor: pointer; margin-left: auto; }
+  .tr-user-select.hidden { display: none; }
+  .tr-user-select:focus { outline: none; border-color: var(--primary); }
+  .tr-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 0 4px; }
+  .tr-filters:empty { display: none; }
+  .tr-countline { padding: 0 0 10px; }
+  #page-transfers .ftable td.t-status { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #page-transfers .ftable td.t-status.blue { color: var(--primary); }
+  #page-transfers .ftable td.t-status.green { color: var(--green); }
+  #page-transfers .ftable td.t-status.red { color: var(--red); }
+  #page-transfers .ftable td.t-status.dim { color: var(--dim); font-weight: 400; }
+  #page-transfers .ftable tbody tr.live td.t-status { animation: live-pulse 1.4s ease-in-out infinite alternate; }
+  .t-del { border: none; background: transparent; color: var(--dim); padding: 6px; border-radius: var(--radius-sm);
+    opacity: 0; transition: opacity .12s, color .12s, background-color .12s; }
+  #page-transfers .ftable tbody tr:hover .t-del { opacity: 1; }
+  .t-del:hover { color: var(--red); background: rgba(248,113,113,.1); }
+  .t-del .icon { width: 15px; height: 15px; }
   .live-dot { display: inline-block; width: 8px; height: 8px; margin-left: 8px;
     border-radius: 999px; background: var(--green); vertical-align: middle;
     animation: live-pulse 1.4s ease-in-out infinite alternate; }
   @keyframes live-pulse { from { opacity: .35; } to { opacity: 1; } }
-  .tr-controls { display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; flex-wrap: wrap; }
-  .tr-controls .files-seg { margin-bottom: 0; }
-  .tr-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    padding: 12px 0 4px; }
-  .tr-filters:empty { display: none; }
-  .tr-user-select { background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: var(--radius-md); padding: 5px 10px; font-size: 12px; color: var(--ink);
-    font-family: var(--sans); cursor: pointer; }
-  .tr-user-select:focus { outline: none; border-color: var(--primary); }
-  .tr-countline { padding: 0 0 10px; }
 
   /* ---------- Device / user card meta line (mockup: tag + access under name) ---------- */
   .dev-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--dim-2); }
@@ -1091,23 +1081,23 @@
         <div id="page-transfers" class="page hidden">
           <div class="stat-grid">
             <div class="stat">
-              <div class="stat-head"><span class="stat-label">Open</span></div>
+              <div class="stat-head"><span class="icon-badge amber"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span class="stat-label">Open</span></div>
               <div class="stat-value" style="color:var(--amber)"><span id="tr-active">0</span></div>
             </div>
             <div class="stat">
-              <div class="stat-head"><span class="stat-label">Completed</span></div>
+              <div class="stat-head"><span class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="stat-label">Completed</span></div>
               <div class="stat-value" style="color:var(--green)"><span id="tr-done">0</span></div>
             </div>
             <div class="stat">
-              <div class="stat-head"><span class="stat-label">Failed</span></div>
+              <div class="stat-head"><span class="icon-badge red"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg></span><span class="stat-label">Failed</span></div>
               <div class="stat-value" style="color:var(--red)"><span id="tr-failed">0</span></div>
             </div>
             <div class="stat">
-              <div class="stat-head"><span class="stat-label">Active now</span></div>
+              <div class="stat-head"><span class="icon-badge blue"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></span><span class="stat-label">Active now</span></div>
               <div class="stat-value"><span id="tr-active-now">0</span><span class="live-dot" id="tr-live-dot"></span></div>
             </div>
           </div>
-          <div class="tr-controls">
+          <div class="tr-toolbar">
             <div class="files-seg" id="tr-seg">
               <button class="active" data-status="">All</button>
               <button data-status="open">Open</button>
@@ -1118,12 +1108,9 @@
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input id="tr-search" type="text" placeholder="Filter by name…">
             </div>
+            <select id="tr-user-select" class="tr-user-select hidden"><option value="">All users</option></select>
           </div>
           <div class="tr-filters" id="transfers-device-filter"></div>
-          <div class="tr-filters hidden" id="tr-user-row">
-            <span class="dim">User:</span>
-            <select id="tr-user-select" class="tr-user-select"><option value="">All</option></select>
-          </div>
           <div class="tr-countline"><span class="dim mono" id="transfers-count"></span></div>
           <div id="transfers-tbody"></div>
           <p class="dim" id="transfers-note" style="margin:12px 0 0"></p>
@@ -2847,9 +2834,11 @@
   let transferSearch = '';
   let lastTransfersPayload = null;
   let lastTransfersJSON = '';
+  let trSortKey = 'updated', trSortDir = -1;
 
   const TR_EMPTY_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
   const TR_SEARCH_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+  const TR_DELETE_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6"/></svg>';
 
   async function loadTransfers() {
     if (lastTransfersPayload === null) $('transfers-tbody').innerHTML = skelHtml(4);
@@ -2891,12 +2880,12 @@
       devices.map((d) => '<button class="device-chip' + (transferDeviceFilter === d.id ? ' active' : '') +
         '" data-device="' + esc(d.id) + '">' + esc(d.label) + '</button>').join('');
     const users = res.users || [];
-    $('tr-user-row').classList.remove('hidden');
     const sel = $('tr-user-select');
+    sel.classList.toggle('hidden', users.length === 0);
     const wantOpts = '' + users.join('\n');
     if (sel.dataset.opts !== wantOpts) {   // rebuild only when the user list changes
       sel.dataset.opts = wantOpts;
-      sel.innerHTML = '<option value="">All</option>' +
+      sel.innerHTML = '<option value="">All users</option>' +
         users.map((u) => '<option value="' + esc(u) + '">' + esc(u) + '</option>').join('');
     }
     sel.value = transferUserFilter;
@@ -2924,38 +2913,52 @@
       return;
     }
     const devLabel = new Map(devices.map((d) => [d.id, d.label]));
+    const devUser = new Map(devices.map((d) => [d.id, d.username]));
     const nowSec = Date.now() / 1000;
-    const devGlyph = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg>';
-    tbody.innerHTML = shown.map((t) => {
+
+    const sorted = shown.slice().sort((a, b) => {
+      let av, bv;
+      if (trSortKey === 'size') { av = a.totalSize || 0; bv = b.totalSize || 0; }
+      else if (trSortKey === 'updated') { av = a.updatedAt || 0; bv = b.updatedAt || 0; }
+      else { av = (a.name || '').toLowerCase(); bv = (b.name || '').toLowerCase(); }
+      if (av < bv) return -trSortDir;
+      if (av > bv) return trSortDir;
+      return 0;
+    });
+
+    const th = (key, label, extra) => {
+      const isSorted = trSortKey === key;
+      return '<th class="sortable' + (extra || '') + (isSorted ? ' sorted' : '') + '" data-key="' + key + '"' +
+        ' aria-sort="' + (isSorted ? (trSortDir === 1 ? 'ascending' : 'descending') : 'none') + '">' +
+        label + ' <span class="sort-arr">' + (isSorted ? (trSortDir === 1 ? '▲' : '▼') : '') + '</span></th>';
+    };
+    const theadHtml = '<tr>' + th('name', 'Name', '') + '<th>Status</th>' + th('size', 'Size', ' ft-num') +
+      '<th>Device</th><th>User</th>' + th('updated', 'Updated', ' ft-num') + '<th class="ft-act"></th></tr>';
+
+    const rowsHtml = sorted.map((t) => {
       const pct = Math.round(t.progress || 0);
       const g = fileGlyph({ name: t.name });
       const live = t.status === 'open' && t.updatedAt && (nowSec - t.updatedAt) < 30;
-      let cls = '', fillCls = '', fillPct = pct, stat = '';
-      if (t.status === 'completed') {
-        cls = 'done'; fillCls = 'done'; fillPct = 100;
-        stat = '<span class="t-stat green">✓ Done</span>';
-      } else if (t.status === 'failed') {
-        cls = 'fail'; fillCls = 'fail'; fillPct = 100;
-        stat = '<span class="t-stat red">✕ Failed</span>';
-      } else if (live) {
-        stat = '<span class="t-stat blue">● ' + pct + '%</span>';
-      } else {
-        fillCls = 'stale';
-        stat = '<span class="t-stat dim">Open (unfinalized)</span>';
-      }
-      const dl = devLabel.get(t.deviceId);
-      const sub = (dl ? devGlyph + esc(dl) + ' · ' : '') + 'Upload · ' +
-        (t.status === 'open' && t.receivedBytes < t.totalSize
-          ? fmtBytes(t.receivedBytes || 0) + ' of ' + fmtBytes(t.totalSize || 0)
-          : fmtBytes(t.totalSize || 0));
-      return '<div class="trow' + (live ? ' live' : '') + '">' +
-        '<div class="t-icon ' + cls + '"' + (cls ? '' : ' style="color:' + g.color + '"') + '>' + g.svg + '</div>' +
-        '<div class="t-info"><div class="t-name" title="' + esc(t.path || '') + '">' + esc(t.name || '—') + '</div>' +
-        '<div class="t-sub">' + sub + '</div></div>' +
-        '<span class="prog-track"><span class="prog-fill ' + fillCls + '" style="width:' + fillPct + '%"></span></span>' +
-        stat +
-        '</div>';
+      let statusCls = 'dim', statusText = 'Open (unfinalized)';
+      if (t.status === 'completed') { statusCls = 'green'; statusText = '✓ Done'; }
+      else if (t.status === 'failed') { statusCls = 'red'; statusText = '✕ Failed'; }
+      else if (live) { statusCls = 'blue'; statusText = '● ' + pct + '%'; }
+      const sizeText = (t.status === 'open' && t.receivedBytes < t.totalSize)
+        ? fmtBytes(t.receivedBytes || 0) + ' of ' + fmtBytes(t.totalSize || 0)
+        : fmtBytes(t.totalSize || 0);
+      return '<tr' + (live ? ' class="live"' : '') + '>' +
+        '<td><span class="ft-name" title="' + esc(t.path || '') + '"><span style="color:' + g.color + ';display:inline-flex">' + g.svg + '</span>' + esc(t.name || '—') + '</span></td>' +
+        '<td class="t-status ' + statusCls + '">' + statusText + '</td>' +
+        '<td class="ft-num">' + sizeText + '</td>' +
+        '<td>' + esc(devLabel.get(t.deviceId) || '—') + '</td>' +
+        '<td>' + esc(devUser.get(t.deviceId) || '—') + '</td>' +
+        '<td class="ft-num">' + timeAgo(t.updatedAt) + '</td>' +
+        '<td class="ft-act"><button class="t-del" data-id="' + esc(t.id) + '" title="Remove this transfer record" aria-label="Remove">' + TR_DELETE_ICON + '</button></td>' +
+        '</tr>';
     }).join('');
+
+    tbody.innerHTML = '<div class="table-scroll"><table class="ftable"><thead>' + theadHtml +
+      '</thead><tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
   $('transfers-device-filter').addEventListener('click', (e) => {
@@ -2983,6 +2986,27 @@
   $('tr-search').addEventListener('input', (e) => {
     transferSearch = e.target.value.trim();
     renderTransfers();
+  });
+
+  $('transfers-tbody').addEventListener('click', async (e) => {
+    const sortTh = e.target.closest('th.sortable');
+    if (sortTh) {
+      const key = sortTh.dataset.key;
+      if (trSortKey === key) trSortDir *= -1;
+      else { trSortKey = key; trSortDir = 1; }
+      renderTransfers();
+      return;
+    }
+    const btn = e.target.closest('.t-del');
+    if (!btn) return;
+    if (!confirm('Remove this transfer record? This only clears the history row, not the uploaded file.')) return;
+    try {
+      await api('/transfers/' + encodeURIComponent(btn.dataset.id), { method: 'DELETE' });
+      lastTransfersJSON = '';   // force re-render on the refetch
+      loadTransfers();
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    }
   });
 
   async function loadUsers() {

@@ -58,7 +58,7 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		}
 		devices := make([]map[string]any, 0, len(transferDevices))
 		for _, d := range transferDevices {
-			devices = append(devices, map[string]any{"id": d.ID, "label": d.Label})
+			devices = append(devices, map[string]any{"id": d.ID, "label": d.Label, "username": d.Username})
 		}
 		accounts, err := db.ListUsers()
 		if err != nil {
@@ -107,6 +107,26 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 			"devices":   devices,   // distinct devices with at least one transfer, for the filter-chip row
 			"users":     users,     // distinct login accounts with at least one transfer, for the user filter-chip row
 		})
+	}
+}
+
+// --------- DELETE /transfers/{id} ---------
+
+// deleteTransferHandler removes a transfer row from history. This does not
+// touch the uploaded file itself — it only clears the session record, e.g. a
+// stale "open" row the client never finalized, or a "failed" one.
+func deleteTransferHandler(db *store.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		err := db.DeleteTransfer(id)
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, sql.ErrNoRows):
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
+		default:
+			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		}
 	}
 }
 

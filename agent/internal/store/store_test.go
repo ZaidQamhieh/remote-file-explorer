@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"sync"
 	"testing"
 	"time"
@@ -569,6 +570,29 @@ func TestMarkChunkReceivedConcurrent(t *testing.T) {
 		if !seen[i] {
 			t.Fatalf("chunk %d missing from received_chunks: %v", i, got.ReceivedChunks)
 		}
+	}
+}
+
+func TestDeleteTransfer(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	tr := &Transfer{ID: "transfer-1", TargetPath: "/tmp/whatever", TotalSize: 10, ChunkSize: 10, TotalChunks: 1}
+	if err := db.CreateTransfer(tr); err != nil {
+		t.Fatalf("create transfer: %v", err)
+	}
+
+	if err := db.DeleteTransfer(tr.ID); err != nil {
+		t.Fatalf("delete transfer: %v", err)
+	}
+	if got, err := db.GetTransfer(tr.ID); err != nil || got != nil {
+		t.Fatalf("expected (nil, nil) after delete, got (%+v, %v)", got, err)
+	}
+	if err := db.DeleteTransfer(tr.ID); err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows deleting again, got %v", err)
 	}
 }
 

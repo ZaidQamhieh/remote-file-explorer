@@ -746,6 +746,24 @@ func (s *DB) SetTransferStatus(id, status string) error {
 	return err
 }
 
+// DeleteTransfer removes a transfer row (its own history, not the uploaded
+// file). Used by the web companion to clear stale "open" or "failed" rows —
+// the table otherwise accumulates every session ever opened forever.
+func (s *DB) DeleteTransfer(id string) error {
+	res, err := s.db.Exec(`DELETE FROM transfers WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // ListTransfers returns the most recent transfer rows, newest first (rowid
 // desc — the table has no created column, and rowid is monotonic with insert
 // order). Capped at limit because the table accumulates every upload session
@@ -837,10 +855,12 @@ func (s *DB) CountActiveTransfers() (int, error) {
 	return n, err
 }
 
-// TransferDevice is one entry in the Transfers page's device filter-chip row.
+// TransferDevice is one entry in the Transfers page's device filter-chip row
+// (and the table's Device/User columns).
 type TransferDevice struct {
-	ID    string
-	Label string
+	ID       string
+	Label    string
+	Username string // "" if the device paired by code rather than login
 }
 
 // ListTransferDevices returns the distinct devices that own at least one
@@ -849,7 +869,7 @@ type TransferDevice struct {
 // (pre-migration transfers) are excluded — the "All" chip already covers them.
 func (s *DB) ListTransferDevices() ([]TransferDevice, error) {
 	rows, err := s.db.Query(`
-        SELECT DISTINCT t.device_id, COALESCE(d.label, t.device_id)
+        SELECT DISTINCT t.device_id, COALESCE(d.label, t.device_id), COALESCE(d.username, '')
         FROM transfers t LEFT JOIN devices d ON d.id = t.device_id
         WHERE t.device_id != ''
         ORDER BY 2`)
@@ -861,7 +881,7 @@ func (s *DB) ListTransferDevices() ([]TransferDevice, error) {
 	var out []TransferDevice
 	for rows.Next() {
 		var d TransferDevice
-		if err := rows.Scan(&d.ID, &d.Label); err != nil {
+		if err := rows.Scan(&d.ID, &d.Label, &d.Username); err != nil {
 			return nil, err
 		}
 		out = append(out, d)

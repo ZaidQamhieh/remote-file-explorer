@@ -61,6 +61,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 			r.Get("/status", statusHandler(cfg))
 			r.Get("/metrics", metricsHandler())
 			r.Get("/transfers/list", listTransfersHandler(db))
+			r.Delete("/transfers/{id}", deleteTransferHandler(db))
 			r.Get("/users", listUsersHandler(db))
 			r.Delete("/users/{username}", deleteUserHandler(db))
 			r.Get("/logs", listLogsHandler())

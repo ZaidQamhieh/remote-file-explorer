@@ -165,10 +165,14 @@
   .term-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--sidebar); position: sticky; top: 0; }
   .term-dots { display: flex; gap: 6px; }
   .term-dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .term-dots span:nth-child(1) { background: var(--red); }
+  .term-dots span:nth-child(2) { background: var(--amber); }
+  .term-dots span:nth-child(3) { background: var(--green); }
   .term-title { font-size: 10px; color: var(--dim); }
   .term-body { padding: 12px 14px; max-height: 70vh; overflow-y: auto; font-size: 12px; line-height: 1.7; }
   .log-line { display: flex; gap: 12px; padding: 1px 0; }
   .log-line .log-ts { color: var(--dim); flex-shrink: 0; }
+  .log-line .log-src { color: var(--dim); flex-shrink: 0; min-width: 60px; }
   .log-line .log-msg { color: rgba(221,225,237,.8); word-break: break-word; }
   .log-cursor { display: inline-block; width: 7px; height: 14px; background: var(--green); vertical-align: middle; animation: pulse-dot 1.1s steps(2) infinite; }
   .log-line { padding-left: 8px; border-left: 2px solid transparent; }
@@ -176,6 +180,7 @@
   .log-line[data-lvl="error"] { border-left-color: var(--red); background: rgba(248,113,113,.05); }
   .log-lvl { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: var(--radius-sm); flex-shrink: 0;
     text-transform: uppercase; background: var(--surface-2); color: var(--dim); align-self: center; }
+  .log-lvl.info { background: rgba(59,130,246,.15); color: var(--primary); }
   .log-lvl.warn { background: rgba(251,191,36,.15); color: var(--amber); }
   .log-lvl.error { background: rgba(248,113,113,.15); color: var(--red); }
 
@@ -806,6 +811,7 @@
           <div class="sub" id="agent-version"></div>
         </div>
         <span class="spacer"></span>
+        <button id="logs-export" class="hidden"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Export</button>
       </div>
       <div class="content">
 
@@ -1158,16 +1164,30 @@
         </div>
 
         <div id="page-logs" class="page hidden">
-          <div class="log-filter" style="padding-left:0;padding-right:0">
-            <span class="dim">Level:</span>
-            <button id="log-filter-all" class="active" data-lvl="all">All</button>
-            <button id="log-filter-info" data-lvl="info">Info</button>
-            <button id="log-filter-warn" data-lvl="warn">Warn</button>
-            <button id="log-filter-error" data-lvl="error">Error</button>
-            <span class="spacer" style="flex:1"></span>
-            <button id="logs-refresh">Refresh</button>
+          <div class="tr-toolbar">
+            <div class="log-filter" style="padding:0;border-bottom:none">
+              <span class="dim">Level:</span>
+              <button id="log-filter-all" class="active" data-lvl="all">All</button>
+              <button id="log-filter-info" data-lvl="info">Info</button>
+              <button id="log-filter-warn" data-lvl="warn">Warn</button>
+              <button id="log-filter-error" data-lvl="error">Error</button>
+              <button id="log-filter-debug" data-lvl="debug">Debug</button>
+            </div>
+            <select id="log-source-select" class="tr-user-select"><option value="">All sources</option></select>
+            <div class="ft-search">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="logs-search" type="text" placeholder="Filter log messages…">
+            </div>
           </div>
-          <div class="term-body" id="logs-body" style="padding-left:0;padding-right:0"></div>
+          <div class="logview">
+            <div class="term-bar">
+              <span class="term-dots"><span></span><span></span><span></span></span>
+              <span class="term-title">remotefs — server log</span>
+              <span class="spacer" style="flex:1"></span>
+              <button id="logs-refresh">Refresh</button>
+            </div>
+            <div class="term-body" id="logs-body"></div>
+          </div>
         </div>
 
       </div>
@@ -2839,7 +2859,7 @@
 
   // ---------- Page routing (sidebar switches one section at a time) ----------
   let overviewSub = '';  // Overview's live "Up … · v… · platform" line, shown as the page subtitle
-  const PAGE_TITLES = { status: 'Overview', control: 'Agent control', settings: 'Settings', devices: 'Devices', files: 'Files', transfers: 'Transfers', users: 'Users', logs: 'Logs' };
+  const PAGE_TITLES = { status: 'Overview', control: 'Agent control', settings: 'Settings', devices: 'Devices', files: 'Files', transfers: 'Transfers', users: 'Users', logs: 'Server Logs' };
   const PAGE_SUBS = {
     devices: 'Each paired phone/browser — permissions, limits, activity, and quota, per person',
     files: 'Full file management — was previously only reachable via the mobile app',
@@ -2853,6 +2873,7 @@
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('nav-active', a.dataset.page === name));
     $('page-title').textContent = PAGE_TITLES[name] || name;
     $('agent-version').textContent = name === 'status' ? overviewSub : (PAGE_SUBS[name] || '');
+    $('logs-export').classList.toggle('hidden', name !== 'logs');
     if (name === 'transfers') loadTransfers();
     else if (name === 'users') loadUsers();
     else if (name === 'logs') loadLogs();
@@ -3080,20 +3101,40 @@
     }
   });
 
-  // journald gives us free-text lines, not a structured level field — this
-  // is a best-effort client-side classification from common log wording,
-  // not an authoritative severity (the agent doesn't emit one).
+  // journald gives us free-text lines, not structured level/source fields —
+  // this is a best-effort client-side classification from common log
+  // wording, not authoritative (the agent doesn't emit either one).
+  const LOG_LVL_LABEL = { info: 'INFO', warn: 'WARN', error: 'ERR', debug: 'DBG' };
   function guessLogLevel(message) {
     const m = message.toLowerCase();
     if (/\berror\b|\bfatal\b|panic:/.test(m)) return 'error';
     if (/\bwarn(ing)?\b/.test(m)) return 'warn';
+    if (/\bdebug\b/.test(m)) return 'debug';
     return 'info';
   }
+  function guessLogSource(message) {
+    const m = message.toLowerCase();
+    if (m.startsWith('mdns')) return 'mdns';
+    if (m.startsWith('pairing')) return 'pairing';
+    return 'agent';
+  }
+  function formatLogTs(ts) {
+    const d = new Date(ts);
+    return isNaN(d) ? ts : d.toLocaleTimeString();
+  }
   let activeLogLevel = 'all';
+  let activeLogSource = '';
+  let activeLogQuery = '';
   function applyLogFilter() {
+    let shown = 0;
     document.querySelectorAll('#logs-body .log-line[data-lvl]').forEach((el) => {
-      el.classList.toggle('hidden', activeLogLevel !== 'all' && el.dataset.lvl !== activeLogLevel);
+      const hide = (activeLogLevel !== 'all' && el.dataset.lvl !== activeLogLevel) ||
+        (activeLogSource !== '' && el.dataset.src !== activeLogSource) ||
+        (activeLogQuery !== '' && !el.dataset.msg.includes(activeLogQuery));
+      el.classList.toggle('hidden', hide);
+      if (!hide) shown++;
     });
+    $('agent-version').textContent = shown + (shown === 1 ? ' entry shown' : ' entries shown');
   }
   document.querySelectorAll('.log-filter button').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3103,6 +3144,14 @@
       applyLogFilter();
     });
   });
+  $('log-source-select').addEventListener('change', (e) => {
+    activeLogSource = e.target.value;
+    applyLogFilter();
+  });
+  $('logs-search').addEventListener('input', (e) => {
+    activeLogQuery = e.target.value.trim().toLowerCase();
+    applyLogFilter();
+  });
 
   async function loadLogs() {
     const body = $('logs-body');
@@ -3110,12 +3159,25 @@
       const rows = await api('/logs');
       if (!rows || rows.length === 0) {
         body.innerHTML = '<p class="dim">No journal output (agent not running under systemd).</p>';
+        $('agent-version').textContent = '0 entries shown';
         return;
       }
+      const sources = new Set();
       body.innerHTML = rows.map((l) => {
         const lvl = guessLogLevel(l.message || '');
-        return '<div class="log-line" data-lvl="' + lvl + '"><span class="log-lvl ' + lvl + '">' + lvl + '</span><span class="log-ts">' + esc(l.ts) + '</span><span class="log-msg">' + esc(l.message) + '</span></div>';
+        const src = guessLogSource(l.message || '');
+        sources.add(src);
+        return '<div class="log-line" data-lvl="' + lvl + '" data-src="' + src + '" data-msg="' + esc((l.message || '').toLowerCase()) + '">' +
+          '<span class="log-ts">' + esc(formatLogTs(l.ts)) + '</span>' +
+          '<span class="log-lvl ' + lvl + '">' + LOG_LVL_LABEL[lvl] + '</span>' +
+          '<span class="log-src">' + esc(src) + '</span>' +
+          '<span class="log-msg">' + esc(l.message) + '</span></div>';
       }).join('') + '<div class="log-line"><span class="log-cursor"></span></div>';
+      const sel = $('log-source-select');
+      sel.innerHTML = '<option value="">All sources</option>' +
+        [...sources].sort().map((s) => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+      sel.value = activeLogSource;
+      if (sel.value !== activeLogSource) { activeLogSource = ''; }  // filtered source vanished from this batch
       applyLogFilter();
       body.scrollTop = body.scrollHeight;
     } catch (e) {
@@ -3123,6 +3185,16 @@
     }
   }
   $('logs-refresh').addEventListener('click', loadLogs);
+  $('logs-export').addEventListener('click', () => {
+    const lines = [...document.querySelectorAll('#logs-body .log-line[data-lvl]:not(.hidden)')]
+      .map((el) => el.querySelector('.log-ts').textContent + '  ' + LOG_LVL_LABEL[el.dataset.lvl] + '  ' + el.dataset.src + '  ' + el.querySelector('.log-msg').textContent);
+    const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rfe-agent-log-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
   $('add-user-btn').addEventListener('click', () => alert('Add a login account from the host machine:\n\n  rfe-agent adduser <name>\n\nWeb sessions can\'t create accounts — this keeps password setup off the network.'));
   document.querySelectorAll('.nav a').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); showPage(a.dataset.page); });

@@ -902,11 +902,6 @@
                 <span>Share link</span>
                 <span class="qa-endpoint">POST /share/mint</span>
               </button>
-              <button class="qa-tile" id="qa-wake">
-                <div class="icon-badge green"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg></div>
-                <span>Wake device</span>
-                <span class="qa-endpoint">POST /wol</span>
-              </button>
               <button class="qa-tile" data-qa-page="settings">
                 <div class="icon-badge red"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6L21 3"/><path d="M21 3v6h-6"/></svg></div>
                 <span>Restart agent</span>
@@ -2478,17 +2473,6 @@
     const path = prompt('Path of the file to share (e.g. /home/user/report.pdf):');
     if (!path) return;
     await shareEntry({ path });
-  });
-
-  $('qa-wake').addEventListener('click', async () => {
-    const mac = prompt('MAC address to wake (e.g. aa:bb:cc:dd:ee:ff):');
-    if (!mac) return;
-    try {
-      await api('/wol', { method: 'POST', body: JSON.stringify({ mac }) });
-      alert('Wake-on-LAN packet sent.');
-    } catch (e) {
-      alert('Wake failed: ' + e.message);
-    }
   });
 
   // Search scopes to the current Browse folder — swaps #files-list for

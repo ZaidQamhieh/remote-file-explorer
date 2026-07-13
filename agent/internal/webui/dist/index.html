@@ -491,11 +491,26 @@
   .ftable .ft-num { text-align: right; }
   .ftable td.ft-num { font-variant-numeric: tabular-nums; }
   .ftable .ft-kind { font-size: 11px; color: var(--dim); }
-  .ftable .ft-act { width: 44px; text-align: right; }
+  .ftable .ft-act { width: 68px; text-align: right; }
   .ft-kebab { border: none; background: transparent; color: var(--dim); padding: 4px 8px;
     border-radius: var(--radius-sm); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s; }
   .ftable tbody tr:hover .ft-kebab, .ft-kebab[aria-expanded="true"] { opacity: 1; }
   .ft-kebab:hover { background: var(--accent); color: var(--ink); }
+  .ft-fav { border: none; background: transparent; color: var(--dim); padding: 4px 8px;
+    border-radius: var(--radius-sm); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s; }
+  .ft-fav .icon { width: 16px; height: 16px; display: block; }
+  .ftable tbody tr:hover .ft-fav, .ft-fav.active { opacity: 1; }
+  .ft-fav:hover { background: var(--accent); color: var(--ink); }
+  .ft-fav.active { color: var(--amber); }
+  .ft-fav.active .icon { fill: currentColor; }
+  .gcell-fav { position: absolute; top: 6px; right: 6px; border: none; background: transparent;
+    color: var(--dim); padding: 4px; border-radius: var(--radius-sm); cursor: pointer; opacity: 0;
+    transition: opacity .12s, background .12s; }
+  .gcell-fav .icon { width: 16px; height: 16px; display: block; }
+  .gcell:hover .gcell-fav, .gcell-fav.active { opacity: 1; }
+  .gcell-fav:hover { background: var(--accent); color: var(--ink); }
+  .gcell-fav.active { color: var(--amber); }
+  .gcell-fav.active .icon { fill: currentColor; }
 
   .ft-menu { position: fixed; z-index: 60; min-width: 160px; padding: 5px;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
@@ -1894,6 +1909,16 @@
 
   const selectedPaths = new Set();
 
+  const FAV_KEY = 'rfe_favorites_v1';
+  const favoritePaths = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
+  function toggleFavorite(path) {
+    if (favoritePaths.has(path)) favoritePaths.delete(path);
+    else favoritePaths.add(path);
+    localStorage.setItem(FAV_KEY, JSON.stringify([...favoritePaths]));
+    renderBrowse();
+  }
+  const FAV_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
+
   function updateBulkToolbar() {
     const bar = $('bulk-toolbar');
     if (selectedPaths.size === 0) {
@@ -2161,6 +2186,12 @@
 
       const actTd = document.createElement('td');
       actTd.className = 'ft-act';
+      const fav = document.createElement('button');
+      fav.className = 'ft-fav' + (favoritePaths.has(entry.path) ? ' active' : '');
+      fav.setAttribute('aria-label', favoritePaths.has(entry.path) ? 'Remove from favorites' : 'Add to favorites');
+      fav.innerHTML = FAV_ICON;
+      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry.path); });
+      actTd.appendChild(fav);
       const kebab = document.createElement('button');
       kebab.className = 'ft-kebab';
       kebab.setAttribute('aria-label', 'Actions');
@@ -2230,6 +2261,13 @@
       iconSpan.innerHTML = g.svg;
       media.appendChild(iconSpan);
       cell.appendChild(media);
+
+      const fav = document.createElement('button');
+      fav.className = 'gcell-fav' + (favoritePaths.has(entry.path) ? ' active' : '');
+      fav.setAttribute('aria-label', favoritePaths.has(entry.path) ? 'Remove from favorites' : 'Add to favorites');
+      fav.innerHTML = FAV_ICON;
+      fav.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(entry.path); });
+      cell.appendChild(fav);
 
       const nameDiv = document.createElement('div');
       nameDiv.className = 'gcell-name';

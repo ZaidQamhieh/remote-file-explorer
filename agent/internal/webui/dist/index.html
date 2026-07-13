@@ -2669,21 +2669,20 @@
       const g = fileGlyph(entry);
       const row = document.createElement('div');
       row.className = 'frow';
+      row.style.cursor = 'pointer';
       row.innerHTML = '<span class="frow-icon" style="color:' + g.color + '">' + g.svg + '</span>' +
         '<span class="frow-info"><span class="frow-name">' + esc(entry.name) + '</span>' +
         '<span class="frow-sub">' + esc(entry.path) + '</span></span>' +
         '<span class="frow-meta">' + (entry.isDir ? 'Folder' : fmtBytes(entry.size)) + '</span>';
-      const actions = document.createElement('span');
-      actions.className = 'frow-actions';
-
-      const openBtn = document.createElement('button');
-      openBtn.textContent = entry.isDir ? 'Open' : 'Preview';
-      openBtn.addEventListener('click', () => {
+      const openEntry = () => {
         filesTab('browse');
         if (entry.isDir) openFolder(entry.path);
         else openFolder(parentPath(entry.path)).then(() => previewFile(entry));
-      });
-      actions.appendChild(openBtn);
+      };
+      row.addEventListener('click', openEntry);
+      const actions = document.createElement('span');
+      actions.className = 'frow-actions';
+      actions.addEventListener('click', (e) => e.stopPropagation());
 
       if (!entry.isDir) {
         const dlBtn = document.createElement('button');

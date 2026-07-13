@@ -10,6 +10,10 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.6', [
+      'New app icon — the real RFE mark instead of the default Flutter icon',
+      'MetaSheet\'s look (gradient header + quick actions) rolled out across the whole app',
+    ]),
     _ChangelogEntry('v1.41.4', [
       'Allowed folders are now managed from the web companion, not the phone',
     ]),

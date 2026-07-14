@@ -98,9 +98,9 @@ class _SectionLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         Spacing.xs,
-        Spacing.md,
+        Spacing.md3,
         Spacing.xs,
-        Spacing.sm,
+        Spacing.md2,
       ),
       child: Text(
         text.toUpperCase(),
@@ -134,7 +134,7 @@ class _HubRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: Spacing.sm),
+      padding: const EdgeInsets.only(bottom: Spacing.md2),
       child: Material(
         color: scheme.surfaceContainerHigh,
         borderRadius: Radii.cardR,
@@ -143,14 +143,14 @@ class _HubRow extends StatelessWidget {
           borderRadius: Radii.cardR,
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm + 2,
+              horizontal: Spacing.md3,
+              vertical: Spacing.md,
             ),
             child: Row(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
@@ -167,13 +167,13 @@ class _HubRow extends StatelessWidget {
                     ],
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, size: 16, color: Colors.white),
+                  child: Icon(icon, size: 20, color: Colors.white),
                 ),
-                const SizedBox(width: Spacing.md),
+                const SizedBox(width: Spacing.md3),
                 Expanded(
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),

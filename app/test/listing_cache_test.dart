@@ -51,4 +51,15 @@ void main() {
     expect(await cache.get('h', '/p2'), isNotNull);
     expect(await cache.get('h', '/p3'), isNotNull);
   });
+
+  test('evictHost clears that host only', () async {
+    final cache = ListingCache(baseDir: tmp);
+    await cache.put('host-1', '/root', [mkEntry('a.txt')]);
+    await cache.put('host-2', '/root', [mkEntry('b.txt')]);
+
+    await cache.evictHost('host-1');
+
+    expect(await cache.get('host-1', '/root'), isNull);
+    expect(await cache.get('host-2', '/root'), isNotNull);
+  });
 }

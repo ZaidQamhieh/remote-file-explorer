@@ -114,6 +114,14 @@ class ListingCache {
     await _write(hostId, data);
   }
 
+  /// Deletes [hostId]'s entire cached-listing file — call on host unpair so a
+  /// forgotten host's directory listings don't keep reappearing.
+  Future<void> evictHost(String hostId) async {
+    final f = await _fileFor(hostId);
+    if (await f.exists()) await f.delete();
+    _pinnedKeys.removeWhere((k) => k.startsWith('$hostId:'));
+  }
+
   Future<CachedListing?> get(String hostId, String path) async {
     final data = await _read(hostId);
     final raw = data[path];

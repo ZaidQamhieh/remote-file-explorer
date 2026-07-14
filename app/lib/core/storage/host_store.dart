@@ -5,6 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/host.dart';
+import 'listing_cache.dart';
+import 'offline_body_cache.dart';
 
 /// Keys used in SharedPreferences and FlutterSecureStorage.
 const _kHostListKey = 'rfe_hosts_v1';
@@ -60,6 +62,10 @@ class HostStore {
     // Clean up secrets too
     await _secure.delete(key: _tokenKey(hostId));
     await _secure.delete(key: _fpKey(hostId));
+    await _prefs.remove(_lastSeenKey(hostId));
+    // A forgotten host shouldn't keep serving its cached listings/files.
+    await ListingCache().evictHost(hostId);
+    await OfflineBodyCache().evictHost(hostId);
   }
 
   Future<void> _saveHosts(List<Host> hosts) async {

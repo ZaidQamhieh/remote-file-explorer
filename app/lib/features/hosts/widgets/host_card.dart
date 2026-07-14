@@ -182,6 +182,14 @@ class _HostCardState extends ConsumerState<HostCard> {
     await widget.store.addHost(updated);
   }
 
+  /// Promotes this host to the hero slot (top of the list) without
+  /// navigating anywhere — tapping a row under "Also paired" just brings
+  /// that host to focus, it doesn't open it.
+  Future<void> _promote() async {
+    await widget.store.touchHost(widget.host.id);
+    ref.invalidate(hostStoreProvider);
+  }
+
   /// Opens the explorer for this host. If the most recent `/health` ping
   /// reported a Windows host, opens the drive list ([DrivesView]) first
   /// instead of a `/`-rooted listing, since `/` isn't a meaningful path on
@@ -189,10 +197,6 @@ class _HostCardState extends ConsumerState<HostCard> {
   /// behaviour.
   Future<void> _openExplorer(BuildContext context) async {
     final health = await _pingFuture;
-    if (!widget.isFirst) {
-      await widget.store.touchHost(widget.host.id);
-      ref.invalidate(hostStoreProvider);
-    }
     if (!context.mounted) return;
     ref.read(activeHostProvider.notifier).state = ActiveHost(
       host: widget.host,
@@ -429,7 +433,7 @@ class _HostCardState extends ConsumerState<HostCard> {
         // action buttons) has been demoted to the Storage/Diagnostics
         // screens reachable from the ⋯ menu.
         return InkWell(
-          onTap: () => _openExplorer(context),
+          onTap: _promote,
           onLongPress: () => _confirmRemove(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(

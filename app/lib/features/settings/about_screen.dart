@@ -10,6 +10,9 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.9', [
+      'Launcher icon background changed from indigo to white',
+    ]),
     _ChangelogEntry('v1.41.8', [
       'Settings redesigned: a 2-column tile grid up top, each category opening on its own colour-tinted hero header',
       'Settings rows now show circular icon badges and pill-style value chips; Storage & Security gets a cache usage bar',

@@ -109,6 +109,11 @@ protocol/openapi.yaml        shared REST contract
 - **One formatter:** use the shared `formatSize`/`formatDate` in `core/ui/` — do not
   reintroduce local `_formatSize` duplicates.
 - **Per-wave commits:** a `feat:` commit, then a separate `fix:` commit for review fixes.
+- **Auto commit/push/release, no permission-asking:** once a change is done and
+  verified (tests/analyze green), commit and push it without stopping to ask first —
+  same for tagging and pushing a release (`vX.Y.Z`). Owner said the back-and-forth
+  wastes time. Still stop for genuinely destructive/irreversible git ops outside this
+  scope (force-push, reset --hard, branch delete).
 
 ## Token-discipline workflow (follow this — CI is free, local re-runs are not)
 

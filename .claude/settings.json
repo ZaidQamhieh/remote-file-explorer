@@ -1,4 +1,18 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(systemctl --user stop rfe-agent.service)",
+      "Bash(systemctl --user start rfe-agent.service)",
+      "Bash(systemctl --user restart rfe-agent.service)",
+      "Bash(systemctl --user is-active rfe-agent.service)",
+      "Bash(cp * ~/.local/bin/rfe-agent)",
+      "Bash(sudo setcap cap_net_bind_service=+ep ~/.local/bin/rfe-agent)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push*)",
+      "Bash(git tag*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

@@ -47,7 +47,6 @@ class AboutSupportSettingsScreen extends StatelessWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.updatesSection,
-            icon: LucideIcons.downloadCloud,
             padded: false,
             children: const [UpdateTile()],
           ),

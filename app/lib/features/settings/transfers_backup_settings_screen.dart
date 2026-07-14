@@ -139,6 +139,7 @@ class _WatchedFoldersSection extends ConsumerWidget {
         for (final folder in folders)
           ListTile(
             dense: true,
+            leading: _folderBadge(LucideIcons.folder),
             title: Text(folder, overflow: TextOverflow.ellipsis),
             trailing: IconButton(
               icon: const Icon(LucideIcons.circleMinus),
@@ -147,13 +148,26 @@ class _WatchedFoldersSection extends ConsumerWidget {
             ),
           ),
         ListTile(
-          leading: const Icon(LucideIcons.plus),
+          leading: _folderBadge(LucideIcons.plus),
           title: const Text('Add folder path'),
           onTap: () => _showAddDialog(context, notifier),
         ),
       ],
     );
   }
+
+  /// Same tonal circle badge recipe as [SettingsTile], so watched-folder
+  /// rows don't look bare next to every other row on this screen.
+  Widget _folderBadge(IconData icon) => Container(
+    width: 38,
+    height: 38,
+    decoration: BoxDecoration(
+      color: Colors.green.withValues(alpha: 0.16),
+      shape: BoxShape.circle,
+    ),
+    alignment: Alignment.center,
+    child: Icon(icon, size: 18, color: Colors.green),
+  );
 
   Future<void> _showAddDialog(
     BuildContext context,

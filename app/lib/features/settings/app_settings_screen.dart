@@ -9,9 +9,10 @@ import 'storage_security_settings_screen.dart';
 import 'transfers_backup_settings_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Global **App Settings** — a 2-column tile grid (Settings redesign v2) into
-/// 5 grouped categories. Each tile pushes its own sub-screen; this file owns
-/// no settings state or controls itself.
+/// Global **App Settings** — categories grouped under section labels
+/// (Personalize / Data / Info) as flat rows, each with a gradient icon
+/// circle (Settings redesign v3). Each row pushes its own sub-screen; this
+/// file owns no settings state or controls itself.
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key});
 
@@ -22,80 +23,57 @@ class AppSettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(Spacing.md),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _HubTile(
-                  icon: LucideIcons.palette,
-                  title: 'Appearance',
-                  subtitle: 'Theme, layout, sort, visibility',
-                  tint: Colors.purple,
-                  onTap:
-                      () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const AppearanceSettingsScreen(),
-                        ),
-                      ),
+          const _SectionLabel('Personalize'),
+          _HubRow(
+            icon: LucideIcons.palette,
+            title: 'Appearance',
+            gradient: const [Color(0xFFC4B5FD), Color(0xFF7C3AED)],
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AppearanceSettingsScreen(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: Spacing.md2),
-              Expanded(
-                child: _HubTile(
-                  icon: LucideIcons.arrowUpDown,
-                  title: 'Transfers & Backup',
-                  subtitle: 'Photo backup, watched folders, history',
-                  tint: Colors.green,
-                  onTap:
-                      () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const TransfersBackupSettingsScreen(),
-                        ),
-                      ),
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: Spacing.md2),
-          Row(
-            children: [
-              Expanded(
-                child: _HubTile(
-                  icon: LucideIcons.bell,
-                  title: 'Notifications & Alerts',
-                  subtitle: 'Transfers, low disk, weekly digest',
-                  tint: Colors.amber,
-                  onTap:
-                      () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const NotificationsSettingsScreen(),
-                        ),
-                      ),
+          _HubRow(
+            icon: LucideIcons.bell,
+            title: 'Notifications & Alerts',
+            gradient: const [Color(0xFFFDE68A), Color(0xFFD97706)],
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const NotificationsSettingsScreen(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: Spacing.md2),
-              Expanded(
-                child: _HubTile(
-                  icon: LucideIcons.shieldCheck,
-                  title: 'Storage & Security',
-                  subtitle: 'Cache, App Lock',
-                  tint: Colors.blue,
-                  onTap:
-                      () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const StorageSecuritySettingsScreen(),
-                        ),
-                      ),
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: Spacing.md2),
-          _HubTile(
+          const _SectionLabel('Data'),
+          _HubRow(
+            icon: LucideIcons.arrowUpDown,
+            title: 'Transfers & Backup',
+            gradient: const [Color(0xFF6EE7B7), Color(0xFF059669)],
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TransfersBackupSettingsScreen(),
+                  ),
+                ),
+          ),
+          _HubRow(
+            icon: LucideIcons.shieldCheck,
+            title: 'Storage & Security',
+            gradient: const [Color(0xFF93C5FD), Color(0xFF2563EB)],
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const StorageSecuritySettingsScreen(),
+                  ),
+                ),
+          ),
+          const _SectionLabel('Info'),
+          _HubRow(
             icon: LucideIcons.info,
             title: 'About & Support',
-            subtitle: 'Updates, diagnostics, changelog',
-            tint: Colors.blueGrey,
-            wide: true,
+            gradient: const [Color(0xFFD4D4D8), Color(0xFF52525B)],
             onTap:
                 () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -109,96 +87,100 @@ class AppSettingsScreen extends StatelessWidget {
   }
 }
 
-/// One tile in the hub's tile grid: a category-tinted flat card (no glow),
-/// a tonal icon badge, title, and subtitle. [wide] spans both grid columns
-/// (used for the lone About & Support tile) and lays out horizontally
-/// instead of stacking icon-over-text.
-class _HubTile extends StatelessWidget {
-  const _HubTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tint,
-    required this.onTap,
-    this.wide = false,
-  });
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color tint;
-  final VoidCallback onTap;
-  final bool wide;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final badge = Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.22),
-        borderRadius: Radii.smR,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.xs,
+        Spacing.md,
+        Spacing.xs,
+        Spacing.sm,
       ),
-      alignment: Alignment.center,
-      child: Icon(icon, size: 18, color: tint),
-    );
-    final text = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+      child: Text(
+        text.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
         ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          maxLines: wide ? 1 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
-        ),
-      ],
+      ),
     );
+  }
+}
 
-    final child =
-        wide
-            ? Row(
+/// One row in the hub: a gradient icon circle (same recipe as
+/// [GradientActionCircle], the host action sheet's shared component) and a
+/// title, in a flat tappable card.
+class _HubRow extends StatelessWidget {
+  const _HubRow({
+    required this.icon,
+    required this.title,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final List<Color> gradient;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.sm),
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: Radii.cardR,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: Radii.cardR,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.md,
+              vertical: Spacing.sm + 2,
+            ),
+            child: Row(
               children: [
-                badge,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: gradient,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradient.last.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 16, color: Colors.white),
+                ),
                 const SizedBox(width: Spacing.md),
-                Expanded(child: text),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
-            )
-            : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [badge, text],
-            );
-
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      borderRadius: Radii.lgR,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: Radii.lgR,
-        child: Container(
-          height: wide ? 74 : 128,
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.md,
-            Spacing.md,
-            Spacing.md,
-            Spacing.md2,
+            ),
           ),
-          decoration: BoxDecoration(
-            borderRadius: Radii.lgR,
-            border: Border.all(color: tint.withValues(alpha: 0.35)),
-          ),
-          child: child,
         ),
       ),
     );

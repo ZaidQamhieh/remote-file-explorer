@@ -66,7 +66,9 @@ void main() {
           ProviderScope(
             child: MaterialApp(
               localizationsDelegates: l10nDelegates,
-              home: Scaffold(body: HostCard(host: host, store: store)),
+              home: Scaffold(
+                body: HostCard(host: host, store: store, isFirst: true),
+              ),
             ),
           ),
         );
@@ -94,16 +96,17 @@ void main() {
       );
       expect(dimmedAncestor, findsNothing);
 
-      // No storage gauges for an offline host — the thin row doesn't render
-      // any dashboard content inline.
+      // No storage gauges for an offline host — the hero doesn't render any
+      // dashboard content inline.
       expect(find.byType(LinearProgressIndicator), findsNothing);
 
-      // The whole row browses on tap (no separate "Browse" button anymore);
-      // Search only appears in the ⋯ sheet while online, so it's simply
-      // absent (not disabled) while offline.
+      // The hero's own "Search" quick action always renders (just dimmed
+      // while offline); the ⋯ sheet's Search entry only appears when online,
+      // so opening the sheet must not add a second "Search" text.
+      expect(find.text('Search'), findsOneWidget);
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      expect(find.text('Search'), findsNothing);
+      expect(find.text('Search'), findsOneWidget);
     },
   );
 
@@ -115,7 +118,9 @@ void main() {
         ProviderScope(
           child: MaterialApp(
             localizationsDelegates: l10nDelegates,
-            home: Scaffold(body: HostCard(host: host, store: store)),
+            home: Scaffold(
+              body: HostCard(host: host, store: store, isFirst: true),
+            ),
           ),
         ),
       );
@@ -130,13 +135,15 @@ void main() {
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
 
-    expect(find.text('main-pc'), findsWidgets); // sheet title + row name
-    expect(find.text('Transfers'), findsOneWidget);
+    expect(find.text('main-pc'), findsWidgets); // sheet title + hero name
+    expect(find.text('Transfers'), findsWidgets); // sheet item + quick action
     expect(find.text('Diagnostics'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsWidgets); // sheet item + quick action
     expect(find.text('Forget this computer'), findsOneWidget);
-    // Offline host (no /system/drives data): Search and Storage are omitted.
-    expect(find.text('Search'), findsNothing);
+    // Offline host (no /system/drives data): the sheet's Search/Storage
+    // entries are omitted — only the hero's own dimmed Search quick action
+    // renders (Storage has no quick-action equivalent).
+    expect(find.text('Search'), findsOneWidget);
     expect(find.text('Storage'), findsNothing);
   });
 }

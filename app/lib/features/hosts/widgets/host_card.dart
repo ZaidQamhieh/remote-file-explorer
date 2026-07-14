@@ -460,18 +460,14 @@ class _HostCardState extends ConsumerState<HostCard> {
                           .lowDiskThresholdBytes ??
                       0,
                 ),
-                const SizedBox(width: Spacing.sm),
-                if (canWake)
+                if (canWake) ...[
+                  const SizedBox(width: Spacing.sm),
                   IconButton.filledTonal(
                     icon: const Icon(LucideIcons.power, size: 18),
                     tooltip: context.l10n.wakeButton,
                     onPressed: () => _sendWol(context),
                   ),
-                IconButton(
-                  icon: const Icon(LucideIcons.moreVertical),
-                  tooltip: context.l10n.moreTooltip,
-                  onPressed: () => _openActions(context, online: online),
-                ),
+                ],
               ],
             ),
           ),

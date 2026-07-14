@@ -49,6 +49,61 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             tint: Colors.purple,
           ),
           const SizedBox(height: Spacing.md),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: Spacing.sm,
+            crossAxisSpacing: Spacing.sm,
+            childAspectRatio: 1.7,
+            children: [
+              _QuickToggleTile(
+                icon: LucideIcons.image,
+                title: context.l10n.useWallpaperColors,
+                value: app.dynamicColor,
+                onTap: () => notifier.setDynamicColor(!app.dynamicColor),
+              ),
+              _QuickToggleTile(
+                icon: LucideIcons.moon,
+                title: 'AMOLED Dark',
+                value: app.amoledDark,
+                onTap: () => notifier.setAmoledDark(!app.amoledDark),
+              ),
+              _QuickToggleTile(
+                icon: app.gridView ? LucideIcons.layoutGrid : LucideIcons.list,
+                title: context.l10n.layoutLabel,
+                caption:
+                    app.gridView
+                        ? context.l10n.gridLabel
+                        : context.l10n.listLabel,
+                onTap: () => notifier.setAppGridView(!app.gridView),
+              ),
+              _QuickToggleTile(
+                icon: LucideIcons.rows3,
+                title: context.l10n.densityLabel,
+                caption:
+                    app.density == EntryDensity.compact
+                        ? context.l10n.compactLabel
+                        : context.l10n.comfortableLabel,
+                onTap:
+                    () => notifier.setAppDensity(
+                      app.density == EntryDensity.compact
+                          ? EntryDensity.comfortable
+                          : EntryDensity.compact,
+                    ),
+              ),
+              _QuickToggleTile(
+                icon: LucideIcons.wifi,
+                title: 'Preload on cellular',
+                value: app.preloadPreviewOnCellular,
+                onTap:
+                    () => notifier.setPreloadPreviewOnCellular(
+                      !app.preloadPreviewOnCellular,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Theme',
             children: [
@@ -83,22 +138,6 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                   if (picked != null) notifier.setThemeMode(picked);
                 },
               ),
-              SettingsTile.toggle(
-                icon: LucideIcons.image,
-                badgeColor: Colors.purple,
-                title: context.l10n.useWallpaperColors,
-                subtitle: context.l10n.wallpaperSubtitle,
-                value: app.dynamicColor,
-                onChanged: notifier.setDynamicColor,
-              ),
-              SettingsTile.toggle(
-                icon: LucideIcons.moon,
-                badgeColor: Colors.purple,
-                title: 'AMOLED Dark',
-                subtitle: 'Pure black background in dark mode',
-                value: app.amoledDark,
-                onChanged: notifier.setAmoledDark,
-              ),
               SettingsTile.value(
                 icon: LucideIcons.swatchBook,
                 badgeColor: Colors.purple,
@@ -130,68 +169,6 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                   }
                 },
               ),
-            ],
-          ),
-          const SizedBox(height: Spacing.md),
-          SettingsSection(
-            title: context.l10n.displaySection,
-            children: [
-              SettingsTile.value(
-                icon: LucideIcons.layoutGrid,
-                badgeColor: Colors.purple,
-                title: context.l10n.layoutLabel,
-                value:
-                    app.gridView
-                        ? context.l10n.gridLabel
-                        : context.l10n.listLabel,
-                onTap: () async {
-                  final picked = await showSettingsPicker<bool>(
-                    context,
-                    title: context.l10n.layoutLabel,
-                    selected: app.gridView,
-                    options: [
-                      SettingsOption(
-                        false,
-                        context.l10n.listLabel,
-                        icon: LucideIcons.list,
-                      ),
-                      SettingsOption(
-                        true,
-                        context.l10n.gridLabel,
-                        icon: LucideIcons.layoutGrid,
-                      ),
-                    ],
-                  );
-                  if (picked != null) notifier.setAppGridView(picked);
-                },
-              ),
-              SettingsTile.value(
-                icon: LucideIcons.rows3,
-                badgeColor: Colors.purple,
-                title: context.l10n.densityLabel,
-                value:
-                    app.density == EntryDensity.compact
-                        ? context.l10n.compactLabel
-                        : context.l10n.comfortableLabel,
-                onTap: () async {
-                  final picked = await showSettingsPicker<EntryDensity>(
-                    context,
-                    title: context.l10n.densityLabel,
-                    selected: app.density,
-                    options: [
-                      SettingsOption(
-                        EntryDensity.comfortable,
-                        context.l10n.comfortableLabel,
-                      ),
-                      SettingsOption(
-                        EntryDensity.compact,
-                        context.l10n.compactLabel,
-                      ),
-                    ],
-                  );
-                  if (picked != null) notifier.setAppDensity(picked);
-                },
-              ),
               SettingsTile.value(
                 icon: LucideIcons.arrowUpDown,
                 badgeColor: Colors.purple,
@@ -219,16 +196,6 @@ class AppearanceSettingsScreen extends ConsumerWidget {
                   }
                 },
               ),
-              SettingsTile.toggle(
-                icon: LucideIcons.wifi,
-                badgeColor: Colors.purple,
-                title: 'Preload previews on cellular',
-                subtitle:
-                    'Warm neighbouring images while swiping the preview, even '
-                    'off Wi-Fi',
-                value: app.preloadPreviewOnCellular,
-                onChanged: notifier.setPreloadPreviewOnCellular,
-              ),
             ],
           ),
           const SizedBox(height: Spacing.md),
@@ -250,6 +217,75 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Square tile for a short binary/2-option setting — tap toggles it (or
+/// cycles the 2-option value) directly, no separate row/picker needed.
+class _QuickToggleTile extends StatelessWidget {
+  const _QuickToggleTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.value,
+    this.caption,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool? value;
+  final String? caption;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final active = value ?? false;
+    return Material(
+      color:
+          active
+              ? Colors.purple.withValues(alpha: 0.14)
+              : scheme.surfaceContainerHigh,
+      borderRadius: Radii.lgR,
+      child: InkWell(
+        borderRadius: Radii.lgR,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md,
+            vertical: Spacing.sm,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: Colors.purple),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      caption ?? (active ? 'On' : 'Off'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

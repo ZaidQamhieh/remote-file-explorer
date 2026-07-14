@@ -41,7 +41,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             subtitle: 'Photo backup, watched folders & history',
             tint: Colors.green,
           ),
-          const SizedBox(height: Spacing.md),
+          const SizedBox(height: Spacing.sm),
           SettingsSection(
             title: context.l10n.photoBackupSection,
             children: [
@@ -59,7 +59,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.md),
+          const SizedBox(height: Spacing.sm),
           SettingsSection(
             title: 'Transfers',
             children: [
@@ -75,9 +75,9 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.md),
+          const SizedBox(height: Spacing.sm),
           const _WatchedFoldersSection(),
-          const SizedBox(height: Spacing.md),
+          const SizedBox(height: Spacing.sm),
           SettingsSection(
             title: 'History',
             children: [
@@ -95,7 +95,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.md),
+          const SizedBox(height: Spacing.sm),
           const BackupRestoreSection(),
         ],
       ),

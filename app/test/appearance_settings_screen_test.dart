@@ -49,9 +49,9 @@ void main() {
     final c = await pump(tester);
     expect(c.read(settingsProvider).valueOrNull!.app.gridView, isFalse);
 
+    // Layout is now a quick-toggle tile (tap cycles list<->grid directly),
+    // not a row that opens a picker sheet.
     await tester.tap(find.text('Layout'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Grid'));
     await tester.pumpAndSettle();
 
     expect(c.read(settingsProvider).valueOrNull!.app.gridView, isTrue);
@@ -60,9 +60,9 @@ void main() {
   testWidgets('changing Density sets the app default', (tester) async {
     final c = await pump(tester);
 
+    // Density is now a quick-toggle tile (tap cycles comfortable<->compact
+    // directly), not a row that opens a picker sheet.
     await tester.tap(find.text('Density'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Compact'));
     await tester.pumpAndSettle();
 
     expect(
@@ -123,12 +123,8 @@ void main() {
     final c = await pump(tester);
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
 
-    await tester.tap(
-      find.descendant(
-        of: find.widgetWithText(Row, 'Use wallpaper colors').first,
-        matching: find.byType(Switch),
-      ),
-    );
+    // Now a quick-toggle tile — the whole tile is tappable, no Switch.
+    await tester.tap(find.text('Use wallpaper colors'));
     await tester.pumpAndSettle();
 
     expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);

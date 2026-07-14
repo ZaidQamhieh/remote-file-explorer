@@ -15,7 +15,7 @@ class AppBottomNavDestination {
   final String label;
 }
 
-const double _kBarHeight = 68;
+const double _kBarHeight = 76;
 const double _kNotchDepth = 14;
 const double _kHalfNotchWidth = 40;
 const double _kFabDiameter = 48;
@@ -57,38 +57,44 @@ class AppBottomNav extends StatelessWidget {
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < 2; i++)
-                          Expanded(
-                            child: _NavButton(
-                              destination: destinations[i],
-                              selected: i == selectedIndex,
-                              onTap: () => onDestinationSelected(i),
+              Positioned(
+                top: _kNotchDepth,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < 2; i++)
+                            Expanded(
+                              child: _NavButton(
+                                destination: destinations[i],
+                                selected: i == selectedIndex,
+                                onTap: () => onDestinationSelected(i),
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: _kHalfNotchWidth * 2),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        for (var i = 2; i < 4; i++)
-                          Expanded(
-                            child: _NavButton(
-                              destination: destinations[i],
-                              selected: i == selectedIndex,
-                              onTap: () => onDestinationSelected(i),
+                    const SizedBox(width: _kHalfNotchWidth * 2),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          for (var i = 2; i < 4; i++)
+                            Expanded(
+                              child: _NavButton(
+                                destination: destinations[i],
+                                selected: i == selectedIndex,
+                                onTap: () => onDestinationSelected(i),
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               Positioned(
                 top: 2,

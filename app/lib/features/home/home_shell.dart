@@ -83,7 +83,7 @@ class HomeShell extends ConsumerWidget {
                   destinations: const [
                     AppBottomNavDestination(
                       icon: LucideIcons.database,
-                      label: 'Servers',
+                      label: 'Devices',
                     ),
                     AppBottomNavDestination(
                       icon: LucideIcons.folder,
@@ -132,7 +132,7 @@ class _FilesTab extends ConsumerWidget {
                 onPressed:
                     () => ref.read(selectedTabIndexProvider.notifier).state = 0,
                 icon: const Icon(LucideIcons.server),
-                label: const Text('Go to Servers'),
+                label: const Text('Go to Devices'),
               ),
             ],
           ),

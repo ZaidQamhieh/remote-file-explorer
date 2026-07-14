@@ -19,8 +19,8 @@ class ScreenHeader extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
           ),
         ),

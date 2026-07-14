@@ -12,16 +12,46 @@ import '../../core/ui/screen_header.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
-import '../search/cross_host_search_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
 
 /// Displays all paired hosts as a dashboard of [HostCard]s.
-class HostListScreen extends ConsumerWidget {
+class HostListScreen extends ConsumerStatefulWidget {
   const HostListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HostListScreen> createState() => _HostListScreenState();
+
+  /// Pushes the pairing flow and reloads the host store on return. Public
+  /// (and static) so the persistent bottom nav's center Add button — shared
+  /// across all 4 tabs, not just this screen — can trigger the same flow.
+  static Future<void> addComputer(
+    BuildContext context,
+    WidgetRef ref, {
+    String? prefillAddress,
+  }) async {
+    await Navigator.of(context).push<Host>(
+      MaterialPageRoute(
+        builder: (_) => PairingScreen(prefillAddress: prefillAddress),
+      ),
+    );
+    // Reload the host store after pairing
+    ref.invalidate(hostStoreProvider);
+  }
+}
+
+class _HostListScreenState extends ConsumerState<HostListScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final storeAsync = ref.watch(hostStoreProvider);
     final scheme = Theme.of(context).colorScheme;
     final hostCount = storeAsync.valueOrNull?.listHosts().length ?? 0;
@@ -30,7 +60,7 @@ class HostListScreen extends ConsumerWidget {
       appBar: AppBar(
         toolbarHeight: 72,
         title: ScreenHeader(
-          'Servers',
+          'Devices',
           subtitle:
               hostCount > 0
                   ? '$hostCount computer${hostCount == 1 ? '' : 's'}'
@@ -44,20 +74,6 @@ class HostListScreen extends ConsumerWidget {
                 () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const QrScanScreen()),
                 ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.search_rounded),
-            tooltip: 'Search all hosts',
-            onPressed: () {
-              final store = storeAsync.valueOrNull;
-              if (store == null) return;
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder:
-                      (_) => CrossHostSearchScreen(hosts: store.listHosts()),
-                ),
-              );
-            },
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -75,6 +91,18 @@ class HostListScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.md,
+              0,
+              Spacing.md,
+              Spacing.sm,
+            ),
+            child: _DeviceSearchBar(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
           const UpdateBanner(),
           Expanded(
             child: storeAsync.when(
@@ -84,11 +112,32 @@ class HostListScreen extends ConsumerWidget {
                     child: Text(context.l10n.errorLabel(humanizeError(e))),
                   ),
               data: (store) {
-                final hosts = store.listHosts();
-                if (hosts.isEmpty) {
+                final allHosts = store.listHosts();
+                if (allHosts.isEmpty) {
                   return _EmptyState(
                     scheme: scheme,
-                    onScan: () => addComputer(context, ref),
+                    onScan: () => HostListScreen.addComputer(context, ref),
+                  );
+                }
+                final query = _query.trim().toLowerCase();
+                final hosts =
+                    query.isEmpty
+                        ? allHosts
+                        : allHosts
+                            .where(
+                              (h) =>
+                                  h.label.toLowerCase().contains(query) ||
+                                  h.address.toLowerCase().contains(query),
+                            )
+                            .toList();
+                if (hosts.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No devices match "$_query"',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
                   );
                 }
                 return RefreshIndicator(
@@ -145,22 +194,47 @@ class HostListScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  /// Pushes the pairing flow and reloads the host store on return. Public
-  /// (and static) so the persistent bottom nav's center Add button — shared
-  /// across all 4 tabs, not just this screen — can trigger the same flow.
-  static Future<void> addComputer(
-    BuildContext context,
-    WidgetRef ref, {
-    String? prefillAddress,
-  }) async {
-    await Navigator.of(context).push<Host>(
-      MaterialPageRoute(
-        builder: (_) => PairingScreen(prefillAddress: prefillAddress),
+// ---------------------------------------------------------------------------
+// Persistent search field — filters the list in place, no navigation
+// ---------------------------------------------------------------------------
+
+class _DeviceSearchBar extends StatelessWidget {
+  const _DeviceSearchBar({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: Radii.lgR,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: Theme.of(context).textTheme.bodyMedium,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Search devices…',
+          hintStyle: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: scheme.outline),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: scheme.outline,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: Radii.lgR,
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: Spacing.md),
+        ),
       ),
     );
-    // Reload the host store after pairing
-    ref.invalidate(hostStoreProvider);
   }
 }
 

@@ -7,8 +7,8 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/ui/screen_header.dart';
 import 'settings_screen.dart' show AddExtensionField;
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 
@@ -39,18 +39,22 @@ class FileVisibilityScreen extends ConsumerWidget {
           ..sort();
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('File visibility'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.eyeOff,
+            title: 'File visibility',
+            subtitle: 'Hidden types & dotfiles',
+            tint: Colors.purple,
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'General',
             children: [

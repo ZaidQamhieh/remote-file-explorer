@@ -6,8 +6,8 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/ui/screen_header.dart';
 import 'file_visibility_screen.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_picker.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
@@ -33,18 +33,22 @@ class AppearanceSettingsScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('Appearance'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.palette,
+            title: 'Appearance',
+            subtitle: "Theme, layout, sort & how files look",
+            tint: Colors.purple,
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'Theme',
             children: [

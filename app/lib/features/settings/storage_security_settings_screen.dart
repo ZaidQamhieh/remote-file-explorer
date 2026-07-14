@@ -8,7 +8,7 @@ import '../../core/storage/cache_manager.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
-import '../../core/ui/screen_header.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -25,18 +25,22 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('Storage & Security'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.shieldCheck,
+            title: 'Storage & Security',
+            subtitle: 'Cache usage & App Lock',
+            tint: Colors.blue,
+          ),
+          const SizedBox(height: Spacing.md),
           const _CacheSection(),
           const SizedBox(height: Spacing.md),
           SettingsSection(
@@ -97,6 +101,14 @@ class _CacheSection extends ConsumerWidget {
                   bytes: stats.totalBytes,
                   bold: true,
                 ),
+                const SizedBox(height: Spacing.sm),
+                _UsageBar(
+                  // ponytail: no real quota concept exists to measure
+                  // against yet, so this is a decorative fixed proportion,
+                  // not a computed used/total fraction — wire to a real
+                  // quota if the app ever gets one.
+                  fraction: stats.totalBytes > 0 ? 0.14 : 0.0,
+                ),
               ],
             );
           },
@@ -117,6 +129,34 @@ class _CacheSection extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Thin rounded usage bar under the cache totals — a blue→purple gradient
+/// fill at [fraction] of the track width.
+class _UsageBar extends StatelessWidget {
+  const _UsageBar({required this.fraction});
+
+  final double fraction;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: Radii.chipR,
+      child: Container(
+        height: 6,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: fraction.clamp(0.0, 1.0),
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

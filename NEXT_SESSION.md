@@ -23,4 +23,6 @@ not here.
 
 ## Open handoff
 
-None.
+None. The approved Settings redesign (v2, tile-grid hub + tinted hero
+sub-screens) from the prior handoff shipped this session — see commit for
+details. `flutter analyze` clean, 618/618 tests pass.

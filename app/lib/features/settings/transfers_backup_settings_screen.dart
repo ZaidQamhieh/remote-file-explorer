@@ -5,10 +5,10 @@ import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/ui/screen_header.dart';
 import '../photo_backup/photo_backup_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import 'widgets/backup_restore_section.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -26,18 +26,22 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('Transfers & Backup'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.arrowUpDown,
+            title: 'Transfers & Backup',
+            subtitle: 'Photo backup, watched folders & history',
+            tint: Colors.green,
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.photoBackupSection,
             children: [

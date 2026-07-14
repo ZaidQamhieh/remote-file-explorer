@@ -74,11 +74,11 @@ class SettingsTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: tint.withValues(alpha: 0.16),
-              borderRadius: Radii.smR,
+              shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: Icon(icon, size: 18, color: tint),
@@ -136,34 +136,41 @@ class SettingsTile extends StatelessWidget {
           color: scheme.onSurfaceVariant,
         );
       case _Kind.value:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (leadingDot != null) ...[
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: leadingDot,
-                  shape: BoxShape.circle,
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: scheme.onSurface.withValues(alpha: 0.06),
+            borderRadius: Radii.stadiumR,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (leadingDot != null) ...[
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: leadingDot,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: Spacing.sm),
+              ],
+              Text(
+                valueLabel!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(width: Spacing.sm),
-            ],
-            Text(
-              valueLabel!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
+              const SizedBox(width: Spacing.xs),
+              Icon(
+                LucideIcons.chevronRight,
+                size: 14,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
               ),
-            ),
-            const SizedBox(width: Spacing.xs),
-            Icon(
-              LucideIcons.chevronRight,
-              size: 20,
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
-            ),
-          ],
+            ],
+          ),
         );
     }
   }

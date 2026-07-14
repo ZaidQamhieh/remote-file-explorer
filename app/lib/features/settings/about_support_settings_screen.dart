@@ -12,12 +12,14 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
-import '../../core/ui/screen_header.dart';
 import 'about_screen.dart';
 import 'update_tile.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+const _slate = Color(0xFFA1A1AA);
 
 /// Updates, diagnostics export, and About/Changelog — the "rarely touched,
 /// look-up-when-needed" settings category (Settings Overhaul, group 5 of 5).
@@ -27,18 +29,22 @@ class AboutSupportSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('About & Support'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.info,
+            title: 'About & Support',
+            subtitle: 'Updates, diagnostics & changelog',
+            tint: _slate,
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.updatesSection,
             icon: LucideIcons.downloadCloud,

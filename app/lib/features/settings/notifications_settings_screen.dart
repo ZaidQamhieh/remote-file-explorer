@@ -5,8 +5,8 @@ import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 
@@ -23,18 +23,22 @@ class NotificationsSettingsScreen extends ConsumerWidget {
     final app = settings.app;
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('Notifications & Alerts'),
-      ),
+      appBar: AppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
-          Spacing.md,
+          Spacing.sm,
           Spacing.md,
           Spacing.xl,
         ),
         children: [
+          const SettingsHero(
+            icon: LucideIcons.bell,
+            title: 'Notifications',
+            subtitle: 'Transfers, low disk & weekly digest',
+            tint: Colors.amber,
+          ),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'ALERTS',
             children: [

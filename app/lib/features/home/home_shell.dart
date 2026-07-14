@@ -79,6 +79,7 @@ class HomeShell extends ConsumerWidget {
                   onDestinationSelected:
                       (i) =>
                           ref.read(selectedTabIndexProvider.notifier).state = i,
+                  onAddPressed: () => HostListScreen.addComputer(context, ref),
                   destinations: const [
                     AppBottomNavDestination(
                       icon: LucideIcons.database,

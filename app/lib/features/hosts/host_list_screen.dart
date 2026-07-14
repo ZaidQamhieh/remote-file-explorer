@@ -73,40 +73,6 @@ class HostListScreen extends ConsumerWidget {
           const SizedBox(width: Spacing.xs),
         ],
       ),
-      floatingActionButton:
-          hostCount > 0
-              ? Tooltip(
-                message: context.l10n.addComputerButton,
-                child: InkResponse(
-                  onTap: () => _addComputer(context, ref),
-                  radius: 40,
-                  child: Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Colors.blue.shade400, Colors.blue.shade800],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.shade800.withValues(alpha: 0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              )
-              : null,
       body: Column(
         children: [
           const UpdateBanner(),
@@ -122,7 +88,7 @@ class HostListScreen extends ConsumerWidget {
                 if (hosts.isEmpty) {
                   return _EmptyState(
                     scheme: scheme,
-                    onScan: () => _addComputer(context, ref),
+                    onScan: () => addComputer(context, ref),
                   );
                 }
                 return RefreshIndicator(
@@ -180,7 +146,10 @@ class HostListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _addComputer(
+  /// Pushes the pairing flow and reloads the host store on return. Public
+  /// (and static) so the persistent bottom nav's center Add button — shared
+  /// across all 4 tabs, not just this screen — can trigger the same flow.
+  static Future<void> addComputer(
     BuildContext context,
     WidgetRef ref, {
     String? prefillAddress,

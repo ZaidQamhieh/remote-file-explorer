@@ -15,50 +15,182 @@ class AppBottomNavDestination {
   final String label;
 }
 
-/// Bottom tab bar matching the Figma design's `BottomNav`: icon + small label,
-/// with a short rounded pill above the active tab's icon instead of Material's
-/// pill-behind-the-icon indicator. Replaces the stock [NavigationBar] so the
-/// 4-tab shell matches the intended look.
+const double _kBarHeight = 68;
+const double _kNotchDepth = 14;
+const double _kHalfNotchWidth = 40;
+const double _kFabDiameter = 48;
+
+/// Bottom tab bar with a curved notch cut into the top edge and a floating
+/// "Add computer" button docked in it — a constant action shared across all
+/// 4 tabs, not a 5th destination. [destinations] must have exactly 4 entries
+/// (2 either side of the notch).
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
     required this.destinations,
+    required this.onAddPressed,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final List<AppBottomNavDestination> destinations;
+  final VoidCallback onAddPressed;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border(top: BorderSide(color: scheme.outlineVariant)),
-      ),
+      decoration: BoxDecoration(color: scheme.surface),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 64,
-          child: Row(
+          height: _kBarHeight,
+          child: Stack(
             children: [
-              for (var i = 0; i < destinations.length; i++)
-                Expanded(
-                  child: _NavButton(
-                    destination: destinations[i],
-                    selected: i == selectedIndex,
-                    onTap: () => onDestinationSelected(i),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _NotchBarPainter(
+                    color: scheme.surfaceContainerLow,
+                    borderColor: scheme.outlineVariant,
                   ),
                 ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < 2; i++)
+                          Expanded(
+                            child: _NavButton(
+                              destination: destinations[i],
+                              selected: i == selectedIndex,
+                              onTap: () => onDestinationSelected(i),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: _kHalfNotchWidth * 2),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        for (var i = 2; i < 4; i++)
+                          Expanded(
+                            child: _NavButton(
+                              destination: destinations[i],
+                              selected: i == selectedIndex,
+                              onTap: () => onDestinationSelected(i),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 2,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Tooltip(
+                    message: 'Add computer',
+                    child: InkResponse(
+                      onTap: onAddPressed,
+                      radius: 32,
+                      child: Container(
+                        width: _kFabDiameter,
+                        height: _kFabDiameter,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.blue.shade400,
+                              Colors.blue.shade800,
+                            ],
+                          ),
+                          border: Border.all(color: scheme.surface, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.shade800.withValues(
+                                alpha: 0.4,
+                              ),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Fills the bar with a curved notch cut into the top edge, centered —
+/// same silhouette as the `curved_navigation_bar` package, sized to
+/// [_kHalfNotchWidth]/[_kNotchDepth] so [AppBottomNav]'s Add button nests
+/// into it.
+class _NotchBarPainter extends CustomPainter {
+  const _NotchBarPainter({required this.color, required this.borderColor});
+
+  final Color color;
+  final Color borderColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    const w = _kHalfNotchWidth;
+    const d = _kNotchDepth;
+    const c = 20.0; // bezier control-point offset, tunes curve smoothness
+    final fillPath =
+        Path()
+          ..moveTo(0, d)
+          ..lineTo(cx - w, d)
+          ..cubicTo(cx - w + c, d, cx - w + c, 0, cx, 0)
+          ..cubicTo(cx + w - c, 0, cx + w - c, d, cx + w, d)
+          ..lineTo(size.width, d)
+          ..lineTo(size.width, size.height)
+          ..lineTo(0, size.height)
+          ..close();
+    canvas.drawPath(fillPath, Paint()..color = color);
+
+    // Trace just the top edge (curve + flat shoulders) for definition —
+    // the surface fill barely differs from the app background otherwise.
+    final borderPath =
+        Path()
+          ..moveTo(0, d)
+          ..lineTo(cx - w, d)
+          ..cubicTo(cx - w + c, d, cx - w + c, 0, cx, 0)
+          ..cubicTo(cx + w - c, 0, cx + w - c, d, cx + w, d)
+          ..lineTo(size.width, d);
+    canvas.drawPath(
+      borderPath,
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_NotchBarPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.borderColor != borderColor;
 }
 
 class _NavButton extends StatelessWidget {

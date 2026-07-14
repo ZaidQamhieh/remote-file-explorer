@@ -10,6 +10,11 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _changelog = <_ChangelogEntry>[
+    _ChangelogEntry('v1.41.10', [
+      'Per-PC device settings (read-only mode, bandwidth, paired devices) now '
+          'carries the same hero banner + circular icon badges as the rest of '
+          'Settings — it was missed in the v1.41.8 redesign pass',
+    ]),
     _ChangelogEntry('v1.41.9', [
       'Launcher icon background changed from indigo to white',
     ]),

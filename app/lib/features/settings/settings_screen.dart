@@ -17,6 +17,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../sync/sync_screen.dart';
+import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -204,7 +205,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.settingsTitle)),
+      appBar: AppBar(),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
@@ -227,6 +228,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Spacing.xl,
       ),
       children: [
+        SettingsHero(
+          icon: LucideIcons.server,
+          title:
+              s.agentName.isNotEmpty
+                  ? s.agentName
+                  : (widget.host.label.isNotEmpty
+                      ? widget.host.label
+                      : widget.host.address),
+          subtitle: 'Access, bandwidth, paired devices',
+          tint: Colors.blueGrey,
+        ),
+        const SizedBox(height: Spacing.md),
         _SecurityWarningCard(scheme: scheme),
         const SizedBox(height: Spacing.lg),
         SettingsSection(
@@ -235,6 +248,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: _rowBadge(LucideIcons.server, scheme.primary),
               title: Text(context.l10n.agentNameLabel),
               subtitle: Text(s.agentName),
               trailing: const Icon(LucideIcons.pencil),
@@ -249,6 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
+              secondary: _rowBadge(LucideIcons.lock, scheme.primary),
               title: Text(context.l10n.readOnlyMode),
               subtitle: Text(
                 s.readOnly
@@ -260,6 +275,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
+              secondary: _rowBadge(LucideIcons.link, scheme.primary),
               title: Text(context.l10n.enableShareLinks),
               subtitle: Text(
                 s.allowSharing
@@ -314,7 +330,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 (r) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  leading: const Icon(LucideIcons.folder),
+                  leading: _rowBadge(LucideIcons.folder, scheme.primary),
                   title: Text(r),
                 ),
               ),
@@ -344,7 +360,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(LucideIcons.refreshCw),
+              leading: _rowBadge(LucideIcons.refreshCw, scheme.primary),
               title: const Text('Manage Sync Rules'),
               subtitle: const Text('Download remote folders to local storage'),
               trailing: const Icon(LucideIcons.chevronRight),
@@ -365,6 +381,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: _rowBadge(LucideIcons.monitorSmartphone, scheme.primary),
               title: Text(context.l10n.pcNameLabel),
               subtitle: Text(
                 s.agentName.isNotEmpty
@@ -383,6 +400,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ],
     );
   }
+}
+
+/// Circular tonal icon badge matching [SettingsTile]'s row icon treatment
+/// (Settings redesign v2), for the rows on this screen that need custom
+/// trailing widgets (dropdown, disconnect button, OS chip) and so can't use
+/// [SettingsTile] itself.
+Widget _rowBadge(IconData icon, Color tint) {
+  return Container(
+    width: 38,
+    height: 38,
+    decoration: BoxDecoration(
+      color: tint.withValues(alpha: 0.16),
+      shape: BoxShape.circle,
+    ),
+    alignment: Alignment.center,
+    child: Icon(icon, size: 18, color: tint),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +450,7 @@ class _BandwidthSection extends StatelessWidget {
       icon: LucideIcons.gauge,
       children: [
         _BandwidthDropdown(
+          icon: LucideIcons.arrowUp,
           label: context.l10n.bandwidthUploadLimit,
           value: bandwidth.maxUploadBytesPerSec,
           onChanged:
@@ -423,6 +458,7 @@ class _BandwidthSection extends StatelessWidget {
           labelBuilder: (v) => _label(context, v),
         ),
         _BandwidthDropdown(
+          icon: LucideIcons.arrowDown,
           label: context.l10n.bandwidthDownloadLimit,
           value: bandwidth.maxDownloadBytesPerSec,
           onChanged:
@@ -436,12 +472,14 @@ class _BandwidthSection extends StatelessWidget {
 
 class _BandwidthDropdown extends StatelessWidget {
   const _BandwidthDropdown({
+    required this.icon,
     required this.label,
     required this.value,
     required this.onChanged,
     required this.labelBuilder,
   });
 
+  final IconData icon;
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
@@ -457,6 +495,7 @@ class _BandwidthDropdown extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      leading: _rowBadge(icon, Theme.of(context).colorScheme.primary),
       title: Text(label),
       trailing: DropdownButton<int>(
         value: value,
@@ -550,6 +589,7 @@ class VisibilityEditor extends StatelessWidget {
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          secondary: _rowBadge(LucideIcons.eyeOff, scheme.primary),
           title: Text(context.l10n.hideDotfiles),
           subtitle: Text(context.l10n.hideDotfilesSubtitle),
           value: prefs.hideDotfiles,
@@ -634,6 +674,7 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
+          secondary: _rowBadge(LucideIcons.copy, scheme.primary),
           title: Text(context.l10n.overrideForDevice),
           subtitle: Text(
             isOverridden
@@ -809,9 +850,9 @@ class _DeviceRow extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(
+      leading: _rowBadge(
         d.revoked ? LucideIcons.unplug : LucideIcons.smartphone,
-        color: d.revoked ? scheme.error : scheme.onSurfaceVariant,
+        d.revoked ? scheme.error : scheme.primary,
       ),
       title: Text(d.label),
       subtitle: Column(
@@ -878,9 +919,9 @@ class _DriveRow extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(
+      leading: _rowBadge(
         drive.isOS ? LucideIcons.memoryStick : LucideIcons.hardDrive,
-        color: drive.isOS ? scheme.primary : scheme.onSurfaceVariant,
+        scheme.primary,
       ),
       title: Row(
         children: [

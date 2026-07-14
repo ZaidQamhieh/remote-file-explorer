@@ -83,9 +83,10 @@ class HostCard extends ConsumerStatefulWidget {
   final Host host;
   final HostStore store;
 
-  /// Whether this is the first (most-recently-used) host in the list.
-  /// Currently unused by the card itself — kept so callers (the host list)
-  /// don't need to change — but reserved for future first-card-only behavior.
+  /// Whether this is the first (most-recently-used) host in the list —
+  /// renders as the big "focused" hero (icon badge, name, status, and an
+  /// Open/Search/Transfers/Settings quick-action row) instead of the compact
+  /// row the rest of the list uses.
   final bool isFirst;
 
   @override
@@ -188,6 +189,10 @@ class _HostCardState extends ConsumerState<HostCard> {
   /// behaviour.
   Future<void> _openExplorer(BuildContext context) async {
     final health = await _pingFuture;
+    if (!widget.isFirst) {
+      await widget.store.touchHost(widget.host.id);
+      ref.invalidate(hostStoreProvider);
+    }
     if (!context.mounted) return;
     ref.read(activeHostProvider.notifier).state = ActiveHost(
       host: widget.host,
@@ -414,12 +419,15 @@ class _HostCardState extends ConsumerState<HostCard> {
         final checking = snap.connectionState == ConnectionState.waiting;
         final canWake = !online && !checking && widget.host.macAddress != null;
 
-        // Thin list row inside the host list's shared GroupedCard (see
-        // HostListScreen) — matches the Figma mockup's simple row instead of
-        // the old dashboard-style card. Dashboard-only content (uptime,
-        // per-drive gauges, full-width action buttons) has been demoted to
-        // the Storage/Diagnostics screens reachable from the ⋯ menu; see
-        // host_card.dart's redesign notes.
+        if (widget.isFirst) {
+          return _buildHero(context, online: online);
+        }
+
+        // Thin list row for every host after the first — matches the Figma
+        // mockup's simple row instead of the old dashboard-style card.
+        // Dashboard-only content (uptime, per-drive gauges, full-width
+        // action buttons) has been demoted to the Storage/Diagnostics
+        // screens reachable from the ⋯ menu.
         return InkWell(
           onTap: () => _openExplorer(context),
           onLongPress: () => _confirmRemove(context),
@@ -467,6 +475,172 @@ class _HostCardState extends ConsumerState<HostCard> {
       },
     );
   }
+
+  /// The focused-host hero (Servers redesign v2): a flat tinted-border card —
+  /// same recipe as [SettingsHero] — with a big icon badge, name/status, and
+  /// an Open/Search/Transfers/Settings quick-action row so the most-recently-
+  /// used PC's primary actions are one tap away instead of behind the ⋯ menu.
+  Widget _buildHero(BuildContext context, {required bool online}) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    const tint = Colors.blue;
+
+    Widget quickAction({
+      required IconData icon,
+      required String label,
+      required VoidCallback? onTap,
+    }) {
+      final enabled = onTap != null;
+      return Expanded(
+        child: Material(
+          color: scheme.onSurface.withValues(alpha: 0.05),
+          borderRadius: Radii.smR,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: Radii.smR,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 17, color: tint),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: () => _openExplorer(context),
+      onLongPress: () => _confirmRemove(context),
+      borderRadius: Radii.lgR,
+      child: Container(
+        margin: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        padding: const EdgeInsets.all(Spacing.md),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: Radii.lgR,
+          border: Border.all(color: tint.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.22),
+                    borderRadius: Radii.cardR,
+                    boxShadow: [
+                      BoxShadow(
+                        color: tint.withValues(alpha: 0.25),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(LucideIcons.monitor, size: 24, color: tint),
+                ),
+                const SizedBox(width: Spacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.host.label,
+                              style: textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(LucideIcons.moreVertical),
+                            tooltip: context.l10n.moreTooltip,
+                            onPressed:
+                                () => _openActions(context, online: online),
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: _HostRowContent(
+                          host: widget.host,
+                          snapshot: AsyncSnapshot.withData(
+                            ConnectionState.done,
+                            null,
+                          ),
+                          checking: false,
+                          online: online,
+                          isTailscaleActive: _isTailscaleActive,
+                          lastChecked: _lastChecked,
+                          lastSeen: _lastSeen,
+                          drivesFuture: null,
+                          lowDiskThresholdBytes: 0,
+                          showIdentity: false,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.md),
+            Row(
+              children: [
+                quickAction(
+                  icon: LucideIcons.folderOpen,
+                  label: context.l10n.openButton,
+                  onTap: () => _openExplorer(context),
+                ),
+                const SizedBox(width: Spacing.sm),
+                quickAction(
+                  icon: LucideIcons.search,
+                  label: context.l10n.searchButton,
+                  onTap: online ? () => _openSearch(context) : null,
+                ),
+                const SizedBox(width: Spacing.sm),
+                quickAction(
+                  icon: LucideIcons.arrowLeftRight,
+                  label: context.l10n.transfersMenuItem,
+                  onTap: () => _openTransfers(context),
+                ),
+                const SizedBox(width: Spacing.sm),
+                quickAction(
+                  icon: LucideIcons.settings,
+                  label: context.l10n.settingsMenuItem,
+                  onTap: () => _openSettings(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -485,6 +659,7 @@ class _HostRowContent extends StatelessWidget {
     required this.lastSeen,
     required this.drivesFuture,
     required this.lowDiskThresholdBytes,
+    this.showIdentity = true,
   });
 
   final Host host;
@@ -496,6 +671,11 @@ class _HostRowContent extends StatelessWidget {
   final DateTime? lastSeen;
   final Future<List<Drive>>? drivesFuture;
   final int lowDiskThresholdBytes;
+
+  /// Whether to render the icon chip + host name. The hero card already
+  /// renders its own big icon badge and name above this widget, so it passes
+  /// `false` to get just the status line instead of a duplicate row.
+  final bool showIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -520,6 +700,56 @@ class _HostRowContent extends StatelessWidget {
       ),
       child: const Icon(LucideIcons.monitor, color: Colors.white, size: 20),
     );
+
+    final statusLine = maybeDim(
+      checking
+          ? Text(
+            context.l10n.checkingStatus,
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          )
+          : Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: online ? Brand.online : Brand.offline,
+                ),
+              ),
+              const SizedBox(width: Spacing.xs),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: _statusWord(context),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color:
+                              online
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      TextSpan(text: ' · ${_subtitle(context)}'),
+                    ],
+                  ),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+    );
+
+    if (!showIdentity) {
+      return statusLine;
+    }
 
     return Expanded(
       child: Row(
@@ -562,51 +792,7 @@ class _HostRowContent extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 2),
-                maybeDim(
-                  checking
-                      ? Text(
-                        context.l10n.checkingStatus,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      )
-                      : Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: online ? Brand.online : Brand.offline,
-                            ),
-                          ),
-                          const SizedBox(width: Spacing.xs),
-                          Expanded(
-                            child: Text.rich(
-                              TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: _statusWord(context),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color:
-                                          online
-                                              ? scheme.onSurface
-                                              : scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  TextSpan(text: ' · ${_subtitle(context)}'),
-                                ],
-                              ),
-                              style: textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                ),
+                statusLine,
               ],
             ),
           ),

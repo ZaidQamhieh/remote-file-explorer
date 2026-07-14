@@ -4,6 +4,7 @@
   "appTitle": "Remote File Explorer",
 
   "browseButton": "Browse",
+  "openButton": "Open",
   "searchButton": "Search",
   "moreTooltip": "More",
   "refreshTooltip": "Refresh",

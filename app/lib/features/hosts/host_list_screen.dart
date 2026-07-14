@@ -73,6 +73,15 @@ class HostListScreen extends ConsumerWidget {
           const SizedBox(width: Spacing.xs),
         ],
       ),
+      floatingActionButton:
+          hostCount > 0
+              ? FloatingActionButton.extended(
+                onPressed: () => _addComputer(context, ref),
+                icon: const Icon(Icons.add_rounded),
+                label: Text(context.l10n.addComputerButton),
+              )
+              : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: Column(
         children: [
           const UpdateBanner(),
@@ -94,38 +103,47 @@ class HostListScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   onRefresh: () => ref.refresh(hostStoreProvider.future),
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.sm,
-                      vertical: Spacing.md,
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.sm,
+                      Spacing.md,
+                      Spacing.sm,
+                      Spacing.xl * 2,
                     ),
                     children: [
-                      const SectionLabel('Your computers'),
-                      GroupedCard(
-                        padded: false,
-                        children: [
-                          for (int i = 0; i < hosts.length; i++) ...[
-                            if (i > 0)
-                              Divider(
-                                height: 1,
-                                indent: Spacing.md,
-                                endIndent: Spacing.md,
-                                color: scheme.outlineVariant,
+                      AppearListItem(
+                        index: 0,
+                        child: HostCard(
+                          host: hosts[0],
+                          store: store,
+                          isFirst: true,
+                        ),
+                      ),
+                      if (hosts.length > 1) ...[
+                        const SizedBox(height: Spacing.md),
+                        SectionLabel('Also paired · ${hosts.length - 1}'),
+                        GroupedCard(
+                          padded: false,
+                          children: [
+                            for (int i = 1; i < hosts.length; i++) ...[
+                              if (i > 1)
+                                Divider(
+                                  height: 1,
+                                  indent: Spacing.md,
+                                  endIndent: Spacing.md,
+                                  color: scheme.outlineVariant,
+                                ),
+                              AppearListItem(
+                                index: i,
+                                child: HostCard(
+                                  host: hosts[i],
+                                  store: store,
+                                  isFirst: false,
+                                ),
                               ),
-                            AppearListItem(
-                              index: i,
-                              child: HostCard(
-                                host: hosts[i],
-                                store: store,
-                                isFirst: i == 0,
-                              ),
-                            ),
+                            ],
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: Spacing.md),
-                      _AddComputerGhostButton(
-                        onPressed: () => _addComputer(context, ref),
-                      ),
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -149,49 +167,6 @@ class HostListScreen extends ConsumerWidget {
     );
     // Reload the host store after pairing
     ref.invalidate(hostStoreProvider);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Add-computer ghost button — inline dashed-style affordance below the list
-// ---------------------------------------------------------------------------
-
-class _AddComputerGhostButton extends StatelessWidget {
-  const _AddComputerGhostButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: Radii.cardR,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: Spacing.md),
-          decoration: BoxDecoration(
-            border: Border.all(color: scheme.outlineVariant),
-            borderRadius: Radii.cardR,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_rounded, size: 18, color: scheme.onSurfaceVariant),
-              const SizedBox(width: Spacing.xs),
-              Text(
-                context.l10n.addComputerButton,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

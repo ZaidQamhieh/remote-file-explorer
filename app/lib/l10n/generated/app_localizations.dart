@@ -106,6 +106,12 @@ abstract class AppLocalizations {
   /// **'Browse'**
   String get browseButton;
 
+  /// No description provided for @openButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get openButton;
+
   /// No description provided for @searchButton.
   ///
   /// In en, this message translates to:

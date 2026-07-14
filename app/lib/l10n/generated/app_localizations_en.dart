@@ -15,6 +15,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browseButton => 'Browse';
 
   @override
+  String get openButton => 'Open';
+
+  @override
   String get searchButton => 'Search';
 
   @override

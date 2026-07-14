@@ -43,6 +43,17 @@ class HostStore {
     await _saveHosts(hosts);
   }
 
+  /// Moves [hostId] to the front of the list — used to promote whichever host
+  /// was most recently opened to the "focused" hero slot at the top of the
+  /// Servers screen.
+  Future<void> touchHost(String hostId) async {
+    final hosts = listHosts();
+    final index = hosts.indexWhere((h) => h.id == hostId);
+    if (index <= 0) return;
+    hosts.insert(0, hosts.removeAt(index));
+    await _saveHosts(hosts);
+  }
+
   Future<void> removeHost(String hostId) async {
     final hosts = listHosts()..removeWhere((h) => h.id == hostId);
     await _saveHosts(hosts);

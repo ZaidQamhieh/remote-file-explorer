@@ -26,10 +26,10 @@ class SettingsHero extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(
-        Spacing.md,
         Spacing.md3,
-        Spacing.md,
-        Spacing.md3 - 2,
+        Spacing.lg,
+        Spacing.md3,
+        Spacing.lg - 2,
       ),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
@@ -40,8 +40,8 @@ class SettingsHero extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               color: tint.withValues(alpha: 0.22),
               borderRadius: Radii.cardR,
@@ -54,24 +54,24 @@ class SettingsHero extends StatelessWidget {
               ],
             ),
             alignment: Alignment.center,
-            child: Icon(icon, size: 24, color: tint),
+            child: Icon(icon, size: 28, color: tint),
           ),
-          const SizedBox(width: Spacing.md),
+          const SizedBox(width: Spacing.md3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                     height: 1.3,
                   ),

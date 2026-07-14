@@ -38,12 +38,12 @@ class SettingsSection extends StatelessWidget {
             Spacing.xs,
             0,
             Spacing.xs,
-            Spacing.sm,
+            Spacing.md2,
           ),
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 18, color: scheme.primary),
+                Icon(icon, size: 20, color: scheme.primary),
                 const SizedBox(width: Spacing.sm),
                 Text(
                   title,
@@ -74,11 +74,11 @@ class SettingsSection extends StatelessWidget {
                   ? Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: Spacing.md,
-                      vertical: Spacing.sm,
+                      vertical: Spacing.xs,
                     ),
-                    child: Column(children: _divided(children, scheme, 50)),
+                    child: Column(children: _divided(children, scheme, 56)),
                   )
-                  : Column(children: _divided(children, scheme, 56)),
+                  : Column(children: _divided(children, scheme, 62)),
         ),
       ],
     );

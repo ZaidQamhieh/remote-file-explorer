@@ -70,20 +70,20 @@ class SettingsTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final tint = badgeColor ?? scheme.onSurfaceVariant;
     final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.md2 - 2),
+      padding: const EdgeInsets.symmetric(vertical: Spacing.md2 + 2),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: tint.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Icon(icon, size: 18, color: tint),
+            child: Icon(icon, size: 20, color: tint),
           ),
-          const SizedBox(width: Spacing.md),
+          const SizedBox(width: Spacing.md3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

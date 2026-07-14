@@ -72,7 +72,6 @@ class _CacheSection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.cacheSection,
-      icon: LucideIcons.refreshCw,
       children: [
         statsAsync.when(
           loading:
@@ -119,6 +118,10 @@ class _CacheSection extends ConsumerWidget {
           child: FilledButton.tonalIcon(
             icon: const Icon(LucideIcons.trash2),
             label: Text(context.l10n.cacheClearAll),
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.errorContainer,
+              foregroundColor: scheme.onErrorContainer,
+            ),
             onPressed: () async {
               await ref.read(cacheManagerProvider).clearAll();
               ref.invalidate(cacheStatsProvider);
@@ -133,8 +136,9 @@ class _CacheSection extends ConsumerWidget {
   }
 }
 
-/// Thin rounded usage bar under the cache totals — a blue→purple gradient
-/// fill at [fraction] of the track width.
+/// Thin rounded usage bar under the cache totals — a flat fill in the
+/// screen's own blue tint (matches [SettingsHero]'s flat-not-gradient
+/// language) at [fraction] of the track width.
 class _UsageBar extends StatelessWidget {
   const _UsageBar({required this.fraction});
 
@@ -150,11 +154,7 @@ class _UsageBar extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
           widthFactor: fraction.clamp(0.0, 1.0),
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
-            ),
-          ),
+          child: Container(color: Colors.blue),
         ),
       ),
     );

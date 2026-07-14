@@ -75,13 +75,18 @@ class HostListScreen extends ConsumerWidget {
       ),
       floatingActionButton:
           hostCount > 0
-              ? FloatingActionButton(
-                onPressed: () => _addComputer(context, ref),
-                tooltip: context.l10n.addComputerButton,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(Radii.card),
+              ? Tooltip(
+                message: context.l10n.addComputerButton,
+                child: FilledButton(
+                  onPressed: () => _addComputer(context, ref),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Radii.card),
+                    ),
+                    padding: const EdgeInsets.all(Spacing.md),
+                  ),
+                  child: const Icon(Icons.add_rounded),
                 ),
-                child: const Icon(Icons.add_rounded),
               )
               : null,
       body: Column(

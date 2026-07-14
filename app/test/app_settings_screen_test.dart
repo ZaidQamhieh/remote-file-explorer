@@ -86,6 +86,8 @@ void main() {
     tester,
   ) async {
     await pump(tester);
+    await tester.ensureVisible(find.text('About & Support'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('About & Support'));
     await tester.pumpAndSettle();
     expect(find.byType(AboutSupportSettingsScreen), findsOneWidget);

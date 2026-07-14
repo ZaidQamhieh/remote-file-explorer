@@ -9,6 +9,7 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
+import '../../core/ui/sheet_chrome.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
@@ -75,18 +76,11 @@ class HostListScreen extends ConsumerWidget {
       ),
       floatingActionButton:
           hostCount > 0
-              ? Tooltip(
-                message: context.l10n.addComputerButton,
-                child: FilledButton(
-                  onPressed: () => _addComputer(context, ref),
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(Radii.card),
-                    ),
-                    padding: const EdgeInsets.all(Spacing.md),
-                  ),
-                  child: const Icon(Icons.add_rounded),
-                ),
+              ? GradientActionCircle(
+                icon: Icons.add_rounded,
+                label: context.l10n.addComputerButton,
+                gradient: [Colors.blue.shade400, Colors.blue.shade800],
+                onTap: () => _addComputer(context, ref),
               )
               : null,
       body: Column(

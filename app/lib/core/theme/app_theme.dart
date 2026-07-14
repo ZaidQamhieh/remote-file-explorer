@@ -191,6 +191,21 @@ class AppTheme {
           borderRadius: BorderRadius.circular(Radii.card - 4),
         ),
       ),
+      switchTheme: SwitchThemeData(
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected)
+                  ? scheme.primary
+                  : scheme.surfaceContainerHighest,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected)
+                  ? scheme.onPrimary
+                  : scheme.onSurfaceVariant,
+        ),
+      ),
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant,
         space: Spacing.md,

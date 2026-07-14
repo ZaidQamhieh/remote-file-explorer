@@ -96,11 +96,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: Spacing.md),
-          SettingsSection(
-            title: 'Backup & restore',
-            padded: false,
-            children: const [BackupRestoreSection()],
-          ),
+          const BackupRestoreSection(),
         ],
       ),
     );

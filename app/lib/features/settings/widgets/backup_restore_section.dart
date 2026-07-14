@@ -14,6 +14,7 @@ import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import 'settings_section.dart';
+import 'settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// **Backup & restore** (N1) — export the app's full local state (paired
@@ -28,21 +29,19 @@ class BackupRestoreSection extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     return SettingsSection(
       title: context.l10n.backupRestoreSection,
-      icon: LucideIcons.shield,
       children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(LucideIcons.fileUp),
-          title: Text(context.l10n.exportConfig),
-          subtitle: Text(context.l10n.exportConfigSubtitle),
+        SettingsTile.nav(
+          icon: LucideIcons.fileUp,
+          badgeColor: Colors.green,
+          title: context.l10n.exportConfig,
+          subtitle: context.l10n.exportConfigSubtitle,
           onTap: () => _exportConfig(context, ref),
         ),
-        const Divider(height: Spacing.lg),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(LucideIcons.download),
-          title: Text(context.l10n.importConfig),
-          subtitle: Text(context.l10n.importConfigSubtitle),
+        SettingsTile.nav(
+          icon: LucideIcons.download,
+          badgeColor: Colors.green,
+          title: context.l10n.importConfig,
+          subtitle: context.l10n.importConfigSubtitle,
           onTap: () => _importConfig(context, ref),
         ),
         const SizedBox(height: Spacing.sm),

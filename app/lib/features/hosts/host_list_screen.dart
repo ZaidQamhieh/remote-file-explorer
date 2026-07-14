@@ -9,7 +9,6 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
-import '../../core/ui/sheet_chrome.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
@@ -76,11 +75,36 @@ class HostListScreen extends ConsumerWidget {
       ),
       floatingActionButton:
           hostCount > 0
-              ? GradientActionCircle(
-                icon: Icons.add_rounded,
-                label: context.l10n.addComputerButton,
-                gradient: [Colors.blue.shade400, Colors.blue.shade800],
-                onTap: () => _addComputer(context, ref),
+              ? Tooltip(
+                message: context.l10n.addComputerButton,
+                child: InkResponse(
+                  onTap: () => _addComputer(context, ref),
+                  radius: 40,
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Colors.blue.shade400, Colors.blue.shade800],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.shade800.withValues(alpha: 0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
               )
               : null,
       body: Column(

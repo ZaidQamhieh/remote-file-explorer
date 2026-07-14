@@ -81,7 +81,7 @@ class HomeShell extends ConsumerWidget {
                           ref.read(selectedTabIndexProvider.notifier).state = i,
                   destinations: const [
                     AppBottomNavDestination(
-                      icon: LucideIcons.server,
+                      icon: LucideIcons.database,
                       label: 'Servers',
                     ),
                     AppBottomNavDestination(
@@ -90,7 +90,7 @@ class HomeShell extends ConsumerWidget {
                       label: 'Files',
                     ),
                     AppBottomNavDestination(
-                      icon: LucideIcons.arrowDownUp,
+                      icon: LucideIcons.activity,
                       label: 'Transfers',
                     ),
                     AppBottomNavDestination(

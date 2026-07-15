@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Transfer notifications, low-disk alerts, and the weekly storage digest
 /// (Settings Overhaul, group 3 of 5).
@@ -141,7 +141,11 @@ class _ToggleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return ShadCard(
+      padding: EdgeInsets.zero,
+      radius: Radii.cardR,
+      backgroundColor: scheme.surfaceContainerHigh,
+      border: ShadBorder.all(color: scheme.outline, width: 1.5),
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(Spacing.md),
@@ -179,7 +183,7 @@ class _ToggleCard extends StatelessWidget {
                 ],
               ),
             ),
-            Switch(value: value, onChanged: onChanged),
+            ShadSwitch(value: value, onChanged: onChanged),
           ],
         ),
       ),

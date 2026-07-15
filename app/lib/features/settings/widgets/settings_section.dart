@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -67,18 +68,36 @@ class SettingsSection extends StatelessWidget {
             ],
           ),
         ),
-        Card(
+        ShadCard(
+          padding: EdgeInsets.zero,
+          radius: Radii.cardR,
+          // surfaceContainerLow + a black shadow are both nearly identical to
+          // the near-black page background on this theme — invisible instead
+          // of "elevated". surfaceContainerHigh + a fully-opaque border is
+          // the same recipe the host-card hero already uses successfully.
+          backgroundColor: scheme.surfaceContainerHigh,
+          // scheme.outlineVariant (zinc-800, 0x27272A) at 1px reads as
+          // basically invisible next to a near-black background — use the
+          // lighter scheme.outline (zinc-600) at 1.5px so the card edge is
+          // actually perceptible, not just technically non-zero.
+          border: ShadBorder.all(color: scheme.outline, width: 1.5),
           clipBehavior: Clip.antiAlias,
-          child:
-              padded
-                  ? Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md,
-                      vertical: Spacing.xs,
-                    ),
-                    child: Column(children: _divided(children, scheme, 56)),
-                  )
-                  : Column(children: _divided(children, scheme, 62)),
+          // ShadCard paints its background on a plain DecoratedBox, not a
+          // Material ancestor — without this, rows nested inside (ListTile,
+          // InkWell) lose ink splashes and Flutter throws in debug/test.
+          child: Material(
+            type: MaterialType.transparency,
+            child:
+                padded
+                    ? Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.md,
+                        vertical: Spacing.xs,
+                      ),
+                      child: Column(children: _divided(children, scheme, 56)),
+                    )
+                    : Column(children: _divided(children, scheme, 62)),
+          ),
         ),
       ],
     );

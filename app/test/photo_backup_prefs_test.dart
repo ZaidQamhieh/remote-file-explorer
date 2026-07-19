@@ -48,4 +48,30 @@ void main() {
     final reopened = await PhotoBackupStore.open();
     expect(reopened.doneIds(), isEmpty);
   });
+
+  group('taskToAsset (PR-30)', () {
+    test('round-trips through a fresh store instance', () async {
+      final store = await PhotoBackupStore.open();
+      await store.saveTaskToAsset({'task-1': 'asset-1', 'task-2': 'asset-2'});
+
+      final reopened = await PhotoBackupStore.open();
+      expect(reopened.loadTaskToAsset(), {
+        'task-1': 'asset-1',
+        'task-2': 'asset-2',
+      });
+    });
+
+    test('is empty when nothing was ever saved', () async {
+      final store = await PhotoBackupStore.open();
+      expect(store.loadTaskToAsset(), isEmpty);
+    });
+
+    test('corrupt stored JSON is treated as empty, not a crash', () async {
+      SharedPreferences.setMockInitialValues({
+        'rfe_photo_backup_task_to_asset': 'not valid json{{{',
+      });
+      final store = await PhotoBackupStore.open();
+      expect(store.loadTaskToAsset(), isEmpty);
+    });
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// User configuration for photo backup, persisted in SharedPreferences under
@@ -67,6 +69,7 @@ class PhotoBackupStore {
   static const _kChargingOnly = 'rfe_photo_backup_charging_only';
   static const _kAlbums = 'rfe_photo_backup_albums';
   static const _kDone = 'rfe_photo_backup_done';
+  static const _kTaskToAsset = 'rfe_photo_backup_task_to_asset';
 
   static Future<PhotoBackupStore> open() async =>
       PhotoBackupStore(await SharedPreferences.getInstance());
@@ -102,4 +105,24 @@ class PhotoBackupStore {
   /// Forgets the backed-up record so the next run re-backs-up everything
   /// (e.g. after switching destination host/folder).
   Future<void> resetDone() async => _prefs.remove(_kDone);
+
+  /// Persisted transfer-task-id → photo-asset-id mapping (PR-30) — without
+  /// this surviving a process restart, a completed-but-not-yet-marked-done
+  /// upload from before the restart could never be recorded, so its asset
+  /// looked "pending" forever and got silently re-uploaded on every
+  /// subsequent run.
+  Map<String, String> loadTaskToAsset() {
+    final raw = _prefs.getString(_kTaskToAsset);
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map((k, v) => MapEntry(k, v as String));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveTaskToAsset(Map<String, String> map) async {
+    await _prefs.setString(_kTaskToAsset, jsonEncode(map));
+  }
 }

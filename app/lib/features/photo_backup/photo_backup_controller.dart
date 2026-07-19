@@ -49,35 +49,47 @@ class PhotoBackupController {
 
   final Ref _ref;
 
-  /// transfer-task id → photo asset id, for the tasks this controller created.
-  final Map<String, String> _taskToAsset = {};
+  /// transfer-task id → photo asset id, for the tasks this controller
+  /// created — persisted (PR-30) via [PhotoBackupStore.saveTaskToAsset] so a
+  /// process restart mid-upload doesn't lose track of which in-flight task
+  /// belongs to which asset. `null` until first hydrated from the store.
+  Map<String, String>? _taskToAssetCache;
 
-  /// Serializes the read-modify-write of the backed-up record so concurrent
-  /// completions can't lose each other's updates.
+  /// Serializes every read-modify-write of the persisted records (done set
+  /// and task→asset map) so concurrent completions/enqueues can't lose each
+  /// other's updates.
   Future<void> _persistChain = Future<void>.value();
+
+  Future<Map<String, String>> _taskToAsset(PhotoBackupStore store) async {
+    return _taskToAssetCache ??= store.loadTaskToAsset();
+  }
 
   /// Called (via the provider's ref.listen) whenever the transfer queue
   /// changes; records completed uploads into the dedupe set.
   Future<void> onTasks(List<TransferTask> tasks) async {
-    if (_taskToAsset.isEmpty) return;
-    final completed = <String>[];
-    for (final t in tasks) {
-      final assetId = _taskToAsset[t.id];
-      if (assetId == null) continue;
-      if (t.status == TransferStatus.completed) {
-        completed.add(assetId);
-        _taskToAsset.remove(t.id);
-      } else if (t.status == TransferStatus.failed) {
-        _taskToAsset.remove(t.id); // leave unmarked → retried next run
+    _persistChain = _persistChain.then((_) async {
+      final store = await PhotoBackupStore.open();
+      final map = await _taskToAsset(store);
+      if (map.isEmpty) return;
+
+      final completed = <String>[];
+      var changed = false;
+      for (final t in tasks) {
+        final assetId = map[t.id];
+        if (assetId == null) continue;
+        if (t.status == TransferStatus.completed) {
+          completed.add(assetId);
+          map.remove(t.id);
+          changed = true;
+        } else if (t.status == TransferStatus.failed) {
+          map.remove(t.id); // leave unmarked → retried next run
+          changed = true;
+        }
       }
-    }
-    if (completed.isNotEmpty) {
-      _persistChain = _persistChain.then((_) async {
-        final store = await PhotoBackupStore.open();
-        await store.markDone(completed);
-      });
-      await _persistChain;
-    }
+      if (completed.isNotEmpty) await store.markDone(completed);
+      if (changed) await store.saveTaskToAsset(map);
+    });
+    await _persistChain;
   }
 
   Future<PhotoBackupRunResult> backupNow() async {
@@ -182,6 +194,7 @@ class PhotoBackupController {
 
     final queue = _ref.read(transferQueueProvider.notifier);
     var enqueued = 0;
+    final newlyMapped = <String, String>{};
     for (final a in pending) {
       try {
         final file = await a.originFile ?? await a.file;
@@ -209,7 +222,7 @@ class PhotoBackupController {
           host: host,
           overwrite: false,
         );
-        _taskToAsset[task.id] = a.id;
+        newlyMapped[task.id] = a.id;
         queue.enqueue(task);
         enqueued++;
       } catch (_) {
@@ -217,6 +230,14 @@ class PhotoBackupController {
         // us, unsupported) rather than aborting the whole backup run.
         continue;
       }
+    }
+    if (newlyMapped.isNotEmpty) {
+      _persistChain = _persistChain.then((_) async {
+        final map = await _taskToAsset(store);
+        map.addAll(newlyMapped);
+        await store.saveTaskToAsset(map);
+      });
+      await _persistChain;
     }
     return PhotoBackupRunResult(
       PhotoBackupOutcome.enqueued,

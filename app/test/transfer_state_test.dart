@@ -10,6 +10,7 @@ import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/upload_session.dart';
+import 'package:remote_file_explorer/core/storage/transfer_queue_store.dart';
 import 'package:remote_file_explorer/features/transfers/chunk_planner.dart';
 import 'package:remote_file_explorer/features/transfers/transfer_state.dart';
 
@@ -661,6 +662,109 @@ void main() {
       expect(finalTask.sha256, isNull);
     });
   });
+
+  // ---------------------------------------------------------------------
+  // PR-58 — persistence writes must not reorder stale snapshots
+  // ---------------------------------------------------------------------
+  group('queue persistence write ordering', () {
+    test(
+      'a second persist() while the first save() is still in flight waits '
+      'for it, and its snapshot reflects the latest state (not stale)',
+      () async {
+        final store = _RecordingStore();
+        // A client whose download never resolves, so the execution engine
+        // (triggered as a side effect of enqueue()) can't itself generate
+        // extra persist() calls (e.g. via a failed/completed transition)
+        // that would make this test racy against unrelated behavior.
+        final hangingClient = _FakeAgentClient(
+          host: _testHost,
+          onDownloadWithStart: (_) => Completer<void>().future,
+        );
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => hangingClient,
+                store: store,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final notifier = container.read(transferQueueProvider.notifier);
+
+        final gate = Completer<void>();
+        store.gateNext = gate;
+
+        final t1 = TransferTask.download(
+          remotePath: '/a',
+          localPath: '/tmp/a',
+          host: _testHost,
+        );
+        notifier.enqueue(t1); // save() call #1 starts and hangs on `gate`
+
+        final t2 = TransferTask.download(
+          remotePath: '/b',
+          localPath: '/tmp/b',
+          host: _testHost,
+        );
+        notifier.enqueue(t2); // triggers further persist() calls behind #1
+
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          store.calls.length,
+          1,
+          reason:
+              'nothing else should have been able to write while the '
+              'first save() is still in flight',
+        );
+
+        gate.complete();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        // The execution engine itself makes further persist() calls as a
+        // side effect of running (e.g. marking a task "running"), so the
+        // exact call count isn't pinned — what matters is (a) save() was
+        // never re-entered while a previous call was still pending
+        // (checked inside _RecordingStore itself) and (b) the final
+        // on-disk state reflects both enqueued tasks, proving the last
+        // write wasn't a stale snapshot that lost t2.
+        expect(store.calls.length, greaterThanOrEqualTo(2));
+        final finalIds = store.calls.last.map((j) => j['id']).toSet();
+        expect(
+          finalIds,
+          containsAll(<String>{t1.id, t2.id}),
+          reason: 'the final persisted state must include both tasks',
+        );
+      },
+    );
+  });
+}
+
+/// Records every save() call and its argument; [gateNext], if set, makes
+/// the *next* call wait on that completer before resolving — used to force
+/// a controlled overlap between two persist() calls. Fails the test
+/// immediately if a call starts while a previous one is still pending,
+/// which is exactly the race PR-58's fix (the write chain) must prevent.
+class _RecordingStore extends TransferQueueStore {
+  final List<List<Map<String, dynamic>>> calls = [];
+  Completer<void>? gateNext;
+  bool _saving = false;
+
+  @override
+  Future<void> save(List<Map<String, dynamic>> tasks) async {
+    if (_saving) {
+      fail('save() was re-entered while a previous call was still pending');
+    }
+    _saving = true;
+    calls.add(tasks);
+    final gate = gateNext;
+    gateNext = null;
+    if (gate != null) await gate.future;
+    _saving = false;
+  }
 }
 
 // ---------------------------------------------------------------------------

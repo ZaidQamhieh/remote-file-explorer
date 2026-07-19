@@ -239,6 +239,13 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
   final TransferQueueStore _store;
 
+  /// Chains persistence writes so they always apply in call order. Each
+  /// `_persist()` call snapshots the *current* state and only starts its
+  /// write once the previous one has finished — without this, two
+  /// fire-and-forget `_store.save()` calls could resolve out of order and
+  /// let an older snapshot silently overwrite a newer one on disk (PR-58).
+  Future<void> _writeChain = Future.value();
+
   @override
   List<TransferTask> build() {
     // Restore unfinished tasks from a prior session (best effort — see
@@ -331,12 +338,12 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   /// them after a restart. Fire-and-forget — [TransferQueueStore.save] is
   /// itself best-effort and never throws.
   void _persist() {
-    _store.save(
-      state
-          .where((t) => t.status != TransferStatus.completed)
-          .map((t) => t.toJson())
-          .toList(),
-    );
+    final snapshot =
+        state
+            .where((t) => t.status != TransferStatus.completed)
+            .map((t) => t.toJson())
+            .toList();
+    _writeChain = _writeChain.then((_) => _store.save(snapshot));
   }
 
   /// [persist] should be `true` for status transitions and other fields a

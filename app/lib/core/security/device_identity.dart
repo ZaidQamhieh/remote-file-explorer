@@ -3,6 +3,26 @@ import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+/// Parses stored Ed25519 key material, validating it decodes to the
+/// algorithm's fixed 32-byte key lengths — returns null (never throws) for
+/// anything else, so a truncated write or corrupted keystore entry falls
+/// back to regenerating a fresh identity instead of crashing every call
+/// that needs one (PR-55). Pure and unit-testable on its own.
+SimpleKeyPairData? tryParseDeviceKeyPair(String storedPriv, String storedPub) {
+  try {
+    final privBytes = base64Decode(storedPriv);
+    final pubBytes = base64Decode(storedPub);
+    if (privBytes.length != 32 || pubBytes.length != 32) return null;
+    return SimpleKeyPairData(
+      privBytes,
+      publicKey: SimplePublicKey(pubBytes, type: KeyPairType.ed25519),
+      type: KeyPairType.ed25519,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 /// This device's permanent Ed25519 identity — generated once, kept in
 /// [FlutterSecureStorage] (Android Keystore-backed) for the life of the app
 /// install. Every agent this phone pairs/logs into pins this same public key
@@ -21,31 +41,41 @@ class DeviceIdentity {
   final _algorithm = Ed25519();
   SimpleKeyPair? _cached;
 
-  Future<SimpleKeyPair> _keyPair() async {
-    final cached = _cached;
-    if (cached != null) return cached;
+  /// The in-flight load/generate call, so concurrent first-callers (e.g.
+  /// `/pair` and `/register` firing near-simultaneously on a cold start)
+  /// await the *same* future instead of racing separate reads and each
+  /// generating and writing a different keypair (PR-55).
+  Future<SimpleKeyPair>? _pending;
 
+  Future<SimpleKeyPair> _keyPair() {
+    final cached = _cached;
+    if (cached != null) return Future.value(cached);
+    return _pending ??= _loadOrCreate().then((keyPair) {
+      _cached = keyPair;
+      _pending = null;
+      return keyPair;
+    });
+  }
+
+  Future<SimpleKeyPair> _loadOrCreate() async {
     final storedPriv = await _secure.read(key: _kPrivateKey);
     final storedPub = await _secure.read(key: _kPublicKey);
     if (storedPriv != null && storedPub != null) {
-      final keyPair = SimpleKeyPairData(
-        base64Decode(storedPriv),
-        publicKey: SimplePublicKey(
-          base64Decode(storedPub),
-          type: KeyPairType.ed25519,
-        ),
-        type: KeyPairType.ed25519,
-      );
-      _cached = keyPair;
-      return keyPair;
+      final parsed = tryParseDeviceKeyPair(storedPriv, storedPub);
+      if (parsed != null) return parsed;
+      // Malformed stored material (truncated write, corrupted keystore
+      // entry) — fall through and regenerate rather than crash every call
+      // that needs the identity (PR-55).
     }
+    return _generateAndStore();
+  }
 
+  Future<SimpleKeyPair> _generateAndStore() async {
     final keyPair = await _algorithm.newKeyPair();
     final privBytes = await keyPair.extractPrivateKeyBytes();
     final pubKey = await keyPair.extractPublicKey();
     await _secure.write(key: _kPrivateKey, value: base64Encode(privBytes));
     await _secure.write(key: _kPublicKey, value: base64Encode(pubKey.bytes));
-    _cached = keyPair;
     return keyPair;
   }
 

@@ -199,7 +199,7 @@ void main() {
         final downloadStarted = Completer<void>();
         final client = _FakeAgentClient(
           host: _testHost,
-          onDownload: (cancelToken) async {
+          onDownload: (_, cancelToken) async {
             downloadStarted.complete();
             // Block until canceled, like a real in-flight HTTP stream.
             await cancelToken.whenCancel;
@@ -263,7 +263,7 @@ void main() {
         final blocking = Completer<void>();
         final blockingClient = _FakeAgentClient(
           host: _testHost,
-          onDownload: (cancelToken) async {
+          onDownload: (_, cancelToken) async {
             await blocking.future; // never completes in this test
           },
         );
@@ -332,20 +332,30 @@ void main() {
       addTearDown(() => dir.delete(recursive: true));
       final localPath = '${dir.path}/out.bin';
 
-      // Simulate a partial file already on disk from a previous attempt.
-      await File(localPath).writeAsBytes(List<int>.filled(50, 1));
+      final task = TransferTask.download(
+        remotePath: '/remote/file.bin',
+        localPath: localPath,
+        host: _testHost,
+      );
+
+      // Simulate a partial file already on disk from a previous attempt, at
+      // the task-scoped staging path _runDownload actually resumes from
+      // (PR-24 — resuming from the bare destination path let an unrelated
+      // same-name file be mistaken for a partial).
+      final stagingPath = '$localPath.rfe-part-${task.id}';
+      await File(stagingPath).writeAsBytes(List<int>.filled(50, 1));
 
       final startBytesSeen = <int>[];
       final client = _FakeAgentClient(
         host: _testHost,
-        onDownloadWithStart: (startByte) async {
+        onDownloadWithStart: (localFile, startByte) async {
           startBytesSeen.add(startByte);
           if (startByte > 0) {
             // Server ignored our Range header.
             throw RangeNotSatisfiedException();
           }
           // Successful full download from scratch.
-          await File(localPath).writeAsBytes(List<int>.filled(100, 2));
+          await localFile.writeAsBytes(List<int>.filled(100, 2));
         },
       );
 
@@ -361,11 +371,6 @@ void main() {
       addTearDown(container.dispose);
 
       final notifier = container.read(transferQueueProvider.notifier);
-      final task = TransferTask.download(
-        remotePath: '/remote/file.bin',
-        localPath: localPath,
-        host: _testHost,
-      );
       notifier.enqueue(task);
 
       await _waitUntil(() {
@@ -395,6 +400,134 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
+  // PR-24 — completed downloads are verified against the agent's checksum
+  // ---------------------------------------------------------------------
+  group('download integrity verification', () {
+    test(
+      'a checksum mismatch fails the task and deletes the staging file',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('integrity_');
+        addTearDown(() => dir.delete(recursive: true));
+        final localPath = '${dir.path}/out.bin';
+
+        final client = _FakeAgentClient(
+          host: _testHost,
+          onDownloadWithStart: (localFile, startByte) async {
+            await localFile.writeAsBytes(List<int>.filled(10, 7));
+          },
+          checksumOverride: (path) async => '0' * 64, // never matches
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => client,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(transferQueueProvider.notifier);
+        final task = TransferTask.download(
+          remotePath: '/remote/file.bin',
+          localPath: localPath,
+          host: _testHost,
+        );
+        notifier.enqueue(task);
+
+        await _waitUntil(
+          () =>
+              container
+                  .read(transferQueueProvider)
+                  .firstWhere((x) => x.id == task.id)
+                  .status ==
+              TransferStatus.failed,
+        );
+
+        final finalTask = container
+            .read(transferQueueProvider)
+            .firstWhere((t) => t.id == task.id);
+        expect(finalTask.error, contains('integrity check'));
+        expect(
+          await File('$localPath.rfe-part-${task.id}').exists(),
+          isFalse,
+          reason: 'the corrupt/mismatched staging file must not be kept',
+        );
+        expect(
+          await File(localPath).exists(),
+          isFalse,
+          reason: 'a failed verification must never publish to the real path',
+        );
+      },
+    );
+
+    test(
+      'an unrelated file already at the destination is never resumed into',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('collision_');
+        addTearDown(() => dir.delete(recursive: true));
+        final localPath = '${dir.path}/out.bin';
+
+        // An unrelated file happens to already sit at the exact destination
+        // path (e.g. left by an unrelated earlier download of a same-named
+        // file). Before PR-24 this file's length was trusted as a resumable
+        // partial for this task.
+        await File(localPath).writeAsBytes(List<int>.filled(999, 9));
+
+        final startBytesSeen = <int>[];
+        final client = _FakeAgentClient(
+          host: _testHost,
+          onDownloadWithStart: (localFile, startByte) async {
+            startBytesSeen.add(startByte);
+            await localFile.writeAsBytes(List<int>.filled(10, 7));
+          },
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => client,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(transferQueueProvider.notifier);
+        final task = TransferTask.download(
+          remotePath: '/remote/file.bin',
+          localPath: localPath,
+          host: _testHost,
+        );
+        notifier.enqueue(task);
+
+        await _waitUntil(() {
+          final t = container
+              .read(transferQueueProvider)
+              .firstWhere((x) => x.id == task.id);
+          return t.status == TransferStatus.completed ||
+              t.status == TransferStatus.failed;
+        });
+
+        expect(
+          startBytesSeen.single,
+          0,
+          reason:
+              'the unrelated file at the destination path must never be '
+              'treated as a resumable partial for this task',
+        );
+        final finalTask = container
+            .read(transferQueueProvider)
+            .firstWhere((t) => t.id == task.id);
+        expect(finalTask.status, TransferStatus.completed);
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------
   // retry() state transitions
   // ---------------------------------------------------------------------
   group('retry()', () {
@@ -402,7 +535,7 @@ void main() {
       var attempt = 0;
       final client = _FakeAgentClient(
         host: _testHost,
-        onDownload: (cancelToken) async {
+        onDownload: (_, cancelToken) async {
           attempt++;
           throw Exception('network down (attempt $attempt)');
         },
@@ -469,14 +602,21 @@ void main() {
         final dir = await Directory.systemTemp.createTemp('retry_resume_');
         addTearDown(() => dir.delete(recursive: true));
         final localPath = '${dir.path}/out.bin';
-        await File(localPath).writeAsBytes(List<int>.filled(40, 1));
+
+        final task = TransferTask.download(
+          remotePath: '/remote/file.bin',
+          localPath: localPath,
+          host: _testHost,
+        );
+        final stagingPath = '$localPath.rfe-part-${task.id}';
+        await File(stagingPath).writeAsBytes(List<int>.filled(40, 1));
 
         final startBytesSeen = <int>[];
         final downloadStarted = Completer<void>();
         var firstCall = true;
         final client = _FakeAgentClient(
           host: _testHost,
-          onDownload: (cancelToken) async {
+          onDownload: (_, cancelToken) async {
             if (firstCall) {
               firstCall = false;
               downloadStarted.complete();
@@ -487,10 +627,10 @@ void main() {
               );
             }
           },
-          onDownloadWithStart: (startByte) async {
+          onDownloadWithStart: (localFile, startByte) async {
             startBytesSeen.add(startByte);
             if (!firstCall) {
-              await File(localPath).writeAsBytes(List<int>.filled(100, 2));
+              await localFile.writeAsBytes(List<int>.filled(100, 2));
             }
           },
         );
@@ -507,11 +647,6 @@ void main() {
         addTearDown(container.dispose);
 
         final notifier = container.read(transferQueueProvider.notifier);
-        final task = TransferTask.download(
-          remotePath: '/remote/file.bin',
-          localPath: localPath,
-          host: _testHost,
-        );
         notifier.enqueue(task);
 
         await downloadStarted.future;
@@ -622,8 +757,8 @@ void main() {
 
       final client = _FakeAgentClient(
         host: _testHost,
-        onDownloadWithStart: (startByte) async {
-          await File(localPath).writeAsBytes(List<int>.filled(10, 7));
+        onDownloadWithStart: (localFile, startByte) async {
+          await localFile.writeAsBytes(List<int>.filled(10, 7));
         },
       );
 
@@ -678,7 +813,7 @@ void main() {
         // that would make this test racy against unrelated behavior.
         final hangingClient = _FakeAgentClient(
           host: _testHost,
-          onDownloadWithStart: (_) => Completer<void>().future,
+          onDownloadWithStart: (_, _) => Completer<void>().future,
         );
         final container = ProviderContainer(
           overrides: [
@@ -780,15 +915,27 @@ class _FakeAgentClient extends AgentClient {
     this.onDownload,
     this.onDownloadWithStart,
     this.onUploadChunk,
+    this.checksumOverride,
   }) : super(host);
 
-  /// Called by [downloadFile]; receives the [CancelToken] passed through.
-  final Future<void> Function(CancelToken cancelToken)? onDownload;
+  /// Called by [downloadFile]; receives the actual staging [File] (PR-24: a
+  /// task-scoped path, not the bare destination) and the [CancelToken].
+  final Future<void> Function(File localFile, CancelToken cancelToken)?
+  onDownload;
 
-  /// Called by [downloadFile]; receives [startByte] for resume tests.
-  final Future<void> Function(int startByte)? onDownloadWithStart;
+  /// Called by [downloadFile]; receives the staging [File] and [startByte]
+  /// for resume tests.
+  final Future<void> Function(File localFile, int startByte)?
+  onDownloadWithStart;
 
   final Future<void> Function(Uint8List data)? onUploadChunk;
+
+  /// Overrides the default checksum behavior (hashing whatever bytes the
+  /// last [downloadFile] call left on disk, i.e. "the download always
+  /// verifies") — set this to force an integrity-check failure in a test.
+  final Future<String> Function(String remotePath)? checksumOverride;
+
+  File? _lastDownloadFile;
 
   @override
   Future<Entry> meta(String path) async {
@@ -803,12 +950,21 @@ class _FakeAgentClient extends AgentClient {
     void Function(int received, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
+    _lastDownloadFile = localFile;
     if (onDownload != null) {
-      await onDownload!(cancelToken ?? CancelToken());
+      await onDownload!(localFile, cancelToken ?? CancelToken());
     }
     if (onDownloadWithStart != null) {
-      await onDownloadWithStart!(startByte);
+      await onDownloadWithStart!(localFile, startByte);
     }
+  }
+
+  @override
+  Future<String> checksum(String path, {String algo = 'sha256'}) async {
+    if (checksumOverride != null) return checksumOverride!(path);
+    final file = _lastDownloadFile;
+    if (file == null || !await file.exists()) return '0' * 64;
+    return hashFileSha256(file.path);
   }
 
   @override

@@ -197,6 +197,17 @@ const _sentinel = Object();
 /// failed. Caught by [TransferQueueNotifier._execute].
 class _TaskStopped implements Exception {}
 
+/// Thrown by [TransferQueueNotifier._runDownload] when the fully-downloaded
+/// file's SHA-256 doesn't match the agent's checksum for the remote file —
+/// the corrupt/stale staging copy has already been deleted.
+class DownloadIntegrityException implements Exception {
+  DownloadIntegrityException(this.fileName);
+  final String fileName;
+
+  @override
+  String toString() => 'Downloaded file "$fileName" failed integrity check';
+}
+
 /// Computes the SHA-256 of the file at [path] by streaming it in fixed-size
 /// chunks, so the whole file never has to fit in memory.
 ///
@@ -481,7 +492,12 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     AgentClient client,
     CancelToken cancelToken,
   ) async {
-    final localFile = File(task.localPath);
+    // Stage into a file scoped to this task's id, not the bare destination
+    // name — task.localPath is shared by every download of a same-named
+    // file (e.g. a retry after a cancelled download, or two files with the
+    // same name from different folders/hosts), and the old code trusted any
+    // bytes already sitting at that path as a resumable partial (PR-24).
+    final stagingFile = File('${task.localPath}.rfe-part-${task.id}');
 
     var mimeType = 'application/octet-stream';
     try {
@@ -496,7 +512,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
     Future<void> doDownload(int startByte) => client.downloadFile(
       remotePath: task.remotePath,
-      localFile: localFile,
+      localFile: stagingFile,
       startByte: startByte,
       cancelToken: cancelToken,
       onProgress: (received, total) {
@@ -510,7 +526,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       },
     );
 
-    var startByte = localFile.existsSync() ? localFile.lengthSync() : 0;
+    var startByte = stagingFile.existsSync() ? stagingFile.lengthSync() : 0;
     try {
       await doDownload(startByte);
     } on RangeNotSatisfiedException {
@@ -520,6 +536,20 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       _updateById(id, (t) => t.copyWith(transferredBytes: 0));
       await doDownload(startByte);
     }
+
+    // Verify the fully-received bytes against the agent's own checksum
+    // before trusting the download — otherwise a remote file that changed
+    // mid-transfer, or corruption in transit, is silently marked complete.
+    final remoteHash = await client.checksum(task.remotePath);
+    final localHash = await compute(hashFileSha256, stagingFile.path);
+    if (remoteHash.toLowerCase() != localHash.toLowerCase()) {
+      await stagingFile.delete();
+      throw DownloadIntegrityException(task.displayName);
+    }
+
+    // Only now — verified good — does it take the real destination name,
+    // replacing any stale file left there by a previous attempt.
+    final localFile = await stagingFile.rename(task.localPath);
 
     // The file streamed to app-private storage; move it into the public
     // Downloads collection so it shows up in the phone's Files app.

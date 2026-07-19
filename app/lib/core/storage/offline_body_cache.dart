@@ -4,13 +4,20 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+/// Aggregate byte budget for the whole offline body cache across all hosts
+/// (PR-29, partial): callers that pre-cache a folder for offline access
+/// (see `ExplorerNotifier._preCacheCurrentEntries`) check [totalBytes]
+/// against this before writing more, so pinning many large folders can't
+/// grow the cache unboundedly. Per-file/per-folder budgets, free-space
+/// checks, and LRU eviction are still unaddressed — this only stops the
+/// aggregate from growing past a fixed cap.
+const int kOfflineCacheMaxBytes = 500 * 1024 * 1024;
+
 /// Persists raw file bytes for offline access.
 ///
 /// Storage: `<app-support>/offline_cache/<key>` where the key is the
 /// base64Url-encoded (padding stripped) UTF-8 bytes of `"$hostId:$path"`.
 /// This avoids filesystem-unsafe characters with no extra dependencies.
-///
-/// Max-size enforcement is out of scope for Part B — just write/read.
 class OfflineBodyCache {
   OfflineBodyCache({Directory? baseDir}) : _baseDir = baseDir;
 
@@ -30,6 +37,22 @@ class OfflineBodyCache {
 
   File _fileFor(Directory dir, String hostId, String path) =>
       File('${dir.path}/${_key(hostId, path)}');
+
+  /// Sums the on-disk size of every cached file, across all hosts.
+  Future<int> totalBytes() async {
+    final dir = await _dir();
+    if (!dir.existsSync()) return 0;
+    var total = 0;
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      try {
+        total += await entity.length();
+      } catch (_) {
+        // Deleted mid-scan or otherwise unreadable — skip.
+      }
+    }
+    return total;
+  }
 
   Future<void> put(String hostId, String path, Uint8List bytes) async {
     final f = _fileFor(await _dir(), hostId, path);

@@ -430,17 +430,22 @@ class ExplorerNotifier
   }
 
   /// Downloads and caches bytes for every non-directory file ≤ 50 MB in the
-  /// current listing. Fire-and-forget; errors are silently swallowed.
+  /// current listing, stopping once the cache's aggregate byte budget
+  /// ([kOfflineCacheMaxBytes]) would be exceeded (PR-29). Fire-and-forget;
+  /// errors are silently swallowed.
   Future<void> _preCacheCurrentEntries() async {
     const maxBytes = 50 * 1024 * 1024;
     final client = await _client();
+    var usedBytes = await _offlineBodyCache.totalBytes();
     // Snapshot entries so navigation mid-pass doesn't cause concurrent mutation.
     for (final e in List.of(state.entries)) {
       if (e.isDir || (e.size ?? 0) > maxBytes) continue;
       if (await _offlineBodyCache.has(arg.hostId, e.path)) continue;
+      if (usedBytes >= kOfflineCacheMaxBytes) break;
       try {
         final bytes = await client.fetchBytes(e.path);
         await _offlineBodyCache.put(arg.hostId, e.path, bytes);
+        usedBytes += bytes.length;
       } catch (_) {
         // Best-effort: agent may be slow or file inaccessible — skip.
       }

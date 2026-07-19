@@ -62,4 +62,32 @@ void main() {
     final cache = OfflineBodyCache(baseDir: tmpDir);
     await expectLater(cache.evictHost('ghost'), completes);
   });
+
+  group('totalBytes (PR-29)', () {
+    test('is zero for an empty cache', () async {
+      final cache = OfflineBodyCache(baseDir: tmpDir);
+      expect(await cache.totalBytes(), 0);
+    });
+
+    test('sums every cached file across all hosts', () async {
+      final cache = OfflineBodyCache(baseDir: tmpDir);
+      await cache.put('h1', '/a.txt', Uint8List(10));
+      await cache.put('h1', '/b.txt', Uint8List(20));
+      await cache.put('h2', '/c.txt', Uint8List(5));
+
+      expect(await cache.totalBytes(), 35);
+    });
+
+    test('drops back down after remove/evictHost', () async {
+      final cache = OfflineBodyCache(baseDir: tmpDir);
+      await cache.put('h1', '/a.txt', Uint8List(10));
+      await cache.put('h1', '/b.txt', Uint8List(20));
+
+      await cache.remove('h1', '/a.txt');
+      expect(await cache.totalBytes(), 20);
+
+      await cache.evictHost('h1');
+      expect(await cache.totalBytes(), 0);
+    });
+  });
 }

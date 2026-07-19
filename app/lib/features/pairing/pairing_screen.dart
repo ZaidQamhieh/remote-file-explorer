@@ -217,11 +217,11 @@ class _QrPairingTabState extends ConsumerState<_QrPairingTab> {
       );
 
       final store = await ref.read(hostStoreProvider.future);
-      await store.addHost(host);
-      await store.setToken(host.id, resp.deviceToken);
-      if (host.certFingerprint != null) {
-        await store.setFingerprint(host.id, host.certFingerprint!);
-      }
+      await store.commitPairing(
+        host,
+        token: resp.deviceToken,
+        fingerprint: host.certFingerprint,
+      );
 
       if (mounted) {
         showSuccess(context, context.l10n.pairedWith(host.label));
@@ -372,11 +372,11 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
       );
 
       final store = await ref.read(hostStoreProvider.future);
-      await store.addHost(host);
-      await store.setToken(host.id, resp.deviceToken);
-      if (host.certFingerprint != null) {
-        await store.setFingerprint(host.id, host.certFingerprint!);
-      }
+      await store.commitPairing(
+        host,
+        token: resp.deviceToken,
+        fingerprint: host.certFingerprint,
+      );
 
       if (mounted) {
         showSuccess(context, context.l10n.pairedWith(host.label));
@@ -528,11 +528,11 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
       );
 
       final store = await ref.read(hostStoreProvider.future);
-      await store.addHost(host);
-      await store.setToken(host.id, resp.deviceToken);
-      if (host.certFingerprint != null) {
-        await store.setFingerprint(host.id, host.certFingerprint!);
-      }
+      await store.commitPairing(
+        host,
+        token: resp.deviceToken,
+        fingerprint: host.certFingerprint,
+      );
 
       if (mounted) {
         showSuccess(context, context.l10n.pairedWith(host.label));
@@ -716,11 +716,11 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
       );
 
       final store = await ref.read(hostStoreProvider.future);
-      await store.addHost(host);
-      await store.setToken(host.id, resp.deviceToken);
-      if (host.certFingerprint != null) {
-        await store.setFingerprint(host.id, host.certFingerprint!);
-      }
+      await store.commitPairing(
+        host,
+        token: resp.deviceToken,
+        fingerprint: host.certFingerprint,
+      );
 
       if (mounted) {
         showSuccess(context, context.l10n.pairedWith(host.label));

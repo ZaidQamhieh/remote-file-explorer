@@ -139,6 +139,63 @@ void main() {
     });
   });
 
+  group('commitPairingSteps (PR-37)', () {
+    test('runs addHost then setToken then setFingerprint in order', () async {
+      final calls = <String>[];
+      await commitPairingSteps(
+        addHost: () async => calls.add('addHost'),
+        setToken: () async => calls.add('setToken'),
+        setFingerprint: () async => calls.add('setFingerprint'),
+        removeHost: () async => calls.add('removeHost'),
+      );
+      expect(calls, ['addHost', 'setToken', 'setFingerprint']);
+    });
+
+    test('skips setFingerprint when null (unpinned host)', () async {
+      final calls = <String>[];
+      await commitPairingSteps(
+        addHost: () async => calls.add('addHost'),
+        setToken: () async => calls.add('setToken'),
+        setFingerprint: null,
+        removeHost: () async => calls.add('removeHost'),
+      );
+      expect(calls, ['addHost', 'setToken']);
+    });
+
+    test(
+      'a setToken failure rolls back the just-added host and rethrows',
+      () async {
+        final calls = <String>[];
+        await expectLater(
+          commitPairingSteps(
+            addHost: () async => calls.add('addHost'),
+            setToken: () async => throw Exception('secure storage full'),
+            setFingerprint: () async => calls.add('setFingerprint'),
+            removeHost: () async => calls.add('removeHost'),
+          ),
+          throwsException,
+        );
+        // Host was added, then rolled back; fingerprint was never attempted.
+        expect(calls, ['addHost', 'removeHost']);
+      },
+    );
+
+    test('a setFingerprint failure rolls back the host even though the token '
+        'write already succeeded', () async {
+      final calls = <String>[];
+      await expectLater(
+        commitPairingSteps(
+          addHost: () async => calls.add('addHost'),
+          setToken: () async => calls.add('setToken'),
+          setFingerprint: () async => throw Exception('secure storage full'),
+          removeHost: () async => calls.add('removeHost'),
+        ),
+        throwsException,
+      );
+      expect(calls, ['addHost', 'setToken', 'removeHost']);
+    });
+  });
+
   group('Last-seen timestamp', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});

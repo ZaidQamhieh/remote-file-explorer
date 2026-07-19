@@ -100,4 +100,40 @@ void main() {
       expect(isConnectivityFailure(DioExceptionType.cancel), isFalse);
     });
   });
+
+  group('collectBytesCapped (PR-28)', () {
+    test('returns the exact bytes when under the cap', () async {
+      final chunks = Stream<List<int>>.fromIterable([
+        [1, 2, 3],
+        [4, 5],
+      ]);
+      final bytes = await collectBytesCapped(chunks, '/f', 10);
+      expect(bytes, [1, 2, 3, 4, 5]);
+    });
+
+    test('exactly at the cap succeeds', () async {
+      final chunks = Stream<List<int>>.fromIterable([
+        [1, 2, 3],
+      ]);
+      final bytes = await collectBytesCapped(chunks, '/f', 3);
+      expect(bytes, [1, 2, 3]);
+    });
+
+    test('aborts as soon as the cap is crossed, never trusting a reported '
+        'size', () async {
+      final chunks = Stream<List<int>>.fromIterable([
+        [1, 2, 3],
+        [4, 5, 6], // pushes total to 6, over a cap of 5
+        [7, 8, 9], // must never be consumed
+      ]);
+      await expectLater(
+        collectBytesCapped(chunks, '/big.bin', 5),
+        throwsA(
+          isA<FetchTooLargeException>()
+              .having((e) => e.remotePath, 'remotePath', '/big.bin')
+              .having((e) => e.maxBytes, 'maxBytes', 5),
+        ),
+      );
+    });
+  });
 }

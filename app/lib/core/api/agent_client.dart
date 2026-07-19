@@ -80,6 +80,18 @@ class PayloadTooLargeException implements Exception {
   String toString() => 'PayloadTooLargeException: $message';
 }
 
+/// Thrown by [AgentClient.fetchBytes] when the remote file's bytes exceed
+/// the caller's `maxBytes` cap. The transfer is aborted as soon as the cap
+/// is crossed, so the excess is never buffered into memory.
+class FetchTooLargeException implements Exception {
+  FetchTooLargeException(this.remotePath, this.maxBytes);
+  final String remotePath;
+  final int maxBytes;
+  @override
+  String toString() =>
+      'FetchTooLargeException: $remotePath exceeds the $maxBytes-byte cap';
+}
+
 /// Thrown by [AgentClient.downloadFile] when a resumed download (a Range
 /// request with `startByte > 0`) was answered with a full `200 OK` instead
 /// of a `206 Partial Content`.
@@ -165,6 +177,28 @@ bool isConnectivityFailure(DioExceptionType errorType) => switch (errorType) {
   DioExceptionType.receiveTimeout => true,
   _ => false,
 };
+
+/// Accumulates [chunks] into bytes, throwing [FetchTooLargeException] for
+/// [remotePath] as soon as more than [maxBytes] have arrived, so [fetchBytes]
+/// never buffers past its cap regardless of what the remote file's reported
+/// size claims — kept separate from Dio so it's directly unit-testable
+/// (PR-28).
+Future<Uint8List> collectBytesCapped(
+  Stream<List<int>> chunks,
+  String remotePath,
+  int maxBytes,
+) async {
+  final builder = BytesBuilder(copy: false);
+  var total = 0;
+  await for (final chunk in chunks) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw FetchTooLargeException(remotePath, maxBytes);
+    }
+    builder.add(chunk);
+  }
+  return builder.toBytes();
+}
 
 /// HTTPS client for a single host agent.
 ///
@@ -1109,29 +1143,39 @@ class AgentClient {
     );
   }
 
+  /// Default cap for [fetchBytes] when the caller doesn't pass its own —
+  /// generous enough for any real preview/small-file use, small enough to
+  /// backstop a stale-metadata or attacker-controlled remote size from
+  /// exhausting memory (PR-28).
+  static const int kFetchBytesDefaultMaxBytes = 64 * 1024 * 1024;
+
   /// Fetch the full contents of [remotePath] into memory as raw bytes.
   ///
-  /// Intended for small-ish files (previews of images/text/PDFs). Callers
-  /// should check [Entry.size] via [meta] first and avoid calling this for
-  /// very large files — there is no size cap enforced here.
+  /// Intended for small-ish files (previews of images/text/PDFs). Streams
+  /// the response and aborts as soon as more than [maxBytes] have arrived —
+  /// throwing [FetchTooLargeException] — rather than trusting the remote
+  /// file's reported size and buffering it unbounded (PR-28).
   Future<Uint8List> fetchBytes(
     String remotePath, {
     CancelToken? cancelToken,
+    int maxBytes = kFetchBytesDefaultMaxBytes,
   }) async {
     try {
       final headers = <String, dynamic>{};
       if (await _wantsGzip()) {
         headers['Accept-Encoding'] = 'gzip';
       }
-      final res = await _dio.get<List<int>>(
+      final res = await _dio.get<ResponseBody>(
         '/content',
         queryParameters: {'path': remotePath},
-        options: Options(responseType: ResponseType.bytes, headers: headers),
+        options: Options(responseType: ResponseType.stream, headers: headers),
         cancelToken: cancelToken,
       );
-      final data = res.data;
-      final bytes =
-          data is Uint8List ? data : Uint8List.fromList(data ?? const []);
+      final bytes = await collectBytesCapped(
+        res.data!.stream,
+        remotePath,
+        maxBytes,
+      );
 
       // Cache bytes when the parent folder is pinned (fire-and-forget).
       final cache = offlineBodyCache;

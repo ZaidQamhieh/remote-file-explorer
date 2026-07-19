@@ -31,6 +31,7 @@ class _FakeAgentClient extends AgentClient {
   Future<Uint8List> fetchBytes(
     String remotePath, {
     CancelToken? cancelToken,
+    int maxBytes = AgentClient.kFetchBytesDefaultMaxBytes,
   }) async {
     return Uint8List.fromList(utf8.encode(contentByPath[remotePath] ?? ''));
   }

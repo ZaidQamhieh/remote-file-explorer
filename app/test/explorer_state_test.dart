@@ -168,6 +168,31 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
+  // joinRemotePath (PR-66) — several call sites used to hardcode "/",
+  // producing a broken mixed-separator path for a Windows-paired host.
+  // ---------------------------------------------------------------------
+  group('joinRemotePath', () {
+    test('POSIX nested dir', () {
+      expect(joinRemotePath('/home/x', 'report.pdf'), '/home/x/report.pdf');
+    });
+
+    test('POSIX root does not double the leading slash', () {
+      expect(joinRemotePath('/', 'report.pdf'), '/report.pdf');
+    });
+
+    test('Windows nested dir uses backslash, not "/"', () {
+      expect(
+        joinRemotePath(r'C:\Users\me', 'report.pdf'),
+        r'C:\Users\me\report.pdf',
+      );
+    });
+
+    test('Windows drive root does not double the backslash', () {
+      expect(joinRemotePath(r'C:\', 'report.pdf'), r'C:\report.pdf');
+    });
+  });
+
+  // ---------------------------------------------------------------------
   // dedupedName — used by the upload "Keep both" resolution
   // ---------------------------------------------------------------------
   group('dedupedName', () {

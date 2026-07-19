@@ -533,14 +533,14 @@ class ExplorerNotifier
 
   Future<void> createFolder(String name) async {
     final client = await _client();
-    final path = '${state.currentPath}/$name';
+    final path = joinRemotePath(state.currentPath, name);
     await client.createFolder(path);
     await _load();
   }
 
   Future<void> createFile(String name) async {
     final client = await _client();
-    final path = '${state.currentPath}/$name';
+    final path = joinRemotePath(state.currentPath, name);
     await client.createFile(path);
     await _load();
   }
@@ -781,6 +781,16 @@ String renameDestination(String oldPath, String newName) {
   final parent = idx <= 0 ? sep : oldPath.substring(0, idx);
   if (parent == sep) return '$sep$newName';
   return '$parent$sep$newName';
+}
+
+/// Joins [dir] and [name] into a remote path using [dir]'s own separator
+/// (`/` for POSIX hosts, `\` for Windows) rather than assuming `/` — several
+/// call sites hardcoded `/`, which built a broken path (`C:\dir/name`) for a
+/// Windows-paired host (PR-66).
+String joinRemotePath(String dir, String name) {
+  final sep = dir.contains('\\') ? r'\' : '/';
+  if (dir.isEmpty || dir == sep) return '$sep$name';
+  return dir.endsWith(sep) ? '$dir$name' : '$dir$sep$name';
 }
 
 /// Expands an absolute path into the cumulative stack of ancestor paths,

@@ -34,7 +34,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/sheet_chrome.dart';
-import '../explorer/explorer_state.dart' show basenameOf;
+import '../explorer/explorer_state.dart' show basenameOf, joinRemotePath;
 import '../explorer/widgets/destination_picker_sheet.dart';
 import '../home/home_state.dart';
 import '../transfers/transfer_manager.dart';
@@ -62,10 +62,9 @@ List<TransferTask> buildShareUploadTasks({
 }) {
   return paths.map((path) {
     final name = basenameOf(path);
-    final dir = destDir == '/' ? '' : destDir;
     return TransferTask.upload(
       localPath: path,
-      remotePath: '$dir/$name',
+      remotePath: joinRemotePath(destDir, name),
       host: host,
       overwrite: false,
     );

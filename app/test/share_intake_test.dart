@@ -65,6 +65,29 @@ void main() {
       expect(tasks.single.remotePath, '/file.txt');
     });
 
+    test(
+      'a Windows destDir is joined with "\\", not a hardcoded "/" (PR-66)',
+      () {
+        final tasks = buildShareUploadTasks(
+          paths: ['/cache/photo.png'],
+          destDir: r'C:\Users\me\Pictures',
+          host: host,
+        );
+
+        expect(tasks.single.remotePath, r'C:\Users\me\Pictures\photo.png');
+      },
+    );
+
+    test('a bare Windows drive root does not double the separator', () {
+      final tasks = buildShareUploadTasks(
+        paths: ['/cache/photo.png'],
+        destDir: r'C:\',
+        host: host,
+      );
+
+      expect(tasks.single.remotePath, r'C:\photo.png');
+    });
+
     test('preserves order and count for multiple shared files', () {
       final paths = ['/cache/a.jpg', '/cache/b.png', '/cache/c.mp4'];
       final tasks = buildShareUploadTasks(

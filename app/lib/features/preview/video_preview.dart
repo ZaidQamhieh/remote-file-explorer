@@ -138,7 +138,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   /// on dispose if the user pauses or leaves mid-video.
   Future<void> _maybeResumePosition(VideoPlayerController video) async {
     final prefs = await SharedPreferences.getInstance();
-    final posMs = _readPosition(prefs, widget.entry.path);
+    final posMs = readVideoPosition(prefs, widget.entry.path);
     if (posMs == null || posMs <= 0) return;
 
     final duration = video.value.duration;
@@ -239,11 +239,11 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     // Fire-and-forget — dispose can't await.
     SharedPreferences.getInstance().then((prefs) {
       if (_completedNaturally) {
-        _clearPosition(prefs, widget.entry.path);
+        clearVideoPosition(prefs, widget.entry.path);
       } else {
         final posMs = video.value.position.inMilliseconds;
         if (posMs > 0) {
-          _writePosition(prefs, widget.entry.path, posMs);
+          writeVideoPosition(prefs, widget.entry.path, posMs);
         }
       }
     });
@@ -415,17 +415,17 @@ class _SeekIndicatorState extends State<_SeekIndicator>
 // ---------------------------------------------------------------------------
 
 /// Read the saved position (in milliseconds) for [filePath], or null.
-int? _readPosition(SharedPreferences prefs, String filePath) {
+int? readVideoPosition(SharedPreferences prefs, String filePath) {
   // We store positions individually so we don't need to parse a JSON blob.
   return prefs.getInt('${kVideoPositionsKey}_$filePath');
 }
 
 /// Write the playback position for [filePath].
-void _writePosition(SharedPreferences prefs, String filePath, int posMs) {
+void writeVideoPosition(SharedPreferences prefs, String filePath, int posMs) {
   prefs.setInt('${kVideoPositionsKey}_$filePath', posMs);
 }
 
 /// Clear the saved position for [filePath] (video completed).
-void _clearPosition(SharedPreferences prefs, String filePath) {
+void clearVideoPosition(SharedPreferences prefs, String filePath) {
   prefs.remove('${kVideoPositionsKey}_$filePath');
 }

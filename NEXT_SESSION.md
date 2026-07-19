@@ -30,24 +30,46 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19, third pass): 37 / 85 closed (count of the list
-below), 1 partial (PR-80). Per-severity subtotals below are the audit doc's
-own tags (verified via `grep '^#### PR-NN —'`), recomputed this pass after
-catching PR-76 mistagged as High in an earlier draft of this file — it's
-Medium.
+### PROGRESS (as of 2026-07-19, fourth pass): 38 / 85 closed (count of the
+list below), 0 partial. Per-severity totals below are counted directly off
+the audit doc's own tags (`grep -oE '^#### PR-[0-9]+ — [A-Za-z]+'`) — the
+prior draft's bucket totals (62 High / 17 Medium / 4 Low) were themselves
+wrong (real totals: 60 High / 20 Medium / 3 Low, on top of 2 Critical =
+85), which is what caused the 39-vs-37 mismatch flagged in the last pass.
+Recounted from source this pass; subtotals now tie out exactly
+(2+25+8+3=38=flat list count).
 - **Critical: 2/2 done** ✅ (PR-01, PR-02).
-- **High: 27/62 closed, 35 open** — unchanged this pass (PR-72/76/84 closed
-  this pass are all Medium, not High).
-- **Medium: 8/17 closed, 9 open** (PR-43, 46, 48, 52, 72, 76, 84, 85).
-- **Low: 2/4 closed, PR-80 partial** (PR-77, 78 closed; PR-80's `.idea/`
-  half done, comment-sweep half open — see DO NEXT).
-
-If severity subtotals (2+27+8+2=39) don't match the flat list count (37)
-next time you check, that's a real discrepancy worth resolving against the
-audit doc directly — don't just trust either number blind.
+- **High: 25/60 closed, 35 open** — unchanged this pass (nothing closed this
+  pass is High-tagged).
+- **Medium: 8/20 closed, 12 open** — includes PR-79, which is Medium per the
+  audit doc, not Low (this file's own register used to say Low — fixed
+  below).
+- **Low: 3/3 closed, 0 open** ✅ (PR-77, 78, 80 — PR-80's comment-sweep half
+  closed this pass, see below).
 
 Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,20,41,42,43,44,45,46,47,48,50,
-51,52,53,60,69,70,71,72,76,77,78,81,84,85.
+51,52,53,60,69,70,71,72,76,77,78,80,81,84,85.
+
+**Fourth pass, same day (2026-07-19): PR-72 and PR-80 fully closed (both
+remainder halves from the third pass), doc-only, NOT pushed.** PR-72's
+"architecture map omits recent files" half: `docs/architecture.md`'s code map
+was checked file-for-file against `find app/lib agent/{internal,cmd} -name
+'*.dart'/'*.go'` (167 Dart / 60 Go files on disk vs. what the tables listed).
+Found and added 11 entirely-missing `app/lib` feature dirs (`home`,
+`bookmarks`, `handoff`, `onboarding`, `photo_backup`, `share`, `sync`) and
+`core` dirs (`backup`, `notifications`, `platform`, `security`, `l10n`), plus
+refreshed the stale `models`/`storage`/`settings` brace-lists. On the agent
+side, ~25 Go files had zero row (`cmd/agent/install*.go`,
+`fsops/{jail,archive,trash}.go`, `security/{device_identity,password}.go`, and
+a dozen `internal/server/*` handlers including `share_handlers.go`,
+`sse_handler.go`, `login.go`, `register.go`, `challenge.go`,
+`webdata_handlers.go`, `wol_handler.go`) — all added with one-line summaries
+read from each file's own doc comment, not guessed. PR-80's "sweep stale
+comments" half: grepped the whole repo (excl. `app/lib`, which is frozen) for
+`TODO`/`FIXME`/`XXX` and found nothing outside `docs/superpowers/plans/`
+(a historical planning doc, not live code) — confirms the third pass's call
+that this needed a concrete offending-comment list before touching, and there
+isn't one. No source changed, only `docs/architecture.md`.
 
 **Third pass, same day (2026-07-19): PR-84 + PR-76 + PR-72 closed, committed
 separately, NOT pushed.** `ca8d71b` adds a Go coverage floor gate to CI
@@ -163,21 +185,13 @@ Redocly 0 errors, gofmt/vet clean.
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
 ### DO NEXT — SAFE server-side / config items (no frozen-tree coupling)
-PR-05,06,12,42,45,46,47,70,81,76,72,84 are DONE. What's left `[S]`:
+PR-05,06,12,42,45,46,47,70,72,76,80,81,84 are DONE. What's left `[S]`:
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
-- **PR-79** — split god files (audit tags it Medium, not Low as this file's
-  own register below says — defer until abstractions settle regardless).
-- PR-72's "architecture map omits recent files" half is still open (see the
-  third-pass note above) — needs a careful full pass, not a quick fix.
-- PR-80's "sweep stale comments" half is still open, same caveat.
+- **PR-79** — split god files (Medium severity; defer until abstractions settle).
 
-**After PR-59/79/72-remainder/80-remainder, everything else genuinely needs
-the frozen shad client tree unfrozen (owner emulator sign-off) to touch.**
-- PR-80's "sweep stale comments" half (SSE/cache/release/threat-model
-  comments that overclaim vs. code) is still open — the mechanical `.idea/`
-  untracking part is done. Low value/high fuzziness; do only with a
-  concrete list of offending comments, not a blind grep pass.
+**After PR-59/79, everything else genuinely needs the frozen shad client
+tree unfrozen (owner emulator sign-off) to touch.**
 
 ### COMPLETE OPEN-FINDINGS REGISTER (60 items open — nothing omitted)
 Zone: `[S]`=safe server/CI (work now) · `[F]`=frozen client/app (needs emulator
@@ -223,7 +237,8 @@ HIGH (35 open) — PR-05,06,12,42,45,47,70,81 now CLOSED (2026-07-19), removed b
 - PR-74 [F] — temp preview/share files collide + retain sensitive content
 - PR-82 [F] — core Flutter networking/workflows barely integration-tested
 
-MEDIUM (9 open) — PR-46, 72, 76, 84 now CLOSED (2026-07-19):
+MEDIUM (12 open) — PR-46, 72, 76, 84 now CLOSED (2026-07-19); PR-79 moved
+here from the LOW section this pass (audit doc tags it Medium, not Low):
 - PR-49 [F] — listing cache rewrites one large JSON blob per host, races
 - PR-54 [F] — one malformed persisted JSON bricks whole app areas
 - PR-55 [F] — device identity generation is race/corruption-prone
@@ -232,12 +247,10 @@ MEDIUM (9 open) — PR-46, 72, 76, 84 now CLOSED (2026-07-19):
 - PR-65 [F] — reduced-motion preference does not reduce motion
 - PR-67 [F] — CSV preview knowingly incorrect + eagerly expensive
 - PR-75 [D] — Android FileProvider exposes overly broad roots
+- PR-79 [S] — nine god files combine unrelated responsibilities (split AFTER abstractions)
 - PR-83 [F] — several tests assert implementation/fake behavior
 
-LOW (1 open, 1 partial):
-- PR-79 [S] — nine god files combine unrelated responsibilities (split AFTER abstractions)
-- PR-80* [S] — `.idea/` untracking CLOSED (2026-07-19); stale/misleading
-  comments sweep still open, needs a concrete offending-comment list first
+LOW (0 open): PR-77, 78, 80 all CLOSED (2026-07-19).
 
 ### DEFERRED (coupling — needs owner decision, do NOT change unilaterally)
 - **PR-61** — minimal unauth `/health` + WoL admin-gate: the shipped app reads

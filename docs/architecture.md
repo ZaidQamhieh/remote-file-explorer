@@ -70,25 +70,37 @@ See `../protocol/openapi.yaml` for the full API surface.
 | Area | Files | Responsibility |
 |------|-------|----------------|
 | api | `api/providers.dart` | Riverpod providers exposing `AgentClient` + derived state. |
-| models | `models/{entry,listing,device,health,drive,host,pair_response,search_result,upload_session,agent_settings,app_release}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
+| backup | `backup/{backup_service,config_backup}.dart` | Full-app backup/restore + settings-only config export/import. |
+| models | `models/{entry,listing,device,health,drive,host,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
+| notifications | `notifications/notification_service.dart` | Local notification channel setup + dispatch (transfer progress/completion). |
+| platform | `platform/{file_opener,transfer_notifications,wol}.dart` | Platform-channel glue: open-with, native transfer notifications, Wake-on-LAN send. |
+| security | `security/device_identity.dart` | Generates/persists the phone's device identity keypair (paired token binding). |
 | settings | `settings/{app_settings.dart, settings_controller.dart}` | Settings model + the two-tier controller. |
-| storage | `storage/{host_store,favorites,listing_cache,recent_searches,view_prefs,visibility_prefs,download_saver}.dart` | Local persistence (hosts, favorites, offline listing cache, prefs, Downloads saver). |
+| storage | `storage/{host_store,favorites,bookmark_store,pin_store,listing_cache,offline_body_cache,cache_manager,recent_searches,saved_searches,sync_rules,transfer_journal,transfer_queue_store,view_prefs,visibility_prefs,download_saver}.dart` | Local persistence (hosts, favorites/bookmarks/pins, offline listing + body cache, search history, sync rules, transfer queue/journal, prefs, Downloads saver). |
 | theme | `theme/{tokens,app_theme,motion}.dart` | `Brand`/`Spacing`/`Radii`/`Elevations`, M3 theme, motion helpers. Skia-only (Impeller off). |
 | ui | `ui/{format,feedback,entry_leading,state_views}.dart` | Shared `formatSize`/`formatDate` (**use these, no local dupes**), snackbar/haptic toolkit, file-type leading icons, empty/error/loading views. |
 | update | `update/update_service.dart` | OTA updater client (`/v1/app/latest` + `/v1/app/download`). |
 | misc | `app_info.dart`, `main.dart` | App version/info; app entrypoint + router. |
+| l10n | `l10n/app_en.arb` (+ `l10n/generated/`) | Flutter gen-l10n source strings + generated localization delegate. |
 
 ### `features/` — one folder per screen/domain
 
 | Feature | Key files | Responsibility |
 |---------|-----------|----------------|
+| home | `home_shell.dart`, `home_state.dart`, `widgets/app_bottom_nav.dart` | Top-level app shell + bottom nav tab state, hosting the other feature screens. |
 | hosts | `host_list_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer/host list + per-host card and storage gauge. |
-| explorer | (hub files above) + `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create menu, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
+| explorer | (hub files above) + `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
+| bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
 | preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
 | search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |
-| settings | `settings_screen.dart`, `app_settings_screen.dart`, `update_tile.dart`, `widgets/{settings_section,device_view_overrides_section}.dart` | Per-device settings, app-default settings, OTA update tile, active-sessions. |
+| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
 | transfers | `transfer_manager.dart`, `transfer_state.dart`, `chunk_planner.dart`, `transfer_speed.dart`, `widgets/mini_transfer_bar.dart` | Transfer queue/center: manager orchestration, state, chunk planning, speed/ETA, mini bar. |
 | pairing | `pairing_screen.dart` | QR scan / manual pairing flow. |
+| handoff | `qr_generate_screen.dart`, `qr_scan_screen.dart` | Device-to-device handoff via QR (distinct from agent pairing). |
+| onboarding | `onboarding_screen.dart` | First-run intro flow. |
+| photo_backup | `photo_backup_controller.dart`, `photo_backup_logic.dart`, `photo_backup_prefs.dart`, `photo_backup_screen.dart` | Camera-roll auto-backup to a host: controller/logic split, prefs, settings UI. |
+| share | `share_intake.dart`, `share_sheet.dart` | Receives OS share-sheet intents into the app; app's own outbound share sheet. |
+| sync | `sync_runner.dart`, `sync_screen.dart` | Background two-way folder sync runner + its status/config UI. |
 
 ## Agent — `agent/`
 
@@ -96,22 +108,45 @@ See `../protocol/openapi.yaml` for the full API surface.
 |----------------|----------------|
 | `cmd/agent/main.go` | Daemon dispatcher + `runServe`; `defaultDataDir()` (`-data` > `$RFE_DATA_DIR` > `~/.rfe-agent`). |
 | `cmd/agent/admin.go` | Admin CLI subcommands: `pair`, `devices`, `revoke`, `remove`, `status`. |
+| `cmd/agent/install{,_darwin,_linux,_windows}.go` | `install`/`uninstall` CLI: registers the agent as an auto-start service (systemd --user / launchd / a Windows equivalent) — no root/admin required. |
 | `internal/server/server.go` | chi router wiring — where every route is mounted. |
 | `internal/server/auth.go` | Bearer-token auth middleware + per-device authorization. |
+| `internal/server/login.go` | Username/password login — a second way (besides `/v1/pair`) to obtain a device token. |
+| `internal/server/register.go` | Account registration; self-gated since it's reachable before any account exists. |
+| `internal/server/challenge.go` | Nonce mint/verify for device-signature proof-of-possession (pairs with `security/device_identity.go`). |
 | `internal/server/fshandlers.go` | List/read/create/delete/move/rename file endpoints. |
+| `internal/server/archive_handler.go` | Compress/extract endpoints (fronts `fsops/archive.go`). |
+| `internal/server/chmod_handler.go` | chmod endpoint. |
+| `internal/server/dupfinder_handler.go` | Batch-checksum endpoint backing the app's duplicate finder. |
+| `internal/server/recent.go` | Recent-files endpoint — a live recursive walk, like `search.go`, not a persistent index. |
 | `internal/server/transferhandlers.go` | Upload-session + chunk PUT + download-range endpoints. |
 | `internal/server/search.go` | Search endpoint (recursive walk). |
+| `internal/server/search_index.go` | Background index rebuild backing `search.go`. |
 | `internal/server/thumb.go` | Thumbnail endpoint. |
 | `internal/server/settings_handlers.go` | Live-mutable agent settings endpoints. |
 | `internal/server/update_handlers.go` | `/v1/app/latest` + `/v1/app/download` (serves APKs from `updates/`). |
 | `internal/server/pair.go` | Pairing endpoint (consumes a DB code, issues a token). |
 | `internal/server/ratelimit.go` | `/pair` rate limiter (10/min). |
-| `internal/fsops/fsops.go` | **Path jail + normalization** (traversal/symlink defense), listing, file ops. |
+| `internal/server/share_handlers.go` | One-time share-link mint/serve/revoke/list — see `docs/r1-share-link-threat-model.md`. |
+| `internal/server/sse_handler.go` | Server-sent-events endpoint — server-side half of the PR-59 finding (client parser lives in the frozen `app/lib` tree). |
+| `internal/server/status_handlers.go` + `status_disk_{unix,windows}.go` | `/v1/health`/status endpoint, incl. OS-specific disk-space lookup. |
+| `internal/server/metrics_{linux,other}.go` | CPU/RAM for `/metrics` — read from `/proc` on Linux, zero on other OSes. |
+| `internal/server/agent_control.go` + `agent_control_{linux,other}.go` | `/agent/restart` handler; OS-specific process restart. |
+| `internal/server/throughput.go` | Process-lifetime cumulative rx/tx byte counters exposed via metrics. |
+| `internal/server/wol_handler.go` | Wake-on-LAN send endpoint. |
+| `internal/server/webdata_handlers.go` | List endpoints (+ user removal) backing the web companion's Transfers/Users/Logs pages. |
+| `internal/fsops/fsops.go` | Core listing + file ops, built on `jail.go`'s path resolution. |
+| `internal/fsops/jail.go` | **Path jail + normalization** (traversal/symlink defense) — the security boundary for every fs operation; `Resolve` is the single chokepoint. |
+| `internal/fsops/archive.go` | Compress (zip) / Extract (zip, tar.gz), both routed through `Resolve`. |
+| `internal/fsops/trash.go` | Move-to-trash / restore, XDG Trash-layout (`files/` + `info/*.trashinfo`). |
 | `internal/fsops/{drives_*,birthtime_*}.go` | OS-specific drive enumeration + file birthtime. |
 | `internal/transfer/transfer.go` | **Resumable chunked transfer engine** — SHA-256, received-chunk bitmap, atomic rename. Touch its UI, not its logic. |
+| `internal/transfer/throttle.go` | Rate-limited `io.ReadSeeker` wrapper for bandwidth-capped transfers. |
 | `internal/thumbs/thumbs.go` | Thumbnail generation. |
 | `internal/pairing/pairing.go` | DB-backed pairing codes (`Mint`/`Consume`). |
 | `internal/security/tls.go` | Self-signed cert generation + SHA-256 fingerprint. |
+| `internal/security/device_identity.go` | Per-device Ed25519 identity keypair, generated on first use (pairs with `server/challenge.go`). |
+| `internal/security/password.go` | bcrypt password hashing for account login (bearer tokens elsewhere use SHA-256 — different threat model). |
 | `internal/settings/settings.go` | Agent settings model + load/save. |
 | `internal/store/store.go` | SQLite store: devices, tokens, pairing codes, transfer bitmaps. Busy-timeout DSN for daemon+CLI concurrency. |
 | `internal/updates/updates.go` | Update-channel management (the `updates/` dir). |

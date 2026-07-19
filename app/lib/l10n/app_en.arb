@@ -1057,8 +1057,6 @@
 
   "storageByTypeTitle": "Storage by type",
 
-  "sseConnected": "Live",
-
   "chmodTitle": "Permissions",
   "chmodOwner": "Owner",
   "chmodGroup": "Group",

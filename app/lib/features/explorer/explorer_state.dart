@@ -6,7 +6,6 @@ import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
 import '../../core/models/batch_result.dart';
 import '../../core/models/entry.dart';
-import '../../core/notifications/notification_service.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/listing_cache.dart';
@@ -14,7 +13,6 @@ import '../../core/storage/offline_body_cache.dart';
 import '../../core/storage/pin_store.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/storage/visibility_prefs.dart';
-import 'sse_listener.dart';
 
 export '../../core/storage/view_prefs.dart' show SortField, SortOrder;
 
@@ -78,7 +76,6 @@ class ExplorerState {
     this.nextCursor,
     this.visibilityPrefs = const VisibilityPrefs(),
     this.showHidden = false,
-    this.sseConnected = false,
   }) : sortedEntries = _sortEntries(entries, sort),
        hiddenPaths = _hiddenPaths(entries, visibilityPrefs);
 
@@ -108,9 +105,6 @@ class ExplorerState {
   /// via [ExplorerNotifier.toggleShowHidden]. Not persisted: resets the next
   /// time this provider instance is recreated.
   final bool showHidden;
-
-  /// `true` while the SSE event stream from the agent is connected.
-  final bool sseConnected;
 
   /// [entries] partitioned (directories first) and sorted per [sort],
   /// computed once at construction time so list/grid `itemBuilder`s can do
@@ -174,7 +168,6 @@ class ExplorerState {
     Object? nextCursor = _sentinel,
     VisibilityPrefs? visibilityPrefs,
     bool? showHidden,
-    bool? sseConnected,
   }) => ExplorerState(
     pathStack: pathStack ?? this.pathStack,
     entries: entries ?? this.entries,
@@ -190,7 +183,6 @@ class ExplorerState {
         nextCursor == _sentinel ? this.nextCursor : nextCursor as String?,
     visibilityPrefs: visibilityPrefs ?? this.visibilityPrefs,
     showHidden: showHidden ?? this.showHidden,
-    sseConnected: sseConnected ?? this.sseConnected,
   );
 }
 
@@ -267,13 +259,6 @@ class ExplorerNotifier
       );
     }, fireImmediately: true);
 
-    // Dispose SSE listener and debounce timer when this provider is torn down.
-    ref.onDispose(() {
-      _sse?.dispose();
-      _refreshDebounce?.cancel();
-    });
-
-    // Schedule async load after construction (SSE starts after first success).
     Future.microtask(_load);
     return ExplorerState(
       pathStack: [arg.rootPath],
@@ -285,8 +270,6 @@ class ExplorerNotifier
 
   final ListingCache _cache = ListingCache();
   final OfflineBodyCache _offlineBodyCache = OfflineBodyCache();
-  SseListener? _sse;
-  Timer? _refreshDebounce;
 
   /// Incremented at the start of every [_load]/[loadMore] call (PR-34).
   /// Comparing `state.currentPath` alone is an ABA hazard: navigating
@@ -349,8 +332,6 @@ class ExplorerNotifier
         error: null,
         nextCursor: listing.nextCursor,
       );
-      // Start SSE once (first successful load proves the client works).
-      if (_sse == null) _initSse(client);
     } catch (e) {
       if (gen != _generation) return;
       if (cached != null) {
@@ -360,29 +341,6 @@ class ExplorerNotifier
         state = state.copyWith(loading: false, error: humanizeError(e));
       }
     }
-  }
-
-  void _initSse(AgentClient client) {
-    _sse = SseListener(client.events);
-    _sse!.events.listen((event) {
-      if (event.type == 'fs.change' &&
-          event.path.startsWith(state.currentPath)) {
-        _refreshDebounce?.cancel();
-        _refreshDebounce = Timer(const Duration(milliseconds: 500), refresh);
-      }
-      // L3: notify when a file is created inside a watched folder.
-      if (event.type == 'fs.change' && event.action.contains('create')) {
-        final parent = _dirnameOf(event.path);
-        final settings = ref.read(settingsProvider).valueOrNull;
-        if (settings != null && settings.isWatched(parent)) {
-          ref
-              .read(notificationServiceProvider)
-              .showNewFileNotification(parent, basenameOf(event.path));
-        }
-      }
-    });
-    _sse!.start();
-    state = state.copyWith(sseConnected: true);
   }
 
   /// Loads the next page of entries for the current directory and appends
@@ -729,15 +687,6 @@ final explorerProvider = NotifierProvider.autoDispose
 /// (`folderLabel`, `breadcrumb_bar.dart`, `selection_bar.dart`).
 String basenameOf(String path) =>
     path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
-
-/// Parent directory of [path] — works for both POSIX and Windows separators.
-/// Used by the L3 watched-folder notification to get the containing folder.
-String _dirnameOf(String path) {
-  final lastSep = path.lastIndexOf(RegExp(r'[/\\]'));
-  if (lastSep < 0) return path;
-  if (lastSep == 0) return '/';
-  return path.substring(0, lastSep);
-}
 
 /// Returns a name derived from [name] that isn't in [existingNames], by
 /// inserting " (1)", " (2)", … before the extension (or at the end, for an

@@ -687,37 +687,6 @@ class AgentClient {
     return result;
   }
 
-  /// Connect to the SSE event stream.
-  ///
-  /// Returns a broadcast [Stream] that emits parsed SSE data lines as raw
-  /// JSON strings. The caller is responsible for parsing the JSON and
-  /// handling reconnection.
-  Stream<String> events() async* {
-    try {
-      final response = await _dio.get<ResponseBody>(
-        '/events',
-        options: Options(responseType: ResponseType.stream),
-      );
-      final stream = response.data?.stream;
-      if (stream == null) return;
-
-      String buffer = '';
-      await for (final chunk in stream) {
-        buffer += utf8.decode(chunk);
-        while (buffer.contains('\n')) {
-          final idx = buffer.indexOf('\n');
-          final line = buffer.substring(0, idx).trim();
-          buffer = buffer.substring(idx + 1);
-          if (line.startsWith('data: ')) {
-            yield line.substring(6);
-          }
-        }
-      }
-    } on DioException catch (e) {
-      throw _apiError(e);
-    }
-  }
-
   /// Search for files and folders whose name contains [q] (case-insensitive),
   /// or matches it as a case-insensitive glob if [q] contains `*` or `?`.
   ///

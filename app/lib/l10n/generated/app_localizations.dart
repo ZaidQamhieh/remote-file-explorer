@@ -3328,12 +3328,6 @@ abstract class AppLocalizations {
   /// **'Storage by type'**
   String get storageByTypeTitle;
 
-  /// No description provided for @sseConnected.
-  ///
-  /// In en, this message translates to:
-  /// **'Live'**
-  String get sseConnected;
-
   /// No description provided for @chmodTitle.
   ///
   /// In en, this message translates to:

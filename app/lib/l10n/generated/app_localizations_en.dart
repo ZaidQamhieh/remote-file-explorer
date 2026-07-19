@@ -1999,9 +1999,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageByTypeTitle => 'Storage by type';
 
   @override
-  String get sseConnected => 'Live';
-
-  @override
   String get chmodTitle => 'Permissions';
 
   @override

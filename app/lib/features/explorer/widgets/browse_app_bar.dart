@@ -31,7 +31,6 @@ class BrowseAppBar extends StatelessWidget {
     required this.onToggleFavorite,
     required this.onOpenBookmarks,
     required this.onOverflow,
-    this.sseConnected = false,
     this.isCurrentFolderPinned = false,
     this.onJumpTo,
   });
@@ -50,7 +49,6 @@ class BrowseAppBar extends StatelessWidget {
   final VoidCallback onToggleFavorite;
   final VoidCallback onOpenBookmarks;
   final void Function(OverflowAction action) onOverflow;
-  final bool sseConnected;
 
   @override
   Widget build(BuildContext context) {
@@ -67,10 +65,6 @@ class BrowseAppBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (sseConnected) ...[
-            const SizedBox(width: Spacing.xs),
-            const Tooltip(message: 'Live', child: _LiveDot()),
-          ],
         ],
       ),
       bottom: PreferredSize(
@@ -182,22 +176,6 @@ class BrowseAppBar extends StatelessWidget {
               ],
         ),
       ],
-    );
-  }
-}
-
-class _LiveDot extends StatelessWidget {
-  const _LiveDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: Brand.online,
-        shape: BoxShape.circle,
-      ),
     );
   }
 }

@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Used to scan the QR code shown by the host PC when pairing a new device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to back up your photos to a paired PC.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Used to discover and connect to a paired PC on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_rfe._tcp</string>
+	</array>
 </dict>
 </plist>

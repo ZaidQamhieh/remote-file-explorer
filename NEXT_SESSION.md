@@ -30,21 +30,151 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19, eighth pass): 66 / 85 closed (count of the
-list below), 0 partial-but-open (several closed findings have a documented
-unaddressed remainder — see "partial" notes per finding below and in the
-open register). Per-severity totals are counted directly off the audit
-doc's own tags (`grep -oE '^#### PR-[0-9]+ — [A-Za-z]+'`).
+### PROGRESS (as of 2026-07-19, ninth pass): 72 / 85 closed (count of the
+list below). Per-severity totals are counted directly off the audit doc's
+own tags. **This pass resolves the previous "15 lines vs 13 open" register
+drift by trusting the concrete open-register list as ground truth instead
+of the arithmetic tally** — going forward the register below is the one
+source of truth; do not re-derive from prose deltas across passes.
 - **Critical: 2/2 done** ✅ (PR-01, PR-02).
-- **High: 47/60 closed, 13 open** — +2 this pass (PR-24, PR-28).
-- **Medium: 14/20 closed, 6 open** — unchanged this pass.
+- **High: 52/60 closed, 8 open** (+2 fixed-but-uncommitted, not counted as
+  closed — see PR-38/PR-62 below) — +5 this pass (PR-25, 30, 31, 32, 66).
+- **Medium: 15/20 closed, 5 open** — +1 this pass (PR-83).
 - **Low: 3/3 closed, 0 open** ✅ (PR-77, 78, 80).
 
-Subtotals tie out exactly (2+47+14+3=66=flat list count).
+Subtotals tie out exactly (2+52+15+3=72=flat list count). Open register:
+10 High lines (8 truly open + PR-38/PR-62 fixed-but-uncommitted) + 3 Medium
+lines = 13 open; 72+13=85 ✅.
 
 Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,
-23,24,26,27,28,29,33,34,35,37,39,41,42,43,44,45,46,47,48,49,50,51,52,53,54,
-55,56,57,58,60,65,67,69,70,71,72,74,76,77,78,80,81,84,85.
+23,24,25,26,27,28,29,30,31,32,33,34,35,37,39,41,42,43,44,45,46,47,48,49,50,
+51,52,53,54,55,56,57,58,60,65,66,67,69,70,71,72,74,76,77,78,80,81,83,84,85.
+(PR-38 and PR-62 are fixed in the working tree but deliberately NOT in this
+list — same convention as each other: entangled with the staged shad diff,
+can't be committed separately, so they stay counted as open until commit.)
+
+**Ninth pass, same day (2026-07-19): continuing autonomously ("fix all the
+remaining", no count given). 6 commits, 6 findings closed (1 full-fix
+working-tree-only, uncommitted, not counted per the convention above).**
+- **PR-31** (`sync_runner.dart`, full close) — `SyncRunner.run()` only ever
+  fetched page 1 of the remote listing (large sync-rule folders silently
+  missed everything past the first page); now pages via `nextCursor`. New
+  pure `needsSync(remote, {localExists, localSize, localModified})` compares
+  size and remote-modified-vs-local-mtime instead of unconditionally
+  re-downloading every file every run. Downloads now land at
+  `<dest>.rfe-sync-tmp` and `.rename()` onto the final path — no more
+  half-written files visible mid-sync. 7 new tests. Commit `b00f513`.
+- **PR-32** (`cross_host_search_screen.dart`, partial) — added a monotonic
+  `_generation` counter so a slow host's stale result can't overwrite a
+  newer search's results, plus a 10s per-host `.timeout()` so one
+  unreachable host no longer blocks every other host's results (was a
+  single `Future.wait`). New `_ControllableSearchClient` test fake proves
+  stale results are dropped via manual `Completer`s. **Discovered this
+  screen has zero production callers** (dead code, only its own test
+  references it) — fixed anyway since it's a named finding, but did NOT add
+  speculative "tap to open" navigation (no caller contract to design
+  against). The "regex" search mode is still a fake glob-wrapper — real
+  bounded regex needs an agent/OpenAPI change (ReDoS risk), left open.
+  Commit `0709cea`.
+- **PR-66** (`explorer_state.dart`, `share_intake.dart`, partial) — new
+  `joinRemotePath(dir, name)` (Windows `\` vs POSIX `/` aware, handles bare
+  drive roots) replaces hardcoded `'$dir/$name'` in `createFolder`/
+  `createFile` and `buildShareUploadTasks` (was breaking Windows-paired-host
+  destinations; also fixed a bonus root-path double-slash bug). Same
+  hardcoded-`/` pattern still exists in `explorer_screen.dart`/
+  `preview_actions.dart` but both are shad-staged/entangled — left
+  unaddressed. The audit's fuller "RemotePath value object" refactor was not
+  attempted (bigger scope than a bug-fix pass). Commit `aace062`.
+- **PR-25** (`release.yml`, `app_release.dart`, `auto_update.dart`, full
+  close) — the most involved fix this pass. `release.sh`'s release.yml now
+  computes and publishes a `sha256` in `latest.json`; `AppRelease` parses it
+  (optional, backward compatible with old feeds); `sharedDownloadApk()` now
+  verifies the finished download's SHA-256 against it
+  (`verifyDownloadedApk`/`hashApkSha256`, streaming digest, same pattern as
+  `transfer_state.dart`'s existing `hashFileSha256`) and deletes+throws
+  `ApkIntegrityException` on mismatch. Cross-isolate download race: my
+  first attempt used `RandomAccessFile.lock()` on a sibling `.lock` file — a
+  test caught that it doesn't actually block a second caller, because
+  dart:io's own docs say file locks are **process-scoped on Linux/Android**
+  (foreground isolate + WorkManager's background isolate are the same OS
+  process, so this was a no-op). Replaced with atomic
+  `File.create(exclusive: true)` plus a 2-minute staleness check for crash
+  recovery — genuinely cross-isolate-safe. 8 new tests, including one that
+  proves the lock actually blocks a concurrent call. Commit `c912cea`.
+- **PR-30** (`photo_backup_controller.dart`, `photo_backup_prefs.dart`,
+  partial) — the task→asset dedupe map was in-memory only; a process
+  restart mid-upload lost track of which in-flight transfer belonged to
+  which photo, so a completed-but-not-yet-recorded asset looked "pending"
+  forever and re-uploaded every run. Now persisted
+  (`PhotoBackupStore.saveTaskToAsset`/`loadTaskToAsset`, corrupt-JSON-safe)
+  and lazily hydrated; both `onTasks()` and `backupNow()`'s enqueue loop
+  route writes through the existing `_persistChain` serialization. New test
+  simulates a restart (fresh controller instance) and proves a completion
+  recorded before it still marks the asset done via the store, not memory.
+  "Manual-only" trigger and serial per-photo upload delay (the other two
+  parts of this finding's title) are unaddressed. Commit `5b0ee89`.
+- **PR-83** (`video_preview.dart`, partial) — renamed private
+  `_readPosition`/`_writePosition`/`_clearPosition` to public
+  `readVideoPosition`/`writeVideoPosition`/`clearVideoPosition` so
+  `video_preview_test.dart` calls the real production code instead of
+  reimplementing the SharedPreferences key format inline (a passing test
+  that would keep passing even if the real code broke). The
+  `transfer_state_test.dart` portion of this finding was already
+  incidentally resolved by the eighth pass's PR-24 fix. Unaddressed:
+  `view_options_sheet_test.dart` and `host_card_test.dart` — the latter is
+  blocked because `host_card.dart`'s `_ping()` builds its `AgentClient`
+  directly (`buildClientForHost()`) rather than through an overridable
+  provider, and `host_card.dart` is shad-staged/entangled, so fixing that
+  coupling would touch a frozen file. Commit `155ea07`.
+
+**PR-38** (`text_editor.dart`, full fix, **NOT committed** — file is `M `
+staged from the shad migration) — the dirty flag cleared unconditionally on
+save success even if the user typed more during the in-flight `putContent`
+await, silently discarding those newer edits as "saved." Fixed via a
+monotonic `_editRevision` counter bumped every keystroke: `_save()` captures
+it before awaiting, and only clears `_dirty` if the revision is still the
+same after the save resolves. Also: `_reload()` used to fetch body
+(`fetchBytes`) and metadata (`meta()`) as two independent requests that
+could straddle a concurrent write and pair mismatched versions — now fetches
+meta before *and* after the body, and discards the result (surfaces an
+error instead of applying it) if they disagree. `PopScope.canPop` now also
+blocks on `_saving`, not just `_dirty` (was: poppable mid-save once `_dirty`
+happened to already be false). 2 new regression tests in
+`text_editor_test.dart` (save-in-flight-then-edit-again stays dirty;
+mid-fetch metadata change is discarded, not applied) — 13/13 green,
+`flutter analyze` clean. Left uncommitted per the PR-62 precedent: `git
+status --porcelain` shows `MM` (shad already staged unrelated changes
+there), so a commit can't be scoped to just this fix without bundling it
+into that unverified diff.
+
+All 6 commits: `flutter analyze` (whole project) and `dart format
+--set-exit-if-changed` clean, targeted `flutter test` green per touched
+file, lefthook pre-commit green on every commit. Frozen shad-tree staged
+count unaffected by any of the 6 (all in files clean of that diff);
+`text_editor.dart`'s pre-existing `M ` flipped to `MM` from the uncommitted
+PR-38 fix, same shape as `main.dart`.
+
+**Confirmed unactionable this pass (git-status-verified, not just recalled
+from memory — the actual paths differ from what an earlier summary said):**
+- PR-36 — `host_list_screen.dart` (`M `) + `host_card.dart`
+  (`app/lib/features/hosts/widgets/host_card.dart`, `M `): both shad-staged.
+- PR-64 — `photo_backup_screen.dart` (`M `) +
+  `settings_tile.dart` (`app/lib/features/settings/widgets/settings_tile.dart`,
+  `M `): both shad-staged.
+- PR-62 — `main.dart` (`MM`): unchanged, still fixed-uncommitted from the
+  sixth pass.
+- PR-73 — `pubspec.yaml`/`pubspec.lock` (`M `): shad-staged AND a dependency
+  bump is explicitly the kind of change CLAUDE.md says not to do unilaterally.
+- PR-83 remainder — `view_options_sheet_test.dart` (`M `): shad-staged.
+- PR-40 (iOS Info.plist privacy strings) — deliberately not attempted:
+  CLAUDE.md is Android-first/no-iOS-work, wording can't be verified without a
+  physical iOS device, and the audit's alternative fix (drop iOS artifacts
+  entirely) is a repo-structure call beyond a bug-fix pass's mandate.
+- PR-68 (l10n/a11y sweep) and PR-82 (integration-test-harness ask) — both
+  span the whole client tree with no single fix site; too broad for a
+  bounded pass, same call as prior sessions.
+- PR-63 (shad theme ignores dynamic/accent/AMOLED) — theme-system work
+  inside the unverified shad migration itself; not attempted.
 
 **Eighth pass, same day (2026-07-19): continuing autonomously ("continue
 fixing bugs in rfe"). 2 findings closed, 2 commits, both in files clean of
@@ -441,65 +571,60 @@ Redocly 0 errors, gofmt/vet clean.
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
 ### DO NEXT
-PR-05,06,12,14-19,21,22,23,24,26,27,28,29,33,34,35,37,39,42,45,46,47,49,54,
-55,56,57,58,60(*see note),65,67,69,70,72,74,76,80,81,84 are DONE (PR-62
-fixed in working tree, not yet committed — see sixth pass note above;
-PR-67/39/74/33/29/28 are partial — see seventh/eighth pass notes for the
-unaddressed remainder of each). What's left, in rough priority order:
+PR-05,06,12,14-19,21-35,37,39,41-58,60(*see note),65-67,69-72,74,76,77,78,
+80,81,83-85 are DONE (PR-38/PR-62 fixed in working tree, not yet committed —
+see notes above; PR-28/29/30/32/33/39/66/67/74/83 are partial — see the
+relevant pass note for the unaddressed remainder of each). What's left is
+exactly the 13-line register below — nothing else is untriaged. In rough
+priority order:
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
-- **PR-62** — commit the working-tree fix once decided how to handle the
-  shad-diff entanglement (see sixth pass note).
+- **PR-38, PR-62** — commit the two working-tree fixes once decided how to
+  handle the shad-diff entanglement (`text_editor.dart` / `main.dart`, both `MM`).
 - **PR-79** — split god files (Medium severity; defer until abstractions settle).
-- **Remaining `[F]` findings** — see the register below. Owner unfroze
-  editing this tree 2026-07-19 (HARD SCOPE RULES rule 1); work through them
-  same as prior passes — pick one whose file(s) `git status` shows clean
-  (not already `M `/staged from the shad migration), fix + test +
-  `git commit --only`, don't push. PR-25/30/31/32/35(remainder)/36/38/
-  40/68/73/82/83 are the untouched-so-far larger/riskier ones (isolate/SAF/
-  server-API/dependency-bump work) — see the audit note before starting any
-  of them, they were deliberately deferred as too large for a fast pass.
+- **PR-36, PR-64, PR-63, PR-73** — all genuinely blocked on shad-staged files
+  (`host_list_screen.dart`, `host_card.dart`, `photo_backup_screen.dart`,
+  `settings_tile.dart`, theme files, `pubspec.yaml`/`.lock`) — re-check `git
+  status` once the shad migration itself is committed/verified; that's what
+  actually unblocks these, not more triage.
+- **PR-40, PR-68, PR-82** — deliberately deferred, not blocked: iOS-only /
+  no-single-fix-site / broad-integration-test asks respectively. See the
+  "confirmed unactionable" note in the ninth-pass section above for why each
+  was skipped rather than attempted.
+- **PR-61, PR-75** — owner-decision-gated, see DEFERRED section below.
 
-### COMPLETE OPEN-FINDINGS REGISTER (19 items open)
+### COMPLETE OPEN-FINDINGS REGISTER (13 items open — this list is the
+### source of truth; supersedes any arithmetic tally elsewhere in this file)
 Zone: `[S]`=safe, no client coupling · `[F]`=in the (now-unfrozen-for-editing,
 still-not-committable-together-with-the-shad-diff) client/app tree · `[D]`=
-deferred coupling. Titles are summaries; full file:line + fix in the audit
-note. Closed-but-partial findings (PR-33/39/67/74/29/28 — see seventh/eighth
-pass notes above for exactly what's left unaddressed in each) are removed
-from this register like every other closed finding; the remainder is
-tracked in prose above, not as an open register line.
+deferred coupling · `[U]`=fixed in working tree, uncommitted (entangled).
+Titles are summaries; full file:line + fix in the audit note. Closed-but-
+partial findings are removed from this register like every other closed
+finding; the remainder is tracked in prose in the relevant pass note above,
+not as an open register line.
 
-HIGH (13 open) — PR-22,29,33,34,35,37,39,74 CLOSED seventh pass, PR-24,28
-CLOSED eighth pass, 2026-07-19, removed below:
-- PR-25 [F] — update downloads race across isolates, size-only verify (+release.yml)
-- PR-30 [F] — photo-backup completion not durable, manual-only, serial delay
-- PR-31 [F] — sync silently creates incomplete/stale replicas, raw paths
-- PR-32 [F] — search "regex" is fake glob; stale-request guards incomplete
+HIGH (10 lines: 8 truly open + 2 fixed-but-uncommitted) — PR-25,30,31,32,66
+CLOSED ninth pass, 2026-07-19, removed below:
 - PR-36 [F] — host-card widget identity + client lifetime unsafe (no ValueKey)
-- PR-38 [F] — text edits made during save are falsely marked saved
+- PR-38 [U] — text edits made during save falsely marked saved — **fixed in
+  working tree** (ninth pass), entangled with staged `text_editor.dart`.
 - PR-40 [F] — iOS scaffold missing camera/photo/local-network privacy strings
+  (deliberately deferred, not blocked — see ninth-pass note)
 - PR-59 [S] — SSE half-finished (server never emits) + unsafe client parser
 - PR-61 [D] — unauth /health leaks topology; any device sends WoL; 443 binds all
-- PR-62 [F] — shad root removes ScaffoldMessenger — **fixed in working tree,
-  not committed** (see sixth pass note); entangled with staged `main.dart`.
+- PR-62 [U] — shad root removes ScaffoldMessenger — **fixed in working tree,
+  not committed** (sixth pass); entangled with staged `main.dart`.
 - PR-64 [F] — disabled photo ShadSwitch keyboard-crash; settings a11y regress
-- PR-66 [F] — remote path manipulation duplicated + Windows-incorrect
 - PR-68 [F] — hard-coded strings bypass localization; missing a11y semantics
+  (deliberately deferred — no single fix site, see ninth-pass note)
 - PR-73 [F] — flutter_markdown discontinued; 66 pkgs stale; Gradle/AGP/Kotlin (pubspec+gradle)
 - PR-82 [F] — core Flutter networking/workflows barely integration-tested
+  (deliberately deferred — too broad, see ninth-pass note)
 
-(That's 15 lines above, not 13 — PR-62's working-tree-fixed status and the
-inherent looseness of a hand-maintained register mean this count has drifted
-before; treat the audit doc's own severity tags as authoritative over any
-running tally here if they ever disagree.)
-
-MEDIUM (6 open) — PR-49,67 CLOSED seventh pass 2026-07-19, removed below:
+MEDIUM (3 open) — PR-83 CLOSED ninth pass, 2026-07-19, removed below:
 - PR-63 [F] — shad theme ignores dynamic/accent/AMOLED appearance
 - PR-75 [D] — Android FileProvider exposes overly broad roots
 - PR-79 [S] — nine god files combine unrelated responsibilities (split AFTER abstractions)
-- PR-83 [F] — several tests assert implementation/fake behavior
-
-(4 lines above, not 6 — same caveat as HIGH above.)
 
 LOW (0 open): PR-77, 78, 80 all CLOSED (2026-07-19).
 
@@ -510,15 +635,10 @@ LOW (0 open): PR-77, 78, 80 all CLOSED (2026-07-19).
 - **PR-75** — FileProvider narrowing: needs Dart update/share paths in the frozen
   tree.
 
-### Remaining client-tree findings (unfrozen for editing 2026-07-19, see
-### HARD SCOPE RULES rule 1 — this is no longer a "wait for sign-off" list,
-### just what's left)
-PR-25,30,31,32,36,38,40,62(fixed-uncommitted),64,66,68,73,82,63,83 —
-all `app/lib/**` or shad UI or `pubspec`. See the audit note per finding.
-Before starting one, `git status` the target file(s) first: if already
-`M ` (staged), the shad migration touched it and a fix commit can't be
-cleanly separated from that unverified diff — flag it instead of bundling
-silently.
+### Remaining client-tree findings
+Superseded by the "COMPLETE OPEN-FINDINGS REGISTER" above (13 items,
+2026-07-19 ninth pass) — that list is current; this section intentionally
+left as a pointer rather than a second copy that can drift out of sync.
 
 ### COMMITTED 2026-07-19 (was the uncommitted fix-session work)
 Landed on `master` as `4e09ddf` (server) + `9706ee2` (android). PR-46 replaced

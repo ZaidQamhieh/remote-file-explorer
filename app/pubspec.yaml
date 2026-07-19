@@ -1,7 +1,7 @@
 name: remote_file_explorer
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.41.13+74
+version: 1.42.0+75
 
 environment:
   sdk: ^3.7.0
@@ -25,7 +25,6 @@ dependencies:
   shared_preferences: ^2.5.3
   photo_view: ^0.15.0
   pdfx: ^2.9.2
-  flutter_markdown: ^0.7.6
   just_audio: ^0.9.43
   video_player: ^2.9.5
   chewie: ^1.11.3
@@ -40,6 +39,8 @@ dependencies:
   path: ^1.9.0
   lucide_icons_flutter: ^3.1.14+2
   workmanager: ^0.9.0+3
+  shadcn_ui: ^0.55.0
+  flutter_markdown_plus: ^1.0.12
 dev_dependencies:
   flutter_test:
     sdk: flutter

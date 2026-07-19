@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
@@ -135,13 +135,18 @@ class _HostCardState extends ConsumerState<HostCard> {
           _isTailscaleActive = client!.isActiveAddressTailscale;
         });
       }
-      _drivesFuture = _loadDrives(client);
+      // _drivesFuture stays in flight after _ping returns (its own
+      // FutureBuilder resolves independently, so the online/offline status
+      // above isn't held up waiting for it) — the client must stay open
+      // until IT finishes, not close as soon as _ping does (PR-36: this used
+      // to close in a `finally` here regardless, racing this still-pending
+      // request against a closed connection).
+      _drivesFuture = _loadDrives(client).whenComplete(client.close);
       return health;
     } catch (_) {
       if (mounted) setState(() => _lastChecked = DateTime.now());
-      return null;
-    } finally {
       client?.close();
+      return null;
     }
   }
 
@@ -285,18 +290,20 @@ class _HostCardState extends ConsumerState<HostCard> {
   }
 
   Future<void> _confirmRemove(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.forgetComputerTitle),
-            content: Text(ctx.l10n.forgetComputerConfirm(widget.host.label)),
+            description: Text(
+              ctx.l10n.forgetComputerConfirm(widget.host.label),
+            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(ctx.l10n.forgetButton),
               ),

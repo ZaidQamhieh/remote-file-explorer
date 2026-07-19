@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -10,6 +11,7 @@ import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/text_editor.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // TextEditorScreen widget tests — headless (fake AgentClient, no real host).
@@ -48,6 +50,15 @@ class _FakeAgentClient extends AgentClient {
   String reloadedText = 'reloaded from host';
   DateTime reloadedModified = DateTime.utc(2026, 1, 2, 0, 0, 0);
 
+  /// When set, [putContent] awaits this before returning — lets a test hold
+  /// a save "in flight" to exercise a concurrent edit (PR-38).
+  Completer<void>? putGate;
+
+  /// Queue of `modified` values [meta] returns on successive calls (PR-38's
+  /// `_reload` calls it twice — before and after the body fetch). Falls back
+  /// to [reloadedModified] once exhausted.
+  final List<DateTime> metaModifiedQueue = [];
+
   @override
   Future<Entry> putContent(
     String remotePath,
@@ -55,6 +66,7 @@ class _FakeAgentClient extends AgentClient {
     DateTime? baseModified,
   }) async {
     putCalls.add((remotePath, utf8.decode(bytes), baseModified));
+    if (putGate != null) await putGate!.future;
     final result =
         putResults.isNotEmpty
             ? putResults.removeAt(0)
@@ -72,17 +84,22 @@ class _FakeAgentClient extends AgentClient {
   Future<Uint8List> fetchBytes(
     String remotePath, {
     CancelToken? cancelToken,
+    int maxBytes = AgentClient.kFetchBytesDefaultMaxBytes,
   }) async {
     return Uint8List.fromList(utf8.encode(reloadedText));
   }
 
   @override
   Future<Entry> meta(String path) async {
+    final modified =
+        metaModifiedQueue.isNotEmpty
+            ? metaModifiedQueue.removeAt(0)
+            : reloadedModified;
     return Entry(
       name: 'notes.txt',
       path: path,
       isDir: false,
-      modified: reloadedModified,
+      modified: modified,
     );
   }
 }
@@ -94,12 +111,14 @@ Future<void> _pumpEditor(
   Entry? entry,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      localizationsDelegates: l10nDelegates,
-      home: TextEditorScreen(
-        entry: entry ?? _textEntry(),
-        client: client,
-        initialText: initialText,
+    wrapShad(
+      MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: TextEditorScreen(
+          entry: entry ?? _textEntry(),
+          client: client,
+          initialText: initialText,
+        ),
       ),
     ),
   );
@@ -203,6 +222,34 @@ void main() {
         expect(client.putCalls[1].$3, newModified);
       },
     );
+
+    testWidgets(
+      'an edit made while a save is in flight is not marked saved (PR-38)',
+      (tester) async {
+        final gate = Completer<void>();
+        client.putGate = gate;
+
+        await _pumpEditor(tester, client, initialText: 'hello world');
+        await tester.enterText(find.byType(TextField), 'edit one');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.pump(); // save started, still awaiting the gate
+
+        // Type more before the in-flight save resolves.
+        await tester.enterText(find.byType(TextField), 'edit one, plus more');
+        await tester.pump();
+
+        gate.complete();
+        await tester.pumpAndSettle();
+
+        expect(client.putCalls, hasLength(1)); // only the first save fired
+        // The later edit wasn't part of that save, so it must still show dirty.
+        final saveButton = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, LucideIcons.save),
+        );
+        expect(saveButton.onPressed, isNotNull);
+      },
+    );
   });
 
   group('STALE_WRITE (409)', () {
@@ -255,6 +302,39 @@ void main() {
       expect(client.putCalls, hasLength(2));
       expect(client.putCalls.last.$3, newModified);
     });
+
+    testWidgets(
+      'Reload discards the result if the file changed mid-fetch (PR-38)',
+      (tester) async {
+        client.putResults.add(StaleWriteException('file changed on disk'));
+        client.reloadedText = 'fresh from disk';
+        // Two different `modified` values across the before/after meta calls
+        // in _reload simulates a write landing between the body fetch and
+        // the follow-up metadata check.
+        client.metaModifiedQueue.addAll([
+          DateTime.utc(2026, 1, 3, 0, 0, 0),
+          DateTime.utc(2026, 1, 3, 0, 0, 5),
+        ]);
+
+        await _pumpEditor(tester, client, initialText: 'hello world');
+        await tester.enterText(find.byType(TextField), 'hello world!');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Reload'));
+        await tester.pumpAndSettle();
+
+        // Local edits are left untouched — the inconsistent read was
+        // discarded rather than applied.
+        final field = tester.widget<TextField>(find.byType(TextField));
+        expect(field.controller!.text, 'hello world!');
+        expect(
+          find.textContaining('File changed while reloading'),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('Overwrite re-saves with baseModified omitted', (tester) async {
       client.putResults.add(StaleWriteException('file changed on disk'));
@@ -310,31 +390,33 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Navigator(
-            onGenerateRoute:
-                (settings) => MaterialPageRoute(
-                  builder:
-                      (context) => Scaffold(
-                        body: Center(
-                          child: ElevatedButton(
-                            onPressed:
-                                () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => TextEditorScreen(
-                                          entry: _textEntry(),
-                                          client: client,
-                                          initialText: 'hello world',
-                                        ),
+        wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Navigator(
+              onGenerateRoute:
+                  (settings) => MaterialPageRoute(
+                    builder:
+                        (context) => Scaffold(
+                          body: Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => TextEditorScreen(
+                                            entry: _textEntry(),
+                                            client: client,
+                                            initialText: 'hello world',
+                                          ),
+                                    ),
                                   ),
-                                ),
-                            child: const Text('Open editor'),
+                              child: const Text('Open editor'),
+                            ),
                           ),
                         ),
-                      ),
-                ),
+                  ),
+            ),
           ),
         ),
       );
@@ -372,31 +454,33 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Navigator(
-            onGenerateRoute:
-                (settings) => MaterialPageRoute(
-                  builder:
-                      (context) => Scaffold(
-                        body: Center(
-                          child: ElevatedButton(
-                            onPressed:
-                                () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => TextEditorScreen(
-                                          entry: _textEntry(),
-                                          client: client,
-                                          initialText: 'hello world',
-                                        ),
+        wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Navigator(
+              onGenerateRoute:
+                  (settings) => MaterialPageRoute(
+                    builder:
+                        (context) => Scaffold(
+                          body: Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => TextEditorScreen(
+                                            entry: _textEntry(),
+                                            client: client,
+                                            initialText: 'hello world',
+                                          ),
+                                    ),
                                   ),
-                                ),
-                            child: const Text('Open editor'),
+                              child: const Text('Open editor'),
+                            ),
                           ),
                         ),
-                      ),
-                ),
+                  ),
+            ),
           ),
         ),
       );

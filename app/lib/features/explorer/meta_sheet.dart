@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
@@ -19,7 +20,6 @@ import '../share/share_sheet.dart';
 import '../transfers/transfer_state.dart';
 import 'explorer_state.dart' show folderLabel, renameDestination;
 import 'widgets/chmod_dialog.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet showing detailed metadata for a single file, with rename,
 /// delete, and download actions.
@@ -573,26 +573,26 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Future<void> _rename(BuildContext context) async {
     final ctrl = TextEditingController(text: _entry.name);
-    final newName = await showDialog<String>(
+    final newName = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.renameButton),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: InputDecoration(labelText: ctx.l10n.newNameLabel),
-            ),
             actions: [
-              TextButton(
+              ShadButton.outline(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
                 child: Text(ctx.l10n.renameButton),
               ),
             ],
+            child: ShadInput(
+              controller: ctrl,
+              autofocus: true,
+              placeholder: Text(ctx.l10n.newNameLabel),
+            ),
           ),
     );
     if (newName == null || newName == _entry.name || !context.mounted) return;
@@ -663,25 +663,22 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
 
   Future<void> _delete(BuildContext context) async {
     // null = cancel, false = trash (default), true = permanent.
-    final permanent = await showDialog<bool>(
+    final permanent = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.deleteTitle),
-            content: Text(ctx.l10n.moveToTrashConfirm(_entry.name)),
+            description: Text(ctx.l10n.moveToTrashConfirm(_entry.name)),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              TextButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(ctx).colorScheme.error,
-                ),
                 child: Text(ctx.l10n.deleteForeverButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.moveToTrashButton),
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
@@ -10,7 +11,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../handoff/qr_scan_screen.dart';
-import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
@@ -80,12 +80,6 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
             tooltip: context.l10n.refreshTooltip,
             onPressed: () => ref.invalidate(hostStoreProvider),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: context.l10n.appSettingsTooltip,
-            onPressed:
-                () => ref.read(selectedTabIndexProvider.notifier).state = 3,
-          ),
           const SizedBox(width: Spacing.xs),
         ],
       ),
@@ -153,6 +147,7 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                       AppearListItem(
                         index: 0,
                         child: HostCard(
+                          key: ValueKey(hosts[0].id),
                           host: hosts[0],
                           store: store,
                           isFirst: true,
@@ -175,6 +170,7 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                               AppearListItem(
                                 index: i,
                                 child: HostCard(
+                                  key: ValueKey(hosts[i].id),
                                   host: hosts[i],
                                   store: store,
                                   isFirst: false,
@@ -209,29 +205,30 @@ class _DeviceSearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      borderRadius: Radii.lgR,
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: Theme.of(context).textTheme.bodyMedium,
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: 'Search devices…',
-          hintStyle: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: scheme.outline),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: scheme.outline,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: Radii.lgR,
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(vertical: Spacing.md),
+    return ShadInput(
+      controller: controller,
+      onChanged: onChanged,
+      style: Theme.of(context).textTheme.bodyMedium,
+      placeholder: Text(
+        'Search devices…',
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: scheme.outline),
+      ),
+      leading: Padding(
+        padding: const EdgeInsets.only(left: Spacing.sm),
+        child: Icon(Icons.search_rounded, size: 18, color: scheme.outline),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.sm,
+        vertical: Spacing.md,
+      ),
+      decoration: ShadDecoration(
+        color: scheme.surfaceContainerHigh,
+        border: ShadBorder.all(color: Colors.transparent, radius: Radii.lgR),
+        focusedBorder: ShadBorder.all(
+          color: Colors.transparent,
+          radius: Radii.lgR,
         ),
       ),
     );

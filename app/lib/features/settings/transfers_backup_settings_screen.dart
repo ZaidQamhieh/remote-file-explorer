@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
@@ -11,7 +12,6 @@ import 'widgets/backup_restore_section.dart';
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Everything about moving/protecting data: photo backup, watched folders,
 /// cellular compression, transfer history, and config backup/restore
@@ -119,14 +119,14 @@ class _WatchedFoldersSection extends ConsumerWidget {
     final folders = settings.app.watchedFolders.toList()..sort();
 
     return SettingsSection(
-      title: 'Watched folders',
+      title: context.l10n.watchedFoldersTitle,
       padded: false,
       children: [
         if (folders.isEmpty)
           Padding(
             padding: const EdgeInsets.all(Spacing.md),
             child: Text(
-              'No watched folders. Add a remote folder path below to get notified when new files appear there.',
+              context.l10n.watchedFoldersEmpty,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -139,13 +139,13 @@ class _WatchedFoldersSection extends ConsumerWidget {
             title: Text(folder, overflow: TextOverflow.ellipsis),
             trailing: IconButton(
               icon: const Icon(LucideIcons.circleMinus),
-              tooltip: 'Stop watching',
+              tooltip: context.l10n.stopWatchingTooltip,
               onPressed: () => notifier.removeWatchedFolder(folder),
             ),
           ),
         ListTile(
           leading: _folderBadge(LucideIcons.plus),
-          title: const Text('Add folder path'),
+          title: Text(context.l10n.addFolderPathTile),
           onTap: () => _showAddDialog(context, notifier),
         ),
       ],
@@ -170,30 +170,27 @@ class _WatchedFoldersSection extends ConsumerWidget {
     SettingsNotifier notifier,
   ) async {
     final controller = TextEditingController();
-    final path = await showDialog<String>(
+    final path = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
-            title: const Text('Watch a folder'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: '/home/user/Downloads',
-                labelText: 'Remote folder path',
-              ),
-              autofocus: true,
-              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-            ),
+          (ctx) => ShadDialog.alert(
+            title: Text(ctx.l10n.watchAFolderTitle),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(ctx.l10n.cancelButton),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('Watch'),
+                child: Text(ctx.l10n.watchButton),
               ),
             ],
+            child: ShadInput(
+              controller: controller,
+              placeholder: const Text('/home/user/Downloads'),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
           ),
     );
     controller.dispose();

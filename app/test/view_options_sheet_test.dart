@@ -13,9 +13,11 @@ import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_state.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/view_options_sheet.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // ViewOptionsSheet widget tests — exercises the popover that folds list/grid,
 // density, and sort into one persisted set of controls.
@@ -116,11 +118,13 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ViewOptionsSheet(notifier: notifier),
+        child: wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ViewOptionsSheet(notifier: notifier),
+              ),
             ),
           ),
         ),
@@ -247,13 +251,13 @@ void main() {
       expect(container.read(explorerProvider(arg)).hiddenCount, 1);
 
       // The tile shows the hidden count via its Badge.
-      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(find.byType(ShadSwitch), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
       expect(find.text('1 hidden by file visibility settings'), findsOneWidget);
 
       expect(container.read(explorerProvider(arg)).showHidden, isFalse);
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.byType(ShadSwitch));
       await tester.pumpAndSettle();
 
       expect(container.read(explorerProvider(arg)).showHidden, isTrue);
@@ -270,7 +274,7 @@ void main() {
       const arg = (hostId: 'h1', rootPath: '/');
       expect(container.read(explorerProvider(arg)).hiddenCount, 0);
 
-      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.byType(ShadSwitch), findsNothing);
       expect(find.byType(Badge), findsNothing);
     });
   });

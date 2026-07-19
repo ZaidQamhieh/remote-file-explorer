@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -114,7 +114,20 @@ class SettingsTile extends StatelessWidget {
 
     switch (_kind) {
       case _Kind.toggle:
-        return row; // Switch itself is the interactive target.
+        // Whole row toggles (not just the small switch itself) — full 48dp+
+        // target, matching the same pattern (and reason) as Flutter's own
+        // SwitchListTile: the row's onTap and the switch's onChanged call the
+        // same callback, and MergeSemantics combines the label + switch into
+        // one TalkBack-announced node instead of two disconnected ones
+        // (PR-64 — previously "the switch itself is the interactive target",
+        // an undersized touch target with unmerged a11y semantics).
+        return MergeSemantics(
+          child: InkWell(
+            onTap: () => _onChanged!(!_value),
+            borderRadius: BorderRadius.circular(Radii.chip),
+            child: row,
+          ),
+        );
       case _Kind.value:
       case _Kind.nav:
         return InkWell(
@@ -128,7 +141,7 @@ class SettingsTile extends StatelessWidget {
   Widget _trailing(BuildContext context, ColorScheme scheme) {
     switch (_kind) {
       case _Kind.toggle:
-        return Switch(value: _value, onChanged: _onChanged);
+        return ShadSwitch(value: _value, onChanged: _onChanged);
       case _Kind.nav:
         return Icon(
           LucideIcons.chevronRight,

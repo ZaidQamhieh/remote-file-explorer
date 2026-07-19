@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
@@ -19,7 +20,7 @@ import '../../core/ui/format.dart';
 import '../sync/sync_screen.dart';
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'widgets/settings_tile.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -138,12 +139,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ? widget.host.label
                 : widget.host.address);
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.disconnectDeviceTitle),
-            content: Text(ctx.l10n.disconnectDeviceMessage(pcName)),
+            description: Text(ctx.l10n.disconnectDeviceMessage(pcName)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -179,12 +180,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _editName() async {
     final ctrl = TextEditingController(text: _settings?.agentName ?? '');
-    final name = await showDialog<String>(
+    final name = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.renameAgentTitle),
-            content: TextField(controller: ctrl, autofocus: true),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -195,6 +195,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Text(ctx.l10n.saveButton),
               ),
             ],
+            child: ShadInput(controller: ctrl, autofocus: true),
           ),
     );
     if (name != null && name.isNotEmpty && mounted) {
@@ -246,12 +247,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: context.l10n.agentSection,
           icon: LucideIcons.server,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: _rowBadge(LucideIcons.server, scheme.primary),
-              title: Text(context.l10n.agentNameLabel),
-              subtitle: Text(s.agentName),
-              trailing: const Icon(LucideIcons.pencil),
+            SettingsTile.value(
+              icon: LucideIcons.server,
+              badgeColor: scheme.primary,
+              title: context.l10n.agentNameLabel,
+              value: s.agentName,
               onTap: _editName,
             ),
           ],
@@ -261,27 +261,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: context.l10n.accessSection,
           icon: LucideIcons.lock,
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: _rowBadge(LucideIcons.lock, scheme.primary),
-              title: Text(context.l10n.readOnlyMode),
-              subtitle: Text(
-                s.readOnly
-                    ? context.l10n.writesRejected
-                    : context.l10n.phoneCanModify,
-              ),
+            SettingsTile.toggle(
+              icon: LucideIcons.lock,
+              badgeColor: scheme.primary,
+              title: context.l10n.readOnlyMode,
+              subtitle:
+                  s.readOnly
+                      ? context.l10n.writesRejected
+                      : context.l10n.phoneCanModify,
               value: s.readOnly,
               onChanged: (v) => _patch(readOnly: v),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: _rowBadge(LucideIcons.link, scheme.primary),
-              title: Text(context.l10n.enableShareLinks),
-              subtitle: Text(
-                s.allowSharing
-                    ? context.l10n.shareLinksEnabledHint
-                    : context.l10n.shareLinksDisabledHint,
-              ),
+            SettingsTile.toggle(
+              icon: LucideIcons.link,
+              badgeColor: scheme.primary,
+              title: context.l10n.enableShareLinks,
+              subtitle:
+                  s.allowSharing
+                      ? context.l10n.shareLinksEnabledHint
+                      : context.l10n.shareLinksDisabledHint,
               value: s.allowSharing,
               onChanged: (v) => _patch(allowSharing: v),
             ),
@@ -358,12 +356,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: 'Sync Rules',
           icon: LucideIcons.refreshCw,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: _rowBadge(LucideIcons.refreshCw, scheme.primary),
-              title: const Text('Manage Sync Rules'),
-              subtitle: const Text('Download remote folders to local storage'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            SettingsTile.nav(
+              icon: LucideIcons.refreshCw,
+              badgeColor: scheme.primary,
+              title: 'Manage Sync Rules',
+              subtitle: 'Download remote folders to local storage',
               onTap:
                   () => Navigator.push(
                     context,
@@ -497,12 +494,12 @@ class _BandwidthDropdown extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: _rowBadge(icon, Theme.of(context).colorScheme.primary),
       title: Text(label),
-      trailing: DropdownButton<int>(
-        value: value,
-        underline: const SizedBox.shrink(),
-        items: [
+      trailing: ShadSelect<int>(
+        initialValue: value,
+        selectedOptionBuilder: (context, v) => Text(labelBuilder(v)),
+        options: [
           for (final v in items)
-            DropdownMenuItem(value: v, child: Text(labelBuilder(v))),
+            ShadOption(value: v, child: Text(labelBuilder(v))),
         ],
         onChanged: (v) {
           if (v != null) onChanged(v);
@@ -519,10 +516,11 @@ class _SecurityWarningCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: scheme.secondaryContainer,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
+    return ShadCard(
+      padding: EdgeInsets.zero,
+      radius: Radii.cardR,
+      backgroundColor: scheme.secondaryContainer,
+      border: ShadBorder.all(color: Colors.transparent),
       child: Padding(
         padding: const EdgeInsets.all(Spacing.md),
         child: Row(
@@ -587,11 +585,11 @@ class VisibilityEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          secondary: _rowBadge(LucideIcons.eyeOff, scheme.primary),
-          title: Text(context.l10n.hideDotfiles),
-          subtitle: Text(context.l10n.hideDotfilesSubtitle),
+        SettingsTile.toggle(
+          icon: LucideIcons.eyeOff,
+          badgeColor: scheme.primary,
+          title: context.l10n.hideDotfiles,
+          subtitle: context.l10n.hideDotfilesSubtitle,
           value: prefs.hideDotfiles,
           onChanged: (v) => notifier.setHideDotfiles(v, hostId: hostId),
         ),
@@ -671,16 +669,14 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          secondary: _rowBadge(LucideIcons.copy, scheme.primary),
-          title: Text(context.l10n.overrideForDevice),
-          subtitle: Text(
-            isOverridden
-                ? context.l10n.usingDeviceVisibility
-                : context.l10n.usingAppDefault,
-          ),
+        SettingsTile.toggle(
+          icon: LucideIcons.copy,
+          badgeColor: scheme.primary,
+          title: context.l10n.overrideForDevice,
+          subtitle:
+              isOverridden
+                  ? context.l10n.usingDeviceVisibility
+                  : context.l10n.usingAppDefault,
           value: isOverridden,
           onChanged: (on) => notifier.setDeviceVisibilityOverride(hostId, on),
         ),
@@ -787,17 +783,17 @@ class AddExtensionFieldState extends State<AddExtensionField> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return ShadInput(
       controller: _controller,
-      decoration: InputDecoration(
-        isDense: true,
-        prefixText: '.',
-        hintText: context.l10n.addExtensionHint,
-        suffixIcon: IconButton(
-          icon: const Icon(LucideIcons.plus),
-          tooltip: context.l10n.addExtensionTooltip,
-          onPressed: _submit,
-        ),
+      leading: const Padding(
+        padding: EdgeInsets.only(left: Spacing.sm),
+        child: Text('.'),
+      ),
+      placeholder: Text(context.l10n.addExtensionHint),
+      trailing: IconButton(
+        icon: const Icon(LucideIcons.plus),
+        tooltip: context.l10n.addExtensionTooltip,
+        onPressed: _submit,
       ),
       onSubmitted: (_) => _submit(),
     );

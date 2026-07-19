@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/settings/settings_controller.dart';
@@ -7,7 +8,6 @@ import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Modal bottom sheet holding every "how should this listing look" control:
 /// list/grid mode, entry density, and sort (field + direction). Replaces the
@@ -189,16 +189,38 @@ class _ShowHiddenTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      secondary: Badge(
-        label: Text('${state.hiddenCount}'),
-        child: const Icon(LucideIcons.eye),
+    final scheme = Theme.of(context).colorScheme;
+    // Switch itself is the interactive target (matches SettingsTile.toggle) —
+    // no outer InkWell, which would double-fire the toggle on tap.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+      child: Row(
+        children: [
+          Badge(
+            label: Text('${state.hiddenCount}'),
+            child: const Icon(LucideIcons.eye),
+          ),
+          const SizedBox(width: Spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.l10n.showHiddenItems),
+                Text(
+                  context.l10n.nHiddenByVisibility(state.hiddenCount),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ShadSwitch(
+            value: state.showHidden,
+            onChanged: (_) => notifier.toggleShowHidden(),
+          ),
+        ],
       ),
-      title: Text(context.l10n.showHiddenItems),
-      subtitle: Text(context.l10n.nHiddenByVisibility(state.hiddenCount)),
-      value: state.showHidden,
-      onChanged: (_) => notifier.toggleShowHidden(),
     );
   }
 }

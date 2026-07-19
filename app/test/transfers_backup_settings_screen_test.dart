@@ -5,7 +5,10 @@ import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/features/settings/transfers_backup_settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:shadcn_ui/shadcn_ui.dart';
+
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -22,9 +25,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: TransfersBackupSettingsScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: TransfersBackupSettingsScreen(),
+          ),
         ),
       ),
     );
@@ -39,7 +44,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(ShadSwitch));
     await tester.pumpAndSettle();
 
     expect(

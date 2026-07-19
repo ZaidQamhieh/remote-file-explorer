@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/app_release.dart';
@@ -8,7 +9,6 @@ import '../../core/ui/feedback.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/update_service.dart';
 import 'update_tile.dart' show triggerUpdateInstall;
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A passive, dismissible "Update available" banner driven by the once-per-
 /// session [latestUpdateProvider]. Renders nothing unless a newer release is
@@ -55,9 +55,11 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.sm, Spacing.sm, Spacing.sm, 0),
-      child: Card(
-        color: scheme.primaryContainer,
-        shape: RoundedRectangleBorder(borderRadius: Radii.cardR),
+      child: ShadCard(
+        padding: EdgeInsets.zero,
+        radius: Radii.cardR,
+        backgroundColor: scheme.primaryContainer,
+        border: ShadBorder.all(color: Colors.transparent),
         child: Padding(
           padding: const EdgeInsets.all(Spacing.md),
           child: Column(

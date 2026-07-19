@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
@@ -9,7 +10,6 @@ import '../../core/ui/feedback.dart';
 import '../../core/ui/sheet_chrome.dart';
 import 'photo_backup_controller.dart';
 import 'photo_backup_prefs.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Settings + manual trigger for one-way photo backup (DCIM → a PC).
@@ -111,11 +111,14 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
     // Master switch off => every other control is disabled (nothing backs up).
     final on = _prefs.enabled;
     return [
-      SwitchListTile(
+      ListTile(
         title: Text(context.l10n.enablePhotoBackup),
         subtitle: Text(context.l10n.photoBackupSubtitle),
-        value: _prefs.enabled,
-        onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
+        trailing: ShadSwitch(
+          value: _prefs.enabled,
+          onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
+        ),
+        onTap: () => _update(_prefs.copyWith(enabled: !_prefs.enabled)),
       ),
       const Divider(),
       ListTile(
@@ -133,15 +136,28 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           Spacing.lg,
           Spacing.sm,
         ),
-        child: TextField(
-          controller: _nicknameCtrl,
-          enabled: on,
-          decoration: InputDecoration(
-            labelText: context.l10n.deviceNicknameLabel,
-            hintText: context.l10n.deviceNicknameHint,
-            helperText: context.l10n.deviceNicknameHelper,
-          ),
-          onChanged: (v) => _update(_prefs.copyWith(deviceName: v.trim())),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.deviceNicknameLabel,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: Spacing.xs),
+            ShadInput(
+              controller: _nicknameCtrl,
+              enabled: on,
+              placeholder: Text(context.l10n.deviceNicknameHint),
+              onChanged: (v) => _update(_prefs.copyWith(deviceName: v.trim())),
+            ),
+            const SizedBox(height: Spacing.xs),
+            Text(
+              context.l10n.deviceNicknameHelper,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
       ListTile(
@@ -153,15 +169,33 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
         onTap: on ? _pickAlbums : null,
       ),
       const Divider(),
-      SwitchListTile(
+      ListTile(
+        enabled: on,
         title: Text(context.l10n.onlyOnWifi),
-        value: _prefs.wifiOnly,
-        onChanged: on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
+        trailing: ShadSwitch(
+          value: _prefs.wifiOnly,
+          enabled: on,
+          onChanged: on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
+        ),
+        onTap:
+            on
+                ? () => _update(_prefs.copyWith(wifiOnly: !_prefs.wifiOnly))
+                : null,
       ),
-      SwitchListTile(
+      ListTile(
+        enabled: on,
         title: Text(context.l10n.onlyWhileCharging),
-        value: _prefs.chargingOnly,
-        onChanged: on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
+        trailing: ShadSwitch(
+          value: _prefs.chargingOnly,
+          enabled: on,
+          onChanged:
+              on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
+        ),
+        onTap:
+            on
+                ? () =>
+                    _update(_prefs.copyWith(chargingOnly: !_prefs.chargingOnly))
+                : null,
       ),
       const Divider(),
       ListTile(

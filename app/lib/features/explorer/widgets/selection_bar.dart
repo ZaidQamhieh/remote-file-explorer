@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/models/host.dart';
@@ -10,7 +11,6 @@ import '../../transfers/transfer_state.dart';
 import '../clipboard_state.dart';
 import '../explorer_state.dart';
 import 'batch_report.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A labelled icon action used in the bottom contextual action bar — tonal
 /// icon button over a small caption, for tidier iconography than bare
@@ -226,12 +226,12 @@ class SelectionBar extends ConsumerWidget {
     final count = state.selected.length;
     // Three-way: Cancel / Delete forever / Move to Trash. `null` = cancel,
     // false = trash (default, reversible), true = permanent.
-    final permanent = await showDialog<bool>(
+    final permanent = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.deleteTitle),
-            content: Text(
+            description: Text(
               '${ctx.l10n.moveNItemsToTrash(count)} '
               '${ctx.l10n.canRestoreFromTrash(count)}',
             ),

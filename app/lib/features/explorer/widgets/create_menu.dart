@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom-sheet menu for the "New" FAB: create a folder or an empty file in
 /// the current directory.
@@ -70,16 +70,11 @@ class CreateMenu extends StatelessWidget {
     required bool isFolder,
   }) {
     final ctrl = TextEditingController();
-    showDialog<void>(
+    showShadDialog<void>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(title),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: InputDecoration(hintText: ctx.l10n.nameHint),
-            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -111,6 +106,11 @@ class CreateMenu extends StatelessWidget {
                 child: Text(ctx.l10n.createButton),
               ),
             ],
+            child: ShadInput(
+              controller: ctrl,
+              autofocus: true,
+              placeholder: Text(ctx.l10n.nameHint),
+            ),
           ),
     );
   }

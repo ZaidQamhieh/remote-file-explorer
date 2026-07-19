@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
@@ -49,7 +50,6 @@ import 'widgets/hidden_items_footer.dart';
 import 'widgets/load_more_indicator.dart';
 import 'widgets/selection_bar.dart';
 import 'widgets/view_options_sheet.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 export 'widgets/hidden_items_footer.dart';
 
@@ -201,7 +201,6 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
                 : BrowseAppBar(
                   state: state,
                   isFav: isFav,
-                  sseConnected: state.sseConnected,
                   isCurrentFolderPinned:
                       ref
                           .watch(pinStoreProvider)
@@ -422,26 +421,26 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   }
 
   Future<void> _showGoToPath(BuildContext context) async {
-    final path = await showDialog<String>(
+    final path = await showShadDialog<String>(
       context: context,
       builder: (ctx) {
         final controller = TextEditingController();
-        return AlertDialog(
+        return ShadDialog(
           title: const Text('Go to Path'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: '/path/to/folder'),
-          ),
           actions: [
-            TextButton(
+            ShadButton.outline(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            ShadButton(
               onPressed: () => Navigator.pop(ctx, controller.text),
               child: const Text('Go'),
             ),
           ],
+          child: ShadInput(
+            controller: controller,
+            placeholder: const Text('/path/to/folder'),
+          ),
         );
       },
     );
@@ -544,18 +543,18 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     final already = notifier.isBookmarked(widget.host.id, entry.path);
 
     if (already) {
-      final ok = await showDialog<bool>(
+      final ok = await showShadDialog<bool>(
         context: context,
         builder:
-            (ctx) => AlertDialog(
+            (ctx) => ShadDialog.alert(
               title: const Text('Remove Bookmark'),
-              content: Text('Remove bookmark for "${entry.name}"?'),
+              description: Text('Remove bookmark for "${entry.name}"?'),
               actions: [
-                TextButton(
+                ShadButton.outline(
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('Cancel'),
                 ),
-                FilledButton(
+                ShadButton(
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text('Remove'),
                 ),
@@ -565,30 +564,27 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       if (ok == true) notifier.removeBookmark(widget.host.id, entry.path);
     } else {
       final ctrl = TextEditingController();
-      final ok = await showDialog<bool>(
+      final ok = await showShadDialog<bool>(
         context: context,
         builder:
-            (ctx) => AlertDialog(
+            (ctx) => ShadDialog(
               title: Text('Bookmark "${entry.name}"'),
-              content: TextField(
-                controller: ctrl,
-                decoration: const InputDecoration(
-                  hintText: 'Tag (optional)',
-                  labelText: 'Tag',
-                ),
-                autofocus: true,
-                onSubmitted: (_) => Navigator.pop(ctx, true),
-              ),
               actions: [
-                TextButton(
+                ShadButton.outline(
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('Cancel'),
                 ),
-                FilledButton(
+                ShadButton(
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text('Save'),
                 ),
               ],
+              child: ShadInput(
+                controller: ctrl,
+                placeholder: const Text('Tag (optional)'),
+                autofocus: true,
+                onSubmitted: (_) => Navigator.pop(ctx, true),
+              ),
             ),
       );
       final tag = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
@@ -860,28 +856,25 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
   ) async {
     if (state.selected.isEmpty) return;
     final count = state.selected.length;
-    final permanent = await showDialog<bool>(
+    final permanent = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.deleteTitle),
-            content: Text(
+            description: Text(
               '${ctx.l10n.moveNItemsToTrash(count)} '
               '${ctx.l10n.canRestoreFromTrash(count)}',
             ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              TextButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(ctx).colorScheme.error,
-                ),
                 child: Text(ctx.l10n.deleteForeverButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.moveToTrashButton),
               ),

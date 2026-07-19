@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/backup/backup_service.dart';
@@ -15,7 +16,6 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import 'settings_section.dart';
 import 'settings_tile.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// **Backup & restore** (N1) — export the app's full local state (paired
 /// hosts, device tokens, cert fingerprints, favorites, all settings) to a
@@ -115,12 +115,12 @@ class BackupRestoreSection extends ConsumerWidget {
     );
     if (passphrase == null || !context.mounted) return;
 
-    final proceed = await showDialog<bool>(
+    final proceed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.replaceCurrentConfig),
-            content: Text(ctx.l10n.importWarningMessage),
+            description: Text(ctx.l10n.importWarningMessage),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -171,7 +171,7 @@ class BackupRestoreSection extends ConsumerWidget {
     required String title,
     required bool confirm,
   }) {
-    return showDialog<String>(
+    return showShadDialog<String>(
       context: context,
       builder: (ctx) => _PassphraseDialog(title: title, confirm: confirm),
     );
@@ -227,29 +227,43 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return ShadDialog.alert(
       title: Text(widget.title),
-      content: Column(
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.cancelButton),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(context.l10n.continueButton),
+        ),
+      ],
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
+          Text(
+            context.l10n.passphraseLabel,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: Spacing.xs),
+          ShadInput(
             controller: _passCtrl,
             obscureText: true,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: context.l10n.passphraseLabel,
-            ),
             onSubmitted: widget.confirm ? null : (_) => _submit(),
           ),
           if (widget.confirm) ...[
             const SizedBox(height: Spacing.sm),
-            TextField(
+            Text(
+              context.l10n.confirmPassphraseLabel,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: Spacing.xs),
+            ShadInput(
               controller: _confirmCtrl,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: context.l10n.confirmPassphraseLabel,
-              ),
               onSubmitted: (_) => _submit(),
             ),
           ],
@@ -262,16 +276,6 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
           ],
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.cancelButton),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(context.l10n.continueButton),
-        ),
-      ],
     );
   }
 }

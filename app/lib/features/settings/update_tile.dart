@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart' show RangeNotSatisfiedException;
 import '../../core/l10n_ext.dart';
@@ -16,7 +17,6 @@ import '../../core/ui/format.dart';
 import '../../core/update/auto_update.dart';
 import '../../core/update/github_update_source.dart';
 import '../../core/update/update_service.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // Native channel into MainActivity (shared with the downloads helper).
 const _kInstallChannel = MethodChannel('rfe/downloads');
@@ -70,7 +70,7 @@ Future<void> triggerUpdateInstall(
   }
 
   if (!context.mounted) return;
-  await showDialog<void>(
+  await showShadDialog<void>(
     context: context,
     barrierDismissible: false,
     builder:
@@ -392,10 +392,10 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
   @override
   Widget build(BuildContext context) {
     final v = widget.release.versionName;
-    return AlertDialog(
+    return ShadDialog.alert(
       title: Text(context.l10n.updatingToVersion(v)),
-      content: _buildContent(context),
       actions: _buildActions(context),
+      child: _buildContent(context),
     );
   }
 

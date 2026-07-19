@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/agent_client.dart';
@@ -13,7 +14,6 @@ import '../../core/platform/file_opener.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../transfers/transfer_state.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// The set of cross-cutting actions a preview viewer offers for the file it's
 /// currently showing — Share, Save (download to device), Delete, and "Show in
@@ -111,12 +111,12 @@ class PreviewActions {
   /// the file was deleted (so the pager can drop it from its page list).
   Future<bool> delete(BuildContext context) async {
     // null = cancel, false = trash (default, reversible), true = permanent.
-    final permanent = await showDialog<bool>(
+    final permanent = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.deleteTitle),
-            content: Text(ctx.l10n.moveToTrashConfirm(entry.name)),
+            description: Text(ctx.l10n.moveToTrashConfirm(entry.name)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),

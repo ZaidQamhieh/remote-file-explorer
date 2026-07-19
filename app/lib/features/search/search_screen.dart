@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
@@ -27,7 +28,6 @@ import 'widgets/glob_indicator.dart';
 import 'widgets/recent_searches_view.dart';
 import 'widgets/search_result_tile.dart';
 import 'widgets/truncation_banner.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 export 'search_types.dart';
 
@@ -342,27 +342,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final q = _controller.text.trim();
     if (q.isEmpty) return;
     final nameCtl = TextEditingController(text: q);
-    final name = await showDialog<String>(
+    final name = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.saveSearch),
-            content: TextField(
-              controller: nameCtl,
-              decoration: InputDecoration(labelText: ctx.l10n.savedSearchName),
-              autofocus: true,
-              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, nameCtl.text.trim()),
                 child: Text(ctx.l10n.saveButton),
               ),
             ],
+            child: ShadInput(
+              controller: nameCtl,
+              placeholder: Text(ctx.l10n.savedSearchName),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
           ),
     );
     if (name == null || name.isEmpty) return;

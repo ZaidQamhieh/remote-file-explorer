@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
@@ -12,7 +13,6 @@ import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Browser for the agent's trash: lists deleted items (newest first), restores
 /// them to their original location, deletes individual items forever, or empties
@@ -117,21 +117,18 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     required String body,
     required String action,
   }) {
-    return showDialog<bool>(
+    return showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(title),
-            content: Text(body),
+            description: Text(body),
             actions: [
-              TextButton(
+              ShadButton.outline(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(ctx).colorScheme.error,
-                ),
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(action),
               ),

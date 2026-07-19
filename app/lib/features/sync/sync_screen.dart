@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/agent_client.dart';
@@ -11,7 +12,6 @@ import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import 'sync_runner.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Screen listing sync rules with add / delete / toggle / sync-now actions.
 class SyncScreen extends ConsumerStatefulWidget {
@@ -56,42 +56,41 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   Future<void> _addRule() async {
     final remoteCtrl = TextEditingController();
     final localCtrl = TextEditingController();
-    final result = await showDialog<bool>(
+    final result = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: const Text('Add Sync Rule'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: remoteCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Remote Path',
-                    hintText: '/photos',
-                  ),
-                ),
-                const SizedBox(height: Spacing.sm),
-                TextField(
-                  controller: localCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Local Folder',
-                    hintText: '/storage/emulated/0/Sync/photos',
-                  ),
-                ),
-              ],
-            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Add'),
               ),
             ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Remote Path'),
+                const SizedBox(height: Spacing.xs),
+                ShadInput(
+                  controller: remoteCtrl,
+                  autofocus: true,
+                  placeholder: const Text('/photos'),
+                ),
+                const SizedBox(height: Spacing.sm),
+                const Text('Local Folder'),
+                const SizedBox(height: Spacing.xs),
+                ShadInput(
+                  controller: localCtrl,
+                  placeholder: const Text('/storage/emulated/0/Sync/photos'),
+                ),
+              ],
+            ),
           ),
     );
     if (result != true) return;
@@ -110,18 +109,18 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   }
 
   Future<void> _deleteRule(SyncRule rule) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: const Text('Delete Sync Rule'),
-            content: const Text('Delete this sync rule?'),
+            description: const Text('Delete this sync rule?'),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Delete'),
               ),
@@ -286,7 +285,7 @@ class _SyncRuleTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                Switch(value: rule.enabled, onChanged: (_) => onToggle()),
+                ShadSwitch(value: rule.enabled, onChanged: (_) => onToggle()),
               ],
             ),
             const SizedBox(height: Spacing.xs),

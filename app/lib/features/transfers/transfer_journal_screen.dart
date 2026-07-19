@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class TransferJournalScreen extends ConsumerWidget {
   const TransferJournalScreen({super.key});
@@ -17,19 +17,17 @@ class TransferJournalScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transfer History'),
+        title: Text(context.l10n.transferHistoryTitle),
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.trash2),
             onPressed: () async {
-              final confirmed = await showDialog<bool>(
+              final confirmed = await showShadDialog<bool>(
                 context: context,
                 builder:
-                    (ctx) => AlertDialog(
-                      title: const Text('Clear History'),
-                      content: const Text(
-                        'Remove all transfer history records?',
-                      ),
+                    (ctx) => ShadDialog.alert(
+                      title: Text(ctx.l10n.clearHistoryTitle),
+                      description: Text(ctx.l10n.clearHistoryConfirm),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
@@ -37,7 +35,7 @@ class TransferJournalScreen extends ConsumerWidget {
                         ),
                         FilledButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Clear'),
+                          child: Text(ctx.l10n.clearTooltip),
                         ),
                       ],
                     ),
@@ -51,7 +49,7 @@ class TransferJournalScreen extends ConsumerWidget {
       ),
       body: journalAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(child: Text('Could not load history')),
+        error: (_, __) => Center(child: Text(context.l10n.couldNotLoadHistory)),
         data: (records) {
           if (records.isEmpty) {
             return Center(
@@ -65,7 +63,7 @@ class TransferJournalScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: Spacing.md),
                   Text(
-                    'No transfers yet',
+                    context.l10n.noTransfersYet,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -91,7 +89,7 @@ class TransferJournalScreen extends ConsumerWidget {
                 ),
                 subtitle: Text('${r.hostLabel} · ${formatSize(r.bytes)}'),
                 trailing: Text(
-                  _formatRelative(r.completedAt),
+                  _formatRelative(context, r.completedAt),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -104,12 +102,13 @@ class TransferJournalScreen extends ConsumerWidget {
     );
   }
 
-  String _formatRelative(DateTime dt) {
+  String _formatRelative(BuildContext context, DateTime dt) {
+    final l = context.l10n;
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inMinutes < 1) return l.relativeJustNow;
+    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l.relativeDaysAgo(diff.inDays);
     return '${dt.month}/${dt.day}';
   }
 }

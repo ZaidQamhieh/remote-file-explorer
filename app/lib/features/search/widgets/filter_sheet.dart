@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
@@ -181,7 +181,7 @@ class _FilterSheetState extends State<FilterSheet> {
                         ),
                         const SizedBox(width: Spacing.sm),
                         Text(context.l10n.fromHere),
-                        Switch(
+                        ShadSwitch(
                           value: !_searchFromHere,
                           onChanged:
                               (everywhere) =>
@@ -191,12 +191,25 @@ class _FilterSheetState extends State<FilterSheet> {
                       ],
                     ),
                     const SizedBox(height: Spacing.sm),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(context.l10n.includeHiddenItems),
-                      subtitle: Text(context.l10n.includeHiddenSubtitle),
-                      value: _includeHidden,
-                      onChanged: (v) => setState(() => _includeHidden = v),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.l10n.includeHiddenItems),
+                              Text(
+                                context.l10n.includeHiddenSubtitle,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        ShadSwitch(
+                          value: _includeHidden,
+                          onChanged: (v) => setState(() => _includeHidden = v),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: Spacing.md),
                     ActionListCard(

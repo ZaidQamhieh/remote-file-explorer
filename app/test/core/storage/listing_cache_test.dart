@@ -86,4 +86,19 @@ void main() {
     // /was-pinned is oldest and no longer protected — should be evicted.
     expect(await cache.get('h1', '/was-pinned'), isNull);
   });
+
+  test(
+    'concurrent put() calls for the same host do not lose an entry (PR-49)',
+    () async {
+      final cache = ListingCache(baseDir: tmpDir);
+
+      // Fire without awaiting, so both read-modify-write cycles overlap.
+      final a = cache.put('h1', '/a', [_entry('a')]);
+      final b = cache.put('h1', '/b', [_entry('b')]);
+      await Future.wait([a, b]);
+
+      expect(await cache.get('h1', '/a'), isNotNull);
+      expect(await cache.get('h1', '/b'), isNotNull);
+    },
+  );
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -616,6 +617,107 @@ void main() {
     });
   });
 
+  group('ExplorerNotifier ABA staleness guard (PR-34)', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('a stale load for A resolving after navigate(A->B->A) does not '
+        'clobber the fresh A result', () async {
+      final gateA1 = Completer<void>();
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('stale-a.txt')]),
+        Listing(path: '/', entries: [_file('fresh-a.txt')]),
+      ];
+      client.gates['/'] = [gateA1, null];
+      client.pages['/sub'] = [
+        Listing(path: '/sub', entries: [_file('b.txt')]),
+      ];
+
+      final arg = (hostId: 'aba1', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+
+      // Let the microtask-scheduled initial _load() actually start (so it
+      // captures path='/' and the pre-navigate generation) before we
+      // navigate — it then blocks inside client.list() on gateA1.
+      await _waitUntil(() => container.read(explorerProvider(arg)).loading);
+      notifier.navigate('/sub');
+      await _waitUntil(
+        () => container
+            .read(explorerProvider(arg))
+            .entries
+            .any((e) => e.name == 'b.txt'),
+      );
+
+      notifier.navigateTo(0); // back to '/' — a fresh, ungated load.
+      await _waitUntil(
+        () => container
+            .read(explorerProvider(arg))
+            .entries
+            .any((e) => e.name == 'fresh-a.txt'),
+      );
+
+      // Release the stale first call for '/'; it must not overwrite the
+      // fresh result that already landed.
+      gateA1.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final state = container.read(explorerProvider(arg));
+      expect(state.entries.map((e) => e.name), ['fresh-a.txt']);
+    });
+  });
+
+  group('ExplorerNotifier.batchRename duplicate targets (PR-35)', () {
+    late ProviderContainer container;
+    late _FakeAgentClient client;
+
+    setUp(() {
+      client = _FakeAgentClient(host: _testHost);
+      container = ProviderContainer(
+        overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('two sources renamed to the same target are both rejected before '
+        'either is touched', () async {
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+      ];
+      final arg = (hostId: 'dup1', rootPath: '/');
+      container.listen(explorerProvider(arg), (_, _) {});
+      final notifier = container.read(explorerProvider(arg).notifier);
+      await _waitUntil(
+        () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+      );
+
+      client.pages['/'] = [
+        Listing(path: '/', entries: [_file('a.txt'), _file('b.txt')]),
+      ];
+      final result = await notifier.batchRename([
+        (path: '/root/a.txt', newName: 'same.txt'),
+        (path: '/root/b.txt', newName: 'same.txt'),
+      ]);
+
+      expect(result.results, hasLength(2));
+      expect(result.results.every((r) => !r.ok), isTrue);
+      expect(
+        result.results.every((r) => r.errorCode == 'DUPLICATE_TARGET'),
+        isTrue,
+      );
+      // Neither source was ever renamed — rejected before touching files.
+      expect(client.renameCalls, isEmpty);
+    });
+  });
+
   // ---------------------------------------------------------------------
   // ExplorerNotifier.collidingBasenames — pre-flight copy/move collision check
   // ---------------------------------------------------------------------
@@ -842,6 +944,21 @@ class _FakeAgentClient extends AgentClient {
   final Map<String, List<Listing>> pages = {};
   final Map<String, Listing> cursorPages = {};
 
+  /// Per-path queue of optional gates, aligned with [pages]' queue for that
+  /// path — the Nth call to `list(path)` awaits the Nth gate (if non-null)
+  /// before returning. Lets tests control out-of-order resolution to
+  /// reproduce ABA staleness races (PR-34).
+  final Map<String, List<Completer<void>?>> gates = {};
+
+  /// Every rename call, in order — used by batchRename tests (PR-35).
+  final List<({String path, String dest})> renameCalls = [];
+
+  @override
+  Future<Entry> rename(String src, String dst) async {
+    renameCalls.add((path: src, dest: dst));
+    return Entry(name: dst.split('/').last, path: dst, isDir: false);
+  }
+
   /// Records every [copy]/[move] call made through this client, in order,
   /// so tests can assert on the `sources`/`destDir`/`duplicate`/`overwrite`
   /// arguments that `ExplorerNotifier.copySelected`/`moveSelected` passed
@@ -861,7 +978,13 @@ class _FakeAgentClient extends AgentClient {
     if (queue == null || queue.isEmpty) {
       throw StateError('No fake page registered for path "$path"');
     }
-    return queue.removeAt(0);
+    final listing = queue.removeAt(0);
+    final gateQueue = gates[path];
+    if (gateQueue != null && gateQueue.isNotEmpty) {
+      final gate = gateQueue.removeAt(0);
+      if (gate != null) await gate.future;
+    }
+    return listing;
   }
 
   @override

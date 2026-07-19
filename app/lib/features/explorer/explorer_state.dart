@@ -288,6 +288,15 @@ class ExplorerNotifier
   SseListener? _sse;
   Timer? _refreshDebounce;
 
+  /// Incremented at the start of every [_load]/[loadMore] call (PR-34).
+  /// Comparing `state.currentPath` alone is an ABA hazard: navigating
+  /// A -> B -> A starts two loads for path A, and if the first (now-stale)
+  /// one resolves after the second, its path-only guard still passes and it
+  /// clobbers the fresh result. Capturing the generation at call time and
+  /// only applying a result if it's still the latest generation closes that
+  /// gap regardless of how many same-path calls overlap.
+  int _generation = 0;
+
   Future<AgentClient> _client() async {
     final client = await ref.read(clientProvider(arg.hostId).future);
     // Wire offline cache once (??= is idempotent on the same instance).
@@ -300,10 +309,11 @@ class ExplorerNotifier
 
   Future<void> _load() async {
     final path = state.currentPath;
+    final gen = ++_generation;
 
     // 1. Paint cached entries instantly (if any) while we fetch live.
     final cached = await _cache.get(arg.hostId, path);
-    if (state.currentPath != path) return;
+    if (gen != _generation) return;
     if (cached != null) {
       state = state.copyWith(
         entries: cached.entries,
@@ -326,11 +336,11 @@ class ExplorerNotifier
     // 2. Fetch live; on success replace + cache; on failure fall back to cache.
     try {
       final client = await _client();
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final listing = await client.list(path);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       await _cache.put(arg.hostId, path, listing.entries);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       state = state.copyWith(
         loading: false,
         entries: listing.entries,
@@ -342,7 +352,7 @@ class ExplorerNotifier
       // Start SSE once (first successful load proves the client works).
       if (_sse == null) _initSse(client);
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       if (cached != null) {
         // Keep cached entries; mark offline rather than erroring out.
         state = state.copyWith(loading: false, stale: true, offline: true);
@@ -384,22 +394,23 @@ class ExplorerNotifier
     if (cursor == null) return;
 
     final path = state.currentPath;
+    final gen = ++_generation;
     state = state.copyWith(loadingMore: true);
     try {
       final client = await _client();
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final listing = await client.list(path, cursor: cursor);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final merged = [...state.entries, ...listing.entries];
       await _cache.put(arg.hostId, path, merged);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       state = state.copyWith(
         entries: merged,
         loadingMore: false,
         nextCursor: listing.nextCursor,
       );
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       // Leave existing entries as-is; just stop the spinner so the user can
       // retry by scrolling again.
       state = state.copyWith(loadingMore: false);
@@ -624,11 +635,36 @@ class ExplorerNotifier
       errorMessage: humanizeError(e),
     );
 
+    // PR-35: two sources landing on the same final name would otherwise
+    // both get renamed to a temp name, then the second `pending[dst] = tmp`
+    // clobbers the first's map entry — the first item is left stuck at its
+    // `.rfe-rn-*` temp name forever, since nothing renames it to `dst`
+    // anymore. Reject every duplicate target up front, before any file is
+    // touched, so no source ever leaves its original name for a doomed dst.
+    final targetCounts = <String, int>{};
+    for (final r in renames) {
+      final dst = renameDestination(r.path, r.newName);
+      targetCounts[dst] = (targetCounts[dst] ?? 0) + 1;
+    }
+
     for (var i = 0; i < renames.length; i++) {
       final r = renames[i];
       final dst = renameDestination(r.path, r.newName);
       if (dst == r.path) {
         results.add(BatchItemResult(path: r.path, ok: true));
+        continue;
+      }
+      if (targetCounts[dst]! > 1) {
+        results.add(
+          BatchItemResult(
+            path: r.path,
+            ok: false,
+            errorCode: 'DUPLICATE_TARGET',
+            errorMessage:
+                'Another selected item is also being renamed to '
+                '"${r.newName}"',
+          ),
+        );
         continue;
       }
       final tmp = renameDestination(r.path, '.rfe-rn-$i-${r.newName}');

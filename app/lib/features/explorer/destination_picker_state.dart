@@ -100,14 +100,22 @@ class DestinationPickerNotifier
     return isEntryHiddenInPicker(e, prefs);
   }
 
+  /// Incremented at the start of every [_load]/[loadMore] call (PR-34): a
+  /// path-only staleness guard is an ABA hazard on navigate(A) -> navigate(B)
+  /// -> navigate(A), since the first (now-stale) call for A and the third
+  /// (fresh) call for A share the same `currentPath`. Comparing against the
+  /// generation captured at call time closes that gap.
+  int _generation = 0;
+
   Future<void> _load() async {
     final path = state.currentPath;
+    final gen = ++_generation;
     state = state.copyWith(loading: true, error: null, nextCursor: null);
     try {
       final client = await ref.read(clientProvider(arg.hostId).future);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final listing = await client.list(path);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       state = state.copyWith(
         loading: false,
         folders:
@@ -118,7 +126,7 @@ class DestinationPickerNotifier
         nextCursor: listing.nextCursor,
       );
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       state = state.copyWith(loading: false, error: humanizeError(e));
     }
   }
@@ -131,12 +139,13 @@ class DestinationPickerNotifier
     if (cursor == null) return;
 
     final path = state.currentPath;
+    final gen = ++_generation;
     state = state.copyWith(loadingMore: true);
     try {
       final client = await ref.read(clientProvider(arg.hostId).future);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final listing = await client.list(path, cursor: cursor);
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       final merged = [
         ...state.folders,
         ...listing.entries.where((e) => e.isDir && !_hiddenInPicker(e)),
@@ -147,7 +156,7 @@ class DestinationPickerNotifier
         nextCursor: listing.nextCursor,
       );
     } catch (_) {
-      if (state.currentPath != path) return;
+      if (gen != _generation) return;
       // Leave existing folders as-is; stop the spinner so the user can retry
       // by scrolling again.
       state = state.copyWith(loadingMore: false);

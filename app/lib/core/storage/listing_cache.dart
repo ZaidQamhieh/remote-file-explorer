@@ -30,6 +30,14 @@ class ListingCache {
   /// build of `ExplorerNotifier` so it's correct again after a restart.
   final Set<String> _pinnedKeys = {};
 
+  /// Per-host write chain (PR-49): [put] does a read-modify-write of the
+  /// whole per-host file, so two concurrent `put()` calls for the same host
+  /// (rapid navigation, background refresh) can both read the same stale
+  /// data and the second write silently clobbers the first's entry. Chaining
+  /// through this per-host future serializes them without blocking other
+  /// hosts.
+  final Map<String, Future<void>> _writeChains = {};
+
   /// Mark or unmark a cached listing as pinned so the eviction pass skips it.
   /// [key] must be in the form `"$hostId:$path"` — same format used by
   /// [ExplorerNotifier.setPinnedListing].
@@ -77,7 +85,18 @@ class ListingCache {
     await f.writeAsString(jsonEncode(data));
   }
 
-  Future<void> put(String hostId, String path, List<Entry> entries) async {
+  Future<void> put(String hostId, String path, List<Entry> entries) {
+    final prior = _writeChains[hostId] ?? Future.value();
+    final next = prior.then((_) => _putLocked(hostId, path, entries));
+    _writeChains[hostId] = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _putLocked(
+    String hostId,
+    String path,
+    List<Entry> entries,
+  ) async {
     final data = await _read(hostId);
     data[path] = {
       'fetchedAt': DateTime.now().toIso8601String(),

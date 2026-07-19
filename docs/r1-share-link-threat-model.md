@@ -61,7 +61,7 @@ Default: **15 minutes**. Max: 24 hours (agent setting). The app UI shows a count
 Expired tokens are deleted by a background goroutine sweeping every 5 minutes.
 
 ### Revoke
-`DELETE /v1/share/:tokenHash` (authenticated, bearer token required).
+`DELETE /v1/share/{tokenHash}` (authenticated, bearer token required).
 The app shows a "Revoke" button while the share is active.
 
 ### Host-level gate
@@ -71,10 +71,10 @@ The Flutter settings screen exposes a "Enable share links" toggle per host.
 
 ### Endpoint surface (OpenAPI changes required)
 ```
-POST /v1/share/mint        → {token, expiresAt, url}        (authenticated)
-GET  /v1/share/:token      → file bytes                      (public, single-use)
-DELETE /v1/share/:token    → 204                             (authenticated, revoke)
-GET  /v1/share             → [{tokenHash, path, expiresAt}]  (authenticated, list active)
+POST /v1/share/mint          → {token, expiresAt, url}        (authenticated)
+GET  /v1/share/{token}       → file bytes                      (public, single-use)
+DELETE /v1/share/{tokenHash} → 204                             (authenticated, revoke)
+GET  /v1/share               → [{tokenHash, path, expiresAt}]  (authenticated, list active)
 ```
 `GET /v1/share/:token` is the **only unauthenticated endpoint** in the entire agent.
 

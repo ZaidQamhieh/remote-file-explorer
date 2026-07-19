@@ -4,7 +4,7 @@
 
 Two components plus a shared contract:
 
-- **`app/`** — Flutter mobile app (Android-focused, v1.5+). All UI + client orchestration.
+- **`app/`** — Flutter mobile app (Android-focused, v1.42+). All UI + client orchestration.
 - **`agent/`** — Go host service on each Windows/Linux computer. Owns filesystem access, the
   transfer engine, search, thumbnails, settings, and the device/token store.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow (source of truth).

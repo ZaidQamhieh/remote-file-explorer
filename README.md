@@ -17,7 +17,7 @@ IP/hostname, and auto-discoverable via mDNS. See `docs/` for the full architectu
 
 The agent serves the full v1 API: directory browsing, file transfer (resumable chunked
 upload/download), search, thumbnails/previews, settings, paired-device management, and in-app
-Android updates (`/v1/app/latest` + `/v1/app/download`). The Flutter app (currently v1.5.x) covers
+Android updates (`/v1/app/latest` + `/v1/app/download`). The Flutter app (currently v1.42.x) covers
 all of the above with a Finder/Explorer-style UI and self-updates over the air.
 
 ## Pairing

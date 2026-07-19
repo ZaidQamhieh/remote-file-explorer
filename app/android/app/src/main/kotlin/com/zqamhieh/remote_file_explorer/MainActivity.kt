@@ -43,16 +43,24 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // POST_NOTIFICATIONS (API 33+) gates whether the transfer progress /
-        // completion notifications are visible. The foreground service still
-        // runs without it; this just makes its notification show.
+        pendingHostId = hostIdFromIntent(intent)
+    }
+
+    /**
+     * POST_NOTIFICATIONS (API 33+) gates whether the transfer progress /
+     * completion notifications are visible. The foreground service still
+     * runs without it; this just makes its notification show. Requested
+     * contextually — right before the first transfer notification — rather
+     * than unconditionally at cold start (PR-76: premature prompts reduce
+     * opt-in).
+     */
+    private fun ensureNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0x504E)
         }
-        pendingHostId = hostIdFromIntent(intent)
     }
 
     /**
@@ -92,6 +100,7 @@ class MainActivity : FlutterFragmentActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "start" -> {
+                        ensureNotificationPermission()
                         val intent = Intent(this, TransferService::class.java).apply {
                             action = TransferService.ACTION_UPDATE
                             putExtra(TransferService.EXTRA_TITLE, call.argument<String>("title"))
@@ -259,12 +268,22 @@ class MainActivity : FlutterFragmentActivity() {
                 MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             val uri = resolver.insert(collection, values)
                 ?: throw IllegalStateException("MediaStore insert returned null")
-            resolver.openOutputStream(uri).use { out ->
-                src.inputStream().use { input -> input.copyTo(out!!) }
+            // If anything below throws, the inserted row would otherwise stay
+            // behind forever with IS_PENDING=1 — invisible in the Files app but
+            // still occupying the display name (PR-76). Clean it up unless the
+            // publish actually completes.
+            var published = false
+            try {
+                resolver.openOutputStream(uri).use { out ->
+                    src.inputStream().use { input -> input.copyTo(out!!) }
+                }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+                published = true
+            } finally {
+                if (!published) resolver.delete(uri, null, null)
             }
-            values.clear()
-            values.put(MediaStore.Downloads.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
             return "Downloads/$fileName"
         } else {
             @Suppress("DEPRECATION")

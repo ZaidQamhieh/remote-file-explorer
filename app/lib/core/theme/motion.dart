@@ -18,13 +18,25 @@ Route<T> fadeThroughPageRoute<T>(
     pageBuilder: (context, animation, secondary) => builder(context),
     transitionsBuilder:
         (context, animation, secondary, child) =>
-            fadeThroughTransition(animation, child),
+            fadeThroughTransition(animation, child, context: context),
   );
 }
 
 /// The cross-fade + slight-scale transition shared by [fadeThroughPageRoute]
 /// and [AppPageTransitionsBuilder] — factored out so both stay in sync.
-Widget fadeThroughTransition(Animation<double> animation, Widget child) {
+///
+/// Returns [child] unchanged, with no fade/scale, when the platform/user
+/// reduced-motion accessibility preference is on (PR-65) — pass [context]
+/// so this can check it; omitting it (some routes don't have one handy)
+/// just keeps the normal transition.
+Widget fadeThroughTransition(
+  Animation<double> animation,
+  Widget child, {
+  BuildContext? context,
+}) {
+  if (context != null && MediaQuery.of(context).disableAnimations) {
+    return child;
+  }
   final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
   return FadeTransition(
     opacity: curved,
@@ -47,7 +59,7 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return fadeThroughTransition(animation, child);
+    return fadeThroughTransition(animation, child, context: context);
   }
 }
 
@@ -79,14 +91,28 @@ class _AppearListItemState extends State<AppearListItem>
     end: Offset.zero,
   ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic));
 
+  bool _skippedForReducedMotion = false;
+
   @override
   void initState() {
     super.initState();
     // Stagger by index, capped so deep lists don't pile up delay.
     final delayMs = (widget.index.clamp(0, 8)) * 30;
     Future.delayed(Duration(milliseconds: delayMs), () {
-      if (mounted) _c.forward();
+      if (mounted && !_skippedForReducedMotion) _c.forward();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced-motion: skip straight to the settled state instead of
+    // fading/sliding in — checked here (not initState) since MediaQuery
+    // isn't reliably available that early (PR-65).
+    if (!_skippedForReducedMotion && MediaQuery.of(context).disableAnimations) {
+      _skippedForReducedMotion = true;
+      _c.value = 1.0;
+    }
   }
 
   @override

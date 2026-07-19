@@ -2108,4 +2108,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unlockReason => 'Unlock Remote File Explorer';
+
+  @override
+  String get transferHistoryTitle => 'Transfer History';
+
+  @override
+  String get clearHistoryTitle => 'Clear History';
+
+  @override
+  String get clearHistoryConfirm => 'Remove all transfer history records?';
+
+  @override
+  String get couldNotLoadHistory => 'Could not load history';
+
+  @override
+  String get noTransfersYet => 'No transfers yet';
+
+  @override
+  String get watchedFoldersTitle => 'Watched folders';
+
+  @override
+  String get watchedFoldersEmpty =>
+      'No watched folders. Add a remote folder path below to get notified when new files appear there.';
+
+  @override
+  String get stopWatchingTooltip => 'Stop watching';
+
+  @override
+  String get addFolderPathTile => 'Add folder path';
+
+  @override
+  String get watchAFolderTitle => 'Watch a folder';
+
+  @override
+  String get watchButton => 'Watch';
 }

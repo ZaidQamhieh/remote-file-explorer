@@ -1107,5 +1107,18 @@
 
   "appLockedTitle": "Locked",
   "unlockButton": "Unlock",
-  "unlockReason": "Unlock Remote File Explorer"
+  "unlockReason": "Unlock Remote File Explorer",
+
+  "transferHistoryTitle": "Transfer History",
+  "clearHistoryTitle": "Clear History",
+  "clearHistoryConfirm": "Remove all transfer history records?",
+  "couldNotLoadHistory": "Could not load history",
+  "noTransfersYet": "No transfers yet",
+
+  "watchedFoldersTitle": "Watched folders",
+  "watchedFoldersEmpty": "No watched folders. Add a remote folder path below to get notified when new files appear there.",
+  "stopWatchingTooltip": "Stop watching",
+  "addFolderPathTile": "Add folder path",
+  "watchAFolderTitle": "Watch a folder",
+  "watchButton": "Watch"
 }

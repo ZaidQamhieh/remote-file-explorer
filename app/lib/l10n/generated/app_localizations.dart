@@ -3537,6 +3537,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unlock Remote File Explorer'**
   String get unlockReason;
+
+  /// No description provided for @transferHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer History'**
+  String get transferHistoryTitle;
+
+  /// No description provided for @clearHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear History'**
+  String get clearHistoryTitle;
+
+  /// No description provided for @clearHistoryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all transfer history records?'**
+  String get clearHistoryConfirm;
+
+  /// No description provided for @couldNotLoadHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load history'**
+  String get couldNotLoadHistory;
+
+  /// No description provided for @noTransfersYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No transfers yet'**
+  String get noTransfersYet;
+
+  /// No description provided for @watchedFoldersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Watched folders'**
+  String get watchedFoldersTitle;
+
+  /// No description provided for @watchedFoldersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No watched folders. Add a remote folder path below to get notified when new files appear there.'**
+  String get watchedFoldersEmpty;
+
+  /// No description provided for @stopWatchingTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop watching'**
+  String get stopWatchingTooltip;
+
+  /// No description provided for @addFolderPathTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Add folder path'**
+  String get addFolderPathTile;
+
+  /// No description provided for @watchAFolderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch a folder'**
+  String get watchAFolderTitle;
+
+  /// No description provided for @watchButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch'**
+  String get watchButton;
 }
 
 class _AppLocalizationsDelegate

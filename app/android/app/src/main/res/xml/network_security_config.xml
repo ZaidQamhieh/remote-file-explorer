@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext is otherwise disabled app-wide (the default since API 28) — the
+     one exception is loopback, for VideoLoopbackProxy's local HTTP bridge
+     (see video_loopback_proxy.dart, PR-26). Every real network request
+     (to the agent, over LAN/Tailscale) stays on the app's normal TLS-pinned
+     HTTPS path, which this config doesn't touch. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

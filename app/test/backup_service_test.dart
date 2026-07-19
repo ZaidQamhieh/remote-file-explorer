@@ -11,11 +11,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FakeSecureKv implements SecureKv {
   final Map<String, String> store = {};
 
+  /// Keys that throw on write, for simulating a failure partway through a
+  /// restore (PR-21's rollback test).
+  final Set<String> failOnWrite = {};
+
   @override
   Future<Map<String, String>> readAll() async => Map.of(store);
 
   @override
   Future<void> write(String key, String value) async {
+    if (failOnWrite.contains(key)) {
+      throw Exception('simulated write failure: $key');
+    }
     store[key] = value;
   }
 
@@ -163,6 +170,44 @@ void main() {
         );
         expect(after.containsKey('rfe_device_identity_private_v1'), isFalse);
         expect(after['rfe_token_h1'], 'tok-abc');
+      },
+    );
+
+    test(
+      'a write failure partway through import rolls back to the '
+      'pre-restore state instead of leaving a half-written install (PR-21)',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'rfe_hosts_v1': ['{"id":"original"}'],
+          'app.themeMode': 'light',
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final secure = FakeSecureKv();
+        await secure.write('rfe_token_h1', 'original-token');
+        final service = BackupService(prefs, secure);
+
+        // Build a backup with different prefs and a secure key that will
+        // fail to write, simulating a platform error mid-restore.
+        final payload = BackupPayload.create(
+          prefs: {
+            'rfe_hosts_v1': PrefEntry.fromValue(['{"id":"new"}']),
+            'app.themeMode': PrefEntry.fromValue('dark'),
+          },
+          secure: {'rfe_token_h2': 'new-token'},
+        );
+        final envelope = await encodeBackup(payload, passphrase);
+        secure.failOnWrite.add('rfe_token_h2');
+
+        await expectLater(
+          service.importFromEnvelope(envelope, passphrase),
+          throwsException,
+        );
+
+        // Rolled back, not half-applied: original prefs and secure state
+        // are both back exactly as they were.
+        expect(prefs.getStringList('rfe_hosts_v1'), ['{"id":"original"}']);
+        expect(prefs.getString('app.themeMode'), 'light');
+        expect(await secure.readAll(), {'rfe_token_h1': 'original-token'});
       },
     );
 

@@ -103,16 +103,57 @@ class BackupService {
   ) async {
     final payload = await decodeBackup(envelopeJson, passphrase);
 
-    // Clear existing app-owned state first (replace semantics).
+    // Snapshot the pre-restore state so a write failure partway through
+    // (disk full, platform error, ...) can roll back instead of leaving a
+    // half-cleared, half-written install — a failed restore must not be
+    // able to destroy every host credential and setting (PR-21).
+    final prevPrefs = <String, Object>{};
+    for (final key in _prefs.getKeys()) {
+      if (_ownedPrefixes.any((p) => key.startsWith(p))) {
+        final v = _prefs.get(key);
+        if (v != null) prevPrefs[key] = v;
+      }
+    }
+    final prevSecure = await _secure.readAll();
+
+    try {
+      await _replacePrefs(payload.prefs);
+      await _secure.deleteAll();
+      for (final entry in payload.secure.entries) {
+        if (_neverBackedUp.contains(entry.key)) continue;
+        await _secure.write(entry.key, entry.value);
+      }
+    } catch (_) {
+      try {
+        for (final key in _prefs.getKeys().toList()) {
+          if (_ownedPrefixes.any((p) => key.startsWith(p))) {
+            await _prefs.remove(key);
+          }
+        }
+        for (final e in prevPrefs.entries) {
+          await _writeRawPref(e.key, e.value);
+        }
+        await _secure.deleteAll();
+        for (final e in prevSecure.entries) {
+          await _secure.write(e.key, e.value);
+        }
+      } catch (_) {
+        // Best-effort rollback; the original failure below is what the
+        // caller needs to see and act on.
+      }
+      rethrow;
+    }
+  }
+
+  /// Removes every existing app-owned key, then writes back every key from
+  /// [prefs] with its original type.
+  Future<void> _replacePrefs(Map<String, PrefEntry> prefs) async {
     for (final key in _prefs.getKeys().toList()) {
       if (_ownedPrefixes.any((p) => key.startsWith(p))) {
         await _prefs.remove(key);
       }
     }
-    await _secure.deleteAll();
-
-    // Write back every key from the backup with its original type.
-    for (final entry in payload.prefs.entries) {
+    for (final entry in prefs.entries) {
       final pref = entry.value;
       switch (pref.type) {
         case PrefType.boolType:
@@ -127,10 +168,19 @@ class BackupService {
           await _prefs.setStringList(entry.key, pref.value as List<String>);
       }
     }
+  }
 
-    for (final entry in payload.secure.entries) {
-      if (_neverBackedUp.contains(entry.key)) continue;
-      await _secure.write(entry.key, entry.value);
+  Future<void> _writeRawPref(String key, Object value) async {
+    if (value is bool) {
+      await _prefs.setBool(key, value);
+    } else if (value is int) {
+      await _prefs.setInt(key, value);
+    } else if (value is double) {
+      await _prefs.setDouble(key, value);
+    } else if (value is String) {
+      await _prefs.setString(key, value);
+    } else if (value is List<String>) {
+      await _prefs.setStringList(key, value);
     }
   }
 }

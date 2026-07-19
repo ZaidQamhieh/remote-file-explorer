@@ -141,6 +141,31 @@ bool shouldRequestGzipDownload({
   return connectivity.contains(ConnectivityResult.mobile);
 }
 
+/// True if [method] is safe to silently replay against a fallback address
+/// after a connection failure. GET/HEAD have no side effects, so a lost
+/// response can't mean the request was already applied; a
+/// POST/PATCH/PUT/DELETE might have been, so it isn't auto-retried — the
+/// error surfaces and the caller decides whether to retry as a fresh,
+/// user-initiated action (PR-23).
+bool isSafeToRetryOnFallback(String method) {
+  final m = method.toUpperCase();
+  return m == 'GET' || m == 'HEAD';
+}
+
+/// True if [errorType] means the agent was genuinely unreachable, as
+/// opposed to a response it actually sent (401/403/404/...) or a failed
+/// certificate check. Only this class of failure should fall back to
+/// cached offline bytes — falling back on the others would hide a revoked
+/// token, a deleted file, or a TLS-pin mismatch behind a stale "it worked"
+/// result (PR-56).
+bool isConnectivityFailure(DioExceptionType errorType) => switch (errorType) {
+  DioExceptionType.connectionError ||
+  DioExceptionType.connectionTimeout ||
+  DioExceptionType.sendTimeout ||
+  DioExceptionType.receiveTimeout => true,
+  _ => false,
+};
+
 /// HTTPS client for a single host agent.
 ///
 /// The agent uses a self-signed certificate, so standard CA validation is
@@ -198,7 +223,9 @@ class AgentClient {
           final isConnectionFailure =
               e.type == DioExceptionType.connectionError ||
               e.type == DioExceptionType.connectionTimeout;
-          if (!isConnectionFailure || _addrIndex + 1 >= _addresses.length) {
+          if (!isConnectionFailure ||
+              !isSafeToRetryOnFallback(e.requestOptions.method) ||
+              _addrIndex + 1 >= _addresses.length) {
             return handler.next(e);
           }
           _addrIndex++;
@@ -1117,9 +1144,12 @@ class AgentClient {
 
       return bytes;
     } on DioException catch (e) {
-      // Offline fallback: serve from cache when the agent is unreachable.
-      final cached = await offlineBodyCache?.get(host.id, remotePath);
-      if (cached != null) return cached;
+      // Offline fallback: only for a genuinely unreachable agent (PR-56) —
+      // see isConnectivityFailure.
+      if (isConnectivityFailure(e.type)) {
+        final cached = await offlineBodyCache?.get(host.id, remotePath);
+        if (cached != null) return cached;
+      }
       throw _apiError(e);
     }
   }

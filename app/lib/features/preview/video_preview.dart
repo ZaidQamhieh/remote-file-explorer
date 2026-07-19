@@ -73,7 +73,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     _proxy = proxy;
 
     final video = VideoPlayerController.networkUrl(
-      Uri.parse('http://127.0.0.1:${proxy.port}/video'),
+      Uri.parse('http://127.0.0.1:${proxy.port}${proxy.path}'),
     );
     _video = video;
     await video.initialize();

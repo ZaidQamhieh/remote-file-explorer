@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import '../../core/api/agent_client.dart';
 
@@ -12,13 +14,23 @@ import '../../core/api/agent_client.dart';
 /// [AgentClient.openContentStream], and relays the response straight through.
 /// The agent connection does the pinning/auth; the player never sees it.
 class VideoLoopbackProxy {
-  VideoLoopbackProxy._(this._server, this._client, this._remotePath) {
+  VideoLoopbackProxy._(
+    this._server,
+    this._client,
+    this._remotePath,
+    this.path,
+  ) {
     _server.listen(_handle);
   }
 
   final HttpServer _server;
   final AgentClient _client;
   final String _remotePath;
+
+  /// Random one-use URL path this instance serves at — any other localhost
+  /// process that discovers the ephemeral port still can't request the
+  /// file without also knowing this (PR-27).
+  final String path;
 
   int get port => _server.port;
 
@@ -27,10 +39,19 @@ class VideoLoopbackProxy {
     String remotePath,
   ) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    return VideoLoopbackProxy._(server, client, remotePath);
+    final token = base64Url.encode(
+      List<int>.generate(24, (_) => Random.secure().nextInt(256)),
+    );
+    return VideoLoopbackProxy._(server, client, remotePath, '/$token');
   }
 
   Future<void> _handle(HttpRequest request) async {
+    if ((request.method != 'GET' && request.method != 'HEAD') ||
+        request.uri.path != path) {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
     try {
       final res = await _client.openContentStream(
         _remotePath,

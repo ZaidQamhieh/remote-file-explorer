@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 
+import '../l10n_ext.dart';
 import '../settings/settings_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -116,7 +117,7 @@ class _LockGateState extends ConsumerState<LockGate>
     _authenticating = true;
     try {
       final ok = await _auth.authenticate(
-        localizedReason: 'Unlock Remote File Explorer',
+        localizedReason: context.l10n.unlockReason,
         options: const AuthenticationOptions(
           biometricOnly: false,
           // Without this, the prompt itself pausing/resuming the app is
@@ -177,14 +178,17 @@ class _LockedShell extends StatelessWidget {
           children: [
             Icon(LucideIcons.lock, size: 64, color: scheme.primary),
             const SizedBox(height: 24),
-            Text('Locked', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              context.l10n.appLockedTitle,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 16),
             onUnlock == null
                 ? const CircularProgressIndicator()
                 : FilledButton.icon(
                   onPressed: onUnlock,
                   icon: const Icon(LucideIcons.fingerprint),
-                  label: const Text('Unlock'),
+                  label: Text(context.l10n.unlockButton),
                 ),
           ],
         ),

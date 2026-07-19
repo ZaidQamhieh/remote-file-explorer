@@ -1103,5 +1103,9 @@
 
   "commandPaletteTitle": "Command Palette",
   "commandPaletteHint": "Type a command...",
-  "goToPathTitle": "Go to Path"
+  "goToPathTitle": "Go to Path",
+
+  "appLockedTitle": "Locked",
+  "unlockButton": "Unlock",
+  "unlockReason": "Unlock Remote File Explorer"
 }

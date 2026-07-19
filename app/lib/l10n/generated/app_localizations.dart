@@ -3519,6 +3519,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Go to Path'**
   String get goToPathTitle;
+
+  /// No description provided for @appLockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get appLockedTitle;
+
+  /// No description provided for @unlockButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get unlockButton;
+
+  /// No description provided for @unlockReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Remote File Explorer'**
+  String get unlockReason;
 }
 
 class _AppLocalizationsDelegate

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/ui/lock_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n_helpers.dart';
+
 // LockGate reads `appLockEnabled` from settingsProvider, an AsyncNotifier
 // backed by SharedPreferences — it isn't loaded synchronously at widget
 // creation. LockGate.initState() used to call _tryUnlock() immediately,
@@ -16,8 +18,11 @@ void main() {
     SharedPreferences.setMockInitialValues({'app.appLockEnabled': true});
 
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: LockGate(child: Text('unlocked content'))),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: l10nDelegates,
+          home: const LockGate(child: Text('unlocked content')),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -33,8 +38,11 @@ void main() {
       SharedPreferences.setMockInitialValues({'app.appLockEnabled': true});
 
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: LockGate(child: Text('unlocked content'))),
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: const LockGate(child: Text('unlocked content')),
+          ),
         ),
       );
       // Deliberately not pumpAndSettle(): settingsProvider hasn't resolved
@@ -49,8 +57,11 @@ void main() {
     SharedPreferences.setMockInitialValues({'app.appLockEnabled': false});
 
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: LockGate(child: Text('unlocked content'))),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: l10nDelegates,
+          home: const LockGate(child: Text('unlocked content')),
+        ),
       ),
     );
     await tester.pumpAndSettle();

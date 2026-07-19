@@ -2099,4 +2099,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get goToPathTitle => 'Go to Path';
+
+  @override
+  String get appLockedTitle => 'Locked';
+
+  @override
+  String get unlockButton => 'Unlock';
+
+  @override
+  String get unlockReason => 'Unlock Remote File Explorer';
 }

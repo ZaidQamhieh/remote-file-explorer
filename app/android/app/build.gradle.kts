@@ -61,11 +61,19 @@ android {
     buildTypes {
         release {
             // Use the dedicated upload key when key.properties is present
-            // (local dev + CI release builds); otherwise fall back to debug.
+            // (local dev + CI release builds). A release without it would be
+            // debug-signed and rejected as an OTA upgrade, so fail loudly rather
+            // than silently ship it (PR-69); pass -PallowDebugSigning to opt into
+            // a debug-signed release for local testing only.
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
-            } else {
+            } else if (project.hasProperty("allowDebugSigning")) {
                 signingConfigs.getByName("debug")
+            } else {
+                throw GradleException(
+                    "Release build has no key.properties. Provide production " +
+                        "signing, or pass -PallowDebugSigning for a local test build."
+                )
             }
         }
     }

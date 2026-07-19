@@ -6,6 +6,7 @@ class AppRelease {
     required this.versionCode,
     required this.size,
     this.url,
+    this.sha256,
   });
 
   final String versionName;
@@ -17,10 +18,17 @@ class AppRelease {
   /// APK is fetched from `/v1/app/download` on the same host instead).
   final String? url;
 
+  /// Hex-encoded SHA-256 of the APK, published in `latest.json` by
+  /// `.github/workflows/release.yml` (PR-25). `null` for a release published
+  /// before this field existed, or for the agent's payload (which doesn't
+  /// carry one) — callers fall back to a size-only check in that case.
+  final String? sha256;
+
   factory AppRelease.fromJson(Map<String, dynamic> json) => AppRelease(
     versionName: json['versionName'] as String? ?? '',
     versionCode: (json['versionCode'] as num?)?.toInt() ?? 0,
     size: (json['size'] as num?)?.toInt() ?? 0,
     url: json['url'] as String?,
+    sha256: json['sha256'] as String?,
   );
 }

@@ -100,11 +100,14 @@ jobs:
           apk="rfe-${name}-${code}.apk"
           cp app/build/app/outputs/flutter-apk/app-release.apk "$apk"
           size="$(stat -c%s "$apk")"
+          sha256="$(sha256sum "$apk" | cut -d' ' -f1)"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${apk}"
           # Same shape as the agent's GET /v1/app/latest (versionName/versionCode/
-          # size) plus the download `url` the off-Tailscale client needs.
-          printf '{"versionName":"%s","versionCode":%s,"size":%s,"url":"%s"}\n' \
-            "$name" "$code" "$size" "$url" > latest.json
+          # size) plus the download `url` and `sha256` (PR-25) the off-Tailscale
+          # client needs to verify what it downloaded, since size alone can't
+          # catch a truncated-but-same-length or corrupted transfer.
+          printf '{"versionName":"%s","versionCode":%s,"size":%s,"url":"%s","sha256":"%s"}\n' \
+            "$name" "$code" "$size" "$url" "$sha256" > latest.json
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"

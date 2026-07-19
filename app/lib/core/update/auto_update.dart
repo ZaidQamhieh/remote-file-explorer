@@ -10,7 +10,9 @@ library;
 
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart' show CancelToken;
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -126,9 +128,99 @@ class _SharedApkDownload {
   }
 }
 
+/// Thrown when a downloaded APK's bytes don't match [AppRelease.sha256] (or,
+/// for a release published without one, its reported size) — the corrupt
+/// file has already been deleted.
+class ApkIntegrityException implements Exception {
+  ApkIntegrityException(this.versionCode);
+  final int versionCode;
+  @override
+  String toString() =>
+      'ApkIntegrityException: downloaded APK for build $versionCode failed '
+      'verification';
+}
+
+/// Computes a file's SHA-256 as a hex string, streaming it so the whole APK
+/// never has to fit in memory. Runs via [compute] (a background isolate).
+Future<String> hashApkSha256(String path) async {
+  final sink = _DigestSink();
+  final input = sha256.startChunkedConversion(sink);
+  await for (final chunk in File(path).openRead()) {
+    input.add(chunk);
+  }
+  input.close();
+  return sink.digest.toString();
+}
+
+class _DigestSink implements Sink<Digest> {
+  Digest? digest;
+
+  @override
+  void add(Digest data) => digest = data;
+
+  @override
+  void close() {}
+}
+
+/// Verifies a completed download against [release]: the real SHA-256 when
+/// the release published one, otherwise the pre-existing size-only check
+/// (older releases, or the agent's payload, don't carry a digest).
+Future<bool> verifyDownloadedApk(AppRelease release, File file) async {
+  if (!await file.exists() || await file.length() != release.size) {
+    return false;
+  }
+  final expected = release.sha256;
+  if (expected == null || expected.isEmpty) return true;
+  final actual = await compute(hashApkSha256, file.path);
+  return actual.toLowerCase() == expected.toLowerCase();
+}
+
+/// A lock held past this long is assumed abandoned (the holder crashed or
+/// was killed mid-download) rather than genuinely still in progress, and is
+/// forcibly cleared — otherwise a single interrupted download would wedge
+/// every future update check for this versionCode forever.
+const _lockStaleAfter = Duration(minutes: 2);
+
+/// Acquires an exclusive, cross-isolate *and* cross-process lock on
+/// [lockFile] by racing to atomically create it (`create(exclusive: true)`
+/// fails if the file already exists) — unlike [RandomAccessFile.lock], which
+/// dart:io documents as advisory-and-**process-scoped** on Linux/Android
+/// ("several isolates in the same process can obtain an exclusive lock on
+/// the same file"), so it would never actually have blocked the foreground
+/// isolate against WorkManager's separate background isolate in the same
+/// app process (PR-25).
+Future<void> _acquireDownloadLock(File lockFile) async {
+  while (true) {
+    try {
+      await lockFile.create(exclusive: true);
+      return;
+    } on FileSystemException {
+      try {
+        final stat = await lockFile.stat();
+        if (stat.type != FileSystemEntityType.notFound &&
+            DateTime.now().difference(stat.modified) > _lockStaleAfter) {
+          await lockFile.delete();
+          continue; // retry create() immediately
+        }
+      } catch (_) {
+        // Lock file vanished between the failed create and this stat —
+        // fine, just retry immediately below.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+}
+
 /// Downloads [release]'s APK to [localFile] (resuming from whatever is
 /// already on disk), joining an already in-flight download for the same
 /// [AppRelease.versionCode] instead of starting a second concurrent writer.
+///
+/// [_activeApkDownloads] only coordinates callers within this isolate — the
+/// foreground app and WorkManager's separate background isolate (see
+/// [checkAndDownloadUpdateInBackground]) each have their own copy of that
+/// map, so both could still open the same file for writing at once. An
+/// atomically-created sibling `.lock` file closes that gap for real
+/// (PR-25) — see [_acquireDownloadLock].
 Future<void> sharedDownloadApk({
   required GithubUpdateSource source,
   required AppRelease release,
@@ -144,14 +236,34 @@ Future<void> sharedDownloadApk({
   final token = CancelToken();
   late final _SharedApkDownload entry;
   Future<void> start() async {
-    final startByte = await localFile.exists() ? await localFile.length() : 0;
-    await source.downloadApk(
-      release: release,
-      localFile: localFile,
-      startByte: startByte,
-      cancelToken: token,
-      onProgress: (received, total) => entry._notify(received, total),
-    );
+    final lockFile = File('${localFile.path}.lock');
+    await _acquireDownloadLock(lockFile);
+    try {
+      // Another isolate/process may have finished this exact download while
+      // this one was waiting for the lock.
+      if (await verifyDownloadedApk(release, localFile)) return;
+
+      final startByte = await localFile.exists() ? await localFile.length() : 0;
+      await source.downloadApk(
+        release: release,
+        localFile: localFile,
+        startByte: startByte,
+        cancelToken: token,
+        onProgress: (received, total) => entry._notify(received, total),
+      );
+
+      if (!await verifyDownloadedApk(release, localFile)) {
+        if (await localFile.exists()) await localFile.delete();
+        throw ApkIntegrityException(release.versionCode);
+      }
+    } finally {
+      try {
+        if (await lockFile.exists()) await lockFile.delete();
+      } catch (_) {
+        // Best-effort — a leftover lock file just gets cleaned up by the
+        // staleness check on the next attempt.
+      }
+    }
   }
 
   final future = start().whenComplete(

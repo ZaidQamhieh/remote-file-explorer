@@ -30,14 +30,45 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19): 33 / 85 closed. No partials left.
+### PROGRESS (as of 2026-07-19, later session): 34 / 85 closed, 1 partial (PR-80).
 - **Critical: 2/2 done** ✅ (PR-01 trash traversal, PR-02 settings authz).
-- **High: 26/62 → 36 open.**
+- **High: 27/62 → 35 open** (PR-81 closed this session).
 - **Medium: 5/17** (PR-43, 46, 48, 52, 85).
-- **Low: 2/4** (PR-77, 78).
+- **Low: 2/4 closed, PR-80 partial** (PR-77, 78 closed; PR-80's `.idea/`
+  half done, comment-sweep half open — see DO NEXT).
 
 Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,20,41,42,43,44,45,46,47,48,50,
-51,52,53,60,69,70,71,77,78,85.
+51,52,53,60,69,70,71,77,78,81,85.
+
+**This session (later 2026-07-19 pass): PR-81 closed, PR-80 partially closed,
+committed separately, NOT pushed.** `61ebf7d` adds
+`agent/internal/server/readonly_matrix_test.go` — a table-driven pass over
+every fs/trash/content mutating route registered exactly as `server.New`
+wires them, proving the read-only invariant end to end through real routing.
+Two shapes asserted: single-target routes (folder/file/rename/compress/
+extract/chmod/content/empty-trash) 403 the whole request; batch routes
+(copy/move/delete/trash-restore) accept the request but degrade every item to
+a `READ_ONLY` `BatchResult` instead (see `fsops.Copy/Move/Delete/MoveToTrash/
+RestoreFromTrash`) — a naive "assert 403 everywhere" test would have wrongly
+flagged those as bugs. `6b879ba` untracks the 8 `.idea/` files
+`.gitignore:29` already covers (git doesn't retroactively untrack files that
+predate an ignore rule) — PR-80's concrete part; its "sweep stale comments"
+half was judged too open-ended/low-value (Low severity) to chase blindly and
+was left alone. Verified green: 334 Go race tests (was 321, +13), gofmt/vet
+clean. Frozen shad tree (40 files) confirmed byte-identical before/after via
+a diff-cached snapshot + restore around the `.idea` commit — see the gotcha
+below, it nearly clobbered that snapshot.
+
+**Gotcha hit this session, worth knowing:** `git commit --only <pathspec>`
+(and even plain `git commit -m … -- <pathspec>`) silently no-ops — prints
+"no changes added to commit" — for paths that are staged for **deletion**
+while a `.gitignore` rule newly covers them (e.g. `git rm --cached` on files
+a rule was just added for). `git diff --cached` shows them staged correctly;
+the pathspec-restricted commit path just refuses to see them. Workaround:
+`git reset -- <the-other-staged-paths>` to unstage everything except the
+target, run a plain `git commit -m …` (no pathspec), then `git add --
+<the-other-staged-paths>` to restore the prior index exactly. Confirmed this
+does NOT reproduce for ordinary (non-ignored, non-deleted) staged paths.
 
 **RECONCILED 2026-07-19:** the 07-15 handoff undercounted. Sessions 07-16→19 also
 landed **PR-05, PR-06, PR-12, PR-42, PR-45, PR-46, PR-47, PR-70** (all in the
@@ -98,26 +129,26 @@ Redocly 0 errors, gofmt/vet clean.
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
 ### DO NEXT — SAFE server-side / config items (no frozen-tree coupling)
-PR-05,06,12,42,45,46,47,70 are DONE (see reconcile note above). What's left `[S]`:
-- **PR-81** — adversarial Go route/security matrix test. Table-driven: every
-  mutating route × read-only → assert 403. The invariant is already enforced +
-  has per-handler read-only tests, so this is regression-armor, not a bug fix.
-  Harness: handlers take `fsops.New(root, true)` for a read-only Ops; call
-  directly (see `transferhandlers_test.go:373`). Zero risk, no owner decision.
+PR-05,06,12,42,45,46,47,70 are DONE (see reconcile note above); PR-81 also
+now DONE (this session), PR-80 partially (see LOW register). What's left `[S]`:
 - **PR-84** — CI coverage floors + platform assurance gates. `.github/workflows/ci.yml`.
-- **PR-72** — refresh stale product/version docs (README/docs). pubspec desc is `[F]`.
-- **PR-80** — repo hygiene: `.idea/` untracking is already staged (D); confirm
-  `.gitignore` covers it, sweep stale comments.
+- **PR-72** — refresh stale product/version docs (README.md, docs/architecture.md,
+  docs/security/r1-share-link-threat-model.md). pubspec desc is `[F]` — do not
+  touch `app/pubspec.yaml`, it's inside the frozen shad diff.
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
 - **PR-79** — split god files (LOW; defer until abstractions settle).
+- PR-80's "sweep stale comments" half (SSE/cache/release/threat-model
+  comments that overclaim vs. code) is still open — the mechanical `.idea/`
+  untracking part is done. Low value/high fuzziness; do only with a
+  concrete list of offending comments, not a blind grep pass.
 
 ### COMPLETE OPEN-FINDINGS REGISTER (60 items open — nothing omitted)
 Zone: `[S]`=safe server/CI (work now) · `[F]`=frozen client/app (needs emulator
 sign-off) · `[D]`=deferred coupling. Titles are summaries; full file:line + fix
 in the audit note. `*`=partially done, finish the rest.
 
-HIGH (36 open) — PR-05,06,12,42,45,47,70 now CLOSED (2026-07-19), removed below:
+HIGH (35 open) — PR-05,06,12,42,45,47,70,81 now CLOSED (2026-07-19), removed below:
 - PR-14 [F] — QR handoff filename local path traversal
 - PR-15 [F] — photo-backup remote paths accept unsafe segments
 - PR-16 [F] — cross-host image caches leak data (key missing hostId/version)
@@ -154,7 +185,6 @@ HIGH (36 open) — PR-05,06,12,42,45,47,70 now CLOSED (2026-07-19), removed belo
 - PR-68 [F] — hard-coded strings bypass localization; missing a11y semantics
 - PR-73 [F] — flutter_markdown discontinued; 66 pkgs stale; Gradle/AGP/Kotlin (pubspec+gradle)
 - PR-74 [F] — temp preview/share files collide + retain sensitive content
-- PR-81 [S] — Go security invariants lack adversarial route/matrix coverage
 - PR-82 [F] — core Flutter networking/workflows barely integration-tested
 
 MEDIUM (12 open) — PR-46 now CLOSED (2026-07-19):
@@ -171,9 +201,10 @@ MEDIUM (12 open) — PR-46 now CLOSED (2026-07-19):
 - PR-83 [F] — several tests assert implementation/fake behavior
 - PR-84 [S] — coverage floors + platform assurance not gated in CI
 
-LOW (2 open):
+LOW (1 open, 1 partial):
 - PR-79 [S] — nine god files combine unrelated responsibilities (split AFTER abstractions)
-- PR-80 [S] — repo hygiene: tracked .idea/ files, stale/misleading comments
+- PR-80* [S] — `.idea/` untracking CLOSED (2026-07-19); stale/misleading
+  comments sweep still open, needs a concrete offending-comment list first
 
 ### DEFERRED (coupling — needs owner decision, do NOT change unilaterally)
 - **PR-61** — minimal unauth `/health` + WoL admin-gate: the shipped app reads

@@ -65,6 +65,14 @@ void main() {
     expect(file.path, endsWith('update-42.apk'));
   });
 
+  test('apkCacheFileFor places the APK in its own updates/ subdirectory '
+      '(PR-75: so the FileProvider grant can be scoped to just that path, '
+      'not the whole cache dir)', () async {
+    final file = await apkCacheFileFor(42);
+    expect(file.parent.path, endsWith('updates'));
+    expect(await file.parent.exists(), isTrue);
+  });
+
   test('isApkReadyToInstall is false when nothing is cached', () async {
     const release = AppRelease(versionName: '1.0.0', versionCode: 1, size: 100);
     expect(await isApkReadyToInstall(release), isFalse);

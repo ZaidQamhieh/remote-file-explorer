@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Paths the updater's FileProvider may share with the system installer.
-     The downloaded APK lives in the app's external cache
-     (getExternalCacheDirectories) — external-cache-path covers that. The others
-     are included for robustness across devices. -->
+<!-- Paths this app's FileProvider may share with other apps (the system
+     installer, or an "open with"/share-sheet target) — PR-75: narrowed to
+     the exact subdirectories each real grant uses, not the whole cache/
+     storage root, so a URI-grant bug or caller mistake has a much smaller
+     blast radius.
+       - updates/  under external cache: the downloaded APK handed to the
+         system installer (auto_update.dart's apkCacheFileFor).
+       - share_cache/, open_cache/ under internal cache: files fetched from
+         the agent for the OS share sheet or an "open with" chooser
+         (preview_actions.dart's share()/openWith()).
+     external-storage-root and the app's files dir are not exposed — nothing
+     hands a Uri under either of them to another app. -->
 <paths>
-    <external-cache-path name="external_cache" path="." />
-    <cache-path name="cache" path="." />
-    <external-path name="external" path="." />
-    <files-path name="files" path="." />
+    <external-cache-path name="updates" path="updates/" />
+    <cache-path name="share_cache" path="share_cache/" />
+    <cache-path name="open_cache" path="open_cache/" />
 </paths>

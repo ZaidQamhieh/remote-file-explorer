@@ -94,7 +94,14 @@ Future<File> apkCacheFileFor(int versionCode) async {
       (dirs != null && dirs.isNotEmpty)
           ? dirs.first
           : await getTemporaryDirectory();
-  return File('${base.path}/update-$versionCode.apk');
+  // Own subdirectory (not the cache root) so the FileProvider grant that
+  // hands this file to the system installer can be scoped to just this path
+  // (provider_paths.xml, PR-75) instead of the whole external cache dir.
+  final updatesDir = Directory('${base.path}/updates');
+  if (!await updatesDir.exists()) {
+    await updatesDir.create(recursive: true);
+  }
+  return File('${updatesDir.path}/update-$versionCode.apk');
 }
 
 /// True when a complete, size-matched APK for [release] is already cached —

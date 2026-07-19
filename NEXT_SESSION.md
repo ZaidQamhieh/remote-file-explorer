@@ -30,25 +30,89 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19, fourth pass): 38 / 85 closed (count of the
-list below), 0 partial. Per-severity totals below are counted directly off
-the audit doc's own tags (`grep -oE '^#### PR-[0-9]+ — [A-Za-z]+'`) — the
-prior draft's bucket totals (62 High / 17 Medium / 4 Low) were themselves
-wrong (real totals: 60 High / 20 Medium / 3 Low, on top of 2 Critical =
-85), which is what caused the 39-vs-37 mismatch flagged in the last pass.
-Recounted from source this pass; subtotals now tie out exactly
-(2+25+8+3=38=flat list count).
+### PROGRESS (as of 2026-07-19, fifth pass): 44 / 85 closed (count of the
+list below), 0 partial. Per-severity totals are counted directly off the
+audit doc's own tags (`grep -oE '^#### PR-[0-9]+ — [A-Za-z]+'`).
 - **Critical: 2/2 done** ✅ (PR-01, PR-02).
-- **High: 25/60 closed, 35 open** — unchanged this pass (nothing closed this
-  pass is High-tagged).
-- **Medium: 8/20 closed, 12 open** — includes PR-79, which is Medium per the
-  audit doc, not Low (this file's own register used to say Low — fixed
-  below).
-- **Low: 3/3 closed, 0 open** ✅ (PR-77, 78, 80 — PR-80's comment-sweep half
-  closed this pass, see below).
+- **High: 31/60 closed, 29 open** — +6 this pass (PR-14,15,16,17,18,19).
+- **Medium: 8/20 closed, 12 open** — includes PR-79 (Medium, not Low).
+- **Low: 3/3 closed, 0 open** ✅ (PR-77, 78, 80).
 
-Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,20,41,42,43,44,45,46,47,48,50,
-51,52,53,60,69,70,71,72,76,77,78,80,81,84,85.
+Subtotals tie out exactly (2+31+8+3=44=flat list count).
+
+Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,41,42,
+43,44,45,46,47,48,50,51,52,53,60,69,70,71,72,76,77,78,80,81,84,85.
+
+**Fifth pass, same day (2026-07-19): owner said "touch the 39 frozen ones" —
+the frozen-client-tree rule is lifted for editing (see HARD SCOPE RULES
+above). Closed PR-14/15/16/17/18/19, committed `a1e0672`, NOT pushed.**
+All 6 are High severity, all in files the pre-existing staged shad-migration
+diff hadn't touched (verified via `git status` before editing each one), so
+each is a clean standalone commit with zero shad-diff overlap — confirmed
+after commit via a staged-file-count check (still exactly 40, unchanged).
+- **PR-14** (`qr_scan_screen.dart`) — `isSafeLocalName()` rejects any
+  hand-off QR `name` containing separators, `.`/`..`, or control chars
+  before it's joined into the local download path; previously an
+  attacker-controlled `../../x` name could escape the downloads dir.
+- **PR-15** (`photo_backup_controller.dart`) — remote filenames are now
+  `<assetId>.<ext>` (extension sniffed from the title via a 5-char alnum
+  regex, default `.jpg`) instead of the raw asset title, which could carry
+  `../` or platform-invalid characters; `_sanitizeSegment` (device
+  nickname) now also strips leading/trailing dots/spaces and control
+  chars, not just path-separator-like characters.
+- **PR-16** (`thumbnail_image.dart`, `preview_image_cache.dart`) — both
+  image caches were keyed by bare remote path; two hosts sharing a path
+  could serve each other's bytes, and a stale in-flight completion could
+  overwrite a newer request's result. Thumbnail cache key extracted into a
+  public, unit-tested `thumbnailCacheKey({hostId, path, size, version})`;
+  the request's key is captured before awaiting and completions compare
+  against the *current* key before applying (`test/features/explorer/
+  thumbnail_cache_key_test.dart`). Thumbnail cache is now byte-bounded
+  (32MB) instead of count-bounded (200 entries). Preview-image cache
+  gained host-scoping (`_key()`) on both its bytes map and its in-flight
+  de-dupe map; version-scoping was **not** added there — its call sites
+  (`image_preview.dart`, `preview.dart`) only have `(client, path)`, no
+  `Entry`, and the cache is small/short-lived (8 entries, ±1 preload
+  window), so the risk/plumbing tradeoff didn't clear the bar this pass.
+- **PR-17** (`backup_service.dart`) — the private device-identity key
+  (`rfe_device_identity_private_v1`) is now permanently excluded from both
+  export and import (`_neverBackedUp`), so a backup+passphrase can no
+  longer clone one device's pairing identity onto another — including
+  defending an *old-format* backup that still has the key, or a
+  hand-crafted one, from planting a foreign identity via import. Trade-off
+  (matches the audit's own suggested fix): any restore now wipes this
+  device's own identity too (secure storage is unconditionally cleared on
+  import, and the private key is never restored), so `DeviceIdentity`
+  regenerates fresh on next use and the device needs to re-pair. Test
+  covers both the export-omits and import-refuses-a-foreign-key cases.
+- **PR-18** (`lock_gate.dart`, `storage_security_settings_screen.dart`) —
+  `LockGate.build()` used to default "settings still loading" or a load
+  error to `appLockEnabled: false` (fast-pathed straight to `widget.child`
+  on the very first frame); now it checks `settingsAsync.hasValue` first
+  and renders the same locked shell (spinner instead of the Unlock button)
+  until the real value is known. New test asserts the very first
+  `tester.pump()` (before `pumpAndSettle`) never shows unlocked content.
+  Also added a preflight in the Security settings screen: turning App Lock
+  on now calls `LocalAuthentication().isDeviceSupported()` first and
+  refuses (with an error message) if the device has no screen lock
+  configured, instead of letting the toggle show "on" while
+  `_noAuthAvailableCodes` handling makes it functionally a no-op forever.
+- **PR-19** (`lock_gate.dart`) — `didChangeAppLifecycleState` only
+  re-locked on `resumed`; added an immediate-cover branch on
+  `inactive`/`paused` (guarded by `_isEnabled && !_locked`, so it doesn't
+  fight the existing `shouldRelockOnResume` grace-window logic for the
+  system biometric prompt's own pause/resume) — the OS can snapshot the
+  current frame for the recent-apps thumbnail as soon as `inactive` fires,
+  before `resumed` ever happens. Native `FLAG_SECURE` (Android) /
+  privacy-overlay (iOS) hardening against a screenshot *while still
+  foregrounded* was **not** added — that's a platform-channel change
+  needing a real device build to verify, out of scope for this pass;
+  flagging as a narrower follow-up, not a full re-open of PR-19.
+
+`flutter analyze` (whole project) and `dart format --set-exit-if-changed`
+both clean after this batch; targeted `flutter test` green on every touched
+test file (see file list above). Lefthook pre-commit ran real `flutter
+analyze` + `dart format` on the commit itself, also green.
 
 **Fourth pass, same day (2026-07-19): PR-72 and PR-80 fully closed (both
 remainder halves from the third pass), doc-only, NOT pushed.** PR-72's
@@ -169,9 +233,25 @@ Android build). Frozen shad tree stayed staged & untouched. **Not pushed.**
    session completing after upgrade conflicts rather than clobbering.
 
 ### HARD SCOPE RULES (do not break)
-1. **Do NOT touch the frozen shad migration tree** — the ~39 uncommitted
-   `app/lib/**` + specific `app/test/**` + `pubspec.*` files pending owner
-   emulator sign-off. ~30 open Highs live there; they wait.
+1. **The frozen shad migration tree is unfrozen for editing as of
+   2026-07-19** — owner explicitly said "touch the 39 frozen ones." This
+   overrides the old blanket "do not touch" rule for *editing*; it does
+   **NOT** change rule 2 below (commit/push approval) or the fact that the
+   shad migration itself (the ~40 files already staged with pre-existing
+   uncommitted content) is still unverified on an emulator. In practice
+   that has meant: pick individual `[F]` findings whose fix lives in a file
+   the shad migration hasn't already staged changes to (check `git status`
+   first — `M ` staged means shad already touched it, ` M`/untracked means
+   it's clean), fix + test + commit each batch with `git commit --only`
+   scoped to exactly the touched paths, and leave the pre-existing 40-file
+   staged diff completely alone. Batch 1 (PR-14/15/16/17/18/19, commit
+   `a1e0672`) hit 6 files this way with zero overlap with the staged shad
+   diff. If a finding's fix REQUIRES editing a file the shad migration
+   already staged changes to, that's a judgment call for the session
+   handling it — probably still fine to edit further (owner said touch
+   them), but the resulting diff can no longer be committed separately
+   from the shad migration's own staged content, so flag it rather than
+   silently bundling an unrelated security fix into that unverified commit.
 2. **Do NOT commit or push** without owner approval — owner gates on "show me on
    emulator first." Scope every commit with `git commit --only <paths>`; the
    index has pre-existing staged shad content that must not be swept in.
@@ -184,27 +264,26 @@ Redocly 0 errors, gofmt/vet clean.
 `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` (0 reachable) ·
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
-### DO NEXT — SAFE server-side / config items (no frozen-tree coupling)
-PR-05,06,12,42,45,46,47,70,72,76,80,81,84 are DONE. What's left `[S]`:
+### DO NEXT
+PR-05,06,12,14,15,16,17,18,19,42,45,46,47,70,72,76,80,81,84 are DONE. What's
+left, in rough priority order:
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
 - **PR-79** — split god files (Medium severity; defer until abstractions settle).
+- **PR-21 through PR-82** `[F]` — see the register below. Owner unfroze
+  editing this tree 2026-07-19 (HARD SCOPE RULES rule 1); work through them
+  same as PR-14-19 were done — pick one whose file(s) `git status` shows
+  clean (not already `M `/staged from the shad migration), fix + test +
+  `git commit --only`, don't push.
 
-**After PR-59/79, everything else genuinely needs the frozen shad client
-tree unfrozen (owner emulator sign-off) to touch.**
+### COMPLETE OPEN-FINDINGS REGISTER (41 items open)
+Zone: `[S]`=safe, no client coupling · `[F]`=in the (now-unfrozen-for-editing,
+still-not-committable-together-with-the-shad-diff) client/app tree · `[D]`=
+deferred coupling. Titles are summaries; full file:line + fix in the audit
+note. `*`=partially done, finish the rest.
 
-### COMPLETE OPEN-FINDINGS REGISTER (60 items open — nothing omitted)
-Zone: `[S]`=safe server/CI (work now) · `[F]`=frozen client/app (needs emulator
-sign-off) · `[D]`=deferred coupling. Titles are summaries; full file:line + fix
-in the audit note. `*`=partially done, finish the rest.
-
-HIGH (35 open) — PR-05,06,12,42,45,47,70,81 now CLOSED (2026-07-19), removed below:
-- PR-14 [F] — QR handoff filename local path traversal
-- PR-15 [F] — photo-backup remote paths accept unsafe segments
-- PR-16 [F] — cross-host image caches leak data (key missing hostId/version)
-- PR-17 [F] — portable backup exports the private device identity key
-- PR-18 [F] — app lock fails OPEN on startup / unavailable auth
-- PR-19 [F] — recent-app task thumbnails retain sensitive content
+HIGH (29 open) — PR-05,06,12,42,45,47,70,81 CLOSED earlier 2026-07-19;
+PR-14,15,16,17,18,19 also now CLOSED (fifth pass, commit `a1e0672`), removed below:
 - PR-21 [F] — backup restore is destructive and non-atomic
 - PR-22 [F] — backup import: resource abuse + weak offline passphrase
 - PR-23 [F] — address fallback replays non-idempotent POST/PATCH/PUT/DELETE
@@ -259,9 +338,14 @@ LOW (0 open): PR-77, 78, 80 all CLOSED (2026-07-19).
 - **PR-75** — FileProvider narrowing: needs Dart update/share paths in the frozen
   tree.
 
-### FROZEN until emulator sign-off (client Highs — ~30)
-PR-14,15,16,17,18,19,21–40, 56,57,62,64,66,68,73,74,82 — all `app/lib/**` or
-shad UI or `pubspec`. See the audit note per finding.
+### Remaining client-tree findings (unfrozen for editing 2026-07-19, see
+### HARD SCOPE RULES rule 1 — this is no longer a "wait for sign-off" list,
+### just what's left)
+PR-21–40 (minus 14-19, closed), 56,57,62,64,66,68,73,74,82 — all `app/lib/**`
+or shad UI or `pubspec`. See the audit note per finding. Before starting one,
+`git status` the target file(s) first: if already `M ` (staged), the shad
+migration touched it and a fix commit can't be cleanly separated from that
+unverified diff — flag it instead of bundling silently.
 
 ### COMMITTED 2026-07-19 (was the uncommitted fix-session work)
 Landed on `master` as `4e09ddf` (server) + `9706ee2` (android). PR-46 replaced

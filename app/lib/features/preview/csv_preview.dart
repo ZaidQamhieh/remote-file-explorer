@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
@@ -15,12 +13,15 @@ import 'text_editor.dart';
 const int kMaxCsvRows = 1000;
 
 /// CSV preview: fetches the file's bytes through the pinned +
-/// authenticated [AgentClient], decodes as UTF-8, parses into rows, and
-/// renders as a horizontally-scrollable [DataTable].
+/// authenticated [AgentClient], decodes as UTF-8, parses into rows via
+/// [parseCsvRows] (quote-aware, RFC 4180-ish), and renders as a
+/// horizontally-scrollable [DataTable].
 ///
-/// Parsing is intentionally simple (split on newlines, then commas) — good
-/// enough for typical CSVs. Quoted fields with embedded commas/newlines are
-/// not handled; a full RFC-4180 parser isn't worth the dependency.
+/// PR-67 (partial): parsing now correctly handles quoted commas, escaped
+/// quotes, and embedded newlines instead of naively splitting on `\n` then
+/// `,`. Still parses the whole file synchronously on the UI isolate rather
+/// than streaming/off-isolate — that half of the finding (medium CSVs can
+/// block the UI while parsing) is unaddressed this pass.
 class CsvPreviewScreen extends StatefulWidget {
   const CsvPreviewScreen({
     super.key,
@@ -197,33 +198,93 @@ class _CsvData {
   final int totalRows;
 }
 
-/// Parses [text] into a [_CsvData]. The first non-empty line becomes headers;
-/// remaining lines become data rows, capped at [kMaxCsvRows].
+/// Parses [text] into a [_CsvData]. The first row becomes headers; remaining
+/// rows become data rows, capped at [kMaxCsvRows].
 _CsvData _parseCsv(String text) {
-  final lines =
-      const LineSplitter()
-          .convert(text)
-          .where((l) => l.trim().isNotEmpty)
-          .toList();
-  if (lines.isEmpty) {
+  final rows = parseCsvRows(text);
+  if (rows.isEmpty) {
     return _CsvData(headers: [], rows: [], totalRows: 0);
   }
 
-  final headers = _splitRow(lines.first);
-  final dataLines = lines.skip(1).toList();
-  final totalRows = dataLines.length;
+  final headers = rows.first;
+  final dataRows = rows.skip(1).toList();
+  final totalRows = dataRows.length;
   final capped =
-      dataLines.length > kMaxCsvRows
-          ? dataLines.sublist(0, kMaxCsvRows)
-          : dataLines;
-  final rows = capped.map(_splitRow).toList();
+      dataRows.length > kMaxCsvRows
+          ? dataRows.sublist(0, kMaxCsvRows)
+          : dataRows;
 
-  return _CsvData(headers: headers, rows: rows, totalRows: totalRows);
+  return _CsvData(headers: headers, rows: capped, totalRows: totalRows);
 }
 
-/// Splits a single CSV row on commas, trimming each cell.
-List<String> _splitRow(String line) =>
-    line.split(',').map((c) => c.trim()).toList();
+/// Parses [text] as CSV into rows of cells, RFC 4180-ish: a field opening
+/// with `"` may contain commas, `\r`/`\n`, and a doubled `""` as an escaped
+/// literal quote, ending at the next unescaped `"`. Unquoted fields are
+/// trimmed (matching the previous naive parser's behavior); quoted field
+/// content is preserved exactly. Blank lines are dropped. Exported for unit
+/// testing.
+List<List<String>> parseCsvRows(String text) {
+  final rows = <List<String>>[];
+  var row = <String>[];
+  final field = StringBuffer();
+  var inQuotes = false;
+  var fieldQuoted = false;
+
+  void endField() {
+    row.add(fieldQuoted ? field.toString() : field.toString().trim());
+    field.clear();
+    fieldQuoted = false;
+  }
+
+  void endRow() {
+    endField();
+    if (!(row.length == 1 && row.first.isEmpty)) {
+      rows.add(row);
+    }
+    row = [];
+  }
+
+  var i = 0;
+  final len = text.length;
+  while (i < len) {
+    final c = text[i];
+    if (inQuotes) {
+      if (c == '"') {
+        if (i + 1 < len && text[i + 1] == '"') {
+          field.write('"');
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        field.write(c);
+        i++;
+      }
+      continue;
+    }
+    if (c == '"' && field.isEmpty) {
+      inQuotes = true;
+      fieldQuoted = true;
+      i++;
+    } else if (c == ',') {
+      endField();
+      i++;
+    } else if (c == '\r') {
+      i++;
+    } else if (c == '\n') {
+      endRow();
+      i++;
+    } else {
+      field.write(c);
+      i++;
+    }
+  }
+  if (field.isNotEmpty || row.isNotEmpty) {
+    endRow();
+  }
+  return rows;
+}
 
 class _TooLarge implements Exception {
   _TooLarge(this.size);

@@ -72,6 +72,10 @@ paths:
         cpuPercent/ramPercent are instantaneous point reads (Linux /proc; 0 on
         other platforms). The agent keeps no history, so all series reset on
         restart. The web companion polls this every 2s.
+
+        Admin only: these are whole-host figures, so a device paired with a
+        one-time code (the phone app, a guest) gets 403. Only a device
+        authenticated via /login or /register may read them.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -80,6 +84,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Metrics' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /transfers/list:
     get:
@@ -92,6 +97,13 @@ paths:
         from received-chunk count; "open" means started-but-never-finalized.
         Distinct from GET /transfers/{id} (single-session status) and POST
         /transfers (open a session).
+
+        Scoped to the caller: an admin device (authenticated via /login or
+        /register) sees every session plus the whole-table counts and the
+        devices/users filter lists. A code-paired device sees only the
+        sessions it opened, its device/user query params are ignored rather
+        than honoured, counts/activeNow are derived from its own rows (and so
+        capped at the same 200), and devices/users come back empty.
       security: [{ deviceToken: [] }]
       parameters:
         - name: device
@@ -101,7 +113,8 @@ paths:
           description: >
             Restrict results to transfers opened by this device ID. Omit or
             pass empty for all devices. Values come from the devices list in
-            this endpoint's own response.
+            this endpoint's own response. Admin only — ignored for a
+            code-paired caller, which is always scoped to itself.
         - name: user
           in: query
           required: false
@@ -145,6 +158,10 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/TransferSummary' }
         '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: >
+            Caller has no device identity at all. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /users:
     get:
@@ -153,6 +170,9 @@ paths:
         Usernames and creation times only — never password hashes. RFE has no
         per-user roles or session tracking, so those Figma-style columns are
         intentionally absent.
+
+        Admin only: a code-paired device (the phone app, a guest) gets 403 and
+        cannot enumerate the host's accounts.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -161,17 +181,19 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/UserSummary' } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /users/{username}:
     delete:
       summary: Permanently remove a login account (web companion Users page)
       description: >
-        Every login account is a full admin today (see the /users GET note) —
-        there's no self-vs-other distinction like device management has, so
-        any authenticated caller may remove any account. The one exception:
-        the LAST remaining account can't be deleted (code=LAST_USER), since
-        that would brick password login entirely (no way to obtain a device
-        token except an existing pairing code).
+        Admin only — a code-paired device gets 403. Every login account is a
+        full admin today (see the /users GET note), so there's no
+        self-vs-other distinction like device management has: any admin may
+        remove any account. The one exception: the LAST remaining account
+        can't be deleted (code=LAST_USER), since that would brick password
+        login entirely (no way to obtain a device token except an existing
+        pairing code).
       security: [{ deviceToken: [] }]
       parameters:
         - { name: username, in: path, required: true, schema: { type: string } }
@@ -182,6 +204,7 @@ paths:
             username is the only remaining account. code=LAST_USER.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404':
           description: No account with that username. code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -191,9 +214,11 @@ paths:
       summary: Tail the agent's own log output (web companion Logs page)
       description: >
         Last ~200 lines of the agent's journald output (Linux/systemd). Empty
-        array on non-systemd hosts. Exposes no more than a paired device can
-        already read from the filesystem. RFE logs are unstructured, so there
-        is no severity level field.
+        array on non-systemd hosts. RFE logs are unstructured, so there is no
+        severity level field.
+
+        Admin only: the journal spans every device, so a code-paired caller
+        (which may itself be jailed or read-only) gets 403.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -202,13 +227,15 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/LogLine' } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /agent/restart:
     post:
       summary: Restart the agent's own service (Linux/systemd only)
       description: >
-        Any paired device may trigger this — restart-only, no remote stop, so
-        there is nothing to get permanently stuck in. Shells out to
+        Admin only — a code-paired device gets 403, since a restart cuts every
+        other device's transfers. Restart-only, no remote stop, so there is
+        nothing to get permanently stuck in. Shells out to
         `systemctl --user restart rfe-agent.service`; the response is sent
         before the command runs. Returns 501 on non-Linux agents.
       security: [{ deviceToken: [] }]
@@ -219,6 +246,7 @@ paths:
             application/json:
               schema: { type: object, properties: { ok: { type: boolean } } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '501':
           description: Not supported on this platform. code=NOT_IMPLEMENTED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -436,23 +464,36 @@ paths:
         "429":
           description: Too many share requests (rate-limited 10/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
-
-  /share/{tokenHash}:
     delete:
       summary: Revoke an active share link
       description: >
-        Takes the SHA-256 hash of the token (as returned by POST
-        /share/mint's tokenHash field), not the raw token.
+        For DELETE the {token} path segment is the SHA-256 HASH of the token
+        (as returned by POST /share/mint's tokenHash field), not the raw
+        token used by GET.
+
+        Scoped to the link's owner: only the device that minted it, or an
+        admin device, may revoke it. Anyone else gets 404 — the same response
+        an unknown hash gets, so a foreign hash is never confirmed. Links
+        minted before the agent recorded owners are admin-only.
       security: [{ deviceToken: [] }]
       parameters:
-        - { name: tokenHash, in: path, required: true, schema: { type: string } }
+        - { name: token, in: path, required: true, schema: { type: string } }
       responses:
-        "204": { description: Revoked (or was already gone) }
+        "204": { description: Revoked }
         "401": { $ref: "#/components/responses/Error" }
+        "404":
+          description: >
+            No such link, or it belongs to another device. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /share:
     get:
       summary: List active (unexpired) share links
+      description: >
+        Scoped to the caller: an admin device (authenticated via /login or
+        /register) sees every active link; a code-paired device sees only the
+        links it minted. Links minted before the agent recorded owners appear
+        for admins only.
       security: [{ deviceToken: [] }]
       responses:
         "200":
@@ -463,6 +504,10 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/ShareLinkSummary" }
         "401": { $ref: "#/components/responses/Error" }
+        "403":
+          description: >
+            Caller has no device identity at all. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /system/drives:
     get:
@@ -912,9 +957,12 @@ paths:
                   default: false
                   description: >
                     When false (default) and path already exists, the
-                    session is rejected with 409 CONFLICT. When true, an
-                    existing file at path is replaced once the upload
-                    completes.
+                    session is rejected with 409 CONFLICT. The flag is
+                    recorded on the session and re-checked atomically at
+                    POST /transfers/{id}/complete, so a file that appears
+                    during the upload also conflicts (409) instead of being
+                    silently replaced. When true, an existing file at path is
+                    replaced once the upload completes.
       responses:
         "201":
           description: Session opened
@@ -925,7 +973,12 @@ paths:
             chunkSize over the 32MiB cap. code=BAD_REQUEST.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Error" }
+        "403":
+          description: >
+            Path outside the caller's jail, or the agent/device is read-only.
+            code=FORBIDDEN or READ_ONLY. Every mutating transfer route honours
+            read-only, the same as the /fs routes.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "409":
           description: >
             path already exists and overwrite=false. code=CONFLICT.
@@ -944,13 +997,20 @@ paths:
       description: >
         Deletes only the session record, not the uploaded file — for clearing
         stale "open" rows the client never finalized, or "failed" ones.
+
+        Scoped to the session's owner: only the device that opened it, or an
+        admin device, may remove the row. Anyone else gets 404 — the same
+        response an unknown ID gets, so a foreign session ID is never
+        confirmed. Rows with no recorded owner are admin-only.
       security: [{ deviceToken: [] }]
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         '204': { description: Transfer row removed }
         '401': { $ref: '#/components/responses/Error' }
         '404':
-          description: No transfer with that ID. code=NOT_FOUND.
+          description: >
+            No transfer with that ID, or it belongs to another device.
+            code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}/chunks/{n}:
@@ -975,6 +1035,10 @@ paths:
         "204": { description: Chunk stored }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403":
+          description: >
+            The agent or the calling device is read-only. code=READ_ONLY.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -984,10 +1048,15 @@ paths:
       summary: Finalize upload (verify whole-file hash, atomic rename)
       description: >
         Verifies the whole-file SHA-256 against the hash supplied at session
-        open, then atomically renames the temp file to its final destination.
-        A 200 response means the file is integrity-verified: it includes
-        sha256 (the verified whole-file hash) and verified=true alongside the
-        usual Entry fields.
+        open, then publishes the temp file to its final destination. A 200
+        response means the file is integrity-verified: it includes sha256 (the
+        verified whole-file hash) and verified=true alongside the usual Entry
+        fields.
+
+        The publish honours the session's overwrite flag atomically: with
+        overwrite=false a file that appeared at the destination during the
+        upload yields 409 CONFLICT and is left untouched, rather than being
+        replaced.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200":
@@ -1008,7 +1077,17 @@ paths:
                         type: boolean
                         description: Always true on a successful complete.
         "401": { $ref: "#/components/responses/Error" }
+        "403":
+          description: >
+            Path outside the caller's jail, or the agent/device is read-only.
+            code=FORBIDDEN or READ_ONLY.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: >
+            The destination was created during the upload and the session was
+            opened with overwrite=false. code=CONFLICT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "422":
           description: Whole-file SHA-256 mismatch. code=HASH_MISMATCH.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -1586,7 +1665,7 @@ components:
         deviceToken: { type: string }
         deviceId: { type: string }
         agentName: { type: string }
-        certFingerprint: { type: string, description: SHA-256 of agent TLS cert, for pinning }
+        certFingerprint: { type: string, description: "SHA-256 of agent TLS cert, for pinning" }
         address:
           type: string
           description: LAN host:port the agent is reachable at, if detected.
@@ -1646,7 +1725,7 @@ components:
       properties:
         sources: { type: array, items: { type: string } }
         destDir: { type: string }
-        duplicate: { type: boolean, default: false, description: When true, auto-rename on collision }
+        duplicate: { type: boolean, default: false, description: "When true, auto-rename on collision" }
         overwrite:
           type: boolean
           default: false

@@ -1,7 +1,11 @@
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 )
 
 func TestSearchIndex_NotReadyBeforeFirstBuild(t *testing.T) {
@@ -52,5 +56,48 @@ func TestSearchIndex_RebuildRespectsLimit(t *testing.T) {
 	}
 	if !truncated || len(results) != 2 {
 		t.Fatalf("want truncated=true and 2 results, got truncated=%v len=%d", truncated, len(results))
+	}
+}
+
+// TestSearchIndex_DoesNotSniffDuringWalk is the PR-47 regression: the index
+// walk must classify by extension only. EntryFromInfo opens extensionless
+// files to sniff them, which across a whole tree is an open+read per file on
+// every rebuild.
+func TestSearchIndex_DoesNotSniffDuringWalk(t *testing.T) {
+	root := t.TempDir()
+	// An extensionless file whose contents would sniff as text/plain.
+	if err := os.WriteFile(filepath.Join(root, "README"), []byte("hello, this is plain text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var entries []indexedEntry
+	collectAll(root, &entries)
+
+	if len(entries) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(entries))
+	}
+	if got := entries[0].entry.MimeType; got != "application/octet-stream" {
+		t.Fatalf("index walk sniffed file contents (mime %q); it must classify by extension alone", got)
+	}
+}
+
+// TestSearchIndex_StatsReported: an index that is silently truncating or
+// thrashing must be observable.
+func TestSearchIndex_StatsReported(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx := &SearchIndex{ops: fsops.New([]string{root}, false)}
+	idx.rebuild()
+
+	st := idx.Stats()
+	if st.Entries != 1 {
+		t.Fatalf("want 1 indexed entry, got %d", st.Entries)
+	}
+	if st.Truncated {
+		t.Fatal("a one-file tree must not report truncated")
+	}
+	if st.BuiltAt.IsZero() {
+		t.Fatal("BuiltAt not stamped — index age is unobservable")
 	}
 }

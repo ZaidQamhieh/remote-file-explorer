@@ -196,3 +196,55 @@ func TestExtract_MissingArchive(t *testing.T) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
+
+// TestExtract_SymlinkParentBlocked is the PR-06 regression: entry names alone
+// are checked lexically, so an entirely innocent-looking "sub/f.txt" used to be
+// written straight through a symlink already sitting in the destination —
+// clobbering a file outside the jail without any "../" ever appearing.
+func TestExtract_SymlinkParentBlocked(t *testing.T) {
+	ops, root := setupJail(t)
+
+	outsideDir := t.TempDir()
+	victim := filepath.Join(outsideDir, "f.txt")
+	if err := os.WriteFile(victim, []byte("ORIGINAL"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	archive := filepath.Join(root, "innocent.zip")
+	f, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("sub/f.txt") // no traversal in the name at all
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("pwned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	// The destination already contains sub -> /outside.
+	dest := filepath.Join(root, "unpack")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(dest, "sub")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ops.Extract(archive, dest); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden (symlink parent), got %v", err)
+	}
+	b, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "ORIGINAL" {
+		t.Fatalf("extraction wrote through a symlink parent, clobbering a file outside the jail: %q", b)
+	}
+}

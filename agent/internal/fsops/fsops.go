@@ -75,6 +75,11 @@ func NewWithSettings(v SettingsView) *Ops {
 	return &Ops{settings: v}
 }
 
+// IsReadOnly reports whether writes are currently rejected. Handlers that
+// mutate outside the batch Ops (e.g. chmod) must consult this so read-only
+// policy is enforced uniformly (PR-04).
+func (o *Ops) IsReadOnly() bool { return o.settings.IsReadOnly() }
+
 // Roots returns the configured allowed roots (a copy). An empty slice
 // means there is no jail (anything is allowed) — callers that need a
 // concrete starting point in that case should fall back to something
@@ -123,6 +128,10 @@ type Drive struct {
 
 // --------- ListDir ---------
 
+// maxListLimit caps how many entries one ListDir page may return, regardless
+// of the client-requested limit (PR-48).
+const maxListLimit = 1000
+
 // ListDir lists a directory with cursor-based pagination by name.
 func (o *Ops) ListDir(path, cursor string, limit int) (*Listing, error) {
 	resolved, err := o.Resolve(path)
@@ -149,6 +158,12 @@ func (o *Ops) ListDir(path, cursor string, limit int) (*Listing, error) {
 	if limit <= 0 {
 		limit = 200
 	}
+	// PR-48: bound the per-page response regardless of what the client asks,
+	// so one request can't demand an enormous page. The full-directory read
+	// and sort above is inherent to name-ordered pagination.
+	if limit > maxListLimit {
+		limit = maxListLimit
+	}
 
 	var nextCursor *string
 
@@ -168,7 +183,7 @@ func (o *Ops) ListDir(path, cursor string, limit int) (*Listing, error) {
 	}
 	entries := make([]Entry, 0, end)
 	for _, info := range filtered[:end] {
-		entries = append(entries, entryFromInfo(info, filepath.Join(resolved, info.Name())))
+		entries = append(entries, entryFromInfo(info, filepath.Join(resolved, info.Name()), true))
 	}
 	if end < len(filtered) {
 		c := entries[end-1].Name
@@ -194,7 +209,7 @@ func (o *Ops) Meta(path string) (*Entry, error) {
 		}
 		return nil, err
 	}
-	e := entryFromInfo(info, resolved)
+	e := entryFromInfo(info, resolved, true)
 	return &e, nil
 }
 
@@ -588,10 +603,22 @@ func (o *Ops) Delete(paths []string) []BatchResult {
 // Exported so other packages (e.g. the search handler) can build Entry
 // values consistently while walking the tree themselves.
 func EntryFromInfo(info os.FileInfo, fullPath string) Entry {
-	return entryFromInfo(info, fullPath)
+	return entryFromInfo(info, fullPath, true)
 }
 
-func entryFromInfo(info os.FileInfo, fullPath string) Entry {
+// EntryFromInfoNoSniff is EntryFromInfo without content sniffing: the MIME
+// type comes from the extension alone, and an extensionless file reports
+// "application/octet-stream" instead of being opened and read.
+//
+// For one entry the sniff is nothing; for the search index it is the whole
+// cost model. That walk visits every file under the roots on every rebuild,
+// so sniffing turns a directory walk into an open+read storm across the tree
+// (PR-47). Callers showing a single entry should use EntryFromInfo.
+func EntryFromInfoNoSniff(info os.FileInfo, fullPath string) Entry {
+	return entryFromInfo(info, fullPath, false)
+}
+
+func entryFromInfo(info os.FileInfo, fullPath string, sniff bool) Entry {
 	isSymlink := info.Mode()&os.ModeSymlink != 0
 	// info comes from Lstat/Readdir, which never follows symlinks — a symlink
 	// to a directory would otherwise report IsDir=false and become permanently
@@ -605,7 +632,7 @@ func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 	}
 	mtype := ""
 	if !isDir {
-		mtype = mimeForPath(fullPath, info)
+		mtype = mimeForPath(fullPath, info, sniff)
 	}
 	e := Entry{
 		Name:      info.Name(),
@@ -626,7 +653,7 @@ func entryFromInfo(info os.FileInfo, fullPath string) Entry {
 	return e
 }
 
-func mimeForPath(path string, info os.FileInfo) string {
+func mimeForPath(path string, info os.FileInfo, sniff bool) string {
 	// First try extension.
 	if ext := filepath.Ext(path); ext != "" {
 		if m := mime.TypeByExtension(ext); m != "" {
@@ -634,7 +661,7 @@ func mimeForPath(path string, info os.FileInfo) string {
 		}
 	}
 	// Sniff up to 512 bytes.
-	if info.Size() > 0 && !info.IsDir() {
+	if sniff && info.Size() > 0 && !info.IsDir() {
 		f, err := os.Open(path)
 		if err == nil {
 			defer f.Close()
@@ -666,6 +693,15 @@ func copyRecursive(src, dst string) error {
 	if err != nil {
 		return err
 	}
+	// Only the top-level source was resolved against the jail (see Ops.Copy),
+	// so a symlink found during recursion is unvalidated. Copying it as a
+	// *file* would open it, follow it, and copy the bytes it points at —
+	// arbitrary agent-readable content, jail or no jail (PR-05). Recreate the
+	// link itself: a link is just a name, and every later read of it goes
+	// through Resolve, which re-checks the jail.
+	if info.Mode()&os.ModeSymlink != 0 {
+		return copySymlink(src, dst)
+	}
 	if info.IsDir() {
 		if err := os.MkdirAll(dst, info.Mode()); err != nil {
 			return err
@@ -684,6 +720,24 @@ func copyRecursive(src, dst string) error {
 	return copyFile(src, dst, info.Mode())
 }
 
+// copySymlink recreates src's link at dst rather than dereferencing it. An
+// existing dst is replaced, matching copyFile's overwrite behaviour.
+func copySymlink(src, dst string) error {
+	target, err := os.Readlink(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	// os.Symlink fails on an existing name, so clear it first. Remove (not
+	// RemoveAll) — replacing a non-empty directory is not this call's job.
+	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Symlink(target, dst)
+}
+
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -692,6 +746,21 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	defer in.Close()
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
+	}
+	// The write side of the same hole: O_CREATE|O_TRUNC on a path that is
+	// already a symlink follows it and truncates whatever it points at, which
+	// for a link planted in the destination tree is a file outside the jail
+	// (PR-05/06). Drop the link and create a real file in its place — the
+	// result a copy is supposed to produce anyway.
+	//
+	// ponytail: Lstat-then-open is still a check/use race against an attacker
+	// with concurrent write access to the destination tree; closing that needs
+	// descriptor-relative openat traversal (the SecureFS refactor the audit
+	// asks for), not a bigger check here.
+	if fi, err := os.Lstat(dst); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if err := os.Remove(dst); err != nil {
+			return err
+		}
 	}
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {

@@ -29,6 +29,16 @@ func Handler() http.Handler {
 	fileServer := http.FileServer(http.FS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		// Defense-in-depth for the companion (PR-13). The bundle is fully
+		// self-hosted (no CDN, no external fetch), so a strict CSP plus
+		// framing/sniff/referrer controls blunt token theft if a path or
+		// filename ever reaches an HTML sink. Inline script/style are the
+		// bundle's own; nothing loads cross-origin.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		fileServer.ServeHTTP(w, r)
 	})
 }

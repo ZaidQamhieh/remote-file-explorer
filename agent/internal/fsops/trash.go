@@ -43,6 +43,25 @@ const xdgDeletionDate = "2006-01-02T15:04:05"
 func trashFilesDir(trashDir string) string { return filepath.Join(trashDir, "files") }
 func trashInfoDir(trashDir string) string  { return filepath.Join(trashDir, "info") }
 
+// ErrBadTrashID rejects a client-supplied trash id that is not a single opaque
+// basename. Trash ids are server-generated basenames under files/; anything
+// with a separator, volume prefix, or dot name could join out of the store and
+// let DELETE/restore reach arbitrary paths.
+var ErrBadTrashID = errors.New("invalid trash id")
+
+func validTrashID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	if id != filepath.Base(id) || strings.ContainsRune(id, '/') || strings.ContainsRune(id, '\\') {
+		return false
+	}
+	if filepath.VolumeName(id) != "" || filepath.IsAbs(id) {
+		return false
+	}
+	return true
+}
+
 // MoveToTrash moves each path into the trash store at trashDir, writing a
 // .trashinfo sidecar so it can be restored. Each path is jail-checked via
 // Resolve. Cross-filesystem moves fall back to copy+remove. Returns a
@@ -140,6 +159,10 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 	}
 	results := make([]BatchResult, len(ids))
 	for i, id := range ids {
+		if !validTrashID(id) {
+			results[i] = BatchResult{Path: id, Error: apiErr("BAD_REQUEST", ErrBadTrashID.Error())}
+			continue
+		}
 		infoPath := filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)
 		orig, _, err := readTrashInfo(infoPath)
 		if err != nil {
@@ -183,6 +206,9 @@ func EmptyTrash(trashDir string, ids []string) error {
 		return os.RemoveAll(trashInfoDir(trashDir))
 	}
 	for _, id := range ids {
+		if !validTrashID(id) {
+			return ErrBadTrashID
+		}
 		if err := os.RemoveAll(filepath.Join(trashFilesDir(trashDir), id)); err != nil {
 			return err
 		}

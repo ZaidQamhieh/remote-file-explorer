@@ -453,7 +453,7 @@ func TestEmptyTrashHandler_OK(t *testing.T) {
 	trashDir := t.TempDir()
 	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", nil)
 	rr := httptest.NewRecorder()
-	emptyTrashHandler(trashDir)(rr, req)
+	emptyTrashHandler(fsops.New(nil, false), trashDir)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -558,7 +558,7 @@ func TestEmptyTrashHandler_WithIDs(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(body))
 	req.Header.Set("Content-Length", "999")
 	rr := httptest.NewRecorder()
-	emptyTrashHandler(trashDir)(rr, req)
+	emptyTrashHandler(fsops.New(nil, false), trashDir)(rr, req)
 
 	// Should succeed even with nonexistent IDs (idempotent).
 	if rr.Code != http.StatusOK {

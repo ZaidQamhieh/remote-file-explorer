@@ -18,7 +18,7 @@ func statusHandler(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		free, total, err := diskStats(cfg.DataDir)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "status", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, statusResponse{

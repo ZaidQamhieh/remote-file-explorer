@@ -23,6 +23,10 @@ agent.db-*
 .DS_Store
 Thumbs.db
 .vscode/
+# JetBrains project state: generated per-machine (SDK paths, device caches,
+# resolved Dart packages), so it churns for every user and is regenerated on
+# open. /app/.idea/ was already ignored; the root one was tracked by oversight.
+/.idea/
 
 # Agent worktrees (local scratch space, never commit)
 /.claude/worktrees/

@@ -37,7 +37,7 @@ func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
 			token := strings.TrimSpace(parts[1])
 			device, err := db.DeviceByToken(token)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "auth middleware", err)
 				return
 			}
 			if device == nil || device.Revoked {

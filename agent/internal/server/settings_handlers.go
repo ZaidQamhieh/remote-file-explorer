@@ -34,6 +34,18 @@ func isAdminDevice(d *store.Device) bool {
 	return d != nil && d.ViaLogin
 }
 
+// adminOnly rejects callers that are not admin devices (see isAdminDevice).
+// Must run after authMiddleware, which puts the device in the context.
+func adminOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "admin device required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 type settingsBody struct {
 	ReadOnly        *bool     `json:"readOnly,omitempty"`
 	Roots           *[]string `json:"roots,omitempty"`
@@ -56,38 +68,44 @@ func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 
 func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Changing global security policy (read-only, roots, sharing, backup
+		// destination) is an admin operation — an ordinary paired device must
+		// not be able to weaken the server for every other client.
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "admin device required")
+			return
+		}
 		var b settingsBody
-		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+		if !decodeJSONBody(w, r, &b) {
 			return
 		}
 		if b.ReadOnly != nil {
 			if err := st.SetReadOnly(*b.ReadOnly); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "patch settings", err)
 				return
 			}
 		}
 		if b.Roots != nil {
 			if err := st.SetRoots(*b.Roots); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "patch settings", err)
 				return
 			}
 		}
 		if b.AgentName != nil {
 			if err := st.SetAgentName(*b.AgentName); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "patch settings", err)
 				return
 			}
 		}
 		if b.AllowSharing != nil {
 			if err := st.SetAllowSharing(*b.AllowSharing); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "patch settings", err)
 				return
 			}
 		}
 		if b.PhotoBackupRoot != nil {
 			if err := st.SetPhotoBackupRoot(*b.PhotoBackupRoot); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "patch settings", err)
 				return
 			}
 		}
@@ -116,23 +134,26 @@ func getBandwidthHandler(st *settings.Store) http.HandlerFunc {
 
 func putBandwidthHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "admin device required")
+			return
+		}
 		var b struct {
 			MaxUploadBytesPerSec   *int64 `json:"maxUploadBytesPerSec"`
 			MaxDownloadBytesPerSec *int64 `json:"maxDownloadBytesPerSec"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+		if !decodeJSONBody(w, r, &b) {
 			return
 		}
 		if b.MaxUploadBytesPerSec != nil {
 			if err := st.SetMaxUploadBytesPerSec(*b.MaxUploadBytesPerSec); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "put bandwidth", err)
 				return
 			}
 		}
 		if b.MaxDownloadBytesPerSec != nil {
 			if err := st.SetMaxDownloadBytesPerSec(*b.MaxDownloadBytesPerSec); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "put bandwidth", err)
 				return
 			}
 		}
@@ -165,7 +186,7 @@ func listDevicesHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		devices, err := db.ListDevices()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "list devices", err)
 			return
 		}
 		cur := deviceFromContext(r)
@@ -193,7 +214,7 @@ func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 			return
 		}
 		if err := db.RevokeDevice(id); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "revoke device", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -212,7 +233,7 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 			return
 		}
 		if err := db.DeleteDevice(id); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "delete device", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -242,7 +263,7 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		target, err := db.GetDeviceByID(id)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "set device jail", err)
 			return
 		}
 		if target == nil {
@@ -262,7 +283,7 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 		}
 		if b.ReadOnly != nil {
 			if err := db.SetDeviceReadOnly(id, *b.ReadOnly); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "set device jail", err)
 				return
 			}
 		}

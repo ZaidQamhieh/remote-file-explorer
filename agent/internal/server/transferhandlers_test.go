@@ -16,8 +16,39 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
+
+// TestTransferStatus_ForeignDeviceGets404 is the PR-11 regression: a paired
+// device that did not open a transfer cannot observe it — the response is
+// indistinguishable from "no such transfer".
+func TestTransferStatus_ForeignDeviceGets404(t *testing.T) {
+	tm, _ := newTestTransferManager(t)
+	target := filepath.Join(t.TempDir(), "out.bin")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, 10, 16, "deadbeef", false, "owner-1"); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	// Foreign non-admin device → 404.
+	rr := httptest.NewRecorder()
+	req := withURLParam(httptest.NewRequest(http.MethodGet, "/v1/transfers/"+id, nil), map[string]string{"id": id})
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "other-1", ViaLogin: false}))
+	transferStatusHandler(tm)(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("foreign device: expected 404, got %d", rr.Code)
+	}
+
+	// The owning device → 200.
+	rr2 := httptest.NewRecorder()
+	req2 := withURLParam(httptest.NewRequest(http.MethodGet, "/v1/transfers/"+id, nil), map[string]string{"id": id})
+	req2 = req2.WithContext(withDevice(req2.Context(), &store.Device{ID: "owner-1"}))
+	transferStatusHandler(tm)(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("owner: expected 200, got %d: %s", rr2.Code, rr2.Body.String())
+	}
+}
 
 // newTestTransferManager builds a transfer.Manager backed by a fresh DB and
 // temp dir, plus an Ops with no path jail.
@@ -193,7 +224,7 @@ func TestUploadChunkHandler_OversizedBodyIs413(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(oversized)))
 	req.Header.Set("X-Chunk-Sha256", sha256hex(oversized))
-	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
+	req = asAdmin(withURLParam(req, map[string]string{"id": id, "n": "0"}))
 
 	uploadChunkHandler(tm)(rr, req)
 
@@ -237,7 +268,7 @@ func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content)))
 	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
-	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
+	req = asAdmin(withURLParam(req, map[string]string{"id": id, "n": "0"}))
 	uploadChunkHandler(tm)(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("upload chunk: expected 204, got %d: %s", rr.Code, rr.Body.String())
@@ -246,7 +277,7 @@ func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
 	// Complete the transfer.
 	rr = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/v1/transfers/"+id+"/complete", nil)
-	req = withURLParam(req, map[string]string{"id": id})
+	req = asAdmin(withURLParam(req, map[string]string{"id": id}))
 	completeTransferHandler(tm, ops)(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -290,11 +321,84 @@ func TestUploadChunkHandler_ExactSizeIsAccepted(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content)))
 	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
-	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
+	req = asAdmin(withURLParam(req, map[string]string{"id": id, "n": "0"}))
 
 	uploadChunkHandler(tm)(rr, req)
 
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestRequireWritable is the PR-04 regression: the resumable-upload routes
+// used to be the one way around read-only. The gate must honour both the
+// global setting and the per-device ops the jail middleware installs.
+func TestRequireWritable(t *testing.T) {
+	root := t.TempDir()
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	tests := []struct {
+		name string
+		ops  *fsops.Ops // installed in the request context, as deviceJailMiddleware does
+		want int
+	}{
+		{"writable", fsops.New([]string{root}, false), http.StatusOK},
+		{"read-only", fsops.New([]string{root}, true), http.StatusForbidden},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/transfers", nil)
+			req = req.WithContext(context.WithValue(req.Context(), opsCtxKey, tc.ops))
+			rr := httptest.NewRecorder()
+			// base ops is writable: only the context ops must decide.
+			requireWritable(fsops.New([]string{root}, false))(next).ServeHTTP(rr, req)
+			if rr.Code != tc.want {
+				t.Fatalf("want %d, got %d: %s", tc.want, rr.Code, rr.Body.String())
+			}
+		})
+	}
+
+	// With no ops in the context, the base ops decides.
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", nil)
+	rr := httptest.NewRecorder()
+	requireWritable(fsops.New([]string{root}, true))(next).ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("read-only base ops: want 403, got %d", rr.Code)
+	}
+}
+
+// TestRegisterTransferRoutes_ReadOnlyWiring proves the PR-04 gate is actually
+// wired onto the mutating routes (the middleware being correct is useless if
+// the routes bypass it), and that read status stays reachable.
+func TestRegisterTransferRoutes_ReadOnlyWiring(t *testing.T) {
+	db, _ := newTestDeps(t)
+	tm, err := transfer.New(db, t.TempDir())
+	if err != nil {
+		t.Fatalf("transfer.New: %v", err)
+	}
+	roOps := fsops.New([]string{t.TempDir()}, true)
+
+	r := chi.NewRouter()
+	r.Route("/v1", func(r chi.Router) {
+		registerTransferRoutes(r, tm, Config{}, roOps)
+	})
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodPost, "/v1/transfers"},
+		{http.MethodPut, "/v1/transfers/abc/chunks/0"},
+		{http.MethodPost, "/v1/transfers/abc/complete"},
+	} {
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, httptest.NewRequest(tc.method, tc.path, strings.NewReader("{}")))
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("%s %s: want 403 under read-only, got %d: %s", tc.method, tc.path, rr.Code, rr.Body.String())
+		}
+	}
+
+	// GET status is not a mutation — it must not be gated (404: no such row).
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/transfers/abc", nil))
+	if rr.Code == http.StatusForbidden {
+		t.Fatalf("GET status must not be read-only gated, got 403")
 	}
 }

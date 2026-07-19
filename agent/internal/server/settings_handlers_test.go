@@ -14,6 +14,12 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
+// asAdmin attaches an admin (via_login) device so a request passes the
+// settings/bandwidth admin gate.
+func asAdmin(r *http.Request) *http.Request {
+	return r.WithContext(withDevice(r.Context(), &store.Device{ViaLogin: true}))
+}
+
 func newTestDeps(t *testing.T) (*store.DB, *settings.Store) {
 	t.Helper()
 	db, err := store.Open(t.TempDir())
@@ -62,7 +68,7 @@ func TestSettingsHandler_GetAndPatch(t *testing.T) {
 	// PATCH toggles read-only, renames, and sets the photo-backup root.
 	body := `{"readOnly":true,"agentName":"new-name","photoBackupRoot":"/home/pc/PhoneBackups"}`
 	rr2 := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr2, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	patchSettingsHandler(st)(rr2, asAdmin(httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body))))
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("PATCH code = %d", rr2.Code)
 	}
@@ -461,9 +467,35 @@ func TestDeviceJailMiddleware_NarrowsOpsForJailedDevice(t *testing.T) {
 func TestPatchSettingsHandler_InvalidJSON(t *testing.T) {
 	_, st := newTestDeps(t)
 	rr := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader("not json")))
+	patchSettingsHandler(st)(rr, asAdmin(httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader("not json"))))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+// TestPatchSettingsHandler_NonAdminForbidden is the PR-02 regression: an
+// ordinary paired (non-admin) device must not be able to change global policy.
+func TestPatchSettingsHandler_NonAdminForbidden(t *testing.T) {
+	_, st := newTestDeps(t)
+	body := `{"readOnly":false}`
+
+	// No device / paired device (ViaLogin=false) → 403, and read-only unchanged.
+	_ = st.SetReadOnly(true)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body))
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ViaLogin: false}))
+	patchSettingsHandler(st)(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin, got %d", rr.Code)
+	}
+	if !st.IsReadOnly() {
+		t.Fatalf("non-admin patch changed global read-only policy")
+	}
+
+	rr2 := httptest.NewRecorder()
+	putBandwidthHandler(st)(rr2, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(`{"maxUploadBytesPerSec":1}`)))
+	if rr2.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin bandwidth, got %d", rr2.Code)
 	}
 }
 
@@ -472,7 +504,7 @@ func TestPatchSettingsHandler_SetRoots(t *testing.T) {
 	root := t.TempDir()
 	body := `{"roots":["` + root + `"]}`
 	rr := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	patchSettingsHandler(st)(rr, asAdmin(httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body))))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -485,7 +517,7 @@ func TestPatchSettingsHandler_SetRoots(t *testing.T) {
 func TestPutBandwidthHandler_InvalidJSON(t *testing.T) {
 	_, st := newTestDeps(t)
 	rr := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader("{bad")))
+	putBandwidthHandler(st)(rr, asAdmin(httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader("{bad"))))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
@@ -509,7 +541,7 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 	// PUT sets limits.
 	body := `{"maxUploadBytesPerSec":1000000,"maxDownloadBytesPerSec":5000000}`
 	rr2 := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr2, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body)))
+	putBandwidthHandler(st)(rr2, asAdmin(httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body))))
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("PUT code = %d: %s", rr2.Code, rr2.Body.String())
 	}
@@ -525,7 +557,7 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 	// PUT with partial body only updates specified fields.
 	body2 := `{"maxUploadBytesPerSec":0}`
 	rr3 := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr3, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body2)))
+	putBandwidthHandler(st)(rr3, asAdmin(httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body2))))
 	if rr3.Code != http.StatusOK {
 		t.Fatalf("PUT partial code = %d", rr3.Code)
 	}

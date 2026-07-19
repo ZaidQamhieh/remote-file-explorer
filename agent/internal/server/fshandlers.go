@@ -16,7 +16,7 @@ func drivesHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		drives, err := fsops.Drives()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "drives", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, drives)
@@ -92,7 +92,7 @@ func listTrashHandler(trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		items, err := fsops.ListTrash(trashDir)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "list trash", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -114,8 +114,12 @@ func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	}
 }
 
-func emptyTrashHandler(trashDir string) http.HandlerFunc {
+func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if opsFromContext(r.Context(), ops).IsReadOnly() {
+			writeError(w, http.StatusForbidden, "READ_ONLY", fsops.ErrReadOnly.Error())
+			return
+		}
 		// Optional body {ids:[...]} deletes specific items; empty body empties all.
 		var body struct {
 			IDs []string `json:"ids"`
@@ -124,7 +128,11 @@ func emptyTrashHandler(trashDir string) http.HandlerFunc {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 		}
 		if err := fsops.EmptyTrash(trashDir, body.IDs); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			if errors.Is(err, fsops.ErrBadTrashID) {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid trash id")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "INTERNAL", "empty trash failed")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -342,6 +350,8 @@ func handleFsError(w http.ResponseWriter, err error) {
 	case errors.Is(err, fsops.ErrStale):
 		writeError(w, http.StatusConflict, "STALE_WRITE", err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		// Unmapped errors are raw OS errors carrying absolute paths — don't
+		// echo them to the client (PR-53).
+		writeInternal(w, "fs operation", err)
 	}
 }

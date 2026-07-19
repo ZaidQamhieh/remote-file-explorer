@@ -64,7 +64,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "PATH_NOT_FOUND", "file not found")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "download", err)
 			}
 			return
 		}
@@ -72,7 +72,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 
 		info, err := f.Stat()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "download", err)
 			return
 		}
 		w = countingWriter{w}
@@ -227,11 +227,30 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			if errors.Is(err, transfer.ErrTooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", err.Error())
+				return
+			}
+			writeInternal(w, "open transfer", err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, transferSession(t))
 	}
+}
+
+// callerOwnsTransfer reports whether the authenticated device opened this
+// transfer, or is an admin device. Non-owners are treated as if the transfer
+// does not exist so foreign session IDs are neither confirmed nor usable
+// (PR-11). Legacy sessions with no recorded owner are admin-only.
+func callerOwnsTransfer(r *http.Request, t *store.Transfer) bool {
+	d := deviceFromContext(r)
+	if d == nil {
+		return false
+	}
+	if t.DeviceID != "" && t.DeviceID == d.ID {
+		return true
+	}
+	return isAdminDevice(d)
 }
 
 // --------- GET /transfers/{id} ---------
@@ -244,8 +263,12 @@ func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "transfer status", err)
 			}
+			return
+		}
+		if !callerOwnsTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
 		writeJSON(w, http.StatusOK, transferSession(t))
@@ -279,7 +302,11 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "upload chunk", err)
+			return
+		}
+		if !callerOwnsTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
 
@@ -315,7 +342,12 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 				writeError(w, http.StatusConflict, "CHUNK_HASH_MISMATCH", err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			// Client-side geometry errors, not server faults (PR-12).
+			if errors.Is(err, transfer.ErrChunkOutOfRange) || errors.Is(err, transfer.ErrChunkWrongSize) {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+				return
+			}
+			writeInternal(w, "upload chunk", err)
 			return
 		}
 		rxBytesTotal.Add(int64(len(data)))
@@ -338,6 +370,10 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		// rename for) a session targeting a path outside its own jail.
 		var verifiedSHA256 string
 		if t, err := tm.Status(id); err == nil && t != nil {
+			if !callerOwnsTransfer(r, t) {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+				return
+			}
 			verifiedSHA256 = t.SHA256
 			if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
 				handleFsError(w, resolveErr)
@@ -355,7 +391,13 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 				writeError(w, http.StatusUnprocessableEntity, "HASH_MISMATCH", err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			// Something occupied the target while the upload ran, and this
+			// session was opened with overwrite=false (PR-50).
+			if errors.Is(err, transfer.ErrDestinationExists) {
+				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
+				return
+			}
+			writeInternal(w, "complete transfer", err)
 			return
 		}
 		// Complete() only returns successfully once the whole-file SHA-256 has

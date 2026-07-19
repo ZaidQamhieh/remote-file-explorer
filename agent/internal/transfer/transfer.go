@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -33,6 +34,27 @@ var ErrFileMismatch = errors.New("whole-file sha256 mismatch")
 // the target path already exists.
 var ErrDestinationExists = errors.New("destination already exists")
 
+// ErrChunkOutOfRange is returned when a chunk index falls outside the
+// session's declared chunk count.
+var ErrChunkOutOfRange = errors.New("chunk index out of range")
+
+// ErrChunkWrongSize is returned when a chunk's length is not exactly the
+// length the session's geometry requires.
+var ErrChunkWrongSize = errors.New("chunk has the wrong length")
+
+// ErrTooLarge is returned when a session declares more bytes than
+// maxTransferSize, or than the destination filesystem can hold.
+var ErrTooLarge = errors.New("declared size exceeds the maximum")
+
+// maxTransferSize caps a single declared upload. OpenSession truncates the
+// temp file to the declared size up front, so an unbounded declaration is a
+// free sparse file of any size a client cares to name — and on filesystems
+// without sparse support, an instant disk fill (PR-12).
+//
+// ponytail: one global ceiling, not a per-device quota — add the quota when
+// there is more than one writer worth metering.
+const maxTransferSize = int64(1) << 40 // 1 TiB
+
 // Manager coordinates in-progress transfer sessions.
 type Manager struct {
 	db      *store.DB
@@ -50,12 +72,27 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 // OpenSession creates a new upload session. deviceID is the requesting
 // device's ID (empty if unknown, e.g. no device context) — recorded on the
 // transfer so the web companion's Transfers page can filter by device.
+//
+// The overwrite=false check here is a courtesy: it fails the client early
+// instead of after a long upload. It is not the guarantee — Complete re-checks
+// atomically at publish time, because anything created during the upload would
+// slip past this Stat (PR-50).
 func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string) (*store.Transfer, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("%w: negative size", ErrTooLarge)
+	}
+	if size > maxTransferSize {
+		return nil, fmt.Errorf("%w: %d bytes declared, limit %d", ErrTooLarge, size, maxTransferSize)
+	}
 	if !overwrite {
 		if _, err := os.Stat(targetPath); err == nil {
 			return nil, ErrDestinationExists
 		}
 	}
+	// ponytail: a flat ceiling, not a free-space check — free space lives
+	// behind three per-platform files in fsops and would need a new exported
+	// helper in each. The cap is what stops the abuse; add the reservation
+	// check if real disks start filling below 1 TiB.
 	totalChunks := int((size + int64(chunkSize) - 1) / int64(chunkSize))
 	if totalChunks == 0 {
 		totalChunks = 1
@@ -85,6 +122,7 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 		TempPath:    tempPath,
 		Status:      "open",
 		DeviceID:    deviceID,
+		Overwrite:   overwrite,
 	}
 	if err := m.db.CreateTransfer(t); err != nil {
 		os.Remove(tempPath)
@@ -93,7 +131,10 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 	return t, nil
 }
 
-// Status returns the current state of a transfer (for resume).
+// Status returns the current state of a transfer (for resume). This is the
+// one path that genuinely needs every received chunk number — the client diffs
+// the set to decide what to re-send — so it loads them explicitly; GetTransfer
+// no longer carries them (PR-42).
 func (m *Manager) Status(id string) (*store.Transfer, error) {
 	t, err := m.db.GetTransfer(id)
 	if err != nil {
@@ -102,6 +143,11 @@ func (m *Manager) Status(id string) (*store.Transfer, error) {
 	if t == nil {
 		return nil, ErrNotFound
 	}
+	chunks, err := m.db.ChunkNumbers(id)
+	if err != nil {
+		return nil, err
+	}
+	t.ReceivedChunks = chunks
 	return t, nil
 }
 
@@ -120,6 +166,19 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 		return fmt.Errorf("transfer is %s, not open", t.Status)
 	}
 
+	// The chunk index drives a WriteAt offset (n * chunkSize). Unchecked, a
+	// large n seeks far past the declared size and leaves a sparse file of the
+	// client's choosing; a negative one is a negative offset (PR-12).
+	if n < 0 || n >= t.TotalChunks {
+		return fmt.Errorf("%w: chunk %d of %d", ErrChunkOutOfRange, n, t.TotalChunks)
+	}
+	// Every chunk but the last must be exactly chunkSize, and the last exactly
+	// the remainder. The body cap alone only bounds the maximum, so a short
+	// chunk would silently leave a hole of zeros inside the file.
+	if want := t.ExpectedChunkLen(n); len(chunkData) != want {
+		return fmt.Errorf("%w: chunk %d is %d bytes, want %d", ErrChunkWrongSize, n, len(chunkData), want)
+	}
+
 	// Verify chunk hash.
 	sum := sha256.Sum256(chunkData)
 	got := hex.EncodeToString(sum[:])
@@ -128,10 +187,13 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 	}
 
 	// Check idempotency: if already received skip writing but return success.
-	for _, received := range t.ReceivedChunks {
-		if received == n {
-			return nil
-		}
+	// An indexed lookup, not a scan of every chunk received so far — the
+	// latter made a large transfer quadratic all on its own (PR-42).
+	switch has, err := m.db.HasChunk(id, n); {
+	case err != nil:
+		return err
+	case has:
+		return nil
 	}
 
 	offset := int64(n) * int64(t.ChunkSize)
@@ -193,17 +255,86 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 	// copy-into-dest-dir + atomic-rename-within-dest. Without this every
 	// cross-filesystem transfer's Complete failed here, leaving the row
 	// stuck "open" forever (see the photo-backup leak).
-	if err := moveFile(t.TempPath, t.TargetPath); err != nil {
+	//
+	// overwrite=false is checked again here, atomically: OpenSession's Stat
+	// happens before the upload, so a file created during it would otherwise
+	// be silently replaced at this rename (PR-50).
+	if err := publish(t.TempPath, t.TargetPath, t.Overwrite); err != nil {
+		if errors.Is(err, ErrDestinationExists) {
+			return nil, "", err
+		}
 		return nil, "", fmt.Errorf("rename: %w", err)
 	}
 
-	_ = m.db.SetTransferStatus(id, "completed")
+	// The bytes are on disk under the final name — the transfer succeeded even
+	// if recording that fails, so surface the persistence error instead of
+	// dropping it and leaving the row stuck "open" (PR-50).
+	if err := m.db.SetTransferStatus(id, "completed"); err != nil {
+		return nil, t.TargetPath, fmt.Errorf("transfer published to %s but recording it failed: %w", t.TargetPath, err)
+	}
 
 	info, err := os.Stat(t.TargetPath)
 	if err != nil {
 		return nil, t.TargetPath, nil
 	}
 	return info, t.TargetPath, nil
+}
+
+// publish moves the finished temp file onto its final path. With overwrite it
+// replaces whatever is there (moveFile); without it, the create must fail
+// rather than replace a file that appeared during the upload — OpenSession's
+// Stat is far too early to rely on (PR-50).
+//
+// The no-replace path uses os.Link, which fails with EEXIST if dst exists and
+// so decides atomically, unlike a Stat-then-rename. Link needs both paths on
+// one filesystem and a backing FS that supports it; any other failure falls
+// back to an O_EXCL copy, which is equally atomic about not clobbering.
+func publish(src, dst string, overwrite bool) error {
+	if overwrite {
+		return moveFile(src, dst)
+	}
+	switch err := os.Link(src, dst); {
+	case err == nil:
+		return os.Remove(src) // dst is now a second name for the same inode
+	case errors.Is(err, fs.ErrExist):
+		return ErrDestinationExists
+	}
+	return copyAcrossNoReplace(src, dst)
+}
+
+// copyAcrossNoReplace copies src onto dst, creating dst with O_EXCL so an
+// existing (or concurrently created) file is never replaced. Unlike
+// copyAcross it writes dst directly: a temp+rename would reintroduce the
+// replace that O_EXCL exists to prevent.
+func copyAcrossNoReplace(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return ErrDestinationExists
+		}
+		return err
+	}
+	cleanup := func() { out.Close(); os.Remove(dst) }
+
+	if _, err := io.Copy(out, in); err != nil {
+		cleanup()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	return os.Remove(src)
 }
 
 // moveFile moves src to dst atomically when possible. It tries os.Rename first

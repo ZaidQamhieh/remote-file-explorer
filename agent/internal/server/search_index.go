@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,23 @@ type SearchIndex struct {
 	mu      sync.RWMutex
 	entries []indexedEntry
 	ready   bool
+	stats   IndexStats
+}
+
+// IndexStats describes the index's size, age, and cost. Without it a rebuild
+// that is quietly truncating or eating the disk is invisible (PR-47).
+type IndexStats struct {
+	Entries       int           `json:"entries"`
+	Truncated     bool          `json:"truncated"` // hit indexMaxEntries; the tail of the tree is unsearchable
+	BuiltAt       time.Time     `json:"builtAt"`
+	BuildDuration time.Duration `json:"buildDurationMs"`
+}
+
+// Stats returns a snapshot of the index's health.
+func (idx *SearchIndex) Stats() IndexStats {
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	return idx.stats
 }
 
 // NewSearchIndex starts building the index in the background and returns
@@ -52,16 +70,29 @@ func NewSearchIndex(ops *fsops.Ops) *SearchIndex {
 	return idx
 }
 
+// maxIndexDutyCycle bounds the share of wall-clock time the rebuild may
+// consume. A walk that takes longer than indexRebuildInterval would otherwise
+// have the next one start the moment it ends, pinning a disk permanently —
+// the bigger the tree, the worse it gets, which is exactly backwards.
+const maxIndexDutyCycle = 10
+
 func (idx *SearchIndex) loop() {
-	idx.rebuild()
-	ticker := time.NewTicker(indexRebuildInterval)
-	defer ticker.Stop()
-	for range ticker.C {
-		idx.rebuild()
+	for {
+		took := idx.rebuild()
+		// Wait the normal interval, or 10x the last build if that was slower:
+		// cost scales with the tree instead of the clock.
+		wait := indexRebuildInterval
+		if backoff := took * maxIndexDutyCycle; backoff > wait {
+			wait = backoff
+		}
+		time.Sleep(wait)
 	}
 }
 
-func (idx *SearchIndex) rebuild() {
+// rebuild walks the roots and swaps in a fresh index, returning how long the
+// walk took (the loop uses it to pace itself).
+func (idx *SearchIndex) rebuild() time.Duration {
+	started := time.Now()
 	roots := idx.ops.Roots()
 	if len(roots) == 0 {
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -77,10 +108,21 @@ func (idx *SearchIndex) rebuild() {
 		}
 	}
 
+	took := time.Since(started)
 	idx.mu.Lock()
 	idx.entries = entries
 	idx.ready = true
+	idx.stats = IndexStats{
+		Entries:       len(entries),
+		Truncated:     len(entries) >= indexMaxEntries,
+		BuiltAt:       time.Now(),
+		BuildDuration: took,
+	}
 	idx.mu.Unlock()
+	if len(entries) >= indexMaxEntries {
+		log.Printf("search index: truncated at %d entries — files beyond the cap are not searchable", indexMaxEntries)
+	}
+	return took
 }
 
 // collectAll appends every entry under root (skipping virtual pseudo-fs
@@ -112,7 +154,10 @@ func collectAll(root string, entries *[]indexedEntry) {
 		if infoErr != nil {
 			return nil
 		}
-		entry := fsops.EntryFromInfo(info, entryPath)
+		// NoSniff: EntryFromInfo opens every extensionless file to sniff its
+		// MIME type. Across a whole-tree walk that is an open+read per such
+		// file, every rebuild — the dominant cost of indexing (PR-47).
+		entry := fsops.EntryFromInfoNoSniff(info, entryPath)
 		*entries = append(*entries, indexedEntry{
 			entry:     entry,
 			lowerName: strings.ToLower(entry.Name),

@@ -2,7 +2,6 @@
 package server
 
 import (
-	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
@@ -14,11 +13,18 @@ import (
 func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
+		if ops.IsReadOnly() {
+			writeError(w, http.StatusForbidden, "READ_ONLY", fsops.ErrReadOnly.Error())
+			return
+		}
 		var req struct {
 			Path string `json:"path"`
 			Mode string `json:"mode"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" || req.Mode == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Path == "" || req.Mode == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path and mode required")
 			return
 		}
@@ -41,10 +47,10 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 				return
 			}
 			if os.IsPermission(err) {
-				writeError(w, http.StatusForbidden, "FORBIDDEN", err.Error())
+				writeError(w, http.StatusForbidden, "FORBIDDEN", "permission denied")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "chmod", err)
 			return
 		}
 

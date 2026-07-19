@@ -1,7 +1,17 @@
 # R1 — One-Time Share Link: Threat Model
 
-**Status: DRAFT — must be reviewed by owner before implementation.**
-Written: 2026-06-30. Required gate per `docs/next-waves-addendum.md`.
+**Status: IMPLEMENTED — R1 shipped; this doc now describes the built system.**
+Written 2026-06-30 as the pre-build gate required by
+`docs/next-waves-addendum.md`; updated 2026-07-15 once the feature landed.
+The mitigations below are the ones in `agent/internal/server/share_handlers.go`
+and `agent/internal/store/store.go` — keep them in step with the code, in the
+same change (PR-72).
+
+**Since the original draft:** share links are additionally scoped to their
+minting device — only that device or an admin may list or revoke a link, and
+links minted before the agent recorded owners are admin-only (PR-03). This
+narrows T5/T9: one paired device can no longer enumerate or revoke another's
+shares.
 
 ---
 
@@ -98,15 +108,15 @@ CREATE TABLE share_log (
 
 ---
 
-## Implementation pre-conditions (must be true before coding starts)
+## Implementation pre-conditions (all met — kept as the build record)
 
-1. This doc reviewed and approved by owner ✅/❌
-2. Agent `store.go` extended with `share_tokens` and `share_log` tables
-3. `agent_settings.go` has `AllowSharing bool`
-4. Rate-limit middleware confirmed reusable for `/share/` path
-5. OpenAPI updated in same commit as implementation
+1. This doc reviewed and approved by owner ✅
+2. Agent `store.go` extended with `share_tokens` and `share_log` tables ✅
+3. `agent_settings.go` has `AllowSharing bool` ✅
+4. Rate-limit middleware confirmed reusable for `/share/` path ✅
+5. OpenAPI updated in same commit as implementation ✅
 
 ---
 
-## R1 is safe to build given the mitigations above.
+## R1 was safe to build given the mitigations above, and shipped with them.
 The critical invariant: **the only unauthenticated endpoint serves one file once, for at most 24 hours, only when the host owner has explicitly opted in.**

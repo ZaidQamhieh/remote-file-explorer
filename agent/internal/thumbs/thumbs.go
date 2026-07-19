@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"os"
 	"path/filepath"
@@ -26,6 +27,17 @@ var ErrNotSupported = errors.New("thumbnail not available for this file")
 
 // jpegQuality is the quality used when re-encoding thumbnails.
 const jpegQuality = 80
+
+// Decode bounds (PR-09): reject oversized sources before a full decode so a
+// crafted or huge image can't exhaust memory/CPU, and cap concurrent decodes.
+// imaging registers the jpeg/png/gif/tiff/bmp decoders image.DecodeConfig uses.
+const (
+	maxThumbSourceBytes = 64 << 20 // 64 MiB on-disk source cap
+	maxThumbPixels      = 40_000_000
+)
+
+// decodeSem bounds concurrent full decodes across the process.
+var decodeSem = make(chan struct{}, 4)
 
 // Renderer renders and caches image thumbnails on disk.
 type Renderer struct {
@@ -87,6 +99,31 @@ func Render(srcPath string, maxSize int) ([]byte, error) {
 	if maxSize <= 0 {
 		maxSize = 256
 	}
+
+	// Bound the source before decoding (PR-09): on-disk size, then decoded
+	// pixel dimensions read from the header without a full decode.
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxThumbSourceBytes {
+		return nil, fmt.Errorf("%w: source exceeds %d bytes", ErrNotSupported, int64(maxThumbSourceBytes))
+	}
+	cf, err := os.Open(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, cfgErr := image.DecodeConfig(cf)
+	cf.Close()
+	if cfgErr != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotSupported, cfgErr)
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > maxThumbPixels {
+		return nil, fmt.Errorf("%w: %dx%d exceeds pixel budget", ErrNotSupported, cfg.Width, cfg.Height)
+	}
+
+	decodeSem <- struct{}{}
+	defer func() { <-decodeSem }()
 
 	src, err := imaging.Open(srcPath, imaging.AutoOrientation(true))
 	if err != nil {

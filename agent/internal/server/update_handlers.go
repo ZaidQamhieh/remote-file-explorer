@@ -12,7 +12,7 @@ func latestAppHandler(dir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rel, err := updates.Latest(dir)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "latest app", err)
 			return
 		}
 		if rel == nil {
@@ -27,7 +27,7 @@ func downloadAppHandler(dir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rel, err := updates.Latest(dir)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "download app", err)
 			return
 		}
 		if rel == nil {
@@ -36,13 +36,13 @@ func downloadAppHandler(dir string) http.HandlerFunc {
 		}
 		f, err := os.Open(updates.Path(dir, rel))
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "download app", err)
 			return
 		}
 		defer f.Close()
 		info, err := f.Stat()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "download app", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.android.package-archive")

@@ -22,17 +22,29 @@ permissions:
   contents: write
 
 jobs:
+  # A tag used to publish straight from a build that had passed nothing: the
+  # gates only ran on branch pushes, and this workflow tracked floating
+  # `stable` while CI pinned a Flutter version. Requiring the real CI workflow
+  # means the published artifact is built from a commit that passed the very
+  # same checks, on the very same toolchain (PR-70).
+  verify:
+    name: CI gates
+    uses: ./.github/workflows/ci.yml
+
   release:
     name: Build & publish APK
+    needs: verify
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: subosito/flutter-action@v2
+      # Pinned to the same version ci.yml verifies with. Floating `stable`
+      # meant a tag could ship on a toolchain nothing had ever tested.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          channel: "stable"
+          flutter-version: "3.44.2"
 
       - name: flutter pub get
         working-directory: app

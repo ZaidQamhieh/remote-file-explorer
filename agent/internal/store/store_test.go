@@ -2,6 +2,8 @@ package store
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -291,6 +293,11 @@ func TestTouchDeviceRecordsAddressAndVersion(t *testing.T) {
 	}
 
 	// A subsequent touch with an empty version overwrites the previous one.
+	// Clear the debounce window (PR-41) so this second touch actually persists
+	// rather than being coalesced within touchInterval.
+	db.touchMu.Lock()
+	db.lastTouch = make(map[string]time.Time)
+	db.touchMu.Unlock()
 	if err := db.TouchDevice("id-1", "100.64.0.5", ""); err != nil {
 		t.Fatalf("touch 2: %v", err)
 	}
@@ -313,7 +320,7 @@ func TestConsumeShareTokenLifecycle(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := db.CreateShareToken("hash-1", "/srv/file.txt", time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreateShareToken("hash-1", "/srv/file.txt", "", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -335,7 +342,7 @@ func TestConsumeShareTokenLifecycle(t *testing.T) {
 	}
 
 	// An expired token is rejected (and removed).
-	if err := db.CreateShareToken("hash-old", "/srv/old.txt", time.Now().Add(-time.Minute)); err != nil {
+	if err := db.CreateShareToken("hash-old", "/srv/old.txt", "", time.Now().Add(-time.Minute)); err != nil {
 		t.Fatalf("create expired: %v", err)
 	}
 	_, ok, err = db.ConsumeShareToken("hash-old")
@@ -365,13 +372,13 @@ func TestSweepExpiredShareTokens(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := db.CreateShareToken("expired-1", "/a", time.Now().Add(-time.Hour)); err != nil {
+	if err := db.CreateShareToken("expired-1", "/a", "", time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("create expired-1: %v", err)
 	}
-	if err := db.CreateShareToken("expired-2", "/b", time.Now().Add(-time.Second)); err != nil {
+	if err := db.CreateShareToken("expired-2", "/b", "", time.Now().Add(-time.Second)); err != nil {
 		t.Fatalf("create expired-2: %v", err)
 	}
-	if err := db.CreateShareToken("active-1", "/c", time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreateShareToken("active-1", "/c", "", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("create active-1: %v", err)
 	}
 
@@ -383,7 +390,7 @@ func TestSweepExpiredShareTokens(t *testing.T) {
 		t.Fatalf("expected 2 swept, got %d", n)
 	}
 
-	tokens, err := db.ListShareTokens()
+	tokens, err := db.ListShareTokens("")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -555,15 +562,24 @@ func TestMarkChunkReceivedConcurrent(t *testing.T) {
 		t.Fatalf("MarkChunkReceived: %v", err)
 	}
 
+	// PR-42: the chunk set lives in transfer_chunks now, not a JSON column on
+	// the transfer row — GetTransfer deliberately no longer carries it.
+	chunks, err := db.ChunkNumbers(tr.ID)
+	if err != nil {
+		t.Fatalf("chunk numbers: %v", err)
+	}
+	if len(chunks) != n {
+		t.Fatalf("expected %d received chunks, got %d: %v", n, len(chunks), chunks)
+	}
 	got, err := db.GetTransfer(tr.ID)
 	if err != nil {
 		t.Fatalf("get transfer: %v", err)
 	}
-	if len(got.ReceivedChunks) != n {
-		t.Fatalf("expected %d received chunks, got %d: %v", n, len(got.ReceivedChunks), got.ReceivedChunks)
+	if got.ReceivedCount != n {
+		t.Fatalf("expected ReceivedCount %d, got %d", n, got.ReceivedCount)
 	}
 	seen := make(map[int]bool, n)
-	for _, c := range got.ReceivedChunks {
+	for _, c := range chunks {
 		seen[c] = true
 	}
 	for i := 0; i < n; i++ {
@@ -636,5 +652,198 @@ func TestCreateUser_DuplicateUsernameFails(t *testing.T) {
 	}
 	if err := db.CreateUser("owner", "hash-2"); err == nil {
 		t.Fatal("expected an error creating a duplicate username, got nil")
+	}
+}
+
+// TestMigrate_SetsVersionAndIsIdempotent is the PR-46 regression: migrations
+// are versioned and transactional, and reopening an already-migrated DB is a
+// no-op rather than a replay.
+func TestMigrate_SetsVersionAndIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var version int
+	if err := db.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatalf("read version: %v", err)
+	}
+	if version != len(migrations) {
+		t.Fatalf("want user_version %d, got %d", len(migrations), version)
+	}
+	db.Close()
+
+	// Reopening must not fail or renumber.
+	db2, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer db2.Close()
+	if err := db2.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatalf("read version after reopen: %v", err)
+	}
+	if version != len(migrations) {
+		t.Fatalf("after reopen: want user_version %d, got %d", len(migrations), version)
+	}
+}
+
+// TestMigrate_UpgradesLegacyZeroVersionDB: databases created before
+// versioning report user_version=0 and must replay the whole list cleanly
+// against a schema that already has every column — the real upgrade path for
+// anyone running the agent today.
+func TestMigrate_UpgradesLegacyZeroVersionDB(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	// Simulate the pre-versioning state: full schema, no version stamp.
+	if _, err := db.db.Exec(`PRAGMA user_version = 0`); err != nil {
+		t.Fatalf("reset version: %v", err)
+	}
+	if err := db.migrate(); err != nil {
+		t.Fatalf("replay against existing schema must succeed, got: %v", err)
+	}
+	var version int
+	if err := db.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatalf("read version: %v", err)
+	}
+	if version != len(migrations) {
+		t.Fatalf("want user_version %d after upgrade, got %d", len(migrations), version)
+	}
+	db.Close()
+}
+
+// TestMigrate_RefusesNewerSchema: a DB written by a newer agent must not be
+// run against older code that doesn't know its schema.
+func TestMigrate_RefusesNewerSchema(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)+1)); err != nil {
+		t.Fatalf("bump version: %v", err)
+	}
+	if err := db.migrate(); err == nil {
+		t.Fatal("expected migrate to refuse a newer schema version")
+	}
+}
+
+// TestMigrateChunkTable_BackfillsLegacyJSON is the PR-42 upgrade path: a
+// database still carrying received_chunks JSON must come out the other side
+// with the same chunks in transfer_chunks, so an in-flight transfer keeps its
+// resume progress across the upgrade.
+func TestMigrateChunkTable_BackfillsLegacyJSON(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	tr := &Transfer{ID: "legacy", TargetPath: "/tmp/x", TotalSize: 30, ChunkSize: 10, TotalChunks: 3}
+	if err := db.CreateTransfer(tr); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Rebuild the pre-PR-42 shape: JSON column present, chunk table empty.
+	if _, err := db.db.Exec(`DROP TABLE transfer_chunks`); err != nil {
+		t.Fatalf("drop chunk table: %v", err)
+	}
+	if err := addColumnDirect(db, "transfers", "received_chunks", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		t.Fatalf("re-add legacy column: %v", err)
+	}
+	if _, err := db.db.Exec(`UPDATE transfers SET received_chunks='[0,2]' WHERE id=?`, tr.ID); err != nil {
+		t.Fatalf("seed legacy json: %v", err)
+	}
+	if _, err := db.db.Exec(`PRAGMA user_version = 1`); err != nil {
+		t.Fatalf("rewind version: %v", err)
+	}
+
+	if err := db.migrate(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	chunks, err := db.ChunkNumbers(tr.ID)
+	if err != nil {
+		t.Fatalf("chunk numbers: %v", err)
+	}
+	if len(chunks) != 2 || chunks[0] != 0 || chunks[1] != 2 {
+		t.Fatalf("backfill lost resume progress: want [0 2], got %v", chunks)
+	}
+	// The JSON column must be gone, so there is no second copy to drift.
+	var legacy int
+	if err := db.db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('transfers') WHERE name='received_chunks'`,
+	).Scan(&legacy); err != nil {
+		t.Fatalf("table info: %v", err)
+	}
+	if legacy != 0 {
+		t.Fatal("legacy received_chunks column survived the migration")
+	}
+}
+
+// addColumnDirect is the test's own ALTER helper (addColumn takes a *sql.Tx).
+func addColumnDirect(db *DB, table, column, spec string) error {
+	_, err := db.db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, spec))
+	return err
+}
+
+// TestRegisterAccount_EnforcesSingleAccountAtomically is the PR-45
+// regression: "this computer has exactly one account" used to be decided by a
+// SELECT in one transaction and enforced by an INSERT in another, so a second
+// registration slipping between them created a second full admin.
+func TestRegisterAccount_EnforcesSingleAccountAtomically(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.RegisterAccount("client-1", "phone", "tok-1", "pk-1", "owner", "hash-1"); err != nil {
+		t.Fatalf("first register: %v", err)
+	}
+	// A different username must still be refused: the rule is one account, not
+	// one name.
+	if _, err := db.RegisterAccount("client-2", "laptop", "tok-2", "pk-2", "intruder", "hash-2"); !errors.Is(err, ErrAccountExists) {
+		t.Fatalf("second register: want ErrAccountExists, got %v", err)
+	}
+	users, err := db.ListUsers()
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	if len(users) != 1 || users[0].Username != "owner" {
+		t.Fatalf("want exactly the first account, got %+v", users)
+	}
+}
+
+// TestRegisterAccount_RollsBackDeviceOnFailure: the account and its device
+// land together or not at all — a burned pairing code with a half-built
+// account is unrecoverable for the user.
+func TestRegisterAccount_RollsBackDeviceOnFailure(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.RegisterAccount("client-1", "phone", "tok-1", "pk-1", "owner", "hash-1"); err != nil {
+		t.Fatalf("first register: %v", err)
+	}
+	// This one fails on the single-account rule, after which its device must
+	// not exist.
+	if _, err := db.RegisterAccount("client-2", "laptop", "tok-2", "pk-2", "intruder", "hash-2"); err == nil {
+		t.Fatal("expected failure")
+	}
+	devices, err := db.ListDevices()
+	if err != nil {
+		t.Fatalf("list devices: %v", err)
+	}
+	for _, d := range devices {
+		if d.Label == "laptop" {
+			t.Fatal("a failed registration left its device row behind")
+		}
 	}
 }

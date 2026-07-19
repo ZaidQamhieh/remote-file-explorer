@@ -78,7 +78,7 @@ func TestMintShareHandler_Success(t *testing.T) {
 	}
 
 	// Listing reflects the freshly minted (active) token.
-	tokens, err := db.ListShareTokens()
+	tokens, err := db.ListShareTokens("")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestServeShareHandler_ExpiredToken404s(t *testing.T) {
 	db, _ := newTestDeps(t)
 
 	hash := hashShareToken("expired-token")
-	if err := db.CreateShareToken(hash, filepath.Join(root, "a.txt"), time.Now().Add(-time.Minute)); err != nil {
+	if err := db.CreateShareToken(hash, filepath.Join(root, "a.txt"), "", time.Now().Add(-time.Minute)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestServeShareHandler_SingleUse(t *testing.T) {
 	handler := serveShareHandler(db, ops)
 
 	hash := hashShareToken("good-token")
-	if err := db.CreateShareToken(hash, filepath.Join(root, "a.txt"), time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreateShareToken(hash, filepath.Join(root, "a.txt"), "", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -153,23 +153,77 @@ func TestServeShareHandler_SingleUse(t *testing.T) {
 func TestRevokeShareHandler(t *testing.T) {
 	db, _ := newTestDeps(t)
 	hash := hashShareToken("to-revoke")
-	if err := db.CreateShareToken(hash, "/tmp/x", time.Now().Add(time.Hour)); err != nil {
+	if err := db.CreateShareToken(hash, "/tmp/x", "", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
+	// Owner-less legacy token: admin-only, same rule legacy transfers get.
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, "/v1/share/"+hash, nil)
-	req = withURLParam(req, map[string]string{"tokenHash": hash})
+	req = asAdmin(withURLParam(req, map[string]string{"tokenHash": hash}))
 	revokeShareHandler(db)(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	tokens, err := db.ListShareTokens()
+	tokens, err := db.ListShareTokens("")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if len(tokens) != 0 {
 		t.Fatalf("expected token revoked, got %+v", tokens)
+	}
+}
+
+// PR-03: one paired device must not revoke or enumerate another's share links.
+func TestShareHandlers_ScopedToOwner(t *testing.T) {
+	db, _ := newTestDeps(t)
+	mine, theirs := hashShareToken("mine"), hashShareToken("theirs")
+	if err := db.CreateShareToken(mine, "/tmp/mine.txt", "me", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create mine: %v", err)
+	}
+	if err := db.CreateShareToken(theirs, "/srv/secret/theirs.txt", "them", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create theirs: %v", err)
+	}
+
+	// Revoking someone else's link: 404, and the link survives.
+	rr := httptest.NewRecorder()
+	req := asDevice(withURLParam(httptest.NewRequest(http.MethodDelete, "/v1/share/"+theirs, nil),
+		map[string]string{"tokenHash": theirs}), "me")
+	revokeShareHandler(db)(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("want 404 revoking another device's share, got %d: %s", rr.Code, rr.Body.String())
+	}
+	switch got, err := db.GetShareToken(theirs); {
+	case err != nil:
+		t.Fatalf("get: %v", err)
+	case got == nil:
+		t.Fatal("a non-owner revoked another device's share")
+	}
+
+	// Listing shows only the caller's own link.
+	rr = httptest.NewRecorder()
+	listSharesHandler(db)(rr, asDevice(httptest.NewRequest(http.MethodGet, "/v1/share", nil), "me"))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out) != 1 || out[0]["tokenHash"] != mine {
+		t.Fatalf("non-admin should see only its own share, got %v", out)
+	}
+	if strings.Contains(rr.Body.String(), "/srv/secret/theirs.txt") {
+		t.Fatalf("share list leaked another device's path: %s", rr.Body.String())
+	}
+
+	// The owner may revoke its own link.
+	rr = httptest.NewRecorder()
+	req = asDevice(withURLParam(httptest.NewRequest(http.MethodDelete, "/v1/share/"+mine, nil),
+		map[string]string{"tokenHash": mine}), "me")
+	revokeShareHandler(db)(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("want 204 revoking own share, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

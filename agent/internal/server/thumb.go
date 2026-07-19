@@ -53,12 +53,14 @@ func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
 				writeError(w, http.StatusNotFound, "NOT_AVAILABLE", "no thumbnail available for this file")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "thumbnail", err)
 			return
 		}
 
 		w.Header().Set("Content-Type", "image/jpeg")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		// Thumbnails derive from authenticated, per-device content — a shared
+		// (public) cache must never retain them (PR-60).
+		w.Header().Set("Cache-Control", "private, max-age=86400")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(data)
 	}

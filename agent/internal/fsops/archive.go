@@ -10,6 +10,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -180,16 +181,85 @@ func (o *Ops) Extract(archivePath, destDir string) (*Entry, error) {
 	return o.Meta(resDest)
 }
 
+// Archive extraction bounds (PR-07): a paired client can supply a crafted
+// archive, so cap entry count and total expanded bytes to defeat zip/tar
+// bombs. These are process-wide ceilings, not per-user quotas.
+const (
+	maxArchiveEntries    = 100_000
+	maxArchiveTotalBytes = int64(2) << 30 // 2 GiB expanded
+)
+
+// ErrArchiveTooLarge is returned when an archive exceeds the extraction bounds.
+var ErrArchiveTooLarge = errors.New("archive exceeds extraction limits")
+
+// copyBounded copies src into dst, debiting *remaining and failing if the
+// archive's total expanded size would exceed the budget. It meters the actual
+// decompressed stream rather than trusting a header, so a bomb with lying
+// declared sizes is still caught.
+func copyBounded(dst io.Writer, src io.Reader, remaining *int64) error {
+	limited := io.LimitReader(src, *remaining+1)
+	n, err := io.Copy(dst, limited)
+	if err != nil {
+		return err
+	}
+	if n > *remaining {
+		return fmt.Errorf("%w: expanded size over %d bytes", ErrArchiveTooLarge, maxArchiveTotalBytes)
+	}
+	*remaining -= n
+	return nil
+}
+
 // safeJoin joins name onto destDir and guarantees the result stays within
 // destDir, defeating zip-slip (entries like "../../etc/passwd"). filepath.Join
 // cleans the path (collapsing "..") and isUnder then rejects anything that
 // climbed out of the destination.
+//
+// isUnder alone is only a *lexical* guarantee, which is not the same as the
+// write landing inside destDir: if any existing component of the path is a
+// symlink, "destDir/sub/x" can be a perfectly innocent-looking name that the
+// OS resolves to /etc/x when MkdirAll or O_CREATE follows it. Both extractors
+// join through here, so the parent-chain check lives here too (PR-06).
 func safeJoin(destDir, name string) (string, error) {
 	target := filepath.Join(destDir, name)
 	if !isUnder(target, destDir) {
 		return "", fmt.Errorf("%w: archive entry escapes destination: %s", ErrForbidden, name)
 	}
+	if err := checkNoSymlinkParent(destDir, target); err != nil {
+		return "", err
+	}
 	return target, nil
+}
+
+// checkNoSymlinkParent rejects target if any existing component between
+// destDir and target (inclusive) is a symlink. Archive entries that ARE links
+// are already skipped by the extractors; this covers links that were sitting
+// in the destination beforehand, which the entry names alone can't reveal.
+//
+// ponytail: Lstat-then-write is a check/use race — an attacker able to plant a
+// symlink into the destination *during* extraction can still win it. Closing
+// that needs descriptor-relative openat traversal (the SecureFS refactor the
+// audit asks for), not a stricter check here.
+func checkNoSymlinkParent(destDir, target string) error {
+	rel, err := filepath.Rel(destDir, target)
+	if err != nil {
+		return fmt.Errorf("%w: archive entry escapes destination: %s", ErrForbidden, target)
+	}
+	cur := destDir
+	for _, part := range strings.Split(rel, string(os.PathSeparator)) {
+		cur = filepath.Join(cur, part)
+		fi, err := os.Lstat(cur)
+		if os.IsNotExist(err) {
+			// Nothing from here down exists yet — the extractor creates it.
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%w: archive entry path crosses a symlink: %s", ErrForbidden, rel)
+		}
+	}
+	return nil
 }
 
 func extractZip(archive, dest string) error {
@@ -199,7 +269,13 @@ func extractZip(archive, dest string) error {
 	}
 	defer zr.Close()
 
+	remaining := maxArchiveTotalBytes
+	entries := 0
 	for _, f := range zr.File {
+		entries++
+		if entries > maxArchiveEntries {
+			return fmt.Errorf("%w: over %d entries", ErrArchiveTooLarge, maxArchiveEntries)
+		}
 		target, err := safeJoin(dest, f.Name)
 		if err != nil {
 			return err
@@ -213,14 +289,14 @@ func extractZip(archive, dest string) error {
 		if !f.Mode().IsRegular() {
 			continue // skip symlinks / devices
 		}
-		if err := writeZipFile(f, target); err != nil {
+		if err := writeZipFile(f, target, &remaining); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func writeZipFile(f *zip.File, target string) error {
+func writeZipFile(f *zip.File, target string, remaining *int64) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
@@ -238,8 +314,7 @@ func writeZipFile(f *zip.File, target string) error {
 		return err
 	}
 	defer out.Close()
-	_, err = io.Copy(out, rc)
-	return err
+	return copyBounded(out, rc, remaining)
 }
 
 func extractTarGz(archive, dest string) error {
@@ -255,6 +330,8 @@ func extractTarGz(archive, dest string) error {
 	defer gz.Close()
 
 	tr := tar.NewReader(gz)
+	remaining := maxArchiveTotalBytes
+	entries := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -262,6 +339,10 @@ func extractTarGz(archive, dest string) error {
 		}
 		if err != nil {
 			return err
+		}
+		entries++
+		if entries > maxArchiveEntries {
+			return fmt.Errorf("%w: over %d entries", ErrArchiveTooLarge, maxArchiveEntries)
 		}
 		target, err := safeJoin(dest, hdr.Name)
 		if err != nil {
@@ -284,7 +365,7 @@ func extractTarGz(archive, dest string) error {
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(out, tr); err != nil { //nolint:gosec // size bounded by caller's own files
+			if err := copyBounded(out, tr, &remaining); err != nil {
 				out.Close()
 				return err
 			}

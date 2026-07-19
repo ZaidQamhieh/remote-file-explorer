@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"net"
 	"net/http"
 )
@@ -32,12 +33,16 @@ func wolRelayHandler() http.HandlerFunc {
 
 		conn, err := net.Dial("udp4", "255.255.255.255:9")
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "WOL_FAILED", err.Error())
+			// Log the real dial error; the client gets the stable code only,
+			// not the host's socket/permission details (PR-53).
+			log.Printf("wol: dial: %v", err)
+			writeError(w, http.StatusInternalServerError, "WOL_FAILED", "failed to send wake packet")
 			return
 		}
 		defer conn.Close()
 		if _, err := conn.Write(packet[:]); err != nil {
-			writeError(w, http.StatusInternalServerError, "WOL_FAILED", err.Error())
+			log.Printf("wol: write: %v", err)
+			writeError(w, http.StatusInternalServerError, "WOL_FAILED", "failed to send wake packet")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})

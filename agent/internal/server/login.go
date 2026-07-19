@@ -37,9 +37,9 @@ type loginRequest struct {
 }
 
 func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc {
-	limiter := newFixedWindowLimiter(loginRateLimitAttempts, loginRateLimitWindow)
+	limiter := newKeyedLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.Allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
 			return
 		}
@@ -55,7 +55,7 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 
 		user, err := db.GetUserByUsername(req.Username)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "login", err)
 			return
 		}
 		// Same error for "no such user" and "wrong password" — don't leak
@@ -76,13 +76,12 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
 			return
 		}
-		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, true)
+		// Device row + the account that authenticated it, in one transaction
+		// (PR-45) — a failure between them used to leave a working token whose
+		// device had no username recorded.
+		deviceID, err := db.LoginDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, req.Username)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "login", err)
 			return
 		}
 

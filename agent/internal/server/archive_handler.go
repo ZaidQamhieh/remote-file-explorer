@@ -50,7 +50,7 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 				handleFsError(w, fsops.ErrNotFound)
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "archive stat", err)
 			return
 		}
 
@@ -68,7 +68,7 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "archive peek", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})

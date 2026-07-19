@@ -79,9 +79,9 @@ const (
 // identity key to prove possession of the private key on the next
 // /v1/pair or /v1/login call.
 func challengeHandler(nonces *nonceStore) http.HandlerFunc {
-	limiter := newFixedWindowLimiter(challengeRateLimitAttempts, challengeRateLimitWindow)
+	limiter := newKeyedLimiter(challengeRateLimitAttempts, challengeRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.Allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many challenge requests, try again later")
 			return
 		}
@@ -147,7 +147,7 @@ func verifyDeviceProof(db *store.DB, nonces *nonceStore, deviceID, publicKey, no
 	}
 	pinned, err := db.DevicePublicKeyByClientID(deviceID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		writeInternal(w, "verify device proof", err)
 		return err
 	}
 	if pinned != "" && pinned != publicKey {

@@ -315,3 +315,137 @@ func TestCopyAcross(t *testing.T) {
 		t.Fatalf("expected only final.jpg in dest dir, got %d entries", len(entries))
 	}
 }
+
+// TestComplete_NoReplaceWhenTargetAppearsDuringUpload is the PR-50
+// regression: OpenSession's overwrite=false check runs before the bytes are
+// uploaded, so a file created in the meantime used to be silently replaced by
+// Complete's rename. The publish must fail instead, leaving the file intact.
+func TestComplete_NoReplaceWhenTargetAppearsDuringUpload(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "raced.bin")
+	content := []byte("uploaded bytes")
+	id := uuid.New().String()
+
+	// Target does not exist yet: the session opens with overwrite=false.
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), false, ""); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatalf("WriteChunk: %v", err)
+	}
+
+	// Someone else creates the target while the upload is in flight.
+	existing := []byte("do not clobber me")
+	if err := os.WriteFile(target, existing, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, _, err := tm.Complete(id); !errors.Is(err, ErrDestinationExists) {
+		t.Fatalf("want ErrDestinationExists, got %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != string(existing) {
+		t.Fatalf("target was clobbered: got %q, want %q", got, existing)
+	}
+}
+
+// TestComplete_OverwriteReplacesTarget: the same race with overwrite=true is
+// the client explicitly asking to replace, and must still succeed.
+func TestComplete_OverwriteReplacesTarget(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "replaced.bin")
+	content := []byte("uploaded bytes")
+	id := uuid.New().String()
+
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), true, ""); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatalf("WriteChunk: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, _, err := tm.Complete(id); err != nil {
+		t.Fatalf("Complete with overwrite: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("overwrite did not replace target: got %q", got)
+	}
+}
+
+// TestWriteChunk_RejectsOutOfRangeIndex is the PR-12 regression: the chunk
+// index becomes a WriteAt offset, so an unchecked one lets a client seek far
+// beyond the declared size and materialise a sparse file of its choosing.
+func TestWriteChunk_RejectsOutOfRangeIndex(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "out.bin")
+	content := []byte("small")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), false, ""); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	for _, n := range []int{-1, 1, 1 << 20} {
+		if err := tm.WriteChunk(id, n, content, sha256hex(content)); !errors.Is(err, ErrChunkOutOfRange) {
+			t.Fatalf("chunk %d: want ErrChunkOutOfRange, got %v", n, err)
+		}
+	}
+
+	// The temp file must not have grown past the declared size.
+	st, err := os.Stat(filepath.Join(dataDir, "tmp", id+".tmp"))
+	if err != nil {
+		t.Fatalf("stat temp: %v", err)
+	}
+	if st.Size() != int64(len(content)) {
+		t.Fatalf("out-of-range chunk resized the temp file to %d, want %d", st.Size(), len(content))
+	}
+}
+
+// TestWriteChunk_RejectsWrongLength is PR-12's other half: the body cap only
+// bounds the maximum, so a short chunk would leave a hole of zeros inside the
+// file that only the whole-file hash would (much later) catch.
+func TestWriteChunk_RejectsWrongLength(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "out.bin")
+	// Two chunks: 4 bytes each, 6 bytes total => chunk 0 wants 4, chunk 1 wants 2.
+	content := []byte("abcdef")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, 6, 4, sha256hex(content), false, ""); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	short := []byte("ab")
+	if err := tm.WriteChunk(id, 0, short, sha256hex(short)); !errors.Is(err, ErrChunkWrongSize) {
+		t.Fatalf("short first chunk: want ErrChunkWrongSize, got %v", err)
+	}
+	// Correct geometry is accepted.
+	if err := tm.WriteChunk(id, 0, content[:4], sha256hex(content[:4])); err != nil {
+		t.Fatalf("full first chunk: %v", err)
+	}
+	if err := tm.WriteChunk(id, 1, content[4:], sha256hex(content[4:])); err != nil {
+		t.Fatalf("final short chunk: %v", err)
+	}
+}
+
+// TestOpenSession_RejectsOversizedDeclaration: OpenSession truncates to the
+// declared size, so an unbounded declaration is a free sparse file (PR-12).
+func TestOpenSession_RejectsOversizedDeclaration(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "huge.bin")
+	id := uuid.New().String()
+	_, err := tm.OpenSession(id, target, maxTransferSize+1, 1024, "deadbeef", false, "")
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("want ErrTooLarge, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dataDir, "tmp", id+".tmp")); !os.IsNotExist(statErr) {
+		t.Fatal("rejected session still created a temp file")
+	}
+}

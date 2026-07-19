@@ -49,9 +49,9 @@ type pairResponse struct {
 }
 
 func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {
-	limiter := newFixedWindowLimiter(pairRateLimitAttempts, pairRateLimitWindow)
+	limiter := newKeyedLimiter(pairRateLimitAttempts, pairRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.Allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many pairing attempts, try again later")
 			return
 		}
@@ -86,7 +86,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 
 		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, false)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "pair", err)
 			return
 		}
 		// Apply the pairing code's guest-mode defaults, if any, to the new
@@ -94,13 +94,13 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		// false, so this is a no-op for the common path.
 		if codeInfo.JailRoot != "" {
 			if err := db.SetDeviceJail(deviceID, codeInfo.JailRoot); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "pair", err)
 				return
 			}
 		}
 		if codeInfo.ReadOnly {
 			if err := db.SetDeviceReadOnly(deviceID, true); err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "pair", err)
 				return
 			}
 		}
@@ -160,7 +160,7 @@ func generatePairingHandler(pm *pairing.Manager, st *settings.Store) http.Handle
 			code, payload, err = pm.Mint(ttl)
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "generate pairing", err)
 			return
 		}
 		resp := map[string]any{

@@ -4,7 +4,7 @@ A mobile app that turns your phone into a full graphical file explorer for your 
 Linux computers — browse, manage, and transfer files over a Finder/Explorer-style GUI, with no SSH
 or terminal required.
 
-- **`app/`** — Flutter mobile app (Android-focused; v1.5+)
+- **`app/`** — Flutter mobile app (Android-focused)
 - **`agent/`** — Go host service that runs on each Windows/macOS/Linux computer
 - **`protocol/`** — OpenAPI 3 contract shared by both sides (source of truth)
 - **`docs/`** — architecture and setup guides

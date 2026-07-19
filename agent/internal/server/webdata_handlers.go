@@ -7,12 +7,15 @@ package server
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -34,49 +37,83 @@ const maxTransferRows = 200
 
 func listTransfersHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// A non-admin device sees only the sessions it opened, and none of the
+		// whole-host aggregates or the device/user filter lists — those name
+		// other people's devices, accounts, and upload paths (PR-03). Its
+		// filter params are ignored rather than honoured, so they can't widen
+		// the scope back out.
+		caller := deviceFromContext(r)
+		admin := isAdminDevice(caller)
 		deviceFilter := r.URL.Query().Get("device")
 		userFilter := r.URL.Query().Get("user")
+		if !admin {
+			// An empty device filter means "every device" — never let a
+			// non-admin reach that, including the ID-less case.
+			if caller == nil || caller.ID == "" {
+				writeError(w, http.StatusForbidden, "FORBIDDEN", "device required")
+				return
+			}
+			deviceFilter, userFilter = caller.ID, ""
+		}
 		transfers, err := db.ListTransfers(maxTransferRows, deviceFilter, userFilter)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "list transfers", err)
 			return
 		}
-		counts, err := db.CountTransfersByStatus()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
+
+		var (
+			counts    map[string]int
+			activeNow int
+			devices   = make([]map[string]any, 0)
+			users     = make([]string, 0)
+		)
+		if admin {
+			counts, err = db.CountTransfersByStatus()
+			if err != nil {
+				writeInternal(w, "count transfers by status", err)
+				return
+			}
+			activeNow, err = db.CountActiveTransfers()
+			if err != nil {
+				writeInternal(w, "count active transfers", err)
+				return
+			}
+			transferDevices, err := db.ListTransferDevices()
+			if err != nil {
+				writeInternal(w, "list transfer devices", err)
+				return
+			}
+			for _, d := range transferDevices {
+				devices = append(devices, map[string]any{"id": d.ID, "label": d.Label, "username": d.Username})
+			}
+			accounts, err := db.ListUsers()
+			if err != nil {
+				writeInternal(w, "list users", err)
+				return
+			}
+			for _, u := range accounts {
+				users = append(users, u.Username)
+			}
+			sort.Strings(users)
+		} else {
+			// Scoped counts, derived from the caller's own rows. Capped at
+			// maxTransferRows like the list itself, unlike the admin aggregate.
+			counts = make(map[string]int, len(transfers))
+			cutoff := time.Now().Add(-store.ActiveTransferWindow).Unix()
+			for _, t := range transfers {
+				counts[t.Status]++
+				if t.Status == "open" && t.UpdatedAt >= cutoff {
+					activeNow++
+				}
+			}
 		}
-		activeNow, err := db.CountActiveTransfers()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		transferDevices, err := db.ListTransferDevices()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		devices := make([]map[string]any, 0, len(transferDevices))
-		for _, d := range transferDevices {
-			devices = append(devices, map[string]any{"id": d.ID, "label": d.Label, "username": d.Username})
-		}
-		accounts, err := db.ListUsers()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		users := make([]string, 0, len(accounts))
-		for _, u := range accounts {
-			users = append(users, u.Username)
-		}
-		sort.Strings(users)
 		total := 0
 		for _, n := range counts {
 			total += n
 		}
 		rows := make([]map[string]any, 0, len(transfers))
 		for _, t := range transfers {
-			received := len(t.ReceivedChunks)
+			received := t.ReceivedCount
 			var progress float64
 			if t.TotalChunks > 0 {
 				progress = float64(received) / float64(t.TotalChunks) * 100
@@ -118,14 +155,36 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 func deleteTransferHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		err := db.DeleteTransfer(id)
+		// Only the device that opened the session (or an admin) may drop its
+		// history row. Non-owners get the same 404 a missing ID gets, so a
+		// foreign session ID is neither confirmed nor deletable (PR-03,
+		// matching callerOwnsTransfer's rule in transferhandlers.go).
+		t, err := db.GetTransfer(id)
+		if err != nil {
+			writeInternal(w, "get transfer", err)
+			return
+		}
+		// GetTransfer reports a missing row as (nil, nil), not sql.ErrNoRows.
+		if t == nil || !callerOwnsTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
+			return
+		}
+		// Drop the session's temp file too. Deleting the row alone orphans it:
+		// nothing else knows the path, so the bytes sit in the temp dir
+		// forever (PR-12). A completed session already moved its temp away.
+		if t.Status != "completed" && t.TempPath != "" {
+			if rmErr := os.Remove(t.TempPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				log.Printf("delete transfer %s: remove temp file: %v", id, rmErr)
+			}
+		}
+		err = db.DeleteTransfer(id)
 		switch {
 		case err == nil:
 			w.WriteHeader(http.StatusNoContent)
 		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
 		default:
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "delete transfer", err)
 		}
 	}
 }
@@ -136,7 +195,7 @@ func listUsersHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := db.ListUsers()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "list users", err)
 			return
 		}
 		out := make([]map[string]any, 0, len(users))
@@ -152,9 +211,10 @@ func listUsersHandler(db *store.DB) http.HandlerFunc {
 
 // --------- DELETE /users/{username} ---------
 
-// deleteUserHandler removes a login account. Every account is a full admin
-// today (see store.User), so there's no self-vs-other distinction like
-// device management has — any authenticated caller may remove any account,
+// deleteUserHandler removes a login account. Admin-gated at the router (see
+// the admin group in server.New) — every account is a full admin today (see
+// store.User), so only another admin may remove one. There's no self-vs-other
+// distinction like device management has: any admin may remove any account,
 // except the last one (see store.ErrLastUser), which would brick password
 // login entirely.
 func deleteUserHandler(db *store.DB) http.HandlerFunc {
@@ -169,7 +229,7 @@ func deleteUserHandler(db *store.DB) http.HandlerFunc {
 		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such user")
 		default:
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "delete user", err)
 		}
 	}
 }
@@ -179,10 +239,10 @@ func deleteUserHandler(db *store.DB) http.HandlerFunc {
 // maxLogLines caps how much of the journal the logs endpoint returns.
 const maxLogLines = 200
 
-// listLogsHandler tails the agent's own journald output. This exposes no
-// more than a paired device can already see (it can read any file); the
-// agent's log is strictly less sensitive. Linux/systemd only — returns an
-// empty list elsewhere rather than erroring.
+// listLogsHandler tails the agent's own journald output. Admin-gated at the
+// router (see the admin group in server.New): the journal spans every device,
+// so it is not a jailed or read-only caller's to read. Linux/systemd only —
+// returns an empty list elsewhere rather than erroring.
 func listLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cmd := exec.Command("journalctl", "--user", "-u", "rfe-agent.service",

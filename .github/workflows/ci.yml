@@ -5,6 +5,9 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  # Callable so release.yml can require these exact gates before publishing,
+  # instead of a second copy that drifts out of sync with this one (PR-70).
+  workflow_call:
 
 jobs:
   agent:
@@ -14,9 +17,9 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
@@ -27,8 +30,21 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: go test
-        run: go test ./...
+      - name: go test (race)
+        run: go test -race ./...
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  contract:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Redocly lint (fail on errors)
+        run: npx --yes @redocly/cli@latest lint protocol/openapi.yaml
 
   app:
     name: App (Flutter)
@@ -37,9 +53,9 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: "3.44.2"
 

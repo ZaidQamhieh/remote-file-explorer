@@ -3025,17 +3025,14 @@
         const card = document.createElement('div');
         card.className = 'rfe-card dev-card ' + accent;
         card.dataset.id = d.id;
-        // ponytail: no per-device quota field on the Device struct — placeholder bar for
-        // mockup parity, width derived from the device id, labelled honestly (no fake GB).
-        // The current browser's own session has no meaningful quota reading at all,
-        // so it gets a plain "Current session / now" foot row instead of a fake bar.
+        // PR-78: per-device quota is not tracked, so show only an honest
+        // last-seen foot row — no fabricated fill bar (its width was derived
+        // from a hash of the device id and meant nothing).
         let quota;
         if (d.current) {
           quota = '<div class="dev-quota-foot" style="margin-top:10px"><span class="dim" style="font-size:11px">Current session</span><span class="dim mono" style="font-size:11px">now</span></div>';
         } else {
-          const qPct = 20 + (Math.abs(hashStr(String(d.id))) % 65);
-          quota = '<div class="dev-quota" title="Placeholder — per-device quota is not tracked yet"><div class="dev-quota-track"><div class="dev-quota-fill" style="width:' + qPct + '%"></div></div>' +
-            '<div class="dev-quota-foot"><span class="dev-quota-text">Quota — not tracked</span><span class="dim mono" style="font-size:10.5px">' + timeAgo(d.lastSeen) + '</span></div></div>';
+          quota = '<div class="dev-quota-foot" style="margin-top:10px"><span class="dim" style="font-size:11px">Last seen</span><span class="dim mono" style="font-size:11px">' + timeAgo(d.lastSeen) + '</span></div>';
         }
         card.innerHTML =
           '<div class="rfe-card-top">' + deviceAvatarHtml(d) + '</div>' +

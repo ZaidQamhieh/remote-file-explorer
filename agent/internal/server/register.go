@@ -12,6 +12,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -69,7 +70,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		// this deliberately for headless/scripted setups.
 		hasUser, err := db.HasAnyUser()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "register", err)
 			return
 		}
 		if hasUser {
@@ -89,17 +90,6 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to hash password")
 			return
 		}
-		if err := db.CreateUser(req.Username, hash); err != nil {
-			// Distinguish a genuine username collision (which is a common,
-			// user-facing 409) from any other DB error (locked/corrupt DB,
-			// disk full) — the latter must not be misreported as "taken".
-			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-				writeError(w, http.StatusConflict, "USERNAME_TAKEN", "that username is already registered on this computer")
-			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			}
-			return
-		}
 
 		if req.DeviceLabel == "" {
 			req.DeviceLabel = "unnamed-device"
@@ -109,13 +99,22 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
 			return
 		}
-		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, true)
+		// One transaction for the account + its device: the HasAnyUser check
+		// above is only an early, friendly 409 — RegisterAccount re-checks it
+		// atomically, so two simultaneous registrations can't both win (PR-45).
+		deviceID, err := db.RegisterAccount(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, req.Username, hash)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			return
-		}
-		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			switch {
+			case errors.Is(err, store.ErrAccountExists):
+				writeError(w, http.StatusConflict, "ACCOUNT_ALREADY_EXISTS", "this computer already has an account — log in instead, or ask the owner to add a device")
+			case strings.Contains(err.Error(), "UNIQUE constraint failed"):
+				// A genuine username collision is a common, user-facing 409;
+				// any other DB error (locked/corrupt DB, disk full) must not be
+				// misreported as "taken".
+				writeError(w, http.StatusConflict, "USERNAME_TAKEN", "that username is already registered on this computer")
+			default:
+				writeInternal(w, "register", err)
+			}
 			return
 		}
 

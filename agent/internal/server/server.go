@@ -3,6 +3,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"runtime"
 	"time"
@@ -59,9 +61,20 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
 			r.Get("/status", statusHandler(cfg))
-			r.Get("/metrics", metricsHandler())
+			// Transfer history is scoped to the caller inside the handlers:
+			// a non-admin sees only its own sessions (PR-03).
 			r.Get("/transfers/list", listTransfersHandler(db))
 			r.Delete("/transfers/{id}", deleteTransferHandler(db))
+		})
+
+		// Admin-only control plane: whole-host telemetry, login-account
+		// management, the agent's journal, and process restart. These expose
+		// or mutate state belonging to every device, so an ordinary paired
+		// device (phone app, guest) must not reach them — PR-03.
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware(db))
+			r.Use(adminOnly)
+			r.Get("/metrics", metricsHandler())
 			r.Get("/users", listUsersHandler(db))
 			r.Delete("/users/{username}", deleteUserHandler(db))
 			r.Get("/logs", listLogsHandler())
@@ -173,7 +186,7 @@ func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 	r.Get("/trash", listTrashHandler(cfg.TrashDir))
 	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
-	r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
+	r.Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
 }
 
 // registerContentRoutes wires whole-file download/write (as opposed to the
@@ -184,12 +197,33 @@ func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 }
 
 // registerTransferRoutes wires the resumable chunked upload session
-// endpoints.
+// endpoints. Every route that writes to the filesystem sits behind
+// requireWritable — the resumable upload path used to be the one way around
+// the read-only policy fsops.Ops enforces everywhere else (PR-04).
 func registerTransferRoutes(r chi.Router, tm *transfer.Manager, cfg Config, ops *fsops.Ops) {
-	r.Post("/transfers", openTransferHandler(tm, ops))
 	r.Get("/transfers/{id}", transferStatusHandler(tm))
-	r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
-	r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
+	r.Group(func(r chi.Router) {
+		r.Use(requireWritable(ops))
+		r.Post("/transfers", openTransferHandler(tm, ops))
+		r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
+		r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
+	})
+}
+
+// requireWritable rejects mutating requests when the agent is globally
+// read-only or the calling device is marked read-only. It reads the
+// device-narrowed ops the jail middleware installed, so the per-device flag
+// counts as much as the global one. Must run after deviceJailMiddleware.
+func requireWritable(base *fsops.Ops) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if opsFromContext(r.Context(), base).IsReadOnly() {
+				writeError(w, http.StatusForbidden, "READ_ONLY", fsops.ErrReadOnly.Error())
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // --------- helpers ---------
@@ -207,6 +241,41 @@ type apiError struct {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, apiError{Code: code, Message: message})
+}
+
+// writeInternal logs the real error server-side and returns a generic 500 to
+// the client, so absolute paths, DB details, and OS messages don't leak into
+// responses (and, via the web companion, into an HTML sink) — PR-53.
+func writeInternal(w http.ResponseWriter, context string, err error) {
+	log.Printf("%s: %v", context, err)
+	writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error")
+}
+
+// maxJSONBody bounds JSON request bodies (PR-51). Streaming routes (chunk
+// upload, content write) set their own, larger limits.
+const maxJSONBody = 1 << 20 // 1 MiB
+
+// decodeJSONBody reads exactly one JSON document from r into dst under a size
+// cap. Returns false (after writing 400/413) on malformed, oversized, or
+// multi-document bodies. It does not reject unknown fields, to stay compatible
+// with older clients; tightening that is a follow-up.
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "request body too large")
+			return false
+		}
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+		return false
+	}
+	if dec.More() {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "unexpected trailing data")
+		return false
+	}
+	return true
 }
 
 // --------- health ---------

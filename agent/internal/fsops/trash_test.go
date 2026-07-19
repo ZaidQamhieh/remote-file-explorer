@@ -169,3 +169,34 @@ func TestTrash_MoveOutsideJail(t *testing.T) {
 		t.Fatalf("expected FORBIDDEN, got %+v", res[0])
 	}
 }
+
+// TestTrash_TraversalRejected is the PR-01 regression: a client-supplied trash
+// id that escapes the store (separators, dot names, absolute) must not delete
+// or restore anything outside files/.
+func TestTrash_TraversalRejected(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+
+	// A victim file outside the trash store that traversal would target.
+	victim := filepath.Join(root, "victim.txt")
+	if err := os.WriteFile(victim, []byte("do not delete"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rel, err := filepath.Rel(trashFilesDir(trashDir), victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bad := []string{rel, "../../../../etc/passwd", "..", ".", "a/b", "/abs", ""}
+	for _, id := range bad {
+		if err := EmptyTrash(trashDir, []string{id}); err == nil {
+			t.Fatalf("EmptyTrash accepted traversal id %q", id)
+		}
+		res := ops.RestoreFromTrash([]string{id}, trashDir)
+		if len(res) != 1 || res[0].OK {
+			t.Fatalf("RestoreFromTrash accepted traversal id %q: %+v", id, res)
+		}
+	}
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("victim was deleted through trash traversal: %v", err)
+	}
+}

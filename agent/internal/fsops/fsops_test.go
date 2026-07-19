@@ -1181,3 +1181,92 @@ func TestJailed_CopyMoveDestOutsideJailForbidden(t *testing.T) {
 		t.Fatalf("expected insideFile to survive, stat err: %v", err)
 	}
 }
+
+// TestCopy_NestedSymlinkNotDereferenced is the PR-05 regression: only the
+// top-level source is jail-resolved, so a symlink *inside* a copied directory
+// used to be opened and its bytes copied out — an arbitrary-file read for a
+// jailed caller. The link must be recreated as a link, never followed.
+func TestCopy_NestedSymlinkNotDereferenced(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("TOP SECRET"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	srcDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	// A crafted link inside the tree the caller asks to copy.
+	if err := os.Symlink(outside, filepath.Join(srcDir, "leak")); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	destDir := filepath.Join(root, "dest")
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	ops := New([]string{root}, false)
+	for _, r := range ops.Copy([]string{srcDir}, destDir, false, false) {
+		if r.Error != nil {
+			t.Fatalf("Copy: %+v", r.Error)
+		}
+	}
+
+	copied := filepath.Join(destDir, "src", "leak")
+	fi, err := os.Lstat(copied)
+	if err != nil {
+		t.Fatalf("Lstat copied: %v", err)
+	}
+	// Dereferencing is the bug: it would materialise the secret's BYTES as a
+	// regular file inside the jail, where Resolve has nothing left to reject.
+	if fi.Mode()&os.ModeSymlink == 0 {
+		if b, readErr := os.ReadFile(copied); readErr == nil && string(b) == "TOP SECRET" {
+			t.Fatal("copy dereferenced a nested symlink and leaked a file from outside the jail")
+		}
+		t.Fatal("nested symlink was dereferenced into a regular file")
+	}
+	// Preserved as a link, the escape is still refused at read time: the link
+	// points outside, and Resolve rejects on the real path, not the name.
+	if _, err := ops.Resolve(copied); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("copied symlink should not resolve inside the jail, got err=%v", err)
+	}
+}
+
+// TestCopy_DoesNotWriteThroughDestinationSymlink is the write-side half of
+// PR-05: O_CREATE|O_TRUNC on a destination that is already a symlink follows
+// it and truncates the target, outside the jail included.
+func TestCopy_DoesNotWriteThroughDestinationSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "victim.txt")
+	if err := os.WriteFile(outside, []byte("ORIGINAL"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	srcDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "f.txt"), []byte("ATTACKER"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	// A link planted where the copy will land.
+	destDir := filepath.Join(root, "dest", "src")
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(destDir, "f.txt")); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	ops := New([]string{root}, false)
+	ops.Copy([]string{srcDir}, filepath.Join(root, "dest"), false, true)
+
+	b, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatalf("ReadFile outside: %v", err)
+	}
+	if string(b) != "ORIGINAL" {
+		t.Fatalf("copy wrote through a destination symlink, clobbering a file outside the jail: %q", b)
+	}
+}

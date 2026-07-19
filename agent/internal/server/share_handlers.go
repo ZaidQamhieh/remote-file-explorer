@@ -87,7 +87,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternal(w, "mint share", err)
 			}
 			return
 		}
@@ -109,8 +109,13 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 		}
 		hash := hashShareToken(token)
 
-		if err := db.CreateShareToken(hash, resolved, expiresAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		// Stamp the minting device so list/revoke can be scoped to it (PR-03).
+		var ownerID string
+		if d := deviceFromContext(r); d != nil {
+			ownerID = d.ID
+		}
+		if err := db.CreateShareToken(hash, resolved, ownerID, expiresAt); err != nil {
+			writeInternal(w, "create share token", err)
 			return
 		}
 		_ = db.LogShareMint(hash, resolved, expiresAt)
@@ -149,7 +154,7 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 
 		path, ok, err := db.ConsumeShareToken(hash)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "serve share", err)
 			return
 		}
 		if !ok {
@@ -198,21 +203,60 @@ func revokeShareHandler(db *store.DB) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "tokenHash required")
 			return
 		}
+		// Only the device that minted the link (or an admin) may revoke it —
+		// otherwise any paired device can kill every other device's shares.
+		// Non-owners get 404, so a foreign hash isn't confirmed (PR-03).
+		t, err := db.GetShareToken(hash)
+		if err != nil {
+			writeInternal(w, "get share token", err)
+			return
+		}
+		if t == nil || !callerOwnsShare(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such share")
+			return
+		}
 		if err := db.DeleteShareToken(hash); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "delete share token", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
+// callerOwnsShare reports whether the authenticated device minted this share
+// token, or is an admin device. Mirrors callerOwnsTransfer's rule: tokens with
+// no recorded owner (minted before the device_id column) are admin-only.
+func callerOwnsShare(r *http.Request, t *store.ShareToken) bool {
+	d := deviceFromContext(r)
+	if d == nil {
+		return false
+	}
+	if t.DeviceID != "" && t.DeviceID == d.ID {
+		return true
+	}
+	return isAdminDevice(d)
+}
+
 // --------- GET /v1/share (authenticated) ---------
 
 func listSharesHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tokens, err := db.ListShareTokens()
+		// A non-admin sees only the links it minted; the full list names other
+		// devices' shared paths (PR-03).
+		caller := deviceFromContext(r)
+		scope := ""
+		if !isAdminDevice(caller) {
+			// scope "" means "every token" — never let a non-admin reach that,
+			// including the ID-less case.
+			if caller == nil || caller.ID == "" {
+				writeError(w, http.StatusForbidden, "FORBIDDEN", "device required")
+				return
+			}
+			scope = caller.ID
+		}
+		tokens, err := db.ListShareTokens(scope)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternal(w, "list share tokens", err)
 			return
 		}
 		out := make([]map[string]any, 0, len(tokens))

@@ -38,9 +38,22 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
   bool _searching = false;
   final Set<String> _failedHosts = {};
 
+  /// Bumped on every [_search] call; a host's result is only applied if it's
+  /// still the current generation when it arrives — otherwise a slow
+  /// response for an old query could land after (and clobber) a newer
+  /// query's results (PR-32).
+  int _generation = 0;
+
+  /// A host that hasn't answered within this long is treated as failed
+  /// rather than blocking every other host's results from appearing
+  /// (previously `Future.wait` waited for the single slowest host before
+  /// showing anything).
+  static const _perHostTimeout = Duration(seconds: 10);
+
   void _onQueryChanged(String query) {
     _debounce?.cancel();
     if (query.trim().length < 2) {
+      _generation++;
       setState(() {
         _results = [];
         _searching = false;
@@ -55,29 +68,33 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
   }
 
   Future<void> _search(String query) async {
+    final gen = ++_generation;
     setState(() {
       _searching = true;
       _results = [];
       _failedHosts.clear();
     });
 
-    final futures = widget.hosts.map((host) async {
+    final perHost = widget.hosts.map((host) async {
       try {
         final client = await ref.read(clientProvider(host.id).future);
-        final result = await client.search(q: query);
-        return result.entries.map((e) => CrossHostResult(host, e)).toList();
+        final result = await client.search(q: query).timeout(_perHostTimeout);
+        if (!mounted || gen != _generation) return;
+        setState(() {
+          _results.addAll(result.entries.map((e) => CrossHostResult(host, e)));
+        });
       } catch (_) {
-        _failedHosts.add(host.id);
-        return <CrossHostResult>[];
+        if (!mounted || gen != _generation) return;
+        setState(() => _failedHosts.add(host.id));
       }
     });
 
-    final allResults = await Future.wait(futures);
-    if (mounted) {
-      setState(() {
-        _results = allResults.expand((r) => r).toList();
-        _searching = false;
-      });
+    // Each host already streamed its own results in above as it finished;
+    // this just waits for all of them to know when to stop showing the
+    // "searching" spinner.
+    await Future.wait(perHost);
+    if (mounted && gen == _generation) {
+      setState(() => _searching = false);
     }
   }
 

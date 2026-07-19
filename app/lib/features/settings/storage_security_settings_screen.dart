@@ -14,6 +14,14 @@ import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+/// Indirection around `LocalAuthentication().isDeviceSupported()` so widget
+/// tests can stub device-auth support without a real platform channel —
+/// local_auth's Pigeon-generated API has no simple `MethodChannel` to mock.
+/// Overridden by tests, reset via `addTearDown`.
+@visibleForTesting
+Future<bool> Function() isDeviceAuthSupportedCheck =
+    () => LocalAuthentication().isDeviceSupported();
+
 /// Cache stats/clear and App Lock — grouped as "storage you might reclaim,
 /// security you might tighten" (Settings Overhaul, group 4 of 5).
 class StorageSecuritySettingsScreen extends ConsumerWidget {
@@ -59,8 +67,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
                   // lock_gate.dart's fail-safe (PR-18) treats "no auth
                   // available" as unlocked, by design, once you're already
                   // past this point. Preflight instead of relying on that.
-                  if (enabled &&
-                      !await LocalAuthentication().isDeviceSupported()) {
+                  if (enabled && !await isDeviceAuthSupportedCheck()) {
                     if (context.mounted) {
                       showError(
                         context,

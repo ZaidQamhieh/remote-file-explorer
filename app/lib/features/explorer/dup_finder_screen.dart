@@ -47,6 +47,7 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
       final paths = <String>[];
       final sizes = <String, int>{};
       await _collectFiles(widget.path, paths, sizes);
+      if (!mounted) return;
       setState(() => _filesScanned = paths.length);
 
       if (paths.isEmpty) {
@@ -63,6 +64,7 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
       for (var i = 0; i < paths.length; i += 500) {
         final chunk = paths.sublist(i, (i + 500).clamp(0, paths.length));
         final hashes = await widget.client.batchChecksums(chunk);
+        if (!mounted) return;
         allHashes.addAll(hashes);
       }
 
@@ -84,6 +86,7 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
         _scanning = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = humanizeError(e);
         _scanning = false;
@@ -91,20 +94,28 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
     }
   }
 
+  /// Recursively collects every file under [path], fully paging through each
+  /// directory's listing (PR-33) — a directory with more entries than one
+  /// page used to silently contribute only its first page, so results could
+  /// be incomplete without any indication.
   Future<void> _collectFiles(
     String path,
     List<String> paths,
     Map<String, int> sizes,
   ) async {
-    final listing = await widget.client.list(path);
-    for (final entry in listing.entries) {
-      if (entry.isDir) {
-        await _collectFiles(entry.path, paths, sizes);
-      } else {
-        paths.add(entry.path);
-        if (entry.size != null) sizes[entry.path] = entry.size!;
+    String? cursor;
+    do {
+      final listing = await widget.client.list(path, cursor: cursor);
+      for (final entry in listing.entries) {
+        if (entry.isDir) {
+          await _collectFiles(entry.path, paths, sizes);
+        } else {
+          paths.add(entry.path);
+          if (entry.size != null) sizes[entry.path] = entry.size!;
+        }
       }
-    }
+      cursor = listing.nextCursor;
+    } while (cursor != null);
   }
 
   @override

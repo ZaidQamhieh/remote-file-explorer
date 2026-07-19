@@ -30,8 +30,14 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: go test (race)
-        run: go test -race ./...
+      - name: go test (race, coverage)
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: coverage floor (55%)
+        run: |
+          pct=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+')
+          echo "total coverage: ${pct}%"
+          awk -v p="$pct" 'BEGIN { exit !(p >= 55) }' || { echo "below 55% floor"; exit 1; }
 
       - name: govulncheck
         run: |

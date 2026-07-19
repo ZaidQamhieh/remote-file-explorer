@@ -2,6 +2,7 @@
 /agent/bin/
 /agent/agent
 *.exe
+/agent/coverage.out
 
 # TLS / local state (never commit)
 *.pem

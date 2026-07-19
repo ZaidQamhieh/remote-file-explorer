@@ -44,7 +44,10 @@ landed **PR-05, PR-06, PR-12, PR-42, PR-45, PR-46, PR-47, PR-70** (all in the
 uncommitted `agent/**` tree, each with a regression test) but never updated this
 file or the log. Verified green on the current dirty tree: gofmt/vet clean, 321
 tests, govulncheck 0 reachable, redocly 0 errors. Read-only invariant confirmed
-airtight across every mutating route. Batch still UNCOMMITTED + unreviewed.
+airtight across every mutating route. **COMMITTED 2026-07-19** on `master`:
+`4e09ddf` (server: agent/protocol/.github/docs/hygiene, 47 files) + `9706ee2`
+(android config PR-69/20/77, split out — not Go/OpenAPI-gated, wants a real
+Android build). Frozen shad tree stayed staged & untouched. **Not pushed.**
 
 **Prior batch 3 (2026-07-15): PR-03, PR-04 (finished), PR-50, PR-53 (finished).**
 - **PR-03** — `adminOnly` middleware (`settings_handlers.go`) + an admin router
@@ -183,13 +186,14 @@ LOW (2 open):
 PR-14,15,16,17,18,19,21–40, 56,57,62,64,66,68,73,74,82 — all `app/lib/**` or
 shad UI or `pubspec`. See the audit note per finding.
 
-### UNCOMMITTED WORK from the fix sessions (~29 files, NOT committed)
-All in `agent/**`, `protocol/openapi.yaml`, `.github/workflows/ci.yml`,
-`app/android/**` — zero overlap with the frozen shad tree. Config changes
-(gradle signing PR-69, manifest PR-20/77) still need a real Android build to
-confirm. Owner must approve the scoped commit before it lands.
+### COMMITTED 2026-07-19 (was the uncommitted fix-session work)
+Landed on `master` as `4e09ddf` (server) + `9706ee2` (android). PR-46 replaced
+the ad-hoc migration chain with `PRAGMA user_version` versioning. Android config
+(gradle signing PR-69, manifest PR-20/77) is committed but **not build-verified** —
+confirm with a real Android release build. Neither commit is **pushed**.
+- **NOTE PR-46 note below is now historical** — the versioned migration shipped.
 
-**This batch also changed the DB schema** (two additive `ALTER TABLE`s:
+**The batch also changed the DB schema** (additive `ALTER TABLE`s:
 `share_tokens.device_id`, `transfers.overwrite`, both `DEFAULT` + guarded by the
 existing duplicate-column check). Migration is still the ad-hoc non-versioned
 chain PR-46 flags — these follow the established pattern rather than fixing it.

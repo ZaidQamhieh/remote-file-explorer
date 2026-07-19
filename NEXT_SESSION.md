@@ -30,12 +30,68 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-20, tenth pass): 78 / 85 closed (count of the
+### PROGRESS (as of 2026-07-20, eleventh pass): 79 / 85 closed (count of the
 concrete open register below, which is the one source of truth — per-severity
-arithmetic subtotals are dropped as of this pass; they drifted twice before
-and re-deriving them by hand each pass is how that happened).
+arithmetic subtotals are dropped as of the tenth pass; they drifted twice
+before and re-deriving them by hand each pass is how that happened).
 
-**Open register (7 items — this IS the backlog, nothing else):**
+**Eleventh pass, same day (2026-07-20): owner said "do all the 7 in
+parallel if you can" (still awake — the tenth pass's shutdown was declined:
+"dont shutdown im still awake"). Ran two efforts concurrently:**
+- **PR-82 closed** (fork/subagent, ran in the same working tree — no
+  isolation, see gotcha below): built `app/test/agent_client_integration_test.dart`,
+  a real self-signed-HTTPS fake-agent server (`HttpServer.bindSecure`, no new
+  dep) driving a real `AgentClient` over an actual loopback TLS connection —
+  20 regression cases (TOFU pin capture/match/mismatch, auth headers, list
+  pagination, 403/409/413→exception mapping, `putContent`/`fetchBytes`/
+  `downloadFile` real byte round-trips incl. the cap-abort and range-resume
+  paths, a full open→chunk→complete upload session verified against the fake
+  server's received bytes/headers, closed-port→`CONNECTION` exception, and
+  the dual-address GET-retries/PUT-doesn't fallback interceptor — that last
+  one had zero prior coverage anywhere). Commit `a0dcbb7`. 733/733 Flutter
+  tests green after.
+- **PR-73's remaining piece (Gradle 8.10.2→9.1.0 / AGP 8.7.0→9.0.1 /
+  Kotlin 2.1.0→2.3.20) attempted and reverted, not shipped.** Confirmed via
+  a fresh `flutter create` with this exact Flutter SDK (3.44.2) that those
+  are the actual Flutter-supported versions, then tried the bump for real
+  (`flutter build apk --debug`, JAVA_HOME pinned to the repo's jbr-21.0.10).
+  Hit three real, escalating compile failures in sequence: (1) the old
+  `kotlinOptions{}`/bare `android{}` extension DSL is a hard compile error
+  under AGP 9's default `newDsl=true` — fixed by migrating to the new
+  `compileOptions`/top-level `kotlin{ compilerOptions{} }` DSL, matching the
+  fresh template; (2) that flipped the `receive_sharing_intent` plugin's
+  pre-existing JVM-target-mismatch workaround (root `build.gradle.kts`) from
+  needing `JVM_1_8` to needing `JVM_11` — fixed; (3) `file_picker`'s own
+  Android module then failed to produce `FilePickerPlugin.class` at all
+  (`GeneratedPluginRegistrant.java: cannot find symbol`) — a third-party
+  plugin module genuinely not building under this toolchain, not something
+  fixable from this repo's own Gradle files. Stopped here: three
+  independent breakages in a toolchain migration that the audit's own fix
+  note explicitly said needs "controlled waves + device regression tests,"
+  with no physical Android device in this dev environment to verify a
+  resulting APK even if it eventually compiled. Cleanly reverted (git
+  checkout, confirmed clean) rather than land a half-fixed toolchain state
+  unsupervised. **Next session: this needs `file_picker`'s changelog
+  checked for a KGP/AGP-9-compatible version (or a replacement — audit's
+  own broader complaint is 66 stale packages, so this may not be worth
+  chasing in isolation) before retrying; do not re-attempt this exact bump
+  blind.**
+- **Git-index gotcha hit mid-pass, resolved, no data loss:** the PR-82 fork
+  ran in the *same* working tree (not `isolation: "worktree"` — an oversight
+  dispatching it) concurrently with the PR-73 Gradle attempt. Something
+  (most likely the fork investigating repo state) unstaged the entire
+  shad-migration index — every previously `MM` file dropped to plain `M`.
+  Working-tree *content* was verified fully intact (`main.dart` still had
+  both the PR-62 ScaffoldMessenger fix and the PR-63 wiring; same spot-check
+  on markdown_preview.dart/transfer_journal_screen.dart/text_editor.dart) —
+  this was an index-only event, not a content revert. Re-staged the exact
+  same file set to restore the `MM`-as-entangled-marker convention this
+  whole effort relies on. **Lesson for next time a fork/subagent needs to
+  touch files in a repo with staged-but-uncommitted content: pass
+  `isolation: "worktree"` on the Agent call, or confirm the subagent won't
+  run any `git add`/`git reset`/`git stash` of its own.**
+
+**Open register (6 items — this IS the backlog, nothing else):**
 - **PR-38** (High) — fixed in the working tree, **NOT committed**:
   `app/lib/features/preview/text_editor.dart` is `MM` (shad-staged).
 - **PR-62** (High) — fixed in the working tree, **NOT committed**:
@@ -59,20 +115,17 @@ and re-deriving them by hand each pass is how that happened).
   `flutter test` both clean/all-passing with the swap applied). The
   Gradle/AGP/Kotlin bump and the other 65 stale packages are untouched —
   explicitly flagged by the audit itself as needing controlled waves +
-  device regression tests, not a blind autonomous pass.
-- **PR-82** (High) — untouched. Needs a fake TLS agent/contract test harness
-  + ~20 regression cases per the audit; genuinely large new test
-  infrastructure, not a bounded bug-fix. Deliberately not attempted
-  unsupervised — a rushed/half-built harness is worse than none.
+  device regression tests, not a blind autonomous pass. Real attempt +
+  revert this pass — see "Eleventh pass" log below for exactly what broke.
 
-Closed this pass (see "Tenth pass" log below): PR-59, PR-61, PR-40, PR-75
-(full), PR-68 (partial — see log), PR-79 (partial — see log).
+PR-82 closed this pass (fork-built fake-TLS-agent harness, 20 regression
+cases, commit `a0dcbb7` — see "Eleventh pass" log below).
 
 Closed (all, flat list): PR-01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,
 17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,39,40,41,42,43,
 44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,65,66,67,68,69,70,71,
-72,74,75,76,77,78,79,80,81,83,84,85. (78 items — matches 85 minus the 7-item
-open register above.)
+72,74,75,76,77,78,79,80,81,82,83,84,85. (79 items — matches 85 minus the
+6-item open register above.)
 
 **Tenth pass (2026-07-20): continuing autonomously across a context
 compaction ("fix all the 13 left", then later "continue... don't stop until

@@ -52,4 +52,28 @@ void main() {
     expect(light.appBarTheme.surfaceTintColor, Colors.transparent);
     expect(light.appBarTheme.backgroundColor, light.colorScheme.surface);
   });
+
+  test('shadColorSchemeFrom tracks the input ColorScheme, not a fixed Zinc '
+      'palette (PR-63 regression)', () {
+    final customLight = ColorScheme.fromSeed(
+      seedColor: const Color(0xFFB00020),
+      brightness: Brightness.light,
+    );
+    final shad = AppTheme.shadColorSchemeFrom(customLight);
+
+    expect(shad.primary, customLight.primary);
+    expect(shad.background, customLight.surface);
+    expect(shad.destructive, customLight.error);
+
+    // Different seeds must produce different Shad primaries -- proves this
+    // isn't silently returning a constant palette.
+    final otherLight = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF006400),
+      brightness: Brightness.light,
+    );
+    expect(
+      AppTheme.shadColorSchemeFrom(otherLight).primary,
+      isNot(shad.primary),
+    );
+  });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'motion.dart';
 import 'tokens.dart';
@@ -56,6 +57,34 @@ class AppTheme {
   /// Dark counterpart to [lightFrom].
   static ThemeData darkFrom(ColorScheme? scheme) =>
       _build(Brightness.dark, scheme);
+
+  /// Maps a resolved Material [ColorScheme] onto shadcn_ui's role naming, so
+  /// Shad* widgets pick up the same dynamic-color/AMOLED/seed inputs as the
+  /// Material side instead of a fixed [ShadZincColorScheme] (PR-63).
+  static ShadColorScheme shadColorSchemeFrom(ColorScheme scheme) {
+    return ShadColorScheme(
+      background: scheme.surface,
+      foreground: scheme.onSurface,
+      card: scheme.surfaceContainerLow,
+      cardForeground: scheme.onSurface,
+      popover: scheme.surfaceContainerHigh,
+      popoverForeground: scheme.onSurface,
+      primary: scheme.primary,
+      primaryForeground: scheme.onPrimary,
+      secondary: scheme.secondaryContainer,
+      secondaryForeground: scheme.onSecondaryContainer,
+      muted: scheme.surfaceContainerHighest,
+      mutedForeground: scheme.onSurfaceVariant,
+      accent: scheme.tertiaryContainer,
+      accentForeground: scheme.onTertiaryContainer,
+      destructive: scheme.error,
+      destructiveForeground: scheme.onError,
+      border: scheme.outlineVariant,
+      input: scheme.outlineVariant,
+      ring: scheme.primary,
+      selection: scheme.primary.withValues(alpha: 0.2),
+    );
+  }
 
   static ThemeData toAmoled(ThemeData dark) {
     final scheme = dark.colorScheme.copyWith(

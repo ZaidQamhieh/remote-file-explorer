@@ -12,9 +12,10 @@ import (
 
 // --------- /system/drives ---------
 
-func drivesHandler() http.HandlerFunc {
+func drivesHandler(base *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		drives, err := fsops.Drives()
+		ops := opsFromContext(r.Context(), base)
+		drives, err := ops.Drives()
 		if err != nil {
 			writeInternal(w, "drives", err)
 			return
@@ -88,9 +89,10 @@ func deleteHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 
 // --------- /trash ---------
 
-func listTrashHandler(trashDir string) http.HandlerFunc {
+func listTrashHandler(base *fsops.Ops, trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := fsops.ListTrash(trashDir)
+		ops := opsFromContext(r.Context(), base)
+		items, err := ops.ListTrash(trashDir)
 		if err != nil {
 			writeInternal(w, "list trash", err)
 			return
@@ -116,7 +118,8 @@ func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 
 func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if opsFromContext(r.Context(), ops).IsReadOnly() {
+		reqOps := opsFromContext(r.Context(), ops)
+		if reqOps.IsReadOnly() {
 			writeError(w, http.StatusForbidden, "READ_ONLY", fsops.ErrReadOnly.Error())
 			return
 		}
@@ -127,7 +130,7 @@ func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		if r.ContentLength > 0 {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 		}
-		if err := fsops.EmptyTrash(trashDir, body.IDs); err != nil {
+		if err := reqOps.EmptyTrash(trashDir, body.IDs); err != nil {
 			if errors.Is(err, fsops.ErrBadTrashID) {
 				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid trash id")
 				return

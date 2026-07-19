@@ -149,6 +149,30 @@ func ListTrash(trashDir string) ([]TrashEntry, error) {
 	return out, nil
 }
 
+// ListTrash enumerates the trash store visible to o: every item when o has
+// no configured roots (no jail — unchanged), or only items whose recorded
+// original path falls within one of o's roots otherwise. The global trash
+// store has no per-device partitioning — everything any device deletes lands
+// in the same store — so without this a jailed device could see the names,
+// paths, and sizes of every other device's deleted files (PR-61).
+func (o *Ops) ListTrash(trashDir string) ([]TrashEntry, error) {
+	all, err := ListTrash(trashDir)
+	if err != nil {
+		return nil, err
+	}
+	roots := o.Roots()
+	if len(roots) == 0 {
+		return all, nil
+	}
+	out := make([]TrashEntry, 0, len(all))
+	for _, e := range all {
+		if _, err := o.Resolve(e.OriginalPath); err == nil {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
 // RestoreFromTrash moves each id back to its recorded original path (jail-
 // checked via Resolve). If the original location is now occupied the restore
 // is auto-renamed ("keep both") rather than clobbering. Returns a per-id
@@ -196,18 +220,44 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 	return results
 }
 
-// EmptyTrash permanently removes trash items. With no ids the whole store is
-// emptied; otherwise only the given ids are removed.
-func EmptyTrash(trashDir string, ids []string) error {
-	if len(ids) == 0 {
+// EmptyTrash permanently removes trash items visible to o. With no ids and no
+// jail, the whole (global) store is emptied — unchanged fast path. Otherwise
+// each candidate id is checked against o's jail (via its recorded original
+// path) and skipped, not deleted, if it falls outside — mirroring
+// RestoreFromTrash's per-id jail check. Without this, a jailed device could
+// pass specific ids (or omit ids entirely) to permanently delete every other
+// device's trashed files, including ones far outside its own jail (PR-61).
+func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
+	if o.settings.IsReadOnly() {
+		return ErrReadOnly
+	}
+	roots := o.Roots()
+	if len(ids) == 0 && len(roots) == 0 {
 		if err := os.RemoveAll(trashFilesDir(trashDir)); err != nil {
 			return err
 		}
 		return os.RemoveAll(trashInfoDir(trashDir))
 	}
+	if len(ids) == 0 {
+		entries, err := ListTrash(trashDir)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			ids = append(ids, e.ID)
+		}
+	}
 	for _, id := range ids {
 		if !validTrashID(id) {
 			return ErrBadTrashID
+		}
+		if len(roots) > 0 {
+			orig, _, err := readTrashInfo(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt))
+			if err == nil {
+				if _, resolveErr := o.Resolve(orig); resolveErr != nil {
+					continue // outside the jail: skip rather than fail the whole batch
+				}
+			}
 		}
 		if err := os.RemoveAll(filepath.Join(trashFilesDir(trashDir), id)); err != nil {
 			return err

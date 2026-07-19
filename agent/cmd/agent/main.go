@@ -152,19 +152,38 @@ func newHTTPServer(addr string, handler http.Handler, cert tls.Certificate) *htt
 // primary --addr listener only.
 const webListenAddr = ":443"
 
-// startWebListener attempts to bind webListenAddr. It returns nil if the bind
-// failed, so the caller can skip it in waitForShutdown.
-func startWebListener(handler http.Handler, cert tls.Certificate) *http.Server {
-	ln, err := net.Listen("tcp", webListenAddr)
+// webListenBindAddr derives the port-443 listener's bind address from
+// primaryAddr: the same explicit host if one was given (an operator
+// restricting the primary listener, e.g. "127.0.0.1:8765", must have that
+// restriction carry over), or webListenAddr (all interfaces) if primaryAddr's
+// host is empty — matching that its own bind was already unrestricted.
+func webListenBindAddr(primaryAddr string) string {
+	if host, _, err := net.SplitHostPort(primaryAddr); err == nil && host != "" {
+		return net.JoinHostPort(host, "443")
+	}
+	return webListenAddr
+}
+
+// startWebListener attempts to bind port 443 on the same host primaryAddr
+// bound to — an explicit restriction there (e.g. "-addr 127.0.0.1:8765" to
+// keep the agent off the LAN) must carry over to this second listener too,
+// rather than this always binding all interfaces regardless (PR-61). A bare
+// port with no host (the default, e.g. ":8765") means "all interfaces" was
+// already the operator's own choice, so this listener keeps that behavior.
+// Returns nil if the bind failed, so the caller can skip it in
+// waitForShutdown.
+func startWebListener(primaryAddr string, handler http.Handler, cert tls.Certificate) *http.Server {
+	bindAddr := webListenBindAddr(primaryAddr)
+	ln, err := net.Listen("tcp", bindAddr)
 	if err != nil {
 		log.Printf("web listener on %s not started (%v) — the agent is still reachable on its "+
 			"primary port; run `sudo setcap cap_net_bind_service=+ep <agent binary>` to enable "+
-			"port-free https:// access", webListenAddr, err)
+			"port-free https:// access", bindAddr, err)
 		return nil
 	}
-	srv := newHTTPServer(webListenAddr, handler, cert)
+	srv := newHTTPServer(bindAddr, handler, cert)
 	go func() {
-		log.Printf("also listening on https://%s/v1  (no port needed)", webListenAddr)
+		log.Printf("also listening on https://%s/v1  (no port needed)", bindAddr)
 		if err := srv.ServeTLS(ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("web listener stopped: %v", err)
 		}
@@ -279,8 +298,6 @@ func runServe(args []string) {
 	// R1: periodically delete expired one-time share tokens (T6).
 	server.StartShareSweeper(db)
 
-	hub := server.NewEventHub()
-
 	handler, err := server.New(server.Config{
 		Name:             st.AgentName(),
 		Version:          version,
@@ -294,7 +311,7 @@ func runServe(args []string) {
 		TrashDir:         dirs.trashDir,
 		StartTime:        startTime,
 		DataDir:          flags.dataDir,
-	}, db, pm, tm, hub)
+	}, db, pm, tm)
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
@@ -309,7 +326,7 @@ func runServe(args []string) {
 		}
 	}()
 
-	webSrv := startWebListener(handler, cert)
+	webSrv := startWebListener(flags.addr, handler, cert)
 
 	if stopMDNS := startMDNS(flags.addr, version); stopMDNS != nil {
 		defer stopMDNS()

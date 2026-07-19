@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,7 +39,7 @@ type Config struct {
 }
 
 // New builds the v1 router and wires all routes.
-func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hub *EventHub) (http.Handler, error) {
+func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
 	ops := fsops.NewWithSettings(cfg.Settings)
 	searchIndex := NewSearchIndex(ops)
 
@@ -91,12 +92,11 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 
 			registerSettingsAndDeviceRoutes(r, cfg, db, pm)
 			registerShareRoutes(r, cfg, db, ops)
-			r.Get("/system/drives", drivesHandler())
+			r.Get("/system/drives", drivesHandler(ops))
 			r.Get("/search", searchHandler(ops, searchIndex))
 			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
 			registerUpdateRoutes(r, cfg)
 			registerFsRoutes(r, cfg, ops)
-			r.Get("/events", sseHandler(hub))
 			registerTrashRoutes(r, cfg, ops)
 			registerContentRoutes(r, cfg, ops)
 			registerTransferRoutes(r, tm, cfg, ops)
@@ -116,7 +116,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 // the single-use share-link fetch (rate-limited and expiring — see
 // docs/r1-share-link-threat-model.md).
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops, nonces *nonceStore) {
-	r.Get("/health", healthHandler(cfg))
+	r.Get("/health", healthHandler(cfg, db))
 	r.Post("/auth/challenge", challengeHandler(nonces))
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/register", registerHandler(cfg, db, pm, nonces))
@@ -184,7 +184,7 @@ func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 
 // registerTrashRoutes wires the trash list/restore/empty endpoints.
 func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/trash", listTrashHandler(cfg.TrashDir))
+	r.Get("/trash", listTrashHandler(ops, cfg.TrashDir))
 	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
 	r.Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
 }
@@ -280,25 +280,47 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 // --------- health ---------
 
-func healthHandler(cfg Config) http.HandlerFunc {
+// healthHandler is deliberately reachable without a bearer token (a phone
+// probing reachability/latency shouldn't need one), but the topology detail
+// below is not: name/OS/version/read-only/addresses/MAC let an unauthenticated
+// caller fingerprint and map the host (PR-61). Every real caller (host-card
+// ping, connection diagnostics, the weekly digest) already has a paired
+// device token and sends it on every request regardless of route, so gating
+// the detail on a valid token is invisible to them; an unpaired caller now
+// only gets a bare liveness signal.
+func healthHandler(cfg Config, db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Surfacing the agent's known addresses lets an already-paired app
-		// learn the Tailscale (or LAN) address it didn't capture at pairing
-		// time, simply by reaching the agent successfully via either one.
-		// macAddress is included so the app can cache it for Wake-on-LAN
-		// when the host is asleep (and thus unreachable).
-		resp := map[string]any{
-			"status":           "ok",
-			"name":             cfg.Settings.AgentName(),
-			"version":          cfg.Version,
-			"os":               runtime.GOOS,
-			"readOnly":         cfg.Settings.IsReadOnly(),
-			"address":          cfg.Address,
-			"tailscaleAddress": cfg.TailscaleAddress,
-		}
-		if cfg.MACAddress != "" {
-			resp["macAddress"] = cfg.MACAddress
+		resp := map[string]any{"status": "ok"}
+		if authorizedDevice(r, db) {
+			// Surfacing the agent's known addresses lets an already-paired app
+			// learn the Tailscale (or LAN) address it didn't capture at pairing
+			// time, simply by reaching the agent successfully via either one.
+			// macAddress is included so the app can cache it for Wake-on-LAN
+			// when the host is asleep (and thus unreachable).
+			resp["name"] = cfg.Settings.AgentName()
+			resp["version"] = cfg.Version
+			resp["os"] = runtime.GOOS
+			resp["readOnly"] = cfg.Settings.IsReadOnly()
+			resp["address"] = cfg.Address
+			resp["tailscaleAddress"] = cfg.TailscaleAddress
+			if cfg.MACAddress != "" {
+				resp["macAddress"] = cfg.MACAddress
+			}
 		}
 		writeJSON(w, http.StatusOK, resp)
 	}
+}
+
+// authorizedDevice reports whether r carries a bearer token for a known,
+// non-revoked device — the same check authMiddleware makes, but without its
+// side effects (device-touch, context injection) or its hard 401, since
+// healthHandler degrades rather than rejects an unauthenticated caller.
+func authorizedDevice(r *http.Request, db *store.DB) bool {
+	hdr := r.Header.Get("Authorization")
+	parts := strings.SplitN(hdr, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return false
+	}
+	device, err := db.DeviceByToken(strings.TrimSpace(parts[1]))
+	return err == nil && device != nil && !device.Revoked
 }

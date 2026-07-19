@@ -1270,3 +1270,35 @@ func TestCopy_DoesNotWriteThroughDestinationSymlink(t *testing.T) {
 		t.Fatalf("copy wrote through a destination symlink, clobbering a file outside the jail: %q", b)
 	}
 }
+
+// TestFilterDrivesByRoots is the PR-61 regression: /system/drives must not
+// expose every mount point to a jailed device regardless of its jail.
+func TestFilterDrivesByRoots(t *testing.T) {
+	all := []Drive{
+		{Path: "/home/alice", Label: "alice-home"},
+		{Path: "/home/alice/usb", Label: "usb-inside-jail"},
+		{Path: "/mnt/other-user", Label: "unrelated"},
+		{Path: "/", Label: "root"},
+	}
+
+	// No jail: unchanged.
+	if got := filterDrivesByRoots(all, nil); len(got) != len(all) {
+		t.Fatalf("expected all drives with no jail, got %+v", got)
+	}
+
+	// Jailed exactly to a subdirectory of a drive (not the drive itself): the
+	// ancestor drive ("/home/alice", "/") can never actually be browsed to
+	// (Resolve rejects anything outside the jail), so it must not be listed —
+	// only a mount genuinely nested inside the jail is real and reachable.
+	got := filterDrivesByRoots(all, []string{"/home/alice/Documents"})
+	if len(got) != 0 {
+		t.Fatalf("expected no drives (jail is a subdir of all of them), got %+v", got)
+	}
+
+	// Jailed to a path that IS one of the drives exactly, with a nested
+	// mount below it: both the exact match and the nested one are reachable.
+	got = filterDrivesByRoots(all, []string{"/home/alice"})
+	if len(got) != 2 {
+		t.Fatalf("expected /home/alice and its nested usb mount, got %+v", got)
+	}
+}

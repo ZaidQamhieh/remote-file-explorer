@@ -97,7 +97,7 @@ func TestTrash_Empty(t *testing.T) {
 	if items, _ := ListTrash(trashDir); len(items) != 2 {
 		t.Fatalf("expected 2 trashed items, got %d", len(items))
 	}
-	if err := EmptyTrash(trashDir, nil); err != nil {
+	if err := ops.EmptyTrash(trashDir, nil); err != nil {
 		t.Fatalf("EmptyTrash: %v", err)
 	}
 	if items, _ := ListTrash(trashDir); len(items) != 0 {
@@ -188,7 +188,7 @@ func TestTrash_TraversalRejected(t *testing.T) {
 
 	bad := []string{rel, "../../../../etc/passwd", "..", ".", "a/b", "/abs", ""}
 	for _, id := range bad {
-		if err := EmptyTrash(trashDir, []string{id}); err == nil {
+		if err := ops.EmptyTrash(trashDir, []string{id}); err == nil {
 			t.Fatalf("EmptyTrash accepted traversal id %q", id)
 		}
 		res := ops.RestoreFromTrash([]string{id}, trashDir)
@@ -198,5 +198,82 @@ func TestTrash_TraversalRejected(t *testing.T) {
 	}
 	if _, err := os.Stat(victim); err != nil {
 		t.Fatalf("victim was deleted through trash traversal: %v", err)
+	}
+}
+
+// TestTrash_JailNarrowsGlobalStore is the PR-61 regression: the trash store
+// has no per-device partitioning (everything anyone deletes lands in the same
+// on-disk store), so a jailed device's view of it must be narrowed to its own
+// jail rather than exposing every other device's deleted files.
+func TestTrash_JailNarrowsGlobalStore(t *testing.T) {
+	rootA := t.TempDir()
+	rootB := t.TempDir()
+	trashDir := filepath.Join(t.TempDir(), "Trash")
+
+	unjailed := New(nil, false)
+	fileA := filepath.Join(rootA, "a.txt")
+	fileB := filepath.Join(rootB, "b.txt")
+	if err := os.WriteFile(fileA, []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fileB, []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if res := unjailed.MoveToTrash([]string{fileA}, trashDir); !res[0].OK {
+		t.Fatalf("trash a: %+v", res[0])
+	}
+	if res := unjailed.MoveToTrash([]string{fileB}, trashDir); !res[0].OK {
+		t.Fatalf("trash b: %+v", res[0])
+	}
+
+	jailedA := New([]string{rootA}, false)
+
+	items, err := jailedA.ListTrash(trashDir)
+	if err != nil {
+		t.Fatalf("ListTrash: %v", err)
+	}
+	if len(items) != 1 || items[0].OriginalPath != fileA {
+		t.Fatalf("expected only rootA's item, got %+v", items)
+	}
+
+	// EmptyTrash with no ids, while jailed, must only remove the item(s)
+	// within the jail — not fall back to wiping the entire global store.
+	if err := jailedA.EmptyTrash(trashDir, nil); err != nil {
+		t.Fatalf("EmptyTrash: %v", err)
+	}
+	remaining, _ := unjailed.ListTrash(trashDir)
+	if len(remaining) != 1 || remaining[0].OriginalPath != fileB {
+		t.Fatalf("expected only rootB's item to survive, got %+v", remaining)
+	}
+}
+
+// TestTrash_EmptyTrash_SkipsIDsOutsideJail: an explicit id list must not let
+// a jailed device delete an item outside its jail either.
+func TestTrash_EmptyTrash_SkipsIDsOutsideJail(t *testing.T) {
+	rootA := t.TempDir()
+	rootB := t.TempDir()
+	trashDir := filepath.Join(t.TempDir(), "Trash")
+
+	unjailed := New(nil, false)
+	fileB := filepath.Join(rootB, "b.txt")
+	if err := os.WriteFile(fileB, []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := unjailed.MoveToTrash([]string{fileB}, trashDir)
+	if !res[0].OK {
+		t.Fatalf("trash b: %+v", res[0])
+	}
+	items, _ := unjailed.ListTrash(trashDir)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+
+	jailedA := New([]string{rootA}, false)
+	if err := jailedA.EmptyTrash(trashDir, []string{items[0].ID}); err != nil {
+		t.Fatalf("EmptyTrash: %v", err)
+	}
+	remaining, _ := unjailed.ListTrash(trashDir)
+	if len(remaining) != 1 {
+		t.Fatalf("item outside the jail was deleted despite an explicit id: %+v", remaining)
 	}
 }

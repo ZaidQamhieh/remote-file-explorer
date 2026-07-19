@@ -262,6 +262,44 @@ func Drives() ([]Drive, error) {
 	return platformDrives()
 }
 
+// Drives returns the mount points/drives visible through o: every drive when
+// o has no configured roots (no jail — today's default, unchanged), or only
+// the drives that contain or are contained by one of o's roots otherwise
+// (PR-61: a per-device jail must narrow /system/drives the same way it
+// narrows every other listing, instead of always exposing the full host
+// topology regardless of jail).
+func (o *Ops) Drives() ([]Drive, error) {
+	all, err := platformDrives()
+	if err != nil {
+		return nil, err
+	}
+	return filterDrivesByRoots(all, o.Roots()), nil
+}
+
+// filterDrivesByRoots keeps only the drives at or nested within one of roots;
+// roots empty (no jail) returns all unchanged. A jailed Ops's entire browsable
+// surface is exactly its root(s) (see Jailed) — a drive the jail root sits
+// *inside* of (an ancestor mount) can never actually be browsed to, so
+// listing it would only leak that it exists; a drive nested *inside* the
+// jail (e.g. a second filesystem mounted under it) is real and reachable, so
+// it stays. Split out from Drives so the filtering logic is testable without
+// a real platformDrives().
+func filterDrivesByRoots(all []Drive, roots []string) []Drive {
+	if len(roots) == 0 {
+		return all
+	}
+	filtered := make([]Drive, 0, len(all))
+	for _, d := range all {
+		for _, root := range roots {
+			if isUnder(d.Path, root) {
+				filtered = append(filtered, d)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
 // --------- Create ---------
 
 // CreateFolder creates a directory (and parents).

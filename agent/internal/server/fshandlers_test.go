@@ -349,9 +349,8 @@ func TestMetaHandler_NotFound(t *testing.T) {
 
 // ---- healthHandler ----
 
-func TestHealthHandler(t *testing.T) {
+func TestHealthHandler_UnauthenticatedGetsMinimalFingerprint(t *testing.T) {
 	db, st := newTestDeps(t)
-	_ = db
 	cfg := Config{
 		Name:     "test-pc",
 		Version:  "1.0.0",
@@ -360,7 +359,7 @@ func TestHealthHandler(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
 	rr := httptest.NewRecorder()
-	healthHandler(cfg)(rr, req)
+	healthHandler(cfg, db)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -372,14 +371,17 @@ func TestHealthHandler(t *testing.T) {
 	if resp["status"] != "ok" {
 		t.Fatalf("expected status ok, got %v", resp["status"])
 	}
-	if resp["name"] != "test-pc" {
-		t.Fatalf("expected name test-pc, got %v", resp["name"])
+	// No topology/identity fields for a caller without a valid device token
+	// (PR-61) — an unpaired caller can't fingerprint or map the host.
+	for _, field := range []string{"name", "version", "os", "readOnly", "address", "tailscaleAddress", "macAddress"} {
+		if _, ok := resp[field]; ok {
+			t.Fatalf("expected %q to be absent for an unauthenticated caller, got %v", field, resp[field])
+		}
 	}
 }
 
-func TestHealthHandler_WithMAC(t *testing.T) {
-	db, st := newTestDeps(t)
-	_ = db
+func TestHealthHandler_AuthenticatedGetsFullDetail(t *testing.T) {
+	db, st, token := newAuthTestDeps(t)
 	cfg := Config{
 		Name:       "test-pc",
 		Version:    "1.0.0",
@@ -388,8 +390,9 @@ func TestHealthHandler_WithMAC(t *testing.T) {
 		Settings:   st,
 	}
 	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
-	healthHandler(cfg)(rr, req)
+	healthHandler(cfg, db)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -398,8 +401,31 @@ func TestHealthHandler_WithMAC(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	if resp["name"] != "test-pc" {
+		t.Fatalf("expected name test-pc, got %v", resp["name"])
+	}
 	if resp["macAddress"] != "aa:bb:cc:dd:ee:ff" {
 		t.Fatalf("expected macAddress, got %v", resp["macAddress"])
+	}
+}
+
+func TestHealthHandler_RevokedTokenGetsMinimalFingerprint(t *testing.T) {
+	db, st, token := newAuthTestDeps(t)
+	if err := db.RevokeDevice("dev1"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	cfg := Config{Name: "test-pc", Version: "1.0.0", Settings: st}
+	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	healthHandler(cfg, db)(rr, req)
+
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := resp["name"]; ok {
+		t.Fatalf("expected no name for a revoked device token, got %v", resp["name"])
 	}
 }
 
@@ -442,7 +468,7 @@ func TestListTrashHandler_EmptyTrash(t *testing.T) {
 	trashDir := t.TempDir()
 	req := httptest.NewRequest(http.MethodGet, "/v1/trash", nil)
 	rr := httptest.NewRecorder()
-	listTrashHandler(trashDir)(rr, req)
+	listTrashHandler(fsops.New(nil, false), trashDir)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -575,7 +601,7 @@ func TestListTrashHandler_WithItems(t *testing.T) {
 	ops.MoveToTrash([]string{filepath.Join(root, "a.txt")}, trashDir)
 
 	rr := httptest.NewRecorder()
-	listTrashHandler(trashDir)(rr, httptest.NewRequest(http.MethodGet, "/v1/trash", nil))
+	listTrashHandler(ops, trashDir)(rr, httptest.NewRequest(http.MethodGet, "/v1/trash", nil))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}

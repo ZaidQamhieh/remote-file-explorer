@@ -5,9 +5,8 @@ info:
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
-    /login, /auth/challenge, and /health require a bearer device token. GET /v1/events
-    provides a Server-Sent Events stream for live filesystem change events and transfer
-    progress. Clients may send an optional `X-RFE-Client-Version` header (e.g.
+    /login, /auth/challenge, and /health require a bearer device token. Clients may
+    send an optional `X-RFE-Client-Version` header (e.g.
     "1.10.0+18") on every authenticated request; the agent records this plus the
     caller's network address against the device row and surfaces both via GET /devices
     (see Device.lastAddress / Device.lastVersion).
@@ -42,6 +41,12 @@ paths:
   /health:
     get:
       summary: Liveness probe (unauthenticated)
+      description: >
+        Reachable without a token, but only `status` is guaranteed for an
+        unauthenticated (or invalid-token) caller — name/version/os/readOnly/
+        address/tailscaleAddress/macAddress are only included for a caller
+        presenting a valid, non-revoked device bearer token, so an unpaired
+        caller can't fingerprint or map the host.
       security: []
       responses:
         "200":
@@ -726,25 +731,6 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
-
-  /events:
-    get:
-      summary: Server-Sent Events stream for live filesystem and transfer events
-      description: >
-        Long-lived SSE connection. The server pushes JSON-encoded events as
-        `data:` lines and sends a `: keepalive` comment every 30s to keep the
-        connection alive. Event types: `fs.change` (path, action:
-        created/modified/deleted), `transfer.progress` (id, bytes, total),
-        `transfer.complete` (id, path).
-      responses:
-        "200":
-          description: SSE stream
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                description: "Newline-delimited SSE `data:` lines, each containing a JSON SseEvent."
-        "401": { $ref: "#/components/responses/Error" }
 
   /fs/chmod:
     post:
@@ -1754,19 +1740,6 @@ components:
         size: { type: integer, format: int64, description: "Uncompressed size in bytes." }
         modified: { type: string, format: date-time }
         isDir: { type: boolean }
-
-    SseEvent:
-      type: object
-      description: >
-        A server-sent event payload. Only the fields relevant to the event
-        type are populated.
-      properties:
-        type: { type: string, enum: [fs.change, transfer.progress, transfer.complete] }
-        path: { type: string }
-        action: { type: string, enum: [created, modified, deleted] }
-        id: { type: string }
-        bytes: { type: integer, format: int64 }
-        total: { type: integer, format: int64 }
 
     AgentStatus:
       type: object

@@ -7,8 +7,19 @@ import (
 	"net/http"
 )
 
+// wolRelayHandler broadcasts a Wake-on-LAN magic packet. Guest/read-only
+// devices are refused (PR-61): the phone app's normal paired token is never
+// "admin" (that's reserved for the separate web-login session), so gating
+// this to admin-only would disable WoL for every ordinary pairing — the
+// read-only flag is what actually distinguishes a lower-trust guest pairing
+// (MintGuest forces it) from a normal full-access paired phone, which is
+// the real, intended caller here and keeps working unchanged.
 func wolRelayHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if cur := deviceFromContext(r); cur == nil || cur.ReadOnly {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "this device is not permitted to send Wake-on-LAN")
+			return
+		}
 		var body struct {
 			MAC string `json:"mac"`
 		}

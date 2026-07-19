@@ -30,22 +30,69 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19, seventh pass): 64 / 85 closed (count of the
+### PROGRESS (as of 2026-07-19, eighth pass): 66 / 85 closed (count of the
 list below), 0 partial-but-open (several closed findings have a documented
 unaddressed remainder — see "partial" notes per finding below and in the
 open register). Per-severity totals are counted directly off the audit
 doc's own tags (`grep -oE '^#### PR-[0-9]+ — [A-Za-z]+'`).
 - **Critical: 2/2 done** ✅ (PR-01, PR-02).
-- **High: 45/60 closed, 15 open** — +8 this pass (PR-34,35,37,22,39,74,33,29
-  — PR-29 is High severity per the audit doc, not Medium; corrected here).
-- **Medium: 14/20 closed, 6 open** — +2 this pass (PR-49,67).
+- **High: 47/60 closed, 13 open** — +2 this pass (PR-24, PR-28).
+- **Medium: 14/20 closed, 6 open** — unchanged this pass.
 - **Low: 3/3 closed, 0 open** ✅ (PR-77, 78, 80).
 
-Subtotals tie out exactly (2+45+14+3=64=flat list count).
+Subtotals tie out exactly (2+47+14+3=66=flat list count).
 
 Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,
-23,26,27,29,33,34,35,37,39,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,
-57,58,60,65,67,69,70,71,72,74,76,77,78,80,81,84,85.
+23,24,26,27,28,29,33,34,35,37,39,41,42,43,44,45,46,47,48,49,50,51,52,53,54,
+55,56,57,58,60,65,67,69,70,71,72,74,76,77,78,80,81,84,85.
+
+**Eighth pass, same day (2026-07-19): continuing autonomously ("continue
+fixing bugs in rfe"). 2 findings closed, 2 commits, both in files clean of
+the frozen shad diff.**
+- **PR-24** (`transfer_state.dart`, full close) — `_runDownload` streamed
+  straight into the bare destination path and trusted any bytes already
+  there as a resumable partial; a stale or unrelated same-name file got
+  silently appended to and marked complete. Now stages into a
+  task-id-scoped file (`<localPath>.rfe-part-<id>`), verifies the finished
+  download's SHA-256 against the agent's own `checksum()` endpoint, and
+  only renames onto the real destination after a match — a mismatch
+  deletes the staging file and fails the task (new
+  `DownloadIntegrityException`). Required reworking `_FakeAgentClient` in
+  `transfer_state_test.dart` so `onDownload`/`onDownloadWithStart`
+  callbacks receive the actual staging `File` (tests previously wrote to a
+  hardcoded bare path, which the new staging scheme no longer touches
+  mid-download) and added a `checksumOverride` hook; 2 new regression
+  tests (mismatch fails+cleans up, unrelated same-name file is never
+  resumed into). Commit `249839f`.
+- **PR-28** (`agent_client.dart`, partial) — `fetchBytes` (the chokepoint
+  every preview loader — image/CSV/markdown/PDF/text — and the offline
+  pre-cache path go through) buffered the entire response with no cap,
+  trusting the remote's reported size. Now streams via
+  `ResponseType.stream` and aborts (`FetchTooLargeException`) as soon as
+  more than `maxBytes` (64 MiB default) have arrived, through a new pure
+  `collectBytesCapped` helper kept Dio-free for direct unit testing (3 new
+  tests in `agent_client_gzip_test.dart`). Required adding the new optional
+  `maxBytes` param to 5 test-file `_FakeAgentClient.fetchBytes` overrides
+  (Dart requires override signatures to carry every named param of the
+  base) — 4 of those files were clean and are in this commit
+  (`csv_preview_test.dart`, `markdown_preview_test.dart`,
+  `preview_pager_test.dart`, `text_preview_test.dart`); **`text_editor_test.dart`
+  already had unrelated staged shad-migration changes (`MM` in git
+  status), so its same mechanical fix is in the working tree only, NOT
+  committed** — same pattern as the PR-62 precedent from the sixth pass.
+  Unaddressed remainder: decode/parse still runs on the UI thread, and
+  `PreviewImageCache` (`preview_image_cache.dart`) is still entry-count-
+  (8) not byte-bounded — a worst case of 8 × 64 MiB is still a lot of
+  memory, just no longer unbounded. Commit `66e61cf`.
+
+All touched files: `flutter analyze` (whole project) and `dart format
+--set-exit-if-changed` clean, targeted `flutter test` green (including the
+5 test files whose compile broke from the `fetchBytes` signature change,
+verified fixed and passing), lefthook pre-commit green on both commits.
+Frozen shad tree re-verified at the same 39 `M`/`A` entries after both
+commits (only `text_editor_test.dart`'s own staged/worktree relationship
+flipped from `M ` to `MM`, expected from the uncommitted working-tree fix
+above — same shape as `main.dart`'s pre-existing `MM`).
 
 **Seventh pass, same day (2026-07-19): owner said "fix 10 more" in the
 unfrozen client tree. 8 commits, 10 findings closed (some paired by shared
@@ -394,11 +441,11 @@ Redocly 0 errors, gofmt/vet clean.
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
 ### DO NEXT
-PR-05,06,12,14-19,21,22,23,26,27,29,33,34,35,37,39,42,45,46,47,49,54,55,56,
-57,58,60(*see note),65,67,69,70,72,74,76,80,81,84 are DONE (PR-62 fixed in
-working tree, not yet committed — see sixth pass note above; PR-67/39/74/33/
-29 are partial — see seventh pass notes for the unaddressed remainder of
-each). What's left, in rough priority order:
+PR-05,06,12,14-19,21,22,23,24,26,27,28,29,33,34,35,37,39,42,45,46,47,49,54,
+55,56,57,58,60(*see note),65,67,69,70,72,74,76,80,81,84 are DONE (PR-62
+fixed in working tree, not yet committed — see sixth pass note above;
+PR-67/39/74/33/29/28 are partial — see seventh/eighth pass notes for the
+unaddressed remainder of each). What's left, in rough priority order:
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
 - **PR-62** — commit the working-tree fix once decided how to handle the
@@ -408,25 +455,23 @@ each). What's left, in rough priority order:
   editing this tree 2026-07-19 (HARD SCOPE RULES rule 1); work through them
   same as prior passes — pick one whose file(s) `git status` shows clean
   (not already `M `/staged from the shad migration), fix + test +
-  `git commit --only`, don't push. PR-24/25/28/30/31/32/35(remainder)/36/38/
+  `git commit --only`, don't push. PR-25/30/31/32/35(remainder)/36/38/
   40/68/73/82/83 are the untouched-so-far larger/riskier ones (isolate/SAF/
   server-API/dependency-bump work) — see the audit note before starting any
   of them, they were deliberately deferred as too large for a fast pass.
 
-### COMPLETE OPEN-FINDINGS REGISTER (21 items open)
+### COMPLETE OPEN-FINDINGS REGISTER (19 items open)
 Zone: `[S]`=safe, no client coupling · `[F]`=in the (now-unfrozen-for-editing,
 still-not-committable-together-with-the-shad-diff) client/app tree · `[D]`=
 deferred coupling. Titles are summaries; full file:line + fix in the audit
-note. Closed-but-partial findings (PR-33/39/67/74/29 — see seventh pass
-notes above for exactly what's left unaddressed in each) are removed from
-this register like every other closed finding; the remainder is tracked in
-prose above, not as an open register line.
+note. Closed-but-partial findings (PR-33/39/67/74/29/28 — see seventh/eighth
+pass notes above for exactly what's left unaddressed in each) are removed
+from this register like every other closed finding; the remainder is
+tracked in prose above, not as an open register line.
 
-HIGH (15 open) — PR-22,29,33,34,35,37,39,74 CLOSED seventh pass 2026-07-19,
-removed below:
-- PR-24 [F] — downloads resume arbitrary files, no digest/range integrity
+HIGH (13 open) — PR-22,29,33,34,35,37,39,74 CLOSED seventh pass, PR-24,28
+CLOSED eighth pass, 2026-07-19, removed below:
 - PR-25 [F] — update downloads race across isolates, size-only verify (+release.yml)
-- PR-28 [F] — preview loaders trust metadata instead of byte limits (OOM)
 - PR-30 [F] — photo-backup completion not durable, manual-only, serial delay
 - PR-31 [F] — sync silently creates incomplete/stale replicas, raw paths
 - PR-32 [F] — search "regex" is fake glob; stale-request guards incomplete
@@ -443,7 +488,7 @@ removed below:
 - PR-73 [F] — flutter_markdown discontinued; 66 pkgs stale; Gradle/AGP/Kotlin (pubspec+gradle)
 - PR-82 [F] — core Flutter networking/workflows barely integration-tested
 
-(That's 17 lines above, not 15 — PR-62's working-tree-fixed status and the
+(That's 15 lines above, not 13 — PR-62's working-tree-fixed status and the
 inherent looseness of a hand-maintained register mean this count has drifted
 before; treat the audit doc's own severity tags as authoritative over any
 running tally here if they ever disagree.)
@@ -468,7 +513,7 @@ LOW (0 open): PR-77, 78, 80 all CLOSED (2026-07-19).
 ### Remaining client-tree findings (unfrozen for editing 2026-07-19, see
 ### HARD SCOPE RULES rule 1 — this is no longer a "wait for sign-off" list,
 ### just what's left)
-PR-24,25,28,30,31,32,36,38,40,62(fixed-uncommitted),64,66,68,73,82,63,83 —
+PR-25,30,31,32,36,38,40,62(fixed-uncommitted),64,66,68,73,82,63,83 —
 all `app/lib/**` or shad UI or `pubspec`. See the audit note per finding.
 Before starting one, `git status` the target file(s) first: if already
 `M ` (staged), the shad migration touched it and a fix commit can't be

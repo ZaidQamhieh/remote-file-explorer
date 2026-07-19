@@ -80,6 +80,17 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused) &&
+        _isEnabled &&
+        !_locked) {
+      // Cover content the instant the app leaves the foreground rather than
+      // waiting for the matching `resumed` to re-lock — the OS can snapshot
+      // the current frame for the recent-apps thumbnail as soon as
+      // `inactive` fires, before `resumed` ever happens (PR-19).
+      setState(() => _locked = true);
+      return;
+    }
     if (state == AppLifecycleState.resumed &&
         shouldRelockOnResume(
           appLockEnabled: _isEnabled,
@@ -132,14 +143,32 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   Widget build(BuildContext context) {
-    final enabled = ref.watch(
-      settingsProvider.select(
-        (s) => s.valueOrNull?.app.appLockEnabled ?? false,
-      ),
-    );
+    final settingsAsync = ref.watch(settingsProvider);
+    if (!settingsAsync.hasValue) {
+      // Settings haven't resolved yet (first frame) or failed to load —
+      // don't default to "app lock off": that would flash real content
+      // before the persisted value is even known. Show the same locked
+      // shell, just without a working Unlock button yet (PR-18).
+      return _LockedShell(onUnlock: null);
+    }
 
+    final enabled = settingsAsync.value!.app.appLockEnabled;
     if (!enabled || !_locked) return widget.child;
 
+    return _LockedShell(onUnlock: _tryUnlock);
+  }
+}
+
+class _LockedShell extends StatelessWidget {
+  const _LockedShell({required this.onUnlock});
+
+  /// Null while settings are still loading — there's nothing to
+  /// authenticate against yet, so the button is disabled rather than
+  /// wired to a lock state that hasn't been read.
+  final VoidCallback? onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: Center(
@@ -150,11 +179,13 @@ class _LockGateState extends ConsumerState<LockGate>
             const SizedBox(height: 24),
             Text('Locked', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _tryUnlock,
-              icon: const Icon(LucideIcons.fingerprint),
-              label: const Text('Unlock'),
-            ),
+            onUnlock == null
+                ? const CircularProgressIndicator()
+                : FilledButton.icon(
+                  onPressed: onUnlock,
+                  icon: const Icon(LucideIcons.fingerprint),
+                  label: const Text('Unlock'),
+                ),
           ],
         ),
       ),

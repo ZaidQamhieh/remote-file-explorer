@@ -6,9 +6,23 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 
-/// Process-wide in-memory cache of decoded thumbnail bytes, keyed by the
-/// entry's remote path. Capped at [_maxEntries] so re-scrolling the grid
-/// doesn't refetch thumbnails, without growing unbounded for huge trees.
+/// Builds the thumbnail cache key: [hostId] keeps two agents with the same
+/// remote path from sharing bytes, and [version] (mtime, falling back to
+/// file size) keeps a replaced file from serving its predecessor's stale
+/// thumbnail for the rest of the process lifetime (PR-16). Pure and
+/// unit-testable on its own (see `test/features/explorer/`).
+String thumbnailCacheKey({
+  required String hostId,
+  required String path,
+  required int size,
+  required int version,
+}) => '$hostId@$path@$size@$version';
+
+/// Process-wide in-memory cache of decoded thumbnail bytes, keyed by
+/// `(hostId, path, size, version)` — see [ThumbnailImage._cacheKey] — and
+/// capped by total decoded bytes rather than entry count, so a handful of
+/// large renditions can't blow past the intended memory budget the way a
+/// count-only cap would (PR-16).
 ///
 /// `null` values record "fetched, but the agent has no thumbnail for this
 /// file" so we don't keep retrying every rebuild.
@@ -16,21 +30,25 @@ class _ThumbnailCache {
   _ThumbnailCache._();
   static final _ThumbnailCache instance = _ThumbnailCache._();
 
-  static const int _maxEntries = 200;
+  static const int _maxBytes = 32 * 1024 * 1024;
 
   final Map<String, Uint8List?> _entries = <String, Uint8List?>{};
+  int _bytes = 0;
 
   bool contains(String key) => _entries.containsKey(key);
 
   Uint8List? get(String key) => _entries[key];
 
   void put(String key, Uint8List? value) {
-    if (_entries.containsKey(key)) {
-      _entries.remove(key); // re-insert to bump recency
-    } else if (_entries.length >= _maxEntries) {
-      _entries.remove(_entries.keys.first); // evict oldest
+    final existing = _entries.remove(key);
+    if (existing != null) _bytes -= existing.length;
+    _entries[key] = value; // (re-)insert at the end to bump recency
+    if (value != null) _bytes += value.length;
+    while (_bytes > _maxBytes && _entries.length > 1) {
+      final oldestKey = _entries.keys.first;
+      final oldest = _entries.remove(oldestKey);
+      if (oldest != null) _bytes -= oldest.length;
     }
-    _entries[key] = value;
   }
 }
 
@@ -64,7 +82,13 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
   bool _loading = false;
   bool _failed = false;
 
-  String get _cacheKey => '${widget.entry.path}@${widget.size}';
+  String get _cacheKey => thumbnailCacheKey(
+    hostId: widget.client.host.id,
+    path: widget.entry.path,
+    size: widget.size,
+    version:
+        widget.entry.modified?.millisecondsSinceEpoch ?? widget.entry.size ?? 0,
+  );
 
   @override
   void initState() {
@@ -97,12 +121,16 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
       return;
     }
 
+    // Captured now so a completion that lands after `didUpdateWidget` moved
+    // this state on to a different entry/size can recognize itself as stale
+    // and skip applying its (now-wrong) result (PR-16).
+    final requestKey = _cacheKey;
     _loading = true;
     widget.client
         .thumbnail(widget.entry.path, size: widget.size)
         .then((data) {
-          cache.put(_cacheKey, data);
-          if (!mounted) return;
+          cache.put(requestKey, data);
+          if (!mounted || requestKey != _cacheKey) return;
           setState(() {
             _bytes = data;
             _failed = data == null;
@@ -110,8 +138,8 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
           });
         })
         .catchError((Object _) {
-          cache.put(_cacheKey, null);
-          if (!mounted) return;
+          cache.put(requestKey, null);
+          if (!mounted || requestKey != _cacheKey) return;
           setState(() {
             _failed = true;
             _loading = false;

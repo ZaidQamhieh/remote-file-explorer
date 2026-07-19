@@ -191,8 +191,12 @@ class PhotoBackupController {
         // is checked twice a beat apart and must agree (and be non-zero).
         // Skipped assets aren't marked done, so they're retried next run.
         if (!await isFileStable(file.length)) continue;
-        final title = await a.titleAsync;
-        final name = title.isNotEmpty ? title : '${a.id}.jpg';
+        // Use the asset id (stable, filesystem-agnostic) plus an extension
+        // sniffed from the title, rather than the title itself — a synced or
+        // renamed photo's title is untrusted input and, unlike a bare
+        // extension, could carry `../` or platform-invalid characters into
+        // the remote path built below (PR-15).
+        final name = '${a.id}${_safeExtension(await a.titleAsync)}';
         final remote = backupRemotePath(
           destRoot: photoBackupRoot,
           created: a.createDateTime,
@@ -229,9 +233,25 @@ class PhotoBackupController {
     return sha256.convert(utf8.encode(pubKey)).toString().substring(0, 8);
   }
 
-  /// Keeps a user-typed device nickname safe as a single path segment.
-  static String _sanitizeSegment(String name) =>
-      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  /// Keeps a user-typed device nickname safe as a single path segment: no
+  /// separators/reserved characters, no leading/trailing dots or spaces (a
+  /// bare `.`/`..` or a Windows-invalid trailing dot could otherwise land as
+  /// a literal remote path segment), no control characters, bounded length.
+  /// Falls back to the per-install id shape if sanitization empties it out.
+  static String _sanitizeSegment(String name) {
+    var s = name.replaceAll(RegExp(r'[\x00-\x1f\\/:*?"<>|]'), '_');
+    s = s.replaceAll(RegExp(r'^[.\s]+|[.\s]+$'), '');
+    if (s.length > 64) s = s.substring(0, 64);
+    return s.isEmpty ? 'device' : s;
+  }
+
+  /// Extracts a short, safe extension (`.` + up to 5 alnum chars) from an
+  /// asset title, or `.jpg` if the title has none — never returns the title
+  /// itself (see [name] above, PR-15).
+  static String _safeExtension(String title) {
+    final match = RegExp(r'\.([A-Za-z0-9]{1,5})$').firstMatch(title);
+    return match == null ? '.jpg' : '.${match.group(1)}';
+  }
 
   Future<bool> _onWifi() async {
     final results = await Connectivity().checkConnectivity();

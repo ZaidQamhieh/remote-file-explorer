@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
@@ -52,7 +53,25 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
                 title: 'App Lock',
                 subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,
-                onChanged: notifier.setAppLockEnabled,
+                onChanged: (enabled) async {
+                  // Turning it on with no device auth configured would leave
+                  // the toggle showing "on" while actually locking nothing —
+                  // lock_gate.dart's fail-safe (PR-18) treats "no auth
+                  // available" as unlocked, by design, once you're already
+                  // past this point. Preflight instead of relying on that.
+                  if (enabled &&
+                      !await LocalAuthentication().isDeviceSupported()) {
+                    if (context.mounted) {
+                      showError(
+                        context,
+                        'Set up a screen lock (PIN, pattern, or biometric) on '
+                        'this device before enabling App Lock.',
+                      );
+                    }
+                    return;
+                  }
+                  notifier.setAppLockEnabled(enabled);
+                },
               ),
             ],
           ),

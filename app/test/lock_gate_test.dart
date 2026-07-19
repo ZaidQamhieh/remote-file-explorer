@@ -26,6 +26,23 @@ void main() {
     expect(find.text('unlocked content'), findsNothing);
   });
 
+  testWidgets(
+    'never shows unlocked content on the very first frame, even before '
+    'settings resolve (PR-18: loading must not default to lock-disabled)',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'app.appLockEnabled': true});
+
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: LockGate(child: Text('unlocked content'))),
+        ),
+      );
+      // Deliberately not pumpAndSettle(): settingsProvider hasn't resolved
+      // yet on this first frame.
+      expect(find.text('unlocked content'), findsNothing);
+    },
+  );
+
   testWidgets('shows the child immediately when appLockEnabled is false', (
     tester,
   ) async {

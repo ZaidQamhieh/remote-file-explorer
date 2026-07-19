@@ -38,11 +38,13 @@ class FlutterSecureKv implements SecureKv {
 ///    last-seen), `app.*` (two-tier app defaults incl. visibility/theme),
 ///    `host.<id>.*` (per-device overrides), plus any `settings.*` migration
 ///    bookkeeping keys.
-///  - **FlutterSecureStorage**: `rfe_token_<id>` (device bearer tokens) and
-///    `rfe_fp_<id>` (cert fingerprints).
+///  - **FlutterSecureStorage**: `rfe_token_<id>` (device bearer tokens),
+///    `rfe_fp_<id>` (cert fingerprints), and `rfe_device_identity_{private,
+///    public}_v1` (this device's pairing identity — see [_neverBackedUp]:
+///    the private half is excluded, not exported like the rest).
 ///
-/// The gather step is generic — it exports *every* key in both stores — so
-/// new state added in future waves is covered automatically.
+/// The gather step is generic — it exports every *other* key in both
+/// stores — so new state added in future waves is covered automatically.
 class BackupService {
   BackupService(this._prefs, this._secure);
 
@@ -54,6 +56,15 @@ class BackupService {
   /// are written back, so the restored snapshot is exact (no orphan hosts or
   /// stale settings left over from the device being restored onto).
   static const _ownedPrefixes = ['rfe_', 'app.', 'host.'];
+
+  /// Secure-storage keys that never round-trip through a backup. The
+  /// private device identity key (`device_identity.dart`) is meant to stay
+  /// permanently device-bound — a backup/passphrase becomes a portable
+  /// clone of that identity otherwise, letting it be replayed onto a
+  /// different device (PR-17). Excluded on both export (new backups never
+  /// contain it) and import (an old backup taken before this fix, or a
+  /// hand-crafted one, can't smuggle a foreign identity in either).
+  static const _neverBackedUp = {'rfe_device_identity_private_v1'};
 
   /// Gathers all app-owned SharedPreferences entries + all secure-storage
   /// entries, builds a [BackupPayload], and returns the encrypted envelope
@@ -72,7 +83,8 @@ class BackupService {
       }
     }
 
-    final secureMap = await _secure.readAll();
+    final secureMap = Map<String, String>.from(await _secure.readAll())
+      ..removeWhere((key, _) => _neverBackedUp.contains(key));
 
     final payload = BackupPayload.create(prefs: prefsMap, secure: secureMap);
     return encodeBackup(payload, passphrase);
@@ -117,6 +129,7 @@ class BackupService {
     }
 
     for (final entry in payload.secure.entries) {
+      if (_neverBackedUp.contains(entry.key)) continue;
       await _secure.write(entry.key, entry.value);
     }
   }

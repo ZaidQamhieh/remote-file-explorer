@@ -21,29 +21,37 @@ class PreviewImageCache {
   final Map<String, Future<Uint8List>> _inflight =
       <String, Future<Uint8List>>{};
 
-  Uint8List? peek(String path) => _bytes[path];
+  /// Two hosts can legitimately share a remote path (e.g. `/home/x/y.jpg` on
+  /// each), so the cache/in-flight key must include host identity — a
+  /// path-only key let a stale image from a *different* host's file show up
+  /// while previewing this one (PR-16).
+  String _key(AgentClient client, String path) => '${client.host.id}@$path';
+
+  Uint8List? peek(AgentClient client, String path) =>
+      _bytes[_key(client, path)];
 
   /// Fetches [path]'s bytes through [client], coalescing concurrent calls for
   /// the same path and caching the result. Used both by the viewer (to display)
   /// and the pager (to warm neighbours).
   Future<Uint8List> fetch(AgentClient client, String path) {
-    final cached = _bytes[path];
+    final key = _key(client, path);
+    final cached = _bytes[key];
     if (cached != null) return Future.value(cached);
-    final pending = _inflight[path];
+    final pending = _inflight[key];
     if (pending != null) return pending;
 
     final future = client
         .fetchBytes(path)
         .then((data) {
-          _put(path, data);
-          _inflight.remove(path);
+          _put(key, data);
+          _inflight.remove(key);
           return data;
         })
         .catchError((Object e) {
-          _inflight.remove(path);
+          _inflight.remove(key);
           throw e;
         });
-    _inflight[path] = future;
+    _inflight[key] = future;
     return future;
   }
 
@@ -52,17 +60,18 @@ class PreviewImageCache {
   /// won't get the instant-swap benefit; the viewer will surface its own error
   /// when actually navigated to).
   void preload(AgentClient client, String path) {
-    if (_bytes.containsKey(path) || _inflight.containsKey(path)) return;
+    final key = _key(client, path);
+    if (_bytes.containsKey(key) || _inflight.containsKey(key)) return;
     // ignore: unawaited_futures
     fetch(client, path).catchError((_) => Uint8List(0));
   }
 
-  void _put(String path, Uint8List data) {
-    if (_bytes.containsKey(path)) {
-      _bytes.remove(path);
+  void _put(String key, Uint8List data) {
+    if (_bytes.containsKey(key)) {
+      _bytes.remove(key);
     } else if (_bytes.length >= _maxEntries) {
       _bytes.remove(_bytes.keys.first);
     }
-    _bytes[path] = data;
+    _bytes[key] = data;
   }
 }

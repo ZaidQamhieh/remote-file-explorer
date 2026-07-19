@@ -110,6 +110,62 @@ void main() {
       },
     );
 
+    test(
+      'never exports the private device identity key, and refuses to '
+      'import one even from an old-format backup that has it (PR-17)',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final secure = FakeSecureKv();
+        await secure.write(
+          'rfe_device_identity_private_v1',
+          'super-secret-key',
+        );
+        await secure.write('rfe_device_identity_public_v1', 'public-key');
+        await secure.write('rfe_token_h1', 'tok-abc');
+
+        final service = BackupService(prefs, secure);
+        final envelope = await service.exportToEnvelope(passphrase);
+
+        final payload = await decodeBackup(envelope, passphrase);
+        expect(
+          payload.secure.containsKey('rfe_device_identity_private_v1'),
+          isFalse,
+        );
+        expect(payload.secure['rfe_device_identity_public_v1'], 'public-key');
+        expect(payload.secure['rfe_token_h1'], 'tok-abc');
+
+        // Simulate importing an old-format backup that DOES carry a private
+        // identity key (hand-crafted here, since exportToEnvelope can no
+        // longer produce one) — e.g. a backup taken before this fix, or a
+        // tampered file trying to plant a foreign identity on this device.
+        final legacyPayload = BackupPayload.create(
+          prefs: const {},
+          secure: {
+            'rfe_device_identity_private_v1': 'attacker-supplied-key',
+            'rfe_token_h1': 'tok-abc',
+          },
+        );
+        final legacyEnvelope = await encodeBackup(legacyPayload, passphrase);
+
+        await service.importFromEnvelope(legacyEnvelope, passphrase);
+
+        // The attacker's key must never land — full stop. (Secure storage
+        // is wiped and rebuilt on every import regardless, per the existing
+        // replace semantics, so this device's own prior identity is gone
+        // too; DeviceIdentity lazily regenerates a fresh one on next use,
+        // requiring re-pairing — the accepted trade-off for never letting a
+        // private identity round-trip through a backup at all.)
+        final after = await secure.readAll();
+        expect(
+          after['rfe_device_identity_private_v1'],
+          isNot('attacker-supplied-key'),
+        );
+        expect(after.containsKey('rfe_device_identity_private_v1'), isFalse);
+        expect(after['rfe_token_h1'], 'tok-abc');
+      },
+    );
+
     test('non-rfe/app/host keys are left untouched on import', () async {
       SharedPreferences.setMockInitialValues({
         'rfe_hosts_v1': ['{"id":"h1"}'],

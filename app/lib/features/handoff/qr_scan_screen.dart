@@ -34,11 +34,25 @@ class HandoffPayload {
       final path = json['path'] as String?;
       final name = json['name'] as String?;
       if (fp == null || path == null || name == null) return null;
+      if (!isSafeLocalName(name)) return null;
       return HandoffPayload(certFingerprint: fp, path: path, name: name);
     } catch (_) {
       return null;
     }
   }
+}
+
+/// True if [name] is safe to use as a single local filename component: no
+/// separators (rules out `../` traversal and absolute/UNC/volume prefixes),
+/// no control characters, not `.`/`..`/empty, bounded length. `p.basename`
+/// alone isn't a cross-platform validator — a bare `\` or `:` still passes
+/// it while meaning something different to a Windows filesystem than to the
+/// Dart string that formed the local path (PR-14).
+bool isSafeLocalName(String name) {
+  if (name.isEmpty || name.length > 255) return false;
+  if (name == '.' || name == '..') return false;
+  if (RegExp(r'[\x00-\x1f\\/:*?"<>|]').hasMatch(name)) return false;
+  return true;
 }
 
 /// Finds the receiver's own paired [Host] whose `certFingerprint` matches

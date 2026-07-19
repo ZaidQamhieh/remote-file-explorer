@@ -59,5 +59,42 @@ void main() {
         isNull,
       );
     });
+
+    test('traversal or absolute name is rejected (PR-14)', () {
+      for (final name in [
+        '../../etc/passwd',
+        '..\\..\\windows\\system32',
+        'a/b.txt',
+        'a\\b.txt',
+        '.',
+        '..',
+        '',
+        'C:foo.txt',
+      ]) {
+        expect(
+          HandoffPayload.tryParse(
+            '{"certFingerprint":"fp","path":"/a","name":"$name"}',
+          ),
+          isNull,
+          reason: 'expected "$name" to be rejected',
+        );
+      }
+    });
+  });
+
+  group('isSafeLocalName', () {
+    test('accepts a plain filename', () {
+      expect(isSafeLocalName('report.pdf'), isTrue);
+    });
+
+    test('rejects separators, dot-names, and control characters', () {
+      expect(isSafeLocalName('../x'), isFalse);
+      expect(isSafeLocalName('a/b'), isFalse);
+      expect(isSafeLocalName('a\\b'), isFalse);
+      expect(isSafeLocalName('.'), isFalse);
+      expect(isSafeLocalName('..'), isFalse);
+      expect(isSafeLocalName(''), isFalse);
+      expect(isSafeLocalName('bad\x00name'), isFalse);
+    });
   });
 }

@@ -30,15 +30,49 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-19, later session): 34 / 85 closed, 1 partial (PR-80).
-- **Critical: 2/2 done** ✅ (PR-01 trash traversal, PR-02 settings authz).
-- **High: 27/62 → 35 open** (PR-81 closed this session).
-- **Medium: 5/17** (PR-43, 46, 48, 52, 85).
+### PROGRESS (as of 2026-07-19, third pass): 37 / 85 closed (count of the list
+below), 1 partial (PR-80). Per-severity subtotals below are the audit doc's
+own tags (verified via `grep '^#### PR-NN —'`), recomputed this pass after
+catching PR-76 mistagged as High in an earlier draft of this file — it's
+Medium.
+- **Critical: 2/2 done** ✅ (PR-01, PR-02).
+- **High: 27/62 closed, 35 open** — unchanged this pass (PR-72/76/84 closed
+  this pass are all Medium, not High).
+- **Medium: 8/17 closed, 9 open** (PR-43, 46, 48, 52, 72, 76, 84, 85).
 - **Low: 2/4 closed, PR-80 partial** (PR-77, 78 closed; PR-80's `.idea/`
   half done, comment-sweep half open — see DO NEXT).
 
+If severity subtotals (2+27+8+2=39) don't match the flat list count (37)
+next time you check, that's a real discrepancy worth resolving against the
+audit doc directly — don't just trust either number blind.
+
 Closed: PR-01,02,03,04,05,06,07,08,09,10,11,12,13,20,41,42,43,44,45,46,47,48,50,
-51,52,53,60,69,70,71,77,78,81,85.
+51,52,53,60,69,70,71,72,76,77,78,81,84,85.
+
+**Third pass, same day (2026-07-19): PR-84 + PR-76 + PR-72 closed, committed
+separately, NOT pushed.** `ca8d71b` adds a Go coverage floor gate to CI
+(`go test -race -coverprofile`, then a step asserting total ≥55%, current
+baseline 57.8%) — PR-84's mechanical part; deliberately does NOT add tests
+for the four 0%-covered packages (`cmd/agent`, `netinfo`, `thumbs`, `webui`)
+or the Android-instrumented/iOS/signed-upgrade-lane asks, which need real
+device/emulator CI infra, a separate effort. `8880883` fixes
+`MainActivity.kt` (PR-76): `POST_NOTIFICATIONS` no longer requested
+unconditionally in `onCreate`, moved to `ensureNotificationPermission()`
+called right before the first transfer notification; `saveToDownloads`'s
+MediaStore insert now wraps the write+publish in try/finally and deletes the
+row if anything throws before `IS_PENDING` clears (was: orphaned pending row
+on any exception). Verified with `./gradlew :app:compileDebugKotlin --offline
+-PallowDebugSigning` (BUILD SUCCESSFUL) since this repo has no Kotlin unit
+test target. `37bb41c` fixes PR-72's mechanical claims: README/architecture.md
+said "v1.5.x"/"v1.5+", app is actually 1.42.0+75 (`app/pubspec.yaml`);
+threat-model doc's endpoint table used `:token`/`:tokenHash` placeholder
+syntax, fixed to the real chi route pattern `{token}`/`{tokenHash}`. Did
+**not** attempt PR-72's broader "architecture map omits recent files" claim —
+that means auditing ~130 files against the code-map table, real risk of
+introducing wrong entries in one fast pass; still open, see DO NEXT.
+`MainActivity.kt` and `.github/workflows/ci.yml`/`.gitignore` are NOT part of
+the frozen shad tree (git status confirmed them as fresh, separate diffs) —
+frozen tree re-verified untouched after all three commits.
 
 **This session (later 2026-07-19 pass): PR-81 closed, PR-80 partially closed,
 committed separately, NOT pushed.** `61ebf7d` adds
@@ -129,15 +163,17 @@ Redocly 0 errors, gofmt/vet clean.
 `npx @redocly/cli@latest lint protocol/openapi.yaml` (0 errors).
 
 ### DO NEXT — SAFE server-side / config items (no frozen-tree coupling)
-PR-05,06,12,42,45,46,47,70 are DONE (see reconcile note above); PR-81 also
-now DONE (this session), PR-80 partially (see LOW register). What's left `[S]`:
-- **PR-84** — CI coverage floors + platform assurance gates. `.github/workflows/ci.yml`.
-- **PR-72** — refresh stale product/version docs (README.md, docs/architecture.md,
-  docs/security/r1-share-link-threat-model.md). pubspec desc is `[F]` — do not
-  touch `app/pubspec.yaml`, it's inside the frozen shad diff.
+PR-05,06,12,42,45,46,47,70,81,76,72,84 are DONE. What's left `[S]`:
 - **PR-59** — SSE: remove-vs-complete is an OWNER DECISION — both directions touch
   the frozen client (`agent_client.dart`, `sse_listener.dart`). Do NOT do unilaterally.
-- **PR-79** — split god files (LOW; defer until abstractions settle).
+- **PR-79** — split god files (audit tags it Medium, not Low as this file's
+  own register below says — defer until abstractions settle regardless).
+- PR-72's "architecture map omits recent files" half is still open (see the
+  third-pass note above) — needs a careful full pass, not a quick fix.
+- PR-80's "sweep stale comments" half is still open, same caveat.
+
+**After PR-59/79/72-remainder/80-remainder, everything else genuinely needs
+the frozen shad client tree unfrozen (owner emulator sign-off) to touch.**
 - PR-80's "sweep stale comments" half (SSE/cache/release/threat-model
   comments that overclaim vs. code) is still open — the mechanical `.idea/`
   untracking part is done. Low value/high fuzziness; do only with a
@@ -187,7 +223,7 @@ HIGH (35 open) — PR-05,06,12,42,45,47,70,81 now CLOSED (2026-07-19), removed b
 - PR-74 [F] — temp preview/share files collide + retain sensitive content
 - PR-82 [F] — core Flutter networking/workflows barely integration-tested
 
-MEDIUM (12 open) — PR-46 now CLOSED (2026-07-19):
+MEDIUM (9 open) — PR-46, 72, 76, 84 now CLOSED (2026-07-19):
 - PR-49 [F] — listing cache rewrites one large JSON blob per host, races
 - PR-54 [F] — one malformed persisted JSON bricks whole app areas
 - PR-55 [F] — device identity generation is race/corruption-prone
@@ -195,11 +231,8 @@ MEDIUM (12 open) — PR-46 now CLOSED (2026-07-19):
 - PR-63 [F] — shad theme ignores dynamic/accent/AMOLED appearance
 - PR-65 [F] — reduced-motion preference does not reduce motion
 - PR-67 [F] — CSV preview knowingly incorrect + eagerly expensive
-- PR-72 [S] — product/version docs stale/misleading (README/docs; pubspec desc is [F])
 - PR-75 [D] — Android FileProvider exposes overly broad roots
-- PR-76 [S] — native save + notification permission lifecycle fragile (MainActivity.kt)
 - PR-83 [F] — several tests assert implementation/fake behavior
-- PR-84 [S] — coverage floors + platform assurance not gated in CI
 
 LOW (1 open, 1 partial):
 - PR-79 [S] — nine god files combine unrelated responsibilities (split AFTER abstractions)

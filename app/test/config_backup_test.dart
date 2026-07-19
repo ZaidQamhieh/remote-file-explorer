@@ -37,8 +37,8 @@ void main() {
 
     test('preserves all pref types exactly', () async {
       final payload = samplePayload();
-      final envelope = await encodeBackup(payload, 'passphrase1');
-      final decoded = await decodeBackup(envelope, 'passphrase1');
+      final envelope = await encodeBackup(payload, 'passphrase12');
+      final decoded = await decodeBackup(envelope, 'passphrase12');
 
       expect(decoded.prefs['rfe_hosts_v1']!.value, [
         '{"id":"h1"}',
@@ -68,7 +68,7 @@ void main() {
 
     test('tampering with the ciphertext throws BackupException', () async {
       final payload = samplePayload();
-      final envelope = await encodeBackup(payload, 'passphrase1');
+      final envelope = await encodeBackup(payload, 'passphrase12');
       final map = jsonDecode(envelope) as Map<String, dynamic>;
 
       // Flip a byte in the ciphertext.
@@ -78,14 +78,14 @@ void main() {
       final tampered = jsonEncode(map);
 
       expect(
-        () => decodeBackup(tampered, 'passphrase1'),
+        () => decodeBackup(tampered, 'passphrase12'),
         throwsA(isA<BackupException>()),
       );
     });
 
     test('tampering with the MAC throws BackupException', () async {
       final payload = samplePayload();
-      final envelope = await encodeBackup(payload, 'passphrase1');
+      final envelope = await encodeBackup(payload, 'passphrase12');
       final map = jsonDecode(envelope) as Map<String, dynamic>;
 
       final macBytes = base64Decode(map['mac'] as String);
@@ -94,14 +94,14 @@ void main() {
       final tampered = jsonEncode(map);
 
       expect(
-        () => decodeBackup(tampered, 'passphrase1'),
+        () => decodeBackup(tampered, 'passphrase12'),
         throwsA(isA<BackupException>()),
       );
     });
 
     test('envelope is valid JSON with the documented fields', () async {
       final payload = samplePayload();
-      final envelope = await encodeBackup(payload, 'passphrase1');
+      final envelope = await encodeBackup(payload, 'passphrase12');
       final map = jsonDecode(envelope) as Map<String, dynamic>;
 
       expect(map['format'], 'rfe-backup');
@@ -117,6 +117,66 @@ void main() {
       expect(base64Decode(map['salt'] as String).length, kBackupSaltLength);
       // AES-GCM nonce is 12 bytes.
       expect(base64Decode(map['nonce'] as String).length, 12);
+    });
+  });
+
+  group('envelope bounds (PR-22)', () {
+    test('encodeBackup rejects a passphrase shorter than the minimum', () {
+      final payload = samplePayload();
+      expect(
+        () => encodeBackup(payload, 'short'),
+        throwsA(isA<BackupException>()),
+      );
+    });
+
+    test('decodeBackup rejects an iteration count above the cap', () async {
+      final payload = samplePayload();
+      final envelope = await encodeBackup(payload, 'passphrase12');
+      final map = jsonDecode(envelope) as Map<String, dynamic>;
+      map['iter'] = kBackupMaxIterations + 1;
+
+      expect(
+        () => decodeBackup(jsonEncode(map), 'passphrase12'),
+        throwsA(isA<BackupException>()),
+      );
+    });
+
+    test('decodeBackup rejects a zero/negative iteration count', () async {
+      final payload = samplePayload();
+      final envelope = await encodeBackup(payload, 'passphrase12');
+      final map = jsonDecode(envelope) as Map<String, dynamic>;
+      map['iter'] = 0;
+
+      expect(
+        () => decodeBackup(jsonEncode(map), 'passphrase12'),
+        throwsA(isA<BackupException>()),
+      );
+    });
+
+    test('decodeBackup rejects an oversized ciphertext field', () async {
+      final payload = samplePayload();
+      final envelope = await encodeBackup(payload, 'passphrase12');
+      final map = jsonDecode(envelope) as Map<String, dynamic>;
+      map['ct'] = base64Encode(
+        List<int>.filled(kBackupMaxCiphertextLength + 1, 0),
+      );
+
+      expect(
+        () => decodeBackup(jsonEncode(map), 'passphrase12'),
+        throwsA(isA<BackupException>()),
+      );
+    });
+
+    test('decodeBackup rejects an oversized salt field', () async {
+      final payload = samplePayload();
+      final envelope = await encodeBackup(payload, 'passphrase12');
+      final map = jsonDecode(envelope) as Map<String, dynamic>;
+      map['salt'] = base64Encode(List<int>.filled(kBackupMaxSaltLength + 1, 0));
+
+      expect(
+        () => decodeBackup(jsonEncode(map), 'passphrase12'),
+        throwsA(isA<BackupException>()),
+      );
     });
   });
 }

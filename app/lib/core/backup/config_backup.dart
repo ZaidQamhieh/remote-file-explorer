@@ -27,6 +27,26 @@ const int kBackupPbkdf2Iterations = 200000;
 /// Length (in bytes) of the random PBKDF2 salt.
 const int kBackupSaltLength = 16;
 
+/// Minimum passphrase length [encodeBackup] accepts (PR-22): the exported
+/// envelope's only protection is this passphrase run through PBKDF2, so a
+/// short one is practical to brute-force offline once a backup file leaks.
+const int kBackupMinPassphraseLength = 12;
+
+/// Bounds [decodeBackup] enforces on an untrusted envelope, all before the
+/// expensive KDF/decrypt work runs (PR-22): a crafted envelope with an
+/// inflated `iter` count or oversized base64 fields could otherwise freeze
+/// or exhaust the app. `iter` is capped well above our own
+/// [kBackupPbkdf2Iterations] to tolerate a future bump without moving this
+/// constant, but far below a value that would make PBKDF2 take unreasonably
+/// long. Field-length caps are generous relative to real app state (host
+/// list, tokens, settings) but small enough to rule out a multi-hundred-MB
+/// envelope being accepted as fast as it can be read.
+const int kBackupMaxIterations = 2000000;
+const int kBackupMaxSaltLength = 128;
+const int kBackupMaxNonceLength = 64;
+const int kBackupMaxMacLength = 64;
+const int kBackupMaxCiphertextLength = 32 * 1024 * 1024;
+
 /// Derived key length, in bits.
 const int _kKeyBits = 256;
 
@@ -238,6 +258,11 @@ Pbkdf2 _kdf() => Pbkdf2(
 /// Encrypts [payload] with [passphrase], returning the envelope JSON string
 /// that gets written to the backup file.
 Future<String> encodeBackup(BackupPayload payload, String passphrase) async {
+  if (passphrase.length < kBackupMinPassphraseLength) {
+    throw BackupException(
+      'Passphrase must be at least $kBackupMinPassphraseLength characters.',
+    );
+  }
   final salt = _randomBytes(kBackupSaltLength);
   final secretKey = await _kdf().deriveKeyFromPassword(
     password: passphrase,
@@ -305,6 +330,19 @@ Future<BackupPayload> decodeBackup(
     mac = base64Decode(envelope['mac'] as String);
     iterations = (envelope['iter'] as num).toInt();
   } catch (_) {
+    throw const BackupException('This backup file is corrupted.');
+  }
+
+  // Bound every field before the expensive KDF/decrypt work runs — a
+  // crafted envelope with an inflated iteration count or oversized fields
+  // must not be able to freeze or exhaust the app (PR-22).
+  if (iterations < 1 || iterations > kBackupMaxIterations) {
+    throw const BackupException('This backup file is corrupted.');
+  }
+  if (salt.length > kBackupMaxSaltLength ||
+      nonce.length > kBackupMaxNonceLength ||
+      mac.length > kBackupMaxMacLength ||
+      ct.length > kBackupMaxCiphertextLength) {
     throw const BackupException('This backup file is corrupted.');
   }
 

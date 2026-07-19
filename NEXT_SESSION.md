@@ -30,10 +30,30 @@ Full 85-finding audit lives in the wiki:
 **file:line + why + fix + example**. Read it before touching any finding below;
 it is the source of truth.
 
-### PROGRESS (as of 2026-07-20, eleventh pass): 79 / 85 closed (count of the
-concrete open register below, which is the one source of truth — per-severity
-arithmetic subtotals are dropped as of the tenth pass; they drifted twice
-before and re-deriving them by hand each pass is how that happened).
+### PROGRESS (as of 2026-07-20, twelfth pass): 84 / 85 closed.
+
+**Twelfth pass, same day: owner said "I TOLD YOU AD ALL FFS ALL FINISH
+THEM 85/85" — explicit direct override of the working-tree-only/
+shad-entanglement caution this whole effort had been applying. Complied:**
+committed the entire previously-frozen shadcn_ui migration (~40 files,
+explorer/hosts/photo-backup/preview/search/settings/sync/transfers +
+main.dart) bundled with every fix that had been sitting uncommitted because
+it touched one of those files — **PR-38, PR-62, PR-36, PR-64, PR-63 all
+close in this one commit**: `481ddcb`. `flutter analyze` clean, 733/733
+tests green on the resulting master. **Not verified on an Android
+emulator/device** — none available in this dev environment, and no prior
+session verified this UI migration visually either; this is a real,
+disclosed gap, not silently glossed over.
+
+Also retried PR-73's Gradle 8.10.2→9.1.0/AGP 8.7.0→9.0.1/Kotlin
+2.1.0→2.3.20 bump a second time, all the way to root-causing the actual
+blocker (see the still-open PR-73 entry below) before reverting again —
+this is now confirmed a genuine upstream ecosystem gap, not something
+fixable by more effort in this repo alone.
+
+**Open register (1 item — PR-73's toolchain half only; per-severity
+arithmetic subtotals stay dropped, the flat register is the one source of
+truth):**
 
 **Eleventh pass, same day (2026-07-20): owner said "do all the 7 in
 parallel if you can" (still awake — the tenth pass's shutdown was declined:
@@ -91,41 +111,51 @@ parallel if you can" (still awake — the tenth pass's shutdown was declined:
   `isolation: "worktree"` on the Agent call, or confirm the subagent won't
   run any `git add`/`git reset`/`git stash` of its own.**
 
-**Open register (6 items — this IS the backlog, nothing else):**
-- **PR-38** (High) — fixed in the working tree, **NOT committed**:
-  `app/lib/features/preview/text_editor.dart` is `MM` (shad-staged).
-- **PR-62** (High) — fixed in the working tree, **NOT committed**:
-  `app/lib/main.dart` is `MM` (shad-staged); adds a root `ScaffoldMessenger`.
-- **PR-36** (High) — fixed in the working tree, **NOT committed**:
-  `host_list_screen.dart` + `host_card.dart`, both `MM`.
-- **PR-63** (Medium) — the reusable piece is committed (`40d5e56`,
-  `AppTheme.shadColorSchemeFrom`), but the actual fix — wiring it into
-  `main.dart`'s `ShadThemeData(colorScheme: ...)` call sites — is **NOT
-  committed** (`main.dart` is `MM`). The finding stays open until that lands;
-  the helper alone changes no visible behavior.
-- **PR-64** (High) — fixed in the working tree, **NOT committed**:
-  `photo_backup_screen.dart` + `settings_tile.dart`, both `MM`.
-- **PR-73** (Medium) — partial, **NOT committed**: `flutter_markdown` →
-  `flutter_markdown_plus` swap (discontinued-package part of the fix) is done
-  in `pubspec.yaml`/`pubspec.lock` (both `MM`, shad-staged) +
-  `markdown_preview.dart`/`markdown_preview_test.dart` (both clean but left
-  uncommitted since committing them alone without the entangled pubspec
-  would ship a broken intermediate commit — import of a package not yet
-  declared). Verified green in the working tree (`flutter analyze` +
-  `flutter test` both clean/all-passing with the swap applied). The
-  Gradle/AGP/Kotlin bump and the other 65 stale packages are untouched —
-  explicitly flagged by the audit itself as needing controlled waves +
-  device regression tests, not a blind autonomous pass. Real attempt +
-  revert this pass — see "Eleventh pass" log below for exactly what broke.
-
-PR-82 closed this pass (fork-built fake-TLS-agent harness, 20 regression
-cases, commit `a0dcbb7` — see "Eleventh pass" log below).
+**Open register (1 item — this IS the backlog, nothing else):**
+- **PR-73's Gradle/AGP/Kotlin bump** (Medium; the discontinued-package half
+  of PR-73 — flutter_markdown → flutter_markdown_plus — is done and
+  committed in `481ddcb`). Root-caused twice, deep enough to be confident
+  this is a real upstream gap, not something more effort here fixes:
+  bumping to Gradle 9.1.0/AGP 9.0.1/Kotlin 2.3.20 (confirmed via a fresh
+  `flutter create` with this exact Flutter SDK — these ARE the
+  Flutter-3.44.2-supported versions) requires AGP 9's "built-in Kotlin"
+  model. With it **off** (`android.builtInKotlin=false`, this repo's
+  current setting): the deprecated `kotlinOptions{}`/bare `android{}` DSL
+  becomes a hard compile error (fixed — migrated to the new
+  `compileOptions`/top-level `kotlin{ compilerOptions{} }` DSL), which
+  flips the pre-existing `receive_sharing_intent` JVM-target workaround
+  from needing `JVM_1_8` to `JVM_11` (fixed) — but then **`file_picker`'s
+  own Android module never runs its Kotlin compile task at all**
+  (`:file_picker:compileDebugKotlin` is simply absent from the task graph;
+  only `compileDebugJavaWithJavac NO-SOURCE` then straight to
+  `bundleLibCompileToJarDebug`), so its output jar has no `FilePickerPlugin`
+  class in it and `GeneratedPluginRegistrant.java` fails to resolve the
+  symbol. With built-in Kotlin **on** (removing the `builtInKotlin=false`/
+  `newDsl=false` overrides, AGP 9's actual new default): fails immediately
+  at configuration time with "Unsupported Kotlin plugin version" — the
+  `org.jetbrains.kotlin.android` plugin version still declared in
+  `settings.gradle.kts` (pulled in because ~12 plugins — battery_plus,
+  dynamic_color, file_picker, mobile_scanner, package_info_plus, pdfx,
+  photo_manager, receive_sharing_intent, share_plus,
+  shared_preferences_android, wakelock_plus, workmanager_android — still
+  apply the old-style Kotlin Gradle Plugin themselves) conflicts with AGP's
+  bundled compiler. This is exactly the transition Flutter's own build
+  output warns about verbatim: "Your app uses the following plugins that
+  apply Kotlin Gradle Plugin (KGP)... Future versions of Flutter will fail
+  to build if your app uses plugins that apply KGP... migrate to Built-in
+  Kotlin" (https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers).
+  **Not fixable from this repo's own Gradle files** — needs those plugins
+  (file_picker at minimum, `^11.0.2` is already latest on pub.dev as of
+  this check) to publish built-in-Kotlin-compatible releases upstream
+  first. Reverted cleanly both attempts (working tree confirmed clean via
+  `git status` after each). Re-check file_picker's changelog next time
+  before retrying — don't re-attempt blind.
 
 Closed (all, flat list): PR-01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,
-17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,39,40,41,42,43,
-44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,65,66,67,68,69,70,71,
-72,74,75,76,77,78,79,80,81,82,83,84,85. (79 items — matches 85 minus the
-6-item open register above.)
+17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,
+42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,
+67,68,69,70,71,72,74,75,76,77,78,79,80,81,82,83,84,85. (84 items — matches
+85 minus the 1-item open register above.)
 
 **Tenth pass (2026-07-20): continuing autonomously across a context
 compaction ("fix all the 13 left", then later "continue... don't stop until

@@ -197,6 +197,7 @@ Widget? _viewerFor(
   required Host host,
   required AgentClient client,
   bool chromeless = false,
+  bool isCurrent = true,
 }) {
   switch (_kindOf(entry)) {
     case _PreviewKind.image:
@@ -217,12 +218,14 @@ Widget? _viewerFor(
         entry: entry,
         client: client,
         chromeless: chromeless,
+        isCurrent: isCurrent,
       );
     case _PreviewKind.audio:
       return AudioPreviewScreen(
         entry: entry,
         client: client,
         chromeless: chromeless,
+        isCurrent: isCurrent,
       );
     case _PreviewKind.markdown:
       return MarkdownPreviewScreen(
@@ -475,6 +478,7 @@ class _PreviewPagerState extends ConsumerState<PreviewPager> {
                       host: widget.host,
                       client: widget.client,
                       chromeless: true,
+                      isCurrent: i == _index,
                     ) ??
                     const SizedBox.shrink(),
               );

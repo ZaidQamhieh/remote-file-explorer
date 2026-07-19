@@ -27,6 +27,7 @@ class AudioPreviewScreen extends StatefulWidget {
     required this.entry,
     required this.client,
     this.chromeless = false,
+    this.isCurrent = true,
   });
 
   final Entry entry;
@@ -36,12 +37,20 @@ class AudioPreviewScreen extends StatefulWidget {
   /// shared top bar across sibling pages.
   final bool chromeless;
 
+  /// Whether this is the currently-visible page in a [PreviewPager] (PR-39).
+  /// A kept-alive offscreen page (the pager preserves per-type State as the
+  /// user swipes) must not keep playing audio in the background — when this
+  /// flips to `false`, playback pauses.
+  final bool isCurrent;
+
   @override
   State<AudioPreviewScreen> createState() => _AudioPreviewScreenState();
 }
 
 class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
-  late Future<AudioPlayer> _future;
+  /// `null` result means the widget was disposed mid-load (PR-39); `build()`
+  /// never runs again in that case, so nothing ever reads a null `data`.
+  late Future<AudioPlayer?> _future;
   AudioPlayer? _player;
   File? _tempFile;
 
@@ -53,14 +62,27 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
     _future = _load();
   }
 
-  Future<AudioPlayer> _load() async {
+  @override
+  void didUpdateWidget(AudioPreviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isCurrent && !widget.isCurrent) {
+      _player?.pause();
+    }
+  }
+
+  Future<AudioPlayer?> _load() async {
     final size = widget.entry.size;
     if (size != null && size > kMaxAudioPreviewBytes) {
       throw _TooLarge(size);
     }
 
     final dir = await getTemporaryDirectory();
-    final previewDir = Directory('${dir.path}/preview_cache');
+    // PR-74: scoped by host + remote path (not just the bare basename), so
+    // the same filename from two hosts — or two different remote paths with
+    // the same name — can't collide and serve/delete each other's content.
+    final previewDir = Directory(
+      '${dir.path}/preview_cache/${audioPreviewCacheKey(widget.client.host.id, widget.entry.path)}',
+    );
     if (!await previewDir.exists()) {
       await previewDir.create(recursive: true);
     }
@@ -83,10 +105,25 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
       },
     );
 
+    // PR-39: the download can finish after this page was swiped away and
+    // disposed (dispose() already cleaned up `_tempFile`/`_player`, both
+    // null at this point) — don't create a player or start playback for a
+    // gone widget.
+    if (!mounted) {
+      await file.delete().catchError((_) => file);
+      return null;
+    }
+
     final player = AudioPlayer();
     _player = player;
     await player.setFilePath(file.path);
-    player.play();
+    if (!mounted) {
+      // dispose() already ran during the await above and, seeing `_player`
+      // still pointing at this player, already disposed it — disposing it
+      // again here would throw.
+      return null;
+    }
+    if (widget.isCurrent) player.play();
     return player;
   }
 
@@ -115,7 +152,7 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
     return PreviewScaffold(
       title: widget.entry.name,
       chromeless: widget.chromeless,
-      body: FutureBuilder<AudioPlayer>(
+      body: FutureBuilder<AudioPlayer?>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -341,4 +378,14 @@ class _SpeedButton extends StatelessWidget {
 class _TooLarge implements Exception {
   _TooLarge(this.size);
   final int size;
+}
+
+/// A filesystem-safe cache subdirectory name unique to [hostId] + [path]
+/// (PR-74): two hosts with a same-named file, or two different remote paths
+/// with the same basename, must not read/write/delete each other's temp
+/// audio file. Exported for unit testing.
+String audioPreviewCacheKey(String hostId, String path) {
+  final safeHost = hostId.replaceAll(RegExp(r'[^\w.\-]'), '_');
+  final safePath = path.replaceAll(RegExp(r'[^\w.\-]'), '_');
+  return '${safeHost}_$safePath';
 }

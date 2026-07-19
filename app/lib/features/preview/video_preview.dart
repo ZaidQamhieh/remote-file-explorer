@@ -28,6 +28,7 @@ class VideoPreviewScreen extends StatefulWidget {
     required this.entry,
     required this.client,
     this.chromeless = false,
+    this.isCurrent = true,
   });
 
   final Entry entry;
@@ -37,12 +38,20 @@ class VideoPreviewScreen extends StatefulWidget {
   /// shared top bar across sibling pages.
   final bool chromeless;
 
+  /// Whether this is the currently-visible page in a [PreviewPager] (PR-39).
+  /// A kept-alive offscreen page (the pager preserves per-type State as the
+  /// user swipes) must not keep playing video in the background — when this
+  /// flips to `false`, playback pauses.
+  final bool isCurrent;
+
   @override
   State<VideoPreviewScreen> createState() => _VideoPreviewScreenState();
 }
 
 class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
-  late Future<ChewieController> _future;
+  /// `null` result means the widget was disposed mid-load (PR-39); `build()`
+  /// never runs again in that case, so nothing ever reads a null `data`.
+  late Future<ChewieController?> _future;
   ChewieController? _chewie;
   VideoPlayerController? _video;
   VideoLoopbackProxy? _proxy;
@@ -61,7 +70,15 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     _future = _load();
   }
 
-  Future<ChewieController> _load() async {
+  @override
+  void didUpdateWidget(VideoPreviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isCurrent && !widget.isCurrent) {
+      _video?.pause();
+    }
+  }
+
+  Future<ChewieController?> _load() async {
     // Capture theme-derived values before any `await` — `context` shouldn't
     // be used across async gaps.
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -70,6 +87,14 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       widget.client,
       widget.entry.path,
     );
+    // PR-39: the page can be swiped away and disposed while the proxy/video
+    // controller are still starting up — dispose() already ran (and saw
+    // null fields, so it did nothing), so nothing else will close this
+    // proxy if we don't.
+    if (!mounted) {
+      proxy.close();
+      return null;
+    }
     _proxy = proxy;
 
     final video = VideoPlayerController.networkUrl(
@@ -77,6 +102,12 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     );
     _video = video;
     await video.initialize();
+    if (!mounted) {
+      // dispose() already ran during the await above and, seeing `_video`
+      // still pointing at this controller, already disposed it — disposing
+      // it again here would throw.
+      return null;
+    }
 
     final chewie = ChewieController(
       videoPlayerController: video,
@@ -93,7 +124,8 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
     // Resume from saved position, then start playback.
     await _maybeResumePosition(video);
-    await video.play();
+    if (!mounted) return null;
+    if (widget.isCurrent) await video.play();
 
     // Listen for completion to clear saved position.
     video.addListener(_onVideoPositionChanged);
@@ -223,7 +255,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       title: widget.entry.name,
       backgroundColor: Colors.black,
       chromeless: widget.chromeless,
-      body: FutureBuilder<ChewieController>(
+      body: FutureBuilder<ChewieController?>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {

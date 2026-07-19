@@ -249,6 +249,57 @@ void main() {
     await _disposeAndClean(tester);
   });
 
+  testWidgets('does not autoplay when isCurrent is false (PR-39)', (
+    tester,
+  ) async {
+    final client = _FakeAgentClient();
+    await _pumpAndWait(
+      tester,
+      _wrap(
+        AudioPreviewScreen(
+          entry: _audio('song.mp3'),
+          client: client,
+          isCurrent: false,
+        ),
+      ),
+    );
+
+    // Loaded but not playing — the play (not pause) icon is shown.
+    expect(find.byIcon(LucideIcons.play), findsOneWidget);
+    expect(find.byIcon(LucideIcons.pause), findsNothing);
+
+    await _disposeAndClean(tester);
+  });
+
+  testWidgets('pauses when isCurrent flips from true to false (PR-39)', (
+    tester,
+  ) async {
+    final client = _FakeAgentClient();
+    final entry = _audio('song.mp3');
+    await _pumpAndWait(
+      tester,
+      _wrap(AudioPreviewScreen(entry: entry, client: client)),
+    );
+    expect(find.byIcon(LucideIcons.pause), findsOneWidget);
+
+    // Same slot, same widget type — Flutter reuses the State and calls
+    // didUpdateWidget rather than remounting.
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        _wrap(
+          AudioPreviewScreen(entry: entry, client: client, isCurrent: false),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
+
+    expect(find.byIcon(LucideIcons.play), findsOneWidget);
+    expect(find.byIcon(LucideIcons.pause), findsNothing);
+
+    await _disposeAndClean(tester);
+  });
+
   testWidgets('shows error state on download failure', (tester) async {
     final client = _FakeAgentClient(shouldFail: true);
     await _pumpAndWait(
@@ -313,5 +364,32 @@ void main() {
     expect(find.byIcon(LucideIcons.music), findsOneWidget);
 
     await _disposeAndClean(tester);
+  });
+
+  group('audioPreviewCacheKey (PR-74)', () {
+    test('differs across hosts for the same remote path', () {
+      final a = audioPreviewCacheKey('host-a', '/music/song.mp3');
+      final b = audioPreviewCacheKey('host-b', '/music/song.mp3');
+      expect(a, isNot(equals(b)));
+    });
+
+    test('differs across remote paths on the same host', () {
+      final a = audioPreviewCacheKey('host-a', '/music/song.mp3');
+      final b = audioPreviewCacheKey('host-a', '/other/song.mp3');
+      expect(a, isNot(equals(b)));
+    });
+
+    test('is filesystem-safe (no path separators)', () {
+      final key = audioPreviewCacheKey('host-a', '/music/sub/song.mp3');
+      expect(key.contains('/'), isFalse);
+      expect(key.contains(r'\'), isFalse);
+    });
+
+    test('is stable for the same inputs', () {
+      expect(
+        audioPreviewCacheKey('host-a', '/music/song.mp3'),
+        audioPreviewCacheKey('host-a', '/music/song.mp3'),
+      );
+    });
   });
 }

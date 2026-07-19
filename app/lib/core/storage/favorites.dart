@@ -38,9 +38,16 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
   Future<List<Favorite>> build() async {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs!.getStringList(_kFavoritesKey) ?? [];
-    return raw
-        .map((s) => Favorite.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final favs = <Favorite>[];
+    for (final s in raw) {
+      try {
+        favs.add(Favorite.fromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt/legacy entry rather than bricking favorites
+        // entirely (PR-54).
+      }
+    }
+    return favs;
   }
 
   List<Favorite> get _current => List<Favorite>.from(state.valueOrNull ?? []);

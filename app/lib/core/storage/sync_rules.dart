@@ -60,9 +60,16 @@ class SyncRuleStore {
 
   List<SyncRule> listRules() {
     final raw = _prefs.getStringList(_kSyncRulesKey) ?? [];
-    return raw
-        .map((s) => SyncRule.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final rules = <SyncRule>[];
+    for (final s in raw) {
+      try {
+        rules.add(SyncRule.fromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt/legacy entry rather than bricking sync rules
+        // entirely (PR-54).
+      }
+    }
+    return rules;
   }
 
   Future<void> saveRule(SyncRule rule) async {

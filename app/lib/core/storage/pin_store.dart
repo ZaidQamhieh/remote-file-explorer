@@ -26,9 +26,16 @@ class PinNotifier extends AsyncNotifier<List<Pin>> {
   Future<List<Pin>> build() async {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs!.getStringList(_kPinsKey) ?? [];
-    return raw
-        .map((s) => Pin.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final pins = <Pin>[];
+    for (final s in raw) {
+      try {
+        pins.add(Pin.fromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt/legacy entry rather than bricking offline pins
+        // entirely (PR-54).
+      }
+    }
+    return pins;
   }
 
   List<Pin> get _current => List<Pin>.from(state.valueOrNull ?? []);

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/storage/pin_store.dart';
@@ -70,5 +72,23 @@ void main() {
       container2.read(pinStoreProvider.notifier).isPinned('h1', '/persisted'),
       isTrue,
     );
+  });
+
+  test('one corrupt persisted entry is skipped instead of bricking pins '
+      '(PR-54)', () async {
+    SharedPreferences.setMockInitialValues({
+      'offline_pins_v1': [
+        jsonEncode(const Pin(hostId: 'h1', remotePath: '/a').toJson()),
+        'not valid json',
+        jsonEncode(const Pin(hostId: 'h2', remotePath: '/b').toJson()),
+      ],
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final pins = await container.read(pinStoreProvider.future);
+
+    expect(pins, hasLength(2));
+    expect(pins.map((p) => p.hostId), containsAll(<String>['h1', 'h2']));
   });
 }

@@ -45,9 +45,16 @@ class BookmarkNotifier extends AsyncNotifier<List<Bookmark>> {
   Future<List<Bookmark>> build() async {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs!.getStringList(_kBookmarksKey) ?? [];
-    return raw
-        .map((s) => Bookmark.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final items = <Bookmark>[];
+    for (final s in raw) {
+      try {
+        items.add(Bookmark.fromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt/legacy entry rather than bricking bookmarks
+        // entirely (PR-54).
+      }
+    }
+    return items;
   }
 
   List<Bookmark> get _current => List<Bookmark>.from(state.valueOrNull ?? []);

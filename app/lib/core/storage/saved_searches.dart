@@ -28,10 +28,23 @@ class SavedSearchesNotifier extends AsyncNotifier<List<SavedSearch>> {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs!.getString(_kSavedSearchesKey);
     if (raw == null) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((e) => SavedSearch.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final List list;
+    try {
+      list = jsonDecode(raw) as List;
+    } catch (_) {
+      // The whole persisted blob is corrupt — better to lose saved
+      // searches than brick the feature that reads it (PR-54).
+      return [];
+    }
+    final searches = <SavedSearch>[];
+    for (final e in list) {
+      try {
+        searches.add(SavedSearch.fromJson(e as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt entry rather than dropping every saved search.
+      }
+    }
+    return searches;
   }
 
   Future<void> _persist(List<SavedSearch> searches) async {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/storage/bookmark_store.dart';
@@ -62,5 +64,23 @@ void main() {
     expect(notifier.bookmarksForHost('h1'), hasLength(1));
     expect(notifier.bookmarksForHost('h2'), hasLength(1));
     expect(notifier.allBookmarks(), hasLength(2));
+  });
+
+  test('one corrupt persisted entry is skipped instead of bricking bookmarks '
+      '(PR-54)', () async {
+    SharedPreferences.setMockInitialValues({
+      'bookmarks_v1': [
+        jsonEncode(const Bookmark(hostId: 'h1', remotePath: '/a').toJson()),
+        'not valid json',
+        jsonEncode(const Bookmark(hostId: 'h2', remotePath: '/b').toJson()),
+      ],
+    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final bookmarks = await container.read(bookmarkStoreProvider.future);
+
+    expect(bookmarks, hasLength(2));
+    expect(bookmarks.map((b) => b.hostId), containsAll(<String>['h1', 'h2']));
   });
 }

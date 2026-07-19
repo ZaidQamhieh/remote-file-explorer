@@ -179,5 +179,26 @@ void main() {
       );
       expect(store.listRules(), hasLength(2));
     });
+
+    test('one corrupt persisted entry is skipped instead of bricking sync '
+        'rules (PR-54)', () async {
+      final rule = SyncRule(
+        id: '1',
+        hostId: 'h1',
+        remotePath: '/photos',
+        localPath: '/sdcard/sync/photos',
+      );
+      await store.saveRule(rule);
+
+      final prefs = await SharedPreferences.getInstance();
+      final raw =
+          prefs.getStringList('rfe_sync_rules_v1')!.toList()
+            ..add('not valid json');
+      await prefs.setStringList('rfe_sync_rules_v1', raw);
+
+      final rules = store.listRules();
+      expect(rules, hasLength(1));
+      expect(rules.first.id, '1');
+    });
   });
 }

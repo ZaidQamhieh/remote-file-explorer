@@ -117,6 +117,26 @@ void main() {
       expect(remaining.length, 2);
       expect(remaining.map((h) => h.id), isNot(contains('h2')));
     });
+
+    test('one corrupt entry is skipped instead of bricking the whole host '
+        'list (PR-54)', () async {
+      const good1 = Host(id: 'h1', label: 'A', address: 'a:1');
+      const good2 = Host(id: 'h2', label: 'B', address: 'b:2');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('rfe_hosts_v1', [
+        jsonEncode(good1.toJson()),
+        'not valid json at all',
+        jsonEncode(good2.toJson()),
+        jsonEncode({'label': 'missing required id/address fields'}),
+      ]);
+
+      final store = await HostStore.create();
+      final hosts = store.listHosts();
+
+      expect(hosts.map((h) => h.id), containsAll(<String>['h1', 'h2']));
+      expect(hosts.length, 2);
+    });
   });
 
   group('Last-seen timestamp', () {

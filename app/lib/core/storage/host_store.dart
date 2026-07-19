@@ -34,9 +34,17 @@ class HostStore {
 
   List<Host> listHosts() {
     final raw = _prefs.getStringList(_kHostListKey) ?? [];
-    return raw
-        .map((s) => Host.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final hosts = <Host>[];
+    for (final s in raw) {
+      try {
+        hosts.add(Host.fromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (_) {
+        // One corrupt/legacy entry must not brick the whole host list — the
+        // app becomes unusable if every host disappears behind a single
+        // bad record (PR-54).
+      }
+    }
+    return hosts;
   }
 
   Future<void> addHost(Host host) async {

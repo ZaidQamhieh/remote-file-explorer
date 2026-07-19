@@ -52,10 +52,23 @@ class TransferJournalNotifier extends AsyncNotifier<List<TransferRecord>> {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs!.getString(_kJournalKey);
     if (raw == null) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((e) => TransferRecord.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final List list;
+    try {
+      list = jsonDecode(raw) as List;
+    } catch (_) {
+      // The whole persisted blob is corrupt — better to lose journal
+      // history than brick the feature that reads it (PR-54).
+      return [];
+    }
+    final records = <TransferRecord>[];
+    for (final e in list) {
+      try {
+        records.add(TransferRecord.fromJson(e as Map<String, dynamic>));
+      } catch (_) {
+        // Skip one corrupt entry rather than dropping the whole journal.
+      }
+    }
+    return records;
   }
 
   Future<void> _persist(List<TransferRecord> records) async {

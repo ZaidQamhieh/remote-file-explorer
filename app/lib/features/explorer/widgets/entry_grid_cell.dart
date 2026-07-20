@@ -189,7 +189,7 @@ class EntryGridCell extends StatelessWidget {
                     child: const Icon(
                       LucideIcons.star,
                       size: 13,
-                      color: Colors.amber,
+                      color: Brand.amber,
                     ),
                   ),
                 ),

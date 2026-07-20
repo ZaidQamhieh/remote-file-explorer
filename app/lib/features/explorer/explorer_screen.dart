@@ -1210,7 +1210,15 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     if (entry.isDir) {
       _notifier.navigate(entry.path);
     } else {
-      _showMeta(context, entry, client);
+      final siblings = ref.read(explorerProvider(_arg)).displayEntries;
+      openPreview(
+        context,
+        entry: entry,
+        host: widget.host,
+        client: client,
+        siblings: siblings,
+        onChanged: _notifier.refresh,
+      );
     }
   }
 

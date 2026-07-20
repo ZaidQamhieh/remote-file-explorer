@@ -6,6 +6,7 @@ import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../home/home_state.dart';
@@ -36,11 +37,7 @@ class BookmarksScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  LucideIcons.bookmark,
-                  size: 36,
-                  color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
-                ),
+                const GradientBlobHero(icon: LucideIcons.bookmark, size: 120),
                 const SizedBox(height: Spacing.sm),
                 Text(
                   'No bookmarks yet. Long-press any file to bookmark it.',

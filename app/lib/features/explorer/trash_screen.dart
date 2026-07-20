@@ -10,6 +10,7 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
@@ -206,7 +207,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.trash2, size: 64, color: c.outline),
+          const GradientBlobHero(icon: LucideIcons.trash2, size: 120),
           const SizedBox(height: 12),
           Text(
             context.l10n.trashIsEmpty,
@@ -235,7 +236,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     return ListTile(
       leading: Icon(
         item.isDir ? LucideIcons.folder : LucideIcons.file,
-        color: item.isDir ? Colors.amber : scheme.onSurfaceVariant,
+        color: item.isDir ? Brand.amber : scheme.onSurfaceVariant,
       ),
       title: Text(item.name, overflow: TextOverflow.ellipsis),
       subtitle: Text(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/models/host.dart';
 import '../../../core/storage/favorites.dart';
+import '../../../core/theme/tokens.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bottom sheet listing the user's favorited folders for [host]. Tapping an
@@ -59,12 +60,12 @@ class FavoritesSheet extends ConsumerWidget {
                   return ListTile(
                     leading: const Icon(
                       LucideIcons.folderHeart,
-                      color: Colors.amber,
+                      color: Brand.amber,
                     ),
                     title: Text(f.label),
                     subtitle: Text(f.path, overflow: TextOverflow.ellipsis),
                     trailing: IconButton(
-                      icon: const Icon(LucideIcons.star, color: Colors.amber),
+                      icon: const Icon(LucideIcons.star, color: Brand.amber),
                       tooltip: context.l10n.removeTooltip,
                       onPressed:
                           () => ref

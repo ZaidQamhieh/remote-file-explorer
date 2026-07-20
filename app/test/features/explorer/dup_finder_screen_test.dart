@@ -97,7 +97,10 @@ void main() {
       ),
     );
     await tester.tap(find.text('Scan for Duplicates'));
-    await tester.pumpAndSettle();
+    // Not pumpAndSettle: the empty state's GradientBlobHero runs a repeating
+    // animation, so the widget tree never fully settles.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('No duplicates found'), findsOneWidget);
   });

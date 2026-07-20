@@ -261,55 +261,64 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
               isFav
                   ? context.l10n.unfavoriteButton
                   : context.l10n.favoriteButton,
-          gradient: const [Colors.amber, Color(0xFFB8860B)],
+          gradient: [Brand.amber, Color.lerp(Brand.amber, Colors.black, 0.3)!],
           onTap: () => _toggleFavorite(context, isFav),
         )
       else if (previewable)
         GradientActionCircle(
           icon: LucideIcons.eye,
           label: context.l10n.previewButton,
-          gradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _preview(context),
         )
       else if (!_entry.isDir)
         GradientActionCircle(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
-          gradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _openWith(context),
         ),
       if (_entry.isDir)
         GradientActionCircle(
           icon: LucideIcons.filePen,
           label: context.l10n.renameButton,
-          gradient: [Colors.blue.shade400, Colors.blue.shade800],
+          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _rename(context),
         )
       else
         GradientActionCircle(
           icon: LucideIcons.download,
           label: context.l10n.downloadButton,
-          gradient: [Colors.green.shade400, Colors.green.shade800],
+          gradient: [
+            Brand.online,
+            Color.lerp(Brand.online, Colors.black, 0.3)!,
+          ],
           onTap: () => _download(context),
         ),
       if (_entry.isDir)
         GradientActionCircle(
           icon: LucideIcons.copy,
           label: context.l10n.duplicateButton,
-          gradient: [Colors.purple.shade300, Colors.purple.shade700],
+          gradient: [
+            Brand.accent,
+            Color.lerp(Brand.accent, Colors.black, 0.3)!,
+          ],
           onTap: () => _duplicate(context),
         )
       else
         GradientActionCircle(
           icon: LucideIcons.share,
           label: context.l10n.shareTooltip,
-          gradient: [Colors.purple.shade300, Colors.purple.shade700],
+          gradient: [
+            Brand.accent,
+            Color.lerp(Brand.accent, Colors.black, 0.3)!,
+          ],
           onTap: () => _share(context),
         ),
       GradientActionCircle(
         icon: LucideIcons.trash2,
         label: context.l10n.deleteButton,
-        gradient: [Colors.red.shade400, Colors.red.shade800],
+        gradient: [Brand.red, Color.lerp(Brand.red, Colors.black, 0.3)!],
         onTap: () => _delete(context),
       ),
     ];

@@ -11,8 +11,10 @@ import '../../core/api/agent_client.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class DupFinderScreen extends StatefulWidget {
   const DupFinderScreen({
@@ -147,7 +149,16 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
                 ),
               )
               : _groups!.isEmpty
-              ? const Center(child: Text('No duplicates found'))
+              ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    GradientBlobHero(icon: LucideIcons.badgeCheck, size: 120),
+                    SizedBox(height: 12),
+                    Text('No duplicates found'),
+                  ],
+                ),
+              )
               : _buildResults(),
     );
   }

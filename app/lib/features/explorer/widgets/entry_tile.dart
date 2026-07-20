@@ -278,11 +278,7 @@ class _IconTile extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Icon(
-                LucideIcons.star,
-                size: 12,
-                color: Colors.amber,
-              ),
+              child: const Icon(LucideIcons.star, size: 12, color: Brand.amber),
             ),
           ),
         if (isPinned)

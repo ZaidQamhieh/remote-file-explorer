@@ -134,7 +134,7 @@ class _MarkdownPreviewScreenState extends State<MarkdownPreviewScreen> {
         child: SelectableText(
           text,
           style: const TextStyle(
-            fontFamily: 'monospace',
+            fontFamily: 'JetBrains Mono',
             fontFamilyFallback: ['monospace'],
             fontSize: 13,
             height: 1.4,
@@ -153,7 +153,7 @@ class _MarkdownPreviewScreenState extends State<MarkdownPreviewScreen> {
           borderRadius: BorderRadius.circular(Radii.sm),
         ),
         code: TextStyle(
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrains Mono',
           fontFamilyFallback: const ['monospace'],
           fontSize: 13,
           color: theme.colorScheme.onSurface,

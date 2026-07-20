@@ -6,26 +6,28 @@ import 'tokens.dart';
 
 /// The app's light and dark themes for the "distinctive modern" look.
 ///
-/// Both are derived from the indigo [Brand.seed] with cyan [Brand.accent] wired
+/// Both are derived from the blue [Brand.seed] with violet [Brand.accent] wired
 /// in as the scheme's secondary. Component themes are centralised here so the
 /// roomier, rounded, tactile feel applies app-wide from one place — individual
 /// screens mostly deal with layout, not restyling.
 class AppTheme {
   AppTheme._();
 
-  /// Dark scheme matching the Figma spec (`figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ`):
-  /// zinc-950/900/800 surfaces, blue-400 primary. Hand-picked rather than
-  /// derived via [ColorScheme.fromSeed] because the algorithmic neutral ramp
-  /// from a seed doesn't reproduce Tailwind's exact zinc stops. Only the
-  /// default [dark] getter uses this — [darkWithSeed] (accent-color picker)
-  /// and [darkFrom] (platform dynamic color) still derive their own scheme so
-  /// those features are unaffected.
+  /// Dark scheme, hand-picked rather than derived via [ColorScheme.fromSeed]
+  /// because the algorithmic neutral ramp from a seed doesn't reproduce
+  /// Tailwind's exact zinc stops. Primary/secondary/error now match
+  /// [Brand]'s mockup-sourced palette (`rfe-full-remake-mockups-2026-07`) —
+  /// surfaces stay the original zinc ramp (a bigger swap to the mockup's
+  /// near-black surfaces is deferred to the Shell phase, not done blind here).
+  /// Only the default [dark] getter uses this — [darkWithSeed] (accent-color
+  /// picker) and [darkFrom] (platform dynamic color) still derive their own
+  /// scheme so those features are unaffected.
   static const ColorScheme _figmaDark = ColorScheme.dark(
-    primary: Color(0xFF60A5FA), // blue-400
+    primary: Brand.seed, // mockup blue
     onPrimary: Color(0xFF0B1220),
-    secondary: Color(0xFF34D399), // emerald-400 (upload/success accent)
+    secondary: Brand.online, // mockup green (upload/success accent)
     onSecondary: Color(0xFF06281E),
-    error: Color(0xFFF87171), // red-400
+    error: Brand.red, // mockup red
     onError: Color(0xFF2E0A0A),
     surface: Color(0xFF09090B), // zinc-950
     onSurface: Color(0xFFF4F4F5), // zinc-100
@@ -126,6 +128,7 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
       visualDensity: VisualDensity.standard,
+      fontFamily: 'Inter',
     );
 
     return base.copyWith(

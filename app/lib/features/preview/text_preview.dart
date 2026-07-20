@@ -181,7 +181,7 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
 
 /// The monospace text style shared by the plain and line-numbered views.
 const TextStyle _kMono = TextStyle(
-  fontFamily: 'monospace',
+  fontFamily: 'JetBrains Mono',
   fontFamilyFallback: ['monospace'],
   fontSize: 13,
   height: 1.4,

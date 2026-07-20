@@ -99,9 +99,9 @@ class _ChmodDialogState extends State<ChmodDialog> {
               children: [
                 Text(
                   _symbolic,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineSmall?.copyWith(fontFamily: 'monospace'),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontFamily: 'JetBrains Mono',
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(_octal, style: Theme.of(context).textTheme.bodySmall),

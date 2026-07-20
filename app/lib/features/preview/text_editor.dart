@@ -298,7 +298,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
             textAlignVertical: TextAlignVertical.top,
             keyboardType: TextInputType.multiline,
             style: const TextStyle(
-              fontFamily: 'monospace',
+              fontFamily: 'JetBrains Mono',
               fontFamilyFallback: ['monospace'],
               fontSize: 13,
               height: 1.4,

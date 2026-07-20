@@ -4,21 +4,28 @@ import 'package:flutter/material.dart';
 /// named constants keeps spacing, radii, and brand colours consistent across
 /// every screen instead of scattered magic numbers.
 
-/// Brand seed colours. Light and dark schemes are both derived from [seed];
-/// [accent] is wired in as the scheme's secondary for actions/highlights.
+/// Brand seed colours, matching the web-companion mockup's palette
+/// (`rfe-full-remake-mockups-2026-07`) so mobile and web share one brand.
+/// Light and dark schemes are both derived from [seed]; [accent] is wired in
+/// as the scheme's secondary for actions/highlights.
 class Brand {
   Brand._();
 
-  /// Indigo — primary brand colour.
-  static const Color seed = Color(0xFF4F5BD5);
+  /// Blue — primary brand colour.
+  static const Color seed = Color(0xFF4C8DFF);
 
-  /// Cyan — accent used for secondary actions and highlights.
-  static const Color accent = Color(0xFF00B4D8);
+  /// Violet — accent used for secondary actions and highlights.
+  static const Color accent = Color(0xFF9B87F5);
 
   /// Stable status colours (used directly, not from the scheme, so "online" and
   /// "error" read the same in light and dark).
-  static const Color online = Color(0xFF2E9E5B);
+  static const Color online = Color(0xFF34D399);
   static const Color offline = Color(0xFF9AA0A6);
+
+  /// Extra semantic accents from the mockup palette, for badges/charts/icons
+  /// that need more than primary/secondary/error.
+  static const Color amber = Color(0xFFF3A73F);
+  static const Color red = Color(0xFFF1596B);
 }
 
 /// Spacing scale (logical pixels). Use these for padding, gaps, and margins.

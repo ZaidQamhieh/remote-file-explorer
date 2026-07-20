@@ -1,6 +1,6 @@
 module github.com/zqamhieh/remote-file-explorer/agent
 
-go 1.25.8
+go 1.25.0
 
 require (
 	github.com/disintegration/imaging v1.6.2

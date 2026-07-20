@@ -106,7 +106,7 @@ class _ShareSheetState extends State<ShareSheet> {
                       GradientActionCircle(
                         icon: LucideIcons.copy,
                         label: context.l10n.copyButton,
-                        gradient: [Colors.blue.shade400, Colors.blue.shade800],
+                        gradient: const [Brand.seed, Brand.accent],
                         onTap: () => _copy(context),
                       ),
                     ],

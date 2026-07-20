@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/gradient_blob_hero.dart';
 
 class CenteredMessage extends StatelessWidget {
   const CenteredMessage({super.key, required this.icon, required this.message});
@@ -16,7 +17,7 @@ class CenteredMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
+            GradientBlobHero(icon: icon, size: 96),
             const SizedBox(height: Spacing.sm + Spacing.xs),
             Text(
               message,

@@ -455,14 +455,14 @@ class _ScopePill extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Colors.blue.shade400, Colors.blue.shade800],
+              colors: [Brand.seed, Brand.accent],
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.blue.shade900.withValues(alpha: 0.4),
+                color: Brand.seed.withValues(alpha: 0.4),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),

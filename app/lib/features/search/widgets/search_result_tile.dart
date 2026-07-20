@@ -97,23 +97,23 @@ Widget _resultIconTile(Entry entry) {
 
 Icon resultIcon(Entry entry) {
   if (entry.isDir) {
-    return const Icon(LucideIcons.folder, color: Colors.amber);
+    return const Icon(LucideIcons.folder, color: Brand.amber);
   }
   final mime = entry.mimeType ?? '';
   if (mime.startsWith('image/')) {
-    return const Icon(LucideIcons.image, color: Colors.blue);
+    return const Icon(LucideIcons.image, color: Brand.seed);
   }
   if (mime.startsWith('video/')) {
-    return const Icon(LucideIcons.video, color: Colors.purple);
+    return const Icon(LucideIcons.video, color: Brand.accent);
   }
   if (mime.startsWith('audio/')) {
-    return const Icon(LucideIcons.music, color: Colors.green);
+    return const Icon(LucideIcons.music, color: Brand.online);
   }
   if (mime.contains('pdf')) {
-    return const Icon(LucideIcons.fileText, color: Colors.red);
+    return const Icon(LucideIcons.fileText, color: Brand.red);
   }
   if (mime.contains('zip') || mime.contains('archive')) {
-    return const Icon(LucideIcons.fileArchive, color: Colors.orange);
+    return const Icon(LucideIcons.fileArchive, color: Brand.amber);
   }
   if (mime.startsWith('text/') || mime.contains('json')) {
     return const Icon(LucideIcons.fileText, color: Colors.teal);

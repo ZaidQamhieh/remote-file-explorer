@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -111,27 +112,22 @@ class AppBottomNav extends StatelessWidget {
                         height: _kFabDiameter,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
+                          gradient: const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              Colors.blue.shade400,
-                              Colors.blue.shade800,
-                            ],
+                            colors: [Brand.seed, Brand.accent],
                           ),
                           border: Border.all(color: scheme.surface, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.blue.shade800.withValues(
-                                alpha: 0.4,
-                              ),
+                              color: Brand.seed.withValues(alpha: 0.4),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
                           ],
                         ),
                         child: const Icon(
-                          Icons.add_rounded,
+                          LucideIcons.plus,
                           color: Colors.white,
                           size: 22,
                         ),

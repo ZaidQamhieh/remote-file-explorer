@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _kOnboardingKey = 'onboarding_complete';
@@ -147,7 +148,7 @@ class _Page extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 80, color: scheme.primary),
+          GradientBlobHero(icon: icon, size: 140),
           const SizedBox(height: Spacing.xl),
           Text(
             title,

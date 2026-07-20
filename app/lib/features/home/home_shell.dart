@@ -176,7 +176,7 @@ class _TransfersTab extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.history_rounded),
+            icon: const Icon(LucideIcons.history),
             tooltip: 'Transfer history',
             onPressed:
                 () => Navigator.of(context).push(

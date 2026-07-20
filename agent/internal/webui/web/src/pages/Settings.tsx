@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 
@@ -80,7 +81,14 @@ export function Settings() {
   }
 
   return (
-    <div className="grid grid-2">
+    <div>
+      <div className="panel-head">
+        <div className="icon-badge violet">
+          <SlidersHorizontal />
+        </div>
+        <h3>Settings</h3>
+      </div>
+      <div className="grid grid-2">
       <div className="card">
         <div className="section-label">Access</div>
         <div className="field-row">
@@ -164,6 +172,7 @@ export function Settings() {
         <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={saveChanges}>
           Save changes
         </button>
+      </div>
       </div>
     </div>
   );

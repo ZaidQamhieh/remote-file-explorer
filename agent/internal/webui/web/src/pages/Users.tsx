@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2 } from 'lucide-react';
+import { UserPlus, Trash2, Users as UsersIcon } from 'lucide-react';
 import { api, ApiError, type UserAccount } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { Dialog } from '@/components/Dialog';
@@ -43,6 +43,12 @@ export function Users() {
 
   return (
     <div>
+      <div className="panel-head">
+        <div className="icon-badge amber">
+          <UsersIcon />
+        </div>
+        <h3>Users</h3>
+      </div>
       <div className="toolbar">
         <div className="grow" />
         <button className="btn btn-primary btn-sm" onClick={() => setShowAddInfo(true)}>

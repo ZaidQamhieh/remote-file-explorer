@@ -401,6 +401,12 @@ export function Files() {
 
   return (
     <div>
+      <div className="panel-head">
+        <div className="icon-badge blue">
+          <Folder />
+        </div>
+        <h3>Files</h3>
+      </div>
       <div className="segmented" style={{ marginBottom: 16 }}>
         {TABS.map((t) => (
           <button key={t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => setActiveTab(t.id)}>

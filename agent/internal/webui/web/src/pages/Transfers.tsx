@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Search, Trash2, File as FileIcon } from 'lucide-react';
+import { Search, Trash2, File as FileIcon, ArrowLeftRight } from 'lucide-react';
 import { api, ApiError, type TransferRow } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { DataTable } from '@/components/DataTable';
@@ -128,6 +128,12 @@ export function Transfers() {
 
   return (
     <div>
+      <div className="panel-head">
+        <div className="icon-badge green">
+          <ArrowLeftRight />
+        </div>
+        <h3>Transfers</h3>
+      </div>
       <div className="grid grid-4" style={{ marginBottom: 18 }}>
         <div className="card stat-card">
           <div className="label">Active now</div>

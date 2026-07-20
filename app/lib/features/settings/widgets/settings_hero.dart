@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -24,18 +25,20 @@ class SettingsHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
+    return ShadCard(
       padding: const EdgeInsets.fromLTRB(
         Spacing.md3,
         Spacing.lg,
         Spacing.md3,
         Spacing.lg - 2,
       ),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: Radii.lgR,
-        border: Border.all(color: tint.withValues(alpha: 0.35)),
-      ),
+      radius: Radii.lgR,
+      backgroundColor: scheme.surfaceContainerHigh,
+      border: ShadBorder.all(color: tint.withValues(alpha: 0.35)),
+      // The icon badge's boxShadow bleeds slightly past its own corners —
+      // keep the old Container's default no-clip behavior instead of
+      // ShadCard's antiAlias default so it isn't cut off.
+      clipBehavior: Clip.none,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

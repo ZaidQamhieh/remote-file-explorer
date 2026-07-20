@@ -47,7 +47,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
             icon: LucideIcons.shieldCheck,
             title: 'Storage & Security',
             subtitle: 'Cache usage & App Lock',
-            tint: Colors.blue,
+            tint: Brand.seed,
           ),
           const SizedBox(height: Spacing.md),
           const _CacheSection(),
@@ -57,7 +57,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.lock,
-                badgeColor: Colors.blue,
+                badgeColor: Brand.seed,
                 title: 'App Lock',
                 subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,
@@ -119,12 +119,12 @@ class _CacheSection extends ConsumerWidget {
                 ),
                 const SizedBox(height: Spacing.md),
                 _CacheLegendRow(
-                  color: Colors.blue,
+                  color: Brand.seed,
                   label: context.l10n.cacheListingLabel,
                   bytes: stats.listingBytes,
                 ),
                 _CacheLegendRow(
-                  color: Colors.blue.shade800,
+                  color: Brand.accent,
                   label: context.l10n.cacheTempLabel,
                   bytes: stats.tempBytes,
                 ),
@@ -235,7 +235,7 @@ class _DonutPainter extends CustomPainter {
 
     final listingPaint =
         Paint()
-          ..color = Colors.blue
+          ..color = Brand.seed
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeCap = StrokeCap.round;
@@ -243,7 +243,7 @@ class _DonutPainter extends CustomPainter {
 
     final tempPaint =
         Paint()
-          ..color = Colors.blue.shade800
+          ..color = Brand.accent
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeCap = StrokeCap.round;

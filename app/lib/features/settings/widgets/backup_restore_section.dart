@@ -32,14 +32,14 @@ class BackupRestoreSection extends ConsumerWidget {
       children: [
         SettingsTile.nav(
           icon: LucideIcons.fileUp,
-          badgeColor: Colors.green,
+          badgeColor: Brand.online,
           title: context.l10n.exportConfig,
           subtitle: context.l10n.exportConfigSubtitle,
           onTap: () => _exportConfig(context, ref),
         ),
         SettingsTile.nav(
           icon: LucideIcons.download,
-          badgeColor: Colors.green,
+          badgeColor: Brand.online,
           title: context.l10n.importConfig,
           subtitle: context.l10n.importConfigSubtitle,
           onTap: () => _importConfig(context, ref),

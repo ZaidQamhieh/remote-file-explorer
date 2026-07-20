@@ -107,7 +107,7 @@ class _NotificationSummary extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
       child: Column(
         children: [
-          Icon(LucideIcons.bell, size: 36, color: Colors.amber),
+          Icon(LucideIcons.bell, size: 36, color: Brand.amber),
           const SizedBox(height: Spacing.xs),
           Text(
             '$activeCount of $totalCount alerts active',
@@ -156,11 +156,11 @@ class _ToggleCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.16),
+                color: Brand.amber.withValues(alpha: 0.16),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: Colors.amber),
+              child: Icon(icon, size: 20, color: Brand.amber),
             ),
             const SizedBox(width: Spacing.md3),
             Expanded(

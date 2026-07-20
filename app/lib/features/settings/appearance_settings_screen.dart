@@ -46,7 +46,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             icon: LucideIcons.palette,
             title: 'Appearance',
             subtitle: "Theme, layout, sort & how files look",
-            tint: Colors.purple,
+            tint: Brand.accent,
           ),
           const SizedBox(height: Spacing.md),
           GridView.count(
@@ -109,7 +109,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.value(
                 icon: LucideIcons.palette,
-                badgeColor: Colors.purple,
+                badgeColor: Brand.accent,
                 title: context.l10n.themeLabel,
                 value: themeLabel(app.themeMode),
                 onTap: () async {
@@ -140,7 +140,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.value(
                 icon: LucideIcons.swatchBook,
-                badgeColor: Colors.purple,
+                badgeColor: Brand.accent,
                 title: 'Accent Color',
                 value: _accentLabel(app.seedColor),
                 leadingDot: app.seedColor ?? Brand.seed,
@@ -171,7 +171,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
               SettingsTile.value(
                 icon: LucideIcons.arrowUpDown,
-                badgeColor: Colors.purple,
+                badgeColor: Brand.accent,
                 title: context.l10n.sortByLabel,
                 value:
                     '${_sortFieldLabel(context, app.sort.field)} '
@@ -204,7 +204,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.eyeOff,
-                badgeColor: Colors.purple,
+                badgeColor: Brand.accent,
                 title: 'File visibility',
                 subtitle: 'Hidden file types & dotfiles',
                 onTap:
@@ -246,7 +246,7 @@ class _QuickToggleTile extends StatelessWidget {
     return Material(
       color:
           active
-              ? Colors.purple.withValues(alpha: 0.14)
+              ? Brand.accent.withValues(alpha: 0.14)
               : scheme.surfaceContainerHigh,
       borderRadius: Radii.lgR,
       child: InkWell(
@@ -259,7 +259,7 @@ class _QuickToggleTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: Colors.purple),
+              Icon(icon, size: 20, color: Brand.accent),
               const SizedBox(width: Spacing.sm),
               Expanded(
                 child: Column(

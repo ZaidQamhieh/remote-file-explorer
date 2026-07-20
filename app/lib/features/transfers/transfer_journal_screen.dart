@@ -6,6 +6,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 
 class TransferJournalScreen extends ConsumerWidget {
   const TransferJournalScreen({super.key});
@@ -56,11 +57,7 @@ class TransferJournalScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    LucideIcons.history,
-                    size: 64,
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
-                  ),
+                  const GradientBlobHero(icon: LucideIcons.history, size: 120),
                   const SizedBox(height: Spacing.md),
                   Text(
                     context.l10n.noTransfersYet,

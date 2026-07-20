@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/sheet_chrome.dart';
@@ -38,7 +39,10 @@ Future<T?> showSettingsPicker<T>(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SheetHero(badge: const Icon(Icons.tune), title: title),
+                SheetHero(
+                  badge: const Icon(LucideIcons.slidersHorizontal),
+                  title: title,
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     Spacing.lg,
@@ -80,7 +84,7 @@ Widget _optionTile<T>(
 ) {
   final check =
       isSelected
-          ? Icon(Icons.check, size: 20, color: scheme.primary)
+          ? Icon(LucideIcons.check, size: 20, color: scheme.primary)
           : const SizedBox(width: 20);
   if (o.icon != null) {
     return ActionListTile(

@@ -39,7 +39,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             icon: LucideIcons.arrowUpDown,
             title: 'Transfers & Backup',
             subtitle: 'Photo backup, watched folders & history',
-            tint: Colors.green,
+            tint: Brand.online,
           ),
           const SizedBox(height: Spacing.sm),
           SettingsSection(
@@ -47,7 +47,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.cloudUpload,
-                badgeColor: Colors.green,
+                badgeColor: Brand.online,
                 title: context.l10n.photoBackupTitle,
                 subtitle: context.l10n.copyPhonePhotos,
                 onTap:
@@ -65,7 +65,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.arrowUpDown,
-                badgeColor: Colors.green,
+                badgeColor: Brand.online,
                 title: 'Compress downloads on cellular',
                 subtitle:
                     'Sends Accept-Encoding: gzip on mobile data for '
@@ -83,7 +83,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.history,
-                badgeColor: Colors.green,
+                badgeColor: Brand.online,
                 title: 'View transfer history',
                 subtitle: 'Completed uploads and downloads',
                 onTap:
@@ -158,11 +158,11 @@ class _WatchedFoldersSection extends ConsumerWidget {
     width: 38,
     height: 38,
     decoration: BoxDecoration(
-      color: Colors.green.withValues(alpha: 0.16),
+      color: Brand.online.withValues(alpha: 0.16),
       shape: BoxShape.circle,
     ),
     alignment: Alignment.center,
-    child: Icon(icon, size: 18, color: Colors.green),
+    child: Icon(icon, size: 18, color: Brand.online),
   );
 
   Future<void> _showAddDialog(

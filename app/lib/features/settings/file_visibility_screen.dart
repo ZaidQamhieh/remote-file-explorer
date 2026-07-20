@@ -52,7 +52,7 @@ class FileVisibilityScreen extends ConsumerWidget {
             icon: LucideIcons.eyeOff,
             title: 'File visibility',
             subtitle: 'Hidden types & dotfiles',
-            tint: Colors.purple,
+            tint: Brand.accent,
           ),
           const SizedBox(height: Spacing.md),
           SettingsSection(
@@ -60,7 +60,7 @@ class FileVisibilityScreen extends ConsumerWidget {
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.eyeOff,
-                badgeColor: Colors.purple,
+                badgeColor: Brand.accent,
                 title: context.l10n.hideDotfiles,
                 subtitle: context.l10n.hideDotfilesSubtitle,
                 value: prefs.hideDotfiles,

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/l10n_ext.dart';
@@ -161,7 +162,7 @@ class _ConnectionDiagnosticsSheetState
               width: double.infinity,
               child: FilledButton.tonalIcon(
                 onPressed: _probing ? null : _runProbes,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(LucideIcons.refreshCw, size: 18),
                 label: Text(context.l10n.retestButton),
               ),
             ),

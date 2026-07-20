@@ -339,26 +339,35 @@ class _HostCardState extends ConsumerState<HostCard> {
             GradientActionCircle(
               icon: LucideIcons.search,
               label: l.searchButton,
-              gradient: [Colors.blue.shade400, Colors.blue.shade800],
+              gradient: [
+                Brand.seed,
+                Color.lerp(Brand.seed, Colors.black, 0.3)!,
+              ],
               onTap: () => run(_openSearch),
             ),
           if (online)
             GradientActionCircle(
               icon: LucideIcons.hardDrive,
               label: l.storageMenuItem,
-              gradient: [Colors.green.shade400, Colors.green.shade800],
+              gradient: [
+                Brand.online,
+                Color.lerp(Brand.online, Colors.black, 0.3)!,
+              ],
               onTap: () => run(_openStorage),
             ),
           GradientActionCircle(
             icon: LucideIcons.settings,
             label: l.settingsMenuItem,
-            gradient: [Colors.purple.shade300, Colors.purple.shade700],
+            gradient: [
+              Brand.accent,
+              Color.lerp(Brand.accent, Colors.black, 0.3)!,
+            ],
             onTap: () => run(_openSettings),
           ),
           GradientActionCircle(
             icon: LucideIcons.userX,
             label: l.forgetComputerMenuItem,
-            gradient: [Colors.red.shade400, Colors.red.shade800],
+            gradient: [Brand.red, Color.lerp(Brand.red, Colors.black, 0.3)!],
             onTap: () => run(_confirmRemove),
           ),
         ];
@@ -490,7 +499,7 @@ class _HostCardState extends ConsumerState<HostCard> {
   Widget _buildHero(BuildContext context, {required bool online}) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    const tint = Colors.blue;
+    const tint = Brand.seed;
 
     Widget quickAction({
       required IconData icon,

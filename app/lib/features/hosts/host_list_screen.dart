@@ -6,6 +6,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
@@ -68,7 +69,7 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner_rounded),
+            icon: const Icon(LucideIcons.scanQrCode),
             tooltip: context.l10n.receiveFileTooltip,
             onPressed:
                 () => Navigator.of(context).push(
@@ -76,7 +77,7 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                 ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(LucideIcons.refreshCw),
             tooltip: context.l10n.refreshTooltip,
             onPressed: () => ref.invalidate(hostStoreProvider),
           ),
@@ -156,28 +157,34 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                       if (hosts.length > 1) ...[
                         const SizedBox(height: Spacing.md),
                         SectionLabel('Also paired · ${hosts.length - 1}'),
-                        GroupedCard(
-                          padded: false,
-                          children: [
-                            for (int i = 1; i < hosts.length; i++) ...[
-                              if (i > 1)
-                                Divider(
-                                  height: 1,
-                                  indent: Spacing.md,
-                                  endIndent: Spacing.md,
-                                  color: scheme.outlineVariant,
+                        ShadCard(
+                          padding: EdgeInsets.zero,
+                          radius: Radii.cardR,
+                          backgroundColor: scheme.surfaceContainer,
+                          border: ShadBorder.all(color: Colors.transparent),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              for (int i = 1; i < hosts.length; i++) ...[
+                                if (i > 1)
+                                  Divider(
+                                    height: 1,
+                                    indent: Spacing.md,
+                                    endIndent: Spacing.md,
+                                    color: scheme.outlineVariant,
+                                  ),
+                                AppearListItem(
+                                  index: i,
+                                  child: HostCard(
+                                    key: ValueKey(hosts[i].id),
+                                    host: hosts[i],
+                                    store: store,
+                                    isFirst: false,
+                                  ),
                                 ),
-                              AppearListItem(
-                                index: i,
-                                child: HostCard(
-                                  key: ValueKey(hosts[i].id),
-                                  host: hosts[i],
-                                  store: store,
-                                  isFirst: false,
-                                ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ],
                     ],
@@ -217,7 +224,7 @@ class _DeviceSearchBar extends StatelessWidget {
       ),
       leading: Padding(
         padding: const EdgeInsets.only(left: Spacing.sm),
-        child: Icon(Icons.search_rounded, size: 18, color: scheme.outline),
+        child: Icon(LucideIcons.search, size: 18, color: scheme.outline),
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: Spacing.sm,
@@ -255,19 +262,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: scheme.primaryContainer,
-              ),
-              child: Icon(
-                Icons.devices_rounded,
-                size: 56,
-                color: scheme.onPrimaryContainer,
-              ),
-            ),
+            const GradientBlobHero(icon: LucideIcons.monitor, size: 120),
             const SizedBox(height: Spacing.lg),
             Text(
               context.l10n.emptyStatePairTitle,
@@ -287,7 +282,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: Spacing.lg),
             FilledButton.icon(
               onPressed: onScan,
-              icon: const Icon(Icons.qr_code_scanner_rounded),
+              icon: const Icon(LucideIcons.scanQrCode),
               label: Text(context.l10n.scanQrCodeButton),
             ),
           ],

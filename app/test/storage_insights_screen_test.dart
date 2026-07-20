@@ -9,14 +9,17 @@ import 'package:remote_file_explorer/features/explorer/drives_view.dart'
 import 'package:remote_file_explorer/features/hosts/storage_insights_screen.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 const _host = Host(id: 'h1', label: 'Test PC', address: '100.64.0.1');
 
 Widget _app(Override override) => ProviderScope(
   overrides: [override],
-  child: const MaterialApp(
-    localizationsDelegates: l10nDelegates,
-    home: StorageInsightsScreen(host: _host),
+  child: wrapShad(
+    const MaterialApp(
+      localizationsDelegates: l10nDelegates,
+      home: StorageInsightsScreen(host: _host),
+    ),
   ),
 );
 

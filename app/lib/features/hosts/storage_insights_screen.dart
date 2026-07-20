@@ -7,13 +7,13 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
-import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/drives_view.dart' show drivesProvider;
@@ -27,6 +27,7 @@ class StorageInsightsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final drivesAsync = ref.watch(drivesProvider(host.id));
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,10 +51,20 @@ class StorageInsightsScreen extends ConsumerWidget {
             children: [
               _TotalCard(usage: total, driveCount: withCapacity.length),
               const SizedBox(height: Spacing.md),
-              GroupedCard(
-                children: [
-                  for (final drive in withCapacity) StorageGauge(drive: drive),
-                ],
+              ShadCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md,
+                  vertical: Spacing.sm,
+                ),
+                radius: Radii.cardR,
+                backgroundColor: scheme.surfaceContainer,
+                border: ShadBorder.all(color: Colors.transparent),
+                child: Column(
+                  children: [
+                    for (final drive in withCapacity)
+                      StorageGauge(drive: drive),
+                  ],
+                ),
               ),
             ],
           );
@@ -77,36 +88,41 @@ class _TotalCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final l10n = context.l10n;
 
-    return GroupedCard(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.allDrives, style: textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            ClipRRect(
-              borderRadius: Radii.stadiumR,
-              child: LinearProgressIndicator(
-                value: usage.usedFraction,
-                minHeight: 10,
-                backgroundColor: scheme.tertiaryContainer,
-                valueColor: AlwaysStoppedAnimation(scheme.tertiary),
-              ),
+    return ShadCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm,
+      ),
+      radius: Radii.cardR,
+      backgroundColor: scheme.surfaceContainer,
+      border: ShadBorder.all(color: Colors.transparent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.allDrives, style: textTheme.titleMedium),
+          const SizedBox(height: Spacing.sm),
+          ClipRRect(
+            borderRadius: Radii.stadiumR,
+            child: LinearProgressIndicator(
+              value: usage.usedFraction,
+              minHeight: 10,
+              backgroundColor: scheme.tertiaryContainer,
+              valueColor: AlwaysStoppedAnimation(scheme.tertiary),
             ),
-            const SizedBox(height: Spacing.xs),
-            Text(
-              l10n.freeOfTotalDrives(
-                formatSize(usage.freeBytes),
-                formatSize(usage.totalBytes),
-                driveCount,
-              ),
-              style: textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+          ),
+          const SizedBox(height: Spacing.xs),
+          Text(
+            l10n.freeOfTotalDrives(
+              formatSize(usage.freeBytes),
+              formatSize(usage.totalBytes),
+              driveCount,
             ),
-          ],
-        ),
-      ],
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

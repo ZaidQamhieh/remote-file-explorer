@@ -1,16 +1,16 @@
 // Package webui serves the browser-based web companion (agent control,
 // status, settings) as a static bundle embedded in the agent binary — one
-// binary, one port, no separate hosting step. Vanilla JS/HTML, no build
-// tool for markup: dist/index.html is served as-is. Styling is Tailwind CSS
-// compiled from src/input.css to dist/tailwind.css (`npm run build:css` in
-// this directory) — rebuild that before `go build` if src/input.css or
-// index.html's class usage changes.
+// binary, one port, no separate hosting step. The bundle is a Vite+React+
+// TypeScript SPA built from web/ (`npm run build` in that directory,
+// outDir "../dist") — rebuild that before `go build` if anything under
+// web/src changes.
 package webui
 
 import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 )
 
 //go:embed dist
@@ -39,6 +39,17 @@ func Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		// SPA fallback: the React app owns client-side routing (react-router,
+		// history mode — /login, /pair, /app/files, ...), so any path that
+		// isn't a real embedded file (a deep link, or a browser refresh on a
+		// non-root route) must still serve index.html rather than 404 —
+		// react-router then renders the matching route from the URL.
+		if r.URL.Path != "/" {
+			if _, err := fs.Stat(sub, strings.TrimPrefix(r.URL.Path, "/")); err != nil {
+				r = r.Clone(r.Context())
+				r.URL.Path = "/"
+			}
+		}
 		fileServer.ServeHTTP(w, r)
 	})
 }

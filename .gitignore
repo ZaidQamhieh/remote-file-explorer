@@ -38,5 +38,6 @@ Thumbs.db
 # Generated knowledge-graph artifact (regenerate with tools/rebuild-graph.sh)
 /graphify-out/
 
-# Web companion Tailwind build tooling (compiled output ships in dist/tailwind.css)
+# Web companion build tooling (compiled output ships in dist/)
 /agent/internal/webui/node_modules/
+/agent/internal/webui/web/node_modules/

@@ -142,11 +142,11 @@ export function Devices() {
     <div>
       <div className="stat-row-7">
         <div className="mini-stat"><div className="label">Total</div><div className="value">{total}</div></div>
-        <div className="mini-stat"><div className="label">Online</div><div className="value">{online}</div></div>
-        <div className="mini-stat"><div className="label">Guests</div><div className="value">{guests}</div></div>
-        <div className="mini-stat"><div className="label">Admins</div><div className="value">{admins}</div></div>
-        <div className="mini-stat"><div className="label">Read-only</div><div className="value">{readOnlyCount}</div></div>
-        <div className="mini-stat"><div className="label">Revoked</div><div className="value">{revokedCount}</div></div>
+        <div className="mini-stat"><div className="label">Online</div><div className="value" style={{ color: 'var(--green)' }}>{online}</div></div>
+        <div className="mini-stat"><div className="label">Guests</div><div className="value" style={{ color: 'var(--amber)' }}>{guests}</div></div>
+        <div className="mini-stat"><div className="label">Admins</div><div className="value" style={{ color: 'var(--primary)' }}>{admins}</div></div>
+        <div className="mini-stat"><div className="label">Read-only</div><div className="value" style={{ color: 'var(--amber)' }}>{readOnlyCount}</div></div>
+        <div className="mini-stat"><div className="label">Revoked</div><div className="value" style={{ color: 'var(--red)' }}>{revokedCount}</div></div>
         <div className="mini-stat">
           <div className="label">Storage used</div>
           <div className="value">{usedBytes != null ? `${(usedBytes / 1e9).toFixed(0)}GB` : '--'}</div>

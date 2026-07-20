@@ -93,11 +93,15 @@ export function Transfers() {
     {
       id: 'progress',
       header: 'Progress',
-      cell: ({ row }) => (
-        <div className="progress" style={{ width: 120 }}>
-          <span style={{ width: `${row.original.progress}%` }} />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const barColor =
+          row.original.status === 'completed' ? 'var(--green)' : row.original.status === 'failed' ? 'var(--red)' : undefined;
+        return (
+          <div className="progress" style={{ width: 120 }}>
+            <span style={{ width: `${row.original.progress}%`, background: barColor }} />
+          </div>
+        );
+      },
     },
     {
       id: 'status',
@@ -137,17 +141,17 @@ export function Transfers() {
       <div className="grid grid-4" style={{ marginBottom: 18 }}>
         <div className="card stat-card">
           <div className="label">Active now</div>
-          <div className="value">
+          <div className="value" style={{ color: 'var(--primary)', gap: 8 }}>
             <span className="live-dot" /> {data?.activeNow ?? 0}
           </div>
         </div>
         <div className="card stat-card">
           <div className="label">Completed today</div>
-          <div className="value">{data?.counts['completed'] ?? 0}</div>
+          <div className="value" style={{ color: 'var(--green)' }}>{data?.counts['completed'] ?? 0}</div>
         </div>
         <div className="card stat-card">
           <div className="label">Failed</div>
-          <div className="value">{data?.counts['failed'] ?? 0}</div>
+          <div className="value" style={{ color: 'var(--red)' }}>{data?.counts['failed'] ?? 0}</div>
         </div>
         <div className="card stat-card">
           <div className="label">Total sessions</div>
@@ -160,6 +164,9 @@ export function Transfers() {
           {FILTERS.map((f) => (
             <button key={f.id} className={statusFilter === f.id ? 'active' : ''} onClick={() => setStatusFilter(f.id)}>
               {f.label}
+              {f.id === 'failed' && (data?.counts['failed'] ?? 0) > 0 && (
+                <span className="badge red" style={{ padding: '0 5px', marginLeft: 5 }}>{data?.counts['failed']}</span>
+              )}
             </button>
           ))}
         </div>

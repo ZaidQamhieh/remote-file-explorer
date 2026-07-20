@@ -9,6 +9,18 @@ function since(created: number): string {
   return `since ${new Date(created * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg,var(--primary),var(--violet))',
+  'linear-gradient(135deg,var(--amber),#d98a1f)',
+  'linear-gradient(135deg,var(--green),#1f9d73)',
+  'linear-gradient(135deg,var(--red),#c23a51)',
+];
+function avatarGradient(username: string): string {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) hash = (hash * 31 + username.charCodeAt(i)) | 0;
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
 export function Users() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -65,7 +77,7 @@ export function Users() {
         <div className="grid grid-3">
           {list.map((u) => (
             <div className="card" key={u.username}>
-              <div className="who-avatar">{u.username.slice(0, 1).toUpperCase()}</div>
+              <div className="who-avatar" style={{ background: avatarGradient(u.username) }}>{u.username.slice(0, 1).toUpperCase()}</div>
               <div style={{ fontSize: 13, fontWeight: 600, marginTop: 10 }}>{u.username}</div>
               <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 2 }}>{since(u.created)}</div>
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>

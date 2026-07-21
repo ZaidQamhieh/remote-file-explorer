@@ -180,6 +180,22 @@
     "placeholders": { "path": {"type": "String"} }
   },
   "searchingEverywhere": "Searching everywhere",
+  "resultsInHost": "{count, plural, =1{1 result} other{{count} results}} in {host}",
+  "@resultsInHost": {
+    "placeholders": { "count": {"type": "int"}, "host": {"type": "String"} }
+  },
+  "searchEveryHostButton": "Search every paired device instead",
+  "fileTypeLabel": "File type",
+  "modifiedLabel": "Modified",
+  "applyFiltersButton": "Apply filters",
+  "searchingNOnlineHosts": "{count, plural, =1{Searching 1 online host} other{Searching {count} online hosts}}",
+  "@searchingNOnlineHosts": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "hostOfflineSkipped": "{host} is offline — skipped",
+  "@hostOfflineSkipped": {
+    "placeholders": { "host": {"type": "String"} }
+  },
 
   "searchTooltip": "Search",
   "clearSelectionTooltip": "Clear selection",
@@ -547,6 +563,27 @@
   "@shareLinkFailed": {
     "placeholders": { "error": {"type": "String"} }
   },
+  "shareLinkOnSubtitle": "Anyone with the link can view",
+  "noActiveLinkLabel": "No active link",
+  "expiresOnDate": "Expires {date}",
+  "@expiresOnDate": {
+    "placeholders": { "date": {"type": "String"} }
+  },
+  "activeSharesLabel": "Active shares ({count})",
+  "@activeSharesLabel": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "sendDirectlyLabel": "Send directly",
+  "qrCodeLabel": "QR code",
+  "moreLabel": "More",
+  "saveSharedFileTitle": "Save shared file",
+  "sharedFilesCountSubtitle": "{count, plural, =1{1 file} other{{count} files}} selected",
+  "@sharedFilesCountSubtitle": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "saveToLabel": "Save to",
+  "saveFileButton": "Save file",
+  "extractAllButton": "Extract all",
   "saveToDeviceTooltip": "Save to device",
   "showInFolderTooltip": "Show in folder",
   "deleteTooltip": "Delete",

@@ -13,6 +13,8 @@ import '../../core/models/host.dart';
 import '../../core/platform/file_opener.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../explorer/meta_sheet.dart';
+import '../share/share_sheet.dart';
 import '../transfers/transfer_state.dart';
 
 /// The set of cross-cutting actions a preview viewer offers for the file it's
@@ -160,13 +162,11 @@ class PreviewActions {
 }
 
 /// The unified preview top bar shared by every viewer type. Presents the file
-/// **name** + **size** (via the one [formatSize]) and a trailing action row:
-/// Share, Save, Delete, and "Show in folder", all driven by [actions] for the
-/// page currently visible.
-///
-/// "Show in folder" simply pops the preview back to the containing folder — in
-/// the in-folder case the explorer listing is exactly one frame below the
-/// preview route, so closing it lands the user on the file's folder.
+/// **name** + **size** (via the one [formatSize]) and a trailing 2-icon
+/// action row — Share (mint a link, [openShareLinkSheet]) and "..."
+/// ([openPreviewMetaSheet]) — matching the mockup's preview chrome exactly.
+/// Save/delete/rename/open-with/QR-handoff all now live behind the "..."
+/// meta sheet instead of being spread across individual top-bar icons.
 ///
 /// Rendered as a real [AppBar] (cheap on Skia — no blur/shader). On dark media
 /// canvases (image/video) it paints translucent black with white foreground so
@@ -175,8 +175,7 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
   const PreviewTopBar({
     super.key,
     required this.actions,
-    this.onDelete,
-    this.onShowInFolder,
+    this.onChanged,
     this.leadingActions = const [],
     this.onDark = false,
   });
@@ -184,12 +183,11 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// Actions for the currently visible entry.
   final PreviewActions actions;
 
-  /// Invoked when Delete completes (so a pager can drop the page). When null,
-  /// Delete just runs [PreviewActions.delete] and pops the route itself.
-  final VoidCallback? onDelete;
-
-  /// Override for "Show in folder". Defaults to popping the preview route.
-  final VoidCallback? onShowInFolder;
+  /// Invoked when the meta sheet reports a change (rename/delete/extract/…)
+  /// so a pager can react (e.g. drop the current page). When null, the
+  /// preview route itself is popped — the safe default for a single-entry
+  /// preview, where a changed/deleted file has nothing else useful to show.
+  final VoidCallback? onChanged;
 
   /// Extra per-type actions inserted before the shared ones (e.g. the text
   /// viewer's Edit and line-numbers toggle).
@@ -239,44 +237,105 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         ...leadingActions,
         IconButton(
-          icon: const Icon(LucideIcons.externalLink),
-          tooltip: context.l10n.openWithTooltip,
-          onPressed: () => actions.openWith(context),
+          icon: const Icon(LucideIcons.share2),
+          tooltip: context.l10n.shareLinkButton,
+          onPressed: () => openShareLinkSheet(context, entry, actions.client),
         ),
         IconButton(
-          icon: const Icon(LucideIcons.share),
-          tooltip: context.l10n.shareTooltip,
-          onPressed: () => actions.share(context),
+          icon: const Icon(LucideIcons.moreVertical),
+          tooltip: context.l10n.moreTooltip,
+          onPressed:
+              () =>
+                  openPreviewMetaSheet(context, actions, onChanged: onChanged),
         ),
-        Consumer(
-          builder:
-              (context, ref, _) => IconButton(
-                icon: const Icon(LucideIcons.download),
-                tooltip: context.l10n.saveToDeviceTooltip,
-                onPressed: () => actions.save(context, ref),
-              ),
-        ),
-        IconButton(
-          icon: const Icon(LucideIcons.folderOpen),
-          tooltip: context.l10n.showInFolderTooltip,
-          onPressed: onShowInFolder ?? () => Navigator.of(context).maybePop(),
-        ),
-        IconButton(
-          icon: const Icon(LucideIcons.trash2),
-          tooltip: context.l10n.deleteTooltip,
-          onPressed: () async {
-            final deleted = await actions.delete(context);
-            if (!deleted) return;
-            if (onDelete != null) {
-              onDelete!();
+      ],
+    );
+  }
+}
+
+/// Mints a one-time share link for [entry] and shows the app's [ShareSheet] —
+/// the "Share" icon in every preview screen's chrome (mockup: tapping Share
+/// opens the link/QR/active-shares sheet, not the OS share chooser). Distinct
+/// from [PreviewActions.share], the raw "send the file bytes" share still
+/// offered from inside the meta sheet.
+Future<void> openShareLinkSheet(
+  BuildContext context,
+  Entry entry,
+  AgentClient client,
+) async {
+  try {
+    final link = await client.mintShareLink(entry.path);
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (_) => ShareSheet(client: client, link: link, fileName: entry.name),
+    );
+  } catch (e) {
+    if (context.mounted) {
+      showError(context, context.l10n.shareLinkFailed(humanizeError(e)));
+    }
+  }
+}
+
+/// The shared trailing 2-icon chrome (Share, "...") for a **standalone**
+/// preview screen (the rare no-siblings path — [chromeless]:false, not
+/// backed by [PreviewPager]/[PreviewTopBar]). [host] is optional because a
+/// few call sites (mostly tests) construct these screens without one; the
+/// meta-sheet icon simply doesn't render in that case (it needs a [Host]),
+/// while Share (only needs [entry] + [client]) always does.
+List<Widget> previewChromeActions({
+  required BuildContext context,
+  required Entry entry,
+  required AgentClient client,
+  Host? host,
+}) => [
+  IconButton(
+    icon: const Icon(LucideIcons.share2),
+    tooltip: context.l10n.shareLinkButton,
+    onPressed: () => openShareLinkSheet(context, entry, client),
+  ),
+  if (host != null)
+    IconButton(
+      icon: const Icon(LucideIcons.moreVertical),
+      tooltip: context.l10n.moreTooltip,
+      onPressed:
+          () => openPreviewMetaSheet(
+            context,
+            PreviewActions(entry: entry, host: host, client: client),
+          ),
+    ),
+];
+
+/// Opens the shared [MetaSheet] for [actions.entry] — the preview chrome's
+/// "..." icon (mockup: 3 stacked dots). Reuses the explorer's existing meta
+/// sheet (rename/download/delete/QR-handoff/etc.) instead of re-building a
+/// second, smaller actions list — it already covers everything
+/// [PreviewTopBar] used to offer directly (openWith/save/showInFolder/delete).
+Future<void> openPreviewMetaSheet(
+  BuildContext context,
+  PreviewActions actions, {
+  VoidCallback? onChanged,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder:
+        (_) => MetaSheet(
+          entry: actions.entry,
+          host: actions.host,
+          client: actions.client,
+          onChanged: () {
+            actions.onDeleted?.call();
+            if (onChanged != null) {
+              onChanged();
             } else if (context.mounted) {
               Navigator.of(context).maybePop();
             }
           },
         ),
-      ],
-    );
-  }
+  );
 }
 
 /// Fallback MIME type lookup from file extension, used when the agent's

@@ -204,6 +204,7 @@ Widget? _viewerFor(
       return ImagePreviewScreen(
         entry: entry,
         client: client,
+        host: host,
         chromeless: chromeless,
         heroTag: imagePreviewHeroTag(host.id, entry.path),
       );
@@ -211,12 +212,14 @@ Widget? _viewerFor(
       return PdfPreviewScreen(
         entry: entry,
         client: client,
+        host: host,
         chromeless: chromeless,
       );
     case _PreviewKind.video:
       return VideoPreviewScreen(
         entry: entry,
         client: client,
+        host: host,
         chromeless: chromeless,
         isCurrent: isCurrent,
       );
@@ -427,8 +430,11 @@ class _PreviewPagerState extends ConsumerState<PreviewPager> {
     _preloadNeighbours();
   }
 
-  /// Drops the entry at [_index] from the pager after a delete. If it was the
-  /// last remaining page, pops the whole pager.
+  /// Drops the entry at [_index] from the pager after the meta sheet reports
+  /// a change (delete, rename, extract, …) — the old [Entry] object (name/
+  /// path) is no longer valid either way, so the safest move is to drop this
+  /// page rather than keep showing stale content. If it was the last
+  /// remaining page, pops the whole pager.
   void _onDeletedCurrent() {
     if (_entries.length <= 1) {
       Navigator.of(context).maybePop();
@@ -458,7 +464,7 @@ class _PreviewPagerState extends ConsumerState<PreviewPager> {
           client: widget.client,
           onDeleted: widget.onChanged,
         ),
-        onDelete: _onDeletedCurrent,
+        onChanged: _onDeletedCurrent,
       ),
       body: Stack(
         children: [

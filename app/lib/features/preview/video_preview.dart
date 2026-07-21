@@ -7,7 +7,9 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/models/host.dart';
 import '../../core/ui/format.dart';
+import 'preview_actions.dart';
 import 'preview_common.dart';
 import 'video_loopback_proxy.dart';
 
@@ -27,12 +29,18 @@ class VideoPreviewScreen extends StatefulWidget {
     super.key,
     required this.entry,
     required this.client,
+    this.host,
     this.chromeless = false,
     this.isCurrent = true,
   });
 
   final Entry entry;
   final AgentClient client;
+
+  /// The host this entry lives on. Only used (optionally) to build the
+  /// standalone chrome's "..." meta-sheet action — null in the rare
+  /// no-siblings path where it isn't available (mostly tests).
+  final Host? host;
 
   /// When `true`, omit the app bar so a host ([PreviewPager]) can overlay one
   /// shared top bar across sibling pages.
@@ -255,6 +263,12 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       title: widget.entry.name,
       backgroundColor: Colors.black,
       chromeless: widget.chromeless,
+      actions: previewChromeActions(
+        context: context,
+        entry: widget.entry,
+        client: widget.client,
+        host: widget.host,
+      ),
       body: FutureBuilder<ChewieController?>(
         future: _future,
         builder: (context, snapshot) {

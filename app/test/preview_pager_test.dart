@@ -74,10 +74,11 @@ void main() {
     expect(find.text('a.txt'), findsOneWidget); // top-bar title
     expect(find.text('alpha file'), findsOneWidget); // page body
 
-    // Shared actions present.
-    expect(find.byIcon(LucideIcons.share), findsOneWidget);
-    expect(find.byIcon(LucideIcons.folderOpen), findsOneWidget);
-    expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
+    // Shared top-bar chrome: Share + a "more" menu that opens the meta sheet
+    // for reveal/delete/etc (mockup's minimal 2-icon chrome, replacing the
+    // old direct folderOpen/trash2 icons).
+    expect(find.byIcon(LucideIcons.share2), findsOneWidget);
+    expect(find.byIcon(LucideIcons.moreVertical), findsOneWidget);
 
     // Page indicator shows "1 of 2".
     expect(find.text('1 of 2'), findsOneWidget);

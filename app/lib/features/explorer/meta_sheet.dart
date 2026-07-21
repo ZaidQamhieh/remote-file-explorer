@@ -534,7 +534,12 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        builder: (_) => ShareSheet(client: widget.client, link: link),
+        builder:
+            (_) => ShareSheet(
+              client: widget.client,
+              link: link,
+              fileName: _entry.name,
+            ),
       );
     } catch (e) {
       if (context.mounted) {

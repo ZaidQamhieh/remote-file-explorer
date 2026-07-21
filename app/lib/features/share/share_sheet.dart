@@ -14,10 +14,19 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// Bottom sheet shown after minting an R1 one-time share link: the URL with
 /// a copy button, a live expiry countdown, and a Revoke button.
 class ShareSheet extends StatefulWidget {
-  const ShareSheet({super.key, required this.client, required this.link});
+  const ShareSheet({
+    super.key,
+    required this.client,
+    required this.link,
+    required this.fileName,
+  });
 
   final AgentClient client;
   final ShareLink link;
+
+  /// Shown as the sheet's subtitle (mockup: "Share" / "Q3-roadmap.pdf") —
+  /// the link URL is shown separately in the body's link row.
+  final String fileName;
 
   @override
   State<ShareSheet> createState() => _ShareSheetState();
@@ -88,7 +97,7 @@ class _ShareSheetState extends State<ShareSheet> {
             SheetHero(
               badge: const Icon(LucideIcons.link),
               title: context.l10n.shareLinkSheetTitle,
-              subtitle: widget.link.url,
+              subtitle: widget.fileName,
               onClose: () => Navigator.pop(context),
             ),
             Padding(
@@ -101,19 +110,17 @@ class _ShareSheetState extends State<ShareSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  QuickActionRow(
-                    actions: [
-                      GradientActionCircle(
-                        icon: LucideIcons.copy,
-                        label: context.l10n.copyButton,
-                        gradient: const [Brand.seed, Brand.accent],
-                        onTap: () => _copy(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: Spacing.md),
                   ActionListCard(
                     children: [
+                      ActionListTile(
+                        icon: LucideIcons.link,
+                        label: widget.link.url,
+                        trailing: TextButton(
+                          onPressed: () => _copy(context),
+                          child: Text(context.l10n.copyButton),
+                        ),
+                        onTap: () => _copy(context),
+                      ),
                       ActionListTile(
                         icon: LucideIcons.clock,
                         label:

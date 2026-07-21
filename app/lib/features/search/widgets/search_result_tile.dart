@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/format.dart';
+import '../../../core/ui/pressable.dart';
 import '../search_logic.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -22,31 +23,61 @@ class SearchResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final subtitleParts = <String>[
       entry.path,
       if (!entry.isDir) formatSize(entry.size),
       if (entry.modified != null) formatDate(entry.modified!),
     ];
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: Spacing.md,
-        vertical: Spacing.xs,
-      ),
-      leading: _resultIconTile(entry),
-      title: _highlightedName(context),
-      subtitle: Text(
-        subtitleParts.where((s) => s.isNotEmpty).join('  ·  '),
-        overflow: TextOverflow.ellipsis,
-        maxLines: 2,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: entry.isDir ? const Icon(LucideIcons.chevronRight) : null,
+    // Mockup's `.row`: 38x38 tinted `.row-icon`, 14px/500 title, 11.5px
+    // faint monospace subtitle (the search result's path).
+    return Pressable(
       onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: 11,
+          horizontal: Spacing.xs,
+        ),
+        child: Row(
+          children: [
+            _resultIconTile(entry),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _highlightedName(context),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitleParts.where((s) => s.isNotEmpty).join('  ·  '),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontFamily: 'JetBrains Mono',
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (entry.isDir) ...[
+              const SizedBox(width: Spacing.xs),
+              Icon(
+                LucideIcons.chevronRight,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
   Widget _highlightedName(BuildContext context) {
-    final baseStyle = Theme.of(context).textTheme.bodyLarge;
+    const baseStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
     final range = highlight ? highlightRange(entry.name, query) : null;
     if (range == null) {
       return Text(
@@ -55,7 +86,7 @@ class SearchResultTile extends StatelessWidget {
         style: baseStyle,
       );
     }
-    final highlightStyle = baseStyle?.copyWith(
+    final highlightStyle = baseStyle.copyWith(
       fontWeight: FontWeight.bold,
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -63,7 +94,9 @@ class SearchResultTile extends StatelessWidget {
     return RichText(
       overflow: TextOverflow.ellipsis,
       text: TextSpan(
-        style: baseStyle,
+        style: baseStyle.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         children: [
           TextSpan(text: entry.name.substring(0, range.start)),
           TextSpan(
@@ -77,21 +110,20 @@ class SearchResultTile extends StatelessWidget {
   }
 }
 
-/// Wraps [resultIcon] in a tinted rounded tile (same treatment as the
-/// explorer's own entry tiles) so a result list scans by color instead of
-/// requiring every icon to be read individually.
+/// The mockup's `.row-icon`: 38x38 rounded square (`Radii.smR`, r-md) with a
+/// .14-alpha tint of the entry's category colour.
 Widget _resultIconTile(Entry entry) {
   final icon = resultIcon(entry);
   final color = icon.color ?? Colors.grey;
   return Container(
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.15),
-      borderRadius: Radii.cardR,
+      color: color.withValues(alpha: 0.14),
+      borderRadius: Radii.smR,
     ),
     alignment: Alignment.center,
-    child: Icon(icon.icon, color: color, size: 20),
+    child: Icon(icon.icon, color: color, size: 19),
   );
 }
 

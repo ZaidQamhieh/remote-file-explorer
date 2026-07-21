@@ -8,6 +8,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/share_link.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -94,11 +95,9 @@ class _ShareSheetState extends State<ShareSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SheetHero(
-              badge: const Icon(LucideIcons.link),
+            SheetHead(
               title: context.l10n.shareLinkSheetTitle,
               subtitle: widget.fileName,
-              onClose: () => Navigator.pop(context),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -110,40 +109,202 @@ class _ShareSheetState extends State<ShareSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ActionListCard(
-                    children: [
-                      ActionListTile(
-                        icon: LucideIcons.link,
-                        label: widget.link.url,
-                        trailing: TextButton(
-                          onPressed: () => _copy(context),
-                          child: Text(context.l10n.copyButton),
+                  // Mockup's `.card` wrapping a link row + expiry row.
+                  Container(
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      border: Border.all(color: scheme.outlineVariant),
+                      borderRadius: Radii.lgR,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      children: [
+                        _LinkRow(
+                          url: widget.link.url,
+                          onCopy: () => _copy(context),
+                          showDivider: true,
                         ),
-                        onTap: () => _copy(context),
-                      ),
-                      ActionListTile(
-                        icon: LucideIcons.clock,
-                        label:
-                            expired
-                                ? context.l10n.shareLinkExpired
-                                : context.l10n.shareLinkExpiresIn(
-                                  _format(_remaining),
-                                ),
-                        tint: expired ? scheme.error : null,
-                        trailing: const SizedBox.shrink(),
-                        onTap: () {},
-                      ),
-                      ActionListTile(
-                        icon: LucideIcons.unlink,
-                        label: context.l10n.shareLinkRevokeButton,
-                        tint: scheme.error,
-                        onTap: () => _revoke(context),
-                      ),
-                    ],
+                        _StatusRow(
+                          icon: LucideIcons.clock,
+                          label:
+                              expired
+                                  ? context.l10n.shareLinkExpired
+                                  : context.l10n.shareLinkExpiresIn(
+                                    _format(_remaining),
+                                  ),
+                          tint: expired ? scheme.error : null,
+                          showDivider: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  _GhostBlockButton(
+                    label: context.l10n.shareLinkRevokeButton,
+                    icon: LucideIcons.unlink,
+                    color: scheme.error,
+                    onTap: () => _revoke(context),
                   ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.row`: a mono URL title + a small `.btn-ghost.btn-sm`
+/// "Copy" button, no leading icon (the mockup's link row is bare text).
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    required this.url,
+    required this.onCopy,
+    required this.showDivider,
+  });
+
+  final String url;
+  final VoidCallback onCopy;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      decoration: BoxDecoration(
+        border:
+            showDivider
+                ? Border(bottom: BorderSide(color: scheme.outlineVariant))
+                : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              url,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'JetBrains Mono',
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Pressable(
+            onTap: onCopy,
+            pressedScale: 0.97,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: Radii.smR,
+              ),
+              child: Text(
+                context.l10n.copyButton,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A plain icon + label row (the mockup's `.row` with no trailing action) —
+/// used for the non-interactive expiry status line.
+class _StatusRow extends StatelessWidget {
+  const _StatusRow({
+    required this.icon,
+    required this.label,
+    required this.showDivider,
+    this.tint,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool showDivider;
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = tint ?? scheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      decoration: BoxDecoration(
+        border:
+            showDivider
+                ? Border(bottom: BorderSide(color: scheme.outlineVariant))
+                : null,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`, with an optional colour override
+/// (e.g. destructive red for Revoke).
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = color ?? scheme.onSurface;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(icon, size: 16, color: fg),
           ],
         ),
       ),

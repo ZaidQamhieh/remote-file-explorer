@@ -4,6 +4,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import 'preview_common.dart';
 import 'text_editor.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -83,17 +84,16 @@ class _TextPreviewScreenState extends State<TextPreviewScreen> {
         loadedText != null &&
         (widget.entry.size ?? loadedText.length) <= kMaxEditableBytes;
     return [
-      IconButton(
-        icon: const Icon(LucideIcons.listOrdered),
-        tooltip: _showLineNumbers ? 'Hide line numbers' : 'Show line numbers',
-        isSelected: _showLineNumbers,
-        onPressed: () => setState(() => _showLineNumbers = !_showLineNumbers),
+      _ToggleIconBtn(
+        icon: LucideIcons.listOrdered,
+        selected: _showLineNumbers,
+        onTap: () => setState(() => _showLineNumbers = !_showLineNumbers),
       ),
       if (canEdit)
-        IconButton(
-          icon: const Icon(LucideIcons.pencil),
-          tooltip: 'Edit',
-          onPressed: () => _edit(context, loadedText),
+        _ToggleIconBtn(
+          icon: LucideIcons.pencil,
+          selected: false,
+          onTap: () => _edit(context, loadedText),
         ),
     ];
   }
@@ -223,4 +223,43 @@ class _NumberedText extends StatelessWidget {
 class _TooLarge implements Exception {
   _TooLarge(this.size);
   final int size;
+}
+
+/// The mockup's `.iconbtn`/`.iconbtn.primary`: 34x34, 19px svg; the selected
+/// state (line-numbers on) tints with `primary-tint` background + `primary`
+/// icon colour instead of Material's `isSelected` highlight.
+class _ToggleIconBtn extends StatelessWidget {
+  const _ToggleIconBtn({
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: selected ? Brand.seed.withValues(alpha: 0.14) : null,
+          borderRadius: Radii.stadiumR,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          icon,
+          size: 19,
+          color:
+              selected
+                  ? Brand.seed
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
 }

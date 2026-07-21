@@ -33,7 +33,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('Search all hosts...'), findsOneWidget);
+    expect(find.text('Search everywhere…'), findsOneWidget);
   });
 
   testWidgets('shows empty prompt when query is blank', (tester) async {

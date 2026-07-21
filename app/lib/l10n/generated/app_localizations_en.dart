@@ -2264,10 +2264,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncLocalPath => 'Local Folder';
 
   @override
-  String get crossHostSearchTitle => 'Search All Hosts';
+  String get crossHostSearchTitle => 'Cross-Host Search';
 
   @override
-  String get crossHostSearchHint => 'Search all hosts...';
+  String get crossHostSearchHint => 'Search everywhere…';
 
   @override
   String crossHostSearching(int count) {
@@ -2282,6 +2282,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get crossHostSearchTooltip => 'Search all hosts';
+
+  @override
+  String crossHostUnreachableCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return '$count host$_temp0 unreachable';
+  }
+
+  @override
+  String crossHostSearchingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 's',
+      one: '',
+    );
+    return 'Searching $count online host$_temp0';
+  }
+
+  @override
+  String crossHostOffline(String host) {
+    return '$host is offline — skipped';
+  }
 
   @override
   String get commandPaletteTitle => 'Command Palette';

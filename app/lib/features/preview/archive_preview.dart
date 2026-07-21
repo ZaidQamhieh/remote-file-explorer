@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/api/agent_client.dart';
 import '../../core/models/archive_entry.dart';
 import '../../core/models/entry.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import 'preview_common.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -93,19 +95,44 @@ class _ArchivePreviewScreenState extends State<ArchivePreviewScreen> {
       body: Column(
         children: [
           if (_filter.isNotEmpty)
-            Material(
-              child: ListTile(
-                dense: true,
-                leading: const Icon(LucideIcons.cornerDownRight, size: 18),
-                title: Text(
-                  '/$_filter',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(LucideIcons.x, size: 18),
-                  onPressed: () => setState(() => _filter = ''),
-                ),
-              ),
+            Builder(
+              builder: (context) {
+                final scheme = Theme.of(context).colorScheme;
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        LucideIcons.cornerDownRight,
+                        size: 16,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '/$_filter',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      Pressable(
+                        onTap: () => setState(() => _filter = ''),
+                        child: Icon(
+                          LucideIcons.x,
+                          size: 18,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           Expanded(child: body),
         ],
@@ -118,15 +145,66 @@ class _ArchivePreviewScreenState extends State<ArchivePreviewScreen> {
     if (entries.isEmpty) {
       return const Center(child: Text('Empty archive'));
     }
+    final scheme = Theme.of(context).colorScheme;
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       itemCount: entries.length,
       itemBuilder: (ctx, i) {
         final e = entries[i];
-        return ListTile(
-          leading: Icon(e.isDir ? LucideIcons.folder : LucideIcons.file),
-          title: Text(e.path),
-          subtitle: e.isDir ? null : Text(formatSize(e.size)),
+        final color = e.isDir ? Brand.amber : scheme.onSurfaceVariant;
+        return Pressable(
           onTap: e.isDir ? () => setState(() => _filter = e.path) : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color:
+                        e.isDir
+                            ? Brand.amber.withValues(alpha: 0.14)
+                            : scheme.surfaceContainerHigh,
+                    borderRadius: Radii.smR,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    e.isDir ? LucideIcons.folder : LucideIcons.file,
+                    size: 19,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(width: Spacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        e.path,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (!e.isDir) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          formatSize(e.size),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

@@ -5,6 +5,7 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import 'preview_common.dart';
 import 'text_editor.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -57,11 +58,19 @@ class _MarkdownPreviewScreenState extends State<MarkdownPreviewScreen> {
   }
 
   List<Widget> _controls() {
+    // The mockup's `.iconbtn`: 34x34, 19px svg.
     return [
-      IconButton(
-        icon: Icon(_showRaw ? LucideIcons.code : LucideIcons.fileText),
-        tooltip: _showRaw ? 'Show rendered' : 'Show raw',
-        onPressed: () => setState(() => _showRaw = !_showRaw),
+      Pressable(
+        onTap: () => setState(() => _showRaw = !_showRaw),
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(
+            _showRaw ? LucideIcons.code : LucideIcons.fileText,
+            size: 19,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
       ),
     ];
   }

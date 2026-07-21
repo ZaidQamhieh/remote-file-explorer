@@ -16,6 +16,7 @@ import '../../core/storage/saved_searches.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack, folderLabel;
 import 'search_logic.dart';
@@ -256,84 +257,124 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // The mockup's `.appbar`: back iconbtn, a flex-1 `.searchbar` pill, and a
+    // filter iconbtn — a plain padded row, not a Material `AppBar`.
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment.topLeft,
-              radius: 1.6,
-              colors: [
-                scheme.primary.withValues(alpha: 0.22),
-                scheme.surface.withValues(alpha: 0),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Row(
+                children: [
+                  _IconBtn(
+                    icon: LucideIcons.arrowLeft,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surface,
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: Radii.stadiumR,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.search,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _controller,
+                              autofocus: true,
+                              textInputAction: TextInputAction.search,
+                              style: const TextStyle(fontSize: 13.5),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                hintText: context.l10n.searchHint,
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: _onChanged,
+                              onSubmitted: _onSubmitted,
+                            ),
+                          ),
+                          if (_controller.text.isNotEmpty) ...[
+                            Pressable(
+                              onTap: () => _saveCurrentSearch(context),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  LucideIcons.bookmarkPlus,
+                                  size: 16,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            Pressable(
+                              onTap: () {
+                                _controller.clear();
+                                _onChanged('');
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  LucideIcons.x,
+                                  size: 16,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilterButton(
+                    activeCount: _activeFilterCount,
+                    onPressed: _openFiltersSheet,
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: Spacing.md),
+                  child: _ScopePill(
+                    searchFromHere: _searchFromHere,
+                    currentPath: widget.currentPath,
+                    onTap: _openFiltersSheet,
+                  ),
+                ),
+                Expanded(
+                  child: CategoryChipsRow(
+                    selected: _selectedCategories,
+                    onToggle: _toggleCategory,
+                  ),
+                ),
               ],
             ),
-          ),
-        ),
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: context.l10n.searchHint,
-            border: InputBorder.none,
-          ),
-          onChanged: _onChanged,
-          onSubmitted: _onSubmitted,
-        ),
-        actions: [
-          if (_controller.text.isNotEmpty) ...[
-            IconButton(
-              icon: const Icon(LucideIcons.bookmarkPlus),
-              tooltip: context.l10n.saveSearch,
-              onPressed: () => _saveCurrentSearch(context),
-            ),
-            IconButton(
-              icon: const Icon(LucideIcons.x),
-              tooltip: context.l10n.clearTooltip,
-              onPressed: () {
-                _controller.clear();
-                _onChanged('');
-              },
-            ),
+            if (_isGlob) const GlobIndicator(),
+            if (_truncated || _timeBudgetHit)
+              TruncationBanner(
+                truncated: _truncated,
+                timeBudgetHit: _timeBudgetHit,
+                limit: _results.length,
+              ),
+            Divider(height: 1, color: scheme.outlineVariant),
+            Expanded(child: _buildBody(context)),
           ],
-          FilterButton(
-            activeCount: _activeFilterCount,
-            onPressed: _openFiltersSheet,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: Spacing.md),
-                child: _ScopePill(
-                  searchFromHere: _searchFromHere,
-                  currentPath: widget.currentPath,
-                  onTap: _openFiltersSheet,
-                ),
-              ),
-              Expanded(
-                child: CategoryChipsRow(
-                  selected: _selectedCategories,
-                  onToggle: _toggleCategory,
-                ),
-              ),
-            ],
-          ),
-          if (_isGlob) const GlobIndicator(),
-          if (_truncated || _timeBudgetHit)
-            TruncationBanner(
-              truncated: _truncated,
-              timeBudgetHit: _timeBudgetHit,
-              limit: _results.length,
-            ),
-          const Divider(height: 1),
-          Expanded(child: _buildBody(context)),
-        ],
+        ),
       ),
     );
   }
@@ -443,51 +484,47 @@ class _ScopePill extends StatelessWidget {
         searchFromHere
             ? folderLabel(currentPath)
             : context.l10n.searchingEverywhere;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Brand.seed, Brand.accent],
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Brand.seed, Brand.accent],
+          boxShadow: [
+            BoxShadow(
+              color: Brand.seed.withValues(alpha: 0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Brand.seed.withValues(alpha: 0.4),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                searchFromHere ? LucideIcons.folder : LucideIcons.globe,
-                size: 15,
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              searchFromHere ? LucideIcons.folder : LucideIcons.globe,
+              size: 15,
+              color: Colors.white,
+            ),
+            const SizedBox(width: Spacing.xs),
+            Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
               ),
-              const SizedBox(width: Spacing.xs),
-              Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -601,6 +638,7 @@ class _RecentAndSavedSearches extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final saved = ref.watch(savedSearchesProvider).valueOrNull ?? const [];
+    final scheme = Theme.of(context).colorScheme;
 
     return ListView(
       children: [
@@ -609,27 +647,106 @@ class _RecentAndSavedSearches extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
               context.l10n.savedSearches,
-              style: Theme.of(context).textTheme.labelLarge,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.09,
+              ),
             ),
           ),
           for (final s in saved)
-            ListTile(
-              leading: const Icon(LucideIcons.bookmark),
-              title: Text(s.name),
-              subtitle: Text(s.query),
-              trailing: IconButton(
-                icon: const Icon(LucideIcons.x, size: 18),
-                tooltip: context.l10n.deleteSavedSearch,
-                onPressed:
-                    () =>
-                        ref.read(savedSearchesProvider.notifier).remove(s.name),
-              ),
+            Pressable(
               onTap: () => onSelectSaved(s.query),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 11,
+                  horizontal: Spacing.md,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Brand.seed.withValues(alpha: 0.14),
+                        borderRadius: Radii.smR,
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        LucideIcons.bookmark,
+                        size: 19,
+                        color: Brand.seed,
+                      ),
+                    ),
+                    const SizedBox(width: Spacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            s.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            s.query,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Pressable(
+                      onTap:
+                          () => ref
+                              .read(savedSearchesProvider.notifier)
+                              .remove(s.name),
+                      child: Padding(
+                        padding: const EdgeInsets.all(Spacing.xs),
+                        child: Icon(
+                          LucideIcons.x,
+                          size: 18,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          const Divider(),
+          const Divider(height: 1),
         ],
         RecentSearchesView(onSelect: onSelectRecent),
       ],
+    );
+  }
+}
+
+/// The mockup's `.iconbtn`: 34x34, 19px svg, no background until pressed.
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+      ),
     );
   }
 }

@@ -23,31 +23,29 @@ class TruncationBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final resolvedMessage =
         message ??
         (truncated
             ? context.l10n.showingFirstNResults(limit)
             : context.l10n.searchTimedOut);
-    return Material(
-      color: c.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm,
-        ),
-        child: Row(
-          children: [
-            Icon(LucideIcons.info, size: 16, color: c.onTertiaryContainer),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: Text(
-                resolvedMessage,
-                style: TextStyle(color: c.onTertiaryContainer, fontSize: 13),
-              ),
+    return Container(
+      color: Brand.amber.withValues(alpha: 0.14),
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm,
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.info, size: 16, color: Brand.amber),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              resolvedMessage,
+              style: TextStyle(color: scheme.onSurface, fontSize: 13),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

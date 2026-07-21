@@ -33,6 +33,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import '../explorer/explorer_state.dart' show basenameOf, joinRemotePath;
 import '../explorer/widgets/destination_picker_sheet.dart';
@@ -229,21 +230,29 @@ class _ShareIntakeListenerState extends ConsumerState<ShareIntakeListener> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SheetHero(
-                  badge: Icon(LucideIcons.computer),
-                  title: 'Share to which PC?',
-                ),
+                const SheetHead(title: 'Share to which PC?'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
-                  child: ActionListCard(
-                    children: [
-                      for (final host in hosts)
-                        ActionListTile(
-                          icon: LucideIcons.computer,
-                          label: '${host.label} • ${host.address}',
-                          onTap: () => Navigator.pop(sheetContext, host),
-                        ),
-                    ],
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(sheetContext).colorScheme.surface,
+                      border: Border.all(
+                        color:
+                            Theme.of(sheetContext).colorScheme.outlineVariant,
+                      ),
+                      borderRadius: Radii.lgR,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < hosts.length; i++)
+                          _HostRow(
+                            host: hosts[i],
+                            showDivider: i < hosts.length - 1,
+                            onTap: () => Navigator.pop(sheetContext, hosts[i]),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -251,6 +260,81 @@ class _ShareIntakeListenerState extends ConsumerState<ShareIntakeListener> {
           ),
         );
       },
+    );
+  }
+}
+
+/// The mockup's `.row`: 38x38 tinted `.row-icon`, 14px/500 title, 11.5px
+/// faint subtitle (the host's address).
+class _HostRow extends StatelessWidget {
+  const _HostRow({
+    required this.host,
+    required this.showDivider,
+    required this.onTap,
+  });
+
+  final Host host;
+  final bool showDivider;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+        decoration: BoxDecoration(
+          border:
+              showDivider
+                  ? Border(bottom: BorderSide(color: scheme.outlineVariant))
+                  : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Brand.seed.withValues(alpha: 0.14),
+                borderRadius: Radii.smR,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                LucideIcons.computer,
+                size: 19,
+                color: Brand.seed,
+              ),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    host.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    host.address,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

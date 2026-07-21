@@ -3775,13 +3775,13 @@ abstract class AppLocalizations {
   /// No description provided for @crossHostSearchTitle.
   ///
   /// In en, this message translates to:
-  /// **'Search All Hosts'**
+  /// **'Cross-Host Search'**
   String get crossHostSearchTitle;
 
   /// No description provided for @crossHostSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Search all hosts...'**
+  /// **'Search everywhere…'**
   String get crossHostSearchHint;
 
   /// No description provided for @crossHostSearching.
@@ -3807,6 +3807,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search all hosts'**
   String get crossHostSearchTooltip;
+
+  /// No description provided for @crossHostUnreachableCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} host{count, plural, =1{} other{s}} unreachable'**
+  String crossHostUnreachableCount(int count);
+
+  /// No description provided for @crossHostSearchingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching {count} online host{count, plural, =1{} other{s}}'**
+  String crossHostSearchingCount(int count);
+
+  /// No description provided for @crossHostOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} is offline — skipped'**
+  String crossHostOffline(String host);
 
   /// No description provided for @commandPaletteTitle.
   ///

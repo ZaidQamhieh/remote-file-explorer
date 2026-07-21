@@ -13,6 +13,7 @@ import '../../core/models/host.dart';
 import '../../core/platform/file_opener.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import '../explorer/meta_sheet.dart';
 import '../share/share_sheet.dart';
 import '../transfers/transfer_state.dart';
@@ -168,9 +169,11 @@ class PreviewActions {
 /// Save/delete/rename/open-with/QR-handoff all now live behind the "..."
 /// meta sheet instead of being spread across individual top-bar icons.
 ///
-/// Rendered as a real [AppBar] (cheap on Skia — no blur/shader). On dark media
-/// canvases (image/video) it paints translucent black with white foreground so
-/// it reads over the content; otherwise it uses the ambient theme.
+/// Rendered as the mockup's literal `.appbar`: a back iconbtn, the filename
+/// (+ size subtitle), then a trailing Share/"..." iconbtn row — a plain
+/// `Container`, not a Material `AppBar`. On dark media canvases (image/
+/// video) it paints translucent black with white foreground so it reads
+/// over the content; otherwise it uses the ambient theme.
 class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
   const PreviewTopBar({
     super.key,
@@ -197,58 +200,102 @@ class PreviewTopBar extends StatelessWidget implements PreferredSizeWidget {
   final bool onDark;
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 8);
 
   @override
   Widget build(BuildContext context) {
     final entry = actions.entry;
     final size = formatSize(entry.size);
-    final fg = onDark ? Colors.white : null;
+    final fg = onDark ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final dimFg =
+        onDark
+            ? Colors.white.withValues(alpha: 0.7)
+            : Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return AppBar(
-      backgroundColor: onDark ? Colors.black.withValues(alpha: 0.45) : null,
-      foregroundColor: fg,
-      elevation: 0,
-      titleSpacing: 0,
-      title: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            entry.name,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+    return Container(
+      color: onDark ? Colors.black.withValues(alpha: 0.45) : null,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            _PreviewIconBtn(
+              icon: LucideIcons.arrowLeft,
               color: fg,
-              fontWeight: FontWeight.w600,
+              onTap: () => Navigator.of(context).maybePop(),
             ),
-          ),
-          if (size.isNotEmpty)
-            Text(
-              size,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color:
-                    fg?.withValues(alpha: 0.8) ??
-                    Theme.of(context).colorScheme.onSurfaceVariant,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.01,
+                      color: fg,
+                    ),
+                  ),
+                  if (size.isNotEmpty)
+                    Text(
+                      size,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11.5, color: dimFg),
+                    ),
+                ],
               ),
             ),
-        ],
+            ...leadingActions,
+            _PreviewIconBtn(
+              icon: LucideIcons.share2,
+              color: fg,
+              onTap: () => openShareLinkSheet(context, entry, actions.client),
+            ),
+            _PreviewIconBtn(
+              icon: LucideIcons.moreVertical,
+              color: fg,
+              onTap:
+                  () => openPreviewMetaSheet(
+                    context,
+                    actions,
+                    onChanged: onChanged,
+                  ),
+            ),
+          ],
+        ),
       ),
-      actions: [
-        ...leadingActions,
-        IconButton(
-          icon: const Icon(LucideIcons.share2),
-          tooltip: context.l10n.shareLinkButton,
-          onPressed: () => openShareLinkSheet(context, entry, actions.client),
-        ),
-        IconButton(
-          icon: const Icon(LucideIcons.moreVertical),
-          tooltip: context.l10n.moreTooltip,
-          onPressed:
-              () =>
-                  openPreviewMetaSheet(context, actions, onChanged: onChanged),
-        ),
-      ],
+    );
+  }
+}
+
+/// The mockup's `.iconbtn` (34x34, 19px svg), colour-adjustable so it reads
+/// on both light chrome and a dark media canvas.
+class _PreviewIconBtn extends StatelessWidget {
+  const _PreviewIconBtn({required this.icon, this.color, required this.onTap});
+
+  final IconData icon;
+
+  /// When null, the icon inherits the ambient [IconTheme] instead — used by
+  /// [previewChromeActions], whose widgets are built once by a caller that
+  /// doesn't yet know [PreviewScaffold]'s eventual on-dark/on-light chrome
+  /// colour (that's only decided when the scaffold itself builds and wraps
+  /// these actions in `IconTheme.merge`).
+  final Color? color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Icon(icon, size: 19, color: color),
+      ),
     );
   }
 }
@@ -290,23 +337,23 @@ List<Widget> previewChromeActions({
   required Entry entry,
   required AgentClient client,
   Host? host,
-}) => [
-  IconButton(
-    icon: const Icon(LucideIcons.share2),
-    tooltip: context.l10n.shareLinkButton,
-    onPressed: () => openShareLinkSheet(context, entry, client),
-  ),
-  if (host != null)
-    IconButton(
-      icon: const Icon(LucideIcons.moreVertical),
-      tooltip: context.l10n.moreTooltip,
-      onPressed:
-          () => openPreviewMetaSheet(
-            context,
-            PreviewActions(entry: entry, host: host, client: client),
-          ),
+}) {
+  return [
+    _PreviewIconBtn(
+      icon: LucideIcons.share2,
+      onTap: () => openShareLinkSheet(context, entry, client),
     ),
-];
+    if (host != null)
+      _PreviewIconBtn(
+        icon: LucideIcons.moreVertical,
+        onTap:
+            () => openPreviewMetaSheet(
+              context,
+              PreviewActions(entry: entry, host: host, client: client),
+            ),
+      ),
+  ];
+}
 
 /// Opens the shared [MetaSheet] for [actions.entry] — the preview chrome's
 /// "..." icon (mockup: 3 stacked dots). Reuses the explorer's existing meta

@@ -9,6 +9,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/pressable.dart';
 
 /// Decodes [bytes] as strict UTF-8. Throws [NotTextException] if the content
 /// looks binary / isn't valid UTF-8, so callers can show a friendly message
@@ -268,26 +269,52 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.entry.name, overflow: TextOverflow.ellipsis),
-          actions: [
-            if (_saving)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: Spacing.md),
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight + 8),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Row(
+                children: [
+                  Pressable(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Icon(
+                        LucideIcons.arrowLeft,
+                        size: 19,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
-                ),
-              )
-            else
-              IconButton(
-                icon: const Icon(LucideIcons.save),
-                tooltip: context.l10n.saveTooltip,
-                onPressed: _dirty ? () => _save() : null,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.entry.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.01,
+                      ),
+                    ),
+                  ),
+                  if (_saving)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: Spacing.sm),
+                      child: SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    _SaveButton(enabled: _dirty, onTap: () => _save()),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
         body: Padding(
           padding: const EdgeInsets.all(Spacing.md),
@@ -312,3 +339,49 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
 }
 
 enum _StaleWriteChoice { cancel, reload, overwrite }
+
+/// The mockup's `.btn.btn-primary.btn-sm` (135° gradient + glow, smaller
+/// padding). Disabled (no unsaved edits) fades to half opacity, matching
+/// every other disabled gradient CTA in this app ([GradientButton]).
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Pressable(
+        onTap: enabled ? onTap : null,
+        pressedScale: 0.97,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          decoration: BoxDecoration(
+            gradient: Brand.primaryGradient,
+            borderRadius: Radii.smR,
+            boxShadow:
+                enabled
+                    ? [
+                      BoxShadow(
+                        color: Brand.seed.withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                    : null,
+          ),
+          child: Text(
+            context.l10n.saveButton,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -9,7 +9,7 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
-import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/state_views.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -107,24 +107,89 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // The mockup's `.appbar`: back iconbtn + h2, then a `.searchbar` pill
+    // below it — not a Material `AppBar`.
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: context.l10n.crossHostSearchHint,
-            border: InputBorder.none,
-          ),
-          onChanged: _onQueryChanged,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Row(
+                children: [
+                  Pressable(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Icon(
+                        LucideIcons.arrowLeft,
+                        size: 19,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    context.l10n.crossHostSearchTitle,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.01,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: Radii.stadiumR,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.search,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        autofocus: true,
+                        textInputAction: TextInputAction.search,
+                        style: const TextStyle(fontSize: 13.5),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: context.l10n.crossHostSearchHint,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: _onQueryChanged,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(child: _buildBody(context)),
+          ],
         ),
       ),
-      body: _buildBody(context),
     );
   }
 
   Widget _buildBody(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (_searching) {
       return Center(
         child: Column(
@@ -152,10 +217,8 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  '${_failedHosts.length} host${_failedHosts.length == 1 ? '' : 's'} unreachable',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  context.l10n.crossHostUnreachableCount(_failedHosts.length),
+                  style: TextStyle(fontSize: 12.5, color: scheme.error),
                 ),
               ),
           ],
@@ -163,56 +226,164 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
       );
     }
 
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
+    final byHost = <Host, List<Entry>>{};
+    for (final r in _results) {
+      (byHost[r.host] ??= []).add(r.entry);
+    }
+    final failedHostObjs =
+        widget.hosts.where((h) => _failedHosts.contains(h.id)).toList();
+
+    return ListView(
+      padding: const EdgeInsets.only(top: 10, bottom: 24),
       children: [
-        if (_failedHosts.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text(
-              '${_failedHosts.length} host${_failedHosts.length == 1 ? '' : 's'} unreachable',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Brand.seed.withValues(alpha: 0.14),
+                borderRadius: Radii.stadiumR,
+              ),
+              child: Text(
+                context.l10n.crossHostSearchingCount(byHost.length),
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: Brand.seed,
+                ),
               ),
             ),
           ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(Spacing.md),
-            children: [
-              GroupedCard(
-                padded: false,
-                children: [
-                  for (int i = 0; i < _results.length; i++) ...[
-                    if (i > 0)
-                      Divider(
-                        height: 1,
-                        indent: Spacing.md,
-                        endIndent: Spacing.md,
-                        color: scheme.outlineVariant,
-                      ),
-                    ListTile(
-                      leading: Icon(
-                        _results[i].entry.isDir
-                            ? LucideIcons.folder
-                            : LucideIcons.file,
-                      ),
-                      title: Text(_results[i].entry.name),
-                      subtitle: Text(
-                        '${_results[i].host.label} · ${_results[i].entry.path}',
-                      ),
-                      trailing:
-                          _results[i].entry.size != null
-                              ? Text(formatSize(_results[i].entry.size))
-                              : null,
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
         ),
+        for (final host in byHost.keys) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+            child: Text(
+              host.label,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.09,
+              ),
+            ),
+          ),
+          for (final entry in byHost[host]!)
+            _ResultRow(host: host, entry: entry),
+        ],
+        if (failedHostObjs.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+            child: Column(
+              children: [
+                for (final host in failedHostObjs)
+                  Opacity(
+                    opacity: 0.6,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: scheme.surface,
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: Radii.lgR,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.monitor,
+                            size: 15,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              context.l10n.crossHostOffline(host.label),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
+    );
+  }
+}
+
+/// The mockup's `.row`: 38x38 tinted `.row-icon`, 14px/500 title, 11.5px
+/// faint monospace subtitle (host label + path).
+class _ResultRow extends StatelessWidget {
+  const _ResultRow({required this.host, required this.entry});
+
+  final Host host;
+  final Entry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDir = entry.isDir;
+    final color = isDir ? Brand.amber : Brand.seed;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 18),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: Radii.smR,
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              isDir ? LucideIcons.folder : LucideIcons.file,
+              size: 19,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: Spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  entry.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  entry.path,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontFamily: 'JetBrains Mono',
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (entry.size != null) ...[
+            const SizedBox(width: Spacing.sm),
+            Text(
+              formatSize(entry.size),
+              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

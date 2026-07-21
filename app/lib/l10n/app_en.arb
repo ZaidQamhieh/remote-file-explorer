@@ -1173,8 +1173,8 @@
   "syncRemotePath": "Remote Path",
   "syncLocalPath": "Local Folder",
 
-  "crossHostSearchTitle": "Search All Hosts",
-  "crossHostSearchHint": "Search all hosts...",
+  "crossHostSearchTitle": "Cross-Host Search",
+  "crossHostSearchHint": "Search everywhere…",
   "crossHostSearching": "Searching {count} hosts...",
   "@crossHostSearching": {
     "placeholders": { "count": {"type": "int"} }
@@ -1182,6 +1182,18 @@
   "crossHostNoResults": "No results",
   "crossHostTypeToSearch": "Type to search across all hosts",
   "crossHostSearchTooltip": "Search all hosts",
+  "crossHostUnreachableCount": "{count} host{count, plural, =1{} other{s}} unreachable",
+  "@crossHostUnreachableCount": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "crossHostSearchingCount": "Searching {count} online host{count, plural, =1{} other{s}}",
+  "@crossHostSearchingCount": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "crossHostOffline": "{host} is offline — skipped",
+  "@crossHostOffline": {
+    "placeholders": { "host": {"type": "String"} }
+  },
 
   "commandPaletteTitle": "Command Palette",
   "commandPaletteHint": "Type a command...",

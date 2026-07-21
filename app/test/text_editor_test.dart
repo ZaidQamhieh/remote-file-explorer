@@ -125,6 +125,18 @@ Future<void> _pumpEditor(
   await tester.pumpAndSettle();
 }
 
+/// The Save button's enabled/disabled state now renders as
+/// `Opacity(opacity: 1)`/`Opacity(opacity: 0.5)` around a `Pressable` (the
+/// mockup's `.btn.btn-primary.btn-sm`) rather than an `IconButton` with a
+/// nullable `onPressed` — this reads that same state via the ancestor
+/// `Opacity` of the "Save" text.
+double _saveButtonOpacity(WidgetTester tester) {
+  final opacity = tester.widget<Opacity>(
+    find.ancestor(of: find.text('Save'), matching: find.byType(Opacity)).first,
+  );
+  return opacity.opacity;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -149,10 +161,7 @@ void main() {
     ) async {
       await _pumpEditor(tester, client);
 
-      final saveButton = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, LucideIcons.save),
-      );
-      expect(saveButton.onPressed, isNull);
+      expect(_saveButtonOpacity(tester), 0.5);
     });
   });
 
@@ -171,7 +180,7 @@ void main() {
         await tester.enterText(find.byType(TextField), 'hello world!');
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
 
         expect(client.putCalls, hasLength(1));
@@ -208,13 +217,13 @@ void main() {
 
         await tester.enterText(find.byType(TextField), 'edit one');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
 
         // Second edit + save should send the *updated* baseModified.
         await tester.enterText(find.byType(TextField), 'edit two');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
 
         expect(client.putCalls, hasLength(2));
@@ -232,7 +241,7 @@ void main() {
         await _pumpEditor(tester, client, initialText: 'hello world');
         await tester.enterText(find.byType(TextField), 'edit one');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.tap(find.text('Save'));
         await tester.pump(); // save started, still awaiting the gate
 
         // Type more before the in-flight save resolves.
@@ -244,10 +253,7 @@ void main() {
 
         expect(client.putCalls, hasLength(1)); // only the first save fired
         // The later edit wasn't part of that save, so it must still show dirty.
-        final saveButton = tester.widget<IconButton>(
-          find.widgetWithIcon(IconButton, LucideIcons.save),
-        );
-        expect(saveButton.onPressed, isNotNull);
+        expect(_saveButtonOpacity(tester), 1);
       },
     );
   });
@@ -259,7 +265,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(find.text('File changed on disk'), findsOneWidget);
@@ -278,7 +284,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(TextButton, 'Reload'));
@@ -288,15 +294,12 @@ void main() {
       expect(field.controller!.text, 'fresh from disk');
 
       // Dirty flag cleared -> Save disabled again.
-      final saveButton = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, LucideIcons.save),
-      );
-      expect(saveButton.onPressed, isNull);
+      expect(_saveButtonOpacity(tester), 0.5);
 
       // A subsequent edit + save should use the reloaded baseModified.
       await tester.enterText(find.byType(TextField), 'fresh from disk, edited');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(client.putCalls, hasLength(2));
@@ -319,7 +322,7 @@ void main() {
         await _pumpEditor(tester, client, initialText: 'hello world');
         await tester.enterText(find.byType(TextField), 'hello world!');
         await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(LucideIcons.save));
+        await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
 
         await tester.tap(find.widgetWithText(TextButton, 'Reload'));
@@ -342,7 +345,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(FilledButton, 'Overwrite'));
@@ -364,7 +367,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('read-only'), findsOneWidget);
@@ -378,7 +381,7 @@ void main() {
       await _pumpEditor(tester, client, initialText: 'hello world');
       await tester.enterText(find.byType(TextField), 'hello world!');
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('too large'), findsOneWidget);
@@ -430,7 +433,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Attempt to pop via the back button.
-      await tester.tap(find.byTooltip('Back'));
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
       await tester.pumpAndSettle();
 
       expect(find.text('Discard changes?'), findsOneWidget);
@@ -441,7 +444,7 @@ void main() {
       expect(find.byType(TextEditorScreen), findsOneWidget);
 
       // Now pop and confirm discard.
-      await tester.tap(find.byTooltip('Back'));
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
       await tester.pumpAndSettle();
@@ -489,7 +492,7 @@ void main() {
       await tester.tap(find.text('Open editor'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Back'));
+      await tester.tap(find.byIcon(LucideIcons.arrowLeft));
       await tester.pumpAndSettle();
 
       expect(find.text('Discard changes?'), findsNothing);

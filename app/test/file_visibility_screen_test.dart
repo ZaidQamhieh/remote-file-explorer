@@ -114,7 +114,7 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -3000));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(ShadInput), 'xyz');
+    await tester.enterText(find.byType(TextField), 'xyz');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 

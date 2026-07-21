@@ -19,7 +19,6 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/ui/feedback.dart';
-import '../../core/ui/grouped_card.dart';
 import '../../core/ui/state_views.dart';
 import '../bookmarks/bookmarks_screen.dart';
 import '../preview/preview.dart';
@@ -975,76 +974,67 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
     final pinnedPaths = _pinnedPaths();
-    return GroupedCard(
-      padded: false,
-      children: [
-        Expanded(
-          child: ListView.separated(
-            controller: _scrollController,
-            itemCount: itemCount,
-            separatorBuilder:
-                (ctx, i) =>
-                    i < entries.length - 1
-                        ? Divider(
-                          height: 1,
-                          indent: Spacing.md,
-                          endIndent: Spacing.md,
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        )
-                        : const SizedBox.shrink(),
-            itemBuilder: (ctx, i) {
-              if (i >= entries.length + (showLoadMore ? 1 : 0)) {
-                return HiddenItemsFooter(
-                  count: state.hiddenCount,
-                  revealed: state.showHidden,
-                  onToggle: _notifier.toggleShowHidden,
-                );
-              }
-              if (i >= entries.length) {
-                _notifier.loadMore();
-                return LoadMoreIndicator(loading: state.loadingMore);
-              }
-              final entry = entries[i];
-              final hidden = state.hiddenPaths.contains(entry.path);
-              return AppearListItem(
-                index: i,
-                child: Opacity(
-                  opacity: hidden ? 0.55 : 1,
-                  child: EntryTile(
-                    entry: entry,
-                    client: client,
-                    selected: state.selected.contains(entry.path),
-                    multiSelect: state.multiSelect,
-                    density: density,
-                    isFavorite: favoritePaths.contains(entry.path),
-                    isPinned: pinnedPaths.contains(entry.path),
-                    onTap: () => _onEntryTap(context, entry, client),
-                    onLongPress: () => _notifier.toggleSelect(entry.path),
-                    onSelect: () => _notifier.toggleSelect(entry.path),
-                    onMoveInto:
-                        (dragged, dest) =>
-                            _moveInto(context, client, dragged, dest),
-                    onShowMeta:
-                        entry.isDir
-                            ? () => _showMeta(context, entry, client)
-                            : null,
-                    onBookmark: () => _showBookmarkSheet(context, entry),
-                    onPeek:
-                        isPreviewable(entry)
-                            ? () => openPreviewPeek(
-                              context,
-                              entry: entry,
-                              host: widget.host,
-                              client: client,
-                            )
-                            : null,
-                  ),
-                ),
-              );
-            },
+    // Flat divided list (mockup's `.px.list`/`.row` — no enclosing card), not
+    // a single rounded container: each row owns its own bottom divider.
+    return ListView.separated(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+      itemCount: itemCount,
+      separatorBuilder:
+          (ctx, i) =>
+              i < entries.length - 1
+                  ? Divider(
+                    height: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  )
+                  : const SizedBox.shrink(),
+      itemBuilder: (ctx, i) {
+        if (i >= entries.length + (showLoadMore ? 1 : 0)) {
+          return HiddenItemsFooter(
+            count: state.hiddenCount,
+            revealed: state.showHidden,
+            onToggle: _notifier.toggleShowHidden,
+          );
+        }
+        if (i >= entries.length) {
+          _notifier.loadMore();
+          return LoadMoreIndicator(loading: state.loadingMore);
+        }
+        final entry = entries[i];
+        final hidden = state.hiddenPaths.contains(entry.path);
+        return AppearListItem(
+          index: i,
+          child: Opacity(
+            opacity: hidden ? 0.55 : 1,
+            child: EntryTile(
+              entry: entry,
+              client: client,
+              selected: state.selected.contains(entry.path),
+              multiSelect: state.multiSelect,
+              density: density,
+              isFavorite: favoritePaths.contains(entry.path),
+              isPinned: pinnedPaths.contains(entry.path),
+              onTap: () => _onEntryTap(context, entry, client),
+              onLongPress: () => _notifier.toggleSelect(entry.path),
+              onSelect: () => _notifier.toggleSelect(entry.path),
+              onMoveInto:
+                  (dragged, dest) => _moveInto(context, client, dragged, dest),
+              onShowMeta:
+                  entry.isDir ? () => _showMeta(context, entry, client) : null,
+              onBookmark: () => _showBookmarkSheet(context, entry),
+              onPeek:
+                  isPreviewable(entry)
+                      ? () => openPreviewPeek(
+                        context,
+                        entry: entry,
+                        host: widget.host,
+                        client: client,
+                      )
+                      : null,
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -1136,69 +1126,61 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         entries.length + (showLoadMore ? 1 : 0) + (showHiddenFooter ? 1 : 0);
     final favoritePaths = _favoritePaths();
     final pinnedPaths = _pinnedPaths();
-    return GroupedCard(
-      padded: false,
-      children: [
-        Expanded(
-          child: GridView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(Spacing.md),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 144,
-              mainAxisExtent: 132,
-              crossAxisSpacing: Spacing.md,
-              mainAxisSpacing: Spacing.md,
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(Spacing.md),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 144,
+        mainAxisExtent: 132,
+        crossAxisSpacing: Spacing.md,
+        mainAxisSpacing: Spacing.md,
+      ),
+      itemCount: itemCount,
+      itemBuilder: (ctx, i) {
+        if (i >= entries.length + (showLoadMore ? 1 : 0)) {
+          return HiddenItemsFooter(
+            count: state.hiddenCount,
+            revealed: state.showHidden,
+            onToggle: _notifier.toggleShowHidden,
+            compact: true,
+          );
+        }
+        if (i >= entries.length) {
+          _notifier.loadMore();
+          return LoadMoreIndicator(loading: state.loadingMore);
+        }
+        final entry = entries[i];
+        final hidden = state.hiddenPaths.contains(entry.path);
+        return AppearListItem(
+          index: i,
+          child: Opacity(
+            opacity: hidden ? 0.55 : 1,
+            child: EntryGridCell(
+              entry: entry,
+              client: client,
+              hostId: widget.host.id,
+              selected: state.selected.contains(entry.path),
+              multiSelect: state.multiSelect,
+              isFavorite: favoritePaths.contains(entry.path),
+              isPinned: pinnedPaths.contains(entry.path),
+              onTap: () => _onEntryTap(context, entry, client),
+              onLongPress: () => _notifier.toggleSelect(entry.path),
+              onMoveInto:
+                  (dragged, dest) => _moveInto(context, client, dragged, dest),
+              onBookmark: () => _showBookmarkSheet(context, entry),
+              onPeek:
+                  isPreviewable(entry)
+                      ? () => openPreviewPeek(
+                        context,
+                        entry: entry,
+                        host: widget.host,
+                        client: client,
+                      )
+                      : null,
             ),
-            itemCount: itemCount,
-            itemBuilder: (ctx, i) {
-              if (i >= entries.length + (showLoadMore ? 1 : 0)) {
-                return HiddenItemsFooter(
-                  count: state.hiddenCount,
-                  revealed: state.showHidden,
-                  onToggle: _notifier.toggleShowHidden,
-                  compact: true,
-                );
-              }
-              if (i >= entries.length) {
-                _notifier.loadMore();
-                return LoadMoreIndicator(loading: state.loadingMore);
-              }
-              final entry = entries[i];
-              final hidden = state.hiddenPaths.contains(entry.path);
-              return AppearListItem(
-                index: i,
-                child: Opacity(
-                  opacity: hidden ? 0.55 : 1,
-                  child: EntryGridCell(
-                    entry: entry,
-                    client: client,
-                    hostId: widget.host.id,
-                    selected: state.selected.contains(entry.path),
-                    multiSelect: state.multiSelect,
-                    isFavorite: favoritePaths.contains(entry.path),
-                    isPinned: pinnedPaths.contains(entry.path),
-                    onTap: () => _onEntryTap(context, entry, client),
-                    onLongPress: () => _notifier.toggleSelect(entry.path),
-                    onMoveInto:
-                        (dragged, dest) =>
-                            _moveInto(context, client, dragged, dest),
-                    onBookmark: () => _showBookmarkSheet(context, entry),
-                    onPeek:
-                        isPreviewable(entry)
-                            ? () => openPreviewPeek(
-                              context,
-                              entry: entry,
-                              host: widget.host,
-                              client: client,
-                            )
-                            : null,
-                  ),
-                ),
-              );
-            },
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 

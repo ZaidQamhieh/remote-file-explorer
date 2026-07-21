@@ -249,118 +249,102 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
                 ) ??
             false);
 
-    // Quick-action circle row (the 4 most common taps) + a plain list below
-    // for everything else — the Google Photos/WhatsApp file-sheet shape.
-    // Metadata isn't in here at all; it's behind the "Details" row.
+    // Quick-action grid (the 4 most common taps, mockup's bordered-square
+    // cards — not gradient circles) + a plain divided list below for
+    // everything else. Metadata isn't in here at all; it's behind the
+    // "Details" row.
     final previewable = !_entry.isDir && isPreviewable(_entry);
-    final quick = <GradientActionCircle>[
+    final quick = <_QuickAction>[
       if (_entry.isDir)
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.star,
           label:
               isFav
                   ? context.l10n.unfavoriteButton
                   : context.l10n.favoriteButton,
-          gradient: [Brand.amber, Color.lerp(Brand.amber, Colors.black, 0.3)!],
           onTap: () => _toggleFavorite(context, isFav),
         )
       else if (previewable)
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.eye,
           label: context.l10n.previewButton,
-          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _preview(context),
         )
       else if (!_entry.isDir)
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
-          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _openWith(context),
         ),
       if (_entry.isDir)
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.filePen,
           label: context.l10n.renameButton,
-          gradient: [Brand.seed, Color.lerp(Brand.seed, Colors.black, 0.3)!],
           onTap: () => _rename(context),
         )
       else
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.download,
           label: context.l10n.downloadButton,
-          gradient: [
-            Brand.online,
-            Color.lerp(Brand.online, Colors.black, 0.3)!,
-          ],
           onTap: () => _download(context),
         ),
       if (_entry.isDir)
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.copy,
           label: context.l10n.duplicateButton,
-          gradient: [
-            Brand.accent,
-            Color.lerp(Brand.accent, Colors.black, 0.3)!,
-          ],
           onTap: () => _duplicate(context),
         )
       else
-        GradientActionCircle(
+        _QuickAction(
           icon: LucideIcons.share,
           label: context.l10n.shareTooltip,
-          gradient: [
-            Brand.accent,
-            Color.lerp(Brand.accent, Colors.black, 0.3)!,
-          ],
           onTap: () => _share(context),
         ),
-      GradientActionCircle(
+      _QuickAction(
         icon: LucideIcons.trash2,
         label: context.l10n.deleteButton,
-        gradient: [Brand.red, Color.lerp(Brand.red, Colors.black, 0.3)!],
         onTap: () => _delete(context),
       ),
     ];
 
-    final more = <ActionListTile>[
+    final more = <_MoreAction>[
       if (previewable)
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.externalLink,
           label: context.l10n.openWithButton,
           onTap: () => _openWith(context),
         ),
       if (!_entry.isDir)
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.link,
           label: context.l10n.shareLinkButton,
           onTap: () => _shareLink(context),
         ),
       if (!_entry.isDir)
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.qrCode,
           label: context.l10n.sendViaQrButton,
           onTap: () => _sendViaQr(context),
         ),
       if (!_entry.isDir && isExtractableArchive(_entry.name))
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.archive,
           label: context.l10n.extractHereButton,
           onTap: () => _extract(context),
         ),
       if (!_entry.isDir)
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.filePen,
           label: context.l10n.renameButton,
           onTap: () => _rename(context),
         ),
       if (!_entry.isDir)
-        ActionListTile(
+        _MoreAction(
           icon: LucideIcons.copy,
           label: context.l10n.duplicateButton,
           onTap: () => _duplicate(context),
         ),
-      ActionListTile(
+      _MoreAction(
         icon: LucideIcons.info,
         label: context.l10n.detailsButton,
         onTap: () => _showDetails(context),
@@ -370,9 +354,9 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        QuickActionRow(actions: quick),
+        Row(children: [for (final a in quick) Expanded(child: a)]),
         const SizedBox(height: Spacing.md),
-        ActionListCard(children: more),
+        _MoreActionList(actions: more),
       ],
     );
   }
@@ -723,4 +707,119 @@ bool isExtractableArchive(String name) {
   return lower.endsWith('.zip') ||
       lower.endsWith('.tar.gz') ||
       lower.endsWith('.tgz');
+}
+
+/// One of the meta sheet's 4 quick actions — mockup's `scr-meta-sheet` shows
+/// these as a row of bordered square tap-cards (icon + tiny label), not
+/// gradient circles, so this replaces [GradientActionCircle]/[QuickActionRow]
+/// for this sheet specifically (those stay as-is for other action sheets).
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: Radii.smR,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            vertical: Spacing.md2,
+            horizontal: Spacing.xs,
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: Radii.smR,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: scheme.primary),
+              const SizedBox(height: Spacing.xs),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row in the meta sheet's secondary action list — mockup's plain `.row`
+/// (icon in a neutral tonal square, title, no card background/chevron), not
+/// [ActionListCard]'s bordered-card treatment.
+class _MoreAction {
+  const _MoreAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+}
+
+class _MoreActionList extends StatelessWidget {
+  const _MoreActionList({required this.actions});
+
+  final List<_MoreAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) Divider(height: 1, color: scheme.outlineVariant),
+          InkWell(
+            onTap: actions[i].onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: Radii.smR,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      actions[i].icon,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.md),
+                  Text(
+                    actions[i].label,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }

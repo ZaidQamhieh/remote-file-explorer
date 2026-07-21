@@ -12,7 +12,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/gradient_blob_hero.dart';
-import '../../core/ui/grouped_card.dart';
+import '../../core/ui/grouped_card.dart' show SectionLabel;
 import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -164,52 +164,121 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
   }
 
   Widget _buildResults() {
+    final scheme = Theme.of(context).colorScheme;
     final totalWaste = _groups!.fold<int>(0, (sum, g) {
       final size = _sizes?[g.first] ?? 0;
       return sum + size * (g.length - 1);
     });
     return Column(
       children: [
+        // Mockup's two-stat summary card (groups / reclaimable space).
         Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            '${_groups!.length} duplicate groups (${formatSize(totalWaste)} wasted)',
-            style: Theme.of(context).textTheme.titleSmall,
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.md,
+            Spacing.md,
+            Spacing.md,
+            Spacing.sm,
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              borderRadius: Radii.cardR,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _StatCell(value: '${_groups!.length}', label: 'groups'),
+                _StatCell(
+                  value: formatSize(totalWaste),
+                  label: 'reclaimable',
+                  valueColor: Brand.online,
+                ),
+              ],
+            ),
           ),
         ),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
             children: [
-              GroupedCard(
-                padded: false,
-                children: [
-                  for (int i = 0; i < _groups!.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    ExpansionTile(
-                      title: Text(
-                        '${_groups![i].length} copies '
-                        '(${formatSize(_sizes?[_groups![i].first] ?? 0)} each)',
-                      ),
+              for (int g = 0; g < _groups!.length; g++) ...[
+                SectionLabel(
+                  '${_groups![g].length} copies '
+                  '(${formatSize(_sizes?[_groups![g].first] ?? 0)} each)',
+                ),
+                for (final path in _groups![g])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md,
+                      vertical: Spacing.xs,
+                    ),
+                    child: Row(
                       children: [
-                        for (final path in _groups![i])
-                          ListTile(
-                            dense: true,
-                            title: Text(
-                              path,
-                              style: const TextStyle(fontSize: 13),
-                            ),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest,
+                            borderRadius: Radii.smR,
                           ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            LucideIcons.file,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        Expanded(
+                          child: Text(
+                            path,
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          formatSize(_sizes?[path]),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
                       ],
                     ),
-                  ],
-                ],
-              ),
+                  ),
+              ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One cell of the duplicate-finder's summary stat card.
+class _StatCell extends StatelessWidget {
+  const _StatCell({required this.value, required this.label, this.valueColor});
+
+  final String value;
+  final String label;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontFamily: 'JetBrains Mono',
+            fontWeight: FontWeight.w700,
+            color: valueColor,
+          ),
+        ),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );

@@ -60,6 +60,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     icon: LucideIcons.monitorSmartphone,
                     title: context.l10n.onboardingWelcomeTitle,
                     body: context.l10n.onboardingWelcomeBody,
+                    hero: const _DeviceLinkHero(),
                   ),
                   _Page(
                     icon: LucideIcons.wifi,
@@ -134,11 +135,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 }
 
 class _Page extends StatelessWidget {
-  const _Page({required this.icon, required this.title, required this.body});
+  const _Page({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.hero,
+  });
 
   final IconData icon;
   final String title;
   final String body;
+
+  /// Overrides the default [GradientBlobHero] with a page-specific
+  /// illustration (e.g. [_DeviceLinkHero] on the welcome page, matching the
+  /// mockup's phone↔PC connector art instead of the generic placeholder).
+  final Widget? hero;
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +159,7 @@ class _Page extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          GradientBlobHero(icon: icon, size: 140),
+          hero ?? GradientBlobHero(icon: icon, size: 140),
           const SizedBox(height: Spacing.xl),
           Text(
             title,
@@ -172,6 +183,93 @@ class _Page extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Phone-chip — dashed connector — monitor-chip illustration matching the
+/// mockup's welcome-page art exactly (two device chips linked by a dashed
+/// line, not an icon-in-a-blob). Static — no animation needed to match this
+/// source, unlike [GradientBlobHero].
+class _DeviceLinkHero extends StatelessWidget {
+  const _DeviceLinkHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DeviceChip(
+          width: 64,
+          height: 88,
+          icon: LucideIcons.smartphone,
+          iconColor: scheme.primary,
+        ),
+        const SizedBox(width: Spacing.md2),
+        const _DashedLine(),
+        const SizedBox(width: Spacing.md2),
+        _DeviceChip(
+          width: 104,
+          height: 74,
+          icon: LucideIcons.monitor,
+          iconColor: Brand.accent,
+        ),
+      ],
+    );
+  }
+}
+
+class _DeviceChip extends StatelessWidget {
+  const _DeviceChip({
+    required this.width,
+    required this.height,
+    required this.icon,
+    required this.iconColor,
+  });
+
+  final double width;
+  final double height;
+  final IconData icon;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Icon(icon, size: height * 0.28, color: iconColor),
+    );
+  }
+}
+
+class _DashedLine extends StatelessWidget {
+  const _DashedLine();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 30,
+      height: 2,
+      child: Row(
+        children: List.generate(
+          4,
+          (i) => Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
+              color: scheme.outline,
+            ),
+          ),
+        ),
       ),
     );
   }

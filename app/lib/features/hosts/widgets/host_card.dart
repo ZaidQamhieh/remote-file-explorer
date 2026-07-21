@@ -12,6 +12,7 @@ import '../../../core/platform/wol.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/pressable.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../home/home_state.dart';
@@ -255,9 +256,14 @@ class _HostCardState extends ConsumerState<HostCard> {
 }
 
 // ---------------------------------------------------------------------------
-// Card body — matches the mockup's `.card` row: avatar + status dot, title +
-// subtitle, a storage bar when online, and a trailing gear button (offline
-// hosts get a dimmed card and an "Offline" badge instead).
+// Card body — rebuilt directly from the mockup's actual CSS (docs/mockup-
+// reference/mockup.css): `.card` (background/1px border/r-lg/14px padding,
+// no Material Card/elevation), `.avatar`+`.pulse-dot` (40x40 gradient box,
+// r-md, with an 11x11 ring-bordered status dot overlapping its corner),
+// `.row-title`/`.row-sub` (14px/500 and 11.5px sizes), `.progress` (5px
+// full-round bar), and a trailing `.iconbtn` (34x34 circular tap target,
+// online) or `.badge.neutral` pill (offline) — no ListTile/IconButton/
+// ShadCard, no Material ripple (see [Pressable]).
 // ---------------------------------------------------------------------------
 
 class _CardBody extends StatelessWidget {
@@ -317,7 +323,7 @@ class _CardBody extends StatelessWidget {
     final diff = DateTime.now().difference(at);
     if (diff.inSeconds < 5) return l.relativeJustNow;
     if (diff.inMinutes < 1) return l.relativeSecondsAgo(diff.inSeconds);
-    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inMinutes);
+    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inHours);
     if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
     return l.relativeDaysAgo(diff.inDays);
   }
@@ -325,28 +331,27 @@ class _CardBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final readOnly = online && health?.readOnly == true;
     final dimmed = !online && !checking;
+    final cardColor = scheme.surface;
 
     return Opacity(
       opacity: dimmed ? 0.55 : 1,
-      child: InkWell(
+      child: Pressable(
         onTap: checking ? null : onTap,
         onLongPress: onLongPress,
-        borderRadius: Radii.cardR,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
+            color: cardColor,
             borderRadius: Radii.cardR,
             border: Border.all(color: scheme.outlineVariant),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _Avatar(online: online, checking: checking),
-              const SizedBox(width: Spacing.md),
+              _Avatar(online: online, checking: checking, cardColor: cardColor),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,14 +362,15 @@ class _CardBody extends StatelessWidget {
                         Flexible(
                           child: Text(
                             host.label,
-                            style: textTheme.titleMedium?.copyWith(
+                            style: const TextStyle(
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (readOnly) ...[
-                          const SizedBox(width: Spacing.xs),
+                          const SizedBox(width: 4),
                           Tooltip(
                             message: 'Read-only',
                             child: Icon(
@@ -384,7 +390,8 @@ class _CardBody extends StatelessWidget {
                     const SizedBox(height: 1),
                     Text(
                       _subtitle(context),
-                      style: textTheme.bodySmall?.copyWith(
+                      style: TextStyle(
+                        fontSize: 11.5,
                         color: scheme.onSurfaceVariant,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -402,10 +409,10 @@ class _CardBody extends StatelessWidget {
               ),
               const SizedBox(width: Spacing.sm),
               if (online)
-                IconButton(
-                  icon: const Icon(LucideIcons.settings),
+                _IconButton(
+                  icon: LucideIcons.settings,
                   tooltip: context.l10n.settingsMenuItem,
-                  onPressed: onSettingsTap,
+                  onTap: onSettingsTap,
                 )
               else
                 _OfflineBadge(label: context.l10n.offlineStatus),
@@ -417,16 +424,20 @@ class _CardBody extends StatelessWidget {
   }
 }
 
-/// Rounded-rect icon badge with a bottom-right status dot — the mockup's
-/// `.avatar` + `.pulse-dot`. Every host renders the same generic monitor
-/// glyph: `/health` doesn't report a device form-factor (desktop/laptop/
-/// tower), so the mockup's per-host icon variety can't be reproduced without
-/// fabricating hardware info the backend doesn't send.
+/// The mockup's `.avatar`: a 40x40 `--r-md` gradient box (`--surface-3` to
+/// `--surface-2`) with an icon, plus its `.pulse-dot`: an 11x11 circle
+/// overlapping the bottom-right corner, ringed by a border matching the
+/// surrounding card so it reads as a cutout rather than a solid dot on top.
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.online, required this.checking});
+  const _Avatar({
+    required this.online,
+    required this.checking,
+    required this.cardColor,
+  });
 
   final bool online;
   final bool checking;
+  final Color cardColor;
 
   @override
   Widget build(BuildContext context) {
@@ -471,10 +482,7 @@ class _Avatar extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: dotColor,
-                border: Border.all(
-                  color: scheme.surfaceContainerHigh,
-                  width: 2.5,
-                ),
+                border: Border.all(color: cardColor, width: 2.5),
               ),
             ),
           ),
@@ -484,8 +492,38 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// "Offline" neutral pill — the mockup's `.badge.neutral`, replacing the gear
-/// button on offline cards.
+/// The mockup's `.iconbtn`: a bare 34x34 circular tap target, no fill, no
+/// Material ripple — just the icon with [Pressable]'s scale-down feedback.
+class _IconButton extends StatelessWidget {
+  const _IconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.badge.neutral` pill — replaces the gear button on offline
+/// cards.
 class _OfflineBadge extends StatelessWidget {
   const _OfflineBadge({required this.label});
 
@@ -495,14 +533,15 @@ class _OfflineBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: Radii.stadiumR,
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        style: TextStyle(
+          fontSize: 10.5,
           fontWeight: FontWeight.w700,
           color: scheme.onSurfaceVariant,
         ),
@@ -511,10 +550,10 @@ class _OfflineBadge extends StatelessWidget {
   }
 }
 
-/// Aggregate-usage bar for the card row — the mockup's per-host `.progress`.
-/// Reuses [aggregateUsage] (already shared with [StorageInsightsScreen]);
-/// renders nothing while unresolved or when the agent has no usable capacity
-/// data (e.g. predates `/system/drives`).
+/// The mockup's `.progress`: a 5px, fully-rounded track+fill bar. Reuses
+/// [aggregateUsage] (shared with [StorageInsightsScreen]) for the real
+/// storage-usage figure; renders nothing while unresolved or when the agent
+/// has no usable capacity data (e.g. predates `/system/drives`).
 class _StorageBar extends StatelessWidget {
   const _StorageBar({required this.drivesFuture});
 
@@ -532,13 +571,21 @@ class _StorageBar extends StatelessWidget {
         final scheme = Theme.of(context).colorScheme;
         // Amber past 70% used, matching the mockup's high-usage example.
         final fillColor = usage.usedFraction >= 0.7 ? Brand.amber : Brand.seed;
-        return ClipRRect(
-          borderRadius: Radii.stadiumR,
-          child: LinearProgressIndicator(
-            value: usage.usedFraction,
-            minHeight: 5,
-            backgroundColor: scheme.surfaceContainerHighest,
-            valueColor: AlwaysStoppedAnimation(fillColor),
+        return Container(
+          height: 5,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: Radii.stadiumR,
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: usage.usedFraction.clamp(0, 1),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: fillColor,
+                borderRadius: Radii.stadiumR,
+              ),
+            ),
           ),
         );
       },
@@ -546,9 +593,11 @@ class _StorageBar extends StatelessWidget {
   }
 }
 
-/// Small inline warning dot shown next to the host name when any drive is
+/// Small inline warning icon shown next to the host name when any drive is
 /// under the configured threshold. Full per-drive detail lives in
-/// [StorageInsightsScreen], reachable from the settings screen.
+/// [StorageInsightsScreen], reachable from the settings screen. Not part of
+/// the mockup (which has no live drive data to show one for) — a real,
+/// working addition rather than a fabricated one.
 class _LowDiskBadge extends StatelessWidget {
   const _LowDiskBadge({
     required this.drivesFuture,

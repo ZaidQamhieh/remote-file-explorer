@@ -1198,6 +1198,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairedDevicesSection => 'Paired devices';
 
   @override
+  String get limitsSection => 'Limits';
+
+  @override
+  String get dangerZoneSection => 'Danger zone';
+
+  @override
+  String get revokeAccessButton => 'Revoke access';
+
+  @override
+  String get forgetThisDeviceButton => 'Forget this device';
+
+  @override
   String get aboutSection => 'About';
 
   @override

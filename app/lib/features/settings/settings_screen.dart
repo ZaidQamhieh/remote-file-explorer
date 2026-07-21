@@ -16,11 +16,26 @@ import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
+import '../hosts/storage_insights_screen.dart';
+import '../hosts/widgets/connection_diagnostics_sheet.dart';
 import '../sync/sync_screen.dart';
-import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+/// Mockup shows a truncated `7f:3a:9c…` fingerprint under the host name —
+/// the raw stored value is a full-length hex string with no separators
+/// baked in by the agent, so this groups it into byte pairs before cutting.
+String? _shortFingerprint(String? fp) {
+  if (fp == null || fp.isEmpty) return null;
+  final bytes = <String>[
+    for (var i = 0; i + 2 <= fp.length && i < 6; i += 2) fp.substring(i, i + 2),
+  ];
+  if (bytes.isEmpty) return null;
+  return '${bytes.join(':')}…';
+}
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -178,6 +193,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  Future<void> _openConnectionDiagnostics(BuildContext context) async {
+    final store = await ref.read(hostStoreProvider.future);
+    final token = await store.getToken(widget.host.id);
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (_) =>
+              ConnectionDiagnosticsSheet(host: widget.host, deviceToken: token),
+    );
+  }
+
+  Future<void> _revokeAccess() async {
+    for (final d in _devices) {
+      if (d.current) {
+        await _disconnectThisDevice(d);
+        return;
+      }
+    }
+  }
+
+  Future<void> _forgetThisDevice() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(ctx.l10n.forgetComputerTitle),
+            content: Text(ctx.l10n.forgetComputerConfirm(widget.host.label)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: Text(ctx.l10n.forgetButton),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+    final store = await ref.read(hostStoreProvider.future);
+    await store.removeHost(widget.host.id);
+    if (!mounted) return;
+    ref.invalidate(hostStoreProvider);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   Future<void> _editName() async {
     final ctrl = TextEditingController(text: _settings?.agentName ?? '');
     final name = await showDialog<String>(
@@ -205,8 +272,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fingerprint = _shortFingerprint(widget.host.certFingerprint);
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.host.label.isNotEmpty
+                  ? widget.host.label
+                  : widget.host.address,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            if (fingerprint != null)
+              Text.rich(
+                TextSpan(
+                  text: '${widget.host.address} · fingerprint ',
+                  children: [
+                    TextSpan(
+                      text: fingerprint,
+                      style: const TextStyle(fontFamily: 'JetBrains Mono'),
+                    ),
+                  ],
+                ),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+      ),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
@@ -229,20 +326,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Spacing.xl,
       ),
       children: [
-        SettingsHero(
-          icon: LucideIcons.server,
-          title:
-              s.agentName.isNotEmpty
-                  ? s.agentName
-                  : (widget.host.label.isNotEmpty
-                      ? widget.host.label
-                      : widget.host.address),
-          subtitle: 'Access, bandwidth, paired devices',
-          tint: Colors.blueGrey,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.xs,
+            0,
+            Spacing.xs,
+            Spacing.md,
+          ),
+          child: Text(
+            context.l10n.securityWarning,
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+          ),
         ),
-        const SizedBox(height: Spacing.md),
-        _SecurityWarningCard(scheme: scheme),
-        const SizedBox(height: Spacing.lg),
         SettingsSection(
           title: context.l10n.agentSection,
           children: [
@@ -284,29 +379,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: Spacing.md),
-        _BandwidthSection(
-          bandwidth: _bandwidth,
-          onChanged: (bw) async {
-            final client = _client;
-            if (client == null) return;
-            final prev = _bandwidth;
-            setState(() => _bandwidth = bw);
-            try {
-              final updated = await client.setBandwidth(
-                maxUploadBytesPerSec: bw.maxUploadBytesPerSec,
-                maxDownloadBytesPerSec: bw.maxDownloadBytesPerSec,
-              );
-              setState(() => _bandwidth = updated);
-            } catch (e) {
-              setState(() => _bandwidth = prev);
-              if (mounted) {
-                showError(
-                  this.context,
-                  this.context.l10n.updateFailed(humanizeError(e)),
-                );
-              }
-            }
-          },
+        SettingsSection(
+          title: context.l10n.limitsSection,
+          children: [
+            ..._BandwidthSection(
+              bandwidth: _bandwidth,
+              onChanged: (bw) async {
+                final client = _client;
+                if (client == null) return;
+                final prev = _bandwidth;
+                setState(() => _bandwidth = bw);
+                try {
+                  final updated = await client.setBandwidth(
+                    maxUploadBytesPerSec: bw.maxUploadBytesPerSec,
+                    maxDownloadBytesPerSec: bw.maxDownloadBytesPerSec,
+                  );
+                  setState(() => _bandwidth = updated);
+                } catch (e) {
+                  setState(() => _bandwidth = prev);
+                  if (mounted) {
+                    showError(
+                      this.context,
+                      this.context.l10n.updateFailed(humanizeError(e)),
+                    );
+                  }
+                }
+              },
+            ).rows,
+            SettingsTile.nav(
+              icon: LucideIcons.chartPie,
+              badgeColor: Brand.accent,
+              title: context.l10n.storageInsightsTitle,
+              onTap:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => StorageInsightsScreen(host: widget.host),
+                    ),
+                  ),
+            ),
+            SettingsTile.nav(
+              icon: LucideIcons.activity,
+              badgeColor: Brand.online,
+              title: context.l10n.connectionDiagnosticsTitle,
+              onTap: () => _openConnectionDiagnostics(context),
+            ),
+          ],
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
@@ -322,12 +440,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               )
             else
               ...s.roots.map(
-                (r) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  leading: _rowBadge(LucideIcons.folder, scheme.primary),
-                  title: Text(r),
-                ),
+                (r) => _InfoRow(icon: LucideIcons.folder, title: r),
               ),
             Padding(
               padding: const EdgeInsets.only(top: Spacing.xs),
@@ -370,40 +483,127 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SettingsSection(
           title: context.l10n.aboutSection,
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: _rowBadge(LucideIcons.monitorSmartphone, scheme.primary),
-              title: Text(context.l10n.pcNameLabel),
-              subtitle: Text(
-                s.agentName.isNotEmpty
-                    ? s.agentName
-                    : (widget.host.label.isNotEmpty
-                        ? widget.host.label
-                        : widget.host.address),
+            _InfoRow(
+              icon: LucideIcons.monitorSmartphone,
+              title: context.l10n.pcNameLabel,
+              subtitle:
+                  s.agentName.isNotEmpty
+                      ? s.agentName
+                      : (widget.host.label.isNotEmpty
+                          ? widget.host.label
+                          : widget.host.address),
+            ),
+            if (drivesWithCapacity.isNotEmpty)
+              for (final drive in drivesWithCapacity) _DriveRow(drive: drive),
+          ],
+        ),
+        const SizedBox(height: Spacing.lg),
+        SectionLabel(context.l10n.dangerZoneSection),
+        Pressable(
+          onTap: _revokeAccess,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            decoration: BoxDecoration(
+              color: scheme.errorContainer,
+              borderRadius: Radii.smR,
+            ),
+            child: Text(
+              context.l10n.revokeAccessButton,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.error,
               ),
             ),
-            if (drivesWithCapacity.isNotEmpty) ...[
-              const Divider(height: Spacing.lg),
-              for (final drive in drivesWithCapacity) _DriveRow(drive: drive),
-            ],
-          ],
+          ),
+        ),
+        const SizedBox(height: Spacing.sm),
+        Pressable(
+          onTap: _forgetThisDevice,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              borderRadius: Radii.smR,
+            ),
+            child: Text(
+              context.l10n.forgetThisDeviceButton,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.error,
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-/// Circular tonal icon badge matching [SettingsTile]'s row icon treatment
-/// (Settings redesign v2), for the rows on this screen that need custom
-/// trailing widgets (dropdown, disconnect button, OS chip) and so can't use
-/// [SettingsTile] itself.
+/// The mockup's `.row`, informational-only (no chevron, not tappable) — for
+/// rows on this screen that just display a fact (an allowed-folder path, the
+/// PC's own name) rather than opening or toggling anything.
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.title, this.subtitle});
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        children: [
+          _rowBadge(icon, scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.row-icon`: matches [SettingsTile]'s own badge exactly, for
+/// rows on this screen that need custom trailing widgets (disconnect button,
+/// OS chip) and so can't use [SettingsTile] itself.
 Widget _rowBadge(IconData icon, Color tint) {
   return Container(
     width: 38,
     height: 38,
     decoration: BoxDecoration(
-      color: tint.withValues(alpha: 0.16),
-      shape: BoxShape.circle,
+      color: tint.withValues(alpha: 0.15),
+      borderRadius: Radii.smR,
     ),
     alignment: Alignment.center,
     child: Icon(icon, size: 18, color: tint),
@@ -423,8 +623,13 @@ const _bandwidthPresets = <int>[
   50 * 1024 * 1024, // 50 MB/s
 ];
 
-class _BandwidthSection extends StatelessWidget {
-  const _BandwidthSection({required this.bandwidth, required this.onChanged});
+/// Builds the two bandwidth rows as [SettingsTile.value]s — tapping opens a
+/// bottom-sheet picker (matching the mockup's tap-to-pick "value ›" row
+/// idiom already used for the agent-name row) instead of a Material
+/// [DropdownButton]'s native popup menu, which has no equivalent in the
+/// mockup at all.
+class _BandwidthSection {
+  _BandwidthSection({required this.bandwidth, required this.onChanged});
 
   final BandwidthSettings bandwidth;
   final ValueChanged<BandwidthSettings> onChanged;
@@ -434,102 +639,73 @@ class _BandwidthSection extends StatelessWidget {
     return '${formatSize(bytesPerSec)}/s';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SettingsSection(
-      title: context.l10n.bandwidthSection,
-      children: [
-        _BandwidthDropdown(
-          icon: LucideIcons.arrowUp,
-          label: context.l10n.bandwidthUploadLimit,
-          value: bandwidth.maxUploadBytesPerSec,
-          onChanged:
-              (v) => onChanged(bandwidth.copyWith(maxUploadBytesPerSec: v)),
-          labelBuilder: (v) => _label(context, v),
-        ),
-        _BandwidthDropdown(
-          icon: LucideIcons.arrowDown,
-          label: context.l10n.bandwidthDownloadLimit,
-          value: bandwidth.maxDownloadBytesPerSec,
-          onChanged:
-              (v) => onChanged(bandwidth.copyWith(maxDownloadBytesPerSec: v)),
-          labelBuilder: (v) => _label(context, v),
-        ),
-      ],
-    );
-  }
-}
+  List<Widget> get rows => [
+    Builder(
+      builder:
+          (context) => SettingsTile.value(
+            icon: LucideIcons.arrowUp,
+            badgeColor: Brand.amber,
+            title: context.l10n.bandwidthUploadLimit,
+            value: _label(context, bandwidth.maxUploadBytesPerSec),
+            onTap:
+                () => _pickBandwidth(
+                  context,
+                  current: bandwidth.maxUploadBytesPerSec,
+                  onSelected:
+                      (v) => onChanged(
+                        bandwidth.copyWith(maxUploadBytesPerSec: v),
+                      ),
+                ),
+          ),
+    ),
+    Builder(
+      builder:
+          (context) => SettingsTile.value(
+            icon: LucideIcons.arrowDown,
+            badgeColor: Brand.amber,
+            title: context.l10n.bandwidthDownloadLimit,
+            value: _label(context, bandwidth.maxDownloadBytesPerSec),
+            onTap:
+                () => _pickBandwidth(
+                  context,
+                  current: bandwidth.maxDownloadBytesPerSec,
+                  onSelected:
+                      (v) => onChanged(
+                        bandwidth.copyWith(maxDownloadBytesPerSec: v),
+                      ),
+                ),
+          ),
+    ),
+  ];
 
-class _BandwidthDropdown extends StatelessWidget {
-  const _BandwidthDropdown({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    required this.labelBuilder,
-  });
-
-  final IconData icon;
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
-  final String Function(int) labelBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    // If current value isn't in presets, include it so the dropdown works.
+  Future<void> _pickBandwidth(
+    BuildContext context, {
+    required int current,
+    required ValueChanged<int> onSelected,
+  }) async {
     final items =
-        _bandwidthPresets.contains(value)
+        _bandwidthPresets.contains(current)
             ? _bandwidthPresets
-            : [value, ..._bandwidthPresets];
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _rowBadge(icon, Theme.of(context).colorScheme.primary),
-      title: Text(label),
-      trailing: DropdownButton<int>(
-        value: value,
-        underline: const SizedBox.shrink(),
-        items: [
-          for (final v in items)
-            DropdownMenuItem(value: v, child: Text(labelBuilder(v))),
-        ],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
-    );
-  }
-}
-
-/// Cleanly-styled warning card explaining the trust model of a paired phone.
-class _SecurityWarningCard extends StatelessWidget {
-  const _SecurityWarningCard({required this.scheme});
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: scheme.secondaryContainer,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.md),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(LucideIcons.shield, color: scheme.onSecondaryContainer),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: Text(
-                context.l10n.securityWarning,
-                style: TextStyle(color: scheme.onSecondaryContainer),
-              ),
+            : [current, ..._bandwidthPresets];
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final v in items)
+                  SettingsTile.nav(
+                    icon: v == current ? LucideIcons.check : LucideIcons.gauge,
+                    badgeColor: Brand.amber,
+                    title: _label(ctx, v),
+                    onTap: () => Navigator.pop(ctx, v),
+                  ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
     );
+    if (picked != null) onSelected(picked);
   }
 }
 
@@ -577,11 +753,11 @@ class VisibilityEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          secondary: _rowBadge(LucideIcons.eyeOff, scheme.primary),
-          title: Text(context.l10n.hideDotfiles),
-          subtitle: Text(context.l10n.hideDotfilesSubtitle),
+        SettingsTile.toggle(
+          icon: LucideIcons.eyeOff,
+          badgeColor: scheme.primary,
+          title: context.l10n.hideDotfiles,
+          subtitle: context.l10n.hideDotfilesSubtitle,
           value: prefs.hideDotfiles,
           onChanged: (v) => notifier.setHideDotfiles(v, hostId: hostId),
         ),
@@ -660,16 +836,14 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          secondary: _rowBadge(LucideIcons.copy, scheme.primary),
-          title: Text(context.l10n.overrideForDevice),
-          subtitle: Text(
-            isOverridden
-                ? context.l10n.usingDeviceVisibility
-                : context.l10n.usingAppDefault,
-          ),
+        SettingsTile.toggle(
+          icon: LucideIcons.copy,
+          badgeColor: scheme.primary,
+          title: context.l10n.overrideForDevice,
+          subtitle:
+              isOverridden
+                  ? context.l10n.usingDeviceVisibility
+                  : context.l10n.usingAppDefault,
           value: isOverridden,
           onChanged: (on) => notifier.setDeviceVisibilityOverride(hostId, on),
         ),
@@ -782,10 +956,16 @@ class AddExtensionFieldState extends State<AddExtensionField> {
         isDense: true,
         prefixText: '.',
         hintText: context.l10n.addExtensionHint,
-        suffixIcon: IconButton(
-          icon: const Icon(LucideIcons.plus),
-          tooltip: context.l10n.addExtensionTooltip,
-          onPressed: _submit,
+        suffixIcon: Tooltip(
+          message: context.l10n.addExtensionTooltip,
+          child: Pressable(
+            onTap: _submit,
+            pressedScale: 0.92,
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(LucideIcons.plus, size: 18),
+            ),
+          ),
         ),
       ),
       onSubmitted: (_) => _submit(),
@@ -828,56 +1008,89 @@ class _DeviceRow extends StatelessWidget {
       statusColor = d.revoked ? scheme.error : Brand.online;
     }
 
-    final trailing =
-        d.current
-            ? TextButton(
-              onPressed: () => screen._disconnectThisDevice(d),
-              style: TextButton.styleFrom(foregroundColor: scheme.error),
-              child: Text(context.l10n.disconnectButton),
-            )
-            : null;
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _rowBadge(
-        d.revoked ? LucideIcons.unplug : LucideIcons.smartphone,
-        d.revoked ? scheme.error : scheme.primary,
-      ),
-      title: Text(d.label),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(status, style: TextStyle(color: statusColor)),
-          if (d.jailRoot.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.lock, size: 14, color: scheme.tertiary),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      context.l10n.limitedTo(d.jailRoot),
-                      style: TextStyle(color: scheme.tertiary, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+          _rowBadge(
+            d.revoked ? LucideIcons.unplug : LucideIcons.smartphone,
+            d.revoked ? scheme.error : scheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  d.label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  status,
+                  style: TextStyle(fontSize: 11.5, color: statusColor),
+                ),
+                if (d.jailRoot.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.lock,
+                          size: 14,
+                          color: scheme.tertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            context.l10n.limitedTo(d.jailRoot),
+                            style: TextStyle(
+                              color: scheme.tertiary,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                if (!d.current)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      context.l10n.managedOnPc,
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          if (!d.current)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                context.l10n.managedOnPc,
-                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+          ),
+          if (d.current)
+            Pressable(
+              onTap: () => screen._disconnectThisDevice(d),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+                child: Text(
+                  context.l10n.disconnectButton,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.error,
+                  ),
+                ),
               ),
             ),
         ],
       ),
-      trailing: trailing,
     );
   }
 }
@@ -906,42 +1119,77 @@ class _DriveRow extends StatelessWidget {
     final totalStr = formatSize(total);
     final freeStr = formatSize(free);
 
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _rowBadge(
-        drive.isOS ? LucideIcons.memoryStick : LucideIcons.hardDrive,
-        scheme.primary,
-      ),
-      title: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
         children: [
-          Expanded(child: Text(name)),
-          if (drive.isOS) ...[
-            const SizedBox(width: Spacing.xs),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.xs,
-                vertical: 1,
-              ),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                context.l10n.osLabel,
-                style: TextStyle(
-                  color: scheme.onPrimaryContainer,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+          _rowBadge(
+            drive.isOS ? LucideIcons.memoryStick : LucideIcons.hardDrive,
+            scheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (drive.isOS) ...[
+                      const SizedBox(width: Spacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Spacing.xs,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          context.l10n.osLabel,
+                          style: TextStyle(
+                            color: scheme.onPrimaryContainer,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
+                const SizedBox(height: 1),
+                Text(
+                  drive.isOS
+                      ? context.l10n.driveCapacityLineOs(
+                        usedStr,
+                        totalStr,
+                        freeStr,
+                      )
+                      : context.l10n.driveCapacityLine(
+                        usedStr,
+                        totalStr,
+                        freeStr,
+                      ),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ],
-      ),
-      subtitle: Text(
-        drive.isOS
-            ? context.l10n.driveCapacityLineOs(usedStr, totalStr, freeStr)
-            : context.l10n.driveCapacityLine(usedStr, totalStr, freeStr),
       ),
     );
   }

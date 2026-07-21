@@ -1984,6 +1984,30 @@ abstract class AppLocalizations {
   /// **'Paired devices'**
   String get pairedDevicesSection;
 
+  /// No description provided for @limitsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Limits'**
+  String get limitsSection;
+
+  /// No description provided for @dangerZoneSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Danger zone'**
+  String get dangerZoneSection;
+
+  /// No description provided for @revokeAccessButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke access'**
+  String get revokeAccessButton;
+
+  /// No description provided for @forgetThisDeviceButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget this device'**
+  String get forgetThisDeviceButton;
+
   /// No description provided for @aboutSection.
   ///
   /// In en, this message translates to:

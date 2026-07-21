@@ -1,15 +1,25 @@
-/// A focused storage view for a single host: an across-all-drives aggregate
-/// total plus a per-drive [StorageGauge] list. Reached from the host card's
-/// ⋯ menu. Reuses the existing `drivesProvider` (`/system/drives`); no agent
-/// work. Drives without usable capacity are excluded from the total and
-/// skipped by [StorageGauge].
+/// A focused storage view for a single host: a donut ring showing the
+/// aggregate used/free split across all drives, plus a per-drive breakdown
+/// list. Reached from the host settings screen. Reuses the existing
+/// `drivesProvider` (`/system/drives`); no agent work.
+///
+/// The mockup's Storage Insights screen shows a "storage by file type"
+/// breakdown (Documents / Photos & Video / Applications / Free space). The
+/// agent's `/system/drives` endpoint only reports free/total bytes per mount
+/// point — it has no concept of file-type categories host-wide (the only
+/// file-type breakdown the app has, `type_treemap_screen.dart`, scans one
+/// already-chosen folder, not the whole host, and is a comparatively
+/// expensive recursive operation). So this reuses the mockup's donut +
+/// coloured-swatch-list *shape* but over the real per-drive dimension
+/// instead of fabricating file-type numbers the backend never sends — see
+/// also the note on the "Open storage-by-type map" button below.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
+import '../../core/models/drive.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
@@ -18,6 +28,11 @@ import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/drives_view.dart' show drivesProvider;
 import 'widgets/storage_gauge.dart';
+
+/// Cycling swatch colours for the per-drive rows (the aggregate "Free space"
+/// row always gets a neutral swatch, matching the mockup's own free-space
+/// row).
+const _drivePalette = [Brand.seed, Brand.accent, Brand.amber];
 
 class StorageInsightsScreen extends ConsumerWidget {
   const StorageInsightsScreen({super.key, required this.host});
@@ -28,11 +43,22 @@ class StorageInsightsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final drivesAsync = ref.watch(drivesProvider(host.id));
     final scheme = Theme.of(context).colorScheme;
+    final knownDrives = drivesAsync.valueOrNull;
+    final total = knownDrives == null ? null : aggregateUsage(knownDrives);
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
-        title: ScreenHeader(context.l10n.hostStorageTitle(host.label)),
+        title: ScreenHeader(
+          context.l10n.storageInsightsTitle,
+          subtitle:
+              total != null
+                  ? context.l10n.hostStorageSubtitle(
+                    host.label,
+                    formatSize(total.totalBytes - total.freeBytes),
+                    formatSize(total.totalBytes),
+                  )
+                  : null,
+        ),
       ),
       body: drivesAsync.when(
         loading: () => const ListingSkeleton(),
@@ -42,29 +68,31 @@ class StorageInsightsScreen extends ConsumerWidget {
               onRetry: () => ref.invalidate(drivesProvider(host.id)),
             ),
         data: (drives) {
-          final total = aggregateUsage(drives);
-          if (total == null) return const EmptyFolderView();
+          final usage = aggregateUsage(drives);
+          if (usage == null) return const EmptyFolderView();
           final withCapacity =
               drives.where((d) => usedFraction(d) != null).toList();
           return ListView(
             padding: const EdgeInsets.all(Spacing.md),
             children: [
-              _TotalCard(usage: total, driveCount: withCapacity.length),
-              const SizedBox(height: Spacing.md),
-              ShadCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md,
-                  vertical: Spacing.sm,
+              Center(
+                child: _UsageRing(
+                  fraction: usage.usedFraction,
+                  usedBytes: usage.totalBytes - usage.freeBytes,
                 ),
-                radius: Radii.cardR,
-                backgroundColor: scheme.surfaceContainer,
-                border: ShadBorder.all(color: Colors.transparent),
-                child: Column(
-                  children: [
-                    for (final drive in withCapacity)
-                      StorageGauge(drive: drive),
-                  ],
+              ),
+              const SizedBox(height: Spacing.lg),
+              for (var i = 0; i < withCapacity.length; i++)
+                _BreakdownRow(
+                  color: _drivePalette[i % _drivePalette.length],
+                  label: _driveLabel(withCapacity[i]),
+                  bytes:
+                      withCapacity[i].totalBytes! - withCapacity[i].freeBytes!,
                 ),
+              _BreakdownRow(
+                color: scheme.surfaceContainerHighest,
+                label: context.l10n.freeSpaceLabel,
+                bytes: usage.freeBytes,
               ),
             ],
           );
@@ -72,52 +100,96 @@ class StorageInsightsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  String _driveLabel(Drive d) =>
+      (d.label != null && d.label!.isNotEmpty) ? d.label! : d.path;
 }
 
-/// The aggregate "All drives" card: a single gauge bar over the summed
-/// capacity, with a "`free` free of `total` · N drive(s)" caption.
-class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.usage, required this.driveCount});
+/// The donut ring: a single [CircularProgressIndicator] whose track colour
+/// covers the free portion and whose value arc covers the used portion —
+/// the mockup's multi-colour conic-gradient ring, collapsed to the one real
+/// number the agent reports (aggregate used vs. free), with the percentage
+/// and used bytes centred inside, same as the mockup.
+class _UsageRing extends StatelessWidget {
+  const _UsageRing({required this.fraction, required this.usedBytes});
 
-  final ({int totalBytes, int freeBytes, double usedFraction}) usage;
-  final int driveCount;
+  final double fraction;
+  final int usedBytes;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final l10n = context.l10n;
-
-    return ShadCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.md,
-        vertical: Spacing.sm,
-      ),
-      radius: Radii.cardR,
-      backgroundColor: scheme.surfaceContainer,
-      border: ShadBorder.all(color: Colors.transparent),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      width: 170,
+      height: 170,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Text(l10n.allDrives, style: textTheme.titleMedium),
-          const SizedBox(height: Spacing.sm),
-          ClipRRect(
-            borderRadius: Radii.stadiumR,
-            child: LinearProgressIndicator(
-              value: usage.usedFraction,
-              minHeight: 10,
-              backgroundColor: scheme.tertiaryContainer,
-              valueColor: AlwaysStoppedAnimation(scheme.tertiary),
+          CircularProgressIndicator(
+            value: fraction,
+            strokeWidth: 26,
+            backgroundColor: scheme.surfaceContainerHighest,
+            valueColor: const AlwaysStoppedAnimation(Brand.seed),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${(fraction * 100).round()}%',
+                style: textTheme.titleLarge?.copyWith(
+                  fontFamily: 'JetBrains Mono',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                formatSize(usedBytes),
+                style: textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row in the breakdown list: a coloured square swatch, a label, and a
+/// mono byte value — the mockup's category row.
+class _BreakdownRow extends StatelessWidget {
+  const _BreakdownRow({
+    required this.color,
+    required this.label,
+    required this.bytes,
+  });
+
+  final Color color;
+  final String label;
+  final int bytes;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
-          const SizedBox(height: Spacing.xs),
+          const SizedBox(width: Spacing.sm),
+          Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
           Text(
-            l10n.freeOfTotalDrives(
-              formatSize(usage.freeBytes),
-              formatSize(usage.totalBytes),
-              driveCount,
-            ),
-            style: textTheme.bodySmall?.copyWith(
+            formatSize(bytes),
+            style: TextStyle(
+              fontFamily: 'JetBrains Mono',
               color: scheme.onSurfaceVariant,
             ),
           ),

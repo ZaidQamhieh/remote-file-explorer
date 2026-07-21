@@ -12,46 +12,11 @@ import '../../../core/platform/wol.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/host_store.dart';
 import '../../../core/theme/tokens.dart';
-import '../../../core/ui/sheet_chrome.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../home/home_state.dart';
-import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
-import '../../transfers/transfer_manager.dart';
-import '../storage_insights_screen.dart';
-import 'connection_diagnostics_sheet.dart';
-
-/// Curated accent palette for [hostAccentColor] — picked hues rather than raw
-/// hash→HSL so every result stays legible on both light and dark surfaces.
-const List<Color> _hostAccentPalette = [
-  Color(0xFF4285F4), // blue
-  Color(0xFF34A853), // green
-  Color(0xFFEA4335), // red
-  Color(0xFFFBBC05), // amber
-  Color(0xFF9C27B0), // purple
-  Color(0xFF00ACC1), // cyan
-  Color(0xFFFF7043), // orange
-  Color(0xFF5C6BC0), // indigo
-];
-
-/// Deterministic string hash (djb2). Used instead of [Object.hashCode], which
-/// Dart doesn't guarantee to stay fixed across SDK versions — this keeps a
-/// host's accent color stable across app runs/restarts.
-int _stableHash(String s) {
-  var hash = 5381;
-  for (final code in s.codeUnits) {
-    hash = ((hash << 5) + hash + code) & 0x7fffffff;
-  }
-  return hash;
-}
-
-/// A stable accent color for [hostId], so hosts stay visually distinguishable
-/// at a glance across the list. Pure — same [hostId] always yields the same
-/// color, and the picked colors are drawn from a fixed palette rather than
-/// generated ad hoc so they never clash with the M3 surface underneath.
-Color hostAccentColor(String hostId) =>
-    _hostAccentPalette[_stableHash(hostId) % _hostAccentPalette.length];
+import 'storage_gauge.dart';
 
 /// Picks the root screen to open when browsing [host], based on its most
 /// recent `/health` response.
@@ -65,29 +30,30 @@ Widget explorerRootFor(Health? health, Host host) {
   return isWindows ? DrivesView(host: host) : ExplorerScreen(host: host);
 }
 
-/// A single host's list row: icon, name, status dot + detail line, and a
-/// trailing Wake button (offline hosts only) / ⋯ menu for the rest of the
-/// actions.
+/// A single host's row: icon-badge with a status dot, name/subtitle line, a
+/// storage-usage bar when online, and a trailing gear button into
+/// [SettingsScreen] — matches the mockup's Devices tab exactly (every host
+/// renders as the same uniform rounded card; there is no more "hero" row for
+/// the most-recently-used host).
 ///
 /// Pings the host's `/health` on mount to determine online/offline state and,
-/// when online, fetches `AgentClient.drives()` to know whether any drive is
-/// low on space (gracefully skipped if the agent predates that endpoint).
+/// when online, fetches `AgentClient.drives()` for the storage bar (gracefully
+/// skipped if the agent predates that endpoint).
 class HostCard extends ConsumerStatefulWidget {
   const HostCard({
     super.key,
     required this.host,
     required this.store,
-    this.isFirst = false,
+    this.onOnlineChanged,
   });
 
   final Host host;
   final HostStore store;
 
-  /// Whether this is the first (most-recently-used) host in the list —
-  /// renders as the big "focused" hero (icon badge, name, status, and an
-  /// Open/Search/Transfers/Settings quick-action row) instead of the compact
-  /// row the rest of the list uses.
-  final bool isFirst;
+  /// Reports this host's online/offline state up to the parent list once
+  /// known, so it can render the "N paired · N online now" header subtitle.
+  /// Purely a display callback — doesn't affect the ping/health logic below.
+  final ValueChanged<bool>? onOnlineChanged;
 
   @override
   ConsumerState<HostCard> createState() => _HostCardState();
@@ -97,14 +63,9 @@ class _HostCardState extends ConsumerState<HostCard> {
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
 
-  /// Address the most recent successful client used — drives the "LAN" vs
-  /// "Tailscale" chip. `null` while unknown (offline / not yet pinged).
+  /// Address the most recent successful client used — drives the "· Tailscale"
+  /// subtitle suffix. `null` while unknown (offline / not yet pinged).
   bool? _isTailscaleActive;
-
-  /// Wall-clock time the most recent ping resolved, used only to render a
-  /// gentle relative "last checked" line — purely cosmetic, doesn't affect the
-  /// online/offline determination itself.
-  DateTime? _lastChecked;
 
   /// Last-seen timestamp loaded from the store, shown when offline.
   DateTime? _lastSeen;
@@ -130,7 +91,6 @@ class _HostCardState extends ConsumerState<HostCard> {
       await widget.store.setLastSeen(widget.host.id, now);
       if (mounted) {
         setState(() {
-          _lastChecked = now;
           _lastSeen = now;
           _isTailscaleActive = client!.isActiveAddressTailscale;
         });
@@ -144,15 +104,14 @@ class _HostCardState extends ConsumerState<HostCard> {
       _drivesFuture = _loadDrives(client).whenComplete(client.close);
       return health;
     } catch (_) {
-      if (mounted) setState(() => _lastChecked = DateTime.now());
       client?.close();
       return null;
     }
   }
 
-  /// Fetches drives for the low-disk indicator. Returns an empty list on any
+  /// Fetches drives for the storage-usage bar. Returns an empty list on any
   /// error — including a 404 from agents that predate `/system/drives` — so a
-  /// missing endpoint never produces an error state.
+  /// missing endpoint just skips the bar instead of showing an error state.
   Future<List<Drive>> _loadDrives(AgentClient client) async {
     try {
       return await client.drives();
@@ -187,19 +146,10 @@ class _HostCardState extends ConsumerState<HostCard> {
     await widget.store.addHost(updated);
   }
 
-  /// Promotes this host to the hero slot (top of the list) without
-  /// navigating anywhere — tapping a row under "Also paired" just brings
-  /// that host to focus, it doesn't open it.
-  Future<void> _promote() async {
-    await widget.store.touchHost(widget.host.id);
-    ref.invalidate(hostStoreProvider);
-  }
-
-  /// Opens the explorer for this host. If the most recent `/health` ping
-  /// reported a Windows host, opens the drive list ([DrivesView]) first
-  /// instead of a `/`-rooted listing, since `/` isn't a meaningful path on
-  /// Windows. Any other (or unknown) OS keeps the existing `/`-rooted
-  /// behaviour.
+  /// Opens the explorer for this host (the mockup's card `onclick` switches
+  /// to the Files tab). If the most recent `/health` ping reported a Windows
+  /// host, opens the drive list ([DrivesView]) first instead of a `/`-rooted
+  /// listing, since `/` isn't a meaningful path on Windows.
   Future<void> _openExplorer(BuildContext context) async {
     final health = await _pingFuture;
     if (!context.mounted) return;
@@ -210,66 +160,9 @@ class _HostCardState extends ConsumerState<HostCard> {
     ref.read(selectedTabIndexProvider.notifier).state = 1;
   }
 
-  /// Opens search for this host with a short-lived client, closed once the
-  /// search screen is popped.
-  Future<void> _openSearch(BuildContext context) async {
-    AgentClient? client;
-    try {
-      client = await buildClientForHost(ref.read, widget.host.id);
-      if (!context.mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder:
-              (_) => SearchScreen(
-                host: widget.host,
-                client: client!,
-                currentPath: '/',
-              ),
-        ),
-      );
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.couldNotReachComputer)),
-        );
-      }
-    } finally {
-      client?.close();
-    }
-  }
-
-  void _openTransfers(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const TransferManagerSheet(),
-    );
-  }
-
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SettingsScreen(host: widget.host)),
-    );
-  }
-
-  void _openStorage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => StorageInsightsScreen(host: widget.host),
-      ),
-    );
-  }
-
-  Future<void> _openDiagnostics(BuildContext context) async {
-    final store = await ref.read(hostStoreProvider.future);
-    final token = await store.getToken(widget.host.id);
-    if (!context.mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder:
-          (_) =>
-              ConnectionDiagnosticsSheet(host: widget.host, deviceToken: token),
     );
   }
 
@@ -316,120 +209,6 @@ class _HostCardState extends ConsumerState<HostCard> {
     }
   }
 
-  /// The host's action sheet (⋯ menu), restyled with the shared MetaSheet
-  /// chrome: a [SheetHero] tinted [Brand.online]/[Brand.offline], a
-  /// [QuickActionRow] for the most-used actions, and an [ActionListCard] for
-  /// the rest. Replaces the old [PopupMenuButton] — same actions, same
-  /// handlers, just presented as a sheet instead of a dropdown.
-  void _openActions(BuildContext context, {required bool online}) {
-    final l = context.l10n;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-
-        void run(void Function(BuildContext) action) {
-          Navigator.pop(sheetContext);
-          action(context);
-        }
-
-        final quick = <GradientActionCircle>[
-          if (online)
-            GradientActionCircle(
-              icon: LucideIcons.search,
-              label: l.searchButton,
-              gradient: [
-                Brand.seed,
-                Color.lerp(Brand.seed, Colors.black, 0.3)!,
-              ],
-              onTap: () => run(_openSearch),
-            ),
-          if (online)
-            GradientActionCircle(
-              icon: LucideIcons.hardDrive,
-              label: l.storageMenuItem,
-              gradient: [
-                Brand.online,
-                Color.lerp(Brand.online, Colors.black, 0.3)!,
-              ],
-              onTap: () => run(_openStorage),
-            ),
-          GradientActionCircle(
-            icon: LucideIcons.settings,
-            label: l.settingsMenuItem,
-            gradient: [
-              Brand.accent,
-              Color.lerp(Brand.accent, Colors.black, 0.3)!,
-            ],
-            onTap: () => run(_openSettings),
-          ),
-          GradientActionCircle(
-            icon: LucideIcons.userX,
-            label: l.forgetComputerMenuItem,
-            gradient: [Brand.red, Color.lerp(Brand.red, Colors.black, 0.3)!],
-            onTap: () => run(_confirmRemove),
-          ),
-        ];
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: Radii.sheetTopR,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SheetHero(
-                    badge: const Icon(LucideIcons.monitor),
-                    tint: online ? Brand.online : Brand.offline,
-                    title: widget.host.label,
-                    subtitle:
-                        '${online ? l.onlineStatus : l.offlineStatus} · '
-                        '${widget.host.address}',
-                    onClose: () => Navigator.pop(sheetContext),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.lg,
-                      0,
-                      Spacing.lg,
-                      Spacing.xl,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        QuickActionRow(actions: quick),
-                        const SizedBox(height: Spacing.md),
-                        ActionListCard(
-                          children: [
-                            ActionListTile(
-                              icon: LucideIcons.arrowLeftRight,
-                              label: l.transfersMenuItem,
-                              onTap: () => run(_openTransfers),
-                            ),
-                            ActionListTile(
-                              icon: LucideIcons.activity,
-                              label: l.diagnosticsMenuItem,
-                              onTap: () => run(_openDiagnostics),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Health?>(
@@ -437,417 +216,103 @@ class _HostCardState extends ConsumerState<HostCard> {
       builder: (context, snap) {
         final online = snap.data != null;
         final checking = snap.connectionState == ConnectionState.waiting;
-        final canWake = !online && !checking && widget.host.macAddress != null;
-
-        if (widget.isFirst) {
-          return _buildHero(context, online: online);
+        if (!checking) {
+          // Report the resolved status up to the list header once known.
+          // Deferred a frame so this never calls setState during the parent's
+          // own build.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onOnlineChanged?.call(online);
+          });
         }
-
-        // Thin list row for every host after the first — matches the Figma
-        // mockup's simple row instead of the old dashboard-style card.
-        // Dashboard-only content (uptime, per-drive gauges, full-width
-        // action buttons) has been demoted to the Storage/Diagnostics
-        // screens reachable from the ⋯ menu.
-        return InkWell(
-          onTap: _promote,
+        return _CardBody(
+          host: widget.host,
+          health: snap.data,
+          online: online,
+          checking: checking,
+          isTailscaleActive: _isTailscaleActive,
+          lastSeen: _lastSeen,
+          drivesFuture: _drivesFuture,
+          lowDiskThresholdBytes:
+              ref
+                  .watch(settingsProvider)
+                  .valueOrNull
+                  ?.app
+                  .lowDiskThresholdBytes ??
+              0,
+          onTap: () {
+            if (online) {
+              _openExplorer(context);
+            } else if (widget.host.macAddress != null) {
+              _sendWol(context);
+            }
+          },
           onLongPress: () => _confirmRemove(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _HostRowContent(
-                  host: widget.host,
-                  snapshot: snap,
-                  checking: checking,
-                  online: online,
-                  isTailscaleActive: _isTailscaleActive,
-                  lastChecked: _lastChecked,
-                  lastSeen: _lastSeen,
-                  drivesFuture: _drivesFuture,
-                  lowDiskThresholdBytes:
-                      ref
-                          .watch(settingsProvider)
-                          .valueOrNull
-                          ?.app
-                          .lowDiskThresholdBytes ??
-                      0,
-                ),
-                if (canWake) ...[
-                  const SizedBox(width: Spacing.sm),
-                  IconButton.filledTonal(
-                    icon: const Icon(LucideIcons.power, size: 18),
-                    tooltip: context.l10n.wakeButton,
-                    onPressed: () => _sendWol(context),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          onSettingsTap: () => _openSettings(context),
         );
       },
-    );
-  }
-
-  /// The focused-host hero (Servers redesign v2): a flat tinted-border card —
-  /// same recipe as [SettingsHero] — with a big icon badge, name/status, and
-  /// an Open/Search/Transfers/Settings quick-action row so the most-recently-
-  /// used PC's primary actions are one tap away instead of behind the ⋯ menu.
-  Widget _buildHero(BuildContext context, {required bool online}) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    const tint = Brand.seed;
-
-    Widget quickAction({
-      required IconData icon,
-      required String label,
-      required VoidCallback? onTap,
-    }) {
-      final enabled = onTap != null;
-      return Expanded(
-        child: Material(
-          color: scheme.onSurface.withValues(alpha: 0.05),
-          borderRadius: Radii.smR,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: Radii.smR,
-            child: Opacity(
-              opacity: enabled ? 1 : 0.4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 17, color: tint),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: () => _openExplorer(context),
-      onLongPress: () => _confirmRemove(context),
-      borderRadius: Radii.lgR,
-      child: Container(
-        margin: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm,
-        ),
-        padding: const EdgeInsets.all(Spacing.md),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: Radii.lgR,
-          border: Border.all(color: tint.withValues(alpha: 0.35)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: tint.withValues(alpha: 0.22),
-                    borderRadius: Radii.cardR,
-                    boxShadow: [
-                      BoxShadow(
-                        color: tint.withValues(alpha: 0.25),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(LucideIcons.monitor, size: 24, color: tint),
-                ),
-                const SizedBox(width: Spacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.host.label,
-                              style: textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(LucideIcons.moreVertical),
-                            tooltip: context.l10n.moreTooltip,
-                            onPressed:
-                                () => _openActions(context, online: online),
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: _HostRowContent(
-                          host: widget.host,
-                          snapshot: AsyncSnapshot.withData(
-                            ConnectionState.done,
-                            null,
-                          ),
-                          checking: false,
-                          online: online,
-                          isTailscaleActive: _isTailscaleActive,
-                          lastChecked: _lastChecked,
-                          lastSeen: _lastSeen,
-                          drivesFuture: null,
-                          lowDiskThresholdBytes: 0,
-                          showIdentity: false,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Row(
-              children: [
-                quickAction(
-                  icon: LucideIcons.folderOpen,
-                  label: context.l10n.openButton,
-                  onTap: () => _openExplorer(context),
-                ),
-                const SizedBox(width: Spacing.sm),
-                quickAction(
-                  icon: LucideIcons.search,
-                  label: context.l10n.searchButton,
-                  onTap: online ? () => _openSearch(context) : null,
-                ),
-                const SizedBox(width: Spacing.sm),
-                quickAction(
-                  icon: LucideIcons.arrowLeftRight,
-                  label: context.l10n.transfersMenuItem,
-                  onTap: () => _openTransfers(context),
-                ),
-                const SizedBox(width: Spacing.sm),
-                quickAction(
-                  icon: LucideIcons.settings,
-                  label: context.l10n.settingsMenuItem,
-                  onTap: () => _openSettings(context),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Row content: icon chip, name (+ read-only / low-disk inline badges), and a
-// single status/detail line.
+// Card body — matches the mockup's `.card` row: avatar + status dot, title +
+// subtitle, a storage bar when online, and a trailing gear button (offline
+// hosts get a dimmed card and an "Offline" badge instead).
 // ---------------------------------------------------------------------------
 
-class _HostRowContent extends StatelessWidget {
-  const _HostRowContent({
+class _CardBody extends StatelessWidget {
+  const _CardBody({
     required this.host,
-    required this.snapshot,
-    required this.checking,
+    required this.health,
     required this.online,
+    required this.checking,
     required this.isTailscaleActive,
-    required this.lastChecked,
     required this.lastSeen,
     required this.drivesFuture,
     required this.lowDiskThresholdBytes,
-    this.showIdentity = true,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onSettingsTap,
   });
 
   final Host host;
-  final AsyncSnapshot<Health?> snapshot;
-  final bool checking;
+  final Health? health;
   final bool online;
+  final bool checking;
   final bool? isTailscaleActive;
-  final DateTime? lastChecked;
   final DateTime? lastSeen;
   final Future<List<Drive>>? drivesFuture;
   final int lowDiskThresholdBytes;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onSettingsTap;
 
-  /// Whether to render the icon chip + host name. The hero card already
-  /// renders its own big icon badge and name above this widget, so it passes
-  /// `false` to get just the status line instead of a duplicate row.
-  final bool showIdentity;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final health = snapshot.data;
-    final readOnly = online && health?.readOnly == true;
-
-    // Offline hosts render dimmed to 60% opacity EXCEPT the host name, which
-    // always stays fully legible.
-    final dimmed = !online && !checking;
-    Widget maybeDim(Widget child) =>
-        dimmed ? Opacity(opacity: 0.6, child: child) : child;
-
-    final iconChip = Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: hostAccentColor(host.id),
-        borderRadius: Radii.chipR,
-      ),
-      child: const Icon(LucideIcons.monitor, color: Colors.white, size: 20),
-    );
-
-    final statusLine = maybeDim(
-      checking
-          ? Text(
-            context.l10n.checkingStatus,
-            style: textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          )
-          : Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: online ? Brand.online : Brand.offline,
-                ),
-              ),
-              const SizedBox(width: Spacing.xs),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: _statusWord(context),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color:
-                              online
-                                  ? scheme.onSurface
-                                  : scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      TextSpan(text: ' · ${_subtitle(context)}'),
-                    ],
-                  ),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-    );
-
-    if (!showIdentity) {
-      return statusLine;
-    }
-
-    return Expanded(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          maybeDim(iconChip),
-          const SizedBox(width: Spacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        host.label,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (readOnly) ...[
-                      const SizedBox(width: Spacing.xs),
-                      Tooltip(
-                        message: 'Read-only',
-                        child: Icon(
-                          LucideIcons.lock,
-                          size: 14,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (online && drivesFuture != null)
-                      _LowDiskBadge(
-                        drivesFuture: drivesFuture!,
-                        thresholdBytes: lowDiskThresholdBytes,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                statusLine,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  /// `runtime.GOOS` as reported by `/health` ("windows"/"linux"/"darwin"),
+  /// capitalized. The mockup shows a full OS+version string ("Windows 11",
+  /// "Ubuntu 24.04") — the agent's `/health` endpoint only reports the bare
+  /// OS name, no version, so that detail can't be shown without fabricating
+  /// it.
+  String? _osLabel() {
+    final os = health?.os;
+    if (os == null || os.isEmpty) return null;
+    return os[0].toUpperCase() + os.substring(1);
   }
 
-  String _statusWord(BuildContext context) {
-    final l = context.l10n;
-    if (online) {
-      final relative = _relative(context, lastChecked);
-      return relative == null
-          ? l.onlineStatus
-          : l.statusCheckedRelative(relative);
-    }
-    final relative = _relative(context, lastSeen);
-    return relative == null
-        ? l.offlineStatus
-        : l.statusOfflineLastSeen(relative);
-  }
-
-  /// "v1.1.0 · Tailscale" / "v1.1.0 · LAN" when online and we know which
-  /// address is active; falls back to the raw address when offline or
-  /// unknown.
   String _subtitle(BuildContext context) {
-    final l = context.l10n;
-    final health = snapshot.data;
-    if (health != null) {
-      final network =
-          isTailscaleActive == true ? l.networkTailscale : l.networkLan;
-      if (health.version.isEmpty) return network;
-      return l.hostSubtitleVersionNetwork(health.version, network);
+    if (checking) return context.l10n.checkingStatus;
+    if (!online) {
+      return lastSeen != null
+          ? context.l10n.statusOfflineLastSeen(_relative(context, lastSeen!))
+          : context.l10n.offlineStatus;
     }
-    return host.address;
+    final parts = <String>[host.address];
+    final os = _osLabel();
+    if (os != null) parts.add(os);
+    if (isTailscaleActive == true) parts.add(context.l10n.networkTailscale);
+    return parts.join(' · ');
   }
 
-  String? _relative(BuildContext context, DateTime? at) {
-    if (at == null) return null;
+  String _relative(BuildContext context, DateTime at) {
     final l = context.l10n;
     final diff = DateTime.now().difference(at);
     if (diff.inSeconds < 5) return l.relativeJustNow;
@@ -856,13 +321,234 @@ class _HostRowContent extends StatelessWidget {
     if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
     return l.relativeDaysAgo(diff.inDays);
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final readOnly = online && health?.readOnly == true;
+    final dimmed = !online && !checking;
+
+    return Opacity(
+      opacity: dimmed ? 0.55 : 1,
+      child: InkWell(
+        onTap: checking ? null : onTap,
+        onLongPress: onLongPress,
+        borderRadius: Radii.cardR,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: Radii.cardR,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _Avatar(online: online, checking: checking),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            host.label,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (readOnly) ...[
+                          const SizedBox(width: Spacing.xs),
+                          Tooltip(
+                            message: 'Read-only',
+                            child: Icon(
+                              LucideIcons.lock,
+                              size: 14,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (online && drivesFuture != null)
+                          _LowDiskBadge(
+                            drivesFuture: drivesFuture!,
+                            thresholdBytes: lowDiskThresholdBytes,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      _subtitle(context),
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (online && drivesFuture != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 7),
+                        child: SizedBox(
+                          width: 140,
+                          child: _StorageBar(drivesFuture: drivesFuture!),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              if (online)
+                IconButton(
+                  icon: const Icon(LucideIcons.settings),
+                  tooltip: context.l10n.settingsMenuItem,
+                  onPressed: onSettingsTap,
+                )
+              else
+                _OfflineBadge(label: context.l10n.offlineStatus),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-/// Small inline warning dot (replacing the old full-width low-disk banner)
-/// shown next to the host name when any drive is under the configured
-/// threshold. The full per-drive detail lives in [StorageInsightsScreen],
-/// reachable from the row's ⋯ menu — the tooltip carries the same copy the
-/// banner used to show.
+/// Rounded-rect icon badge with a bottom-right status dot — the mockup's
+/// `.avatar` + `.pulse-dot`. Every host renders the same generic monitor
+/// glyph: `/health` doesn't report a device form-factor (desktop/laptop/
+/// tower), so the mockup's per-host icon variety can't be reproduced without
+/// fabricating hardware info the backend doesn't send.
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.online, required this.checking});
+
+  final bool online;
+  final bool checking;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dotColor =
+        checking
+            ? scheme.outlineVariant
+            : (online ? Brand.online : Brand.offline);
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  scheme.surfaceContainerHighest,
+                  scheme.surfaceContainerHigh,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              LucideIcons.monitor,
+              size: 20,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 11,
+              height: 11,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: dotColor,
+                border: Border.all(
+                  color: scheme.surfaceContainerHigh,
+                  width: 2.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Offline" neutral pill — the mockup's `.badge.neutral`, replacing the gear
+/// button on offline cards.
+class _OfflineBadge extends StatelessWidget {
+  const _OfflineBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// Aggregate-usage bar for the card row — the mockup's per-host `.progress`.
+/// Reuses [aggregateUsage] (already shared with [StorageInsightsScreen]);
+/// renders nothing while unresolved or when the agent has no usable capacity
+/// data (e.g. predates `/system/drives`).
+class _StorageBar extends StatelessWidget {
+  const _StorageBar({required this.drivesFuture});
+
+  final Future<List<Drive>> drivesFuture;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Drive>>(
+      future: drivesFuture,
+      builder: (context, snap) {
+        final drives = snap.data;
+        if (drives == null) return const SizedBox.shrink();
+        final usage = aggregateUsage(drives);
+        if (usage == null) return const SizedBox.shrink();
+        final scheme = Theme.of(context).colorScheme;
+        // Amber past 70% used, matching the mockup's high-usage example.
+        final fillColor = usage.usedFraction >= 0.7 ? Brand.amber : Brand.seed;
+        return ClipRRect(
+          borderRadius: Radii.stadiumR,
+          child: LinearProgressIndicator(
+            value: usage.usedFraction,
+            minHeight: 5,
+            backgroundColor: scheme.surfaceContainerHighest,
+            valueColor: AlwaysStoppedAnimation(fillColor),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Small inline warning dot shown next to the host name when any drive is
+/// under the configured threshold. Full per-drive detail lives in
+/// [StorageInsightsScreen], reachable from the settings screen.
 class _LowDiskBadge extends StatelessWidget {
   const _LowDiskBadge({
     required this.drivesFuture,

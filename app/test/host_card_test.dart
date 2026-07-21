@@ -10,6 +10,7 @@ import 'package:remote_file_explorer/features/hosts/widgets/host_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // HostCard widget tests. The card pings the host's `/health` on mount; to
 // keep this fast and offline-friendly we point the host at a port nothing is
@@ -66,9 +67,7 @@ void main() {
           ProviderScope(
             child: MaterialApp(
               localizationsDelegates: l10nDelegates,
-              home: Scaffold(
-                body: HostCard(host: host, store: store, isFirst: true),
-              ),
+              home: Scaffold(body: HostCard(host: host, store: store)),
             ),
           ),
         );
@@ -85,32 +84,30 @@ void main() {
       expect(find.text('main-pc'), findsOneWidget);
       expect(find.textContaining('Offline'), findsWidgets);
 
-      // Per spec, offline cards dim to 60% opacity EXCEPT the host name — the
-      // name `Text` must not sit inside an `Opacity(0.6)` ancestor.
+      // Per spec, offline cards dim the whole card (mockup opacity:.55) —
+      // the host name sits inside that same dimmed subtree, unlike the old
+      // hero card which kept the name at full opacity.
       final nameFinder = find.text('main-pc');
       final dimmedAncestor = find.ancestor(
         of: nameFinder,
         matching: find.byWidgetPredicate(
-          (w) => w is Opacity && w.opacity == 0.6,
+          (w) => w is Opacity && w.opacity == 0.55,
         ),
       );
-      expect(dimmedAncestor, findsNothing);
+      expect(dimmedAncestor, findsOneWidget);
 
-      // No storage gauges for an offline host — the hero doesn't render any
-      // dashboard content inline.
+      // No storage bar for an offline host.
       expect(find.byType(LinearProgressIndicator), findsNothing);
 
-      // The hero's own "Search" quick action always renders (just dimmed
-      // while offline); the ⋯ sheet's Search entry only appears when online,
-      // so opening the sheet must not add a second "Search" text.
-      expect(find.text('Search'), findsOneWidget);
-      await tester.tap(find.byTooltip('More'));
-      await tester.pumpAndSettle();
-      expect(find.text('Search'), findsOneWidget);
+      // The gear (Settings) button is replaced by the "Offline" badge —
+      // there's no settings shortcut on a card that can't be reached.
+      expect(find.byTooltip('Settings'), findsNothing);
     },
   );
 
-  testWidgets('renders the ⋯ sheet with the row actions', (tester) async {
+  testWidgets('long-press opens the forget-device confirmation', (
+    tester,
+  ) async {
     final store = await buildStore();
 
     await tester.runAsync(() async {
@@ -118,9 +115,11 @@ void main() {
         ProviderScope(
           child: MaterialApp(
             localizationsDelegates: l10nDelegates,
-            home: Scaffold(
-              body: HostCard(host: host, store: store, isFirst: true),
-            ),
+            // ShadDialog is inserted into the root Navigator's overlay, above
+            // the Scaffold subtree — wrap the whole app (via `builder`), not
+            // just the card, so the dialog also finds a ShadTheme ancestor.
+            builder: (context, child) => wrapShad(child!),
+            home: Scaffold(body: HostCard(host: host, store: store)),
           ),
         ),
       );
@@ -130,20 +129,9 @@ void main() {
       }
     });
 
-    expect(find.byTooltip('More'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('More'));
+    await tester.longPress(find.text('main-pc'));
     await tester.pumpAndSettle();
 
-    expect(find.text('main-pc'), findsWidgets); // sheet title + hero name
-    expect(find.text('Transfers'), findsWidgets); // sheet item + quick action
-    expect(find.text('Diagnostics'), findsOneWidget);
-    expect(find.text('Settings'), findsWidgets); // sheet item + quick action
-    expect(find.text('Forget this computer'), findsOneWidget);
-    // Offline host (no /system/drives data): the sheet's Search/Storage
-    // entries are omitted — only the hero's own dimmed Search quick action
-    // renders (Storage has no quick-action equivalent).
-    expect(find.text('Search'), findsOneWidget);
-    expect(find.text('Storage'), findsNothing);
+    expect(find.text('Forget this computer?'), findsOneWidget);
   });
 }

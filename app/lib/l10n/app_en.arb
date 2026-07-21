@@ -94,6 +94,16 @@
 
   "connectionDiagnosticsTitle": "Connection Diagnostics",
   "retestButton": "Re-test",
+  "runAgainButton": "Run again",
+  "diagHostReachable": "Host reachable",
+  "diagTlsPinned": "TLS fingerprint pinned",
+  "diagLatency": "Latency",
+  "diagPath": "Path",
+  "diagPinnedBadge": "Pinned",
+  "diagMismatchBadge": "Mismatch",
+  "diagUnknownBadge": "Unknown",
+  "diagOkBadge": "OK",
+  "diagLanDirect": "LAN direct",
   "probeTimedOut": "Timed out",
   "probeError": "Error",
   "probeLatencyMs": "{ms}ms",
@@ -105,7 +115,17 @@
   "@hostStorageTitle": {
     "placeholders": { "hostLabel": {"type": "String"} }
   },
+  "storageInsightsTitle": "Storage Insights",
+  "hostStorageSubtitle": "{hostLabel} · {used} of {total} used",
+  "@hostStorageSubtitle": {
+    "placeholders": {
+      "hostLabel": {"type": "String"},
+      "used": {"type": "String"},
+      "total": {"type": "String"}
+    }
+  },
   "allDrives": "All drives",
+  "freeSpaceLabel": "Free space",
   "couldNotLoadStorage": "Could not load storage: {error}",
   "@couldNotLoadStorage": {
     "placeholders": { "error": {"type": "String"} }

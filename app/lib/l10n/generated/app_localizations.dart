@@ -412,6 +412,66 @@ abstract class AppLocalizations {
   /// **'Re-test'**
   String get retestButton;
 
+  /// No description provided for @runAgainButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Run again'**
+  String get runAgainButton;
+
+  /// No description provided for @diagHostReachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Host reachable'**
+  String get diagHostReachable;
+
+  /// No description provided for @diagTlsPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'TLS fingerprint pinned'**
+  String get diagTlsPinned;
+
+  /// No description provided for @diagLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency'**
+  String get diagLatency;
+
+  /// No description provided for @diagPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Path'**
+  String get diagPath;
+
+  /// No description provided for @diagPinnedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get diagPinnedBadge;
+
+  /// No description provided for @diagMismatchBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Mismatch'**
+  String get diagMismatchBadge;
+
+  /// No description provided for @diagUnknownBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get diagUnknownBadge;
+
+  /// No description provided for @diagOkBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get diagOkBadge;
+
+  /// No description provided for @diagLanDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'LAN direct'**
+  String get diagLanDirect;
+
   /// No description provided for @probeTimedOut.
   ///
   /// In en, this message translates to:
@@ -436,11 +496,29 @@ abstract class AppLocalizations {
   /// **'{hostLabel} · Storage'**
   String hostStorageTitle(String hostLabel);
 
+  /// No description provided for @storageInsightsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage Insights'**
+  String get storageInsightsTitle;
+
+  /// No description provided for @hostStorageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{hostLabel} · {used} of {total} used'**
+  String hostStorageSubtitle(String hostLabel, String used, String total);
+
   /// No description provided for @allDrives.
   ///
   /// In en, this message translates to:
   /// **'All drives'**
   String get allDrives;
+
+  /// No description provided for @freeSpaceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Free space'**
+  String get freeSpaceLabel;
 
   /// No description provided for @couldNotLoadStorage.
   ///

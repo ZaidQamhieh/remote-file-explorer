@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/api/providers.dart';
@@ -21,6 +20,7 @@ import '../sync/sync_screen.dart';
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Per-host settings: read-only mode, folder jail, paired devices, agent name.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -139,12 +139,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ? widget.host.label
                 : widget.host.address);
 
-    final confirmed = await showShadDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder:
-          (ctx) => ShadDialog.alert(
+          (ctx) => AlertDialog(
             title: Text(ctx.l10n.disconnectDeviceTitle),
-            description: Text(ctx.l10n.disconnectDeviceMessage(pcName)),
+            content: Text(ctx.l10n.disconnectDeviceMessage(pcName)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -180,11 +180,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _editName() async {
     final ctrl = TextEditingController(text: _settings?.agentName ?? '');
-    final name = await showShadDialog<String>(
+    final name = await showDialog<String>(
       context: context,
       builder:
-          (ctx) => ShadDialog.alert(
+          (ctx) => AlertDialog(
             title: Text(ctx.l10n.renameAgentTitle),
+            content: TextField(controller: ctrl, autofocus: true),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -195,7 +196,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Text(ctx.l10n.saveButton),
               ),
             ],
-            child: ShadInput(controller: ctrl, autofocus: true),
           ),
     );
     if (name != null && name.isNotEmpty && mounted) {
@@ -494,12 +494,12 @@ class _BandwidthDropdown extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: _rowBadge(icon, Theme.of(context).colorScheme.primary),
       title: Text(label),
-      trailing: ShadSelect<int>(
-        initialValue: value,
-        selectedOptionBuilder: (context, v) => Text(labelBuilder(v)),
-        options: [
+      trailing: DropdownButton<int>(
+        value: value,
+        underline: const SizedBox.shrink(),
+        items: [
           for (final v in items)
-            ShadOption(value: v, child: Text(labelBuilder(v))),
+            DropdownMenuItem(value: v, child: Text(labelBuilder(v))),
         ],
         onChanged: (v) {
           if (v != null) onChanged(v);
@@ -516,11 +516,10 @@ class _SecurityWarningCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadCard(
-      padding: EdgeInsets.zero,
-      radius: Radii.cardR,
-      backgroundColor: scheme.secondaryContainer,
-      border: ShadBorder.all(color: Colors.transparent),
+    return Card(
+      elevation: 0,
+      color: scheme.secondaryContainer,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
       child: Padding(
         padding: const EdgeInsets.all(Spacing.md),
         child: Row(
@@ -585,11 +584,11 @@ class VisibilityEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SettingsTile.toggle(
-          icon: LucideIcons.eyeOff,
-          badgeColor: scheme.primary,
-          title: context.l10n.hideDotfiles,
-          subtitle: context.l10n.hideDotfilesSubtitle,
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: _rowBadge(LucideIcons.eyeOff, scheme.primary),
+          title: Text(context.l10n.hideDotfiles),
+          subtitle: Text(context.l10n.hideDotfilesSubtitle),
           value: prefs.hideDotfiles,
           onChanged: (v) => notifier.setHideDotfiles(v, hostId: hostId),
         ),
@@ -669,14 +668,16 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
-        SettingsTile.toggle(
-          icon: LucideIcons.copy,
-          badgeColor: scheme.primary,
-          title: context.l10n.overrideForDevice,
-          subtitle:
-              isOverridden
-                  ? context.l10n.usingDeviceVisibility
-                  : context.l10n.usingAppDefault,
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          secondary: _rowBadge(LucideIcons.copy, scheme.primary),
+          title: Text(context.l10n.overrideForDevice),
+          subtitle: Text(
+            isOverridden
+                ? context.l10n.usingDeviceVisibility
+                : context.l10n.usingAppDefault,
+          ),
           value: isOverridden,
           onChanged: (on) => notifier.setDeviceVisibilityOverride(hostId, on),
         ),
@@ -783,17 +784,17 @@ class AddExtensionFieldState extends State<AddExtensionField> {
 
   @override
   Widget build(BuildContext context) {
-    return ShadInput(
+    return TextField(
       controller: _controller,
-      leading: const Padding(
-        padding: EdgeInsets.only(left: Spacing.sm),
-        child: Text('.'),
-      ),
-      placeholder: Text(context.l10n.addExtensionHint),
-      trailing: IconButton(
-        icon: const Icon(LucideIcons.plus),
-        tooltip: context.l10n.addExtensionTooltip,
-        onPressed: _submit,
+      decoration: InputDecoration(
+        isDense: true,
+        prefixText: '.',
+        hintText: context.l10n.addExtensionHint,
+        suffixIcon: IconButton(
+          icon: const Icon(LucideIcons.plus),
+          tooltip: context.l10n.addExtensionTooltip,
+          onPressed: _submit,
+        ),
       ),
       onSubmitted: (_) => _submit(),
     );

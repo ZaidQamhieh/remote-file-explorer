@@ -39,10 +39,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('All drives'), findsOneWidget);
-    // One bar for the total card + one per capacity drive (2) = 3.
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
-    expect(find.textContaining('free of'), findsWidgets);
+    // Donut ring (total used/free) plus a breakdown row per capacity drive
+    // (2) plus the aggregate "Free space" row.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('53%'), findsOneWidget); // (3000-1400)/3000 = 53.3%
+    expect(find.text('Free space'), findsOneWidget);
   });
 
   testWidgets('shows the empty view when no drive has capacity', (

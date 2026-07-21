@@ -13,6 +13,7 @@ import '../../core/security/device_identity.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/gradient_button.dart';
 import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -841,16 +842,19 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
               _InlineErrorCard(message: _error!),
               const SizedBox(height: Spacing.sm + Spacing.xs),
             ],
-            FilledButton.icon(
+            GradientButton(
               onPressed: _loading ? null : _submit,
               icon:
                   _loading
                       ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                       : const Icon(LucideIcons.link),
-              label: Text(context.l10n.pairButton),
+              child: Text(context.l10n.pairButton),
             ),
           ],
         ),
@@ -1120,16 +1124,19 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
               _InlineErrorCard(message: _error!),
               const SizedBox(height: Spacing.sm + Spacing.xs),
             ],
-            FilledButton.icon(
+            GradientButton(
               onPressed: _loading ? null : _submit,
               icon:
                   _loading
                       ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                       : const Icon(LucideIcons.logIn),
-              label: Text(context.l10n.loginButton),
+              child: Text(context.l10n.loginButton),
             ),
           ],
         ),
@@ -1340,16 +1347,19 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
               _InlineErrorCard(message: _error!),
               const SizedBox(height: Spacing.sm + Spacing.xs),
             ],
-            FilledButton.icon(
+            GradientButton(
               onPressed: _loading ? null : _submit,
               icon:
                   _loading
                       ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                       : const Icon(LucideIcons.userPlus),
-              label: Text(context.l10n.registerButton),
+              child: Text(context.l10n.registerButton),
             ),
           ],
         ),

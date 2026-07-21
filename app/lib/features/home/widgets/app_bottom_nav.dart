@@ -112,15 +112,11 @@ class AppBottomNav extends StatelessWidget {
                         height: _kFabDiameter,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Brand.seed, Brand.accent],
-                          ),
+                          gradient: Brand.accentGradient,
                           border: Border.all(color: scheme.surface, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: Brand.seed.withValues(alpha: 0.4),
+                              color: Brand.accent.withValues(alpha: 0.4),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/gradient_blob_hero.dart';
+import '../../core/ui/gradient_button.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _kOnboardingKey = 'onboarding_complete';
@@ -110,7 +111,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       child: Text(context.l10n.onboardingBack),
                     ),
                   const SizedBox(width: Spacing.sm),
-                  FilledButton(
+                  GradientButton(
                     onPressed:
                         isLast
                             ? _finish

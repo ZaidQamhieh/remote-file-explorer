@@ -144,14 +144,14 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        // Matches the mockup's `--shadow-1: 0 1px 2px rgba(0,0,0,.4)` — at
-        // elevation 0 this shadowColor never rendered at all (Material only
-        // draws a shadow when elevation > 0), so every bare Card() app-wide
-        // was rendering completely flat with no depth.
-        elevation: 1,
+        // The mockup's own `.card` rule is flat by design (background +
+        // 1px border + radius, no box-shadow at all) — `--shadow-1`/`-2`
+        // are only used on the sidebar logo glow and the phone-frame
+        // decoration, not on cards. elevation:0 here is correct, not dead
+        // code — confirmed against the mockup's actual CSS, not guessed.
+        elevation: 0,
         color: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black.withValues(alpha: 0.4),
         margin: const EdgeInsets.symmetric(
           horizontal: Spacing.md,
           vertical: Spacing.sm,

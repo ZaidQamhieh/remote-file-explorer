@@ -7,16 +7,18 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/gradient_blob_hero.dart';
+import '../../core/ui/grouped_card.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../handoff/qr_scan_screen.dart';
 import '../pairing/pairing_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
 
-/// Displays all paired hosts as a dashboard of [HostCard]s.
+/// Displays every paired host as a flat list of uniform [HostCard] rows —
+/// matches the mockup's Devices tab exactly: no "hero" row for the most-
+/// recently-used host, just one card style throughout.
 class HostListScreen extends ConsumerStatefulWidget {
   const HostListScreen({super.key});
 
@@ -44,6 +46,13 @@ class HostListScreen extends ConsumerStatefulWidget {
 class _HostListScreenState extends ConsumerState<HostListScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  bool _showSearch = false;
+
+  /// Online/offline state reported up by each [HostCard] once its `/health`
+  /// ping resolves, used only to render the "N paired · N online now"
+  /// subtitle — doesn't affect the ping logic itself, which stays entirely
+  /// inside [HostCard].
+  final Map<String, bool> _online = {};
 
   @override
   void dispose() {
@@ -51,11 +60,22 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
     super.dispose();
   }
 
+  void _reportOnline(String hostId, bool online) {
+    if (_online[hostId] == online) return;
+    setState(() => _online[hostId] = online);
+  }
+
   @override
   Widget build(BuildContext context) {
     final storeAsync = ref.watch(hostStoreProvider);
     final scheme = Theme.of(context).colorScheme;
     final hostCount = storeAsync.valueOrNull?.listHosts().length ?? 0;
+    final onlineCount =
+        storeAsync.valueOrNull
+            ?.listHosts()
+            .where((h) => _online[h.id] == true)
+            .length ??
+        0;
 
     return Scaffold(
       appBar: AppBar(
@@ -64,10 +84,15 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
           'Devices',
           subtitle:
               hostCount > 0
-                  ? '$hostCount computer${hostCount == 1 ? '' : 's'}'
+                  ? '$hostCount paired · $onlineCount online now'
                   : null,
         ),
         actions: [
+          IconButton(
+            icon: Icon(_showSearch ? LucideIcons.x : LucideIcons.search),
+            tooltip: context.l10n.searchButton,
+            onPressed: () => setState(() => _showSearch = !_showSearch),
+          ),
           IconButton(
             icon: const Icon(LucideIcons.scanQrCode),
             tooltip: context.l10n.receiveFileTooltip,
@@ -76,28 +101,24 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                   MaterialPageRoute<void>(builder: (_) => const QrScanScreen()),
                 ),
           ),
-          IconButton(
-            icon: const Icon(LucideIcons.refreshCw),
-            tooltip: context.l10n.refreshTooltip,
-            onPressed: () => ref.invalidate(hostStoreProvider),
-          ),
           const SizedBox(width: Spacing.xs),
         ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Spacing.md,
-              0,
-              Spacing.md,
-              Spacing.sm,
+          if (_showSearch)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.md,
+                0,
+                Spacing.md,
+                Spacing.sm,
+              ),
+              child: _DeviceSearchBar(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+              ),
             ),
-            child: _DeviceSearchBar(
-              controller: _searchController,
-              onChanged: (v) => setState(() => _query = v),
-            ),
-          ),
           const UpdateBanner(),
           Expanded(
             child: storeAsync.when(
@@ -139,54 +160,49 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                   onRefresh: () => ref.refresh(hostStoreProvider.future),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(
-                      Spacing.sm,
                       Spacing.md,
                       Spacing.sm,
+                      Spacing.md,
                       Spacing.xl * 2,
                     ),
                     children: [
-                      AppearListItem(
-                        index: 0,
-                        child: HostCard(
-                          key: ValueKey(hosts[0].id),
-                          host: hosts[0],
-                          store: store,
-                          isFirst: true,
-                        ),
-                      ),
-                      if (hosts.length > 1) ...[
-                        const SizedBox(height: Spacing.md),
-                        SectionLabel('Also paired · ${hosts.length - 1}'),
-                        ShadCard(
-                          padding: EdgeInsets.zero,
-                          radius: Radii.cardR,
-                          backgroundColor: scheme.surfaceContainer,
-                          border: ShadBorder.all(color: Colors.transparent),
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            children: [
-                              for (int i = 1; i < hosts.length; i++) ...[
-                                if (i > 1)
-                                  Divider(
-                                    height: 1,
-                                    indent: Spacing.md,
-                                    endIndent: Spacing.md,
-                                    color: scheme.outlineVariant,
-                                  ),
-                                AppearListItem(
-                                  index: i,
-                                  child: HostCard(
-                                    key: ValueKey(hosts[i].id),
-                                    host: hosts[i],
-                                    store: store,
-                                    isFirst: false,
-                                  ),
-                                ),
-                              ],
-                            ],
+                      for (int i = 0; i < hosts.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 10),
+                        AppearListItem(
+                          index: i,
+                          child: HostCard(
+                            key: ValueKey(hosts[i].id),
+                            host: hosts[i],
+                            store: store,
+                            onOnlineChanged:
+                                (online) => _reportOnline(hosts[i].id, online),
                           ),
                         ),
                       ],
+                      const SizedBox(height: Spacing.md),
+                      const SectionLabel('This device'),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: scheme.surfaceContainerHigh,
+                          side: BorderSide(color: scheme.outlineVariant),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: Radii.smR,
+                          ),
+                        ),
+                        // The mockup's "Show my pairing code" button implies
+                        // this phone displays a code for a PC to scan — but
+                        // this app's actual TOFU pairing flow runs the other
+                        // way (the agent mints the code, the phone scans it;
+                        // see `agent pair` in CLAUDE.md). There's no real
+                        // "phone shows its own code" flow to wire this to, so
+                        // it opens the existing add-a-computer pairing flow
+                        // instead of fabricating a fake code display.
+                        onPressed:
+                            () => HostListScreen.addComputer(context, ref),
+                        icon: const Icon(LucideIcons.qrCode, size: 18),
+                        label: const Text('Show my pairing code'),
+                      ),
                     ],
                   ),
                 );
@@ -214,6 +230,7 @@ class _DeviceSearchBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return ShadInput(
       controller: controller,
+      autofocus: true,
       onChanged: onChanged,
       style: Theme.of(context).textTheme.bodyMedium,
       placeholder: Text(
@@ -243,7 +260,9 @@ class _DeviceSearchBar extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — "pair your first PC" hero
+// Empty state — "pair your first PC" hero. Not shown in the mockup (its
+// Devices tab always has 3 mock hosts), so this keeps the existing hero
+// rather than inventing a design that isn't specified anywhere.
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {

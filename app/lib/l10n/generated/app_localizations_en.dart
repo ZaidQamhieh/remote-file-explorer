@@ -189,6 +189,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retestButton => 'Re-test';
 
   @override
+  String get runAgainButton => 'Run again';
+
+  @override
+  String get diagHostReachable => 'Host reachable';
+
+  @override
+  String get diagTlsPinned => 'TLS fingerprint pinned';
+
+  @override
+  String get diagLatency => 'Latency';
+
+  @override
+  String get diagPath => 'Path';
+
+  @override
+  String get diagPinnedBadge => 'Pinned';
+
+  @override
+  String get diagMismatchBadge => 'Mismatch';
+
+  @override
+  String get diagUnknownBadge => 'Unknown';
+
+  @override
+  String get diagOkBadge => 'OK';
+
+  @override
+  String get diagLanDirect => 'LAN direct';
+
+  @override
   String get probeTimedOut => 'Timed out';
 
   @override
@@ -205,7 +235,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get storageInsightsTitle => 'Storage Insights';
+
+  @override
+  String hostStorageSubtitle(String hostLabel, String used, String total) {
+    return '$hostLabel · $used of $total used';
+  }
+
+  @override
   String get allDrives => 'All drives';
+
+  @override
+  String get freeSpaceLabel => 'Free space';
 
   @override
   String couldNotLoadStorage(String error) {

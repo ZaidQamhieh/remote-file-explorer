@@ -8,9 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
-import '../../core/ui/screen_header.dart';
 import '../transfers/transfer_state.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Decoded payload from a device-to-device hand-off QR (see
 /// `qr_generate_screen.dart`): `{"certFingerprint":"...","path":"...","name":"..."}`.
@@ -85,6 +86,13 @@ class QrScanScreen extends ConsumerStatefulWidget {
 
 class _QrScanScreenState extends ConsumerState<QrScanScreen> {
   bool _processing = false;
+  final _controller = MobileScannerController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   Future<void> _onBarcodeDetected(BarcodeCapture capture) async {
     if (_processing) return;
@@ -131,17 +139,220 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Full-bleed dark scanner with a corner-bracket viewfinder, matching the
+    // mockup's `scr-qr-scan` chrome (see qr_generate_screen.dart's sibling
+    // sheet for the sending side of this same hand-off feature).
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: ScreenHeader(context.l10n.receiveFileTitle),
-      ),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          MobileScanner(onDetect: _onBarcodeDetected),
-          if (_processing) const Center(child: CircularProgressIndicator()),
+          MobileScanner(controller: _controller, onDetect: _onBarcodeDetected),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      _DarkIconButton(
+                        icon: LucideIcons.arrowLeft,
+                        onTap: () => Navigator.of(context).pop(),
+                      ),
+                      const Spacer(),
+                      Text(
+                        context.l10n.receiveFileTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      _DarkIconButton(
+                        icon: LucideIcons.flashlight,
+                        onTap: () => _controller.toggleTorch(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                const Center(
+                  child: SizedBox(
+                    width: 230,
+                    height: 230,
+                    child: _CornerBracketBox(
+                      cornerSize: 36,
+                      borderWidth: 4,
+                      inset: 0,
+                      scanlineHeight: 230,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg,
+                    0,
+                    Spacing.lg,
+                    Spacing.xl,
+                  ),
+                  child: Text(
+                    context.l10n.qrHandoffScanHint,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_processing)
+            const ColoredBox(
+              color: Color(0x66000000),
+              child: Center(child: CircularProgressIndicator()),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// Translucent circular icon button on a dark camera background — the
+/// mockup's `.iconbtn` treatment for full-screen scanner appbars.
+class _DarkIconButton extends StatelessWidget {
+  const _DarkIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.08),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, color: Colors.white, size: 19),
+        ),
+      ),
+    );
+  }
+}
+
+/// Four L-shaped corner brackets around a square viewfinder, with an
+/// animated glowing scanline — the mockup's live-scan viewfinder chrome
+/// (see pairing_screen.dart for the static placeholder variant).
+class _CornerBracketBox extends StatefulWidget {
+  const _CornerBracketBox({
+    required this.cornerSize,
+    required this.borderWidth,
+    required this.inset,
+    required this.scanlineHeight,
+  });
+
+  final double cornerSize;
+  final double borderWidth;
+  final double inset;
+
+  /// Animates a glowing horizontal line up/down across this height,
+  /// matching the mockup's `@keyframes scanline`.
+  final double scanlineHeight;
+
+  @override
+  State<_CornerBracketBox> createState() => _CornerBracketBoxState();
+}
+
+class _CornerBracketBoxState extends State<_CornerBracketBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _bracket(Alignment alignment) {
+    final isTop = alignment.y < 0;
+    final isLeft = alignment.x < 0;
+    final side = BorderSide(color: Brand.seed, width: widget.borderWidth);
+    return Positioned(
+      top: isTop ? widget.inset : null,
+      bottom: !isTop ? widget.inset : null,
+      left: isLeft ? widget.inset : null,
+      right: !isLeft ? widget.inset : null,
+      child: SizedBox(
+        width: widget.cornerSize,
+        height: widget.cornerSize,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: isTop ? side : BorderSide.none,
+              bottom: !isTop ? side : BorderSide.none,
+              left: isLeft ? side : BorderSide.none,
+              right: !isLeft ? side : BorderSide.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scanlineHeight = widget.scanlineHeight;
+    return Stack(
+      children: [
+        for (final a in const [
+          Alignment.topLeft,
+          Alignment.topRight,
+          Alignment.bottomLeft,
+          Alignment.bottomRight,
+        ])
+          _bracket(a),
+        AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            final travel = scanlineHeight / 2 - 8;
+            final y = travel * (2 * _ctrl.value - 1);
+            return Positioned(
+              left: 8,
+              right: 8,
+              top: scanlineHeight / 2 + y,
+              child: Container(
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Brand.seed,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Brand.seed.withValues(alpha: 0.6),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

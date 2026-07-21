@@ -75,7 +75,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discardButton => 'Discard';
 
   @override
-  String get pairButton => 'Pair';
+  String get pairButton => 'Pair device';
 
   @override
   String get onlineStatus => 'Online';
@@ -784,7 +784,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanQrTab => 'Scan QR';
 
   @override
-  String get manualTab => 'Manual';
+  String get enterCodeTab => 'Enter Code';
+
+  @override
+  String get openCameraViewfinder => 'Open camera viewfinder';
+
+  @override
+  String get pairingScanHint =>
+      'Align the QR code from the desktop app within the frame';
+
+  @override
+  String get enterCodeManuallyButton => 'Enter code manually instead';
+
+  @override
+  String get pairingHint =>
+      'On the PC, open RFE and go to Settings → Pair a device to get a code or QR.';
 
   @override
   String get loginTab => 'Log in';
@@ -1388,10 +1402,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'Can\'t share — this host has no pinned certificate.';
 
   @override
+  String get qrHandoffCopyButton => 'Copy details';
+
+  @override
+  String get qrHandoffCopied => 'Details copied';
+
+  @override
   String get receiveFileTooltip => 'Receive file';
 
   @override
   String get receiveFileTitle => 'Receive file';
+
+  @override
+  String get qrHandoffScanHint =>
+      'Align the other phone\'s hand-off QR within the frame';
 
   @override
   String get qrHandoffNoHostMatch =>

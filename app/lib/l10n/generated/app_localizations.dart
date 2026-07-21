@@ -229,7 +229,7 @@ abstract class AppLocalizations {
   /// No description provided for @pairButton.
   ///
   /// In en, this message translates to:
-  /// **'Pair'**
+  /// **'Pair device'**
   String get pairButton;
 
   /// No description provided for @onlineStatus.
@@ -1282,11 +1282,35 @@ abstract class AppLocalizations {
   /// **'Scan QR'**
   String get scanQrTab;
 
-  /// No description provided for @manualTab.
+  /// No description provided for @enterCodeTab.
   ///
   /// In en, this message translates to:
-  /// **'Manual'**
-  String get manualTab;
+  /// **'Enter Code'**
+  String get enterCodeTab;
+
+  /// No description provided for @openCameraViewfinder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open camera viewfinder'**
+  String get openCameraViewfinder;
+
+  /// No description provided for @pairingScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Align the QR code from the desktop app within the frame'**
+  String get pairingScanHint;
+
+  /// No description provided for @enterCodeManuallyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter code manually instead'**
+  String get enterCodeManuallyButton;
+
+  /// No description provided for @pairingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On the PC, open RFE and go to Settings → Pair a device to get a code or QR.'**
+  String get pairingHint;
 
   /// No description provided for @loginTab.
   ///
@@ -2308,6 +2332,18 @@ abstract class AppLocalizations {
   /// **'Can\'t share — this host has no pinned certificate.'**
   String get qrHandoffNoFingerprint;
 
+  /// No description provided for @qrHandoffCopyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy details'**
+  String get qrHandoffCopyButton;
+
+  /// No description provided for @qrHandoffCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Details copied'**
+  String get qrHandoffCopied;
+
   /// No description provided for @receiveFileTooltip.
   ///
   /// In en, this message translates to:
@@ -2319,6 +2355,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Receive file'**
   String get receiveFileTitle;
+
+  /// No description provided for @qrHandoffScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Align the other phone\'s hand-off QR within the frame'**
+  String get qrHandoffScanHint;
 
   /// No description provided for @qrHandoffNoHostMatch.
   ///

@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/sheet_chrome.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -48,7 +50,40 @@ class QrGenerateSheet extends StatelessWidget {
               Spacing.lg,
               Spacing.lg,
             ),
-            child: Center(child: QrImageView(data: payload, size: 240)),
+            child: Column(
+              children: [
+                // White backing box: QR codes render solid black on
+                // transparent by default, which is unreadable (and
+                // unscannable) against this app's dark surfaces — matches
+                // the mockup's white QR tile too.
+                Container(
+                  padding: const EdgeInsets.all(Spacing.md2),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: Radii.cardR,
+                  ),
+                  child: QrImageView(
+                    data: payload,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: Spacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: payload));
+                      if (context.mounted) {
+                        showSuccess(context, context.l10n.qrHandoffCopied);
+                      }
+                    },
+                    icon: const Icon(LucideIcons.copy),
+                    label: Text(context.l10n.qrHandoffCopyButton),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

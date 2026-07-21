@@ -402,6 +402,7 @@ class _ResultView extends StatelessWidget {
           ..sort((a, b) => b.value.compareTo(a.value));
 
     final textTheme = Theme.of(context).textTheme;
+    final buckets = _bucketedBySize(sorted);
 
     return ListView(
       padding: const EdgeInsets.all(Spacing.md),
@@ -413,41 +414,22 @@ class _ResultView extends StatelessWidget {
         ),
         const SizedBox(height: Spacing.md),
 
-        // Stacked bar chart
-        SizedBox(
-          height: 32,
-          child: CustomPaint(
-            painter: _StackedBarPainter(
-              segments:
-                  sorted
-                      .map(
-                        (e) => _BarSegment(
-                          ext: e.key,
-                          bytes: e.value,
-                          color: colorFor(categoryFor(e.key)),
-                        ),
-                      )
-                      .toList(),
-              totalBytes: result.totalSize,
-              selectedExt: selectedExt,
-            ),
-            size: const Size(double.infinity, 32),
+        // Category treemap — mockup's block-area-proportional-to-size grid
+        // (largest category top-left), not the old per-extension bar chart.
+        _CategoryTreemap(buckets: buckets),
+        const SizedBox(height: Spacing.sm),
+        Text(
+          'Block area is proportional to space used — largest first, '
+          'top-left.',
+          textAlign: TextAlign.center,
+          style: textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: Spacing.lg),
 
-        // Category legend (compact row)
-        Wrap(
-          spacing: Spacing.md,
-          runSpacing: Spacing.xs,
-          children: [
-            for (final cat in FileCategory.values)
-              if (_categoryPresent(cat, sorted)) _LegendChip(category: cat),
-          ],
-        ),
-        const SizedBox(height: Spacing.md),
-
-        // Detail list
+        // Per-extension detail (finer-grained than the mockup shows, kept
+        // for users who want it — tap to highlight in this list).
         GroupedCard(
           padded: false,
           children: [
@@ -476,42 +458,145 @@ class _ResultView extends StatelessWidget {
       ],
     );
   }
+}
 
-  bool _categoryPresent(FileCategory cat, List<MapEntry<String, int>> sorted) {
-    return sorted.any((e) => categoryFor(e.key) == cat);
+/// Mockup's 5 storage categories are coarser than [FileCategory] (7 values,
+/// kept as-is — it's the tested extension classifier). This groups them for
+/// the treemap display only: Photos & Video = image+video, Documents =
+/// document+code, Archives = archive, Other = audio+other. (The mockup also
+/// shows an "Apps" category for installers/executables — this app's
+/// classifier has no such bucket, no `.exe`/`.apk`/`.dmg` extension set, so
+/// app-type files land in "Other"; flagging as a real data gap, not
+/// fabricated.)
+String _visualBucketLabel(FileCategory c) => switch (c) {
+  FileCategory.image || FileCategory.video => 'Photos & Video',
+  FileCategory.document || FileCategory.code => 'Documents',
+  FileCategory.archive => 'Archives',
+  FileCategory.audio || FileCategory.other => 'Other',
+};
+
+/// Aggregates [sorted] (ext -> size, already size-descending) into the 4
+/// visual buckets above, dropping empty ones, sorted largest-first.
+List<(String label, int size)> _bucketedBySize(
+  List<MapEntry<String, int>> sorted,
+) {
+  final sizes = <String, int>{};
+  for (final e in sorted) {
+    final label = _visualBucketLabel(categoryFor(e.key));
+    sizes[label] = (sizes[label] ?? 0) + e.value;
+  }
+  final list =
+      sizes.entries.map((e) => (e.key, e.value)).toList()
+        ..sort((a, b) => b.$2.compareTo(a.$2));
+  return list;
+}
+
+/// Category storage treemap — mirrors the mockup's CSS grid (a large block
+/// for the biggest category, spanning the left column, with the rest
+/// stacked in the right column, largest first, top-left).
+class _CategoryTreemap extends StatelessWidget {
+  const _CategoryTreemap({required this.buckets});
+
+  final List<(String label, int size)> buckets;
+
+  static const _gradients = [
+    [Color(0xFF4C8DFF), Color(0xFF2A5FD9)], // primary blue — biggest
+    [Color(0xFF9B87F5), Color(0xFF7C6AE0)], // violet
+    [Color(0xFFF3A73F), Color(0xFFD98A1F)], // amber
+    [Color(0xFF4A5064), Color(0xFF363B4A)], // neutral grey
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (buckets.isEmpty) return const SizedBox.shrink();
+    Widget block(int i) => _TreemapBlock(
+      label: buckets[i].$1,
+      size: buckets[i].$2,
+      gradient: _gradients[i % _gradients.length],
+    );
+    if (buckets.length == 1) {
+      return SizedBox(height: 160, child: block(0));
+    }
+    return SizedBox(
+      height: 236,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 16, child: block(0)),
+          const SizedBox(width: Spacing.xs),
+          Expanded(
+            flex: 10,
+            child: Column(
+              children: [
+                for (var i = 1; i < buckets.length; i++) ...[
+                  if (i > 1) const SizedBox(height: Spacing.xs),
+                  Expanded(child: block(i)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TreemapBlock extends StatelessWidget {
+  const _TreemapBlock({
+    required this.label,
+    required this.size,
+    required this.gradient,
+  });
+
+  final String label;
+  final int size;
+  final List<Color> gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.sm,
+        vertical: Spacing.xs,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradient,
+        ),
+        borderRadius: Radii.smR,
+      ),
+      alignment: Alignment.bottomLeft,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            formatSize(size),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.75),
+              fontFamily: 'JetBrains Mono',
+              fontSize: 10.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 // ---------------------------------------------------------------------------
 // Widgets
 // ---------------------------------------------------------------------------
-
-class _LegendChip extends StatelessWidget {
-  const _LegendChip({required this.category});
-  final FileCategory category;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: colorFor(category),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          categoryLabel(category),
-          style: Theme.of(context).textTheme.labelSmall,
-        ),
-      ],
-    );
-  }
-}
 
 class _ExtensionRow extends StatelessWidget {
   const _ExtensionRow({
@@ -593,63 +678,4 @@ class _ExtensionRow extends StatelessWidget {
       ),
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Custom painter for the stacked horizontal bar
-// ---------------------------------------------------------------------------
-
-class _BarSegment {
-  const _BarSegment({
-    required this.ext,
-    required this.bytes,
-    required this.color,
-  });
-
-  final String ext;
-  final int bytes;
-  final Color color;
-}
-
-class _StackedBarPainter extends CustomPainter {
-  _StackedBarPainter({
-    required this.segments,
-    required this.totalBytes,
-    this.selectedExt,
-  });
-
-  final List<_BarSegment> segments;
-  final int totalBytes;
-  final String? selectedExt;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (totalBytes == 0 || segments.isEmpty) return;
-
-    final radius = Radius.circular(Radii.sm);
-    final rrect = RRect.fromRectAndRadius(Offset.zero & size, radius);
-    canvas.clipRRect(rrect);
-
-    var x = 0.0;
-    for (final seg in segments) {
-      final w = (seg.bytes / totalBytes) * size.width;
-      if (w < 0.5) continue; // skip sub-pixel segments
-
-      final paint =
-          Paint()
-            ..color =
-                selectedExt == null || selectedExt == seg.ext
-                    ? seg.color
-                    : seg.color.withValues(alpha: 0.3);
-
-      canvas.drawRect(Rect.fromLTWH(x, 0, w, size.height), paint);
-      x += w;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_StackedBarPainter old) =>
-      old.selectedExt != selectedExt ||
-      old.totalBytes != totalBytes ||
-      old.segments.length != segments.length;
 }

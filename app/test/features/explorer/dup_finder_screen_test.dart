@@ -70,9 +70,14 @@ void main() {
       await tester.tap(find.text('Scan for Duplicates'));
       await tester.pumpAndSettle();
 
-      // Found the cross-page duplicate group.
-      expect(find.textContaining('1 duplicate groups'), findsOneWidget);
-      expect(find.text('2 copies (100 B each)'), findsOneWidget);
+      // Found the cross-page duplicate group — mockup's two-stat summary
+      // card (groups count / reclaimable size) replaces the old single
+      // sentence header.
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('groups'), findsOneWidget);
+      expect(find.text('100 B'), findsWidgets);
+      // SectionLabel upper-cases its title.
+      expect(find.text('2 COPIES (100 B EACH)'), findsOneWidget);
     },
   );
 

@@ -122,22 +122,20 @@ class _IconSpec {
   final Color bg;
 }
 
-// Figma spec (figma.com/make/h4RTUMIg8O8KS2Uv9dG9GJ) file-type palette:
-// icon tint + the dark-tonal chip background behind it (`colorMap`/`bgMap`
-// in FileBrowserScreen.tsx).
-const Color _folderColor = Color(0xFFFACC15); // yellow-400
-const Color _folderBg = Color(0xFF422006);
-const Color _imageColor = Color(0xFF34D399); // emerald-400
-const Color _imageBg = Color(0xFF022C22);
-const Color _videoColor = Color(0xFFA78BFA); // violet-400
-const Color _videoBg = Color(0xFF2E1065);
-const Color _audioColor = Color(0xFFF472B6); // pink-400
-const Color _audioBg = Color(0xFF4A044E);
-const Color _archiveColor = Color(0xFFFB923C); // orange-400
-const Color _archiveBg = Color(0xFF431407);
-const Color _documentColor = Color(0xFF38BDF8); // sky-400
-const Color _documentBg = Color(0xFF0C4A6E);
-const Color _otherBg = Color(0xFF27272A); // zinc-800
+// RFE mockup file-type palette (`rfe-full-remake-mockups-2026-07`, Files tab
+// row icons): folder/generic-document = primary blue, image/video = violet,
+// PDF = red, archive = amber, plain text/other = neutral (no tint — matches
+// the mockup's un-classed `.row-icon`). Dark-tonal chip background behind
+// each icon mirrors the mockup's `--*-tint` CSS vars.
+const Color _folderColor = Color(0xFF4C8DFF); // --primary
+const Color _folderBg = Color(0x244C8DFF); // --primary-tint
+const Color _imageColor = Color(0xFF9B87F5); // --violet
+const Color _imageBg = Color(0x249B87F5); // --violet-tint
+const Color _pdfColor = Color(0xFFF1596B); // --red
+const Color _pdfBg = Color(0x24F1596B); // --red-tint
+const Color _archiveColor = Color(0xFFF3A73F); // --amber
+const Color _archiveBg = Color(0x24F3A73F); // --amber-tint
+const Color _otherBg = Color(0xFF191C24); // --surface-2 (neutral, no tint)
 
 _IconSpec _iconSpecFor(Entry entry) {
   if (entry.isDir) {
@@ -150,9 +148,9 @@ _IconSpec _iconSpecFor(Entry entry) {
     case EntryCategory.image:
       return const _IconSpec(LucideIcons.image, _imageColor, _imageBg);
     case EntryCategory.video:
-      return const _IconSpec(LucideIcons.video, _videoColor, _videoBg);
+      return const _IconSpec(LucideIcons.video, _imageColor, _imageBg);
     case EntryCategory.audio:
-      return const _IconSpec(LucideIcons.music, _audioColor, _audioBg);
+      return const _IconSpec(LucideIcons.music, null, _otherBg);
     case EntryCategory.archive:
       return const _IconSpec(
         LucideIcons.fileArchive,
@@ -161,13 +159,15 @@ _IconSpec _iconSpecFor(Entry entry) {
       );
     case EntryCategory.document:
       if (mime.contains('pdf')) {
-        return const _IconSpec(
-          LucideIcons.fileText,
-          _documentColor,
-          _documentBg,
-        );
+        return const _IconSpec(LucideIcons.fileText, _pdfColor, _pdfBg);
       }
-      return const _IconSpec(LucideIcons.fileText, _documentColor, _documentBg);
+      // Plain text/markdown reads as a neutral "generic file" in the
+      // mockup (no tint); other office docs (docx/xlsx/...) share the
+      // folder's primary-blue tonal treatment.
+      if (mime.startsWith('text/')) {
+        return const _IconSpec(LucideIcons.fileText, null, _otherBg);
+      }
+      return const _IconSpec(LucideIcons.fileText, _folderColor, _folderBg);
     case EntryCategory.other:
       return const _IconSpec(LucideIcons.file, null, _otherBg);
   }

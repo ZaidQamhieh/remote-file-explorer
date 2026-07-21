@@ -7,12 +7,13 @@ import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
-import '../../core/ui/grouped_card.dart';
+import '../../core/ui/format.dart';
+import '../../core/ui/grouped_card.dart' show SectionLabel;
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
-import '../search/widgets/search_result_tile.dart';
 import '../search/widgets/truncation_banner.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -89,6 +90,35 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
     if (entries == null || entries.isEmpty) {
       return _emptyView(context);
     }
+    // Mockup groups Recent by "Today"/"Yesterday" section labels — bucket by
+    // calendar day vs. now. Anything older falls into "Earlier" (the mockup
+    // only illustrates the two most-recent buckets).
+    final buckets = <String, List<Entry>>{};
+    final now = DateTime.now();
+    for (final e in entries) {
+      final modified = e.modified?.toLocal();
+      final String bucket;
+      if (modified == null) {
+        bucket = 'Earlier';
+      } else {
+        final today = DateTime(now.year, now.month, now.day);
+        final modifiedDay = DateTime(
+          modified.year,
+          modified.month,
+          modified.day,
+        );
+        final days = today.difference(modifiedDay).inDays;
+        if (days <= 0) {
+          bucket = 'Today';
+        } else if (days == 1) {
+          bucket = 'Yesterday';
+        } else {
+          bucket = 'Earlier';
+        }
+      }
+      (buckets[bucket] ??= []).add(e);
+    }
+
     return Column(
       children: [
         if (_timeBudgetHit)
@@ -102,28 +132,23 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
           child: RefreshIndicator(
             onRefresh: _load,
             child: ListView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.sm,
-                vertical: Spacing.md,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: Spacing.md),
               children: [
-                GroupedCard(
-                  padded: false,
-                  children: [
-                    for (int i = 0; i < entries.length; i++) ...[
-                      if (i > 0) const Divider(height: 1),
+                for (final label in ['Today', 'Yesterday', 'Earlier'])
+                  if (buckets[label] case final bucketEntries?) ...[
+                    SectionLabel(label),
+                    for (final (i, entry) in bucketEntries.indexed) ...[
+                      if (i > 0) const Divider(height: 1, indent: Spacing.md),
                       AppearListItem(
                         index: i,
-                        child: SearchResultTile(
-                          entry: entries[i],
-                          query: '',
-                          highlight: false,
-                          onTap: () => _openResult(entries[i]),
+                        child: _RecentRow(
+                          entry: entry,
+                          hostLabel: widget.host.label,
+                          onTap: () => _openResult(entry),
                         ),
                       ),
                     ],
                   ],
-                ),
               ],
             ),
           ),
@@ -152,6 +177,73 @@ class _RecentScreenState extends ConsumerState<RecentScreen> {
             ).textTheme.bodySmall?.copyWith(color: c.onSurfaceVariant),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A single Recent row — mockup's flat `.row` (category-tinted icon, title,
+/// "{host} · modified &lt;relative&gt;" subtitle). Says "modified" rather than the
+/// mockup's "opened": the agent has no access log (see repo `CLAUDE.md`,
+/// "there is no audit log"), so this list is really "recently modified", not
+/// "recently opened" — the subtitle is worded to match what the data
+/// actually is instead of implying a feature that doesn't exist.
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({
+    required this.entry,
+    required this.hostLabel,
+    required this.onTap,
+  });
+
+  final Entry entry;
+  final String hostLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final modified = entry.modified;
+    final subtitle =
+        modified != null
+            ? '$hostLabel  ·  modified ${formatRelative(modified.toLocal())}'
+            : hostLabel;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: figmaIconBg(entry),
+                borderRadius: Radii.smR,
+              ),
+              alignment: Alignment.center,
+              child: EntryLeading(entry: entry, size: 18),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.name, overflow: TextOverflow.ellipsis),
+                  Text(
+                    subtitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

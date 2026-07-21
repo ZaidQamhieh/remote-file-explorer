@@ -11,7 +11,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/gradient_blob_hero.dart';
-import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 
@@ -176,25 +175,66 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.sm,
-          vertical: Spacing.md,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: Spacing.md),
         children: [
-          GroupedCard(
-            padded: false,
-            children: [
-              for (int i = 0; i < items.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: 1,
-                    indent: Spacing.md,
-                    endIndent: Spacing.md,
-                    color: scheme.outlineVariant,
+          // Mockup's info card: trash isn't auto-purged, matching this
+          // screen's actual retention (there's no TTL/auto-empty anywhere in
+          // the agent's trash API — items sit here until acted on).
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+            child: Container(
+              padding: const EdgeInsets.all(Spacing.md2),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: Radii.cardR,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    LucideIcons.info,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
                   ),
-                AppearListItem(index: i, child: _tile(context, items[i])),
-              ],
-            ],
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Text(
+                      "Items stay here until you delete them yourself — "
+                      "RFE doesn't auto-purge trash.",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: Spacing.sm),
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 1,
+                indent: Spacing.md,
+                color: scheme.outlineVariant,
+              ),
+            AppearListItem(index: i, child: _tile(context, items[i])),
+          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.md,
+              Spacing.md,
+              Spacing.md,
+              Spacing.sm,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _emptyAll,
+                style: TextButton.styleFrom(foregroundColor: scheme.error),
+                child: Text(context.l10n.emptyTrashTooltip),
+              ),
+            ),
           ),
         ],
       ),
@@ -233,42 +273,63 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         context.l10n.deletedRelative(formatRelative(item.deletedAt!)),
       if (!item.isDir && item.size != null) formatSize(item.size),
     ].join(' · ');
-    return ListTile(
-      leading: Icon(
-        item.isDir ? LucideIcons.folder : LucideIcons.file,
-        color: item.isDir ? Brand.amber : scheme.onSurfaceVariant,
-      ),
-      title: Text(item.name, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        subtitle,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (v) {
-          if (v == 'restore') _restore(item);
-          if (v == 'delete') _deleteForever(item);
-        },
-        itemBuilder:
-            (ctx) => [
-              PopupMenuItem(
-                value: 'restore',
-                child: ListTile(
-                  leading: const Icon(LucideIcons.archiveRestore),
-                  title: Text(ctx.l10n.restoreButton),
+    // Mockup fades every trashed row to the same neutral, un-tinted icon
+    // (folder or file) regardless of type — a deleted item reads as inert,
+    // not "still this category of file".
+    return Opacity(
+      opacity: 0.7,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.sm,
+        ),
+        child: InkWell(
+          onTap: () => _restore(item),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: Radii.smR,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  item.isDir ? LucideIcons.folder : LucideIcons.file,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  leading: const Icon(LucideIcons.trash2),
-                  title: Text(ctx.l10n.deleteForeverButton),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.name, overflow: TextOverflow.ellipsis),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(LucideIcons.archiveRestore),
+                tooltip: context.l10n.restoreButton,
+                onPressed: () => _restore(item),
+              ),
+              IconButton(
+                icon: Icon(LucideIcons.trash2, color: scheme.error),
+                tooltip: context.l10n.deleteForeverButton,
+                onPressed: () => _deleteForever(item),
               ),
             ],
+          ),
+        ),
       ),
-      onTap: () => _restore(item),
     );
   }
 }

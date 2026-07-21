@@ -922,10 +922,20 @@ class _CodeBoxRowState extends State<_CodeBoxRow> {
                         newValue.copyWith(text: newValue.text.toUpperCase()),
                   ),
                 ],
-                decoration: const InputDecoration(counterText: ''),
+                decoration: const InputDecoration(
+                  counterText: '',
+                  // The app-wide InputDecorationTheme's default contentPadding
+                  // is sized for full-width fields; left as-is it eats almost
+                  // all of this 34x48 box, squeezing the glyph down to a
+                  // near-invisible sliver.
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
                 style: const TextStyle(
                   fontFamily: 'JetBrains Mono',
-                  fontWeight: FontWeight.bold,
+                  // w700 isn't bundled for this family (only 400/500) — Skia's
+                  // synthetic-bold fallback corrupts these glyphs at this size.
+                  fontWeight: FontWeight.w500,
                   fontSize: 18,
                 ),
                 onChanged: (v) {

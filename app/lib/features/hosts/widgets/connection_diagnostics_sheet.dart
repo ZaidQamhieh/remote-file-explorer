@@ -358,7 +358,10 @@ class _DiagRow extends StatelessWidget {
             child: Text(
               badgeText,
               style: textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+                // JetBrains Mono only bundles 400/500 — w700 corrupts its
+                // glyphs via Skia's synthetic-bold fallback (see pairing
+                // screen's code boxes for the same fix).
+                fontWeight: mono ? FontWeight.w500 : FontWeight.w700,
                 color: badgeColor,
                 fontFamily: mono ? 'JetBrains Mono' : null,
               ),

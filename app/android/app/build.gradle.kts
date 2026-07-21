@@ -70,6 +70,10 @@ android {
                         "signing, or pass -PallowDebugSigning for a local test build."
                 )
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

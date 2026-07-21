@@ -70,7 +70,7 @@ class AppearanceSettingsScreen extends ConsumerWidget {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: Spacing.sm,
             crossAxisSpacing: Spacing.sm,
-            childAspectRatio: 1.7,
+            childAspectRatio: 1.4,
             children: [
               _QuickToggleTile(
                 icon: LucideIcons.image,
@@ -400,7 +400,7 @@ class _QuickToggleTile extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(

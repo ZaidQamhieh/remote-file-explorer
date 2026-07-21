@@ -249,6 +249,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get freeSpaceLabel => 'Free space';
 
   @override
+  String get openStorageTypeMapButton => 'Open storage-by-type map';
+
+  @override
   String couldNotLoadStorage(String error) {
     return 'Could not load storage: $error';
   }

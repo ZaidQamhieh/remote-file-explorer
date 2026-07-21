@@ -126,6 +126,7 @@
   },
   "allDrives": "All drives",
   "freeSpaceLabel": "Free space",
+  "openStorageTypeMapButton": "Open storage-by-type map",
   "couldNotLoadStorage": "Could not load storage: {error}",
   "@couldNotLoadStorage": {
     "placeholders": { "error": {"type": "String"} }

@@ -520,6 +520,12 @@ abstract class AppLocalizations {
   /// **'Free space'**
   String get freeSpaceLabel;
 
+  /// No description provided for @openStorageTypeMapButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Open storage-by-type map'**
+  String get openStorageTypeMapButton;
+
   /// No description provided for @couldNotLoadStorage.
   ///
   /// In en, this message translates to:

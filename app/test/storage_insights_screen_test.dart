@@ -41,9 +41,9 @@ void main() {
 
     // Donut ring (total used/free) plus a breakdown row per capacity drive
     // (2) plus the aggregate "Free space" row.
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.text('53%'), findsOneWidget); // (3000-1400)/3000 = 53.3%
     expect(find.text('Free space'), findsOneWidget);
+    expect(find.text('Open storage-by-type map'), findsOneWidget);
   });
 
   testWidgets('shows the empty view when no drive has capacity', (

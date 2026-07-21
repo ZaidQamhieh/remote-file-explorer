@@ -3,6 +3,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/gradient_button.dart';
+import '../../../core/ui/pressable.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../batch_rename.dart';
 
@@ -81,21 +83,20 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SegmentedButton<BatchRenameMode>(
-                  segments: [
-                    ButtonSegment(
-                      value: BatchRenameMode.pattern,
-                      label: Text(context.l10n.patternLabel),
-                      icon: const Icon(LucideIcons.listOrdered),
-                    ),
-                    ButtonSegment(
-                      value: BatchRenameMode.findReplace,
-                      label: Text(context.l10n.findAndReplaceLabel),
-                      icon: const Icon(LucideIcons.replace),
-                    ),
+                _SegmentedControl(
+                  options: [
+                    context.l10n.findAndReplaceLabel,
+                    context.l10n.patternLabel,
                   ],
-                  selected: {_mode},
-                  onSelectionChanged: (s) => setState(() => _mode = s.first),
+                  selectedIndex: _mode == BatchRenameMode.findReplace ? 0 : 1,
+                  onChanged:
+                      (i) => setState(
+                        () =>
+                            _mode =
+                                i == 0
+                                    ? BatchRenameMode.findReplace
+                                    : BatchRenameMode.pattern,
+                      ),
                 ),
                 const SizedBox(height: Spacing.md),
                 if (_mode == BatchRenameMode.pattern) ...[
@@ -136,21 +137,12 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
                 const SizedBox(height: Spacing.md),
                 _PreviewList(oldNames: widget.names, newNames: preview),
                 const SizedBox(height: Spacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(context.l10n.cancelButton),
-                    ),
-                    const SizedBox(width: Spacing.sm),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, preview),
-                      child: Text(
-                        context.l10n.renameNItems(widget.names.length),
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: GradientButton(
+                    onPressed: () => Navigator.pop(context, preview),
+                    child: Text(context.l10n.renameNItems(widget.names.length)),
+                  ),
                 ),
               ],
             ),
@@ -199,6 +191,78 @@ class _PreviewList extends StatelessWidget {
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.segmented`: a pill toggle track (`surface-2`, 3px padding),
+/// the active option raised on `surface-3` with a subtle shadow — replaces
+/// `SegmentedButton`.
+class _SegmentedControl extends StatelessWidget {
+  const _SegmentedControl({
+    required this.options,
+    required this.selectedIndex,
+    required this.onChanged,
+  });
+
+  final List<String> options;
+  final int selectedIndex;
+  final void Function(int index) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: Radii.smR,
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < options.length; i++)
+            Expanded(
+              child: Pressable(
+                onTap: () => onChanged(i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 7,
+                    horizontal: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        i == selectedIndex
+                            ? scheme.surfaceContainerHighest
+                            : null,
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow:
+                        i == selectedIndex
+                            ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                offset: const Offset(0, 1),
+                                blurRadius: 2,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: Text(
+                    options[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          i == selectedIndex
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               ),
             ),
         ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/pressable.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HiddenItemsFooter extends StatelessWidget {
@@ -33,8 +34,7 @@ class HiddenItemsFooter extends StatelessWidget {
 
     if (compact) {
       return Center(
-        child: InkWell(
-          borderRadius: Radii.smR,
+        child: Pressable(
           onTap: onToggle,
           child: Padding(
             padding: const EdgeInsets.all(Spacing.sm),
@@ -56,7 +56,7 @@ class HiddenItemsFooter extends StatelessWidget {
       );
     }
 
-    return InkWell(
+    return Pressable(
       onTap: onToggle,
       child: Padding(
         padding: const EdgeInsets.symmetric(

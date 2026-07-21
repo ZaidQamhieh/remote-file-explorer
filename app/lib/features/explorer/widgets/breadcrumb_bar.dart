@@ -5,6 +5,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/pressable.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maximum number of crumbs shown before head ancestors collapse into a
@@ -166,41 +167,33 @@ class _Crumb extends StatelessWidget {
     final label = crumbLabel(stack, index);
     final path = stack[index];
 
-    final chip = Material(
-      color: isCurrent ? scheme.secondaryContainer : Colors.transparent,
-      shape: StadiumBorder(
-        side:
-            isCurrent
-                ? BorderSide.none
-                : BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: () => onNavigateTo(index),
-        onLongPress: () => copyPathToClipboard(context, path),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
-          ),
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color:
-                  isCurrent
-                      ? scheme.onSecondaryContainer
-                      : scheme.onSurfaceVariant,
-              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-            ),
+    // Mockup's `.chip`/`.chip.active`: pill, 1px border, 12px text; active
+    // fills with the primary color and white text, no elevation/ripple.
+    final chip = Pressable(
+      onTap: () => onNavigateTo(index),
+      onLongPress: () => copyPathToClipboard(context, path),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isCurrent ? Brand.seed : Colors.transparent,
+          borderRadius: Radii.stadiumR,
+          border:
+              isCurrent
+                  ? null
+                  : Border.all(color: scheme.outlineVariant, width: 1),
+        ),
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            color: isCurrent ? Colors.white : scheme.onSurfaceVariant,
           ),
         ),
       ),
     );
 
-    if (onMoveInto == null) {
-      return ClipPath(clipper: const _StadiumClipper(), child: chip);
-    }
+    if (onMoveInto == null) return chip;
 
     return DragTarget<Entry>(
       onWillAcceptWithDetails: (d) => d.data.path != path,
@@ -216,28 +209,10 @@ class _Crumb extends StatelessWidget {
                         : const BorderSide(color: Colors.transparent, width: 2),
               ),
             ),
-            child: ClipPath(clipper: const _StadiumClipper(), child: chip),
+            child: chip,
           ),
     );
   }
-}
-
-/// `ClipPath` clipper matching a [StadiumBorder] shape, used so the chip's
-/// [InkWell] ripple stays within the pill outline.
-class _StadiumClipper extends CustomClipper<Path> {
-  const _StadiumClipper();
-
-  @override
-  Path getClip(Size size) =>
-      Path()..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(size.height / 2),
-        ),
-      );
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 
 /// Non-navigation actions in the collapsed-crumb overflow menu.
@@ -305,23 +280,15 @@ class _CollapsedChip extends StatelessWidget {
                 child: Text(context.l10n.pastePathAction),
               ),
           ],
-      child: Material(
-        color: Colors.transparent,
-        shape: StadiumBorder(
-          side: BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: Radii.stadiumR,
+          border: Border.all(color: scheme.outlineVariant, width: 1),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
-          ),
-          child: Text(
-            '…',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+        child: Text(
+          '…',
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
         ),
       ),
     );

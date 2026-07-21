@@ -4,6 +4,7 @@ import '../../../core/api/agent_client.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
+import '../../../core/ui/pressable.dart';
 import '../../preview/image_preview.dart';
 import '../thumbnail_image.dart';
 import 'entry_drag.dart';
@@ -120,104 +121,95 @@ class EntryGridCell extends StatelessWidget {
       thumbnail = GestureDetector(onLongPress: onPeek, child: thumbnail);
     }
 
-    final cell = Material(
-      color:
-          selected
-              ? scheme.secondaryContainer.withValues(alpha: 0.65)
-              : scheme.surfaceContainerLow,
-      borderRadius: Radii.cardR,
-      child: InkWell(
-        borderRadius: Radii.cardR,
-        onTap: onTap,
-        onLongPress:
-            (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: Radii.cardR,
-            border: Border.all(
-              color: selected ? scheme.primary : scheme.outlineVariant,
-              width: selected ? 3 : 1,
+    final cell = Pressable(
+      onTap: onTap,
+      onLongPress:
+          (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
+      child: Container(
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? scheme.secondaryContainer.withValues(alpha: 0.65)
+                  : scheme.surfaceContainerLow,
+          borderRadius: Radii.cardR,
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 3 : 1,
+          ),
+        ),
+        padding: const EdgeInsets.all(Spacing.sm),
+        child: Stack(
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                thumbnail,
+                const SizedBox(height: Spacing.sm),
+                Text(
+                  entry.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
             ),
-          ),
-          padding: const EdgeInsets.all(Spacing.sm),
-          child: Stack(
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  thumbnail,
-                  const SizedBox(height: Spacing.sm),
-                  Text(
-                    entry.name,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleSmall,
+            if (selected)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    shape: BoxShape.circle,
                   ),
-                ],
+                  child: Icon(
+                    LucideIcons.check,
+                    size: 16,
+                    color: scheme.onPrimary,
+                  ),
+                ),
               ),
-              if (selected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      LucideIcons.check,
-                      size: 16,
-                      color: scheme.onPrimary,
-                    ),
+            if (isFavorite && entry.isDir)
+              Positioned(
+                top: 0,
+                left: 0,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    LucideIcons.star,
+                    size: 13,
+                    color: Brand.amber,
                   ),
                 ),
-              if (isFavorite && entry.isDir)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: scheme.surface,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      LucideIcons.star,
-                      size: 13,
-                      color: Brand.amber,
-                    ),
+              ),
+            if (isPinned && entry.isDir)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    shape: BoxShape.circle,
                   ),
+                  alignment: Alignment.center,
+                  child: Icon(LucideIcons.pin, size: 12, color: scheme.primary),
                 ),
-              if (isPinned && entry.isDir)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: scheme.surface,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      LucideIcons.pin,
-                      size: 12,
-                      color: scheme.primary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
-
     return wrapDraggable(
       context: context,
       entry: entry,

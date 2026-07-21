@@ -145,16 +145,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         floatingActionButton:
             state.multiSelect
                 ? null
-                : ExplorerFab(
-                  clipboard: ref.watch(clipboardProvider),
-                  hostId: widget.host.id,
-                  multiSelect: state.multiSelect,
-                  onPaste:
-                      () =>
-                          _paste(context, state, ref.read(clipboardProvider)!),
-                  onUpload: () => _pickAndUpload(context, state),
-                  onNew: () => _showCreateMenu(context),
-                ),
+                : ExplorerFab(onTap: () => _showCreateMenu(context, state)),
         bottomNavigationBar:
             state.multiSelect
                 ? SelectionBar(
@@ -1377,10 +1368,24 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
   }
 
-  void _showCreateMenu(BuildContext context) {
+  void _showCreateMenu(BuildContext context, ExplorerState state) {
+    final clipboard = ref.read(clipboardProvider);
+    final showPaste =
+        clipboard != null &&
+        !clipboard.isEmpty &&
+        clipboard.hostId == widget.host.id;
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => CreateMenu(notifier: _notifier),
+      builder:
+          (ctx) => CreateMenu(
+            notifier: _notifier,
+            onUpload: () => _pickAndUpload(context, state),
+            onPaste: showPaste ? () => _paste(context, state, clipboard) : null,
+            pasteLabel:
+                showPaste
+                    ? context.l10n.pasteNItems(clipboard.paths.length)
+                    : null,
+          ),
     );
   }
 }

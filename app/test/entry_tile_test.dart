@@ -65,8 +65,8 @@ void main() {
     expect(find.textContaining('2.0 KB'), findsOneWidget);
     expect(find.textContaining('2024-03-05'), findsOneWidget);
     expect(find.byIcon(LucideIcons.chevronRight), findsNothing);
-    // Not in multi-select mode: no checkbox, plain icon leading element.
-    expect(find.byType(Checkbox), findsNothing);
+    // Not in multi-select mode: no sel-box, plain icon leading element.
+    expect(find.byKey(const ValueKey('entry_tile_sel_box')), findsNothing);
     expect(find.byIcon(LucideIcons.fileText), findsOneWidget);
   });
 
@@ -154,7 +154,7 @@ void main() {
     expect(find.textContaining('KB'), findsNothing);
   });
 
-  testWidgets('multiSelect mode shows a checkbox reflecting selected state', (
+  testWidgets('multiSelect mode shows a sel-box reflecting selected state', (
     tester,
   ) async {
     var selectCalls = 0;
@@ -171,10 +171,11 @@ void main() {
       ),
     );
 
-    final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(checkbox.value, isTrue);
+    final selBox = find.byKey(const ValueKey('entry_tile_sel_box'));
+    expect(selBox, findsOneWidget);
+    expect(find.byIcon(LucideIcons.check), findsOneWidget);
 
-    await tester.tap(find.byType(Checkbox));
+    await tester.tap(selBox);
     expect(selectCalls, 1);
   });
 
@@ -221,12 +222,7 @@ void main() {
 
       // Leading icon container sized 40dp in comfortable density.
       final size = tester.getSize(
-        find
-            .descendant(
-              of: find.byType(EntryTile),
-              matching: find.byType(Container),
-            )
-            .first,
+        find.byKey(const ValueKey('entry_tile_icon')),
       );
       expect(size.width, 40);
       expect(size.height, 40);
@@ -264,7 +260,7 @@ void main() {
       expect(rowFinder, findsWidgets);
     });
 
-    testWidgets('selected tile paints primaryContainer behind it', (
+    testWidgets('selected tile paints a primary tint behind it', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -280,15 +276,23 @@ void main() {
         ),
       );
 
-      final materials = tester.widgetList<Material>(
+      final containers = tester.widgetList<Container>(
         find.descendant(
           of: find.byType(EntryTile),
-          matching: find.byType(Material),
+          matching: find.byType(Container),
         ),
       );
       final scheme =
           Theme.of(tester.element(find.byType(EntryTile))).colorScheme;
-      expect(materials.any((m) => m.color == scheme.primaryContainer), isTrue);
+      final expected = scheme.primary.withValues(alpha: 0.14);
+      expect(
+        containers.any(
+          (c) =>
+              (c.decoration as BoxDecoration?)?.color == expected ||
+              c.color == expected,
+        ),
+        isTrue,
+      );
     });
   });
 }

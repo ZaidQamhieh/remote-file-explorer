@@ -8,10 +8,22 @@ import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
 
 /// Bottom-sheet menu for the "New" FAB: create a folder or an empty file in
-/// the current directory.
+/// the current directory, plus (when provided) upload and paste — the
+/// mockup's `.files-fab` tap only ever shows a mock toast, so this sheet's
+/// contents have no literal markup to match; it keeps its existing
+/// quick-action-circle shape and just gains the two extra real actions.
 class CreateMenu extends StatelessWidget {
-  const CreateMenu({super.key, required this.notifier});
+  const CreateMenu({
+    super.key,
+    required this.notifier,
+    this.onUpload,
+    this.onPaste,
+    this.pasteLabel,
+  });
   final ExplorerNotifier notifier;
+  final VoidCallback? onUpload;
+  final VoidCallback? onPaste;
+  final String? pasteLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +68,26 @@ class CreateMenu extends StatelessWidget {
                     );
                   },
                 ),
+                if (onUpload != null)
+                  GradientActionCircle(
+                    icon: LucideIcons.upload,
+                    label: context.l10n.uploadFileTooltip,
+                    gradient: [Colors.orange.shade400, Colors.orange.shade800],
+                    onTap: () {
+                      Navigator.pop(context);
+                      onUpload!();
+                    },
+                  ),
+                if (onPaste != null)
+                  GradientActionCircle(
+                    icon: LucideIcons.clipboardPaste,
+                    label: pasteLabel!,
+                    gradient: [Colors.purple.shade400, Colors.purple.shade800],
+                    onTap: () {
+                      Navigator.pop(context);
+                      onPaste!();
+                    },
+                  ),
               ],
             ),
           ],

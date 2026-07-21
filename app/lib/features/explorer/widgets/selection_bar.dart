@@ -5,16 +5,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/models/host.dart';
-import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/pressable.dart';
 import '../../transfers/transfer_state.dart';
 import '../clipboard_state.dart';
 import '../explorer_state.dart';
 import 'batch_report.dart';
 
-/// A labelled icon action used in the bottom contextual action bar — tonal
-/// icon button over a small caption, for tidier iconography than bare
-/// [IconButton]s.
+/// An icon action in `.selbar-actions` — the mockup's plain 34x34 `.iconbtn`
+/// (icon only, label carried by the tooltip), replacing `InkWell` + a
+/// 44px tonal square + caption.
 class BarAction extends StatelessWidget {
   const BarAction({
     super.key,
@@ -33,37 +33,12 @@ class BarAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final fg = color ?? scheme.onSurfaceVariant;
-    return InkWell(
-      borderRadius: Radii.chipR,
-      onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.sm,
-          vertical: Spacing.xs,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: (color ?? scheme.primary).withValues(alpha: 0.12),
-                borderRadius: Radii.chipR,
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: fg),
-            ),
-            const SizedBox(height: Spacing.xs),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+    return Tooltip(
+      message: label,
+      child: Pressable(
+        onTap: onPressed,
+        pressedScale: 0.92,
+        child: SizedBox(width: 34, height: 34, child: Icon(icon, color: fg)),
       ),
     );
   }
@@ -102,45 +77,54 @@ class SelectionBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
 
+    // Mockup's `.selection-bar`: flush bottom bar, surface-2, top border
+    // only (no radius) — count label on the left, `.selbar-actions` (a
+    // tight-gap row of plain iconbtns) on the right.
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: Radii.sheetTopR,
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            BarAction(
-              icon: LucideIcons.scissors,
-              label: context.l10n.cutButton,
-              onPressed: () => _cutSelected(context, ref),
+            Text(
+              context.l10n.nSelected(state.selected.length),
+              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
             ),
-            BarAction(
-              icon: LucideIcons.copy,
-              label: context.l10n.copyButton,
-              onPressed: () => _copySelected(context, ref),
-            ),
-            BarAction(
-              icon: LucideIcons.archive,
-              label: context.l10n.compressButton,
-              onPressed: () => _compressSelected(context, ref),
-            ),
-            BarAction(
-              icon: LucideIcons.download,
-              label: context.l10n.downloadButton,
-              onPressed: () => _downloadSelected(context, ref),
-            ),
-            BarAction(
-              icon: LucideIcons.trash2,
-              label: context.l10n.deleteButton,
-              color: scheme.error,
-              onPressed: () => _confirmDelete(context),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                BarAction(
+                  icon: LucideIcons.scissors,
+                  label: context.l10n.cutButton,
+                  onPressed: () => _cutSelected(context, ref),
+                ),
+                BarAction(
+                  icon: LucideIcons.copy,
+                  label: context.l10n.copyButton,
+                  onPressed: () => _copySelected(context, ref),
+                ),
+                BarAction(
+                  icon: LucideIcons.archive,
+                  label: context.l10n.compressButton,
+                  onPressed: () => _compressSelected(context, ref),
+                ),
+                BarAction(
+                  icon: LucideIcons.download,
+                  label: context.l10n.downloadButton,
+                  onPressed: () => _downloadSelected(context, ref),
+                ),
+                BarAction(
+                  icon: LucideIcons.trash2,
+                  label: context.l10n.deleteButton,
+                  color: scheme.error,
+                  onPressed: () => _confirmDelete(context),
+                ),
+              ],
             ),
           ],
         ),

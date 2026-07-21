@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/models/entry.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/pressable.dart';
 import '../explorer_state.dart';
 import 'breadcrumb_bar.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -61,7 +62,11 @@ class BrowseAppBar extends StatelessWidget {
           Flexible(
             child: Text(
               folderLabel(state.currentPath),
-              style: Theme.of(context).textTheme.titleLarge,
+              style: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.19,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -83,24 +88,24 @@ class BrowseAppBar extends StatelessWidget {
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(LucideIcons.search),
+        _IconBtn(
+          icon: LucideIcons.search,
           tooltip: context.l10n.searchTooltip,
-          onPressed: onSearch,
+          onTap: onSearch,
         ),
-        IconButton(
-          icon: const Icon(LucideIcons.bookmark),
+        _IconBtn(
+          icon: LucideIcons.bookmark,
           tooltip: 'Bookmarks',
-          onPressed: onOpenBookmarks,
+          onTap: onOpenBookmarks,
         ),
-        IconButton(
-          icon: Icon(LucideIcons.star),
-          color: isFav ? Colors.amber : null,
+        _IconBtn(
+          icon: LucideIcons.star,
+          tint: isFav ? Brand.amber : null,
           tooltip:
               isFav
                   ? context.l10n.removeFavoriteTooltip
                   : context.l10n.favoriteFolderTooltip,
-          onPressed: onToggleFavorite,
+          onTap: onToggleFavorite,
         ),
         PopupMenuButton<OverflowAction>(
           icon: const Icon(LucideIcons.moreVertical),
@@ -177,5 +182,39 @@ class BrowseAppBar extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// The mockup's `.iconbtn`: 34x34, transparent by default, a 19px icon,
+/// scale-.92 on press — replaces Material's `IconButton` ripple.
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.tint,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  /// Non-null when this button carries the mockup's `.iconbtn.primary`-style
+  /// tint (e.g. a starred/active state) instead of the default `--text-dim`.
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final button = Pressable(
+      onTap: onTap,
+      pressedScale: 0.92,
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Icon(icon, size: 19, color: tint ?? scheme.onSurfaceVariant),
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip, child: button);
   }
 }

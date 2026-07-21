@@ -12,6 +12,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import '../handoff/qr_generate_screen.dart';
 import '../preview/preview.dart';
@@ -138,7 +139,7 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       if (_entry.mimeType != null)
         _row(context, LucideIcons.tag, l.metaType, _entry.mimeType!),
       if (_entry.mode != null)
-        InkWell(
+        Pressable(
           onTap: () async {
             final updated = await ChmodDialog.show(
               context,
@@ -732,35 +733,31 @@ class _QuickAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: Radii.smR,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: Spacing.md2,
-            horizontal: Spacing.xs,
-          ),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          decoration: BoxDecoration(
-            border: Border.all(color: scheme.outlineVariant),
-            borderRadius: Radii.smR,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: scheme.primary),
-              const SizedBox(height: Spacing.xs),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ],
-          ),
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: Spacing.md2,
+          horizontal: Spacing.xs,
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: scheme.primary),
+            const SizedBox(height: Spacing.xs),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
         ),
       ),
     );
@@ -794,7 +791,7 @@ class _MoreActionList extends StatelessWidget {
       children: [
         for (var i = 0; i < actions.length; i++) ...[
           if (i > 0) Divider(height: 1, color: scheme.outlineVariant),
-          InkWell(
+          Pressable(
             onTap: actions[i].onTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: Spacing.sm),

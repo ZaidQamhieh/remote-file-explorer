@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remote_file_explorer/core/ui/pressable.dart';
 import 'package:remote_file_explorer/features/explorer/explorer_screen.dart';
 
 import 'l10n_helpers.dart';
@@ -61,7 +62,7 @@ void main() {
       onToggle: () => toggled = true,
     );
 
-    await tester.tap(find.byType(InkWell));
+    await tester.tap(find.byType(Pressable));
     await tester.pump();
 
     expect(toggled, isTrue);
@@ -84,11 +85,14 @@ void main() {
     // Compact mode wraps the label in a Column instead of the full-width Row
     // used by the non-compact layout.
     expect(
-      find.descendant(of: find.byType(InkWell), matching: find.byType(Column)),
+      find.descendant(
+        of: find.byType(Pressable),
+        matching: find.byType(Column),
+      ),
       findsOneWidget,
     );
 
-    await tester.tap(find.byType(InkWell));
+    await tester.tap(find.byType(Pressable));
     await tester.pump();
     expect(toggled, isTrue);
   });

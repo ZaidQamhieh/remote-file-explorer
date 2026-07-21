@@ -7,6 +7,7 @@ import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/entry_leading.dart';
 import '../../../core/ui/format.dart';
+import '../../../core/ui/pressable.dart';
 import '../thumbnail_image.dart';
 import 'entry_drag.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -99,7 +100,7 @@ class EntryTile extends StatelessWidget {
 
     Widget leading =
         multiSelect
-            ? Checkbox(value: selected, onChanged: (_) => onSelect())
+            ? _SelBox(checked: selected, onTap: onSelect)
             : _IconTile(
               entry: entry,
               compact: compact,
@@ -154,40 +155,36 @@ class EntryTile extends StatelessWidget {
               ],
             );
 
-    Widget tile = Material(
-      color: selected ? scheme.primaryContainer : Colors.transparent,
-      borderRadius: Radii.cardR,
-      child: InkWell(
-        borderRadius: Radii.cardR,
-        onTap: onTap,
-        onLongPress:
-            (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: compact ? Spacing.xs : Spacing.sm,
-          ),
-          child: Row(
-            children: [
-              leading,
-              const SizedBox(width: Spacing.md),
-              Expanded(child: content),
-              if (entry.isDir)
-                onShowMeta != null
-                    ? IconButton(
-                      icon: Icon(
-                        LucideIcons.chevronRight,
-                        color: scheme.primary,
-                      ),
-                      tooltip: context.l10n.folderDetailsTooltip,
-                      onPressed: onShowMeta,
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    )
-                    : Icon(LucideIcons.chevronRight, color: scheme.primary),
-            ],
-          ),
+    // Mockup's `.row`: flat (no radius, no elevation) — the enclosing
+    // `ListView.separated` already draws the border-bottom divider between
+    // rows, so this tile just paints its own background + press feedback.
+    Widget tile = Pressable(
+      onTap: onTap,
+      onLongPress:
+          (!multiSelect && onBookmark != null) ? onBookmark : onLongPress,
+      child: Container(
+        color:
+            selected
+                ? scheme.primary.withValues(alpha: 0.14)
+                : Colors.transparent,
+        padding: EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: compact ? Spacing.xs : Spacing.sm,
+        ),
+        child: Row(
+          children: [
+            leading,
+            const SizedBox(width: Spacing.md),
+            Expanded(child: content),
+            if (entry.isDir)
+              onShowMeta != null
+                  ? _RowEndButton(
+                    icon: LucideIcons.chevronRight,
+                    tooltip: context.l10n.folderDetailsTooltip,
+                    onTap: onShowMeta!,
+                  )
+                  : Icon(LucideIcons.chevronRight, color: scheme.primary),
+          ],
         ),
       ),
     );
@@ -225,6 +222,7 @@ class _IconTile extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final size = compact ? 32.0 : 40.0;
     final container = Container(
+      key: const ValueKey('entry_tile_icon'),
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -297,6 +295,66 @@ class _IconTile extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// A `.row-end` icon button (the folder-details chevron) — the mockup's
+/// `.iconbtn` treatment, replacing `IconButton`'s ripple.
+class _RowEndButton extends StatelessWidget {
+  const _RowEndButton({required this.icon, required this.onTap, this.tooltip});
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final button = Pressable(
+      onTap: onTap,
+      pressedScale: 0.92,
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: Icon(icon, size: 18, color: scheme.primary),
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip, child: button);
+  }
+}
+
+/// The mockup's `.sel-box`: 20x20, radius 6, bordered; checked fills primary
+/// with a white check glyph. Replaces `Checkbox` in multi-select rows.
+class _SelBox extends StatelessWidget {
+  const _SelBox({required this.checked, required this.onTap});
+
+  final bool checked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      key: const ValueKey('entry_tile_sel_box'),
+      onTap: onTap,
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: checked ? Brand.seed : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border:
+              checked
+                  ? null
+                  : Border.all(color: scheme.outlineVariant, width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child:
+            checked
+                ? const Icon(LucideIcons.check, size: 13, color: Colors.white)
+                : null,
+      ),
     );
   }
 }

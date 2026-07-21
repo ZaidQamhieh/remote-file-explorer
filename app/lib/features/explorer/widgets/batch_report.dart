@@ -59,10 +59,33 @@ Future<void> reportBatchResult(
                     children:
                         failed.map((f) {
                           final msg = f.errorMessage ?? f.errorCode ?? 'failed';
-                          return ListTile(
-                            dense: true,
-                            title: Text(f.path),
-                            subtitle: Text(msg),
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Spacing.lg,
+                              vertical: 6,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  f.path,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  msg,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color:
+                                        Theme.of(
+                                          ctx,
+                                        ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
                         }).toList(),
                   ),

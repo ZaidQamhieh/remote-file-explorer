@@ -245,7 +245,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.lg),
         SettingsSection(
           title: context.l10n.agentSection,
-          icon: LucideIcons.server,
           children: [
             SettingsTile.value(
               icon: LucideIcons.server,
@@ -259,7 +258,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.accessSection,
-          icon: LucideIcons.lock,
           children: [
             SettingsTile.toggle(
               icon: LucideIcons.lock,
@@ -313,7 +311,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.allowedFoldersSection,
-          icon: LucideIcons.folder,
           children: [
             if (s.roots.isEmpty)
               Padding(
@@ -346,7 +343,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.pairedDevicesSection,
-          icon: LucideIcons.monitorSmartphone,
           children: [
             for (final d in _devices) _DeviceRow(device: d, screen: this),
           ],
@@ -354,7 +350,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: 'Sync Rules',
-          icon: LucideIcons.refreshCw,
           children: [
             SettingsTile.nav(
               icon: LucideIcons.refreshCw,
@@ -374,7 +369,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.aboutSection,
-          icon: LucideIcons.info,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -444,7 +438,6 @@ class _BandwidthSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return SettingsSection(
       title: context.l10n.bandwidthSection,
-      icon: LucideIcons.gauge,
       children: [
         _BandwidthDropdown(
           icon: LucideIcons.arrowUp,
@@ -659,7 +652,6 @@ class DeviceVisibilityOverrideSection extends ConsumerWidget {
 
     return SettingsSection(
       title: context.l10n.fileVisibilityDeviceSection,
-      icon: LucideIcons.eye,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: Spacing.xs),

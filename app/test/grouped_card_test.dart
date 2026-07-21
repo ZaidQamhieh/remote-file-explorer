@@ -14,7 +14,13 @@ void main() {
 
     expect(find.text('row 1'), findsOneWidget);
     expect(find.text('row 2'), findsOneWidget);
-    expect(find.byType(Card), findsOneWidget);
+    expect(find.byType(Card), findsNothing);
+    final decorated = tester.widget<Container>(
+      find
+          .ancestor(of: find.text('row 1'), matching: find.byType(Container))
+          .first,
+    );
+    expect((decorated.decoration as BoxDecoration).border, isNotNull);
   });
 
   testWidgets('SectionLabel uppercases its title', (tester) async {

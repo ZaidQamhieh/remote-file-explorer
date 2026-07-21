@@ -36,10 +36,10 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-/// Figma's recurring visual unit: a rounded card containing divided rows.
-/// Shared by Settings ([SettingsSection]), Servers (host list), Files
-/// (explorer list), and Transfers (grouped transfer list) so they all wrap
-/// their existing rows in the same container instead of each inventing one.
+/// The mockup's `.card`: flat `surface` background, 1px `border`, `r-lg`
+/// radius, 14px padding — no `Card`/elevation. Shared by Settings, Devices,
+/// Files, and Transfers so they all wrap their rows in the same container
+/// instead of each inventing one.
 class GroupedCard extends StatelessWidget {
   const GroupedCard({super.key, required this.children, this.padded = true});
 
@@ -52,21 +52,21 @@ class GroupedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: Elevations.card,
-      color: scheme.surfaceContainer,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.cardR),
-      clipBehavior: Clip.antiAlias,
-      child:
-          padded
-              ? Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md,
-                  vertical: Spacing.sm,
-                ),
-                child: Column(children: children),
-              )
-              : Column(children: children),
+    return Container(
+      padding: padded ? const EdgeInsets.all(14) : EdgeInsets.zero,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: Radii.cardR,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      // Not every row inside here has been rebuilt off Material widgets yet
+      // (ListTile/InkWell mid zero-reuse migration elsewhere in the app) —
+      // this transparent Material ancestor keeps their splashes/backgrounds
+      // working without painting anything of its own.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(children: children),
+      ),
     );
   }
 }

@@ -6,8 +6,6 @@ import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/features/settings/storage_security_settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import 'l10n_helpers.dart';
 import 'shad_test_wrap.dart';
 
@@ -49,7 +47,7 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.byType(ShadSwitch));
+    await tester.tap(find.byType(AnimatedContainer));
     await tester.pumpAndSettle();
 
     expect(

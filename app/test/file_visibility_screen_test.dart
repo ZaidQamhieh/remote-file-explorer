@@ -6,8 +6,6 @@ import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/settings/file_visibility_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import 'l10n_helpers.dart';
 import 'shad_test_wrap.dart';
 
@@ -98,7 +96,7 @@ void main() {
     expect(_appVis(container).hideDotfiles, isTrue);
 
     // "Hide dotfiles" is now a ShadSwitch (SettingsTile.toggle).
-    await tester.tap(find.byType(ShadSwitch).first);
+    await tester.tap(find.byType(AnimatedContainer).first);
     await tester.pumpAndSettle();
 
     expect(_appVis(container).hideDotfiles, isFalse);

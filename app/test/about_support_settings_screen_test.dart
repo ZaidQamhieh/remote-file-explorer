@@ -30,6 +30,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Export diagnostics'), findsOneWidget);
-    expect(find.text('About & Changelog'), findsOneWidget);
+    expect(find.text('About RFE'), findsOneWidget);
   });
 }

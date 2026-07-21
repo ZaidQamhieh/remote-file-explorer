@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/core/storage/view_prefs.dart';
 import 'package:remote_file_explorer/features/settings/appearance_settings_screen.dart';
-import 'package:remote_file_explorer/features/settings/file_visibility_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
@@ -112,8 +111,8 @@ void main() {
       ThemeMode.system,
     );
 
-    await tester.tap(find.text('Theme'));
-    await tester.pumpAndSettle();
+    // Theme is now an inline swatch grid (tap the swatch directly), not a
+    // row that opens a picker sheet.
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
 
@@ -142,31 +141,21 @@ void main() {
       final c = await pump(tester);
       expect(c.read(settingsProvider).valueOrNull!.app.seedColor, isNull);
 
-      await tester.tap(find.text('Accent Color'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Blue'));
+      // Accent is now an inline dot row (tap the tooltip-labelled dot
+      // directly), not a row that opens a picker sheet.
+      await tester.tap(find.byTooltip('Blue'));
       await tester.pumpAndSettle();
       expect(
         c.read(settingsProvider).valueOrNull!.app.seedColor,
         const Color(0xFF2196F3),
       );
 
-      await tester.tap(find.text('Accent Color'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Default'));
+      await tester.tap(find.byTooltip('Default'));
       await tester.pumpAndSettle();
       expect(c.read(settingsProvider).valueOrNull!.app.seedColor, isNull);
     },
   );
 
-  testWidgets('tapping the File visibility row pushes FileVisibilityScreen', (
-    tester,
-  ) async {
-    await pump(tester);
-
-    await tester.tap(find.text('File visibility'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(FileVisibilityScreen), findsOneWidget);
-  });
+  // File Visibility moved to the top-level Settings hub (mockup's
+  // tab-settings Data section) — covered by app_settings_screen_test.dart.
 }

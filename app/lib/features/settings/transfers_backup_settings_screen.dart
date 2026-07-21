@@ -6,16 +6,25 @@ import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../transfers/chunk_planner.dart' show describeDefaultChunkSize;
 import '../photo_backup/photo_backup_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
 import 'widgets/backup_restore_section.dart';
-import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 
-/// Everything about moving/protecting data: photo backup, watched folders,
-/// cellular compression, transfer history, and config backup/restore
-/// (Settings Overhaul, group 2 of 5).
+/// Everything about moving/protecting data: transfer engine, photo backup,
+/// watched folders, transfer history, and config backup/restore (Settings
+/// Overhaul, group 2 of 5).
+///
+/// Mockup's `settings-transfers-backup` screen shows a "Transfer engine"
+/// section with a parallel-chunks segmented control (1/2/4) and a "Wi-Fi
+/// only" toggle. Neither exists as a real setting — transfer parallelism
+/// isn't user-configurable and the real per-transfer network gate is
+/// "compress downloads on cellular", not "Wi-Fi only" (different semantics:
+/// it still transfers on cellular, just compressed). The chunk *size* badge
+/// (mockup shows "4 MB") is real — `chunk_planner.dart`'s fixed 4 MB
+/// constant — so that one row is genuine, read-only data, not fabricated.
 class TransfersBackupSettingsScreen extends ConsumerWidget {
   const TransfersBackupSettingsScreen({super.key});
 
@@ -26,7 +35,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(title: const Text('Transfers & Backup')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
@@ -35,15 +44,36 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
           Spacing.xl,
         ),
         children: [
-          const SettingsHero(
-            icon: LucideIcons.arrowUpDown,
-            title: 'Transfers & Backup',
-            subtitle: 'Photo backup, watched folders & history',
-            tint: Brand.online,
-          ),
-          const SizedBox(height: Spacing.sm),
           SettingsSection(
-            title: context.l10n.photoBackupSection,
+            title: 'Transfer engine',
+            padded: false,
+            children: [
+              SettingsTile.toggle(
+                icon: LucideIcons.arrowUpDown,
+                badgeColor: Brand.online,
+                title: 'Compress downloads on cellular',
+                subtitle:
+                    'Sends Accept-Encoding: gzip on mobile data for '
+                    'compressible files (text, logs, source code)',
+                value: settings.app.compressDownloadsOnCellular,
+                onChanged: notifier.setCompressDownloadsOnCellular,
+              ),
+              ListTile(
+                title: const Text('Chunk size'),
+                trailing: Text(
+                  describeDefaultChunkSize(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontFamily: 'monospace',
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Photo backup',
+            padded: false,
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.cloudUpload,
@@ -59,27 +89,12 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.sm),
-          SettingsSection(
-            title: 'Transfers',
-            children: [
-              SettingsTile.toggle(
-                icon: LucideIcons.arrowUpDown,
-                badgeColor: Brand.online,
-                title: 'Compress downloads on cellular',
-                subtitle:
-                    'Sends Accept-Encoding: gzip on mobile data for '
-                    'compressible files (text, logs, source code)',
-                value: settings.app.compressDownloadsOnCellular,
-                onChanged: notifier.setCompressDownloadsOnCellular,
-              ),
-            ],
-          ),
-          const SizedBox(height: Spacing.sm),
+          const SizedBox(height: Spacing.md),
           const _WatchedFoldersSection(),
-          const SizedBox(height: Spacing.sm),
+          const SizedBox(height: Spacing.md),
           SettingsSection(
             title: 'History',
+            padded: false,
             children: [
               SettingsTile.nav(
                 icon: LucideIcons.history,
@@ -95,7 +110,7 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.sm),
+          const SizedBox(height: Spacing.md),
           const BackupRestoreSection(),
         ],
       ),

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/settings/settings_controller.dart';
 import 'package:remote_file_explorer/features/settings/notifications_settings_screen.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
@@ -39,12 +38,9 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(
-      find.descendant(
-        of: find.widgetWithText(Row, 'Weekly storage digest').first,
-        matching: find.byType(ShadSwitch),
-      ),
-    );
+    // The whole tile is tappable (MergeSemantics + InkWell wrapping title +
+    // switch), matching the mockup's "Weekly activity digest" wording.
+    await tester.tap(find.text('Weekly activity digest'));
     await tester.pumpAndSettle();
 
     expect(

@@ -6,16 +6,21 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
-import 'file_visibility_screen.dart';
-import 'widgets/settings_hero.dart';
+import '../../core/ui/grouped_card.dart';
 import 'widgets/settings_picker.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Theme, layout, density, sort, and file-visibility defaults — everything
-/// about how the app looks and lists files (Settings Overhaul, group 1 of 5;
-/// merges the old "Appearance" and "Display" sections).
+/// Theme, accent, layout, density, and sort — everything about how the app
+/// looks and lists files (Settings Overhaul, group 1 of 5; merges the old
+/// "Appearance" and "Display" sections).
+///
+/// Structure matches the mockup's `settings-appearance` screen: an inline
+/// theme-swatch grid and accent-color dot row (no value-row + bottom-sheet
+/// picker for those two — tap directly selects). File visibility moved to a
+/// top-level Settings-hub entry (mockup's `tab-settings` Data section) so it
+/// no longer lives here.
 class AppearanceSettingsScreen extends ConsumerWidget {
   const AppearanceSettingsScreen({super.key});
 
@@ -26,14 +31,8 @@ class AppearanceSettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
     final app = settings.app;
 
-    String themeLabel(ThemeMode m) => switch (m) {
-      ThemeMode.system => context.l10n.systemTheme,
-      ThemeMode.light => context.l10n.lightTheme,
-      ThemeMode.dark => context.l10n.darkTheme,
-    };
-
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(title: const Text('Appearance')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
@@ -42,12 +41,28 @@ class AppearanceSettingsScreen extends ConsumerWidget {
           Spacing.xl,
         ),
         children: [
-          const SettingsHero(
-            icon: LucideIcons.palette,
-            title: 'Appearance',
-            subtitle: "Theme, layout, sort & how files look",
-            tint: Brand.accent,
+          const SectionLabel('Theme'),
+          // ponytail: mockup shows 6 swatches (Dark/AMOLED/Light/Dracula/
+          // Nord/System) as first-class theme presets. The real settings
+          // model only has ThemeMode (system/light/dark) plus a separate
+          // `amoledDark` bool modifier — no Dracula/Nord palettes exist.
+          // Built the swatch grid for the 3 real modes only; AMOLED stays
+          // where it already was (the quick-toggle grid below) rather than
+          // faking 3 more theme presets with no backing implementation.
+          _ThemeSwatchGrid(
+            selected: app.themeMode,
+            onSelected: notifier.setThemeMode,
           ),
+          const SizedBox(height: Spacing.md),
+          const SectionLabel('Accent color'),
+          _AccentDotRow(
+            selected: app.seedColor,
+            onSelected: notifier.setSeedColor,
+          ),
+          // ponytail: mockup also has a "Text size" segmented control here —
+          // no text-scale setting exists anywhere in AppDefaults/the
+          // notifier, so it's omitted rather than shipping a dead control.
+          // Add a real `textScale` setting first if this is wanted.
           const SizedBox(height: Spacing.md),
           GridView.count(
             crossAxisCount: 2,
@@ -103,72 +118,13 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          // Sort-by isn't in the mockup's Appearance screen at all (it only
+          // mocks Theme/Accent/Text size) — kept as a real, working setting
+          // rather than deleted; it just doesn't map to any mockup section.
           const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Theme',
+            title: 'Sort',
             children: [
-              SettingsTile.value(
-                icon: LucideIcons.palette,
-                badgeColor: Brand.accent,
-                title: context.l10n.themeLabel,
-                value: themeLabel(app.themeMode),
-                onTap: () async {
-                  final picked = await showSettingsPicker<ThemeMode>(
-                    context,
-                    title: context.l10n.themeLabel,
-                    selected: app.themeMode,
-                    options: [
-                      SettingsOption(
-                        ThemeMode.system,
-                        context.l10n.systemTheme,
-                        icon: LucideIcons.sunMoon,
-                      ),
-                      SettingsOption(
-                        ThemeMode.light,
-                        context.l10n.lightTheme,
-                        icon: LucideIcons.sun,
-                      ),
-                      SettingsOption(
-                        ThemeMode.dark,
-                        context.l10n.darkTheme,
-                        icon: LucideIcons.moon,
-                      ),
-                    ],
-                  );
-                  if (picked != null) notifier.setThemeMode(picked);
-                },
-              ),
-              SettingsTile.value(
-                icon: LucideIcons.swatchBook,
-                badgeColor: Brand.accent,
-                title: 'Accent Color',
-                value: _accentLabel(app.seedColor),
-                leadingDot: app.seedColor ?? Brand.seed,
-                onTap: () async {
-                  // Picker is keyed by preset index, not Color?, so picking
-                  // "Default" (a null Color) can't be confused with the
-                  // sheet being dismissed (both would otherwise read null).
-                  final currentIndex = _accentPresets.indexWhere(
-                    (p) => p.$1 == app.seedColor,
-                  );
-                  final picked = await showSettingsPicker<int>(
-                    context,
-                    title: 'Accent Color',
-                    selected: currentIndex < 0 ? 0 : currentIndex,
-                    options: [
-                      for (var i = 0; i < _accentPresets.length; i++)
-                        SettingsOption(
-                          i,
-                          _accentPresets[i].$2,
-                          color: _accentPresets[i].$1 ?? Brand.seed,
-                        ),
-                    ],
-                  );
-                  if (picked != null) {
-                    notifier.setSeedColor(_accentPresets[picked].$1);
-                  }
-                },
-              ),
               SettingsTile.value(
                 icon: LucideIcons.arrowUpDown,
                 badgeColor: Brand.accent,
@@ -198,24 +154,197 @@ class AppearanceSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: Spacing.md),
-          SettingsSection(
-            title: 'File visibility',
-            children: [
-              SettingsTile.nav(
-                icon: LucideIcons.eyeOff,
-                badgeColor: Brand.accent,
-                title: 'File visibility',
-                subtitle: 'Hidden file types & dotfiles',
-                onTap:
-                    () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const FileVisibilityScreen(),
-                      ),
-                    ),
-              ),
-            ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline theme picker matching the mockup's `.theme-grid`: a 3-column grid
+/// of tappable preview swatches (no value-row + bottom-sheet).
+class _ThemeSwatchGrid extends StatelessWidget {
+  const _ThemeSwatchGrid({required this.selected, required this.onSelected});
+
+  final ThemeMode selected;
+  final ValueChanged<ThemeMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: Spacing.sm,
+      crossAxisSpacing: Spacing.sm,
+      childAspectRatio: 0.95,
+      children: [
+        _swatch(
+          context,
+          mode: ThemeMode.dark,
+          label: context.l10n.darkTheme,
+          preview: const _SolidPreview(
+            bg: Color(0xFF08090D),
+            bar: Color(0xFF191C24),
           ),
+        ),
+        _swatch(
+          context,
+          mode: ThemeMode.light,
+          label: context.l10n.lightTheme,
+          preview: const _SolidPreview(
+            bg: Color(0xFFF3F4F7),
+            bar: Colors.white,
+          ),
+        ),
+        _swatch(
+          context,
+          mode: ThemeMode.system,
+          label: context.l10n.systemTheme,
+          preview: const _SystemPreview(),
+        ),
+      ],
+    );
+  }
+
+  Widget _swatch(
+    BuildContext context, {
+    required ThemeMode mode,
+    required String label,
+    required Widget preview,
+  }) {
+    final active = selected == mode;
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => onSelected(mode),
+      borderRadius: Radii.smR,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: Radii.smR,
+          border: Border.all(
+            color: active ? Brand.accent : scheme.outlineVariant,
+            width: active ? 2 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Expanded(child: preview),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SolidPreview extends StatelessWidget {
+  const _SolidPreview({required this.bg, required this.bar});
+  final Color bg;
+  final Color bar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: bg,
+      alignment: Alignment.bottomCenter,
+      padding: const EdgeInsets.all(6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: 30,
+          height: 8,
+          decoration: BoxDecoration(
+            color: bar,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemPreview extends StatelessWidget {
+  const _SystemPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF08090D), Color(0xFF191C24)],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(
+        LucideIcons.sunMoon,
+        size: 16,
+        color: Color(0xFF5B6377),
+      ),
+    );
+  }
+}
+
+/// Inline accent picker matching the mockup's `.dot-row`: a row of tappable
+/// color circles (no value-row + bottom-sheet). Keeps the same
+/// [accentPresets] list the old picker used.
+class _AccentDotRow extends StatelessWidget {
+  const _AccentDotRow({required this.selected, required this.onSelected});
+
+  final Color? selected;
+  final ValueChanged<Color?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+      child: Row(
+        children: [
+          for (final (color, label) in accentPresets)
+            Padding(
+              padding: const EdgeInsets.only(right: Spacing.sm),
+              child: Tooltip(
+                message: label,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => onSelected(color),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color ?? Brand.seed,
+                      border:
+                          selected == color
+                              ? Border.all(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                width: 2,
+                              )
+                              : null,
+                    ),
+                    alignment: Alignment.center,
+                    child:
+                        selected == color
+                            ? const Icon(
+                              LucideIcons.check,
+                              size: 14,
+                              color: Colors.white,
+                            )
+                            : null,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -299,7 +428,9 @@ String _sortFieldLabel(BuildContext context, SortField field) =>
       SortField.type => context.l10n.sortFieldType,
     };
 
-const _accentPresets = <(Color?, String)>[
+/// Accent presets shared with [AppSettingsScreen]'s hub subtitle (single
+/// source of truth for the color↔label mapping).
+const accentPresets = <(Color?, String)>[
   (null, 'Default'),
   (Color(0xFF2196F3), 'Blue'),
   (Color(0xFF4CAF50), 'Green'),
@@ -310,7 +441,14 @@ const _accentPresets = <(Color?, String)>[
   (Color(0xFF009688), 'Teal'),
 ];
 
-String _accentLabel(Color? selected) =>
-    _accentPresets
-        .firstWhere((p) => p.$1 == selected, orElse: () => _accentPresets.first)
+String accentLabel(Color? selected) =>
+    accentPresets
+        .firstWhere((p) => p.$1 == selected, orElse: () => accentPresets.first)
         .$2;
+
+/// Theme mode label shared with [AppSettingsScreen]'s hub subtitle.
+String themeModeLabel(BuildContext context, ThemeMode m) => switch (m) {
+  ThemeMode.system => context.l10n.systemTheme,
+  ThemeMode.light => context.l10n.lightTheme,
+  ThemeMode.dark => context.l10n.darkTheme,
+};

@@ -7,7 +7,19 @@ import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/gradient_blob_hero.dart';
+import '../../core/ui/grouped_card.dart';
 
+/// Date-grouped ("Today" / "Yesterday" / older) transfer history, matching
+/// the mockup's `transfer-journal` screen shape.
+///
+/// The mockup shows both green "Completed" and red "Failed" rows in the
+/// journal. The real [TransferJournalNotifier] only ever logs a record on
+/// successful completion (`_logToJournal` in `transfer_state.dart` — there is
+/// no failure path that writes to the journal), so every row here is
+/// necessarily a completed transfer. Rather than fabricate a "Failed" badge
+/// with no failed records behind it, every row shows the real "Completed"
+/// badge; adding failed-transfer journaling would be a business-logic change
+/// out of scope for this view-layer rewrite.
 class TransferJournalScreen extends ConsumerWidget {
   const TransferJournalScreen({super.key});
 
@@ -69,43 +81,109 @@ class TransferJournalScreen extends ConsumerWidget {
               ),
             );
           }
-          return ListView.builder(
-            itemCount: records.length,
-            itemBuilder: (context, index) {
-              final r = records[index];
-              final isUpload = r.kind == 'upload';
-              return ListTile(
-                leading: Icon(
-                  isUpload ? LucideIcons.upload : LucideIcons.download,
-                  color: isUpload ? scheme.tertiary : scheme.primary,
-                ),
-                title: Text(
-                  r.fileName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text('${r.hostLabel} · ${formatSize(r.bytes)}'),
-                trailing: Text(
-                  _formatRelative(context, r.completedAt),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+          final groups = _groupByDay(records);
+          return ListView(
+            padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+            children: [
+              for (final group in groups) ...[
+                SectionLabel(group.label),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+                  child: GroupedCard(
+                    padded: false,
+                    children: [
+                      for (var i = 0; i < group.records.length; i++) ...[
+                        if (i > 0) const Divider(height: 1),
+                        _JournalRow(record: group.records[i]),
+                      ],
+                    ],
                   ),
                 ),
-              );
-            },
+                const SizedBox(height: Spacing.md),
+              ],
+            ],
           );
         },
       ),
     );
   }
+}
 
-  String _formatRelative(BuildContext context, DateTime dt) {
-    final l = context.l10n;
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return l.relativeJustNow;
-    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inMinutes);
-    if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
-    if (diff.inDays < 7) return l.relativeDaysAgo(diff.inDays);
+class _DayGroup {
+  const _DayGroup(this.label, this.records);
+  final String label;
+  final List<TransferRecord> records;
+}
+
+/// Buckets [records] (already newest-first) into "Today" / "Yesterday" /
+/// "M/D" groups by real [TransferRecord.completedAt] calendar dates —
+/// preserves the mockup's date-grouped shape without inventing a boundary.
+List<_DayGroup> _groupByDay(List<TransferRecord> records) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+
+  String labelFor(DateTime dt) {
+    final day = DateTime(dt.year, dt.month, dt.day);
+    if (day == today) return 'Today';
+    if (day == yesterday) return 'Yesterday';
     return '${dt.month}/${dt.day}';
+  }
+
+  final groups = <_DayGroup>[];
+  for (final r in records) {
+    final label = labelFor(r.completedAt);
+    if (groups.isNotEmpty && groups.last.label == label) {
+      groups.last.records.add(r);
+    } else {
+      groups.add(_DayGroup(label, [r]));
+    }
+  }
+  return groups;
+}
+
+class _JournalRow extends StatelessWidget {
+  const _JournalRow({required this.record});
+  final TransferRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUpload = record.kind == 'upload';
+    return ListTile(
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Brand.online.withValues(alpha: 0.16),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          isUpload ? LucideIcons.upload : LucideIcons.download,
+          size: 18,
+          color: Brand.online,
+        ),
+      ),
+      title: Text(
+        record.fileName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text('${record.hostLabel} · ${formatSize(record.bytes)}'),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Brand.online.withValues(alpha: 0.16),
+          borderRadius: Radii.stadiumR,
+        ),
+        child: Text(
+          'Completed',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Brand.online,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }

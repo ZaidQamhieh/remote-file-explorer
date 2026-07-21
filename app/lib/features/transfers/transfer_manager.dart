@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n_ext.dart';
+import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
@@ -10,6 +11,128 @@ import '../../core/ui/sheet_chrome.dart';
 import 'transfer_speed.dart';
 import 'transfer_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+/// The Transfers tab's stat-grid header, matching the mockup's
+/// `tab-transfers` screen: 3 tiles (Active / Done today / Failed) above the
+/// grouped list.
+///
+/// "Active" and "Failed" read the live in-memory [transferQueueProvider]
+/// (transient — cleared on "Clear completed" or app restart). "Done today"
+/// reads the persisted [transferJournalProvider] filtered to today's
+/// calendar date — genuine day-boundary data, not an approximation, since
+/// the journal already timestamps every completed transfer.
+class TransferStatGrid extends ConsumerWidget {
+  const TransferStatGrid({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final transfers = ref.watch(transferQueueProvider);
+    final active =
+        transfers
+            .where(
+              (t) =>
+                  t.status == TransferStatus.running ||
+                  t.status == TransferStatus.paused,
+            )
+            .length;
+    final failed =
+        transfers.where((t) => t.status == TransferStatus.failed).length;
+
+    final journal = ref.watch(transferJournalProvider).valueOrNull ?? const [];
+    final now = DateTime.now();
+    final doneToday =
+        journal
+            .where(
+              (r) =>
+                  r.completedAt.year == now.year &&
+                  r.completedAt.month == now.month &&
+                  r.completedAt.day == now.day,
+            )
+            .length;
+
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatTile(
+              label: 'Active',
+              value: '$active',
+              color: scheme.primary,
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: _StatTile(
+              label: 'Done today',
+              value: '$doneToday',
+              color: Brand.online,
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: _StatTile(
+              label: 'Failed',
+              value: '$failed',
+              color: scheme.error,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(Spacing.md2),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: Radii.smR,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: color,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Bottom sheet listing all transfers, grouped into collapsible
 /// Active / Queued / Done / Failed sections with live per-task speed + ETA,

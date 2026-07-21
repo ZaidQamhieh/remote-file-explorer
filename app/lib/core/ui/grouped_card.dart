@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 
-/// The uppercase, muted label that sits above a [GroupedCard] — Figma's
-/// "SECTION LABEL" pattern. Shared so every grouped list (Servers, Files,
-/// Transfers, Settings) uses one consistent label style instead of each
-/// screen inventing its own.
+/// The mockup's `.section-label`: 10.5px/700, uppercase, `.09em` tracking,
+/// faint colour. Shared so every list section (Devices, Files, Transfers,
+/// Settings) uses one consistent label style instead of each screen
+/// inventing its own.
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.title, {super.key, this.trailing});
 
@@ -21,10 +21,11 @@ class SectionLabel extends StatelessWidget {
         children: [
           Text(
             title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.945,
               color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
             ),
           ),
           const Spacer(),

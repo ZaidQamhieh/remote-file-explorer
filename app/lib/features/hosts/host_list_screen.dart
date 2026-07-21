@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/gradient_blob_hero.dart';
+import '../../core/ui/gradient_button.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/screen_header.dart';
@@ -79,7 +81,7 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
+        toolbarHeight: 64,
         title: ScreenHeader(
           'Devices',
           subtitle:
@@ -88,20 +90,20 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                   : null,
         ),
         actions: [
-          IconButton(
-            icon: Icon(_showSearch ? LucideIcons.x : LucideIcons.search),
+          _AppbarIconBtn(
+            icon: _showSearch ? LucideIcons.x : LucideIcons.search,
             tooltip: context.l10n.searchButton,
-            onPressed: () => setState(() => _showSearch = !_showSearch),
+            onTap: () => setState(() => _showSearch = !_showSearch),
           ),
-          IconButton(
-            icon: const Icon(LucideIcons.scanQrCode),
+          _AppbarIconBtn(
+            icon: LucideIcons.scanQrCode,
             tooltip: context.l10n.receiveFileTooltip,
-            onPressed:
+            onTap:
                 () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const QrScanScreen()),
                 ),
           ),
-          const SizedBox(width: Spacing.xs),
+          const SizedBox(width: Spacing.sm),
         ],
       ),
       body: Column(
@@ -181,27 +183,18 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                       ],
                       const SizedBox(height: Spacing.md),
                       const SectionLabel('This device'),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          backgroundColor: scheme.surfaceContainerHigh,
-                          side: BorderSide(color: scheme.outlineVariant),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: Radii.smR,
-                          ),
-                        ),
-                        // The mockup's "Show my pairing code" button implies
-                        // this phone displays a code for a PC to scan — but
-                        // this app's actual TOFU pairing flow runs the other
-                        // way (the agent mints the code, the phone scans it;
-                        // see `agent pair` in CLAUDE.md). There's no real
-                        // "phone shows its own code" flow to wire this to, so
-                        // it opens the existing add-a-computer pairing flow
-                        // instead of fabricating a fake code display.
-                        onPressed:
-                            () => HostListScreen.addComputer(context, ref),
-                        icon: const Icon(LucideIcons.qrCode, size: 18),
-                        label: const Text('Show my pairing code'),
+                      // The mockup's "Show my pairing code" button implies
+                      // this phone displays a code for a PC to scan — but
+                      // this app's actual TOFU pairing flow runs the other
+                      // way (the agent mints the code, the phone scans it;
+                      // see `agent pair` in CLAUDE.md). There's no real
+                      // "phone shows its own code" flow to wire this to, so
+                      // it opens the existing add-a-computer pairing flow
+                      // instead of fabricating a fake code display.
+                      _GhostButton(
+                        icon: LucideIcons.qrCode,
+                        label: 'Show my pairing code',
+                        onTap: () => HostListScreen.addComputer(context, ref),
                       ),
                     ],
                   ),
@@ -216,7 +209,10 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Persistent search field — filters the list in place, no navigation
+// Persistent search field — filters the list in place, no navigation. Built
+// directly from the mockup's `.searchbar` rule (docs/mockup-reference/
+// mockup.css): flat pill, 1px border, 9/14 padding, 13.5px text — no
+// ShadInput.
 // ---------------------------------------------------------------------------
 
 class _DeviceSearchBar extends StatelessWidget {
@@ -228,31 +224,113 @@ class _DeviceSearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ShadInput(
-      controller: controller,
-      autofocus: true,
-      onChanged: onChanged,
-      style: Theme.of(context).textTheme.bodyMedium,
-      placeholder: Text(
-        'Search devices…',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: scheme.outline),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: Radii.stadiumR,
       ),
-      leading: Padding(
-        padding: const EdgeInsets.only(left: Spacing.sm),
-        child: Icon(LucideIcons.search, size: 18, color: scheme.outline),
+      child: Row(
+        children: [
+          Icon(LucideIcons.search, size: 16, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              onChanged: onChanged,
+              style: const TextStyle(fontSize: 13.5),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: 'Search devices…',
+                hintStyle: TextStyle(
+                  fontSize: 13.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.sm,
-        vertical: Spacing.md,
+    );
+  }
+}
+
+/// The mockup's `.iconbtn`: bare 34x34 circular tap target, 19px icon, no
+/// fill, no Material ripple ([Pressable]'s scale-down instead).
+class _AppbarIconBtn extends StatelessWidget {
+  const _AppbarIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+        ),
       ),
-      decoration: ShadDecoration(
-        color: scheme.surfaceContainerHigh,
-        border: ShadBorder.all(color: Colors.transparent, radius: Radii.lgR),
-        focusedBorder: ShadBorder.all(
-          color: Colors.transparent,
-          radius: Radii.lgR,
+    );
+  }
+}
+
+/// The mockup's `.btn` + `.btn-ghost`: 1px bordered pill, `surface-2` fill,
+/// 13.5px/600 label — no `OutlinedButton`.
+class _GhostButton extends StatelessWidget {
+  const _GhostButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: scheme.onSurface),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -299,10 +377,10 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: Spacing.lg),
-            FilledButton.icon(
+            GradientButton(
               onPressed: onScan,
               icon: const Icon(LucideIcons.scanQrCode),
-              label: Text(context.l10n.scanQrCodeButton),
+              child: Text(context.l10n.scanQrCodeButton),
             ),
           ],
         ),

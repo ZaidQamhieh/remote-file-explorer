@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -69,23 +70,67 @@ class QrGenerateSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: Spacing.lg),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: payload));
-                      if (context.mounted) {
-                        showSuccess(context, context.l10n.qrHandoffCopied);
-                      }
-                    },
-                    icon: const Icon(LucideIcons.copy),
-                    label: Text(context.l10n.qrHandoffCopyButton),
-                  ),
+                _GhostBlockButton(
+                  label: context.l10n.qrHandoffCopyButton,
+                  icon: LucideIcons.copy,
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: payload));
+                    if (context.mounted) {
+                      showSuccess(context, context.l10n.qrHandoffCopied);
+                    }
+                  },
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`: full-width, `surface-2`
+/// background, 1px border, text then a trailing icon.
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(icon, size: 16, color: scheme.onSurface),
+          ],
+        ),
       ),
     );
   }

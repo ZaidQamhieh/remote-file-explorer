@@ -14,6 +14,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/gradient_button.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -126,21 +127,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
               Spacing.lg,
               Spacing.sm,
             ),
-            child: SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  label: Text(context.l10n.scanQrTab),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text(context.l10n.enterCodeTab),
-                ),
-              ],
-              selected: {_codeMode},
-              showSelectedIcon: false,
-              onSelectionChanged:
-                  (sel) => setState(() => _codeMode = sel.first),
+            child: _SegmentedControl(
+              options: [context.l10n.scanQrTab, context.l10n.enterCodeTab],
+              selectedIndex: _codeMode ? 1 : 0,
+              onChanged: (i) => setState(() => _codeMode = i == 1),
             ),
           ),
           Expanded(
@@ -175,8 +165,84 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
   }
 }
 
+/// The mockup's `.segmented`: a pill toggle (not `SegmentedButton`'s
+/// underlined Material tabs) — `surface-2` track, 3px padding, active option
+/// on `surface-3` with a subtle `--shadow-1`.
+class _SegmentedControl extends StatelessWidget {
+  const _SegmentedControl({
+    required this.options,
+    required this.selectedIndex,
+    required this.onChanged,
+  });
+
+  final List<String> options;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: Radii.smR,
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            if (i > 0) const SizedBox(width: 2),
+            Expanded(
+              child: Pressable(
+                onTap: () => onChanged(i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        i == selectedIndex
+                            ? scheme.surfaceContainerHighest
+                            : null,
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow:
+                        i == selectedIndex
+                            ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                offset: const Offset(0, 1),
+                                blurRadius: 2,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: Text(
+                    options[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          i == selectedIndex
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// The "On the PC, open RFE and go to Settings → Pair a device..." hint
-/// card, shown at the bottom of both the scan and code-entry panels.
+/// card, shown at the bottom of both the scan and code-entry panels — the
+/// mockup's `.card` with a `--primary-tint` background and transparent
+/// border.
 class _PairingHintCard extends StatelessWidget {
   const _PairingHintCard();
 
@@ -197,7 +263,8 @@ class _PairingHintCard extends StatelessWidget {
           Expanded(
             child: Text(
               context.l10n.pairingHint,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: TextStyle(
+                fontSize: 12.5,
                 color: scheme.onSurfaceVariant,
                 height: 1.5,
               ),
@@ -236,38 +303,34 @@ class _QrPairingPanel extends StatelessWidget {
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: Container(
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(Radii.sheet),
-                border: Border.all(color: scheme.outlineVariant),
+            child: CustomPaint(
+              painter: _DashedRRectPainter(
+                color: scheme.outlineVariant,
+                radius: Radii.lg,
               ),
-              child: _CornerBracketBox(
-                cornerSize: 26,
-                borderWidth: 3,
-                inset: 16,
-                child: Icon(
-                  LucideIcons.qrCode,
-                  size: 64,
-                  color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  borderRadius: Radii.lgR,
+                ),
+                child: _CornerBracketBox(
+                  cornerSize: 26,
+                  borderWidth: 3,
+                  inset: 16,
+                  child: Icon(
+                    LucideIcons.qrCode,
+                    size: 64,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: Spacing.md2 + Spacing.xs),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: onOpenCamera,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(context.l10n.openCameraViewfinder),
-                  const SizedBox(width: Spacing.sm),
-                  const Icon(LucideIcons.arrowRight, size: 16),
-                ],
-              ),
-            ),
+          _GhostBlockButton(
+            label: context.l10n.openCameraViewfinder,
+            icon: LucideIcons.arrowRight,
+            onTap: onOpenCamera,
           ),
           const SizedBox(height: Spacing.lg),
           const _PairingHintCard(),
@@ -394,7 +457,8 @@ class _CornerBracketBoxState extends State<_CornerBracketBox>
 }
 
 /// Translucent circular icon button on a dark camera background — the
-/// mockup's `.iconbtn` treatment for full-screen scanner appbars.
+/// mockup's `.iconbtn` treatment for full-screen scanner appbars, built on
+/// [Pressable] rather than `Material`/`InkWell`.
 class _DarkIconButton extends StatelessWidget {
   const _DarkIconButton({required this.icon, required this.onTap});
 
@@ -403,20 +467,117 @@ class _DarkIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.08),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 34,
-          height: 34,
-          child: Icon(icon, color: Colors.white, size: 19),
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, color: Colors.white, size: 19),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`: full-width, `surface-2`
+/// background, 1px border, text then a trailing icon.
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            if (icon != null) ...[
+              const SizedBox(width: 7),
+              Icon(icon, size: 16, color: scheme.onSurface),
+            ],
+          ],
         ),
       ),
     );
   }
+}
+
+/// A dashed rounded-rect stroke — the mockup's QR-viewfinder placeholder
+/// (`border:1.5px dashed var(--border-strong)`), which `BoxDecoration` can't
+/// express natively.
+class _DashedRRectPainter extends CustomPainter {
+  _DashedRRectPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  static const _dashWidth = 6.0;
+  static const _dashGap = 4.0;
+  static const _strokeWidth = 1.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        _strokeWidth / 2,
+        _strokeWidth / 2,
+        size.width - _strokeWidth,
+        size.height - _strokeWidth,
+      ),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _strokeWidth;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + _dashWidth;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
+        distance = next + _dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRRectPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 /// Live full-screen QR scanner for the PC-pairing flow — pushed from
@@ -629,18 +790,9 @@ class _PairingCameraScanScreenState
                     Spacing.lg,
                     Spacing.xl,
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.24),
-                        ),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(_switchToCode),
-                      child: Text(context.l10n.enterCodeManuallyButton),
-                    ),
+                  child: _GhostBlockButton(
+                    label: context.l10n.enterCodeManuallyButton,
+                    onTap: () => Navigator.of(context).pop(_switchToCode),
                   ),
                 ),
               ],
@@ -674,31 +826,31 @@ class _InlineErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.errorContainer,
-      borderRadius: Radii.cardR,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm + Spacing.xs,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              LucideIcons.circleAlert,
-              size: 20,
-              color: scheme.onErrorContainer,
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm + Spacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: Radii.cardR,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            LucideIcons.circleAlert,
+            size: 20,
+            color: scheme.onErrorContainer,
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: scheme.onErrorContainer),
             ),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: scheme.onErrorContainer),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

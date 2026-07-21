@@ -10,6 +10,7 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/pressable.dart';
 import '../transfers/transfer_state.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -223,7 +224,8 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
 }
 
 /// Translucent circular icon button on a dark camera background — the
-/// mockup's `.iconbtn` treatment for full-screen scanner appbars.
+/// mockup's `.iconbtn` treatment for full-screen scanner appbars, built on
+/// [Pressable] rather than `Material`/`InkWell`.
 class _DarkIconButton extends StatelessWidget {
   const _DarkIconButton({required this.icon, required this.onTap});
 
@@ -232,17 +234,17 @@ class _DarkIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.08),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 34,
-          height: 34,
-          child: Icon(icon, color: Colors.white, size: 19),
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          shape: BoxShape.circle,
         ),
+        alignment: Alignment.center,
+        child: Icon(icon, color: Colors.white, size: 19),
       ),
     );
   }

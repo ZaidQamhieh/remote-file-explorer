@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/cache_manager.dart';
+import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
-import 'widgets/settings_hero.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Indirection around `LocalAuthentication().isDeviceSupported()` so widget
 /// tests can stub device-auth support without a real platform channel —
@@ -34,7 +34,7 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(title: const Text('Storage & Security')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           Spacing.md,
@@ -43,21 +43,16 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
           Spacing.xl,
         ),
         children: [
-          const SettingsHero(
-            icon: LucideIcons.shieldCheck,
-            title: 'Storage & Security',
-            subtitle: 'Cache usage & App Lock',
-            tint: Brand.seed,
-          ),
-          const SizedBox(height: Spacing.md),
-          const _CacheSection(),
-          const SizedBox(height: Spacing.md),
           SettingsSection(
-            title: 'Security',
+            title: 'App lock',
+            padded: false,
             children: [
               SettingsTile.toggle(
                 icon: LucideIcons.lock,
                 badgeColor: Brand.seed,
+                // Kept the real (more accurate) title/subtitle — the app
+                // supports PIN/pattern device-auth too, not just biometric,
+                // unlike the mockup's narrower "Require biometric unlock".
                 title: 'App Lock',
                 subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,
@@ -82,10 +77,140 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: Spacing.md),
+          const _CacheSection(),
+          const SizedBox(height: Spacing.md),
+          const _TrustedCertificatesSection(),
         ],
       ),
     );
   }
+}
+
+/// Lists paired hosts' pinned TLS fingerprints (TOFU — see `agent_client.dart`)
+/// with a "Forget" action, matching the mockup's `settings-security`
+/// "Trusted certificates" card.
+///
+/// "Forget" reuses the exact same local-only `HostStore.removeHost` +
+/// `hostStoreProvider` invalidation [HostCard]'s existing "Forget this
+/// computer" flow already uses (`widgets/host_card.dart`) — no new store
+/// method added. Note this un-pairs the host entirely (same as elsewhere in
+/// the app), not just its cert the way the mockup's narrower "forget the
+/// cert, keep the host paired" wording implies — there's no such narrower
+/// action anywhere in `HostStore`, so this is the closest real behavior
+/// rather than a fabricated partial action.
+class _TrustedCertificatesSection extends ConsumerWidget {
+  const _TrustedCertificatesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hostsAsync = ref.watch(hostStoreProvider);
+    return SettingsSection(
+      title: 'Trusted certificates',
+      padded: false,
+      children: [
+        hostsAsync.when(
+          loading:
+              () => const Padding(
+                padding: EdgeInsets.all(Spacing.md),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (store) {
+            final hosts =
+                store
+                    .listHosts()
+                    .where((h) => h.certFingerprint != null)
+                    .toList();
+            if (hosts.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.all(Spacing.md),
+                child: Text(
+                  'No pinned certificates yet',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: [
+                for (var i = 0; i < hosts.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  ListTile(
+                    title: Text(hosts[i].label),
+                    subtitle: Text(
+                      _formatFingerprint(hosts[i].certFingerprint!),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    ),
+                    trailing: TextButton(
+                      onPressed:
+                          () => _forget(
+                            context,
+                            ref,
+                            hosts[i].id,
+                            hosts[i].label,
+                          ),
+                      child: Text(
+                        context.l10n.forgetButton,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _forget(
+    BuildContext context,
+    WidgetRef ref,
+    String hostId,
+    String label,
+  ) async {
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => ShadDialog(
+            title: Text(ctx.l10n.forgetComputerTitle),
+            description: Text(ctx.l10n.forgetComputerConfirm(label)),
+            actions: [
+              ShadButton.ghost(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              ShadButton.destructive(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(ctx.l10n.forgetButton),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    final store = await ref.read(hostStoreProvider.future);
+    await store.removeHost(hostId);
+    ref.invalidate(hostStoreProvider);
+  }
+}
+
+/// `abcd1234ef…` → `ab:cd:12:34:ef…`, truncated to 5 byte-pairs — purely a
+/// display transform (no change to the stored fingerprint), matching the
+/// mockup's masked `7f:3a:9c:1e:2d…` style.
+String _formatFingerprint(String raw) {
+  final hex = raw.replaceAll(':', '').replaceAll(' ', '');
+  final pairs = <String>[];
+  for (var i = 0; i + 2 <= hex.length && pairs.length < 5; i += 2) {
+    pairs.add(hex.substring(i, i + 2));
+  }
+  return '${pairs.join(':')}…';
 }
 
 class _CacheSection extends ConsumerWidget {

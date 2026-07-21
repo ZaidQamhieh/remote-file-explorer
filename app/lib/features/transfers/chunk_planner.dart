@@ -6,6 +6,11 @@ library;
 
 const _defaultChunkSize = 4 * 1024 * 1024; // 4 MB
 
+/// Human-readable label for [_defaultChunkSize] (e.g. "4 MB") — display-only,
+/// for settings screens that show the real (fixed, not user-configurable)
+/// chunk size rather than fabricating a control for it.
+String describeDefaultChunkSize() => '${_defaultChunkSize ~/ (1024 * 1024)} MB';
+
 /// Returns the chunk plan for a file of [fileSize] bytes.
 ///
 /// Each chunk has exactly [chunkSize] bytes, except the last which may be

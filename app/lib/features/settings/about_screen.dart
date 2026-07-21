@@ -134,6 +134,15 @@ class AboutScreen extends StatelessWidget {
     ]),
   ];
 
+  /// Matches the mockup's `about` screen: centered gradient app mark, name,
+  /// mono version+build, a plain list of two nav rows ("What's new" /
+  /// "Privacy policy"), and the footer tagline — instead of the old inline
+  /// changelog card. The changelog itself is real (unchanged) data, just
+  /// moved behind the "What's new" tap target to match the mockup's shape;
+  /// "Privacy policy" pushes a short, factual note derived from this app's
+  /// actual architecture (no cloud, no account, no analytics/telemetry
+  /// anywhere in the codebase — see `CLAUDE.md`), not placeholder/fabricated
+  /// legal text.
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -148,18 +157,23 @@ class AboutScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(Spacing.md),
             children: [
+              const SizedBox(height: Spacing.md),
               Center(
                 child: Container(
-                  width: 72,
-                  height: 72,
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Brand.seed, Brand.accent],
+                    ),
                     borderRadius: Radii.lgR,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     LucideIcons.folderOpen,
-                    size: 36,
-                    color: scheme.onPrimaryContainer,
+                    size: 30,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -175,69 +189,150 @@ class AboutScreen extends StatelessWidget {
               const SizedBox(height: Spacing.xs),
               Center(
                 child: Text(
-                  info != null ? 'v${info.version}+${info.buildNumber}' : '...',
-                  style: textTheme.bodyMedium?.copyWith(
+                  info != null
+                      ? 'v${info.version} · build ${info.buildNumber}'
+                      : '…',
+                  style: textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
                   ),
                 ),
               ),
-              const SizedBox(height: Spacing.sm),
+              const SizedBox(height: Spacing.xl),
+              GroupedCard(
+                padded: false,
+                children: [
+                  ListTile(
+                    title: const Text("What's new"),
+                    trailing: const Icon(LucideIcons.chevronRight),
+                    onTap:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => _ChangelogScreen(_changelog),
+                          ),
+                        ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('Privacy policy'),
+                    trailing: const Icon(LucideIcons.chevronRight),
+                    onTap:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const _PrivacyPolicyScreen(),
+                          ),
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.xl),
               Center(
                 child: Text(
-                  'Browse, transfer, and manage files on your PCs from your phone.',
-                  style: textTheme.bodyMedium?.copyWith(
+                  'No cloud. No account. Your PCs, your network.',
+                  style: textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
-              const SizedBox(height: Spacing.xl),
-              const SectionLabel('Changelog'),
-              GroupedCard(
-                padded: false,
-                children: [
-                  for (int i = 0; i < _changelog.length; i++) ...[
-                    if (i > 0)
-                      Divider(
-                        height: 1,
-                        indent: Spacing.md,
-                        endIndent: Spacing.md,
-                        color: scheme.outlineVariant,
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(Spacing.md),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _changelog[i].version,
-                            style: textTheme.labelLarge?.copyWith(
-                              color: scheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: Spacing.xs),
-                          for (final item in _changelog[i].items)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: Spacing.xs,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('  •  ', style: textTheme.bodyMedium),
-                                  Expanded(child: Text(item)),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ChangelogScreen extends StatelessWidget {
+  const _ChangelogScreen(this.entries);
+  final List<_ChangelogEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text("What's new")),
+      body: ListView(
+        padding: const EdgeInsets.all(Spacing.md),
+        children: [
+          GroupedCard(
+            padded: false,
+            children: [
+              for (int i = 0; i < entries.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: Spacing.md,
+                    endIndent: Spacing.md,
+                    color: scheme.outlineVariant,
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(Spacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entries[i].version,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: scheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: Spacing.xs),
+                      for (final item in entries[i].items)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Spacing.xs),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('  •  ', style: textTheme.bodyMedium),
+                              Expanded(child: Text(item)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyPolicyScreen extends StatelessWidget {
+  const _PrivacyPolicyScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Privacy policy')),
+      body: ListView(
+        padding: const EdgeInsets.all(Spacing.md),
+        children: [
+          Text(
+            'Remote File Explorer has no cloud server, no cloud database, '
+            'and no user account. It connects directly from your phone to '
+            'your own paired PCs over your LAN or your Tailscale network — '
+            'the same code path either way.\n\n'
+            'The app collects no analytics and no telemetry: there is no '
+            'crash reporter, no usage tracking, and no third-party SDK that '
+            'phones anything home. Files you browse or transfer never pass '
+            'through any server operated by the developer or anyone else.\n\n'
+            'Diagnostics export (Support → Export diagnostics) is the one '
+            'place data leaves the app boundary at all, and only when you '
+            'explicitly trigger it — it copies a plain-text summary to your '
+            'clipboard for you to share yourself; nothing is sent '
+            'automatically.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface,
+              height: 1.5,
+            ),
+          ),
+        ],
       ),
     );
   }

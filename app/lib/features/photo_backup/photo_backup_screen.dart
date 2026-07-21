@@ -7,7 +7,9 @@ import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
+import '../../core/ui/grouped_card.dart';
 import '../../core/ui/sheet_chrome.dart';
+import '../settings/widgets/settings_section.dart';
 import 'photo_backup_controller.dart';
 import 'photo_backup_prefs.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -101,109 +103,150 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
           _loading
               ? const Center(child: CircularProgressIndicator())
               : ListView(
-                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md,
+                  vertical: Spacing.sm,
+                ),
                 children: _buildItems(context),
               ),
     );
   }
 
+  /// Card-grouped sections matching the mockup's `photo-backup` screen shape
+  /// (top standalone toggle card, then "Destination"/"Status" section
+  /// cards). Two real differences from the mockup, kept rather than
+  /// fabricated:
+  /// - The mockup shows a literal remote path under Destination
+  ///   ("/Photos/Mobile Backup/Zaid's Phone"); the real client never learns
+  ///   the remote path — it's decided server-side (see [PhotoBackupPrefs]'s
+  ///   doc comment) — so this shows the host label + device nickname
+  ///   instead of a fabricated path.
+  /// - The mockup has a single "Include videos" toggle; the real app has a
+  ///   richer per-album picker (`_pickAlbums`) instead of a video/photo
+  ///   split, which is kept since it's strictly more capable.
+  /// - The mockup's Status card shows an "X of Y (97%)" progress bar; the
+  ///   real store only tracks the backed-up count, not a total pending
+  ///   count, so no true percentage is available without new tracking —
+  ///   shown as a plain count instead of a fabricated bar.
   List<Widget> _buildItems(BuildContext context) {
     // Master switch off => every other control is disabled (nothing backs up).
     final on = _prefs.enabled;
     return [
-      ListTile(
-        title: Text(context.l10n.enablePhotoBackup),
-        subtitle: Text(context.l10n.photoBackupSubtitle),
-        trailing: ShadSwitch(
-          value: _prefs.enabled,
-          onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
-        ),
-        onTap: () => _update(_prefs.copyWith(enabled: !_prefs.enabled)),
-      ),
-      const Divider(),
-      ListTile(
-        enabled: on,
-        leading: const Icon(LucideIcons.computer),
-        title: Text(context.l10n.backUpTo),
-        subtitle: Text(_hostLabel(context)),
-        trailing: const Icon(LucideIcons.chevronRight),
-        onTap: (!on || _hosts.isEmpty) ? null : _pickHost,
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.lg,
-          0,
-          Spacing.lg,
-          Spacing.sm,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.deviceNicknameLabel,
-              style: Theme.of(context).textTheme.labelMedium,
+      GroupedCard(
+        padded: false,
+        children: [
+          ListTile(
+            title: Text(context.l10n.enablePhotoBackup),
+            subtitle: Text(context.l10n.photoBackupSubtitle),
+            trailing: ShadSwitch(
+              value: _prefs.enabled,
+              onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
             ),
-            const SizedBox(height: Spacing.xs),
-            ShadInput(
-              controller: _nicknameCtrl,
+            onTap: () => _update(_prefs.copyWith(enabled: !_prefs.enabled)),
+          ),
+        ],
+      ),
+      const SizedBox(height: Spacing.md),
+      SettingsSection(
+        title: 'Destination',
+        padded: false,
+        children: [
+          ListTile(
+            enabled: on,
+            leading: const Icon(LucideIcons.computer),
+            title: Text(context.l10n.backUpTo),
+            subtitle: Text(_hostLabel(context)),
+            trailing: const Icon(LucideIcons.chevronRight),
+            onTap: (!on || _hosts.isEmpty) ? null : _pickHost,
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.lg,
+              Spacing.sm,
+              Spacing.lg,
+              Spacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.deviceNicknameLabel,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+                const SizedBox(height: Spacing.xs),
+                ShadInput(
+                  controller: _nicknameCtrl,
+                  enabled: on,
+                  placeholder: Text(context.l10n.deviceNicknameHint),
+                  onChanged:
+                      (v) => _update(_prefs.copyWith(deviceName: v.trim())),
+                ),
+                const SizedBox(height: Spacing.xs),
+                Text(
+                  context.l10n.deviceNicknameHelper,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            enabled: on,
+            leading: const Icon(LucideIcons.images),
+            title: Text(context.l10n.albumsToBackUp),
+            subtitle: Text(_albumsLabel(context)),
+            trailing: const Icon(LucideIcons.chevronRight),
+            onTap: on ? _pickAlbums : null,
+          ),
+          const Divider(height: 1),
+          ListTile(
+            enabled: on,
+            title: Text(context.l10n.onlyOnWifi),
+            trailing: ShadSwitch(
+              value: _prefs.wifiOnly,
               enabled: on,
-              placeholder: Text(context.l10n.deviceNicknameHint),
-              onChanged: (v) => _update(_prefs.copyWith(deviceName: v.trim())),
+              onChanged:
+                  on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
             ),
-            const SizedBox(height: Spacing.xs),
-            Text(
-              context.l10n.deviceNicknameHelper,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            onTap:
+                on
+                    ? () => _update(_prefs.copyWith(wifiOnly: !_prefs.wifiOnly))
+                    : null,
+          ),
+          ListTile(
+            enabled: on,
+            title: Text(context.l10n.onlyWhileCharging),
+            trailing: ShadSwitch(
+              value: _prefs.chargingOnly,
+              enabled: on,
+              onChanged:
+                  on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
             ),
-          ],
-        ),
+            onTap:
+                on
+                    ? () => _update(
+                      _prefs.copyWith(chargingOnly: !_prefs.chargingOnly),
+                    )
+                    : null,
+          ),
+        ],
       ),
-      ListTile(
-        enabled: on,
-        leading: const Icon(LucideIcons.images),
-        title: Text(context.l10n.albumsToBackUp),
-        subtitle: Text(_albumsLabel(context)),
-        trailing: const Icon(LucideIcons.chevronRight),
-        onTap: on ? _pickAlbums : null,
-      ),
-      const Divider(),
-      ListTile(
-        enabled: on,
-        title: Text(context.l10n.onlyOnWifi),
-        trailing: ShadSwitch(
-          value: _prefs.wifiOnly,
-          enabled: on,
-          onChanged: on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
-        ),
-        onTap:
-            on
-                ? () => _update(_prefs.copyWith(wifiOnly: !_prefs.wifiOnly))
-                : null,
-      ),
-      ListTile(
-        enabled: on,
-        title: Text(context.l10n.onlyWhileCharging),
-        trailing: ShadSwitch(
-          value: _prefs.chargingOnly,
-          enabled: on,
-          onChanged:
-              on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
-        ),
-        onTap:
-            on
-                ? () =>
-                    _update(_prefs.copyWith(chargingOnly: !_prefs.chargingOnly))
-                : null,
-      ),
-      const Divider(),
-      ListTile(
-        enabled: on,
-        leading: const Icon(LucideIcons.cloudCheck),
-        title: Text(context.l10n.photosBackedUp(_doneCount)),
-        subtitle: Text(context.l10n.resetBackupHint),
-        onTap: (!on || _doneCount == 0) ? null : _resetRecord,
+      const SizedBox(height: Spacing.md),
+      SettingsSection(
+        title: 'Status',
+        padded: false,
+        children: [
+          ListTile(
+            enabled: on,
+            leading: const Icon(LucideIcons.cloudCheck),
+            title: Text(context.l10n.photosBackedUp(_doneCount)),
+            subtitle: Text(context.l10n.resetBackupHint),
+            onTap: (!on || _doneCount == 0) ? null : _resetRecord,
+          ),
+        ],
       ),
       Padding(
         padding: const EdgeInsets.all(Spacing.lg),

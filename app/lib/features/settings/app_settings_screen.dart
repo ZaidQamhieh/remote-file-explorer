@@ -1,187 +1,133 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/settings/app_settings.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/screen_header.dart';
 import 'about_support_settings_screen.dart';
 import 'appearance_settings_screen.dart';
+import 'file_visibility_screen.dart';
 import 'notifications_settings_screen.dart';
 import 'storage_security_settings_screen.dart';
 import 'transfers_backup_settings_screen.dart';
+import 'widgets/settings_section.dart';
+import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Global **App Settings** — categories grouped under section labels
-/// (Personalize / Data / Info) as flat rows, each with a gradient icon
-/// circle (Settings redesign v3). Each row pushes its own sub-screen; this
-/// file owns no settings state or controls itself.
-class AppSettingsScreen extends StatelessWidget {
+/// Global **Settings hub** — card-grouped sections (one rounded surface per
+/// section holding all its rows, dividers between rows) matching the
+/// mockup's `tab-settings` screen exactly: section labels "Preferences" /
+/// "Data" / "Support" (not the old "Personalize" / "Data" / "Info"), and a
+/// subtitle under Appearance reflecting the live theme mode + accent color.
+///
+/// Sync is deliberately NOT listed here even though the mockup shows it in
+/// this hub — `SyncScreen` requires a `hostId` and is genuinely per-host,
+/// already wired correctly from the per-host settings screen. Forcing it in
+/// here would be an architecture regression.
+class AppSettingsScreen extends ConsumerWidget {
   const AppSettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings =
+        ref.watch(settingsProvider).valueOrNull ?? const SettingsState();
+    final app = settings.app;
+    final appearanceSubtitle =
+        '${themeModeLabel(context, app.themeMode)} · '
+        '${accentLabel(app.seedColor)} accent';
+
     return Scaffold(
       appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('Settings')),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.md),
         children: [
-          const _SectionLabel('Personalize'),
-          _HubRow(
-            icon: LucideIcons.palette,
-            title: 'Appearance',
-            gradient: const [Color(0xFFC4B5FD), Color(0xFF7C3AED)],
-            onTap:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AppearanceSettingsScreen(),
-                  ),
-                ),
+          SettingsSection(
+            title: 'Preferences',
+            padded: false,
+            children: [
+              SettingsTile.nav(
+                icon: LucideIcons.palette,
+                badgeColor: Brand.accent,
+                title: 'Appearance',
+                subtitle: appearanceSubtitle,
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AppearanceSettingsScreen(),
+                      ),
+                    ),
+              ),
+              SettingsTile.nav(
+                icon: LucideIcons.bell,
+                badgeColor: Brand.amber,
+                title: 'Notifications',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const NotificationsSettingsScreen(),
+                      ),
+                    ),
+              ),
+            ],
           ),
-          _HubRow(
-            icon: LucideIcons.bell,
-            title: 'Notifications & Alerts',
-            gradient: const [Color(0xFFFDE68A), Color(0xFFD97706)],
-            onTap:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const NotificationsSettingsScreen(),
-                  ),
-                ),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Data',
+            padded: false,
+            children: [
+              SettingsTile.nav(
+                icon: LucideIcons.shieldCheck,
+                badgeColor: Brand.accent,
+                title: 'Storage & Security',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const StorageSecuritySettingsScreen(),
+                      ),
+                    ),
+              ),
+              SettingsTile.nav(
+                icon: LucideIcons.arrowUpDown,
+                badgeColor: Brand.online,
+                title: 'Transfers & Backup',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const TransfersBackupSettingsScreen(),
+                      ),
+                    ),
+              ),
+              SettingsTile.nav(
+                icon: LucideIcons.eye,
+                title: 'File Visibility',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const FileVisibilityScreen(),
+                      ),
+                    ),
+              ),
+            ],
           ),
-          const _SectionLabel('Data'),
-          _HubRow(
-            icon: LucideIcons.arrowUpDown,
-            title: 'Transfers & Backup',
-            gradient: const [Color(0xFF6EE7B7), Color(0xFF059669)],
-            onTap:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const TransfersBackupSettingsScreen(),
-                  ),
-                ),
-          ),
-          _HubRow(
-            icon: LucideIcons.shieldCheck,
-            title: 'Storage & Security',
-            gradient: const [Color(0xFF93C5FD), Color(0xFF2563EB)],
-            onTap:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const StorageSecuritySettingsScreen(),
-                  ),
-                ),
-          ),
-          const _SectionLabel('Info'),
-          _HubRow(
-            icon: LucideIcons.info,
-            title: 'About & Support',
-            gradient: const [Color(0xFFD4D4D8), Color(0xFF52525B)],
-            onTap:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AboutSupportSettingsScreen(),
-                  ),
-                ),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Support',
+            padded: false,
+            children: [
+              SettingsTile.nav(
+                icon: LucideIcons.info,
+                title: 'About & Support',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AboutSupportSettingsScreen(),
+                      ),
+                    ),
+              ),
+            ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Spacing.xs,
-        Spacing.md3,
-        Spacing.xs,
-        Spacing.md2,
-      ),
-      child: Text(
-        text.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
-/// One row in the hub: a gradient icon circle (same recipe as
-/// [GradientActionCircle], the host action sheet's shared component) and a
-/// title, in a flat tappable card.
-class _HubRow extends StatelessWidget {
-  const _HubRow({
-    required this.icon,
-    required this.title,
-    required this.gradient,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Color> gradient;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Spacing.md2),
-      child: Material(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: Radii.cardR,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: Radii.cardR,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md3,
-              vertical: Spacing.md,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: gradient,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: gradient.last.withValues(alpha: 0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, size: 20, color: Colors.white),
-                ),
-                const SizedBox(width: Spacing.md3),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

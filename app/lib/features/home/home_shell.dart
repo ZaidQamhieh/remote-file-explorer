@@ -187,7 +187,12 @@ class _TransfersTab extends ConsumerWidget {
           ),
         ],
       ),
-      body: const TransferGroupedList(showTitle: false),
+      body: const Column(
+        children: [
+          TransferStatGrid(),
+          Expanded(child: TransferGroupedList(showTitle: false)),
+        ],
+      ),
     );
   }
 }

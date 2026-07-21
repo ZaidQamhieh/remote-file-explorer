@@ -18,108 +18,64 @@ import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-const _slate = Color(0xFFA1A1AA);
-
 /// Updates, diagnostics export, and About/Changelog — the "rarely touched,
 /// look-up-when-needed" settings category (Settings Overhaul, group 5 of 5).
+///
+/// Matches the mockup's `settings-about-support` screen: plain appbar, no
+/// credits hero, one card of rows. The mockup also mocks "Help center" and
+/// "Send feedback" rows — those are `toast(...)` stubs in the mockup itself
+/// (no real destination even there), and there's no support email/URL
+/// anywhere in this app, so they're omitted rather than wiring dead taps.
+/// "Open-source licenses" is wired to Flutter's real `showLicensePage` (the
+/// licenses it already collects from pubspec dependencies) instead — zero
+/// fabrication, just using a stdlib feature that was previously unused.
 class AboutSupportSettingsScreen extends StatelessWidget {
   const AboutSupportSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
-      // A short, rarely-touched page — top-pinned content on a tall phone
-      // would leave a dead black void below it (same fix as Notifications).
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _CreditsHero(),
-                const SizedBox(height: Spacing.md),
-                SettingsSection(
-                  title: context.l10n.updatesSection,
-                  padded: false,
-                  children: const [UpdateTile()],
-                ),
-                const SizedBox(height: Spacing.md),
-                const _DiagnosticsSection(),
-                const SizedBox(height: Spacing.md),
-                SettingsSection(
-                  title: 'ABOUT',
-                  children: [
-                    SettingsTile.nav(
-                      icon: LucideIcons.info,
-                      title: 'About & Changelog',
-                      subtitle: 'Version info and what\'s new',
-                      onTap:
-                          () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AboutScreen(),
-                            ),
-                          ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+      appBar: AppBar(title: const Text('About & Support')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.md,
+          Spacing.sm,
+          Spacing.md,
+          Spacing.xl,
         ),
-      ),
-    );
-  }
-}
-
-/// Centered credits-style header — app icon, name, and version — replacing
-/// the left-aligned [SettingsHero] band on this one screen, since About &
-/// Support reads more like a splash/credits screen than a settings category.
-class _CreditsHero extends StatelessWidget {
-  const _CreditsHero();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.md),
-      child: Column(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: _slate.withValues(alpha: 0.16),
-              borderRadius: Radii.cardR,
-            ),
-            alignment: Alignment.center,
-            child: Icon(LucideIcons.info, size: 26, color: _slate),
+          SettingsSection(
+            title: context.l10n.updatesSection,
+            padded: false,
+            children: const [UpdateTile()],
           ),
-          const SizedBox(height: Spacing.sm),
-          Text(
-            'RFE',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 2),
-          FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snap) {
-              final info = snap.data;
-              return Text(
-                info != null ? 'v${info.version} (${info.buildNumber})' : '…',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-              );
-            },
+          const SizedBox(height: Spacing.md),
+          const _DiagnosticsSection(),
+          const SizedBox(height: Spacing.md),
+          SettingsSection(
+            title: 'Support',
+            padded: false,
+            children: [
+              SettingsTile.nav(
+                icon: LucideIcons.fileText,
+                title: 'Open-source licenses',
+                onTap:
+                    () => showLicensePage(
+                      context: context,
+                      applicationName: 'Remote File Explorer',
+                    ),
+              ),
+              SettingsTile.nav(
+                icon: LucideIcons.info,
+                title: 'About RFE',
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AboutScreen(),
+                      ),
+                    ),
+              ),
+            ],
           ),
         ],
       ),
@@ -133,7 +89,8 @@ class _DiagnosticsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SettingsSection(
-      title: 'DIAGNOSTICS',
+      title: 'Diagnostics',
+      padded: false,
       children: [
         SettingsTile.nav(
           icon: LucideIcons.share2,

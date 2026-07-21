@@ -5,7 +5,10 @@ import 'package:pdfx/pdfx.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
+import '../../core/models/host.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
+import 'preview_actions.dart';
 import 'preview_common.dart';
 
 /// Paginated PDF preview, fetched through the pinned + authenticated
@@ -15,11 +18,17 @@ class PdfPreviewScreen extends StatefulWidget {
     super.key,
     required this.entry,
     required this.client,
+    this.host,
     this.chromeless = false,
   });
 
   final Entry entry;
   final AgentClient client;
+
+  /// The host this entry lives on. Only used (optionally) to build the
+  /// standalone chrome's "..." meta-sheet action — null in the rare
+  /// no-siblings path where it isn't available (mostly tests).
+  final Host? host;
 
   /// When `true`, omit the app bar so a host ([PreviewPager]) can overlay one
   /// shared top bar across sibling pages.
@@ -71,6 +80,12 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     return PreviewScaffold(
       title: widget.entry.name,
       chromeless: widget.chromeless,
+      actions: previewChromeActions(
+        context: context,
+        entry: widget.entry,
+        client: widget.client,
+        host: widget.host,
+      ),
       body: FutureBuilder<PdfController>(
         future: _future,
         builder: (context, snapshot) {
@@ -88,19 +103,43 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             );
           }
           final controller = snapshot.data!;
-          return PdfView(
-            controller: controller,
-            scrollDirection: Axis.horizontal,
-            builders: PdfViewBuilders<DefaultBuilderOptions>(
-              options: const DefaultBuilderOptions(),
-              documentLoaderBuilder:
-                  (_) => const PreviewLoading(message: 'Rendering PDF…'),
-              pageLoaderBuilder: (_) => const PreviewLoading(),
-              errorBuilder:
-                  (_, error) => PreviewError(
-                    message: 'Could not render this PDF.\n$error',
+          return Column(
+            children: [
+              Expanded(
+                child: PdfView(
+                  controller: controller,
+                  scrollDirection: Axis.horizontal,
+                  builders: PdfViewBuilders<DefaultBuilderOptions>(
+                    options: const DefaultBuilderOptions(),
+                    documentLoaderBuilder:
+                        (_) => const PreviewLoading(message: 'Rendering PDF…'),
+                    pageLoaderBuilder: (_) => const PreviewLoading(),
+                    errorBuilder:
+                        (_, error) => PreviewError(
+                          message: 'Could not render this PDF.\n$error',
+                        ),
                   ),
-            ),
+                ),
+              ),
+              // "Page N of M" caption — matches the mockup's page indicator
+              // under the page thumbnail.
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                child: ValueListenableBuilder<int>(
+                  valueListenable: controller.pageListenable,
+                  builder: (context, page, _) {
+                    final total = controller.pagesCount;
+                    return Text(
+                      total != null ? 'Page $page of $total' : 'Page $page',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontFamily: 'JetBrains Mono',
+                        fontFamilyFallback: const ['monospace'],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

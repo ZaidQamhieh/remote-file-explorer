@@ -574,6 +574,48 @@ abstract class AppLocalizations {
   /// **'Searching everywhere'**
   String get searchingEverywhere;
 
+  /// No description provided for @resultsInHost.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 result} other{{count} results}} in {host}'**
+  String resultsInHost(int count, String host);
+
+  /// No description provided for @searchEveryHostButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Search every paired device instead'**
+  String get searchEveryHostButton;
+
+  /// No description provided for @fileTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'File type'**
+  String get fileTypeLabel;
+
+  /// No description provided for @modifiedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get modifiedLabel;
+
+  /// No description provided for @applyFiltersButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply filters'**
+  String get applyFiltersButton;
+
+  /// No description provided for @searchingNOnlineHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Searching 1 online host} other{Searching {count} online hosts}}'**
+  String searchingNOnlineHosts(int count);
+
+  /// No description provided for @hostOfflineSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} is offline — skipped'**
+  String hostOfflineSkipped(String host);
+
   /// No description provided for @searchTooltip.
   ///
   /// In en, this message translates to:
@@ -1551,6 +1593,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share link failed: {error}'**
   String shareLinkFailed(String error);
+
+  /// No description provided for @shareLinkOnSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with the link can view'**
+  String get shareLinkOnSubtitle;
+
+  /// No description provided for @noActiveLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'No active link'**
+  String get noActiveLinkLabel;
+
+  /// No description provided for @expiresOnDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String expiresOnDate(String date);
+
+  /// No description provided for @activeSharesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active shares ({count})'**
+  String activeSharesLabel(int count);
+
+  /// No description provided for @sendDirectlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Send directly'**
+  String get sendDirectlyLabel;
+
+  /// No description provided for @qrCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get qrCodeLabel;
+
+  /// No description provided for @moreLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get moreLabel;
+
+  /// No description provided for @saveSharedFileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save shared file'**
+  String get saveSharedFileTitle;
+
+  /// No description provided for @sharedFilesCountSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 file} other{{count} files}} selected'**
+  String sharedFilesCountSubtitle(int count);
+
+  /// No description provided for @saveToLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to'**
+  String get saveToLabel;
+
+  /// No description provided for @saveFileButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Save file'**
+  String get saveFileButton;
+
+  /// No description provided for @extractAllButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract all'**
+  String get extractAllButton;
 
   /// No description provided for @saveToDeviceTooltip.
   ///

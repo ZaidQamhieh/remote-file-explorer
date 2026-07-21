@@ -296,6 +296,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchingEverywhere => 'Searching everywhere';
 
   @override
+  String resultsInHost(int count, String host) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count results',
+      one: '1 result',
+    );
+    return '$_temp0 in $host';
+  }
+
+  @override
+  String get searchEveryHostButton => 'Search every paired device instead';
+
+  @override
+  String get fileTypeLabel => 'File type';
+
+  @override
+  String get modifiedLabel => 'Modified';
+
+  @override
+  String get applyFiltersButton => 'Apply filters';
+
+  @override
+  String searchingNOnlineHosts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Searching $count online hosts',
+      one: 'Searching 1 online host',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String hostOfflineSkipped(String host) {
+    return '$host is offline — skipped';
+  }
+
+  @override
   String get searchTooltip => 'Search';
 
   @override
@@ -939,6 +978,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String shareLinkFailed(String error) {
     return 'Share link failed: $error';
   }
+
+  @override
+  String get shareLinkOnSubtitle => 'Anyone with the link can view';
+
+  @override
+  String get noActiveLinkLabel => 'No active link';
+
+  @override
+  String expiresOnDate(String date) {
+    return 'Expires $date';
+  }
+
+  @override
+  String activeSharesLabel(int count) {
+    return 'Active shares ($count)';
+  }
+
+  @override
+  String get sendDirectlyLabel => 'Send directly';
+
+  @override
+  String get qrCodeLabel => 'QR code';
+
+  @override
+  String get moreLabel => 'More';
+
+  @override
+  String get saveSharedFileTitle => 'Save shared file';
+
+  @override
+  String sharedFilesCountSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+    );
+    return '$_temp0 selected';
+  }
+
+  @override
+  String get saveToLabel => 'Save to';
+
+  @override
+  String get saveFileButton => 'Save file';
+
+  @override
+  String get extractAllButton => 'Extract all';
 
   @override
   String get saveToDeviceTooltip => 'Save to device';

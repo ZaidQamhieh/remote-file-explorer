@@ -72,6 +72,12 @@
     "placeholders": { "hostLabel": {"type": "String"} }
   },
   "forgetButton": "Forget",
+  "removeBookmarkTitle": "Remove bookmark?",
+  "removeBookmarkConfirm": "Remove \"{name}\" from your bookmarks?",
+  "@removeBookmarkConfirm": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "removeButton": "Remove",
   "forgetComputerMenuItem": "Forget this computer",
   "storageMenuItem": "Storage",
   "transfersMenuItem": "Transfers",
@@ -221,6 +227,8 @@
   "comfortableLabel": "Comfortable",
   "compactLabel": "Compact",
   "sortByLabel": "Sort by",
+  "optionsLabel": "Options",
+  "foldersFirstLabel": "Folders first",
   "showHiddenItems": "Show hidden items",
   "nHiddenByVisibility": "{count} hidden by file visibility settings",
   "@nHiddenByVisibility": {
@@ -243,7 +251,12 @@
   },
 
   "favoritesTitle": "Favorites",
+  "favoritesSubtitle": "Pinned folders",
   "noFavoritesYet": "No favorites yet. Open a folder and tap the star to bookmark it.",
+  "addCurrentFolderLabel": "Add \"{name}\"",
+  "@addCurrentFolderLabel": {
+    "placeholders": { "name": {"type": "String"} }
+  },
 
   "cancelTooltip": "Cancel",
 

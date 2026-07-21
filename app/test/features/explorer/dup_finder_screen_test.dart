@@ -76,8 +76,13 @@ void main() {
       expect(find.text('1'), findsOneWidget);
       expect(find.text('groups'), findsOneWidget);
       expect(find.text('100 B'), findsWidgets);
-      // SectionLabel upper-cases its title.
-      expect(find.text('2 COPIES (100 B EACH)'), findsOneWidget);
+      // SectionLabel upper-cases its title; format is "filename · N copies ·
+      // hash-prefix…" matching the mockup's literal section label.
+      expect(find.text('A.TXT · 2 COPIES · HASH…'), findsOneWidget);
+      // First (kept) copy is badged, not selectable; the mockup pre-selects
+      // every other copy in the group for deletion.
+      expect(find.text('Keep'), findsOneWidget);
+      expect(find.text('Delete 1 selected duplicates'), findsOneWidget);
     },
   );
 

@@ -6,6 +6,7 @@ import 'package:remote_file_explorer/core/api/providers.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
+import 'package:remote_file_explorer/core/ui/gradient_button.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/destination_picker_sheet.dart';
 
 import 'l10n_helpers.dart';
@@ -116,8 +117,8 @@ void main() {
 
     await pumpSheet(tester, originPath: '/root');
 
-    final confirm = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Move here'),
+    final confirm = tester.widget<GradientButton>(
+      find.widgetWithText(GradientButton, 'Move here'),
     );
     expect(confirm.onPressed, isNull);
   });
@@ -141,8 +142,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    final confirm = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Move here'),
+    final confirm = tester.widget<GradientButton>(
+      find.widgetWithText(GradientButton, 'Move here'),
     );
     expect(confirm.onPressed, isNotNull);
   });
@@ -196,7 +197,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Move here'));
+    await tester.tap(find.widgetWithText(GradientButton, 'Move here'));
     await tester.pumpAndSettle();
 
     expect(result, '/root/Documents');

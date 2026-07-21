@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/storage/favorites.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/pressable.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single row of [favorites], one tonal card per favorite (folder icon +
@@ -44,39 +45,38 @@ class FavoritesPinRow extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: Spacing.sm),
         itemBuilder: (context, i) {
           final fav = favorites[i];
-          return Material(
-            color: scheme.secondaryContainer,
-            borderRadius: Radii.cardR,
-            child: InkWell(
-              borderRadius: Radii.cardR,
-              onTap: () => onOpen(fav),
-              onLongPress: () => onRemove(fav),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md,
-                  vertical: Spacing.sm,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      LucideIcons.folder,
-                      size: 18,
-                      color: scheme.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: Spacing.xs),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      child: Text(
-                        fav.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: scheme.onSecondaryContainer,
-                        ),
+          return Pressable(
+            onTap: () => onOpen(fav),
+            onLongPress: () => onRemove(fav),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: scheme.secondaryContainer,
+                borderRadius: Radii.cardR,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.folder,
+                    size: 18,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: Spacing.xs),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      fav.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: scheme.onSecondaryContainer,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );

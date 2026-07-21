@@ -11,6 +11,7 @@ import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart' show SectionLabel;
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 import '../explorer/explorer_state.dart' show buildPathStack;
@@ -207,7 +208,7 @@ class _RecentRow extends StatelessWidget {
         modified != null
             ? '$hostLabel  ·  modified ${formatRelative(modified.toLocal())}'
             : hostLabel;
-    return InkWell(
+    return Pressable(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -231,11 +232,19 @@ class _RecentRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.name, overflow: TextOverflow.ellipsis),
+                  Text(
+                    entry.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   Text(
                     subtitle,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 11.5,
                       color: scheme.onSurfaceVariant,
                     ),
                   ),

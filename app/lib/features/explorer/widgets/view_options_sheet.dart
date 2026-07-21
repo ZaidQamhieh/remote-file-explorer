@@ -6,6 +6,8 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/view_prefs.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/ui/grouped_card.dart' show GroupedCard, SectionLabel;
+import '../../../core/ui/pressable.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../explorer_state.dart';
 
@@ -53,112 +55,91 @@ class ViewOptionsSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SheetHero(
-            badge: const Icon(LucideIcons.slidersHorizontal),
-            title: context.l10n.viewOptionsTitle,
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Spacing.md,
-              0,
-              Spacing.md,
-              Spacing.lg,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (state.hiddenCount > 0) ...[
-                  _ShowHiddenTile(state: state, notifier: notifier),
+          SheetHead(title: context.l10n.viewOptionsTitle),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.md,
+                0,
+                Spacing.md,
+                Spacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.l10n.layoutLabel,
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  _SegmentedControl<bool>(
+                    options: const [false, true],
+                    labels: [context.l10n.listLabel, context.l10n.gridLabel],
+                    value: state.gridView,
+                    onChanged: (v) {
+                      if (v != state.gridView) notifier.toggleView();
+                    },
+                  ),
                   const SizedBox(height: Spacing.lg),
+                  // No mockup equivalent (the view-options sheet only shows
+                  // Layout + Sort + Options) — kept as a real feature with the
+                  // same segmented look as Layout above it for visual
+                  // consistency, rather than the old raw SegmentedButton.
+                  Text(
+                    context.l10n.densityLabel,
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  _SegmentedControl<EntryDensity>(
+                    options: const [
+                      EntryDensity.comfortable,
+                      EntryDensity.compact,
+                    ],
+                    labels: [
+                      context.l10n.comfortableLabel,
+                      context.l10n.compactLabel,
+                    ],
+                    value: density,
+                    onChanged:
+                        (v) => ref
+                            .read(settingsProvider.notifier)
+                            .setAppDensity(v),
+                  ),
+                  const SizedBox(height: Spacing.lg),
+                  SectionLabel(context.l10n.sortByLabel),
+                  _SortList(state: state, notifier: notifier),
+                  const SizedBox(height: Spacing.lg),
+                  SectionLabel(context.l10n.optionsLabel),
+                  GroupedCard(
+                    padded: false,
+                    children: [
+                      _ToggleRow(
+                        title: context.l10n.foldersFirstLabel,
+                        // Directories are always partitioned before files in
+                        // [_sortEntries] — there is no persisted preference to
+                        // disable that, so this reflects real, always-on
+                        // behavior rather than a toggle with nothing behind it.
+                        value: true,
+                        onChanged: null,
+                        showDivider: true,
+                      ),
+                      _ToggleRow(
+                        title: context.l10n.showHiddenItems,
+                        subtitle:
+                            state.hiddenCount > 0
+                                ? context.l10n.nHiddenByVisibility(
+                                  state.hiddenCount,
+                                )
+                                : null,
+                        value: state.showHidden,
+                        onChanged: (_) => notifier.toggleShowHidden(),
+                        showDivider: false,
+                      ),
+                    ],
+                  ),
                 ],
-                Text(
-                  context.l10n.layoutLabel,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: Spacing.sm),
-                SegmentedButton<bool>(
-                  segments: [
-                    ButtonSegment(
-                      value: false,
-                      label: Text(context.l10n.listLabel),
-                      icon: const Icon(LucideIcons.list),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text(context.l10n.gridLabel),
-                      icon: const Icon(LucideIcons.layoutGrid),
-                    ),
-                  ],
-                  selected: {state.gridView},
-                  onSelectionChanged: (sel) {
-                    if (sel.first != state.gridView) notifier.toggleView();
-                  },
-                ),
-                const SizedBox(height: Spacing.lg),
-                Text(
-                  context.l10n.densityLabel,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: Spacing.sm),
-                SegmentedButton<EntryDensity>(
-                  segments: [
-                    ButtonSegment(
-                      value: EntryDensity.comfortable,
-                      label: Text(context.l10n.comfortableLabel),
-                      icon: const Icon(LucideIcons.rows3),
-                    ),
-                    ButtonSegment(
-                      value: EntryDensity.compact,
-                      label: Text(context.l10n.compactLabel),
-                      icon: const Icon(LucideIcons.rows4),
-                    ),
-                  ],
-                  selected: {density},
-                  onSelectionChanged:
-                      (sel) => ref
-                          .read(settingsProvider.notifier)
-                          .setAppDensity(sel.first),
-                ),
-                const SizedBox(height: Spacing.lg),
-                Text(
-                  context.l10n.sortByLabel,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: Spacing.sm),
-                Wrap(
-                  spacing: Spacing.sm,
-                  runSpacing: Spacing.sm,
-                  children:
-                      SortField.values.map((field) {
-                        final selected = state.sort.field == field;
-                        return ChoiceChip(
-                          label: Text(_sortFieldLabel(context, field)),
-                          selected: selected,
-                          onSelected: (_) {
-                            if (selected) {
-                              notifier.setSort(
-                                state.sort.copyWith(
-                                  ascending: !state.sort.ascending,
-                                ),
-                              );
-                            } else {
-                              notifier.setSort(SortOrder(field: field));
-                            }
-                          },
-                          avatar:
-                              selected
-                                  ? Icon(
-                                    state.sort.ascending
-                                        ? LucideIcons.arrowUp
-                                        : LucideIcons.arrowDown,
-                                    size: 18,
-                                  )
-                                  : null,
-                        );
-                      }).toList(),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -176,13 +157,85 @@ String _sortFieldLabel(BuildContext context, SortField field) =>
       SortField.type => context.l10n.sortFieldType,
     };
 
-/// "Show hidden items" eye toggle, with a badge showing how many entries in
-/// the current listing are filtered by file-visibility prefs
-/// (`core/storage/visibility_prefs.dart`). Mirrors
-/// [ExplorerState.showHidden] — same session-only override toggled by the
-/// listing's [HiddenItemsFooter].
-class _ShowHiddenTile extends StatelessWidget {
-  const _ShowHiddenTile({required this.state, required this.notifier});
+/// The mockup's `.segmented`: `surface-2` track, 3px padding, active option
+/// on `surface-3` + a subtle shadow. Generic over [T] so this one private
+/// widget covers both the Layout and Density rows in this sheet.
+class _SegmentedControl<T> extends StatelessWidget {
+  const _SegmentedControl({
+    required this.options,
+    required this.labels,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<T> options;
+  final List<String> labels;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: Radii.smR,
+      ),
+      child: Row(
+        children: [
+          for (final (i, option) in options.indexed) ...[
+            if (i > 0) const SizedBox(width: 2),
+            Expanded(
+              child: Pressable(
+                onTap: () => onChanged(option),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        option == value ? scheme.surfaceContainerHighest : null,
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow:
+                        option == value
+                            ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                offset: const Offset(0, 1),
+                                blurRadius: 2,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: Text(
+                    labels[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          option == value
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's Sort-by `.list` of `.row`s: a flat title per [SortField],
+/// with a direction arrow on the active field replacing the mockup's static
+/// checkmark svg (so the sheet keeps showing which way it's actually sorted).
+class _SortList extends StatelessWidget {
+  const _SortList({required this.state, required this.notifier});
 
   final ExplorerState state;
   final ExplorerNotifier notifier;
@@ -190,36 +243,155 @@ class _ShowHiddenTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Switch itself is the interactive target (matches SettingsTile.toggle) —
-    // no outer InkWell, which would double-fire the toggle on tap.
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+    final fields = SortField.values;
+    return Column(
+      children: [
+        for (final (i, field) in fields.indexed)
+          Pressable(
+            onTap: () {
+              if (state.sort.field == field) {
+                notifier.setSort(
+                  state.sort.copyWith(ascending: !state.sort.ascending),
+                );
+              } else {
+                notifier.setSort(SortOrder(field: field));
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+              decoration:
+                  i == fields.length - 1
+                      ? null
+                      : BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: scheme.outlineVariant),
+                        ),
+                      ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _sortFieldLabel(context, field),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (state.sort.field == field)
+                    Icon(
+                      state.sort.ascending
+                          ? LucideIcons.arrowUp
+                          : LucideIcons.arrowDown,
+                      size: 17,
+                      color: scheme.primary,
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A `.row-toggle` inside the Options `.card`: no leading icon (unlike
+/// [SettingsTile]), just a title and a trailing `.switch`.
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+    required this.showDivider,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final row = Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration:
+          showDivider
+              ? BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: scheme.outlineVariant),
+                ),
+              )
+              : null,
       child: Row(
         children: [
-          Badge(
-            label: Text('${state.hiddenCount}'),
-            child: const Icon(LucideIcons.eye),
-          ),
-          const SizedBox(width: Spacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.l10n.showHiddenItems),
                 Text(
-                  context.l10n.nHiddenByVisibility(state.hiddenCount),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          ShadSwitch(
-            value: state.showHidden,
-            onChanged: (_) => notifier.toggleShowHidden(),
-          ),
+          _MockupSwitch(value: value),
         ],
+      ),
+    );
+    return onChanged == null
+        ? row
+        : Pressable(onTap: () => onChanged!(!value), child: row);
+  }
+}
+
+/// The mockup's `.switch`: 42x25 pill track, 19x19 thumb — this file's own
+/// copy of `settings_tile.dart`'s private `_MockupSwitch` (zero-shared-
+/// widget-reuse doctrine: each file owns its own literal-CSS rebuilds).
+class _MockupSwitch extends StatelessWidget {
+  const _MockupSwitch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: MotionDuration.short,
+      width: 42,
+      height: 25,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: value ? scheme.primary : scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+        border: Border.all(
+          color: value ? scheme.primary : scheme.outlineVariant,
+        ),
+      ),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: 19,
+        height: 19,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: value ? Colors.white : scheme.onSurfaceVariant,
+        ),
       ),
     );
   }

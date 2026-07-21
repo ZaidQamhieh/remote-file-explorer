@@ -264,7 +264,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
       case OverflowAction.viewOptions:
         ViewOptionsSheet.show(context, notifier: _notifier);
       case OverflowAction.favorites:
-        _showFavorites(context);
+        _showFavorites(context, state);
       case OverflowAction.transfers:
         _showTransfers(context);
       case OverflowAction.trash:
@@ -383,7 +383,7 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
         PaletteAction(
           label: 'Favorites',
           icon: LucideIcons.bookmark,
-          onTap: () => _showFavorites(context),
+          onTap: () => _showFavorites(context, state),
         ),
         PaletteAction(
           label: 'Transfers',
@@ -469,13 +469,14 @@ class _ExplorerScreenState extends ConsumerState<ExplorerScreen> {
     }
   }
 
-  void _showFavorites(BuildContext context) {
+  void _showFavorites(BuildContext context, ExplorerState state) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder:
           (_) => FavoritesSheet(
             host: widget.host,
+            currentPath: state.currentPath,
             onOpen: (path) {
               Navigator.pop(context);
               _notifier.jumpTo(path);

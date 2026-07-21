@@ -147,24 +147,25 @@ void main() {
 
     // Regression (BUGS_REPORTED.md): the sheet must reflect the live explorer
     // state, not a snapshot captured when it opened. Before the fix the
-    // SegmentedButton kept its open-time selection, so tapping Grid changed the
-    // listing but the selected segment never moved.
+    // segmented control kept its open-time selection, so tapping Grid changed
+    // the listing but the selected segment never moved.
     testWidgets('selected Layout segment updates after tapping Grid', (
       tester,
     ) async {
-      await pumpSheet(tester);
-
-      SegmentedButton<bool> layout() => tester.widget<SegmentedButton<bool>>(
-        find.byType(SegmentedButton<bool>),
+      final (container, _) = await pumpSheet(tester);
+      const arg = (hostId: 'h1', rootPath: '/');
+      expect(
+        container.read(explorerProvider(arg)).gridView,
+        isFalse,
+        reason: 'starts on List',
       );
-      expect(layout().selected, {false}, reason: 'starts on List');
 
       await tester.tap(find.text('Grid'));
       await tester.pumpAndSettle();
 
       expect(
-        layout().selected,
-        {true},
+        container.read(explorerProvider(arg)).gridView,
+        isTrue,
         reason: 'selection must follow the live state, not the snapshot',
       );
     });
@@ -189,54 +190,49 @@ void main() {
     testWidgets('selecting a new field sorts ascending by that field', (
       tester,
     ) async {
-      await pumpSheet(tester);
+      final (container, _) = await pumpSheet(tester);
 
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Size'));
+      await tester.tap(find.text('Size'));
       await tester.pumpAndSettle();
 
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(ViewOptionsSheet)),
-      );
-      final settings = container.read(settingsProvider).valueOrNull!;
-      expect(settings.app.sort.field, SortField.size);
-      expect(settings.app.sort.ascending, isTrue);
+      const arg = (hostId: 'h1', rootPath: '/');
+      final sort = container.read(explorerProvider(arg)).sort;
+      expect(sort.field, SortField.size);
+      expect(sort.ascending, isTrue);
     });
 
     testWidgets('re-selecting the active field flips direction', (
       tester,
     ) async {
-      await pumpSheet(tester);
+      final (container, _) = await pumpSheet(tester);
 
       // First tap selects Name (already the default field) -> still
-      // ascending=true initially, so tapping the already-active "Name" chip
+      // ascending=true initially, so tapping the already-active "Name" row
       // flips it to descending.
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Name'));
+      await tester.tap(find.text('Name'));
       await tester.pumpAndSettle();
 
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(ViewOptionsSheet)),
-      );
-      final settings = container.read(settingsProvider).valueOrNull!;
-      expect(settings.app.sort.field, SortField.name);
-      expect(settings.app.sort.ascending, isFalse);
+      const arg = (hostId: 'h1', rootPath: '/');
+      final sort = container.read(explorerProvider(arg)).sort;
+      expect(sort.field, SortField.name);
+      expect(sort.ascending, isFalse);
     });
 
-    testWidgets('shows an arrow icon on the active sort chip', (tester) async {
+    testWidgets('shows a direction arrow on the active sort row', (
+      tester,
+    ) async {
       await pumpSheet(tester);
 
-      // Name is the default active field -> its chip shows a direction
-      // arrow as its avatar.
-      final chip = tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Name'),
-      );
-      expect(chip.selected, isTrue);
-      expect(chip.avatar, isNotNull);
+      // Name is the default active field, ascending -> shows an up arrow;
+      // no other row shows a direction icon.
+      expect(find.byIcon(LucideIcons.arrowUp), findsOneWidget);
+      expect(find.byIcon(LucideIcons.arrowDown), findsNothing);
     });
   });
 
-  group('Show hidden items tile', () {
-    testWidgets('shows hidden count and toggles showHidden when entries '
-        'include hidden items', (tester) async {
+  group('Show hidden files toggle', () {
+    testWidgets('shows hidden count as a subtitle and toggles showHidden '
+        'when entries include hidden items', (tester) async {
       // Default VisibilityPrefs hides dotfiles, so the ".env" entry below
       // makes ExplorerState.hiddenCount == 1.
       final (container, _) = await pumpSheet(
@@ -249,21 +245,18 @@ void main() {
 
       const arg = (hostId: 'h1', rootPath: '/');
       expect(container.read(explorerProvider(arg)).hiddenCount, 1);
-
-      // The tile shows the hidden count via its Badge.
-      expect(find.byType(ShadSwitch), findsOneWidget);
-      expect(find.text('1'), findsOneWidget);
       expect(find.text('1 hidden by file visibility settings'), findsOneWidget);
-
       expect(container.read(explorerProvider(arg)).showHidden, isFalse);
 
-      await tester.tap(find.byType(ShadSwitch));
+      await tester.tap(find.text('Show hidden items'));
       await tester.pumpAndSettle();
 
       expect(container.read(explorerProvider(arg)).showHidden, isTrue);
     });
 
-    testWidgets('is absent when there are no hidden entries', (tester) async {
+    testWidgets('has no subtitle when there are no hidden entries', (
+      tester,
+    ) async {
       final (container, _) = await pumpSheet(
         tester,
         entries: const [
@@ -273,9 +266,13 @@ void main() {
 
       const arg = (hostId: 'h1', rootPath: '/');
       expect(container.read(explorerProvider(arg)).hiddenCount, 0);
-
-      expect(find.byType(ShadSwitch), findsNothing);
-      expect(find.byType(Badge), findsNothing);
+      expect(
+        find.textContaining('hidden by file visibility settings'),
+        findsNothing,
+      );
+      // The toggle itself is always present (mockup's Options card shows it
+      // unconditionally), unlike the old count-gated tile.
+      expect(find.text('Show hidden items'), findsOneWidget);
     });
   });
 }

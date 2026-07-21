@@ -12,6 +12,7 @@ import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/theme/tokens.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -621,15 +622,16 @@ class _ExtensionRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final color = colorFor(categoryFor(ext));
 
-    return Material(
-      color:
-          selected
-              ? scheme.primaryContainer.withValues(alpha: 0.3)
-              : Colors.transparent,
-      borderRadius: Radii.smR,
-      child: InkWell(
-        borderRadius: Radii.smR,
-        onTap: onTap,
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? scheme.primaryContainer.withValues(alpha: 0.3)
+                  : Colors.transparent,
+          borderRadius: Radii.smR,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Spacing.sm,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/bookmark_store.dart';
 import '../../core/storage/host_store.dart';
@@ -8,9 +10,9 @@ import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/ui/grouped_card.dart' show SectionLabel;
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import '../home/home_state.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Full-screen list of all bookmarks, grouped by host.
 ///
@@ -123,8 +125,11 @@ class _BookmarkRow extends StatelessWidget {
     final name = bookmark.remotePath
         .split('/')
         .lastWhere((s) => s.isNotEmpty, orElse: () => bookmark.remotePath);
-    return InkWell(
+    // The mockup's bookmarks row has no visible delete affordance — removal
+    // is long-press, same pattern as host_card.dart's "forget this device".
+    return Pressable(
       onTap: onOpen,
+      onLongPress: () => _confirmRemove(context, name, onRemove),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: Spacing.md,
@@ -151,11 +156,19 @@ class _BookmarkRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, overflow: TextOverflow.ellipsis),
+                  Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   Text(
                     bookmark.remotePath,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 11.5,
                       color: scheme.onSurfaceVariant,
                       fontFamily: 'JetBrains Mono',
                     ),
@@ -164,22 +177,51 @@ class _BookmarkRow extends StatelessWidget {
               ),
             ),
             if (bookmark.tag != null) ...[
-              Chip(
-                label: Text(bookmark.tag!),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: Radii.stadiumR,
+                ),
+                child: Text(
+                  bookmark.tag!,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-              const SizedBox(width: Spacing.xs),
             ],
-            IconButton(
-              icon: const Icon(LucideIcons.trash2),
-              tooltip: 'Remove bookmark',
-              onPressed: onRemove,
-            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmRemove(
+    BuildContext context,
+    String name,
+    VoidCallback onRemove,
+  ) async {
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => ShadDialog(
+            title: Text(ctx.l10n.removeBookmarkTitle),
+            description: Text(ctx.l10n.removeBookmarkConfirm(name)),
+            actions: [
+              ShadButton.ghost(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              ShadButton.destructive(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(ctx.l10n.removeButton),
+              ),
+            ],
+          ),
+    );
+    if (confirmed == true) onRemove();
   }
 }

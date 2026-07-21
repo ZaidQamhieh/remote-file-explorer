@@ -334,6 +334,24 @@ abstract class AppLocalizations {
   /// **'Forget'**
   String get forgetButton;
 
+  /// No description provided for @removeBookmarkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bookmark?'**
+  String get removeBookmarkTitle;
+
+  /// No description provided for @removeBookmarkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove \"{name}\" from your bookmarks?'**
+  String removeBookmarkConfirm(String name);
+
+  /// No description provided for @removeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeButton;
+
   /// No description provided for @forgetComputerMenuItem.
   ///
   /// In en, this message translates to:
@@ -814,6 +832,18 @@ abstract class AppLocalizations {
   /// **'Sort by'**
   String get sortByLabel;
 
+  /// No description provided for @optionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get optionsLabel;
+
+  /// No description provided for @foldersFirstLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders first'**
+  String get foldersFirstLabel;
+
   /// No description provided for @showHiddenItems.
   ///
   /// In en, this message translates to:
@@ -862,11 +892,23 @@ abstract class AppLocalizations {
   /// **'Favorites'**
   String get favoritesTitle;
 
+  /// No description provided for @favoritesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned folders'**
+  String get favoritesSubtitle;
+
   /// No description provided for @noFavoritesYet.
   ///
   /// In en, this message translates to:
   /// **'No favorites yet. Open a folder and tap the star to bookmark it.'**
   String get noFavoritesYet;
+
+  /// No description provided for @addCurrentFolderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add \"{name}\"'**
+  String addCurrentFolderLabel(String name);
 
   /// No description provided for @cancelTooltip.
   ///

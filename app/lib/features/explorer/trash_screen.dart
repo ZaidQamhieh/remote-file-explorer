@@ -11,6 +11,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/gradient_blob_hero.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 
@@ -151,11 +152,12 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           title: ScreenHeader(context.l10n.trashTitle),
           actions: [
             if (items != null && items.isNotEmpty)
-              IconButton(
-                icon: const Icon(LucideIcons.trash2),
+              _AppbarIconBtn(
+                icon: LucideIcons.moreVertical,
                 tooltip: context.l10n.emptyTrashTooltip,
-                onPressed: _emptyAll,
+                onTap: _emptyAll,
               ),
+            const SizedBox(width: Spacing.sm),
           ],
         ),
         body: _buildBody(context, items),
@@ -187,6 +189,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHigh,
                 borderRadius: Radii.cardR,
+                border: Border.all(color: scheme.outlineVariant),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,13 +230,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               Spacing.md,
               Spacing.sm,
             ),
-            child: SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: _emptyAll,
-                style: TextButton.styleFrom(foregroundColor: scheme.error),
-                child: Text(context.l10n.emptyTrashTooltip),
-              ),
+            child: _GhostBlockButton(
+              label: context.l10n.emptyTrashTooltip,
+              color: scheme.error,
+              onTap: _emptyAll,
             ),
           ),
         ],
@@ -283,50 +283,164 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           horizontal: Spacing.md,
           vertical: Spacing.sm,
         ),
-        child: InkWell(
-          onTap: () => _restore(item),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: Radii.smR,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  item.isDir ? LucideIcons.folder : LucideIcons.file,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: Radii.smR,
               ),
-              const SizedBox(width: Spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name, overflow: TextOverflow.ellipsis),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+              alignment: Alignment.center,
+              child: Icon(
+                item.isDir ? LucideIcons.folder : LucideIcons.file,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(LucideIcons.archiveRestore),
-                tooltip: context.l10n.restoreButton,
-                onPressed: () => _restore(item),
-              ),
-              IconButton(
-                icon: Icon(LucideIcons.trash2, color: scheme.error),
-                tooltip: context.l10n.deleteForeverButton,
-                onPressed: () => _deleteForever(item),
-              ),
-            ],
+            ),
+            _RowIconBtn(
+              icon: LucideIcons.archiveRestore,
+              tooltip: context.l10n.restoreButton,
+              onTap: () => _restore(item),
+            ),
+            const SizedBox(width: Spacing.xs),
+            _RowIconBtn(
+              icon: LucideIcons.trash2,
+              tooltip: context.l10n.deleteForeverButton,
+              color: scheme.error,
+              onTap: () => _deleteForever(item),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.iconbtn`: bare 34x34 circular tap target, 19px icon, no
+/// fill, no Material ripple ([Pressable]'s scale-down instead).
+class _AppbarIconBtn extends StatelessWidget {
+  const _AppbarIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+/// Same `.iconbtn` treatment as [_AppbarIconBtn], scaled down to sit inside
+/// a `.row-end` instead of an appbar.
+class _RowIconBtn extends StatelessWidget {
+  const _RowIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 18, color: color ?? scheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`, with an optional text-color
+/// override (the Empty Trash button renders in `--red`).
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: color ?? scheme.onSurface,
           ),
         ),
       ),

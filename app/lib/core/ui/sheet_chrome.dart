@@ -20,6 +20,66 @@ class SheetGrabber extends StatelessWidget {
   }
 }
 
+/// The mockup's literal `.sheet-handle` + `.sheet-head`: a 36x4 pill handle,
+/// a 16px bold `h3` title, and an optional 12px faint `p` subtitle — no icon
+/// badge, no gradient, no close button (unlike [SheetHero], which is a
+/// pre-mockup hero treatment still used by sheets/dialogs that have no
+/// literal mockup markup to match). First used by
+/// `connection_diagnostics_sheet.dart`; extracted here once the same exact
+/// block needed to repeat across several Group C sheets verbatim.
+class SheetHead extends StatelessWidget {
+  const SheetHead({super.key, required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 4),
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.outlineVariant,
+              borderRadius: Radii.stadiumR,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Hero header for an action sheet or dialog: an optional grabber, a
 /// radial-gradient zone tinted by the subject's own colour, an icon badge,
 /// title/subtitle, and an optional close button. Originally MetaSheet's

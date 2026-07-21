@@ -15,6 +15,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
+import '../../../core/ui/gradient_button.dart';
+import '../../../core/ui/pressable.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../../../core/ui/state_views.dart';
 import '../destination_picker_state.dart';
@@ -93,12 +95,7 @@ class DestinationPickerSheet extends ConsumerWidget {
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                SheetHero(
-                  badge: Icon(LucideIcons.folder, color: scheme.primary),
-                  title: headerText,
-                  subtitle: originPath,
-                  onClose: () => Navigator.pop(context),
-                ),
+                SheetHead(title: headerText, subtitle: originPath),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
                   child: Align(
@@ -170,23 +167,10 @@ class DestinationPickerSheet extends ConsumerWidget {
           );
         }
         final folder = folders[i];
-        final tile = ActionListTile(
-          icon: LucideIcons.folder,
-          label: folder.name,
+        return _FolderRow(
+          name: folder.name,
+          showDivider: i < folders.length - 1,
           onTap: () => notifier.navigate(folder.path),
-        );
-        if (i == 0) return tile;
-        return Column(
-          children: [
-            Divider(
-              height: 1,
-              indent: 56,
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-            tile,
-          ],
         );
       },
     );
@@ -209,20 +193,26 @@ class DestinationPickerSheet extends ConsumerWidget {
           Spacing.md,
           Spacing.sm,
         ),
-        child: Row(
+        // Mockup stacks these two full-width `.btn-block` buttons, not a
+        // side-by-side Row.
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextButton.icon(
-              onPressed: () => _newFolder(context, ref, notifier),
-              icon: const Icon(LucideIcons.folderPlus),
-              label: Text(context.l10n.newFolderButton),
+            _GhostBlockButton(
+              label: context.l10n.newFolderButton,
+              icon: LucideIcons.folderPlus,
+              onTap: () => _newFolder(context, ref, notifier),
             ),
-            const Spacer(),
-            FilledButton(
-              onPressed:
-                  atOrigin
-                      ? null
-                      : () => Navigator.pop(context, state.currentPath),
-              child: Text(confirmLabel),
+            const SizedBox(height: Spacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: GradientButton(
+                onPressed:
+                    atOrigin
+                        ? null
+                        : () => Navigator.pop(context, state.currentPath),
+                child: Text(confirmLabel),
+              ),
             ),
           ],
         ),
@@ -267,5 +257,118 @@ class DestinationPickerSheet extends ConsumerWidget {
         showError(context, context.l10n.createFailed(name, humanizeError(e)));
       }
     }
+  }
+}
+
+/// The mockup's folder `.row`: a blue `.row-icon`, title, trailing chevron —
+/// no leading checkbox/selection affordance (this list is browse-only).
+class _FolderRow extends StatelessWidget {
+  const _FolderRow({
+    required this.name,
+    required this.showDivider,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool showDivider;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: 11,
+        ),
+        decoration:
+            showDivider
+                ? BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: scheme.outlineVariant),
+                  ),
+                )
+                : null,
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.14),
+                borderRadius: Radii.smR,
+              ),
+              alignment: Alignment.center,
+              child: Icon(LucideIcons.folder, size: 18, color: scheme.primary),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`: full-width, `surface-2`
+/// background, 1px border, text then a trailing icon.
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(icon, size: 16, color: scheme.onSurface),
+          ],
+        ),
+      ),
+    );
   }
 }

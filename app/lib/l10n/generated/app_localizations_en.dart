@@ -145,6 +145,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get forgetButton => 'Forget';
 
   @override
+  String get removeBookmarkTitle => 'Remove bookmark?';
+
+  @override
+  String removeBookmarkConfirm(String name) {
+    return 'Remove \"$name\" from your bookmarks?';
+  }
+
+  @override
+  String get removeButton => 'Remove';
+
+  @override
   String get forgetComputerMenuItem => 'Forget this computer';
 
   @override
@@ -438,6 +449,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortByLabel => 'Sort by';
 
   @override
+  String get optionsLabel => 'Options';
+
+  @override
+  String get foldersFirstLabel => 'Folders first';
+
+  @override
   String get showHiddenItems => 'Show hidden items';
 
   @override
@@ -468,8 +485,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get favoritesTitle => 'Favorites';
 
   @override
+  String get favoritesSubtitle => 'Pinned folders';
+
+  @override
   String get noFavoritesYet =>
       'No favorites yet. Open a folder and tap the star to bookmark it.';
+
+  @override
+  String addCurrentFolderLabel(String name) {
+    return 'Add \"$name\"';
+  }
 
   @override
   String get cancelTooltip => 'Cancel';

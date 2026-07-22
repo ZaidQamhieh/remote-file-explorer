@@ -67,10 +67,13 @@ void main() {
   ) async {
     final container = await pumpScreen(tester);
 
-    // "Hide dotfiles" is now a ShadSwitch (SettingsTile.toggle); category
-    // master switches are still plain Switch, so the first one is index 0.
-    final switchFinder = find.byType(Switch).first;
-    expect(tester.widget<Switch>(switchFinder).value, isFalse);
+    // Category master switches are a private, mockup-literal `.switch`
+    // widget (not a raw Material `Switch`), keyed per preset since the
+    // widget type itself isn't visible outside file_visibility_screen.dart.
+    final switchFinder = find.byKey(
+      const ValueKey('visibility-category-switch-System junk'),
+    );
+    expect(_appVis(container).hiddenExtensions, isEmpty);
 
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
@@ -79,7 +82,6 @@ void main() {
     for (final ext in systemJunkPreset.extensions) {
       expect(prefs.hiddenExtensions, contains(ext));
     }
-    expect(tester.widget<Switch>(switchFinder).value, isTrue);
 
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();

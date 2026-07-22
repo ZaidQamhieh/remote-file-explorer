@@ -8,6 +8,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import '../settings/widgets/settings_section.dart';
 import 'photo_backup_controller.dart';
@@ -135,13 +136,10 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
       GroupedCard(
         padded: false,
         children: [
-          ListTile(
-            title: Text(context.l10n.enablePhotoBackup),
-            subtitle: Text(context.l10n.photoBackupSubtitle),
-            trailing: ShadSwitch(
-              value: _prefs.enabled,
-              onChanged: (v) => _update(_prefs.copyWith(enabled: v)),
-            ),
+          _Row(
+            title: context.l10n.enablePhotoBackup,
+            subtitle: context.l10n.photoBackupSubtitle,
+            trailing: _Switch(value: _prefs.enabled),
             onTap: () => _update(_prefs.copyWith(enabled: !_prefs.enabled)),
           ),
         ],
@@ -151,12 +149,16 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
         title: 'Destination',
         padded: false,
         children: [
-          ListTile(
+          _Row(
             enabled: on,
-            leading: const Icon(LucideIcons.computer),
-            title: Text(context.l10n.backUpTo),
-            subtitle: Text(_hostLabel(context)),
-            trailing: const Icon(LucideIcons.chevronRight),
+            icon: LucideIcons.computer,
+            title: context.l10n.backUpTo,
+            subtitle: _hostLabel(context),
+            trailing: Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             onTap: (!on || _hosts.isEmpty) ? null : _pickHost,
           ),
           const Divider(height: 1),
@@ -193,38 +195,32 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
             ),
           ),
           const Divider(height: 1),
-          ListTile(
+          _Row(
             enabled: on,
-            leading: const Icon(LucideIcons.images),
-            title: Text(context.l10n.albumsToBackUp),
-            subtitle: Text(_albumsLabel(context)),
-            trailing: const Icon(LucideIcons.chevronRight),
+            icon: LucideIcons.images,
+            title: context.l10n.albumsToBackUp,
+            subtitle: _albumsLabel(context),
+            trailing: Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             onTap: on ? _pickAlbums : null,
           ),
           const Divider(height: 1),
-          ListTile(
+          _Row(
             enabled: on,
-            title: Text(context.l10n.onlyOnWifi),
-            trailing: ShadSwitch(
-              value: _prefs.wifiOnly,
-              enabled: on,
-              onChanged:
-                  on ? (v) => _update(_prefs.copyWith(wifiOnly: v)) : null,
-            ),
+            title: context.l10n.onlyOnWifi,
+            trailing: _Switch(value: _prefs.wifiOnly),
             onTap:
                 on
                     ? () => _update(_prefs.copyWith(wifiOnly: !_prefs.wifiOnly))
                     : null,
           ),
-          ListTile(
+          _Row(
             enabled: on,
-            title: Text(context.l10n.onlyWhileCharging),
-            trailing: ShadSwitch(
-              value: _prefs.chargingOnly,
-              enabled: on,
-              onChanged:
-                  on ? (v) => _update(_prefs.copyWith(chargingOnly: v)) : null,
-            ),
+            title: context.l10n.onlyWhileCharging,
+            trailing: _Switch(value: _prefs.chargingOnly),
             onTap:
                 on
                     ? () => _update(
@@ -239,30 +235,22 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
         title: 'Status',
         padded: false,
         children: [
-          ListTile(
+          _Row(
             enabled: on,
-            leading: const Icon(LucideIcons.cloudCheck),
-            title: Text(context.l10n.photosBackedUp(_doneCount)),
-            subtitle: Text(context.l10n.resetBackupHint),
+            icon: LucideIcons.cloudCheck,
+            title: context.l10n.photosBackedUp(_doneCount),
+            subtitle: context.l10n.resetBackupHint,
             onTap: (!on || _doneCount == 0) ? null : _resetRecord,
           ),
         ],
       ),
       Padding(
         padding: const EdgeInsets.all(Spacing.lg),
-        child: FilledButton.icon(
-          onPressed: (!on || _running) ? null : _backupNow,
-          icon:
-              _running
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(LucideIcons.cloudUpload),
-          label: Text(
-            _running ? context.l10n.scanningStatus : context.l10n.backUpNow,
-          ),
+        child: _GhostBlockButton(
+          label:
+              _running ? context.l10n.scanningStatus : context.l10n.backUpNow,
+          icon: _running ? null : LucideIcons.cloudUpload,
+          onTap: (!on || _running) ? null : _backupNow,
         ),
       ),
     ];
@@ -407,5 +395,172 @@ class _PhotoBackupScreenState extends ConsumerState<PhotoBackupScreen> {
     await _store?.resetDone();
     if (mounted) setState(() => _doneCount = 0);
     if (mounted) showInfo(context, context.l10n.backupRecordCleared);
+  }
+}
+
+/// The mockup's `.row` (optionally `.row-toggle` when there's no icon):
+/// 38x38 tonal `.row-icon`, 14px/500 title + 11.5px/faint sub, trailing
+/// chevron/switch. [enabled] dims the whole row and disables its tap,
+/// matching this screen's real master-switch-gates-everything behavior.
+class _Row extends StatelessWidget {
+  const _Row({
+    this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final IconData? icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: Radii.smR,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: Spacing.sm),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+    final content = Opacity(opacity: enabled ? 1 : 0.5, child: row);
+    if (onTap == null) return content;
+    return Pressable(onTap: enabled ? onTap : null, child: content);
+  }
+}
+
+/// The mockup's `.switch`: 42x25 pill track, 19x19 thumb — purely decorative
+/// here since [_Row] wires the tap on the whole row.
+class _Switch extends StatelessWidget {
+  const _Switch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 42,
+      height: 25,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: value ? scheme.primary : scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+        border: Border.all(
+          color: value ? scheme.primary : scheme.outlineVariant,
+        ),
+      ),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: 19,
+        height: 19,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: value ? Colors.white : scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`: full-width, `surface-2`
+/// background, 1px border, text then an optional trailing icon. `onTap` may
+/// be null to render a disabled state (this screen gates the button on the
+/// master switch + in-flight state).
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Opacity(
+      opacity: onTap == null ? 0.5 : 1,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.97,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: Radii.smR,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
+              ),
+              if (icon != null) ...[
+                const SizedBox(width: 7),
+                Icon(icon, size: 16, color: scheme.onSurface),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

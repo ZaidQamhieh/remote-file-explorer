@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/theme/tokens.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import '../explorer/explorer_screen.dart';
 import '../explorer/explorer_state.dart' show explorerProvider;
@@ -175,16 +177,17 @@ class _TransfersTab extends ConsumerWidget {
           subtitle: activeCount > 0 ? '$activeCount active' : null,
         ),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.history),
+          _AppbarIconBtn(
+            icon: LucideIcons.history,
             tooltip: 'Transfer history',
-            onPressed:
+            onTap:
                 () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const TransferJournalScreen(),
                   ),
                 ),
           ),
+          const SizedBox(width: Spacing.sm),
         ],
       ),
       body: const Column(
@@ -192,6 +195,37 @@ class _TransfersTab extends ConsumerWidget {
           TransferStatGrid(),
           Expanded(child: TransferGroupedList(showTitle: false)),
         ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.iconbtn`: 34x34, 19px glyph — replaces a raw [IconButton]
+/// in this tab's app bar actions.
+class _AppbarIconBtn extends StatelessWidget {
+  const _AppbarIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+        ),
       ),
     );
   }

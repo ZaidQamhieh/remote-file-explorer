@@ -7,6 +7,7 @@ import '../../core/settings/settings_controller.dart';
 import '../../core/storage/view_prefs.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import 'widgets/settings_picker.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
@@ -214,9 +215,8 @@ class _ThemeSwatchGrid extends StatelessWidget {
   }) {
     final active = selected == mode;
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
+    return Pressable(
       onTap: () => onSelected(mode),
-      borderRadius: Radii.smR,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: Radii.smR,
@@ -315,8 +315,7 @@ class _AccentDotRow extends StatelessWidget {
               padding: const EdgeInsets.only(right: Spacing.sm),
               child: Tooltip(
                 message: label,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
+                child: Pressable(
                   onTap: () => onSelected(color),
                   child: Container(
                     width: 30,
@@ -372,15 +371,16 @@ class _QuickToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final active = value ?? false;
-    return Material(
-      color:
-          active
-              ? Brand.accent.withValues(alpha: 0.14)
-              : scheme.surfaceContainerHigh,
-      borderRadius: Radii.lgR,
-      child: InkWell(
-        borderRadius: Radii.lgR,
-        onTap: onTap,
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color:
+              active
+                  ? Brand.accent.withValues(alpha: 0.14)
+                  : scheme.surfaceContainerHigh,
+          borderRadius: Radii.lgR,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Spacing.md,

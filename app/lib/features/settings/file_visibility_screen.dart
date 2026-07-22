@@ -7,6 +7,7 @@ import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/visibility_prefs.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/pressable.dart';
 import 'settings_screen.dart' show AddExtensionField;
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
@@ -149,14 +150,16 @@ class _CategoryTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Switch(
-            value: allHidden,
-            onChanged:
-                (on) =>
-                    on
-                        ? notifier.applyPreset(preset)
-                        : notifier.removePreset(preset),
+          Pressable(
+            key: ValueKey('visibility-category-switch-${preset.label}'),
+            onTap:
+                () =>
+                    allHidden
+                        ? notifier.removePreset(preset)
+                        : notifier.applyPreset(preset),
+            child: _MockupSwitch(value: allHidden),
           ),
+          const SizedBox(width: Spacing.xs),
           const Icon(LucideIcons.chevronDown),
         ],
       ),
@@ -192,6 +195,40 @@ class _CategoryTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The mockup's `.switch`: 42x25 pill track, 19x19 thumb — replaces a raw
+/// Material [Switch]; the tap is wired by the enclosing [Pressable].
+class _MockupSwitch extends StatelessWidget {
+  const _MockupSwitch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 42,
+      height: 25,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: value ? scheme.primary : scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+        border: Border.all(
+          color: value ? scheme.primary : scheme.outlineVariant,
+        ),
+      ),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: 19,
+        height: 19,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: value ? Colors.white : scheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }

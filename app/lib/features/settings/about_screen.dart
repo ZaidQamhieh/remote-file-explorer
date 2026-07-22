@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -202,9 +203,8 @@ class AboutScreen extends StatelessWidget {
               GroupedCard(
                 padded: false,
                 children: [
-                  ListTile(
-                    title: const Text("What's new"),
-                    trailing: const Icon(LucideIcons.chevronRight),
+                  _NavRow(
+                    title: "What's new",
                     onTap:
                         () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -213,9 +213,8 @@ class AboutScreen extends StatelessWidget {
                         ),
                   ),
                   const Divider(height: 1),
-                  ListTile(
-                    title: const Text('Privacy policy'),
-                    trailing: const Icon(LucideIcons.chevronRight),
+                  _NavRow(
+                    title: 'Privacy policy',
                     onTap:
                         () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -342,4 +341,46 @@ class _ChangelogEntry {
   const _ChangelogEntry(this.version, this.items);
   final String version;
   final List<String> items;
+}
+
+/// The mockup's plain `.row` (no `.row-icon` — the About screen's `.px list`
+/// rows have no leading icon at all): 14px/500 title + bare chevron.
+/// Replaces a raw [ListTile].
+class _NavRow extends StatelessWidget {
+  const _NavRow({required this.title, required this.onTap});
+
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md2,
+          vertical: 11,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

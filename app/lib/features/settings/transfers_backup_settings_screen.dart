@@ -6,6 +6,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/pressable.dart';
 import '../transfers/chunk_planner.dart' show describeDefaultChunkSize;
 import '../photo_backup/photo_backup_screen.dart';
 import '../transfers/transfer_journal_screen.dart';
@@ -58,14 +59,24 @@ class TransfersBackupSettingsScreen extends ConsumerWidget {
                 value: settings.app.compressDownloadsOnCellular,
                 onChanged: notifier.setCompressDownloadsOnCellular,
               ),
-              ListTile(
-                title: const Text('Chunk size'),
-                trailing: Text(
-                  describeDefaultChunkSize(),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 11,
+                  horizontal: 4,
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Chunk size',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    _NeutralBadge(describeDefaultChunkSize()),
+                  ],
                 ),
               ),
             ],
@@ -148,33 +159,76 @@ class _WatchedFoldersSection extends ConsumerWidget {
             ),
           ),
         for (final folder in folders)
-          ListTile(
-            dense: true,
-            leading: _folderBadge(LucideIcons.folder),
-            title: Text(folder, overflow: TextOverflow.ellipsis),
-            trailing: IconButton(
-              icon: const Icon(LucideIcons.circleMinus),
-              tooltip: context.l10n.stopWatchingTooltip,
-              onPressed: () => notifier.removeWatchedFolder(folder),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+            child: Row(
+              children: [
+                _folderBadge(LucideIcons.folder),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    folder,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Spacing.sm),
+                Tooltip(
+                  message: context.l10n.stopWatchingTooltip,
+                  child: Pressable(
+                    onTap: () => notifier.removeWatchedFolder(folder),
+                    pressedScale: 0.92,
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Icon(
+                        LucideIcons.circleMinus,
+                        size: 19,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ListTile(
-          leading: _folderBadge(LucideIcons.plus),
-          title: Text(context.l10n.addFolderPathTile),
+        Pressable(
           onTap: () => _showAddDialog(context, notifier),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+            child: Row(
+              children: [
+                _folderBadge(LucideIcons.plus),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    context.l10n.addFolderPathTile,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  /// Same tonal circle badge recipe as [SettingsTile], so watched-folder
-  /// rows don't look bare next to every other row on this screen.
+  /// Same tonal square badge recipe as [SettingsTile]'s `.row-icon`, so
+  /// watched-folder rows don't look bare next to every other row on this
+  /// screen.
   Widget _folderBadge(IconData icon) => Container(
     width: 38,
     height: 38,
     decoration: BoxDecoration(
-      color: Brand.online.withValues(alpha: 0.16),
-      shape: BoxShape.circle,
+      color: Brand.online.withValues(alpha: 0.14),
+      borderRadius: Radii.smR,
     ),
     alignment: Alignment.center,
     child: Icon(icon, size: 18, color: Brand.online),
@@ -212,5 +266,33 @@ class _WatchedFoldersSection extends ConsumerWidget {
     if (path != null && path.isNotEmpty) {
       await notifier.addWatchedFolder(path);
     }
+  }
+}
+
+/// The mockup's `.badge.neutral`: `surface-3` bg, `text-dim` text, pill.
+class _NeutralBadge extends StatelessWidget {
+  const _NeutralBadge(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'JetBrains Mono',
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 }

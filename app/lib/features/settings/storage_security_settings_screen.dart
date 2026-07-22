@@ -11,6 +11,7 @@ import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/pressable.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
 
@@ -137,28 +138,52 @@ class _TrustedCertificatesSection extends ConsumerWidget {
               children: [
                 for (var i = 0; i < hosts.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
-                  ListTile(
-                    title: Text(hosts[i].label),
-                    subtitle: Text(
-                      _formatFingerprint(hosts[i].certFingerprint!),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 11,
+                      horizontal: 4,
                     ),
-                    trailing: TextButton(
-                      onPressed:
-                          () => _forget(
-                            context,
-                            ref,
-                            hosts[i].id,
-                            hosts[i].label,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                hosts[i].label,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                _formatFingerprint(hosts[i].certFingerprint!),
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontFamily: 'JetBrains Mono',
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                      child: Text(
-                        context.l10n.forgetButton,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
                         ),
-                      ),
+                        const SizedBox(width: Spacing.sm),
+                        _GhostSmButton(
+                          label: context.l10n.forgetButton,
+                          color: Theme.of(context).colorScheme.error,
+                          onTap:
+                              () => _forget(
+                                context,
+                                ref,
+                                hosts[i].id,
+                                hosts[i].label,
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -260,14 +285,9 @@ class _CacheSection extends ConsumerWidget {
         const SizedBox(height: Spacing.sm),
         Align(
           alignment: AlignmentDirectional.centerStart,
-          child: FilledButton.tonalIcon(
-            icon: const Icon(LucideIcons.trash2),
-            label: Text(context.l10n.cacheClearAll),
-            style: FilledButton.styleFrom(
-              backgroundColor: scheme.errorContainer,
-              foregroundColor: scheme.onErrorContainer,
-            ),
-            onPressed: () async {
+          child: _GhostSmButton(
+            label: context.l10n.cacheClearAll,
+            onTap: () async {
               await ref.read(cacheManagerProvider).clearAll();
               ref.invalidate(cacheStatsProvider);
               if (context.mounted) {
@@ -408,6 +428,43 @@ class _CacheLegendRow extends StatelessWidget {
           Expanded(child: Text(label)),
           Text(formatSize(bytes)),
         ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-sm`: `surface-2` bg, 1px border, smaller
+/// padding/font than the block variant. [color] overrides the text color
+/// (e.g. red for a destructive "Forget"), matching the mockup's inline
+/// `style="color:var(--red)"` override on an otherwise-plain ghost button.
+class _GhostSmButton extends StatelessWidget {
+  const _GhostSmButton({required this.label, required this.onTap, this.color});
+
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: color ?? scheme.onSurface,
+          ),
+        ),
       ),
     );
   }

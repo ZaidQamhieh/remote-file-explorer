@@ -10,6 +10,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
 import 'sync_runner.dart';
 
@@ -169,48 +170,132 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: const ScreenHeader('Sync Rules'),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addRule,
-        tooltip: 'Add Sync Rule',
-        child: const Icon(LucideIcons.plus),
-      ),
+      appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('Sync')),
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
-              : _rules.isEmpty
-              ? const Center(child: Text('No sync rules yet'))
               : ListView(
                 padding: const EdgeInsets.all(Spacing.md),
                 children: [
-                  const SectionLabel('Sync rules'),
-                  GroupedCard(
-                    padded: false,
-                    children: [
-                      for (int i = 0; i < _rules.length; i++) ...[
-                        if (i > 0)
-                          Divider(
-                            height: 1,
-                            indent: Spacing.md,
-                            endIndent: Spacing.md,
-                            color: scheme.outlineVariant,
+                  // The mockup's info card explaining what a sync pair does —
+                  // `.card` with `--primary-tint` bg and no border.
+                  Container(
+                    padding: const EdgeInsets.all(Spacing.md2),
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.14),
+                      borderRadius: Radii.cardR,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          LucideIcons.refreshCw,
+                          size: 16,
+                          color: scheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Keeps a phone folder and a host path identical, '
+                            'both directions, whenever both are online.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
                           ),
-                        _SyncRuleTile(
-                          rule: _rules[i],
-                          progress: _syncing[_rules[i].id],
-                          isSyncing: _syncing.containsKey(_rules[i].id),
-                          onToggle: () => _toggleEnabled(_rules[i]),
-                          onSync: () => _syncNow(_rules[i]),
-                          onDelete: () => _deleteRule(_rules[i]),
                         ),
                       ],
-                    ],
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  const SectionLabel('Sync pairs'),
+                  if (_rules.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                      child: Text(
+                        'No sync pairs yet',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    )
+                  else
+                    GroupedCard(
+                      padded: false,
+                      children: [
+                        for (int i = 0; i < _rules.length; i++) ...[
+                          if (i > 0)
+                            Divider(
+                              height: 1,
+                              indent: Spacing.md,
+                              endIndent: Spacing.md,
+                              color: scheme.outlineVariant,
+                            ),
+                          _SyncRuleTile(
+                            rule: _rules[i],
+                            progress: _syncing[_rules[i].id],
+                            isSyncing: _syncing.containsKey(_rules[i].id),
+                            onToggle: () => _toggleEnabled(_rules[i]),
+                            onSync: () => _syncNow(_rules[i]),
+                            onDelete: () => _deleteRule(_rules[i]),
+                          ),
+                        ],
+                      ],
+                    ),
+                  const SizedBox(height: Spacing.md),
+                  _GhostBlockButton(
+                    label: 'Add sync pair',
+                    icon: LucideIcons.plus,
+                    onTap: _addRule,
                   ),
                 ],
               ),
+    );
+  }
+}
+
+/// The mockup's `.btn.btn-ghost.btn-block`: full-width, `surface-2`
+/// background, 1px border, text then a trailing icon.
+class _GhostBlockButton extends StatelessWidget {
+  const _GhostBlockButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: Radii.smR,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(icon, size: 16, color: scheme.onSurface),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -258,61 +343,120 @@ class _SyncRuleTile extends StatelessWidget {
         return false; // we handle deletion in the callback
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: Spacing.sm,
-        ),
-        child: Column(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 11),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Brand.seed.withValues(alpha: 0.14),
+                borderRadius: Radii.smR,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                LucideIcons.refreshCw,
+                size: 18,
+                color: Brand.seed,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rule.remotePath,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    rule.localPath,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontFamily: 'JetBrains Mono',
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
                     children: [
-                      Text(
-                        rule.remotePath,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        rule.localPath,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                      Expanded(
+                        child: Text(
+                          progressText ?? lastSyncText,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (isSyncing)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Pressable(
+                          onTap: rule.enabled ? onSync : null,
+                          child: Opacity(
+                            opacity: rule.enabled ? 1 : 0.4,
+                            child: Icon(
+                              LucideIcons.refreshCw,
+                              size: 16,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                ),
-                ShadSwitch(value: rule.enabled, onChanged: (_) => onToggle()),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: Spacing.xs),
-            Row(
-              children: [
-                Text(
-                  progressText ?? lastSyncText,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const Spacer(),
-                if (isSyncing)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  TextButton.icon(
-                    onPressed: rule.enabled ? onSync : null,
-                    icon: const Icon(LucideIcons.refreshCw, size: 18),
-                    label: const Text('Sync Now'),
-                  ),
-              ],
-            ),
+            const SizedBox(width: Spacing.sm),
+            Pressable(onTap: onToggle, child: _SyncSwitch(value: rule.enabled)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The mockup's `.switch`: 42x25 pill track, 19x19 thumb — the tap is wired
+/// by the enclosing [Pressable].
+class _SyncSwitch extends StatelessWidget {
+  const _SyncSwitch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 42,
+      height: 25,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: value ? scheme.primary : scheme.surfaceContainerHighest,
+        borderRadius: Radii.stadiumR,
+        border: Border.all(
+          color: value ? scheme.primary : scheme.outlineVariant,
+        ),
+      ),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: 19,
+        height: 19,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: value ? Colors.white : scheme.onSurfaceVariant,
         ),
       ),
     );

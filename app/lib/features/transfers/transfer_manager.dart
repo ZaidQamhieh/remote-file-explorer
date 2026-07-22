@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
 import '../../core/ui/sheet_chrome.dart';
 import 'transfer_speed.dart';
 import 'transfer_state.dart';
@@ -104,7 +105,7 @@ class _StatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Spacing.md2),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
+        color: scheme.surface,
         borderRadius: Radii.smR,
         border: Border.all(color: scheme.outlineVariant),
       ),
@@ -113,19 +114,21 @@ class _StatTile extends StatelessWidget {
         children: [
           Text(
             label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+            style: TextStyle(
+              fontSize: 10,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.7,
+              color: scheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: TextStyle(
+              fontSize: 19,
               fontWeight: FontWeight.w700,
+              fontFamily: 'JetBrains Mono',
               color: color,
-              fontFamily: 'monospace',
             ),
           ),
         ],
@@ -350,7 +353,7 @@ class _TransferSectionState extends State<_TransferSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
+        Pressable(
           onTap: () => setState(() => _expanded = !_expanded),
           child: SectionLabel(
             widget.group.localizedLabel(context),
@@ -418,20 +421,43 @@ class _TransferTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(transferQueueProvider.notifier);
 
-    final tile = ListTile(
+    final subtitle = _buildSubtitle(context, ref, notifier);
+    final actions = _buildActions(context, notifier);
+    // Literal `.row`: 38x38 tinted `.row-icon`, 14px/500 title + 11.5px/faint
+    // sub (or the live progress bar), row-end action button(s) — replaces
+    // the old ListTile, whose slots don't match the mockup's row geometry.
+    final tile = Container(
       key: ValueKey('tile-${task.id}'),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: Spacing.md,
-        vertical: Spacing.xs,
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md2,
+        vertical: 11,
       ),
-      leading: _statusIcon(context),
-      title: Text(
-        task.displayName,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodyLarge,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _statusIcon(context),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  task.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (subtitle != null) subtitle,
+              ],
+            ),
+          ),
+          if (actions != null) ...[const SizedBox(width: Spacing.sm), actions],
+        ],
       ),
-      subtitle: _buildSubtitle(context, ref, notifier),
-      trailing: _buildActions(context, notifier),
     );
 
     return Dismissible(
@@ -515,9 +541,20 @@ class _TransferTile extends ConsumerWidget {
   Widget _statusIcon(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final directionColor = _directionColor(scheme);
+    // Terminal states get the mockup's `.row-icon.green`/`.row-icon.red`
+    // tint; queued is the mockup's untinted default `.row-icon`; running/
+    // paused use the direction color (download=primary/blue,
+    // upload=secondary/violet) since the mockup has no "in-progress" example
+    // to draw a literal color from.
+    final Color? tint = switch (task.status) {
+      TransferStatus.completed => Brand.online,
+      TransferStatus.failed => scheme.error,
+      TransferStatus.queued => null,
+      TransferStatus.running || TransferStatus.paused => directionColor,
+    };
     final Widget glyph = switch (task.status) {
       TransferStatus.running => SizedBox.square(
-        dimension: 20,
+        dimension: 18,
         child: CircularProgressIndicator(
           value: task.progress > 0 ? task.progress : null,
           strokeWidth: 2.5,
@@ -526,23 +563,30 @@ class _TransferTile extends ConsumerWidget {
       ),
       TransferStatus.completed => const Icon(
         LucideIcons.circleCheck,
+        size: 18,
         color: Brand.online,
       ),
       TransferStatus.failed => Icon(
         LucideIcons.circleAlert,
+        size: 18,
         color: scheme.error,
       ),
       TransferStatus.paused => Icon(
         LucideIcons.circlePause,
+        size: 18,
         color: directionColor,
       ),
-      TransferStatus.queued => Icon(LucideIcons.clock, color: directionColor),
+      TransferStatus.queued => Icon(
+        LucideIcons.clock,
+        size: 18,
+        color: scheme.onSurfaceVariant,
+      ),
     };
     return Container(
-      width: 40,
-      height: 40,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        color: tint?.withValues(alpha: 0.14) ?? scheme.surfaceContainerHigh,
         borderRadius: Radii.smR,
       ),
       alignment: Alignment.center,
@@ -569,30 +613,39 @@ class _TransferTile extends ConsumerWidget {
           if (eta?.etaLabel != null) eta!.etaLabel!,
         ].join(' · ');
         return Padding(
-          padding: const EdgeInsets.only(top: Spacing.xs),
+          padding: const EdgeInsets.only(top: 7),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(Radii.chip / 2),
+                borderRadius: Radii.stadiumR,
                 child: LinearProgressIndicator(
                   value: task.progress > 0 ? task.progress : null,
-                  minHeight: 6,
+                  minHeight: 5,
+                  backgroundColor: scheme.surfaceContainerHighest,
                   color: _directionColor(scheme),
                 ),
               ),
-              const SizedBox(height: Spacing.xs),
-              Text(meta, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 3),
+              Text(
+                meta,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         );
       case TransferStatus.failed:
         // Inline error text with a Retry button (button lives in trailing).
         return Padding(
-          padding: const EdgeInsets.only(top: Spacing.xs),
+          padding: const EdgeInsets.only(top: 1),
           child: Text(
             task.error ?? context.l10n.unknownError,
-            style: TextStyle(color: scheme.error),
+            style: TextStyle(fontSize: 11.5, color: scheme.error),
+            overflow: TextOverflow.ellipsis,
           ),
         );
       case TransferStatus.completed:
@@ -606,19 +659,19 @@ class _TransferTile extends ConsumerWidget {
         if (!showVerified) {
           return Text(
             label,
-            style: const TextStyle(color: Brand.online),
+            style: const TextStyle(fontSize: 11.5, color: Brand.online),
             overflow: TextOverflow.ellipsis,
           );
         }
         return Padding(
-          padding: const EdgeInsets.only(top: Spacing.xs),
+          padding: const EdgeInsets.only(top: 1),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 label,
-                style: const TextStyle(color: Brand.online),
+                style: const TextStyle(fontSize: 11.5, color: Brand.online),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: Spacing.xs),
@@ -627,53 +680,87 @@ class _TransferTile extends ConsumerWidget {
           ),
         );
       case TransferStatus.queued:
-        return Text(context.l10n.queuedStatus);
+        return Text(
+          context.l10n.queuedStatus,
+          style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+        );
     }
   }
 
   Widget? _buildActions(BuildContext context, TransferQueueNotifier notifier) {
     switch (task.status) {
       case TransferStatus.running:
-        return IconButton(
-          icon: const Icon(LucideIcons.pause),
+        return _RowIconBtn(
+          icon: LucideIcons.pause,
           tooltip: context.l10n.pauseTooltip,
-          onPressed: () => notifier.pause(task.id),
+          onTap: () => notifier.pause(task.id),
         );
       case TransferStatus.paused:
-        return IconButton(
-          icon: const Icon(LucideIcons.play),
+        return _RowIconBtn(
+          icon: LucideIcons.play,
           tooltip: context.l10n.resumeTooltip,
-          onPressed: () => notifier.retry(task.id),
+          onTap: () => notifier.retry(task.id),
         );
       case TransferStatus.failed:
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(LucideIcons.refreshCw),
+            _RowIconBtn(
+              icon: LucideIcons.refreshCw,
               tooltip: context.l10n.retryButton,
-              onPressed: () => notifier.retry(task.id),
+              onTap: () => notifier.retry(task.id),
             ),
-            IconButton(
-              icon: const Icon(LucideIcons.x),
+            _RowIconBtn(
+              icon: LucideIcons.x,
               tooltip: context.l10n.removeTooltip,
-              onPressed: () => notifier.remove(task.id),
+              onTap: () => notifier.remove(task.id),
             ),
           ],
         );
       case TransferStatus.completed:
-        return IconButton(
-          icon: const Icon(LucideIcons.x),
+        return _RowIconBtn(
+          icon: LucideIcons.x,
           tooltip: context.l10n.removeTooltip,
-          onPressed: () => notifier.remove(task.id),
+          onTap: () => notifier.remove(task.id),
         );
       case TransferStatus.queued:
-        return IconButton(
-          icon: const Icon(LucideIcons.x),
+        return _RowIconBtn(
+          icon: LucideIcons.x,
           tooltip: context.l10n.removeTooltip,
-          onPressed: () => notifier.remove(task.id),
+          onTap: () => notifier.remove(task.id),
         );
     }
+  }
+}
+
+/// The mockup's `.row-end` iconbtn: 34x34, 19px glyph, faint by default —
+/// replaces a raw [IconButton] in transfer-row actions.
+class _RowIconBtn extends StatelessWidget {
+  const _RowIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    );
   }
 }
 

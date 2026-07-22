@@ -8,6 +8,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/gradient_blob_hero.dart';
 import '../../core/ui/grouped_card.dart';
+import '../../core/ui/pressable.dart';
+import '../../core/ui/screen_header.dart';
 
 /// Date-grouped ("Today" / "Yesterday" / older) transfer history, matching
 /// the mockup's `transfer-journal` screen shape.
@@ -30,11 +32,12 @@ class TransferJournalScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.transferHistoryTitle),
+        title: ScreenHeader(context.l10n.transferHistoryTitle),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.trash2),
-            onPressed: () async {
+          _AppbarIconBtn(
+            icon: LucideIcons.trash2,
+            tooltip: context.l10n.clearTooltip,
+            onTap: () async {
               final confirmed = await showShadDialog<bool>(
                 context: context,
                 builder:
@@ -58,6 +61,7 @@ class TransferJournalScreen extends ConsumerWidget {
               }
             },
           ),
+          const SizedBox(width: Spacing.sm),
         ],
       ),
       body: journalAsync.when(
@@ -149,39 +153,97 @@ class _JournalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUpload = record.kind == 'upload';
-    return ListTile(
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: Brand.online.withValues(alpha: 0.16),
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          isUpload ? LucideIcons.upload : LucideIcons.download,
-          size: 18,
-          color: Brand.online,
-        ),
-      ),
-      title: Text(
-        record.fileName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text('${record.hostLabel} · ${formatSize(record.bytes)}'),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: Brand.online.withValues(alpha: 0.16),
-          borderRadius: Radii.stadiumR,
-        ),
-        child: Text(
-          'Completed',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Brand.online,
-            fontWeight: FontWeight.w700,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 11),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Brand.online.withValues(alpha: 0.14),
+              borderRadius: Radii.smR,
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              isUpload ? LucideIcons.upload : LucideIcons.download,
+              size: 18,
+              color: Brand.online,
+            ),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  '${record.hostLabel} · ${formatSize(record.bytes)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: Brand.online.withValues(alpha: 0.14),
+              borderRadius: Radii.stadiumR,
+            ),
+            child: const Text(
+              'Completed',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: Brand.online,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's `.iconbtn`: 34x34, 19px glyph — replaces a raw [IconButton]
+/// in this screen's app bar actions.
+class _AppbarIconBtn extends StatelessWidget {
+  const _AppbarIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
         ),
       ),
     );

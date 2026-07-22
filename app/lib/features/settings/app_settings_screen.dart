@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
@@ -38,7 +39,20 @@ class AppSettingsScreen extends ConsumerWidget {
         '${accentLabel(app.seedColor)} accent';
 
     return Scaffold(
-      appBar: AppBar(toolbarHeight: 72, title: const ScreenHeader('Settings')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder:
+              (context, snap) => ScreenHeader(
+                'Settings',
+                subtitle:
+                    snap.data != null
+                        ? 'RFE Mobile · v${snap.data!.version}'
+                        : null,
+              ),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.md),
         children: [

@@ -65,57 +65,75 @@ class AppearanceSettingsScreen extends ConsumerWidget {
           // notifier, so it's omitted rather than shipping a dead control.
           // Add a real `textScale` setting first if this is wanted.
           const SizedBox(height: Spacing.md),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: Spacing.sm,
-            crossAxisSpacing: Spacing.sm,
-            childAspectRatio: 1.4,
+          // A fixed-childAspectRatio GridView doesn't fit these tiles' natural
+          // (variable, sometimes 2-line-caption) height — it left large dead
+          // space in every cell. A same-order 2-column-of-natural-height
+          // layout keeps the same visual grid without forcing a bad ratio.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _QuickToggleTile(
-                icon: LucideIcons.image,
-                title: context.l10n.useWallpaperColors,
-                value: app.dynamicColor,
-                onTap: () => notifier.setDynamicColor(!app.dynamicColor),
-              ),
-              _QuickToggleTile(
-                icon: LucideIcons.moon,
-                title: 'AMOLED Dark',
-                value: app.amoledDark,
-                onTap: () => notifier.setAmoledDark(!app.amoledDark),
-              ),
-              _QuickToggleTile(
-                icon: app.gridView ? LucideIcons.layoutGrid : LucideIcons.list,
-                title: context.l10n.layoutLabel,
-                caption:
-                    app.gridView
-                        ? context.l10n.gridLabel
-                        : context.l10n.listLabel,
-                onTap: () => notifier.setAppGridView(!app.gridView),
-              ),
-              _QuickToggleTile(
-                icon: LucideIcons.rows3,
-                title: context.l10n.densityLabel,
-                caption:
-                    app.density == EntryDensity.compact
-                        ? context.l10n.compactLabel
-                        : context.l10n.comfortableLabel,
-                onTap:
-                    () => notifier.setAppDensity(
-                      app.density == EntryDensity.compact
-                          ? EntryDensity.comfortable
-                          : EntryDensity.compact,
+              Expanded(
+                child: Column(
+                  children: [
+                    _QuickToggleTile(
+                      icon: LucideIcons.image,
+                      title: context.l10n.useWallpaperColors,
+                      value: app.dynamicColor,
+                      onTap: () => notifier.setDynamicColor(!app.dynamicColor),
                     ),
-              ),
-              _QuickToggleTile(
-                icon: LucideIcons.wifi,
-                title: 'Preload on cellular',
-                value: app.preloadPreviewOnCellular,
-                onTap:
-                    () => notifier.setPreloadPreviewOnCellular(
-                      !app.preloadPreviewOnCellular,
+                    const SizedBox(height: Spacing.sm),
+                    _QuickToggleTile(
+                      icon:
+                          app.gridView
+                              ? LucideIcons.layoutGrid
+                              : LucideIcons.list,
+                      title: context.l10n.layoutLabel,
+                      caption:
+                          app.gridView
+                              ? context.l10n.gridLabel
+                              : context.l10n.listLabel,
+                      onTap: () => notifier.setAppGridView(!app.gridView),
                     ),
+                    const SizedBox(height: Spacing.sm),
+                    _QuickToggleTile(
+                      icon: LucideIcons.wifi,
+                      title: 'Preload on cellular',
+                      value: app.preloadPreviewOnCellular,
+                      onTap:
+                          () => notifier.setPreloadPreviewOnCellular(
+                            !app.preloadPreviewOnCellular,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Column(
+                  children: [
+                    _QuickToggleTile(
+                      icon: LucideIcons.moon,
+                      title: 'AMOLED Dark',
+                      value: app.amoledDark,
+                      onTap: () => notifier.setAmoledDark(!app.amoledDark),
+                    ),
+                    const SizedBox(height: Spacing.sm),
+                    _QuickToggleTile(
+                      icon: LucideIcons.rows3,
+                      title: context.l10n.densityLabel,
+                      caption:
+                          app.density == EntryDensity.compact
+                              ? context.l10n.compactLabel
+                              : context.l10n.comfortableLabel,
+                      onTap:
+                          () => notifier.setAppDensity(
+                            app.density == EntryDensity.compact
+                                ? EntryDensity.comfortable
+                                : EntryDensity.compact,
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

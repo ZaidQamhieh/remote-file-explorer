@@ -123,13 +123,13 @@ void main() {
     tester,
   ) async {
     final c = await pump(tester);
-    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
+    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);
 
     // Now a quick-toggle tile — the whole tile is tappable, no Switch.
     await tester.tap(find.text('Use wallpaper colors'));
     await tester.pumpAndSettle();
 
-    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isFalse);
+    expect(c.read(settingsProvider).valueOrNull!.app.dynamicColor, isTrue);
   });
 
   // Guards the index-keyed nullable picker: selecting "Default" (a null Color)

@@ -442,7 +442,7 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
       ),
       visibility: _readAppVisibility(prefs),
       themeMode: _themeModeFrom(prefs.getString(_kThemeMode)),
-      dynamicColor: prefs.getBool(_kDynamicColor) ?? true,
+      dynamicColor: prefs.getBool(_kDynamicColor) ?? false,
       notificationsEnabled: prefs.getBool(_kNotifications) ?? true,
       lowDiskThresholdBytes:
           prefs.getInt(_kLowDiskThreshold) ?? 1024 * 1024 * 1024,

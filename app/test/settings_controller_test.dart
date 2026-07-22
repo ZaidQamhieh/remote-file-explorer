@@ -238,14 +238,17 @@ void main() {
   group('appearance defaults and persistence', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
-    test('fresh install defaults to system theme + dynamic color on', () async {
-      final c = ProviderContainer();
-      addTearDown(c.dispose);
-      final s = await c.read(settingsProvider.future);
+    test(
+      'fresh install defaults to system theme + dynamic color off',
+      () async {
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        final s = await c.read(settingsProvider.future);
 
-      expect(s.app.themeMode, ThemeMode.system);
-      expect(s.app.dynamicColor, isTrue);
-    });
+        expect(s.app.themeMode, ThemeMode.system);
+        expect(s.app.dynamicColor, isFalse);
+      },
+    );
 
     test('setThemeMode / setDynamicColor update state and persist', () async {
       final c1 = ProviderContainer();

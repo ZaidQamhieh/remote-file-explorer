@@ -26,7 +26,7 @@ class AppDefaults {
     this.sort = const SortOrder(),
     this.visibility = const VisibilityPrefs(),
     this.themeMode = ThemeMode.system,
-    this.dynamicColor = true,
+    this.dynamicColor = false,
     this.notificationsEnabled = true,
     this.lowDiskThresholdBytes = 1024 * 1024 * 1024,
     this.appLockEnabled = false,

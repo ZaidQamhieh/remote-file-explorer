@@ -36,6 +36,11 @@ class _PressableState extends State<Pressable> {
   Widget build(BuildContext context) {
     final disabled = widget.onTap == null && widget.onLongPress == null;
     return GestureDetector(
+      // Without this, GestureDetector defaults to HitTestBehavior.deferToChild:
+      // only pixels a descendant actually paints (icon, text glyphs) register a
+      // hit, so the whitespace gaps in a Row (e.g. between a left-aligned title
+      // and a trailing chevron) are dead space — most of a row's visual area.
+      behavior: HitTestBehavior.opaque,
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       onTapDown: disabled ? null : (_) => _setPressed(true),

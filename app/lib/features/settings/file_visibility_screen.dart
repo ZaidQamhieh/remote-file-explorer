@@ -81,31 +81,41 @@ class FileVisibilityScreen extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           SettingsSection(
             title: context.l10n.customLabel,
+            // Single child, not 3: SettingsSection inserts a Divider between
+            // every pair of children (meant for distinct rows), which would
+            // otherwise cut a divider through this composite block (empty-
+            // state text/chip-wrap, spacer, input field) that isn't a list
+            // of rows at all.
             children: [
-              if (custom.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
-                  child: Text(
-                    context.l10n.noCustomExtensions,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                Wrap(
-                  spacing: Spacing.xs,
-                  runSpacing: Spacing.xs,
-                  children: [
-                    for (final ext in custom)
-                      InputChip(
-                        label: Text('.$ext'),
-                        onDeleted: () => notifier.removeExtension(ext),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (custom.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+                      child: Text(
+                        context.l10n.noCustomExtensions,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                  ],
-                ),
-              const SizedBox(height: Spacing.xs),
-              AddExtensionField(onSubmit: notifier.addExtension),
+                    )
+                  else
+                    Wrap(
+                      spacing: Spacing.xs,
+                      runSpacing: Spacing.xs,
+                      children: [
+                        for (final ext in custom)
+                          InputChip(
+                            label: Text('.$ext'),
+                            onDeleted: () => notifier.removeExtension(ext),
+                          ),
+                      ],
+                    ),
+                  const SizedBox(height: Spacing.xs),
+                  AddExtensionField(onSubmit: notifier.addExtension),
+                ],
+              ),
             ],
           ),
         ],

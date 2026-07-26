@@ -10,7 +10,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/screen_header.dart';
 import '../handoff/qr_scan_screen.dart';
-import '../home/home_state.dart';
 import '../pairing/pairing_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
@@ -79,12 +78,6 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
             icon: const Icon(Icons.refresh_rounded),
             tooltip: context.l10n.refreshTooltip,
             onPressed: () => ref.invalidate(hostStoreProvider),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: context.l10n.appSettingsTooltip,
-            onPressed:
-                () => ref.read(selectedTabIndexProvider.notifier).state = 3,
           ),
           const SizedBox(width: Spacing.xs),
         ],

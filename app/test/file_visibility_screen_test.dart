@@ -7,6 +7,7 @@ import 'package:remote_file_explorer/features/settings/file_visibility_screen.da
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // FileVisibilityScreen widget tests — the drill-in that replaced the old
 // inline file-visibility card: hide-dotfiles toggle, one collapsed
@@ -31,9 +32,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: FileVisibilityScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: FileVisibilityScreen(),
+          ),
         ),
       ),
     );

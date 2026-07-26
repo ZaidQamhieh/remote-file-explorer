@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -128,7 +128,7 @@ class SettingsTile extends StatelessWidget {
   Widget _trailing(BuildContext context, ColorScheme scheme) {
     switch (_kind) {
       case _Kind.toggle:
-        return Switch(value: _value, onChanged: _onChanged);
+        return ShadSwitch(value: _value, onChanged: _onChanged);
       case _Kind.nav:
         return Icon(
           LucideIcons.chevronRight,

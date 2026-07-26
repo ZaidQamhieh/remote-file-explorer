@@ -8,6 +8,7 @@ import 'package:remote_file_explorer/features/settings/file_visibility_screen.da
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // Relocated from app_settings_screen_test.dart (Settings Overhaul, Task 5):
 // these controls now live on AppearanceSettingsScreen, not the top-level nav.
@@ -35,9 +36,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: AppearanceSettingsScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: AppearanceSettingsScreen(),
+          ),
         ),
       ),
     );

@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'core/app_info.dart';
@@ -178,12 +179,29 @@ class RemoteFileExplorerApp extends ConsumerWidget {
     required ThemeData dark,
     required ThemeMode mode,
   }) {
-    return MaterialApp(
+    // ShadApp wraps the same WidgetsApp/Navigator/Localizations machinery
+    // MaterialApp used — existing Material widgets, routes, and l10n are
+    // unaffected. materialThemeBuilder hands back our hand-tuned [light]/
+    // [dark] ThemeData verbatim (dynamic color, AMOLED, accent picker all
+    // still flow through unchanged); the ShadThemeData below only drives the
+    // new Shad* widgets being introduced screen-by-screen.
+    return ShadApp(
       title: 'Remote File Explorer',
       navigatorKey: navigatorKey,
-      theme: light,
-      darkTheme: dark,
+      theme: ShadThemeData(
+        brightness: Brightness.light,
+        colorScheme: const ShadZincColorScheme.light(),
+      ),
+      darkTheme: ShadThemeData(
+        brightness: Brightness.dark,
+        colorScheme: const ShadZincColorScheme.dark(),
+      ),
       themeMode: mode,
+      // `theme` here is ShadApp's already-resolved brightness for the
+      // current themeMode/platform — defer to it rather than re-deriving.
+      materialThemeBuilder:
+          (context, theme) =>
+              theme.brightness == Brightness.dark ? dark : light,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: ShareIntakeListener(

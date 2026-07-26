@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/theme/tokens.dart';
 
@@ -67,18 +68,28 @@ class SettingsSection extends StatelessWidget {
             ],
           ),
         ),
-        Card(
+        ShadCard(
+          padding: EdgeInsets.zero,
+          radius: Radii.cardR,
+          backgroundColor: scheme.surfaceContainerLow,
+          border: ShadBorder.all(color: scheme.outlineVariant),
           clipBehavior: Clip.antiAlias,
-          child:
-              padded
-                  ? Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md,
-                      vertical: Spacing.xs,
-                    ),
-                    child: Column(children: _divided(children, scheme, 56)),
-                  )
-                  : Column(children: _divided(children, scheme, 62)),
+          // ShadCard paints its background on a plain DecoratedBox, not a
+          // Material ancestor — without this, rows nested inside (ListTile,
+          // InkWell) lose ink splashes and Flutter throws in debug/test.
+          child: Material(
+            type: MaterialType.transparency,
+            child:
+                padded
+                    ? Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.md,
+                        vertical: Spacing.xs,
+                      ),
+                      child: Column(children: _divided(children, scheme, 56)),
+                    )
+                    : Column(children: _divided(children, scheme, 62)),
+          ),
         ),
       ],
     );

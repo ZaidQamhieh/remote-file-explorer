@@ -83,6 +83,7 @@
   "transfersMenuItem": "Transfers",
   "diagnosticsMenuItem": "Diagnostics",
   "settingsMenuItem": "Settings",
+  "moreOptionsTooltip": "More options",
 
   "nMoreDrives": "+{count} more",
   "@nMoreDrives": {

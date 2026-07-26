@@ -140,6 +140,10 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 	}
 	results := make([]BatchResult, len(ids))
 	for i, id := range ids {
+		if err := validateTrashID(id); err != nil {
+			results[i] = BatchResult{Path: id, Error: apiErr("BAD_REQUEST", err.Error())}
+			continue
+		}
 		infoPath := filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)
 		orig, _, err := readTrashInfo(infoPath)
 		if err != nil {
@@ -175,7 +179,10 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 
 // EmptyTrash permanently removes trash items. With no ids the whole store is
 // emptied; otherwise only the given ids are removed.
-func EmptyTrash(trashDir string, ids []string) error {
+func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
+	if o.settings.IsReadOnly() {
+		return ErrReadOnly
+	}
 	if len(ids) == 0 {
 		if err := os.RemoveAll(trashFilesDir(trashDir)); err != nil {
 			return err
@@ -183,12 +190,24 @@ func EmptyTrash(trashDir string, ids []string) error {
 		return os.RemoveAll(trashInfoDir(trashDir))
 	}
 	for _, id := range ids {
+		if err := validateTrashID(id); err != nil {
+			return err
+		}
 		if err := os.RemoveAll(filepath.Join(trashFilesDir(trashDir), id)); err != nil {
 			return err
 		}
 		if err := os.Remove(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateTrashID(id string) error {
+	if id == "" || id == "." || id == ".." || filepath.IsAbs(id) ||
+		filepath.VolumeName(id) != "" || filepath.Base(id) != id ||
+		strings.ContainsAny(id, `/\`) {
+		return ErrInvalidTrashID
 	}
 	return nil
 }

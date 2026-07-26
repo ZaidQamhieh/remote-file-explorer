@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class PaletteAction {
   const PaletteAction({
@@ -58,13 +58,13 @@ class _CommandPaletteState extends State<CommandPalette> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: TextField(
+            child: ShadInput(
               controller: _controller,
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Type a command...',
-                prefixIcon: Icon(LucideIcons.search),
-                border: OutlineInputBorder(),
+              placeholder: const Text('Type a command...'),
+              leading: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(LucideIcons.search, size: 18),
               ),
               onChanged: (v) => setState(() => _filter = v),
             ),

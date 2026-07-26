@@ -80,6 +80,37 @@ class PayloadTooLargeException implements Exception {
   String toString() => 'PayloadTooLargeException: $message';
 }
 
+/// Thrown when an in-memory response crosses the caller's byte budget.
+class ResponseTooLargeException implements Exception {
+  ResponseTooLargeException(this.maxBytes);
+
+  final int maxBytes;
+
+  @override
+  String toString() => 'Response exceeds the $maxBytes-byte in-memory limit.';
+}
+
+const int maxInMemoryResponseBytes = 50 * 1024 * 1024;
+
+/// Collects a response stream while enforcing a hard limit on bytes actually
+/// received (not potentially stale remote metadata).
+Future<Uint8List> readBoundedByteStream(
+  Stream<List<int>> stream, {
+  required int maxBytes,
+}) async {
+  if (maxBytes < 0) throw ArgumentError.value(maxBytes, 'maxBytes');
+  final builder = BytesBuilder(copy: false);
+  var received = 0;
+  await for (final chunk in stream) {
+    if (chunk.length > maxBytes - received) {
+      throw ResponseTooLargeException(maxBytes);
+    }
+    builder.add(chunk);
+    received += chunk.length;
+  }
+  return builder.takeBytes();
+}
+
 /// Thrown by [AgentClient.downloadFile] when a resumed download (a Range
 /// request with `startByte > 0`) was answered with a full `200 OK` instead
 /// of a `206 Partial Content`.
@@ -140,6 +171,22 @@ bool shouldRequestGzipDownload({
   }
   return connectivity.contains(ConnectivityResult.mobile);
 }
+
+/// Whether an unreachable-address fallback may transparently replay a
+/// request. Mutations are never replayed: the first address may have committed
+/// before its response was lost.
+bool canReplayOnAddressFallback(String method) {
+  final normalized = method.toUpperCase();
+  return normalized == 'GET' || normalized == 'HEAD';
+}
+
+/// Offline bytes are a connectivity fallback, never a substitute for a
+/// rejected authenticated request.
+bool canServeOfflineAfter(DioException error) =>
+    error.error is! CertPinMismatch &&
+    (error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout);
 
 /// HTTPS client for a single host agent.
 ///
@@ -205,6 +252,11 @@ class AgentClient {
           final newBase = _baseUrlFor(_addresses[_addrIndex]);
           _dio.options.baseUrl = newBase;
           _dio.options.connectTimeout = const Duration(seconds: 10);
+          if (!canReplayOnAddressFallback(e.requestOptions.method)) {
+            // Move future explicit retries to the alternate address, but do
+            // not duplicate a mutation whose commit status is unknown.
+            return handler.next(e);
+          }
           try {
             final retried = await _dio.fetch(
               e.requestOptions..baseUrl = newBase,
@@ -1084,27 +1136,36 @@ class AgentClient {
 
   /// Fetch the full contents of [remotePath] into memory as raw bytes.
   ///
-  /// Intended for small-ish files (previews of images/text/PDFs). Callers
-  /// should check [Entry.size] via [meta] first and avoid calling this for
-  /// very large files — there is no size cap enforced here.
+  /// Intended for previews and offline pinning. [maxBytes] is enforced against
+  /// the received stream even when remote metadata is missing or stale.
   Future<Uint8List> fetchBytes(
     String remotePath, {
     CancelToken? cancelToken,
+    int maxBytes = maxInMemoryResponseBytes,
   }) async {
     try {
       final headers = <String, dynamic>{};
       if (await _wantsGzip()) {
         headers['Accept-Encoding'] = 'gzip';
       }
-      final res = await _dio.get<List<int>>(
+      final res = await _dio.get<ResponseBody>(
         '/content',
         queryParameters: {'path': remotePath},
-        options: Options(responseType: ResponseType.bytes, headers: headers),
+        options: Options(responseType: ResponseType.stream, headers: headers),
         cancelToken: cancelToken,
       );
-      final data = res.data;
-      final bytes =
-          data is Uint8List ? data : Uint8List.fromList(data ?? const []);
+      final contentLength = int.tryParse(
+        res.headers.value(Headers.contentLengthHeader) ?? '',
+      );
+      if (contentLength != null && contentLength > maxBytes) {
+        throw ResponseTooLargeException(maxBytes);
+      }
+      final body = res.data;
+      if (body == null) return Uint8List(0);
+      final bytes = await readBoundedByteStream(
+        body.stream,
+        maxBytes: maxBytes,
+      );
 
       // Cache bytes when the parent folder is pinned (fire-and-forget).
       final cache = offlineBodyCache;
@@ -1117,9 +1178,17 @@ class AgentClient {
 
       return bytes;
     } on DioException catch (e) {
-      // Offline fallback: serve from cache when the agent is unreachable.
-      final cached = await offlineBodyCache?.get(host.id, remotePath);
-      if (cached != null) return cached;
+      // Offline fallback is only for connectivity failures. A cached body
+      // must never hide revoked credentials or another server rejection.
+      if (canServeOfflineAfter(e)) {
+        final cached = await offlineBodyCache?.get(host.id, remotePath);
+        if (cached != null) {
+          if (cached.lengthInBytes > maxBytes) {
+            throw ResponseTooLargeException(maxBytes);
+          }
+          return cached;
+        }
+      }
       throw _apiError(e);
     }
   }

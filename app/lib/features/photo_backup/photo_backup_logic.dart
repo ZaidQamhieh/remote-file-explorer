@@ -3,8 +3,57 @@
 /// these to photo_manager / the transfer queue.
 library;
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 /// Two-digit zero-padded string for the date-folder layout.
 String _two(int n) => n.toString().padLeft(2, '0');
+
+String safeRemoteSegment(String raw, {required String fallback}) {
+  var segment = raw.split(RegExp(r'[/\\]')).last.trim();
+  segment = segment.replaceAll(RegExp(r'[\x00-\x1f\x7f:*?"<>|]'), '_');
+  segment = segment.replaceFirst(RegExp(r'[. ]+$'), '');
+  if (segment.isEmpty || segment == '.' || segment == '..') return fallback;
+  final stem = segment.split('.').first;
+  if (RegExp(
+    r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',
+    caseSensitive: false,
+  ).hasMatch(stem)) {
+    return fallback;
+  }
+  if (segment.length > 120) segment = segment.substring(0, 120);
+  return segment;
+}
+
+String photoBackupFileName({
+  required String assetId,
+  required String suggestedName,
+  required String localPath,
+}) {
+  final suggested = safeRemoteSegment(suggestedName, fallback: 'photo');
+  final local = safeRemoteSegment(localPath, fallback: 'photo');
+  final extensionSource = suggested.contains('.') ? suggested : local;
+  final dot = extensionSource.lastIndexOf('.');
+  final candidateExtension =
+      dot >= 0 ? extensionSource.substring(dot).toLowerCase() : '';
+  final extension =
+      RegExp(r'^\.[a-z0-9]{1,10}$').hasMatch(candidateExtension)
+          ? candidateExtension
+          : '.jpg';
+  final stemWithExtension =
+      suggested.endsWith(extension)
+          ? suggested.substring(0, suggested.length - extension.length)
+          : suggested;
+  final stem = safeRemoteSegment(stemWithExtension, fallback: 'photo');
+  final suffix = sha256
+      .convert(utf8.encode(assetId))
+      .toString()
+      .substring(0, 12);
+  final maxStem = 120 - suffix.length - extension.length - 1;
+  final boundedStem = stem.length > maxStem ? stem.substring(0, maxStem) : stem;
+  return '$boundedStem-$suffix$extension';
+}
 
 /// Builds the remote destination path for a photo:
 /// `<destRoot>/[deviceSegment/]YYYY/YYYY-MM/<name>`, using [created] (the
@@ -30,9 +79,14 @@ String backupRemotePath({
     root = root.substring(0, root.length - 1);
   }
   if (root == '/') root = '';
+  final safeName = safeRemoteSegment(name, fallback: 'photo');
+  final safeDevice =
+      deviceSegment.isEmpty
+          ? ''
+          : safeRemoteSegment(deviceSegment, fallback: 'device');
   final dateFolders =
-      deviceSegment.isEmpty ? '$year/$month' : '$deviceSegment/$year/$month';
-  return '$root/$dateFolders/$name';
+      safeDevice.isEmpty ? '$year/$month' : '$safeDevice/$year/$month';
+  return '$root/$dateFolders/$safeName';
 }
 
 /// Returns the subset of [allIds] (photo asset ids) not present in

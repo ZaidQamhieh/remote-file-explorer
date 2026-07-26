@@ -17,6 +17,11 @@ PUBSPEC="$APP_DIR/pubspec.yaml"
 UPDATES_DIR="${RFE_UPDATES_DIR:-$HOME/.rfe-agent/updates}"
 FLUTTER="${FLUTTER_BIN:-$HOME/flutter/bin/flutter}"
 
+if [[ ! -f "$APP_DIR/android/key.properties" ]]; then
+  echo "error: app/android/key.properties is required for a production release" >&2
+  exit 1
+fi
+
 # Optional: bump the version in pubspec first (arg form X.Y.Z+N).
 if [[ "${1:-}" != "" ]]; then
   NEW_VERSION="$1"

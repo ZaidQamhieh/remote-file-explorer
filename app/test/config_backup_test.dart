@@ -118,5 +118,26 @@ void main() {
       // AES-GCM nonce is 12 bytes.
       expect(base64Decode(map['nonce'] as String).length, 12);
     });
+
+    test('rejects an envelope before parsing when it exceeds the size cap', () {
+      expect(
+        () => decodeBackup('x' * (kMaxBackupEnvelopeChars + 1), 'passphrase'),
+        throwsA(isA<BackupException>()),
+      );
+    });
+
+    test('rejects attacker-controlled KDF work factors', () async {
+      final envelope = await encodeBackup(
+        samplePayload(),
+        'correct horse battery',
+      );
+      final map = jsonDecode(envelope) as Map<String, dynamic>;
+      map['iter'] = 2000000000;
+
+      expect(
+        () => decodeBackup(jsonEncode(map), 'correct horse battery'),
+        throwsA(isA<BackupException>()),
+      );
+    });
   });
 }

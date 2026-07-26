@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:crypto/crypto.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
@@ -27,6 +29,7 @@ class AudioPreviewScreen extends StatefulWidget {
     required this.entry,
     required this.client,
     this.chromeless = false,
+    this.active = true,
   });
 
   final Entry entry;
@@ -36,24 +39,49 @@ class AudioPreviewScreen extends StatefulWidget {
   /// shared top bar across sibling pages.
   final bool chromeless;
 
+  /// Only the visible page may download or play media. PreviewPager keeps
+  /// adjacent pages alive for swiping, so this gate prevents neighbour
+  /// autoplay and releases offscreen resources.
+  final bool active;
+
   @override
   State<AudioPreviewScreen> createState() => _AudioPreviewScreenState();
 }
 
 class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
-  late Future<AudioPlayer> _future;
+  Future<AudioPlayer>? _future;
   AudioPlayer? _player;
   File? _tempFile;
+  int _loadGeneration = 0;
 
   double _progress = 0;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    if (widget.active) _startLoad();
   }
 
-  Future<AudioPlayer> _load() async {
+  @override
+  void didUpdateWidget(covariant AudioPreviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entry.path != widget.entry.path ||
+        oldWidget.active != widget.active) {
+      _stopLoad();
+      if (widget.active) _startLoad();
+    }
+  }
+
+  void _startLoad() {
+    final generation = ++_loadGeneration;
+    _progress = 0;
+    _future = _load(generation);
+  }
+
+  bool _isCurrentLoad(int generation) =>
+      mounted && widget.active && generation == _loadGeneration;
+
+  Future<AudioPlayer> _load(int generation) async {
     final size = widget.entry.size;
     if (size != null && size > kMaxAudioPreviewBytes) {
       throw _TooLarge(size);
@@ -64,8 +92,12 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
     if (!await previewDir.exists()) {
       await previewDir.create(recursive: true);
     }
-    final safeName = widget.entry.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
-    final file = File('${previewDir.path}/$safeName');
+    final cacheKey = sha256
+        .convert(
+          utf8.encode('${widget.client.host.id}\u0000${widget.entry.path}'),
+        )
+        .toString();
+    final file = File('${previewDir.path}/$cacheKey.audio');
     _tempFile = file;
 
     if (await file.exists()) {
@@ -83,19 +115,40 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
       },
     );
 
+    if (!_isCurrentLoad(generation)) {
+      await file.delete().catchError((_) => file);
+      throw const _LoadCanceled();
+    }
+
     final player = AudioPlayer();
-    _player = player;
-    await player.setFilePath(file.path);
-    player.play();
-    return player;
+    try {
+      await player.setFilePath(file.path);
+      if (!_isCurrentLoad(generation)) throw const _LoadCanceled();
+      _player = player;
+      await player.play();
+      return player;
+    } catch (_) {
+      await player.dispose();
+      if (identical(_player, player)) _player = null;
+      rethrow;
+    }
   }
 
   void _retry() {
     setState(() {
       _progress = 0;
-      _disposePlayer();
-      _future = _load();
+      _stopLoad();
+      _startLoad();
     });
+  }
+
+  void _stopLoad() {
+    _loadGeneration++;
+    _disposePlayer();
+    _future = null;
+    final file = _tempFile;
+    _tempFile = null;
+    file?.delete().catchError((_) => file);
   }
 
   void _disposePlayer() {
@@ -105,8 +158,7 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
 
   @override
   void dispose() {
-    _disposePlayer();
-    _tempFile?.delete().catchError((_) => _tempFile!);
+    _stopLoad();
     super.dispose();
   }
 
@@ -115,7 +167,10 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
     return PreviewScaffold(
       title: widget.entry.name,
       chromeless: widget.chromeless,
-      body: FutureBuilder<AudioPlayer>(
+      body:
+          !widget.active || _future == null
+              ? const SizedBox.expand()
+              : FutureBuilder<AudioPlayer>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -141,9 +196,13 @@ class _AudioPreviewScreenState extends State<AudioPreviewScreen> {
             title: widget.entry.name,
           );
         },
-      ),
+                ),
     );
   }
+}
+
+class _LoadCanceled implements Exception {
+  const _LoadCanceled();
 }
 
 /// Available playback speed presets.

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/storage/transfer_journal.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class TransferJournalScreen extends ConsumerWidget {
   const TransferJournalScreen({super.key});
@@ -22,20 +22,20 @@ class TransferJournalScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(LucideIcons.trash2),
             onPressed: () async {
-              final confirmed = await showDialog<bool>(
+              final confirmed = await showShadDialog<bool>(
                 context: context,
                 builder:
-                    (ctx) => AlertDialog(
+                    (ctx) => ShadDialog.alert(
                       title: const Text('Clear History'),
-                      content: const Text(
+                      description: const Text(
                         'Remove all transfer history records?',
                       ),
                       actions: [
-                        TextButton(
+                        ShadButton.ghost(
                           onPressed: () => Navigator.pop(ctx, false),
                           child: Text(ctx.l10n.cancelButton),
                         ),
-                        FilledButton(
+                        ShadButton.destructive(
                           onPressed: () => Navigator.pop(ctx, true),
                           child: const Text('Clear'),
                         ),

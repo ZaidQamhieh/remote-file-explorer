@@ -7,8 +7,10 @@ import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/features/explorer/widgets/destination_picker_sheet.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
@@ -49,22 +51,24 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
-        child: MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Scaffold(
-            body: Builder(
-              builder:
-                  (context) => ElevatedButton(
-                    onPressed:
-                        () => showDestinationPicker(
-                          context,
-                          hostId: 'h1',
-                          originPath: originPath,
-                          itemCount: 2,
-                          isCopy: false,
-                        ),
-                    child: const Text('open'),
-                  ),
+        child: wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Scaffold(
+              body: Builder(
+                builder:
+                    (context) => ElevatedButton(
+                      onPressed:
+                          () => showDestinationPicker(
+                            context,
+                            hostId: 'h1',
+                            originPath: originPath,
+                            itemCount: 2,
+                            isCopy: false,
+                          ),
+                      child: const Text('open'),
+                    ),
+              ),
             ),
           ),
         ),
@@ -116,8 +120,8 @@ void main() {
 
     await pumpSheet(tester, originPath: '/root');
 
-    final confirm = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Move here'),
+    final confirm = tester.widget<ShadButton>(
+      find.widgetWithText(ShadButton, 'Move here'),
     );
     expect(confirm.onPressed, isNull);
   });
@@ -141,8 +145,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    final confirm = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Move here'),
+    final confirm = tester.widget<ShadButton>(
+      find.widgetWithText(ShadButton, 'Move here'),
     );
     expect(confirm.onPressed, isNotNull);
   });
@@ -163,23 +167,25 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [clientProvider.overrideWith((ref, hostId) async => client)],
-        child: MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Scaffold(
-            body: Builder(
-              builder:
-                  (context) => ElevatedButton(
-                    onPressed: () async {
-                      result = await showDestinationPicker(
-                        context,
-                        hostId: 'h1',
-                        originPath: '/root',
-                        itemCount: 1,
-                        isCopy: false,
-                      );
-                    },
-                    child: const Text('open'),
-                  ),
+        child: wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Scaffold(
+              body: Builder(
+                builder:
+                    (context) => ElevatedButton(
+                      onPressed: () async {
+                        result = await showDestinationPicker(
+                          context,
+                          hostId: 'h1',
+                          originPath: '/root',
+                          itemCount: 1,
+                          isCopy: false,
+                        );
+                      },
+                      child: const Text('open'),
+                    ),
+              ),
             ),
           ),
         ),
@@ -196,7 +202,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Move here'));
+    await tester.tap(find.widgetWithText(ShadButton, 'Move here'));
     await tester.pumpAndSettle();
 
     expect(result, '/root/Documents');

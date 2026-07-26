@@ -7,6 +7,17 @@ on:
     branches: [master, main]
 
 jobs:
+  contract:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - name: Redocly lint
+        run: npx --yes @redocly/cli@2.39.0 lint protocol/openapi.yaml
+
   agent:
     name: Agent (Go)
     runs-on: ubuntu-latest

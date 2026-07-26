@@ -10,6 +10,7 @@ import 'package:remote_file_explorer/features/settings/transfers_backup_settings
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // AppSettingsScreen is now a thin 5-row nav (Settings Overhaul); the actual
 // controls are covered by each sub-screen's own test file.
@@ -25,9 +26,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: AppSettingsScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: AppSettingsScreen(),
+          ),
         ),
       ),
     );

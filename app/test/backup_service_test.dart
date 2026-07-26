@@ -10,18 +10,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// FlutterSecureStorage (which requires platform channels).
 class FakeSecureKv implements SecureKv {
   final Map<String, String> store = {};
+  String? failNextWriteFor;
 
   @override
   Future<Map<String, String>> readAll() async => Map.of(store);
 
   @override
   Future<void> write(String key, String value) async {
+    if (failNextWriteFor == key) {
+      failNextWriteFor = null;
+      throw StateError('injected secure storage failure');
+    }
     store[key] = value;
   }
 
   @override
   Future<void> deleteAll() async {
     store.clear();
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    store.remove(key);
   }
 }
 
@@ -31,59 +41,81 @@ void main() {
   const passphrase = 'super-secret-passphrase';
 
   group('BackupService export/import round-trip', () {
-    test('reproduces prefs (with types) and secure entries', () async {
-      SharedPreferences.setMockInitialValues({
-        'rfe_hosts_v1': ['{"id":"h1"}', '{"id":"h2"}'],
-        'app.themeMode': 'dark',
-        'host.h1.sortField': 'size',
-        'rfe_some_int': 7,
-        'rfe_some_bool': true,
-      });
-      final prefs = await SharedPreferences.getInstance();
-      final secure = FakeSecureKv();
-      await secure.write('rfe_token_h1', 'tok-abc');
-      await secure.write('rfe_fp_h1', 'fp-123');
+    test(
+      'reproduces prefs but excludes credentials and device identity',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'rfe_hosts_v1': ['{"id":"h1"}', '{"id":"h2"}'],
+          'app.themeMode': 'dark',
+          'host.h1.sortField': 'size',
+          'rfe_some_int': 7,
+          'rfe_some_bool': true,
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final secure = FakeSecureKv();
+        await secure.write('rfe_token_h1', 'tok-abc');
+        await secure.write('rfe_fp_h1', 'fp-123');
+        await secure.write(
+          'rfe_device_identity_private_v1',
+          'original-private',
+        );
+        await secure.write('rfe_device_identity_public_v1', 'original-public');
 
-      final service = BackupService(prefs, secure);
-      final envelope = await service.exportToEnvelope(passphrase);
+        final service = BackupService(prefs, secure);
+        final envelope = await service.exportToEnvelope(passphrase);
 
-      // Sanity: the envelope round-trips through decodeBackup directly too.
-      final payload = await decodeBackup(envelope, passphrase);
-      expect(payload.prefs['rfe_hosts_v1']!.value, [
-        '{"id":"h1"}',
-        '{"id":"h2"}',
-      ]);
-      expect(payload.prefs['app.themeMode']!.value, 'dark');
-      expect(payload.prefs['host.h1.sortField']!.value, 'size');
-      expect(payload.prefs['rfe_some_int']!.value, 7);
-      expect(payload.prefs['rfe_some_int']!.type, PrefType.intType);
-      expect(payload.prefs['rfe_some_bool']!.value, true);
-      expect(payload.secure['rfe_token_h1'], 'tok-abc');
-      expect(payload.secure['rfe_fp_h1'], 'fp-123');
+        // Sanity: the envelope round-trips through decodeBackup directly too.
+        final payload = await decodeBackup(envelope, passphrase);
+        expect(payload.prefs['rfe_hosts_v1']!.value, [
+          '{"id":"h1"}',
+          '{"id":"h2"}',
+        ]);
+        expect(payload.prefs['app.themeMode']!.value, 'dark');
+        expect(payload.prefs['host.h1.sortField']!.value, 'size');
+        expect(payload.prefs['rfe_some_int']!.value, 7);
+        expect(payload.prefs['rfe_some_int']!.type, PrefType.intType);
+        expect(payload.prefs['rfe_some_bool']!.value, true);
+        expect(payload.secure['rfe_fp_h1'], 'fp-123');
+        expect(payload.secure, isNot(contains('rfe_token_h1')));
+        expect(
+          payload.secure,
+          isNot(contains('rfe_device_identity_private_v1')),
+        );
+        expect(
+          payload.secure,
+          isNot(contains('rfe_device_identity_public_v1')),
+        );
 
-      // Now mutate state on "this device" before importing — simulates a
-      // fresh install with different (or no) data.
-      await prefs.clear();
-      await prefs.setString('rfe_hosts_v1', 'should-be-overwritten');
-      secure.store.clear();
-      await secure.write('rfe_token_other', 'leftover');
+        // Now mutate state on "this device" before importing — simulates a
+        // fresh install with different (or no) data.
+        await prefs.clear();
+        await prefs.setString('rfe_hosts_v1', 'should-be-overwritten');
+        secure.store.clear();
+        await secure.write('rfe_token_other', 'leftover');
+        await secure.write('rfe_fp_other', 'stale-fingerprint');
+        await secure.write('rfe_device_identity_private_v1', 'current-private');
+        await secure.write('rfe_device_identity_public_v1', 'current-public');
+        await secure.write('unrelated_secure_key', 'keep-me');
 
-      await service.importFromEnvelope(envelope, passphrase);
+        await service.importFromEnvelope(envelope, passphrase);
 
-      expect(prefs.getStringList('rfe_hosts_v1'), [
-        '{"id":"h1"}',
-        '{"id":"h2"}',
-      ]);
-      expect(prefs.getString('app.themeMode'), 'dark');
-      expect(prefs.getString('host.h1.sortField'), 'size');
-      expect(prefs.getInt('rfe_some_int'), 7);
-      expect(prefs.getBool('rfe_some_bool'), true);
+        expect(prefs.getStringList('rfe_hosts_v1'), [
+          '{"id":"h1"}',
+          '{"id":"h2"}',
+        ]);
+        expect(prefs.getString('app.themeMode'), 'dark');
+        expect(prefs.getString('host.h1.sortField'), 'size');
+        expect(prefs.getInt('rfe_some_int'), 7);
+        expect(prefs.getBool('rfe_some_bool'), true);
 
-      expect(await secure.readAll(), {
-        'rfe_token_h1': 'tok-abc',
-        'rfe_fp_h1': 'fp-123',
-      });
-    });
+        expect(await secure.readAll(), {
+          'rfe_fp_h1': 'fp-123',
+          'rfe_device_identity_private_v1': 'current-private',
+          'rfe_device_identity_public_v1': 'current-public',
+          'unrelated_secure_key': 'keep-me',
+        });
+      },
+    );
 
     test(
       'replace semantics: a stale rfe_ key not in the backup is removed',
@@ -123,6 +155,28 @@ void main() {
       await service.importFromEnvelope(envelope, passphrase);
 
       expect(prefs.getString('unrelated.key'), 'keep-me');
+    });
+
+    test('rolls back the previous snapshot when a write fails', () async {
+      SharedPreferences.setMockInitialValues({'app.themeMode': 'dark'});
+      final prefs = await SharedPreferences.getInstance();
+      final secure = FakeSecureKv()..store['rfe_fp_h1'] = 'new-fingerprint';
+      final service = BackupService(prefs, secure);
+      final envelope = await service.exportToEnvelope(passphrase);
+
+      await prefs.setString('app.themeMode', 'light');
+      secure.store
+        ..clear()
+        ..['rfe_fp_old'] = 'old-fingerprint';
+      secure.failNextWriteFor = 'rfe_fp_h1';
+
+      await expectLater(
+        service.importFromEnvelope(envelope, passphrase),
+        throwsA(isA<BackupException>()),
+      );
+
+      expect(prefs.getString('app.themeMode'), 'light');
+      expect(secure.store, {'rfe_fp_old': 'old-fingerprint'});
     });
   });
 }

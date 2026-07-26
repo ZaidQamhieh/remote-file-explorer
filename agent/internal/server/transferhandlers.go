@@ -64,7 +64,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "PATH_NOT_FOUND", "file not found")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternalError(w, r, err)
 			}
 			return
 		}
@@ -72,7 +72,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 
 		info, err := f.Stat()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		w = countingWriter{w}
@@ -178,7 +178,7 @@ func writeContentHandler(ops *fsops.Ops) http.HandlerFunc {
 // maxChunkSize caps the client-chosen chunkSize for an upload session.
 // Chunks are buffered fully in memory (see uploadChunkHandler), so an
 // unbounded chunkSize would let a client force large allocations.
-const maxChunkSize = 32 * 1024 * 1024 // 32 MiB
+const maxChunkSize = transfer.MaxChunkSize
 
 // --------- POST /transfers ---------
 
@@ -192,8 +192,7 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 			ChunkSize int    `json:"chunkSize"`
 			Overwrite bool   `json:"overwrite"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.Path == "" || req.SHA256 == "" || req.ChunkSize <= 0 {
@@ -206,6 +205,10 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 		}
 		if req.ChunkSize > maxChunkSize {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "chunkSize exceeds maximum of 32MiB")
+			return
+		}
+		if err := ops.CheckWritable(); err != nil {
+			handleFsError(w, err)
 			return
 		}
 		// Validate path is in jail.
@@ -227,7 +230,19 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			if errors.Is(err, transfer.ErrFileTooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "file exceeds maximum upload size")
+				return
+			}
+			if errors.Is(err, transfer.ErrQuotaExceeded) {
+				writeError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", "active upload quota reached")
+				return
+			}
+			if errors.Is(err, transfer.ErrInvalidSession) {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid transfer declaration")
+				return
+			}
+			writeInternalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, transferSession(t))
@@ -241,11 +256,11 @@ func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		t, err := tm.Status(id)
 		if err != nil {
-			if errors.Is(err, transfer.ErrNotFound) {
-				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
-			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
-			}
+			writeTransferLookupError(w, err)
+			return
+		}
+		if !canAccessTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
 		writeJSON(w, http.StatusOK, transferSession(t))
@@ -254,12 +269,17 @@ func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 
 // --------- PUT /transfers/{id}/chunks/{n} ---------
 
-func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.HandlerFunc {
+func uploadChunkHandler(tm *transfer.Manager, ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 	var ss *settings.Store
 	if len(st) > 0 {
 		ss = st[0]
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
+		if err := ops.CheckWritable(); err != nil {
+			handleFsError(w, err)
+			return
+		}
 		id := chi.URLParam(r, "id")
 		nStr := chi.URLParam(r, "n")
 		n, err := strconv.Atoi(nStr)
@@ -275,11 +295,11 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 
 		t, err := tm.Status(id)
 		if err != nil {
-			if errors.Is(err, transfer.ErrNotFound) {
-				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeTransferLookupError(w, err)
+			return
+		}
+		if !canAccessTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
 
@@ -307,6 +327,10 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 		}
 
 		if err := tm.WriteChunk(id, n, data, chunkSHA256); err != nil {
+			if errors.Is(err, transfer.ErrExpired) {
+				writeError(w, http.StatusGone, "TRANSFER_EXPIRED", "transfer session expired")
+				return
+			}
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 				return
@@ -315,7 +339,11 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 				writeError(w, http.StatusConflict, "CHUNK_HASH_MISMATCH", err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			if errors.Is(err, transfer.ErrInvalidChunk) {
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+				return
+			}
+			writeInternalError(w, r, err)
 			return
 		}
 		rxBytesTotal.Add(int64(len(data)))
@@ -328,6 +356,10 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
+		if err := ops.CheckWritable(); err != nil {
+			handleFsError(w, err)
+			return
+		}
 		id := chi.URLParam(r, "id")
 
 		// Re-check the session's target path against the calling device's
@@ -336,26 +368,44 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		// isn't otherwise scoped to the device that opened it — so a jailed
 		// device must not be able to "complete" (i.e. trigger the final
 		// rename for) a session targeting a path outside its own jail.
-		var verifiedSHA256 string
-		if t, err := tm.Status(id); err == nil && t != nil {
-			verifiedSHA256 = t.SHA256
-			if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
-				handleFsError(w, resolveErr)
-				return
-			}
+		t, err := tm.Status(id)
+		if err != nil {
+			writeTransferLookupError(w, err)
+			return
+		}
+		if !canAccessTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			return
+		}
+		verifiedSHA256 := t.SHA256
+		if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
+			handleFsError(w, resolveErr)
+			return
 		}
 
 		_, targetPath, err := tm.Complete(id)
 		if err != nil {
+			if errors.Is(err, transfer.ErrExpired) {
+				writeError(w, http.StatusGone, "TRANSFER_EXPIRED", "transfer session expired")
+				return
+			}
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+				return
+			}
+			if errors.Is(err, transfer.ErrDestinationExists) {
+				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
 				return
 			}
 			if errors.Is(err, transfer.ErrFileMismatch) {
 				writeError(w, http.StatusUnprocessableEntity, "HASH_MISMATCH", err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			if errors.Is(err, transfer.ErrIncomplete) {
+				writeError(w, http.StatusConflict, "TRANSFER_INCOMPLETE", err.Error())
+				return
+			}
+			writeInternalError(w, r, err)
 			return
 		}
 		// Complete() only returns successfully once the whole-file SHA-256 has
@@ -385,6 +435,14 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 	}
 }
 
+func canAccessTransfer(r *http.Request, t *store.Transfer) bool {
+	if t.DeviceID == "" {
+		return true // Legacy rows created before transfer ownership was recorded.
+	}
+	d := deviceFromContext(r)
+	return d != nil && (d.ID == t.DeviceID || isAdminDevice(d))
+}
+
 // transferSession converts a store.Transfer to the UploadSession JSON shape.
 func transferSession(t *store.Transfer) map[string]any {
 	chunks := t.ReceivedChunks
@@ -399,5 +457,18 @@ func transferSession(t *store.Transfer) map[string]any {
 		"totalChunks":    t.TotalChunks,
 		"receivedChunks": chunks,
 		"status":         t.Status,
+		"createdAt":      time.Unix(t.CreatedAt, 0).UTC(),
+		"expiresAt":      time.Unix(t.ExpiresAt, 0).UTC(),
+	}
+}
+
+func writeTransferLookupError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, transfer.ErrNotFound):
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+	case errors.Is(err, transfer.ErrExpired):
+		writeError(w, http.StatusGone, "TRANSFER_EXPIRED", "transfer session expired")
+	default:
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "transfer operation failed")
 	}
 }

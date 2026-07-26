@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
@@ -18,7 +19,6 @@ import '../../../core/ui/sheet_chrome.dart';
 import '../../../core/ui/state_views.dart';
 import '../destination_picker_state.dart';
 import 'breadcrumb_bar.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Shows the destination picker sheet for [itemCount] selected items being
 /// `copy`d or `move`d, starting at [originPath] (the explorer's current
@@ -211,13 +211,13 @@ class DestinationPickerSheet extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            TextButton.icon(
+            ShadButton.ghost(
               onPressed: () => _newFolder(context, ref, notifier),
-              icon: const Icon(LucideIcons.folderPlus),
-              label: Text(context.l10n.newFolderButton),
+              leading: const Icon(LucideIcons.folderPlus),
+              child: Text(context.l10n.newFolderButton),
             ),
             const Spacer(),
-            FilledButton(
+            ShadButton(
               onPressed:
                   atOrigin
                       ? null
@@ -236,26 +236,26 @@ class DestinationPickerSheet extends ConsumerWidget {
     DestinationPickerNotifier notifier,
   ) async {
     final ctrl = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.newFolderButton),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: InputDecoration(hintText: ctx.l10n.nameHint),
-            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
                 child: Text(ctx.l10n.createButton),
               ),
             ],
+            child: ShadInput(
+              controller: ctrl,
+              autofocus: true,
+              placeholder: Text(ctx.l10n.nameHint),
+            ),
           ),
     );
     if (name == null || name.isEmpty || !context.mounted) return;

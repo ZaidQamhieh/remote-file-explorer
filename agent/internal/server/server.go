@@ -3,6 +3,9 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net/http"
 	"runtime"
 	"time"
@@ -58,6 +61,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager, hu
 		// Authenticated, no path jail (non-filesystem endpoints).
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware(db))
+			r.Use(adminOnlyMiddleware)
 			r.Get("/status", statusHandler(cfg))
 			r.Get("/metrics", metricsHandler())
 			r.Get("/transfers/list", listTransfersHandler(db))
@@ -131,7 +135,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 		}
 		revokeDeviceHandler(db)(w, req, id)
 	})
-	r.Post("/wol", wolRelayHandler())
+	r.With(adminOnlyMiddleware).Post("/wol", wolRelayHandler())
 	r.Post("/pairing/generate", generatePairingHandler(pm, cfg.Settings))
 }
 
@@ -173,7 +177,7 @@ func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 	r.Get("/trash", listTrashHandler(cfg.TrashDir))
 	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
-	r.Delete("/trash", emptyTrashHandler(cfg.TrashDir))
+	r.Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
 }
 
 // registerContentRoutes wires whole-file download/write (as opposed to the
@@ -188,7 +192,7 @@ func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 func registerTransferRoutes(r chi.Router, tm *transfer.Manager, cfg Config, ops *fsops.Ops) {
 	r.Post("/transfers", openTransferHandler(tm, ops))
 	r.Get("/transfers/{id}", transferStatusHandler(tm))
-	r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
+	r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, ops, cfg.Settings))
 	r.Post("/transfers/{id}/complete", completeTransferHandler(tm, ops))
 }
 
@@ -207,6 +211,52 @@ type apiError struct {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, apiError{Code: code, Message: message})
+}
+
+func writeServerError(w http.ResponseWriter, r *http.Request, code string, err error) {
+	requestID := ""
+	if r != nil {
+		requestID = middleware.GetReqID(r.Context())
+	}
+	log.Printf("request_id=%q server error: %v", requestID, err)
+	writeError(w, http.StatusInternalServerError, code, "internal server error")
+}
+
+func writeInternalError(w http.ResponseWriter, r *http.Request, err error) {
+	writeServerError(w, r, "INTERNAL", err)
+}
+
+const maxJSONBodyBytes int64 = 1 << 20
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	return decodeJSONBodyWithEmpty(w, r, dst, false)
+}
+
+func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	return decodeJSONBodyWithEmpty(w, r, dst, true)
+}
+
+func decodeJSONBodyWithEmpty(w http.ResponseWriter, r *http.Request, dst any, allowEmpty bool) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		if allowEmpty && errors.Is(err, io.EOF) {
+			return true
+		}
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "JSON body exceeds 1MiB")
+		} else {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+		}
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "request body must contain one JSON value")
+		return false
+	}
+	return true
 }
 
 // --------- health ---------

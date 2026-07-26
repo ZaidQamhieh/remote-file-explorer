@@ -28,6 +28,7 @@ class VideoPreviewScreen extends StatefulWidget {
     required this.entry,
     required this.client,
     this.chromeless = false,
+    this.active = true,
   });
 
   final Entry entry;
@@ -37,12 +38,15 @@ class VideoPreviewScreen extends StatefulWidget {
   /// shared top bar across sibling pages.
   final bool chromeless;
 
+  /// Only the visible pager page may own a proxy/controller or play media.
+  final bool active;
+
   @override
   State<VideoPreviewScreen> createState() => _VideoPreviewScreenState();
 }
 
 class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
-  late Future<ChewieController> _future;
+  Future<ChewieController>? _future;
   ChewieController? _chewie;
   VideoPlayerController? _video;
   VideoLoopbackProxy? _proxy;
@@ -54,59 +58,92 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   /// Whether the video completed (position >= duration). Used to clear the
   /// saved resume position so completed videos restart from the beginning.
   bool _completedNaturally = false;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    if (widget.active) _startLoad();
   }
 
-  Future<ChewieController> _load() async {
+  @override
+  void didUpdateWidget(covariant VideoPreviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entry.path != widget.entry.path ||
+        oldWidget.active != widget.active) {
+      _savePosition(path: oldWidget.entry.path);
+      _stopLoad();
+      if (widget.active) _startLoad();
+    }
+  }
+
+  void _startLoad() {
+    final generation = ++_loadGeneration;
+    _completedNaturally = false;
+    _future = _load(generation, widget.entry.path);
+  }
+
+  bool _isCurrentLoad(int generation, String path) =>
+      mounted &&
+      widget.active &&
+      generation == _loadGeneration &&
+      widget.entry.path == path;
+
+  Future<ChewieController> _load(int generation, String path) async {
     // Capture theme-derived values before any `await` — `context` shouldn't
     // be used across async gaps.
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final proxy = await VideoLoopbackProxy.start(
-      widget.client,
-      widget.entry.path,
-    );
-    _proxy = proxy;
+    VideoLoopbackProxy? proxy;
+    VideoPlayerController? video;
+    ChewieController? chewie;
+    try {
+      proxy = await VideoLoopbackProxy.start(widget.client, path);
+      if (!_isCurrentLoad(generation, path)) throw const _VideoLoadCanceled();
 
-    final video = VideoPlayerController.networkUrl(
-      Uri.parse('http://127.0.0.1:${proxy.port}/video'),
-    );
-    _video = video;
-    await video.initialize();
+      video = VideoPlayerController.networkUrl(proxy.uri);
+      await video.initialize();
+      if (!_isCurrentLoad(generation, path)) throw const _VideoLoadCanceled();
 
-    final chewie = ChewieController(
-      videoPlayerController: video,
-      autoPlay: false, // we'll play after seeking to resume position
-      looping: false,
-      allowFullScreen: true,
-      allowMuting: true,
-      materialProgressColors: ChewieProgressColors(
-        playedColor: primaryColor,
-        handleColor: primaryColor,
-      ),
-    );
-    _chewie = chewie;
+      chewie = ChewieController(
+        videoPlayerController: video,
+        autoPlay: false,
+        looping: false,
+        allowFullScreen: true,
+        allowMuting: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: primaryColor,
+          handleColor: primaryColor,
+        ),
+      );
 
-    // Resume from saved position, then start playback.
-    await _maybeResumePosition(video);
-    await video.play();
+      await _maybeResumePosition(video, path);
+      if (!_isCurrentLoad(generation, path)) throw const _VideoLoadCanceled();
+      await video.play();
+      if (!_isCurrentLoad(generation, path)) throw const _VideoLoadCanceled();
 
-    // Listen for completion to clear saved position.
-    video.addListener(_onVideoPositionChanged);
-
-    return chewie;
+      video.addListener(_onVideoPositionChanged);
+      _proxy = proxy;
+      _video = video;
+      _chewie = chewie;
+      return chewie;
+    } catch (_) {
+      chewie?.dispose();
+      await video?.dispose();
+      await proxy?.close();
+      rethrow;
+    }
   }
 
   /// If a position was previously saved for this file, seek to it and show a
   /// snackbar. We clear the saved position immediately — it'll be re-saved
   /// on dispose if the user pauses or leaves mid-video.
-  Future<void> _maybeResumePosition(VideoPlayerController video) async {
+  Future<void> _maybeResumePosition(
+    VideoPlayerController video,
+    String path,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final posMs = _readPosition(prefs, widget.entry.path);
+    final posMs = _readPosition(prefs, path);
     if (posMs == null || posMs <= 0) return;
 
     final duration = video.value.duration;
@@ -174,9 +211,15 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   void _retry() {
     setState(() {
-      _disposeControllers();
-      _future = _load();
+      _stopLoad();
+      _startLoad();
     });
+  }
+
+  void _stopLoad() {
+    _loadGeneration++;
+    _disposeControllers();
+    _future = null;
   }
 
   void _disposeControllers() {
@@ -193,25 +236,25 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   @override
   void dispose() {
-    _savePosition();
-    _disposeControllers();
+    _savePosition(path: widget.entry.path);
+    _stopLoad();
     super.dispose();
   }
 
   /// Persist the current playback position so we can resume later.
   /// If the video completed naturally, clear the saved position instead.
-  void _savePosition() {
+  void _savePosition({required String path}) {
     final video = _video;
     if (video == null || !video.value.isInitialized) return;
 
     // Fire-and-forget — dispose can't await.
     SharedPreferences.getInstance().then((prefs) {
       if (_completedNaturally) {
-        _clearPosition(prefs, widget.entry.path);
+        _clearPosition(prefs, path);
       } else {
         final posMs = video.value.position.inMilliseconds;
         if (posMs > 0) {
-          _writePosition(prefs, widget.entry.path, posMs);
+          _writePosition(prefs, path, posMs);
         }
       }
     });
@@ -223,7 +266,10 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       title: widget.entry.name,
       backgroundColor: Colors.black,
       chromeless: widget.chromeless,
-      body: FutureBuilder<ChewieController>(
+      body:
+          !widget.active || _future == null
+              ? const SizedBox.expand()
+              : FutureBuilder<ChewieController>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -241,9 +287,13 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
             onDoubleTap: _onDoubleTapSeek,
           );
         },
-      ),
+                ),
     );
   }
+}
+
+class _VideoLoadCanceled implements Exception {
+  const _VideoLoadCanceled();
 }
 
 // ---------------------------------------------------------------------------

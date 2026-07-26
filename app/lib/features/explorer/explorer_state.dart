@@ -287,6 +287,10 @@ class ExplorerNotifier
   final OfflineBodyCache _offlineBodyCache = OfflineBodyCache();
   SseListener? _sse;
   Timer? _refreshDebounce;
+  int _requestGeneration = 0;
+
+  bool _isCurrentRequest(int generation, String path) =>
+      generation == _requestGeneration && state.currentPath == path;
 
   Future<AgentClient> _client() async {
     final client = await ref.read(clientProvider(arg.hostId).future);
@@ -299,15 +303,17 @@ class ExplorerNotifier
   }
 
   Future<void> _load() async {
+    final generation = ++_requestGeneration;
     final path = state.currentPath;
 
     // 1. Paint cached entries instantly (if any) while we fetch live.
     final cached = await _cache.get(arg.hostId, path);
-    if (state.currentPath != path) return;
+    if (!_isCurrentRequest(generation, path)) return;
     if (cached != null) {
       state = state.copyWith(
         entries: cached.entries,
         loading: false,
+        loadingMore: false,
         stale: true,
         offline: false,
         error: null,
@@ -317,6 +323,7 @@ class ExplorerNotifier
     } else {
       state = state.copyWith(
         loading: true,
+        loadingMore: false,
         error: null,
         selected: {},
         nextCursor: null,
@@ -326,11 +333,11 @@ class ExplorerNotifier
     // 2. Fetch live; on success replace + cache; on failure fall back to cache.
     try {
       final client = await _client();
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       final listing = await client.list(path);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       await _cache.put(arg.hostId, path, listing.entries);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       state = state.copyWith(
         loading: false,
         entries: listing.entries,
@@ -342,7 +349,7 @@ class ExplorerNotifier
       // Start SSE once (first successful load proves the client works).
       if (_sse == null) _initSse(client);
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       if (cached != null) {
         // Keep cached entries; mark offline rather than erroring out.
         state = state.copyWith(loading: false, stale: true, offline: true);
@@ -383,23 +390,25 @@ class ExplorerNotifier
     final cursor = state.nextCursor;
     if (cursor == null) return;
 
+    final generation = ++_requestGeneration;
     final path = state.currentPath;
+    final existingEntries = List<Entry>.of(state.entries);
     state = state.copyWith(loadingMore: true);
     try {
       final client = await _client();
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       final listing = await client.list(path, cursor: cursor);
-      if (state.currentPath != path) return;
-      final merged = [...state.entries, ...listing.entries];
+      if (!_isCurrentRequest(generation, path)) return;
+      final merged = [...existingEntries, ...listing.entries];
       await _cache.put(arg.hostId, path, merged);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       state = state.copyWith(
         entries: merged,
         loadingMore: false,
         nextCursor: listing.nextCursor,
       );
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       // Leave existing entries as-is; just stop the spinner so the user can
       // retry by scrolling again.
       state = state.copyWith(loadingMore: false);

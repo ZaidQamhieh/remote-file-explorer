@@ -2,6 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/features/explorer/dup_finder_screen.dart';
 
 void main() {
+  group('duplicateCandidatesBySize', () {
+    test('keeps only repeated known sizes plus unknown sizes', () {
+      final paths = ['/a', '/b', '/c', '/unknown'];
+      final sizes = {'/a': 10, '/b': 20, '/c': 10};
+
+      expect(duplicateCandidatesBySize(paths, sizes), ['/a', '/c', '/unknown']);
+    });
+  });
+
   group('groupDuplicates', () {
     test('returns empty list when all hashes are unique', () {
       final hashes = {'/a.txt': 'aaa', '/b.txt': 'bbb', '/c.txt': 'ccc'};

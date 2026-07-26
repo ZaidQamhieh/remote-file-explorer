@@ -235,6 +235,33 @@ func TestRename_WithinJailWorks(t *testing.T) {
 	}
 }
 
+func TestCopyRejectsNestedSymlink(t *testing.T) {
+	ops, root := setupJail(t)
+	src := filepath.Join(root, "src")
+	dest := filepath.Join(root, "dest")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(src, "escape")); err != nil {
+		t.Fatal(err)
+	}
+
+	result := ops.Copy([]string{src}, dest, false, false)
+	if len(result) != 1 || result[0].OK || result[0].Error == nil {
+		t.Fatalf("expected copy failure, got %+v", result)
+	}
+	if _, err := os.Lstat(filepath.Join(dest, "src")); !os.IsNotExist(err) {
+		t.Fatalf("partial destination remained after rejected symlink: %v", err)
+	}
+}
+
 // TestReadOnly verifies that write ops are rejected when readOnly=true.
 func TestReadOnly(t *testing.T) {
 	root := t.TempDir()

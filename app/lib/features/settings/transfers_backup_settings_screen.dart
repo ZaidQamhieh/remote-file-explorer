@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/settings/app_settings.dart';
@@ -11,7 +12,6 @@ import 'widgets/backup_restore_section.dart';
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Everything about moving/protecting data: photo backup, watched folders,
 /// cellular compression, transfer history, and config backup/restore
@@ -170,30 +170,27 @@ class _WatchedFoldersSection extends ConsumerWidget {
     SettingsNotifier notifier,
   ) async {
     final controller = TextEditingController();
-    final path = await showDialog<String>(
+    final path = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: const Text('Watch a folder'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: '/home/user/Downloads',
-                labelText: 'Remote folder path',
-              ),
-              autofocus: true,
-              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
-              TextButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, controller.text.trim()),
                 child: const Text('Watch'),
               ),
             ],
+            child: ShadInput(
+              controller: controller,
+              placeholder: const Text('/home/user/Downloads'),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
           ),
     );
     controller.dispose();

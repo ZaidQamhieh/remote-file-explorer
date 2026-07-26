@@ -5,6 +5,7 @@ import 'package:remote_file_explorer/features/settings/about_support_settings_sc
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,9 +19,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: AboutSupportSettingsScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: AboutSupportSettingsScreen(),
+          ),
         ),
       ),
     );

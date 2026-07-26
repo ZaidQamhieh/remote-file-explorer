@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Decodes [bytes] as strict UTF-8. Throws [NotTextException] if the content
 /// looks binary / isn't valid UTF-8, so callers can show a friendly message
@@ -69,6 +69,8 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
   late DateTime? _baseModified;
   bool _dirty = false;
   bool _saving = false;
+  int _revision = 0;
+  bool _applyingRemoteText = false;
 
   @override
   void initState() {
@@ -86,6 +88,8 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
   }
 
   void _onChanged() {
+    if (_applyingRemoteText) return;
+    _revision++;
     if (!_dirty) {
       setState(() => _dirty = true);
     }
@@ -97,8 +101,10 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
   Future<void> _save({bool forceOverwrite = false}) async {
     if (_saving) return;
     setState(() => _saving = true);
+    final savedRevision = _revision;
+    final savedText = _controller.text;
     try {
-      final bytes = Uint8List.fromList(utf8.encode(_controller.text));
+      final bytes = Uint8List.fromList(utf8.encode(savedText));
       final updated = await widget.client.putContent(
         widget.entry.path,
         bytes,
@@ -107,7 +113,7 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
       if (!mounted) return;
       setState(() {
         _baseModified = updated.modified;
-        _dirty = false;
+        _dirty = _revision != savedRevision;
         _saving = false;
       });
       showSuccess(context, context.l10n.savedFile(widget.entry.name));
@@ -141,22 +147,22 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
   /// user a choice: reload the current on-disk content (discarding local
   /// edits) or overwrite it with the local edits anyway.
   Future<void> _resolveStaleWrite() async {
-    final choice = await showDialog<_StaleWriteChoice>(
+    final choice = await showShadDialog<_StaleWriteChoice>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.fileChangedOnDisk),
-            content: Text(ctx.l10n.staleWriteMessage),
+            description: Text(ctx.l10n.staleWriteMessage),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.cancel),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              TextButton(
+              ShadButton.outline(
                 onPressed: () => Navigator.pop(ctx, _StaleWriteChoice.reload),
                 child: Text(ctx.l10n.reloadButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed:
                     () => Navigator.pop(ctx, _StaleWriteChoice.overwrite),
                 child: Text(ctx.l10n.overwriteButton),
@@ -185,7 +191,10 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
       final text = decodeAsText(bytes);
       if (!mounted) return;
       setState(() {
+        _applyingRemoteText = true;
         _controller.text = text;
+        _applyingRemoteText = false;
+        _revision++;
         _baseModified = entry.modified;
         _dirty = false;
       });
@@ -202,18 +211,18 @@ class _TextEditorScreenState extends State<TextEditorScreen> {
 
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
-    final discard = await showDialog<bool>(
+    final discard = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.discardChangesTitle),
-            content: Text(ctx.l10n.unsavedChangesMessage),
+            description: Text(ctx.l10n.unsavedChangesMessage),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.keepEditingButton),
               ),
-              FilledButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(ctx.l10n.discardButton),
               ),

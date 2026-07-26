@@ -450,10 +450,11 @@ func TestListTrashHandler_EmptyTrash(t *testing.T) {
 }
 
 func TestEmptyTrashHandler_OK(t *testing.T) {
+	ops, _ := newFsFixture(t)
 	trashDir := t.TempDir()
 	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", nil)
 	rr := httptest.NewRecorder()
-	emptyTrashHandler(trashDir)(rr, req)
+	emptyTrashHandler(ops, trashDir)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -483,6 +484,30 @@ func TestCompressHandler_MissingFields(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
+}
+
+func TestCreateFolderHandler_RejectsUnknownAndOversizedJSON(t *testing.T) {
+	ops, root := newFsFixture(t)
+
+	t.Run("unknown field", func(t *testing.T) {
+		body := `{"path":"` + filepath.Join(root, "new") + `","admin":true}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/fs/folder", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		createFolderHandler(ops)(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("oversized", func(t *testing.T) {
+		body := `{"path":"` + strings.Repeat("x", int(maxJSONBodyBytes)+1) + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/fs/folder", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		createFolderHandler(ops)(rr, req)
+		if rr.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("expected 413, got %d: %s", rr.Code, rr.Body.String())
+		}
+	})
 }
 
 func TestCompressHandler_OK(t *testing.T) {
@@ -553,16 +578,36 @@ func TestHandleFsError_DefaultCase(t *testing.T) {
 }
 
 func TestEmptyTrashHandler_WithIDs(t *testing.T) {
+	ops, _ := newFsFixture(t)
 	trashDir := t.TempDir()
 	body := `{"ids":["nonexistent-id"]}`
 	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(body))
 	req.Header.Set("Content-Length", "999")
 	rr := httptest.NewRecorder()
-	emptyTrashHandler(trashDir)(rr, req)
+	emptyTrashHandler(ops, trashDir)(rr, req)
 
 	// Should succeed even with nonexistent IDs (idempotent).
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestEmptyTrashHandler_RejectsTraversalID(t *testing.T) {
+	ops, _ := newFsFixture(t)
+	trashDir := t.TempDir()
+	victim := filepath.Join(trashDir, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`{"ids":["../victim"]}`))
+	rr := httptest.NewRecorder()
+	emptyTrashHandler(ops, trashDir)(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got, err := os.ReadFile(victim); err != nil || string(got) != "keep" {
+		t.Fatalf("outside file changed: content=%q err=%v", got, err)
 	}
 }
 

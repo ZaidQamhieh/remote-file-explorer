@@ -49,6 +49,38 @@ void main() {
       );
       expect(p, '/2024/2024-01/x.jpg');
     });
+
+    test('unsafe path segments cannot escape the backup subtree', () {
+      final p = backupRemotePath(
+        destRoot: '/safe/root',
+        created: DateTime(2026, 3, 7),
+        name: '../../secret.jpg',
+        deviceSegment: '..',
+      );
+      expect(p, '/safe/root/device/2026/2026-03/secret.jpg');
+      expect(p, isNot(contains('/../')));
+    });
+
+    test(
+      'photoBackupFileName is stable, safe, and preserves a short extension',
+      () {
+        final name = photoBackupFileName(
+          assetId: r'album/../../asset:42',
+          suggestedName: '../holiday.jpg',
+          localPath: '/private/cache/blob',
+        );
+        expect(name, matches(RegExp(r'^holiday-[0-9a-f]{12}\.jpg$')));
+        expect(name, isNot(contains('/')));
+        expect(
+          photoBackupFileName(
+            assetId: r'album/../../asset:42',
+            suggestedName: '../holiday.jpg',
+            localPath: '/other/path',
+          ),
+          name,
+        );
+      },
+    );
   });
 
   group('pendingIds', () {

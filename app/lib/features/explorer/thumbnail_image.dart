@@ -6,9 +6,8 @@ import '../../core/api/agent_client.dart';
 import '../../core/models/entry.dart';
 import '../../core/theme/tokens.dart';
 
-/// Process-wide in-memory cache of decoded thumbnail bytes, keyed by the
-/// entry's remote path. Capped at [_maxEntries] so re-scrolling the grid
-/// doesn't refetch thumbnails, without growing unbounded for huge trees.
+/// Process-wide in-memory cache of thumbnail bytes, keyed by host, remote file
+/// version, and rendition size. Both entry count and bytes are bounded.
 ///
 /// `null` values record "fetched, but the agent has no thumbnail for this
 /// file" so we don't keep retrying every rebuild.
@@ -17,22 +16,53 @@ class _ThumbnailCache {
   static final _ThumbnailCache instance = _ThumbnailCache._();
 
   static const int _maxEntries = 200;
+  static const int _maxBytes = 32 * 1024 * 1024;
 
-  final Map<String, Uint8List?> _entries = <String, Uint8List?>{};
+  final Map<_ThumbnailCacheKey, Uint8List?> _entries =
+      <_ThumbnailCacheKey, Uint8List?>{};
+  int _storedBytes = 0;
 
-  bool contains(String key) => _entries.containsKey(key);
+  bool contains(_ThumbnailCacheKey key) => _entries.containsKey(key);
 
-  Uint8List? get(String key) => _entries[key];
+  Uint8List? get(_ThumbnailCacheKey key) {
+    if (!_entries.containsKey(key)) return null;
+    final value = _entries.remove(key);
+    _entries[key] = value;
+    return value;
+  }
 
-  void put(String key, Uint8List? value) {
-    if (_entries.containsKey(key)) {
-      _entries.remove(key); // re-insert to bump recency
-    } else if (_entries.length >= _maxEntries) {
-      _entries.remove(_entries.keys.first); // evict oldest
+  void put(_ThumbnailCacheKey key, Uint8List? value) {
+    final replaced = _entries.remove(key);
+    if (replaced != null) _storedBytes -= replaced.lengthInBytes;
+
+    if (value != null && value.lengthInBytes > _maxBytes) return;
+    while (_entries.isNotEmpty &&
+        (_entries.length >= _maxEntries ||
+            _storedBytes + (value?.lengthInBytes ?? 0) > _maxBytes)) {
+      final evicted = _entries.remove(_entries.keys.first);
+      if (evicted != null) _storedBytes -= evicted.lengthInBytes;
     }
     _entries[key] = value;
+    _storedBytes += value?.lengthInBytes ?? 0;
   }
 }
+
+typedef _ThumbnailCacheKey =
+    ({
+      String hostId,
+      String path,
+      int? modifiedMicros,
+      int? sourceSize,
+      int renditionSize,
+    });
+
+_ThumbnailCacheKey _cacheKeyFor(ThumbnailImage widget) => (
+  hostId: widget.client.host.id,
+  path: widget.entry.path,
+  modifiedMicros: widget.entry.modified?.microsecondsSinceEpoch,
+  sourceSize: widget.entry.size,
+  renditionSize: widget.size,
+);
 
 /// Displays a server-rendered thumbnail for image [entry]s, fetched through
 /// [client] and cached in-memory for the lifetime of the app.
@@ -64,7 +94,7 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
   bool _loading = false;
   bool _failed = false;
 
-  String get _cacheKey => '${widget.entry.path}@${widget.size}';
+  _ThumbnailCacheKey get _cacheKey => _cacheKeyFor(widget);
 
   @override
   void initState() {
@@ -75,10 +105,10 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
   @override
   void didUpdateWidget(covariant ThumbnailImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.entry.path != widget.entry.path ||
-        oldWidget.size != widget.size) {
+    if (_cacheKeyFor(oldWidget) != _cacheKey) {
       _bytes = null;
       _failed = false;
+      _loading = false;
       _load();
     }
   }
@@ -90,19 +120,23 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
     }
 
     final cache = _ThumbnailCache.instance;
-    if (cache.contains(_cacheKey)) {
-      final cached = cache.get(_cacheKey);
+    final key = _cacheKey;
+    if (cache.contains(key)) {
+      final cached = cache.get(key);
       _bytes = cached;
       _failed = cached == null;
       return;
     }
 
     _loading = true;
-    widget.client
-        .thumbnail(widget.entry.path, size: widget.size)
+    final client = widget.client;
+    final path = widget.entry.path;
+    final size = widget.size;
+    client
+        .thumbnail(path, size: size)
         .then((data) {
-          cache.put(_cacheKey, data);
-          if (!mounted) return;
+          cache.put(key, data);
+          if (!mounted || key != _cacheKey) return;
           setState(() {
             _bytes = data;
             _failed = data == null;
@@ -110,8 +144,8 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
           });
         })
         .catchError((Object _) {
-          cache.put(_cacheKey, null);
-          if (!mounted) return;
+          cache.put(key, null);
+          if (!mounted || key != _cacheKey) return;
           setState(() {
             _failed = true;
             _loading = false;

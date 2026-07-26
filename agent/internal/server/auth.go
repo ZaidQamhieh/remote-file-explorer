@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
@@ -22,6 +24,24 @@ const opsCtxKey contextKey = "ops"
 // authMiddleware validates the Bearer token against the device store.
 // Returns 401 if missing/invalid/revoked.
 func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
+	type touchState struct {
+		at               time.Time
+		address, version string
+	}
+	var touchMu sync.Mutex
+	touches := make(map[string]touchState)
+	shouldTouch := func(id, address, version string) bool {
+		now := time.Now()
+		touchMu.Lock()
+		defer touchMu.Unlock()
+		previous, ok := touches[id]
+		if ok && previous.address == address && previous.version == version && now.Sub(previous.at) < time.Minute {
+			return false
+		}
+		touches[id] = touchState{at: now, address: address, version: version}
+		return true
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hdr := r.Header.Get("Authorization")
@@ -37,7 +57,7 @@ func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
 			token := strings.TrimSpace(parts[1])
 			device, err := db.DeviceByToken(token)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeError(w, http.StatusInternalServerError, "INTERNAL", "authentication lookup failed")
 				return
 			}
 			if device == nil || device.Revoked {
@@ -49,12 +69,24 @@ func authMiddleware(db *store.DB) func(http.Handler) http.Handler {
 				addr = host
 			}
 			ver := r.Header.Get("X-RFE-Client-Version")
-			_ = db.TouchDevice(device.ID, addr, ver)
+			if shouldTouch(device.ID, addr, ver) {
+				_ = db.TouchDevice(device.ID, addr, ver)
+			}
 
 			ctx := context.WithValue(r.Context(), deviceCtxKey, device)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func adminOnlyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "admin (login) session required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // deviceJailMiddleware reads the *store.Device placed in context by

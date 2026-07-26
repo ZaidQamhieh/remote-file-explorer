@@ -804,7 +804,7 @@
         <p class="note">Uses the same one-time code as "Pair with code" — creates your account and pairs this browser together.</p>
       </div>
 
-      <p class="auth-footer">Token stored in this browser's localStorage — less secure than the phone app's Keystore. Only use trusted browsers.</p>
+      <p class="auth-footer">Token kept only for this browser tab. Closing the tab signs it out.</p>
     </div>
     </div>
   </div>
@@ -1333,7 +1333,7 @@
     });
   });
 
-  function token() { return localStorage.getItem(TOKEN_KEY); }
+  function token() { return sessionStorage.getItem(TOKEN_KEY); }
 
   // A stable per-browser-profile id (there's no hardware id to key off of
   // like the phone app's Android ID). Persisted in localStorage so this
@@ -1425,6 +1425,13 @@
     const d = document.createElement('div');
     d.textContent = str == null ? '' : String(str);
     return d.innerHTML;
+  }
+
+  function showMessage(container, className, message) {
+    const p = document.createElement('p');
+    p.className = className;
+    p.textContent = message == null ? '' : String(message);
+    container.replaceChildren(p);
   }
 
   // Tiny deterministic string hash (djb2) — used only for stable placeholder widths.
@@ -1525,8 +1532,8 @@
   });
 
   function storeSession(body, whoLabel) {
-    localStorage.setItem(TOKEN_KEY, body.deviceToken);
-    localStorage.setItem(FP_KEY, body.certFingerprint || '');
+    sessionStorage.setItem(TOKEN_KEY, body.deviceToken);
+    sessionStorage.setItem(FP_KEY, body.certFingerprint || '');
     localStorage.setItem(NAME_KEY, body.agentName || 'RFE');
     localStorage.setItem(WHO_KEY, whoLabel);
   }
@@ -1613,8 +1620,8 @@
 
   // ---------- Dashboard ----------
   $('forget-btn').addEventListener('click', () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(FP_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(FP_KEY);
     localStorage.removeItem(NAME_KEY);
     localStorage.removeItem(WHO_KEY);
     location.reload();
@@ -2143,7 +2150,7 @@
       browseEntries = listing.entries || [];
       renderBrowse();
     } catch (e) {
-      list.innerHTML = '<p class="error-text">' + e.message + '</p>';
+      showMessage(list, 'error-text', e.message);
     }
   }
 
@@ -2441,7 +2448,7 @@
         body.innerHTML = '<p class="dim">No inline preview for this file type — use Download.</p>';
       }
     } catch (e) {
-      body.innerHTML = '<p class="error-text">' + e.message + '</p>';
+      showMessage(body, 'error-text', e.message);
     }
   }
 
@@ -2949,7 +2956,7 @@
       const start = (pick && pick.path) || '/';
       openFolder(start);
     } catch (e) {
-      $('files-list').innerHTML = '<p class="error-text">' + e.message + '</p>';
+      showMessage($('files-list'), 'error-text', e.message);
     }
   }
 
@@ -3057,7 +3064,7 @@
       renderConnTable(devices || []);
     } catch (e) {
       if (String(e.message).includes('401') || String(e.message).includes('UNAUTHORIZED')) {
-        localStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
         showPairing();
       }
     }

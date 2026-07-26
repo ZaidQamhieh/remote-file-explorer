@@ -4,9 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/backup/backup_service.dart';
+import '../../../core/backup/config_backup.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/settings/settings_controller.dart';
 import '../../../core/storage/favorites.dart';
@@ -15,12 +17,11 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import 'settings_section.dart';
 import 'settings_tile.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// **Backup & restore** (N1) — export the app's full local state (paired
-/// hosts, device tokens, cert fingerprints, favorites, all settings) to a
-/// passphrase-encrypted file, and import it back to restore on a
-/// reinstalled/new phone.
+/// **Backup & restore** (N1) — export portable configuration, favorites, and
+/// certificate fingerprints to a passphrase-encrypted file. Bearer tokens and
+/// the permanent device identity stay on the originating device, so restored
+/// hosts must be paired again.
 class BackupRestoreSection extends ConsumerWidget {
   const BackupRestoreSection({super.key});
 
@@ -99,7 +100,11 @@ class BackupRestoreSection extends ConsumerWidget {
 
     String envelope;
     try {
-      envelope = await File(path).readAsString();
+      final file = File(path);
+      if (await file.length() > kMaxBackupEnvelopeChars) {
+        throw const BackupException('This backup file is too large.');
+      }
+      envelope = await file.readAsString();
     } catch (e) {
       if (context.mounted) {
         showError(context, context.l10n.couldNotReadFile(humanizeError(e)));
@@ -115,18 +120,18 @@ class BackupRestoreSection extends ConsumerWidget {
     );
     if (passphrase == null || !context.mounted) return;
 
-    final proceed = await showDialog<bool>(
+    final proceed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog.alert(
             title: Text(ctx.l10n.replaceCurrentConfig),
-            content: Text(ctx.l10n.importWarningMessage),
+            description: Text(ctx.l10n.importWarningMessage),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(ctx.l10n.replaceButton),
               ),
@@ -161,9 +166,9 @@ class BackupRestoreSection extends ConsumerWidget {
   // ---------------------------------------------------------------------------
 
   /// Prompts for a passphrase. When [confirm] is true (export), shows a second
-  /// "confirm passphrase" field and requires both to match and be at least 6
-  /// characters. When false (import), a single field is shown with no length
-  /// check (the file's own passphrase determines validity).
+  /// "confirm passphrase" field and requires both to match and meet the
+  /// current minimum. Import retains the legacy six-character minimum so
+  /// backups created by older releases remain usable.
   ///
   /// Returns the passphrase, or `null` if cancelled.
   Future<String?> _promptPassphrase(
@@ -171,7 +176,7 @@ class BackupRestoreSection extends ConsumerWidget {
     required String title,
     required bool confirm,
   }) {
-    return showDialog<String>(
+    return showShadDialog<String>(
       context: context,
       builder: (ctx) => _PassphraseDialog(title: title, confirm: confirm),
     );
@@ -214,7 +219,8 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
 
   void _submit() {
     final pass = _passCtrl.text;
-    if (pass.length < 6) {
+    final minimum = widget.confirm ? kBackupMinimumPassphraseLength : 6;
+    if (pass.length < minimum) {
       setState(() => _error = context.l10n.passphraseMinLength);
       return;
     }
@@ -227,29 +233,43 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return ShadDialog.alert(
       title: Text(widget.title),
-      content: Column(
+      actions: [
+        ShadButton.ghost(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.cancelButton),
+        ),
+        ShadButton(
+          onPressed: _submit,
+          child: Text(context.l10n.continueButton),
+        ),
+      ],
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
+          Text(
+            context.l10n.passphraseLabel,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: Spacing.xs),
+          ShadInput(
             controller: _passCtrl,
             obscureText: true,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: context.l10n.passphraseLabel,
-            ),
             onSubmitted: widget.confirm ? null : (_) => _submit(),
           ),
           if (widget.confirm) ...[
             const SizedBox(height: Spacing.sm),
-            TextField(
+            Text(
+              context.l10n.confirmPassphraseLabel,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: Spacing.xs),
+            ShadInput(
               controller: _confirmCtrl,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: context.l10n.confirmPassphraseLabel,
-              ),
               onSubmitted: (_) => _submit(),
             ),
           ],
@@ -262,16 +282,6 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
           ],
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.cancelButton),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(context.l10n.continueButton),
-        ),
-      ],
     );
   }
 }

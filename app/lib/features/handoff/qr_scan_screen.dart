@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/l10n_ext.dart';
@@ -33,12 +34,35 @@ class HandoffPayload {
       final fp = json['certFingerprint'] as String?;
       final path = json['path'] as String?;
       final name = json['name'] as String?;
-      if (fp == null || path == null || name == null) return null;
+      if (fp == null ||
+          path == null ||
+          name == null ||
+          !isSafeHandoffFileName(name)) {
+        return null;
+      }
       return HandoffPayload(certFingerprint: fp, path: path, name: name);
     } catch (_) {
       return null;
     }
   }
+}
+
+/// True only for one portable local filename. Both Unix and Windows path
+/// syntax are rejected regardless of the receiving platform.
+bool isSafeHandoffFileName(String name) {
+  if (name.isEmpty || name.length > 255 || name == '.' || name == '..') {
+    return false;
+  }
+  if (name.endsWith('.') || name.endsWith(' ')) return false;
+  if (RegExp(r'[\\/:*?"<>|\x00-\x1f\x7f]').hasMatch(name)) return false;
+  final stem = name.split('.').first;
+  if (RegExp(
+    r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',
+    caseSensitive: false,
+  ).hasMatch(stem)) {
+    return false;
+  }
+  return true;
 }
 
 /// Finds the receiver's own paired [Host] whose `certFingerprint` matches
@@ -95,7 +119,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
       final dir =
           await getDownloadsDirectory() ??
           await getApplicationDocumentsDirectory();
-      final localPath = '${dir.path}/${payload.name}';
+      final localPath = p.join(dir.path, payload.name);
       ref
           .read(transferQueueProvider.notifier)
           .enqueue(

@@ -10,6 +10,7 @@ library;
 
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -99,9 +100,24 @@ Future<File> apkCacheFileFor(int versionCode) async {
 /// the install flow can skip straight to the installer instead of
 /// downloading (or resuming) it again.
 Future<bool> isApkReadyToInstall(AppRelease release) async {
-  if (release.size <= 0) return false;
+  if (release.size <= 0 || !release.hasIntegrityMetadata) return false;
   final file = await apkCacheFileFor(release.versionCode);
-  return await file.exists() && await file.length() == release.size;
+  return _isValidApk(file, release);
+}
+
+class UpdateIntegrityException implements Exception {
+  const UpdateIntegrityException();
+
+  @override
+  String toString() => 'Downloaded update failed its integrity check.';
+}
+
+Future<String> _fileSHA256(File file) async =>
+    (await sha256.bind(file.openRead()).first).toString();
+
+Future<bool> _isValidApk(File file, AppRelease release) async {
+  if (!await file.exists() || await file.length() != release.size) return false;
+  return await _fileSHA256(file) == release.sha256;
 }
 
 /// Tracks the in-flight APK download for a given [AppRelease.versionCode], if
@@ -144,14 +160,35 @@ Future<void> sharedDownloadApk({
   final token = CancelToken();
   late final _SharedApkDownload entry;
   Future<void> start() async {
-    final startByte = await localFile.exists() ? await localFile.length() : 0;
-    await source.downloadApk(
-      release: release,
-      localFile: localFile,
-      startByte: startByte,
-      cancelToken: token,
-      onProgress: (received, total) => entry._notify(received, total),
-    );
+    if (!release.hasIntegrityMetadata || release.size <= 0) {
+      throw const UpdateIntegrityException();
+    }
+    final lock = await File(
+      '${localFile.path}.lock',
+    ).open(mode: FileMode.append);
+    await lock.lock(FileLock.exclusive);
+    try {
+      if (await _isValidApk(localFile, release)) return;
+      if (await localFile.exists() &&
+          await localFile.length() >= release.size) {
+        await localFile.delete();
+      }
+      final startByte = await localFile.exists() ? await localFile.length() : 0;
+      await source.downloadApk(
+        release: release,
+        localFile: localFile,
+        startByte: startByte,
+        cancelToken: token,
+        onProgress: (received, total) => entry._notify(received, total),
+      );
+      if (!await _isValidApk(localFile, release)) {
+        if (await localFile.exists()) await localFile.delete();
+        throw const UpdateIntegrityException();
+      }
+    } finally {
+      await lock.unlock();
+      await lock.close();
+    }
   }
 
   final future = start().whenComplete(

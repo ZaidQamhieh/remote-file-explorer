@@ -9,7 +9,6 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +23,7 @@ import (
 const (
 	shareDefaultExpiry = 15 * time.Minute
 	shareMaxExpiry     = 24 * time.Hour
+	shareMaxFileBytes  = 500 << 20
 
 	// T2: the token is 32 bytes of crypto/rand (2^256 space) so brute force is
 	// already infeasible, but the unauthenticated /share/{token} route is
@@ -63,8 +63,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 		}
 
 		var req mintShareRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.Path == "" {
@@ -87,12 +86,16 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternalError(w, r, err)
 			}
 			return
 		}
-		if info.IsDir() {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "cannot share a directory")
+		if !info.Mode().IsRegular() {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "only regular files can be shared")
+			return
+		}
+		if info.Size() > shareMaxFileBytes {
+			writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "shared files cannot exceed 500 MiB")
 			return
 		}
 
@@ -110,7 +113,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 		hash := hashShareToken(token)
 
 		if err := db.CreateShareToken(hash, resolved, expiresAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		_ = db.LogShareMint(hash, resolved, expiresAt)
@@ -139,7 +142,8 @@ func shareURL(cfg Config, token string) string {
 func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(shareRateLimitAttempts, shareRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.AllowRequest(r) {
+			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many share requests, try again later")
 			return
 		}
@@ -147,9 +151,9 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 		token := chi.URLParam(r, "token")
 		hash := hashShareToken(token)
 
-		path, ok, err := db.ConsumeShareToken(hash)
+		path, ok, err := db.LookupShareToken(hash)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if !ok {
@@ -174,7 +178,17 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 		}
 		defer f.Close()
 		info, err := f.Stat()
-		if err != nil || info.IsDir() {
+		if err != nil || !info.Mode().IsRegular() || info.Size() > shareMaxFileBytes {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
+			return
+		}
+
+		consumedPath, consumed, err := db.ConsumeShareToken(hash)
+		if err != nil {
+			writeInternalError(w, r, err)
+			return
+		}
+		if !consumed || consumedPath != path {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
 			return
 		}
@@ -193,13 +207,16 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 
 func revokeShareHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireAdminDevice(w, r) {
+			return
+		}
 		hash := chi.URLParam(r, "tokenHash")
 		if hash == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "tokenHash required")
 			return
 		}
 		if err := db.DeleteShareToken(hash); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -210,9 +227,12 @@ func revokeShareHandler(db *store.DB) http.HandlerFunc {
 
 func listSharesHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireAdminDevice(w, r) {
+			return
+		}
 		tokens, err := db.ListShareTokens()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		out := make([]map[string]any, 0, len(tokens))

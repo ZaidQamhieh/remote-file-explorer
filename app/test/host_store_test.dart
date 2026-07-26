@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/storage/host_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  const secureChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
 
   group('Host JSON serialisation', () {
     test('all fields survive a JSON round-trip', () {
@@ -170,5 +175,55 @@ void main() {
         t2.millisecondsSinceEpoch,
       );
     });
+  });
+
+  group('paired host persistence', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureChannel, null);
+    });
+
+    test(
+      'rolls back token and host visibility when pin storage fails',
+      () async {
+        final secureValues = <String, String>{};
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(secureChannel, (call) async {
+              final args = Map<String, Object?>.from(call.arguments as Map);
+              final key = args['key']! as String;
+              switch (call.method) {
+                case 'read':
+                  return secureValues[key];
+                case 'write':
+                  if (key == 'rfe_fp_h1') {
+                    throw PlatformException(code: 'write_failed');
+                  }
+                  secureValues[key] = args['value']! as String;
+                  return null;
+                case 'delete':
+                  secureValues.remove(key);
+                  return null;
+              }
+              return null;
+            });
+
+        final store = await HostStore.create();
+        const host = Host(
+          id: 'h1',
+          label: 'PC',
+          address: 'pc:8765',
+          certFingerprint: 'fingerprint',
+        );
+        await expectLater(
+          store.savePairedHost(host, 'token'),
+          throwsA(isA<PlatformException>()),
+        );
+
+        expect(store.listHosts(), isEmpty);
+        expect(secureValues, isEmpty);
+      },
+    );
   });
 }

@@ -9,7 +9,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -39,13 +38,13 @@ type loginRequest struct {
 func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(loginRateLimitAttempts, loginRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.AllowRequest(r) {
+			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
 			return
 		}
 		var req loginRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.Username == "" || req.Password == "" {
@@ -55,7 +54,7 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 
 		user, err := db.GetUserByUsername(req.Username)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		// Same error for "no such user" and "wrong password" — don't leak
@@ -78,11 +77,11 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 		}
 		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, true)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 

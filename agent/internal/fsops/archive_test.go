@@ -196,3 +196,75 @@ func TestExtract_MissingArchive(t *testing.T) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestExtractRejectsExistingDestinationWithSymlink(t *testing.T) {
+	ops, root := setupJail(t)
+	outside := t.TempDir()
+	dest := filepath.Join(root, "out")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dest, "redirect")); err != nil {
+		t.Fatal(err)
+	}
+
+	archive := filepath.Join(root, "evil.zip")
+	f, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("redirect/pwned.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("pwned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ops.Extract(archive, dest)
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "pwned.txt")); !os.IsNotExist(err) {
+		t.Fatalf("archive wrote through destination symlink: %v", err)
+	}
+}
+
+func TestExtractRejectsExcessiveExpansionRatio(t *testing.T) {
+	ops, root := setupJail(t)
+	archive := filepath.Join(root, "bomb.zip")
+	f, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("zeros.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(make([]byte, 20<<20)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(root, "out")
+	_, err = ops.Extract(archive, dest)
+	if !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("expected ErrArchiveLimit, got %v", err)
+	}
+	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+		t.Fatalf("limited extraction published destination: %v", err)
+	}
+}

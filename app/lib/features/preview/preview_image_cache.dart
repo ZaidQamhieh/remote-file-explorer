@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import '../../core/api/agent_client.dart';
 
 /// Process-wide cache + in-flight de-duplication for full-resolution preview
-/// image bytes, keyed by remote path.
+/// image bytes. Keys include the host and file version so bytes can never leak
+/// across computers or survive a remote file replacement.
 ///
 /// Separate from the grid's *thumbnail* cache (`thumbnail_image.dart`): this
 /// holds the full image bytes the [ImagePreviewScreen] decodes. It exists so
@@ -12,38 +13,67 @@ import '../../core/api/agent_client.dart';
 /// are already fetched (or in flight). Bounded so paging through a large
 /// folder doesn't grow memory without limit.
 class PreviewImageCache {
-  PreviewImageCache._();
-  static final PreviewImageCache instance = PreviewImageCache._();
+  PreviewImageCache({int maxEntries = 8, int maxBytes = 96 * 1024 * 1024})
+    : assert(maxEntries > 0),
+      assert(maxBytes > 0),
+      _maxEntries = maxEntries,
+      _maxBytes = maxBytes;
 
-  static const int _maxEntries = 8;
+  static final PreviewImageCache instance = PreviewImageCache();
 
-  final Map<String, Uint8List> _bytes = <String, Uint8List>{};
-  final Map<String, Future<Uint8List>> _inflight =
-      <String, Future<Uint8List>>{};
+  final int _maxEntries;
+  final int _maxBytes;
+  int _storedBytes = 0;
 
-  Uint8List? peek(String path) => _bytes[path];
+  final Map<_PreviewCacheKey, Uint8List> _bytes =
+      <_PreviewCacheKey, Uint8List>{};
+  final Map<_PreviewCacheKey, Future<Uint8List>> _inflight =
+      <_PreviewCacheKey, Future<Uint8List>>{};
+
+  _PreviewCacheKey _key(
+    AgentClient client,
+    String path, {
+    DateTime? modified,
+    int? size,
+  }) => (
+    hostId: client.host.id,
+    path: path,
+    modifiedMicros: modified?.microsecondsSinceEpoch,
+    size: size,
+  );
+
+  Uint8List? _cached(_PreviewCacheKey key) {
+    final data = _bytes.remove(key);
+    if (data != null) _bytes[key] = data;
+    return data;
+  }
 
   /// Fetches [path]'s bytes through [client], coalescing concurrent calls for
   /// the same path and caching the result. Used both by the viewer (to display)
   /// and the pager (to warm neighbours).
-  Future<Uint8List> fetch(AgentClient client, String path) {
-    final cached = _bytes[path];
+  Future<Uint8List> fetch(
+    AgentClient client,
+    String path, {
+    DateTime? modified,
+    int? size,
+  }) {
+    final key = _key(client, path, modified: modified, size: size);
+    final cached = _cached(key);
     if (cached != null) return Future.value(cached);
-    final pending = _inflight[path];
+    final pending = _inflight[key];
     if (pending != null) return pending;
 
-    final future = client
-        .fetchBytes(path)
-        .then((data) {
-          _put(path, data);
-          _inflight.remove(path);
-          return data;
-        })
-        .catchError((Object e) {
-          _inflight.remove(path);
-          throw e;
-        });
-    _inflight[path] = future;
+    final future =
+        (() async {
+          try {
+            final data = await client.fetchBytes(path);
+            _put(key, data);
+            return data;
+          } finally {
+            _inflight.remove(key);
+          }
+        })();
+    _inflight[key] = future;
     return future;
   }
 
@@ -51,18 +81,38 @@ class PreviewImageCache {
   /// used to warm neighbours where a failure should be silent (the user just
   /// won't get the instant-swap benefit; the viewer will surface its own error
   /// when actually navigated to).
-  void preload(AgentClient client, String path) {
-    if (_bytes.containsKey(path) || _inflight.containsKey(path)) return;
+  void preload(
+    AgentClient client,
+    String path, {
+    DateTime? modified,
+    int? size,
+  }) {
+    final key = _key(client, path, modified: modified, size: size);
+    if (_bytes.containsKey(key) || _inflight.containsKey(key)) return;
     // ignore: unawaited_futures
-    fetch(client, path).catchError((_) => Uint8List(0));
+    fetch(
+      client,
+      path,
+      modified: modified,
+      size: size,
+    ).catchError((_) => Uint8List(0));
   }
 
-  void _put(String path, Uint8List data) {
-    if (_bytes.containsKey(path)) {
-      _bytes.remove(path);
-    } else if (_bytes.length >= _maxEntries) {
-      _bytes.remove(_bytes.keys.first);
+  void _put(_PreviewCacheKey key, Uint8List data) {
+    final replaced = _bytes.remove(key);
+    if (replaced != null) _storedBytes -= replaced.lengthInBytes;
+
+    if (data.lengthInBytes > _maxBytes) return;
+    while (_bytes.isNotEmpty &&
+        (_bytes.length >= _maxEntries ||
+            _storedBytes + data.lengthInBytes > _maxBytes)) {
+      final evicted = _bytes.remove(_bytes.keys.first)!;
+      _storedBytes -= evicted.lengthInBytes;
     }
-    _bytes[path] = data;
+    _bytes[key] = data;
+    _storedBytes += data.lengthInBytes;
   }
 }
+
+typedef _PreviewCacheKey =
+    ({String hostId, String path, int? modifiedMicros, int? size});

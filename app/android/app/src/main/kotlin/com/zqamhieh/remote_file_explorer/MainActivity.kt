@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -43,6 +44,10 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // File names, previews, host addresses, and photos must not appear in
+        // screenshots or the system recents thumbnail while the app is locked
+        // or backgrounded.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         // POST_NOTIFICATIONS (API 33+) gates whether the transfer progress /
         // completion notifications are visible. The foreground service still
         // runs without it; this just makes its notification show.

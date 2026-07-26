@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,6 +88,28 @@ func TestMintShareHandler_Success(t *testing.T) {
 	}
 }
 
+func TestMintShareHandler_RejectsOversizedFile(t *testing.T) {
+	ops, root := newFsFixture(t)
+	db, st := newTestDeps(t)
+	if err := st.SetAllowSharing(true); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "large.bin")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(path, shareMaxFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/share/mint", strings.NewReader(`{"path":"`+path+`"}`))
+	mintShareHandler(Config{Address: "127.0.0.1:8765", Settings: st}, db, ops)(rr, req)
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestServeShareHandler_UnknownToken404s(t *testing.T) {
 	ops, _ := newFsFixture(t)
 	db, _ := newTestDeps(t)
@@ -150,6 +173,39 @@ func TestServeShareHandler_SingleUse(t *testing.T) {
 	}
 }
 
+func TestServeShareHandler_MissingTargetDoesNotConsumeToken(t *testing.T) {
+	ops, root := newFsFixture(t)
+	db, _ := newTestDeps(t)
+	handler := serveShareHandler(db, ops)
+	path := filepath.Join(root, "created-later.txt")
+	hash := hashShareToken("retry-token")
+	if err := db.CreateShareToken(hash, path, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	first := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/share/retry-token", nil)
+	req = withURLParam(req, map[string]string{"token": "retry-token"})
+	handler(first, req)
+	if first.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", first.Code, first.Body.String())
+	}
+	if _, ok, err := db.LookupShareToken(hash); err != nil || !ok {
+		t.Fatalf("missing target consumed token: ok=%v err=%v", ok, err)
+	}
+
+	if err := os.WriteFile(path, []byte("available now"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second := httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/v1/share/retry-token", nil)
+	req = withURLParam(req, map[string]string{"token": "retry-token"})
+	handler(second, req)
+	if second.Code != http.StatusOK || second.Body.String() != "available now" {
+		t.Fatalf("retry = %d %q", second.Code, second.Body.String())
+	}
+}
+
 func TestRevokeShareHandler(t *testing.T) {
 	db, _ := newTestDeps(t)
 	hash := hashShareToken("to-revoke")
@@ -160,6 +216,7 @@ func TestRevokeShareHandler(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, "/v1/share/"+hash, nil)
 	req = withURLParam(req, map[string]string{"tokenHash": hash})
+	req = asAdmin(t, db, req)
 	revokeShareHandler(db)(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rr.Code, rr.Body.String())
@@ -171,5 +228,30 @@ func TestRevokeShareHandler(t *testing.T) {
 	}
 	if len(tokens) != 0 {
 		t.Fatalf("expected token revoked, got %+v", tokens)
+	}
+}
+
+func TestRevokeShareHandler_AdminOnly(t *testing.T) {
+	db, _ := newTestDeps(t)
+	hash := hashShareToken("keep")
+	if err := db.CreateShareToken(hash, "/tmp/x", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateDevice("phone", "phone", "phone-token"); err != nil {
+		t.Fatal(err)
+	}
+	phone, _ := db.DeviceByToken("phone-token")
+	req := httptest.NewRequest(http.MethodDelete, "/v1/share/"+hash, nil)
+	req = withURLParam(req, map[string]string{"tokenHash": hash})
+	req = req.WithContext(withDevice(req.Context(), phone))
+	rr := httptest.NewRecorder()
+
+	revokeShareHandler(db)(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if tokens, err := db.ListShareTokens(); err != nil || len(tokens) != 1 {
+		t.Fatalf("non-admin revoked share: tokens=%v err=%v", tokens, err)
 	}
 }

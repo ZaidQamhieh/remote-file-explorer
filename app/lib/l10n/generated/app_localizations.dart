@@ -2599,7 +2599,7 @@ abstract class AppLocalizations {
   /// No description provided for @passphraseMinLength.
   ///
   /// In en, this message translates to:
-  /// **'Passphrase must be at least 6 characters'**
+  /// **'New backup passphrases must be at least 12 characters'**
   String get passphraseMinLength;
 
   /// No description provided for @usingDeviceVisibility.
@@ -2659,7 +2659,7 @@ abstract class AppLocalizations {
   /// No description provided for @exportConfigSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Save paired hosts, tokens, favorites, and settings to an encrypted file'**
+  /// **'Save hosts, favorites, and settings; restored hosts must be paired again'**
   String get exportConfigSubtitle;
 
   /// No description provided for @backupEncryptionWarning.

@@ -9,11 +9,14 @@
 package thumbs
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"image"
 	"image/jpeg"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -24,8 +27,20 @@ import (
 // (e.g. unsupported format, or decode failure).
 var ErrNotSupported = errors.New("thumbnail not available for this file")
 
+// ErrResourceLimit is returned before full decode when a source would exceed
+// the renderer's file or decoded-pixel budget.
+var ErrResourceLimit = errors.New("thumbnail source exceeds resource limits")
+
 // jpegQuality is the quality used when re-encoding thumbnails.
-const jpegQuality = 80
+const (
+	jpegQuality     = 80
+	maxSourceBytes  = 64 << 20
+	maxSourcePixels = 40_000_000
+)
+
+// Image decoders can be CPU- and memory-heavy even for valid inputs. Bound
+// concurrent decodes across all renderers in this process.
+var renderSlots = make(chan struct{}, 2)
 
 // Renderer renders and caches image thumbnails on disk.
 type Renderer struct {
@@ -88,33 +103,40 @@ func Render(srcPath string, maxSize int) ([]byte, error) {
 		maxSize = 256
 	}
 
-	src, err := imaging.Open(srcPath, imaging.AutoOrientation(true))
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxSourceBytes {
+		return nil, fmt.Errorf("%w: source is %d bytes (max %d)", ErrResourceLimit, info.Size(), maxSourceBytes)
+	}
+	f, err := os.Open(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	config, _, err := image.DecodeConfig(io.NewSectionReader(f, 0, maxSourceBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotSupported, err)
+	}
+	if config.Width <= 0 || config.Height <= 0 || int64(config.Width) > maxSourcePixels/int64(config.Height) {
+		return nil, fmt.Errorf("%w: dimensions %dx%d", ErrResourceLimit, config.Width, config.Height)
+	}
+
+	renderSlots <- struct{}{}
+	defer func() { <-renderSlots }()
+	src, err := imaging.Decode(io.NewSectionReader(f, 0, maxSourceBytes+1), imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNotSupported, err)
 	}
 
 	thumb := imaging.Fit(src, maxSize, maxSize, imaging.Lanczos)
-
-	tmp, err := os.CreateTemp("", "rfe-thumb-*.jpg")
-	if err != nil {
-		return nil, fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-
-	if err := jpeg.Encode(tmp, thumb, &jpeg.Options{Quality: jpegQuality}); err != nil {
-		tmp.Close()
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, thumb, &jpeg.Options{Quality: jpegQuality}); err != nil {
 		return nil, fmt.Errorf("encode jpeg: %w", err)
 	}
-	if err := tmp.Close(); err != nil {
-		return nil, fmt.Errorf("close temp file: %w", err)
-	}
-
-	data, err := os.ReadFile(tmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("read encoded thumbnail: %w", err)
-	}
-	return data, nil
+	return encoded.Bytes(), nil
 }
 
 // cachePath returns the on-disk path for a cached thumbnail keyed by the

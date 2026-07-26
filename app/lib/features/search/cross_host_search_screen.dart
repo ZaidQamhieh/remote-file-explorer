@@ -11,6 +11,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui/format.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/state_views.dart';
+import '../explorer/explorer_screen.dart';
+import '../explorer/explorer_state.dart' show buildPathStack;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// A single search result tagged with the [Host] it came from.
@@ -37,10 +39,12 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
   List<CrossHostResult> _results = [];
   bool _searching = false;
   final Set<String> _failedHosts = {};
+  int _searchGeneration = 0;
 
   void _onQueryChanged(String query) {
     _debounce?.cancel();
     if (query.trim().length < 2) {
+      _searchGeneration++;
       setState(() {
         _results = [];
         _searching = false;
@@ -55,30 +59,58 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
   }
 
   Future<void> _search(String query) async {
+    final generation = ++_searchGeneration;
     setState(() {
       _searching = true;
       _results = [];
       _failedHosts.clear();
     });
 
+    if (widget.hosts.isEmpty) {
+      setState(() => _searching = false);
+      return;
+    }
+
+    var remaining = widget.hosts.length;
     final futures = widget.hosts.map((host) async {
       try {
         final client = await ref.read(clientProvider(host.id).future);
-        final result = await client.search(q: query);
-        return result.entries.map((e) => CrossHostResult(host, e)).toList();
+        final result = await client
+            .search(q: query)
+            .timeout(const Duration(seconds: 10));
+        if (!mounted || generation != _searchGeneration) return;
+        setState(() {
+          _results.addAll(
+            result.entries.map((entry) => CrossHostResult(host, entry)),
+          );
+        });
       } catch (_) {
-        _failedHosts.add(host.id);
-        return <CrossHostResult>[];
+        if (!mounted || generation != _searchGeneration) return;
+        setState(() => _failedHosts.add(host.id));
+      } finally {
+        if (mounted && generation == _searchGeneration) {
+          remaining--;
+          if (remaining == 0) setState(() => _searching = false);
+        }
       }
     });
+    await Future.wait(futures);
+  }
 
-    final allResults = await Future.wait(futures);
-    if (mounted) {
-      setState(() {
-        _results = allResults.expand((r) => r).toList();
-        _searching = false;
-      });
-    }
+  void _openResult(CrossHostResult result) {
+    final entry = result.entry;
+    final stack = buildPathStack(entry.path);
+    final rootPath =
+        entry.isDir
+            ? entry.path
+            : stack.length >= 2
+            ? stack[stack.length - 2]
+            : entry.path;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExplorerScreen(host: result.host, rootPath: rootPath),
+      ),
+    );
   }
 
   @override
@@ -175,6 +207,7 @@ class _CrossHostSearchScreenState extends ConsumerState<CrossHostSearchScreen> {
                         color: scheme.outlineVariant,
                       ),
                     ListTile(
+                      onTap: () => _openResult(_results[i]),
                       leading: Icon(
                         _results[i].entry.isDir
                             ? LucideIcons.folder

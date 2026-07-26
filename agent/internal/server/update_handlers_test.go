@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,7 +12,8 @@ import (
 
 func TestLatestAppHandler(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "rfe-2.0.0-20.apk"), []byte("apk-bytes"), 0o644)
+	apk := []byte("apk-bytes")
+	_ = os.WriteFile(filepath.Join(dir, "rfe-2.0.0-20.apk"), apk, 0o644)
 
 	rr := httptest.NewRecorder()
 	latestAppHandler(dir)(rr, httptest.NewRequest(http.MethodGet, "/v1/app/latest", nil))
@@ -19,6 +22,10 @@ func TestLatestAppHandler(t *testing.T) {
 	}
 	if body := rr.Body.String(); !contains(body, `"versionCode":20`) || !contains(body, `"versionName":"2.0.0"`) {
 		t.Fatalf("unexpected body: %s", body)
+	}
+	wantHash := sha256.Sum256(apk)
+	if body := rr.Body.String(); !contains(body, `"sha256":"`+hex.EncodeToString(wantHash[:])+`"`) {
+		t.Fatalf("missing APK digest: %s", body)
 	}
 }
 

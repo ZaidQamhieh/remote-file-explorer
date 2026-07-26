@@ -4,6 +4,9 @@
 package updates
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +19,7 @@ type Release struct {
 	VersionCode int    `json:"versionCode"`
 	Filename    string `json:"-"`
 	Size        int64  `json:"size"`
+	SHA256      string `json:"sha256"`
 }
 
 // rfe-<versionName>-<versionCode>.apk
@@ -58,6 +62,21 @@ func Latest(dir string) (*Release, error) {
 			Filename:    e.Name(),
 			Size:        info.Size(),
 		}
+	}
+	if best != nil {
+		file, err := os.Open(Path(dir, best))
+		if err != nil {
+			return nil, err
+		}
+		hash := sha256.New()
+		if _, err := io.Copy(hash, file); err != nil {
+			file.Close()
+			return nil, err
+		}
+		if err := file.Close(); err != nil {
+			return nil, err
+		}
+		best.SHA256 = hex.EncodeToString(hash.Sum(nil))
 	}
 	return best, nil
 }

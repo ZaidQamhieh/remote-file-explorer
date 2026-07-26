@@ -90,6 +90,11 @@ class DestinationPickerNotifier
     return DestinationPickerState(pathStack: buildPathStack(arg.startPath));
   }
 
+  int _requestGeneration = 0;
+
+  bool _isCurrentRequest(int generation, String path) =>
+      generation == _requestGeneration && state.currentPath == path;
+
   /// Folders the destination picker should never show: dotfolders are hidden
   /// here too (per [VisibilityPrefs.hideDotfiles]), but extension/exact-name
   /// rules don't apply — the picker only ever lists directories.
@@ -101,13 +106,19 @@ class DestinationPickerNotifier
   }
 
   Future<void> _load() async {
+    final generation = ++_requestGeneration;
     final path = state.currentPath;
-    state = state.copyWith(loading: true, error: null, nextCursor: null);
+    state = state.copyWith(
+      loading: true,
+      loadingMore: false,
+      error: null,
+      nextCursor: null,
+    );
     try {
       final client = await ref.read(clientProvider(arg.hostId).future);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       final listing = await client.list(path);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       state = state.copyWith(
         loading: false,
         folders:
@@ -118,7 +129,7 @@ class DestinationPickerNotifier
         nextCursor: listing.nextCursor,
       );
     } catch (e) {
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       state = state.copyWith(loading: false, error: humanizeError(e));
     }
   }
@@ -130,15 +141,17 @@ class DestinationPickerNotifier
     final cursor = state.nextCursor;
     if (cursor == null) return;
 
+    final generation = ++_requestGeneration;
     final path = state.currentPath;
+    final existingFolders = List<Entry>.of(state.folders);
     state = state.copyWith(loadingMore: true);
     try {
       final client = await ref.read(clientProvider(arg.hostId).future);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       final listing = await client.list(path, cursor: cursor);
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       final merged = [
-        ...state.folders,
+        ...existingFolders,
         ...listing.entries.where((e) => e.isDir && !_hiddenInPicker(e)),
       ];
       state = state.copyWith(
@@ -147,7 +160,7 @@ class DestinationPickerNotifier
         nextCursor: listing.nextCursor,
       );
     } catch (_) {
-      if (state.currentPath != path) return;
+      if (!_isCurrentRequest(generation, path)) return;
       // Leave existing folders as-is; stop the spinner so the user can retry
       // by scrolling again.
       state = state.copyWith(loadingMore: false);

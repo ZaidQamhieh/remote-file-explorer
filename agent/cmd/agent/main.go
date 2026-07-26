@@ -267,6 +267,10 @@ func runServe(args []string) {
 	if err != nil {
 		log.Fatalf("transfer: %v", err)
 	}
+	if _, err := tm.SweepExpired(time.Now()); err != nil {
+		log.Printf("transfer cleanup: %v", err)
+	}
+	tm.StartSweeper()
 
 	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
 	log.Printf("run `rfe-agent pair` to add a device")

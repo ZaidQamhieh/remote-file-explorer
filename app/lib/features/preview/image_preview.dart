@@ -58,7 +58,12 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
     }
     // Go through the shared preview cache so neighbours preloaded by the pager
     // are reused instantly instead of refetched.
-    return PreviewImageCache.instance.fetch(widget.client, widget.entry.path);
+    return PreviewImageCache.instance.fetch(
+      widget.client,
+      widget.entry.path,
+      modified: widget.entry.modified,
+      size: widget.entry.size,
+    );
   }
 
   void _retry() {

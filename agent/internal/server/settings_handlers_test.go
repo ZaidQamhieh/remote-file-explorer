@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,6 +29,20 @@ func newTestDeps(t *testing.T) (*store.DB, *settings.Store) {
 	return db, st
 }
 
+func asAdmin(t *testing.T, db *store.DB, req *http.Request) *http.Request {
+	t.Helper()
+	token := fmt.Sprintf("admin-token-%p", req)
+	id, err := db.UpsertDevice("", "admin", token, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := db.GetDeviceByID(id)
+	if err != nil || admin == nil {
+		t.Fatalf("load admin: %v", err)
+	}
+	return req.WithContext(withDevice(req.Context(), admin))
+}
+
 // newTestDepsWithRoots is like newTestDeps but seeds the agent's configured
 // global roots, for tests that need to validate a jailRoot against them.
 func newTestDepsWithRoots(t *testing.T, roots []string) (*store.DB, *settings.Store) {
@@ -45,7 +60,7 @@ func newTestDepsWithRoots(t *testing.T, roots []string) (*store.DB, *settings.St
 }
 
 func TestSettingsHandler_GetAndPatch(t *testing.T) {
-	_, st := newTestDeps(t)
+	db, st := newTestDeps(t)
 
 	// GET reflects defaults.
 	rr := httptest.NewRecorder()
@@ -62,12 +77,59 @@ func TestSettingsHandler_GetAndPatch(t *testing.T) {
 	// PATCH toggles read-only, renames, and sets the photo-backup root.
 	body := `{"readOnly":true,"agentName":"new-name","photoBackupRoot":"/home/pc/PhoneBackups"}`
 	rr2 := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr2, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	adminID, err := db.UpsertDevice("", "admin", "admin-token", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, _ := db.GetDeviceByID(adminID)
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body))
+	patchReq = patchReq.WithContext(withDevice(patchReq.Context(), admin))
+	patchSettingsHandler(st)(rr2, patchReq)
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("PATCH code = %d", rr2.Code)
 	}
 	if !st.IsReadOnly() || st.AgentName() != "new-name" || st.PhotoBackupRoot() != "/home/pc/PhoneBackups" {
 		t.Fatalf("settings not applied: ro=%v name=%s photoBackupRoot=%s", st.IsReadOnly(), st.AgentName(), st.PhotoBackupRoot())
+	}
+}
+
+func TestPatchSettingsHandler_AdminOnly(t *testing.T) {
+	db, st := newTestDeps(t)
+	if err := db.CreateDevice("phone", "phone", "phone-token"); err != nil {
+		t.Fatal(err)
+	}
+	phone, _ := db.DeviceByToken("phone-token")
+	req := httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(`{"readOnly":true}`))
+	req = req.WithContext(withDevice(req.Context(), phone))
+	rr := httptest.NewRecorder()
+
+	patchSettingsHandler(st)(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if st.IsReadOnly() {
+		t.Fatal("non-admin changed global read-only setting")
+	}
+}
+
+func TestPutBandwidthHandler_AdminOnly(t *testing.T) {
+	db, st := newTestDeps(t)
+	if err := db.CreateDevice("phone", "phone", "phone-token"); err != nil {
+		t.Fatal(err)
+	}
+	phone, _ := db.DeviceByToken("phone-token")
+	req := httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(`{"maxUploadBytesPerSec":123}`))
+	req = req.WithContext(withDevice(req.Context(), phone))
+	rr := httptest.NewRecorder()
+
+	putBandwidthHandler(st)(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if st.MaxUploadBytesPerSec() != 0 {
+		t.Fatal("non-admin changed global bandwidth setting")
 	}
 }
 
@@ -80,33 +142,27 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	// Current device = the keeper (simulate auth context).
 	cur, _ := db.DeviceByToken("tok-keep")
 
-	// LIST marks current.
+	// Ordinary paired devices can inspect only their own row.
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/devices", nil)
 	req = req.WithContext(withDevice(req.Context(), cur))
 	listDevicesHandler(db)(rr, req)
 	var list []map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &list)
-	if len(list) != 2 {
-		t.Fatalf("expected 2 devices, got %d", len(list))
+	if len(list) != 1 {
+		t.Fatalf("expected only current device, got %d", len(list))
 	}
 
 	// The keeper's row reflects its recorded address/version; the untouched
 	// device's row has the empty-string defaults.
-	var keeper, goneRow map[string]any
+	var keeper map[string]any
 	for _, d := range list {
-		switch d["id"] {
-		case "id-keep":
+		if d["id"] == "id-keep" {
 			keeper = d
-		case "id-gone":
-			goneRow = d
 		}
 	}
 	if keeper == nil || keeper["lastAddress"] != "192.168.1.42" || keeper["lastVersion"] != "1.10.0+18" {
 		t.Fatalf("expected keeper lastAddress/lastVersion recorded, got %v", keeper)
-	}
-	if goneRow == nil || goneRow["lastAddress"] != "" || goneRow["lastVersion"] != "" {
-		t.Fatalf("expected gone device to have empty lastAddress/lastVersion, got %v", goneRow)
 	}
 
 	// Revoking SELF succeeds (204) — a device managing itself is the only
@@ -148,6 +204,15 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 		t.Fatalf("upsert admin: %v", err)
 	}
 	admin, _ := db.GetDeviceByID(adminID)
+	rrAdminList := httptest.NewRecorder()
+	reqAdminList := httptest.NewRequest(http.MethodGet, "/v1/devices", nil)
+	reqAdminList = reqAdminList.WithContext(withDevice(reqAdminList.Context(), admin))
+	listDevicesHandler(db)(rrAdminList, reqAdminList)
+	var adminList []map[string]any
+	_ = json.Unmarshal(rrAdminList.Body.Bytes(), &adminList)
+	if len(adminList) != 3 {
+		t.Fatalf("expected admin to see all 3 devices, got %d", len(adminList))
+	}
 	rrAdmin := httptest.NewRecorder()
 	reqAdmin := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-gone", nil)
 	reqAdmin = reqAdmin.WithContext(withDevice(reqAdmin.Context(), admin))
@@ -459,20 +524,22 @@ func TestDeviceJailMiddleware_NarrowsOpsForJailedDevice(t *testing.T) {
 }
 
 func TestPatchSettingsHandler_InvalidJSON(t *testing.T) {
-	_, st := newTestDeps(t)
+	db, st := newTestDeps(t)
 	rr := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader("not json")))
+	req := asAdmin(t, db, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader("not json")))
+	patchSettingsHandler(st)(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
 }
 
 func TestPatchSettingsHandler_SetRoots(t *testing.T) {
-	_, st := newTestDeps(t)
+	db, st := newTestDeps(t)
 	root := t.TempDir()
 	body := `{"roots":["` + root + `"]}`
 	rr := httptest.NewRecorder()
-	patchSettingsHandler(st)(rr, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	req := asAdmin(t, db, httptest.NewRequest(http.MethodPatch, "/v1/settings", strings.NewReader(body)))
+	patchSettingsHandler(st)(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -483,16 +550,17 @@ func TestPatchSettingsHandler_SetRoots(t *testing.T) {
 }
 
 func TestPutBandwidthHandler_InvalidJSON(t *testing.T) {
-	_, st := newTestDeps(t)
+	db, st := newTestDeps(t)
 	rr := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader("{bad")))
+	req := asAdmin(t, db, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader("{bad")))
+	putBandwidthHandler(st)(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
 }
 
 func TestBandwidthHandler_GetAndPut(t *testing.T) {
-	_, st := newTestDeps(t)
+	db, st := newTestDeps(t)
 
 	// GET defaults to zero (unlimited).
 	rr := httptest.NewRecorder()
@@ -509,7 +577,8 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 	// PUT sets limits.
 	body := `{"maxUploadBytesPerSec":1000000,"maxDownloadBytesPerSec":5000000}`
 	rr2 := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr2, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body)))
+	req2 := asAdmin(t, db, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body)))
+	putBandwidthHandler(st)(rr2, req2)
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("PUT code = %d: %s", rr2.Code, rr2.Body.String())
 	}
@@ -525,7 +594,8 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 	// PUT with partial body only updates specified fields.
 	body2 := `{"maxUploadBytesPerSec":0}`
 	rr3 := httptest.NewRecorder()
-	putBandwidthHandler(st)(rr3, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body2)))
+	req3 := asAdmin(t, db, httptest.NewRequest(http.MethodPut, "/v1/settings/bandwidth", strings.NewReader(body2)))
+	putBandwidthHandler(st)(rr3, req3)
 	if rr3.Code != http.StatusOK {
 		t.Fatalf("PUT partial code = %d", rr3.Code)
 	}

@@ -18,6 +18,7 @@ import 'image_preview.dart';
 import 'markdown_preview.dart';
 import 'pdf_preview.dart';
 import 'preview_actions.dart';
+import 'preview_common.dart';
 import 'preview_image_cache.dart';
 import 'text_preview.dart';
 import 'video_preview.dart';
@@ -197,6 +198,7 @@ Widget? _viewerFor(
   required Host host,
   required AgentClient client,
   bool chromeless = false,
+  bool active = true,
 }) {
   switch (_kindOf(entry)) {
     case _PreviewKind.image:
@@ -217,12 +219,14 @@ Widget? _viewerFor(
         entry: entry,
         client: client,
         chromeless: chromeless,
+        active: active,
       );
     case _PreviewKind.audio:
       return AudioPreviewScreen(
         entry: entry,
         client: client,
         chromeless: chromeless,
+        active: active,
       );
     case _PreviewKind.markdown:
       return MarkdownPreviewScreen(
@@ -413,8 +417,14 @@ class _PreviewPagerState extends ConsumerState<PreviewPager> {
     for (final i in [_index - 1, _index + 1]) {
       if (i < 0 || i >= _entries.length) continue;
       final e = _entries[i];
-      if (_isImage(e)) {
-        PreviewImageCache.instance.preload(widget.client, e.path);
+      if (_isImage(e) &&
+          (e.size == null || e.size! <= kMaxInMemoryPreviewBytes)) {
+        PreviewImageCache.instance.preload(
+          widget.client,
+          e.path,
+          modified: e.modified,
+          size: e.size,
+        );
       }
     }
   }
@@ -475,6 +485,7 @@ class _PreviewPagerState extends ConsumerState<PreviewPager> {
                       host: widget.host,
                       client: widget.client,
                       chromeless: true,
+                      active: i == _index,
                     ) ??
                     const SizedBox.shrink(),
               );

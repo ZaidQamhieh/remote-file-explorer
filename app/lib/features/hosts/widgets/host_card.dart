@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/api/agent_client.dart';
 import '../../../core/api/providers.dart';
@@ -96,6 +96,7 @@ class HostCard extends ConsumerStatefulWidget {
 class _HostCardState extends ConsumerState<HostCard> {
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
+  int _pingGeneration = 0;
 
   /// Address the most recent successful client used — drives the "LAN" vs
   /// "Tailscale" chip. `null` while unknown (offline / not yet pinged).
@@ -112,33 +113,56 @@ class _HostCardState extends ConsumerState<HostCard> {
   @override
   void initState() {
     super.initState();
-    _lastSeen = widget.store.getLastSeen(widget.host.id);
-    _pingFuture = _ping();
+    _startPing();
   }
 
-  Future<Health?> _ping() async {
+  @override
+  void didUpdateWidget(covariant HostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.host.id != widget.host.id) {
+      _startPing();
+    }
+  }
+
+  void _startPing() {
+    final generation = ++_pingGeneration;
+    final host = widget.host;
+    final store = widget.store;
+    _lastSeen = store.getLastSeen(host.id);
+    _lastChecked = null;
+    _isTailscaleActive = null;
+    _drivesFuture = null;
+    _pingFuture = _ping(host, store, generation);
+  }
+
+  bool _isCurrentPing(int generation, Host host) =>
+      mounted && generation == _pingGeneration && widget.host.id == host.id;
+
+  Future<Health?> _ping(Host host, HostStore store, int generation) async {
     AgentClient? client;
     try {
-      client = await buildClientForHost(
-        ref.read,
-        widget.host.id,
-        probeLanFirst: true,
+      client = await buildClientForHost(ref.read, host.id, probeLanFirst: true);
+      final activeClient = client;
+      final health = await activeClient.health().timeout(
+        const Duration(seconds: 8),
       );
-      final health = await client.health().timeout(const Duration(seconds: 8));
-      await _learnAddresses(health);
+      await _learnAddresses(health, host, store);
       final now = DateTime.now();
-      await widget.store.setLastSeen(widget.host.id, now);
-      if (mounted) {
+      await store.setLastSeen(host.id, now);
+      final drives = await _loadDrives(activeClient);
+      if (_isCurrentPing(generation, host)) {
         setState(() {
           _lastChecked = now;
           _lastSeen = now;
-          _isTailscaleActive = client!.isActiveAddressTailscale;
+          _isTailscaleActive = activeClient.isActiveAddressTailscale;
+          _drivesFuture = Future.value(drives);
         });
       }
-      _drivesFuture = _loadDrives(client);
       return health;
     } catch (_) {
-      if (mounted) setState(() => _lastChecked = DateTime.now());
+      if (_isCurrentPing(generation, host)) {
+        setState(() => _lastChecked = DateTime.now());
+      }
       return null;
     } finally {
       client?.close();
@@ -160,26 +184,30 @@ class _HostCardState extends ConsumerState<HostCard> {
   /// already know, so a host paired before Wave 2 (or paired only via one
   /// network) gradually learns to be reachable both at home and away — and
   /// the app caches the MAC for Wake-on-LAN when the host is asleep.
-  Future<void> _learnAddresses(Health health) async {
+  Future<void> _learnAddresses(
+    Health health,
+    Host host,
+    HostStore store,
+  ) async {
     final newTailscale = health.tailscaleAddress;
     final newMac = health.macAddress;
 
     final tailscaleChanged =
         newTailscale != null &&
-        newTailscale != widget.host.tailscaleAddress &&
-        newTailscale != widget.host.address;
-    final macChanged = newMac != null && newMac != widget.host.macAddress;
+        newTailscale != host.tailscaleAddress &&
+        newTailscale != host.address;
+    final macChanged = newMac != null && newMac != host.macAddress;
 
     if (!tailscaleChanged && !macChanged) return;
 
-    var updated = widget.host;
+    var updated = host;
     if (tailscaleChanged) {
       updated = updated.copyWith(tailscaleAddress: newTailscale);
     }
     if (macChanged) {
       updated = updated.copyWith(macAddress: newMac);
     }
-    await widget.store.addHost(updated);
+    await store.addHost(updated);
   }
 
   /// Promotes this host to the hero slot (top of the list) without
@@ -285,18 +313,20 @@ class _HostCardState extends ConsumerState<HostCard> {
   }
 
   Future<void> _confirmRemove(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showShadDialog<bool>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.forgetComputerTitle),
-            content: Text(ctx.l10n.forgetComputerConfirm(widget.host.label)),
+            description: Text(
+              ctx.l10n.forgetComputerConfirm(widget.host.label),
+            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton.destructive(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(ctx.l10n.forgetButton),
               ),

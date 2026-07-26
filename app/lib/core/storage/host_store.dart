@@ -45,6 +45,39 @@ class HostStore {
     await _saveHosts(hosts);
   }
 
+  /// Persists one pairing bundle without ever exposing a host row before its
+  /// token and certificate pin are durable. If any write fails, the previous
+  /// host/secrets are restored best-effort and the original error is rethrown.
+  Future<void> savePairedHost(Host host, String token) async {
+    final previousHosts = listHosts();
+    final previousToken = await getToken(host.id);
+    final previousFingerprint = await getFingerprint(host.id);
+    try {
+      await setToken(host.id, token);
+      final fingerprint = host.certFingerprint;
+      if (fingerprint == null) {
+        await _secure.delete(key: _fpKey(host.id));
+      } else {
+        await setFingerprint(host.id, fingerprint);
+      }
+      final hosts =
+          List<Host>.of(previousHosts)
+            ..removeWhere((existing) => existing.id == host.id)
+            ..add(host);
+      await _saveHosts(hosts);
+    } catch (_) {
+      await _restoreSecureValue(_tokenKey(host.id), previousToken);
+      await _restoreSecureValue(_fpKey(host.id), previousFingerprint);
+      await _saveHosts(previousHosts);
+      rethrow;
+    }
+  }
+
+  Future<void> _restoreSecureValue(String key, String? value) =>
+      value == null
+          ? _secure.delete(key: key)
+          : _secure.write(key: key, value: value);
+
   /// Moves [hostId] to the front of the list — used to promote whichever host
   /// was most recently opened to the "focused" hero slot at the top of the
   /// Servers screen.

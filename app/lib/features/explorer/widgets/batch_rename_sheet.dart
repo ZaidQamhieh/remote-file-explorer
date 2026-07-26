@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/sheet_chrome.dart';
 import '../batch_rename.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Modal sheet for batch-renaming [names] (basenames, in selection order).
 /// Pops a `List<String>` of the new basenames (same length/order as [names])
@@ -99,37 +99,37 @@ class _BatchRenameSheetState extends State<BatchRenameSheet> {
                 ),
                 const SizedBox(height: Spacing.md),
                 if (_mode == BatchRenameMode.pattern) ...[
-                  TextField(
+                  ShadInput(
                     controller: _base,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.baseNameLabel,
-                      helperText: context.l10n.baseNameHelperText,
-                    ),
+                    placeholder: Text(context.l10n.baseNameLabel),
                     onChanged: (_) => setState(() {}),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 4),
+                    child: Text(
+                      context.l10n.baseNameHelperText,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: Spacing.sm),
-                  TextField(
+                  ShadInput(
                     controller: _start,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.startNumberLabel,
-                    ),
+                    placeholder: Text(context.l10n.startNumberLabel),
                     onChanged: (_) => setState(() {}),
                   ),
                 ] else ...[
-                  TextField(
+                  ShadInput(
                     controller: _find,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.findLabel,
-                    ),
+                    placeholder: Text(context.l10n.findLabel),
                     onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: Spacing.sm),
-                  TextField(
+                  ShadInput(
                     controller: _replace,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.replaceWithLabel,
-                    ),
+                    placeholder: Text(context.l10n.replaceWithLabel),
                     onChanged: (_) => setState(() {}),
                   ),
                 ],

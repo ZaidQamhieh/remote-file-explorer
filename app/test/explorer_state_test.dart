@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -614,6 +615,57 @@ void main() {
       expect(state.nextCursor, isNull);
       expect(state.hasMore, isFalse);
     });
+
+    test(
+      'an older A to B to A response cannot overwrite the latest A',
+      () async {
+        client.pages['/'] = [
+          Listing(path: '/', entries: [_file('initial.txt')]),
+        ];
+
+        final arg = (hostId: 'h4', rootPath: '/');
+        container.listen(explorerProvider(arg), (_, _) {});
+        final notifier = container.read(explorerProvider(arg).notifier);
+        await _waitUntil(
+          () => container.read(explorerProvider(arg)).entries.isNotEmpty,
+        );
+
+        final staleResponse = Completer<Listing>();
+        client.delayedPages['/'] = [staleResponse];
+        final staleRefresh = notifier.refresh();
+        await _waitUntil(
+          () => client.listCalls.where((call) => call == '/').length == 2,
+        );
+
+        client.pages['/sub'] = [
+          Listing(path: '/sub', entries: [_file('sub.txt')]),
+        ];
+        notifier.navigate('/sub');
+        await _waitUntil(
+          () => container.read(explorerProvider(arg)).currentPath == '/sub',
+        );
+
+        client.pages['/'] = [
+          Listing(path: '/', entries: [_file('latest.txt')]),
+        ];
+        notifier.navigateTo(0);
+        await _waitUntil(
+          () => container
+              .read(explorerProvider(arg))
+              .entries
+              .any((entry) => entry.name == 'latest.txt'),
+        );
+
+        staleResponse.complete(
+          Listing(path: '/', entries: [_file('stale.txt')]),
+        );
+        await staleRefresh;
+
+        final state = container.read(explorerProvider(arg));
+        expect(state.currentPath, '/');
+        expect(state.entries.map((entry) => entry.name), ['latest.txt']);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------
@@ -841,6 +893,8 @@ class _FakeAgentClient extends AgentClient {
 
   final Map<String, List<Listing>> pages = {};
   final Map<String, Listing> cursorPages = {};
+  final Map<String, List<Completer<Listing>>> delayedPages = {};
+  final List<String> listCalls = [];
 
   /// Records every [copy]/[move] call made through this client, in order,
   /// so tests can assert on the `sources`/`destDir`/`duplicate`/`overwrite`
@@ -850,12 +904,17 @@ class _FakeAgentClient extends AgentClient {
 
   @override
   Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
+    listCalls.add(path);
     if (cursor != null) {
       final listing = cursorPages[cursor];
       if (listing == null) {
         throw StateError('No fake page registered for cursor "$cursor"');
       }
       return listing;
+    }
+    final delayedQueue = delayedPages[path];
+    if (delayedQueue != null && delayedQueue.isNotEmpty) {
+      return delayedQueue.removeAt(0).future;
     }
     final queue = pages[path];
     if (queue == null || queue.isEmpty) {

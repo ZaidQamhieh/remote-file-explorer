@@ -12,26 +12,19 @@ enum SearchMode {
 
   /// Glob pattern (wildcards `*` and `?`).
   glob,
-
-  /// Regular expression, converted to a glob for the agent API.
-  regex,
 }
 
 /// Returns `true` if [q] should be treated as a glob pattern (contains `*`
 /// or `?`) rather than a plain substring match.
 bool isGlobQuery(String q) => q.contains('*') || q.contains('?');
 
-/// Wraps [q] based on [mode] for the agent's search API (which only speaks
-/// substring and glob). Regex is approximated by wrapping the term in `*`.
+/// Returns [q] in the syntax selected for the agent's substring/glob API.
 String queryForMode(String q, SearchMode mode) {
   switch (mode) {
     case SearchMode.substring:
       return q;
     case SearchMode.glob:
       return q;
-    case SearchMode.regex:
-      // Agent only supports glob — wrap regex in wildcards as best-effort.
-      return '*$q*';
   }
 }
 

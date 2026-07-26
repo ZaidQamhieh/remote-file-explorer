@@ -11,7 +11,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -43,13 +42,13 @@ type registerRequest struct {
 func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(registerRateLimitAttempts, registerRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.AllowRequest(r) {
+			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many registration attempts, try again later")
 			return
 		}
 		var req registerRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 		// Validate the cheap stuff and device-identity proof BEFORE consuming
@@ -69,7 +68,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		// this deliberately for headless/scripted setups.
 		hasUser, err := db.HasAnyUser()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if hasUser {
@@ -96,7 +95,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				writeError(w, http.StatusConflict, "USERNAME_TAKEN", "that username is already registered on this computer")
 			} else {
-				writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+				writeInternalError(w, r, err)
 			}
 			return
 		}
@@ -111,11 +110,11 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		}
 		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, true)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if err := db.SetDeviceUsername(deviceID, req.Username); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 

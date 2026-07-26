@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -197,5 +198,30 @@ func TestFixedWindowLimiter_AllowsBurstThenBlocks(t *testing.T) {
 	later := now.Add(time.Minute + time.Second)
 	if !l.allowAt(later) {
 		t.Fatal("attempt after window should be allowed")
+	}
+}
+
+func TestFixedWindowLimiter_IsolatesSourcesAndHasGlobalCeiling(t *testing.T) {
+	l := newFixedWindowLimiter(2, time.Minute)
+	now := time.Now()
+
+	if !l.allowKeyAt("192.0.2.1", now) || !l.allowKeyAt("192.0.2.1", now) {
+		t.Fatal("first source should receive its full allocation")
+	}
+	if l.allowKeyAt("192.0.2.1", now) {
+		t.Fatal("first source should be blocked after its allocation")
+	}
+	if !l.allowKeyAt("192.0.2.2", now) {
+		t.Fatal("one source must not consume another source's allocation")
+	}
+
+	// maxAttempts*10 is the global ceiling, independent of source keys.
+	for i := 0; i < 17; i++ {
+		if !l.allowKeyAt(fmt.Sprintf("198.51.100.%d", i), now) {
+			t.Fatalf("global attempt %d blocked too early", i)
+		}
+	}
+	if l.allowKeyAt("203.0.113.1", now) {
+		t.Fatal("global ceiling should stop distributed attempts")
 	}
 }

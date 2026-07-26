@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 // Tests for C1's QR hand-off host matching: matchHandoffHost (the pure core
 // of _QrScanScreenState._onBarcodeDetected in qr_scan_screen.dart).
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +60,24 @@ void main() {
         HandoffPayload.tryParse('{"certFingerprint":"fp","path":"/a"}'),
         isNull,
       );
+    });
+
+    test('rejects names that are not one safe local basename', () {
+      for (final name in [
+        '../secret.txt',
+        r'..\secret.txt',
+        '/absolute.txt',
+        r'C:\absolute.txt',
+        '.',
+        '..',
+        'trailing. ',
+        'bad\u0000name.txt',
+        'CON.txt',
+      ]) {
+        final raw =
+            '{"certFingerprint":"fp","path":"/a","name":${jsonEncode(name)}}';
+        expect(HandoffPayload.tryParse(raw), isNull, reason: name);
+      }
     });
   });
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
@@ -163,13 +165,25 @@ func TestOpenTransferHandler_ChunkSizeAtCapIsAllowed(t *testing.T) {
 	tm, ops := newTestTransferManager(t)
 
 	target := filepath.Join(t.TempDir(), "file.bin")
-	body := `{"path":"` + target + `","size":100,"sha256":"deadbeef","chunkSize":33554432}`
+	body := `{"path":"` + target + `","size":100,"sha256":"` + strings.Repeat("a", 64) + `","chunkSize":33554432}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
 	openTransferHandler(tm, ops)(rr, req)
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestOpenTransferHandler_OversizedFileIs413(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	target := filepath.Join(t.TempDir(), "huge.bin")
+	body := `{"path":"` + target + `","size":` + strconv.FormatInt(transfer.MaxFileSize+1, 10) + `,"sha256":"` + sha256hex(nil) + `","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	openTransferHandler(tm, ops)(rr, req)
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -195,7 +209,7 @@ func TestUploadChunkHandler_OversizedBodyIs413(t *testing.T) {
 	req.Header.Set("X-Chunk-Sha256", sha256hex(oversized))
 	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
 
-	uploadChunkHandler(tm)(rr, req)
+	uploadChunkHandler(tm, ops)(rr, req)
 
 	if rr.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d: %s", rr.Code, rr.Body.String())
@@ -238,7 +252,7 @@ func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content)))
 	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
 	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
-	uploadChunkHandler(tm)(rr, req)
+	uploadChunkHandler(tm, ops)(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("upload chunk: expected 204, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -274,7 +288,7 @@ func TestCompleteTransferHandler_SuccessIncludesVerifiedSHA256(t *testing.T) {
 // TestUploadChunkHandler_ExactSizeIsAccepted sanity-checks that a body
 // exactly matching chunkSize still succeeds.
 func TestUploadChunkHandler_ExactSizeIsAccepted(t *testing.T) {
-	tm, _ := newTestTransferManager(t)
+	tm, ops := newTestTransferManager(t)
 
 	target := filepath.Join(t.TempDir(), "out.bin")
 	const chunkSize = 16
@@ -292,9 +306,177 @@ func TestUploadChunkHandler_ExactSizeIsAccepted(t *testing.T) {
 	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
 	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
 
-	uploadChunkHandler(tm)(rr, req)
+	uploadChunkHandler(tm, ops)(rr, req)
 
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestOpenTransferHandler_ReadOnly(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	target := filepath.Join(t.TempDir(), "blocked.bin")
+	body := `{"path":"` + target + `","size":0,"sha256":"` + sha256hex(nil) + `","chunkSize":1024}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+
+	openTransferHandler(tm, ops.ReadOnly())(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestUploadChunkHandler_ReadOnly(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	content := []byte("blocked")
+	target := filepath.Join(t.TempDir(), "blocked.bin")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content)))
+	req.Header.Set("X-Chunk-Sha256", sha256hex(content))
+	req = withURLParam(req, map[string]string{"id": id, "n": "0"})
+	uploadChunkHandler(tm, ops.ReadOnly())(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	sess, err := tm.Status(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sess.ReceivedChunks) != 0 {
+		t.Fatalf("read-only upload recorded chunks: %v", sess.ReceivedChunks)
+	}
+}
+
+func TestCompleteTransferHandler_ReadOnly(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	content := []byte("blocked")
+	target := filepath.Join(t.TempDir(), "blocked.bin")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	req := withURLParam(httptest.NewRequest(http.MethodPost, "/v1/transfers/"+id+"/complete", nil), map[string]string{"id": id})
+	completeTransferHandler(tm, ops.ReadOnly())(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("read-only completion created target: %v", err)
+	}
+}
+
+func TestTransferHandlers_HideForeignSession(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	owner := &store.Device{ID: "device-a"}
+	foreign := &store.Device{ID: "device-b"}
+	content := []byte("owned data")
+
+	t.Run("status", func(t *testing.T) {
+		id := uuid.New().String()
+		target := filepath.Join(t.TempDir(), "status.bin")
+		if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, owner.ID); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		req := withURLParam(httptest.NewRequest(http.MethodGet, "/v1/transfers/"+id, nil), map[string]string{"id": id})
+		req = req.WithContext(withDevice(req.Context(), foreign))
+		transferStatusHandler(tm)(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("chunk", func(t *testing.T) {
+		id := uuid.New().String()
+		target := filepath.Join(t.TempDir(), "chunk.bin")
+		if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, owner.ID); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		req := withURLParam(httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", strings.NewReader(string(content))), map[string]string{"id": id, "n": "0"})
+		req.Header.Set("X-Chunk-Sha256", sha256hex(content))
+		req = req.WithContext(withDevice(req.Context(), foreign))
+		uploadChunkHandler(tm, ops)(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+		}
+		sess, err := tm.Status(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sess.ReceivedChunks) != 0 {
+			t.Fatalf("foreign chunk changed session: %v", sess.ReceivedChunks)
+		}
+	})
+
+	t.Run("complete", func(t *testing.T) {
+		id := uuid.New().String()
+		target := filepath.Join(t.TempDir(), "complete.bin")
+		if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, owner.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		req := withURLParam(httptest.NewRequest(http.MethodPost, "/v1/transfers/"+id+"/complete", nil), map[string]string{"id": id})
+		req = req.WithContext(withDevice(req.Context(), foreign))
+		completeTransferHandler(tm, ops)(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+		}
+		if _, err := os.Stat(target); !os.IsNotExist(err) {
+			t.Fatalf("foreign device published target: %v", err)
+		}
+	})
+}
+
+func TestUploadChunkHandler_InvalidChunkIs400(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	content := []byte("0123456789abcdefghi")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, filepath.Join(t.TempDir(), "out.bin"), int64(len(content)), 10, sha256hex(content), false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	badFinal := content[10:]
+	badFinal = append(badFinal, '!')
+	rr := httptest.NewRecorder()
+	req := withURLParam(httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/1", strings.NewReader(string(badFinal))), map[string]string{"id": id, "n": "1"})
+	req.Header.Set("X-Chunk-Sha256", sha256hex(badFinal))
+	uploadChunkHandler(tm, ops)(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestWriteTransferLookupError_ExpiredIs410(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	writeTransferLookupError(rr, transfer.ErrExpired)
+
+	if rr.Code != http.StatusGone {
+		t.Fatalf("expected 410, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var got apiError
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Code != "TRANSFER_EXPIRED" {
+		t.Fatalf("unexpected error: %+v", got)
 	}
 }

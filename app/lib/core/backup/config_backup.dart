@@ -27,6 +27,17 @@ const int kBackupPbkdf2Iterations = 200000;
 /// Length (in bytes) of the random PBKDF2 salt.
 const int kBackupSaltLength = 16;
 
+/// Maximum accepted encoded backup size. Configuration backups are normally
+/// measured in kilobytes; this cap prevents crafted imports from exhausting
+/// memory before authentication.
+const int kMaxBackupEnvelopeChars = 4 * 1024 * 1024;
+
+/// Minimum passphrase length required for newly exported backups. Import keeps
+/// accepting older backups whose passphrases met the previous UI policy.
+const int kBackupMinimumPassphraseLength = 12;
+
+const int _kMaxCiphertextBytes = 3 * 1024 * 1024;
+
 /// Derived key length, in bits.
 const int _kKeyBits = 256;
 
@@ -276,6 +287,9 @@ Future<BackupPayload> decodeBackup(
   String envelopeJson,
   String passphrase,
 ) async {
+  if (envelopeJson.length > kMaxBackupEnvelopeChars) {
+    throw const BackupException('This backup file is too large.');
+  }
   late final Map<String, dynamic> envelope;
   try {
     envelope = jsonDecode(envelopeJson) as Map<String, dynamic>;
@@ -299,12 +313,22 @@ Future<BackupPayload> decodeBackup(
   final List<int> mac;
   final int iterations;
   try {
+    iterations = (envelope['iter'] as num).toInt();
+    if (iterations != kBackupPbkdf2Iterations) {
+      throw const BackupException('Unsupported backup work factor.');
+    }
     salt = base64Decode(envelope['salt'] as String);
     nonce = base64Decode(envelope['nonce'] as String);
     ct = base64Decode(envelope['ct'] as String);
     mac = base64Decode(envelope['mac'] as String);
-    iterations = (envelope['iter'] as num).toInt();
   } catch (_) {
+    throw const BackupException('This backup file is corrupted.');
+  }
+  if (salt.length != kBackupSaltLength ||
+      nonce.length != 12 ||
+      mac.length != 16 ||
+      ct.isEmpty ||
+      ct.length > _kMaxCiphertextBytes) {
     throw const BackupException('This backup file is corrupted.');
   }
 

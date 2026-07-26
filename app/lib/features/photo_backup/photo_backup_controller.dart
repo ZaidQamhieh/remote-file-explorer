@@ -177,7 +177,7 @@ class PhotoBackupController {
     final nickname = prefs.deviceName?.trim();
     final deviceSegment =
         (nickname != null && nickname.isNotEmpty)
-            ? _sanitizeSegment(nickname)
+            ? safeRemoteSegment(nickname, fallback: 'device')
             : await _deviceSegment();
 
     final queue = _ref.read(transferQueueProvider.notifier);
@@ -192,7 +192,11 @@ class PhotoBackupController {
         // Skipped assets aren't marked done, so they're retried next run.
         if (!await isFileStable(file.length)) continue;
         final title = await a.titleAsync;
-        final name = title.isNotEmpty ? title : '${a.id}.jpg';
+        final name = photoBackupFileName(
+          assetId: a.id,
+          suggestedName: title,
+          localPath: file.path,
+        );
         final remote = backupRemotePath(
           destRoot: photoBackupRoot,
           created: a.createDateTime,
@@ -228,10 +232,6 @@ class PhotoBackupController {
     final pubKey = await DeviceIdentity.instance.publicKeyBase64();
     return sha256.convert(utf8.encode(pubKey)).toString().substring(0, 8);
   }
-
-  /// Keeps a user-typed device nickname safe as a single path segment.
-  static String _sanitizeSegment(String name) =>
-      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
   Future<bool> _onWifi() async {
     final results = await Connectivity().checkConnectivity();

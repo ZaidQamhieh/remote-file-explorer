@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -80,7 +79,16 @@ CREATE TABLE IF NOT EXISTS transfers (
     received_chunks  TEXT NOT NULL DEFAULT '[]',
     status           TEXT NOT NULL DEFAULT 'open',
     temp_path        TEXT NOT NULL,
-    total_chunks     INTEGER NOT NULL
+    total_chunks     INTEGER NOT NULL,
+    overwrite       INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL DEFAULT 0,
+    expires_at      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS transfer_chunks (
+    transfer_id TEXT NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+    chunk_no    INTEGER NOT NULL,
+    PRIMARY KEY (transfer_id, chunk_no)
 );
 
 CREATE TABLE IF NOT EXISTS share_tokens (
@@ -212,7 +220,165 @@ CREATE TABLE IF NOT EXISTS users (
 	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}
+	if _, err := s.db.Exec(
+		`ALTER TABLE transfers ADD COLUMN overwrite INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(
+		`ALTER TABLE transfers ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(
+		`ALTER TABLE transfers ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_transfers_status_device ON transfers(status, device_id)`); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_transfers_updated_at ON transfers(updated_at)`); err != nil {
+		return err
+	}
+	if err := s.migrateLegacyTransferChunks(); err != nil {
+		return err
+	}
+	if err := s.dedupeDeviceClientIDs(); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_client_id_unique ON devices(client_id) WHERE client_id <> ''`); err != nil {
+		return err
+	}
 	return nil
+}
+
+const transferChunksMigrationKey = "migration.transfer_chunks.v1"
+
+// migrateLegacyTransferChunks performs a one-time conversion from the old
+// JSON array on transfers to normalized rows. The legacy column remains for
+// downgrade compatibility but is no longer read or rewritten during uploads.
+func (s *DB) migrateLegacyTransferChunks() error {
+	var done string
+	err := s.db.QueryRow(`SELECT value FROM config WHERE key=?`, transferChunksMigrationKey).Scan(&done)
+	if err == nil && done == "1" {
+		return nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+
+	rows, err := tx.Query(`SELECT id, received_chunks FROM transfers WHERE received_chunks <> '[]'`)
+	if err != nil {
+		return err
+	}
+	type legacyChunk struct {
+		transferID string
+		chunkNo    int
+	}
+	var legacy []legacyChunk
+	for rows.Next() {
+		var id, raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return err
+		}
+		var chunks []int
+		if err := json.Unmarshal([]byte(raw), &chunks); err != nil {
+			rows.Close()
+			return fmt.Errorf("decode legacy chunks for %s: %w", id, err)
+		}
+		for _, chunk := range chunks {
+			legacy = append(legacy, legacyChunk{transferID: id, chunkNo: chunk})
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, chunk := range legacy {
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO transfer_chunks(transfer_id,chunk_no) VALUES(?,?)`,
+			chunk.transferID, chunk.chunkNo,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO config(key,value) VALUES(?, '1') ON CONFLICT(key) DO UPDATE SET value='1'`,
+		transferChunksMigrationKey,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// dedupeDeviceClientIDs repairs databases created before client_id uniqueness
+// was enforced. The most recently seen row remains authoritative and transfer
+// ownership is repointed before older duplicate rows are removed.
+func (s *DB) dedupeDeviceClientIDs() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`SELECT client_id FROM devices WHERE client_id <> '' GROUP BY client_id HAVING COUNT(*) > 1`)
+	if err != nil {
+		return err
+	}
+	var clientIDs []string
+	for rows.Next() {
+		var clientID string
+		if err := rows.Scan(&clientID); err != nil {
+			rows.Close()
+			return err
+		}
+		clientIDs = append(clientIDs, clientID)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	for _, clientID := range clientIDs {
+		deviceRows, err := tx.Query(
+			`SELECT id FROM devices WHERE client_id=? ORDER BY last_seen DESC, created DESC, id`,
+			clientID,
+		)
+		if err != nil {
+			return err
+		}
+		var deviceIDs []string
+		for deviceRows.Next() {
+			var id string
+			if err := deviceRows.Scan(&id); err != nil {
+				deviceRows.Close()
+				return err
+			}
+			deviceIDs = append(deviceIDs, id)
+		}
+		if err := deviceRows.Close(); err != nil {
+			return err
+		}
+		if len(deviceIDs) < 2 {
+			continue
+		}
+		keep := deviceIDs[0]
+		for _, duplicate := range deviceIDs[1:] {
+			if _, err := tx.Exec(`UPDATE transfers SET device_id=? WHERE device_id=?`, keep, duplicate); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`DELETE FROM devices WHERE id=?`, duplicate); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }
 
 // --------- devices ---------
@@ -280,27 +446,24 @@ func (s *DB) UpsertDevice(clientID, label, token, publicKey string, viaLogin boo
 		viaLoginInt = 1
 	}
 
-	if clientID != "" {
-		var existingID string
-		err := s.db.QueryRow(
-			`SELECT id FROM devices WHERE client_id=?`, clientID,
-		).Scan(&existingID)
-		if err == nil {
-			// Same phone re-pairing: rotate token, clear revoked, refresh label.
-			if _, err := s.db.Exec(
-				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=?, via_login=? WHERE id=?`,
-				hash, label, now, publicKey, viaLoginInt, existingID,
-			); err != nil {
-				return "", err
-			}
-			return existingID, nil
-		}
-		if err != sql.ErrNoRows {
-			return "", err
-		}
-	}
-
 	id := uuid.New().String()
+	if clientID != "" {
+		var definitiveID string
+		err := s.db.QueryRow(
+			`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key,via_login)
+			 VALUES (?,?,?,?,?,0,?,?,?)
+			 ON CONFLICT(client_id) WHERE client_id <> '' DO UPDATE SET
+			   token_hash=excluded.token_hash,
+			   label=excluded.label,
+			   last_seen=excluded.last_seen,
+			   revoked=0,
+			   public_key=excluded.public_key,
+			   via_login=excluded.via_login
+			 RETURNING id`,
+			id, label, hash, now, now, clientID, publicKey, viaLoginInt,
+		).Scan(&definitiveID)
+		return definitiveID, err
+	}
 	if _, err := s.db.Exec(
 		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key,via_login) VALUES (?,?,?,?,?,0,?,?,?)`,
 		id, label, hash, now, now, clientID, publicKey, viaLoginInt,
@@ -504,7 +667,7 @@ type PairingCodeInfo struct {
 	ReadOnly bool
 }
 
-// ConsumePairingCode validates code and removes it (single-use).
+// ConsumePairingCode atomically validates and removes code (single-use).
 func (s *DB) ConsumePairingCode(code string) PairingCodeInfo {
 	if code == "" {
 		return PairingCodeInfo{}
@@ -513,14 +676,13 @@ func (s *DB) ConsumePairingCode(code string) PairingCodeInfo {
 	var jailRoot string
 	var readOnly int
 	err := s.db.QueryRow(
-		`SELECT expires, jail_root, read_only FROM pairing_codes WHERE code=?`, code,
+		`DELETE FROM pairing_codes WHERE code=? AND expires >= ? RETURNING expires, jail_root, read_only`,
+		code, time.Now().Unix(),
 	).Scan(&expires, &jailRoot, &readOnly)
 	if err != nil {
-		return PairingCodeInfo{}
-	}
-	// Remove it regardless (single-use); only accept if still valid.
-	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE code=?`, code)
-	if time.Now().Unix() > expires {
+		// Opportunistically remove a matching expired row without revealing
+		// whether the code ever existed.
+		_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE code=? AND expires < ?`, code, time.Now().Unix())
 		return PairingCodeInfo{}
 	}
 	return PairingCodeInfo{Valid: true, JailRoot: jailRoot, ReadOnly: readOnly != 0}
@@ -673,16 +835,26 @@ type Transfer struct {
 	TotalChunks    int
 	DeviceID       string
 	UpdatedAt      int64 // unix seconds, stamped on each received chunk; 0 = never
+	Overwrite      bool
+	CreatedAt      int64
+	ExpiresAt      int64
 }
 
 // CreateTransfer inserts a new transfer row.
 func (s *DB) CreateTransfer(t *Transfer) error {
 	chunks, _ := json.Marshal([]int{})
+	if t.CreatedAt == 0 {
+		t.CreatedAt = time.Now().Unix()
+	}
+	if t.UpdatedAt == 0 {
+		t.UpdatedAt = t.CreatedAt
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at,overwrite,created_at,expires_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.TargetPath, t.TotalSize, t.ChunkSize, t.SHA256,
-		string(chunks), "open", t.TempPath, t.TotalChunks, t.DeviceID,
+		string(chunks), "open", t.TempPath, t.TotalChunks, t.DeviceID, t.UpdatedAt,
+		t.Overwrite, t.CreatedAt, t.ExpiresAt,
 	)
 	return err
 }
@@ -690,51 +862,44 @@ func (s *DB) CreateTransfer(t *Transfer) error {
 // GetTransfer retrieves a transfer by ID.
 func (s *DB) GetTransfer(id string) (*Transfer, error) {
 	row := s.db.QueryRow(
-		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at
+		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at,overwrite,created_at,expires_at
          FROM transfers WHERE id=?`, id,
 	)
-	return scanTransfer(row)
+	t, err := scanTransfer(row)
+	if err != nil || t == nil {
+		return t, err
+	}
+	chunks, err := s.loadReceivedChunks([]string{id})
+	if err != nil {
+		return nil, err
+	}
+	t.ReceivedChunks = chunks[id]
+	if t.ReceivedChunks == nil {
+		t.ReceivedChunks = []int{}
+	}
+	return t, nil
 }
 
 // MarkChunkReceived atomically records chunk n as received.
-//
-// The read-modify-write of received_chunks must happen inside a single
-// transaction: without one, two concurrent chunk uploads can both read the
-// same JSON array, add their own chunk number, and write back — and one
-// update silently clobbers the other (lost update).
-func (s *DB) MarkChunkReceived(id string, n int) error {
+func (s *DB) MarkChunkReceived(id string, n int, extendExpiry ...time.Time) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op once committed
 
-	var chunksJSON string
-	if err := tx.QueryRow(
-		`SELECT received_chunks FROM transfers WHERE id=?`, id,
-	).Scan(&chunksJSON); err != nil {
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO transfer_chunks(transfer_id,chunk_no) VALUES(?,?)`, id, n,
+	); err != nil {
 		return err
 	}
-	var received []int
-	_ = json.Unmarshal([]byte(chunksJSON), &received)
-
-	// Add n if not already present.
-	set := make(map[int]struct{}, len(received)+1)
-	for _, c := range received {
-		set[c] = struct{}{}
+	query := `UPDATE transfers SET updated_at=? WHERE id=?`
+	args := []any{time.Now().Unix(), id}
+	if len(extendExpiry) > 0 {
+		query = `UPDATE transfers SET updated_at=?, expires_at=? WHERE id=?`
+		args = []any{time.Now().Unix(), extendExpiry[0].Unix(), id}
 	}
-	set[n] = struct{}{}
-	updated := make([]int, 0, len(set))
-	for c := range set {
-		updated = append(updated, c)
-	}
-	// Sort for determinism.
-	slices.Sort(updated)
-	b, _ := json.Marshal(updated)
-	if _, err := tx.Exec(
-		`UPDATE transfers SET received_chunks=?, updated_at=? WHERE id=?`,
-		string(b), time.Now().Unix(), id,
-	); err != nil {
+	if _, err := tx.Exec(query, args...); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -744,6 +909,65 @@ func (s *DB) MarkChunkReceived(id string, n int) error {
 func (s *DB) SetTransferStatus(id, status string) error {
 	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
 	return err
+}
+
+// OpenTransferUsage returns active session counts and reserved logical bytes
+// globally and, when deviceID is non-empty, for that device.
+func (s *DB) OpenTransferUsage(deviceID string) (globalCount, deviceCount int, globalBytes, deviceBytes int64, err error) {
+	err = s.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(SUM(total_size), 0) FROM transfers WHERE status IN ('open','publishing')`,
+	).Scan(&globalCount, &globalBytes)
+	if err != nil || deviceID == "" {
+		return
+	}
+	err = s.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(SUM(total_size), 0) FROM transfers WHERE status IN ('open','publishing') AND device_id=?`,
+		deviceID,
+	).Scan(&deviceCount, &deviceBytes)
+	return
+}
+
+// ExpiredOpenTransfers returns open sessions whose inactivity deadline has
+// passed. Callers must claim each row with ExpireTransfer before cleanup.
+func (s *DB) ExpiredOpenTransfers(cutoff int64) ([]Transfer, error) {
+	rows, err := s.db.Query(
+		`SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at,overwrite,created_at,expires_at
+         FROM transfers WHERE status='open' AND expires_at > 0 AND expires_at <= ?`, cutoff,
+	)
+	if err != nil {
+		return nil, err
+	}
+	var out []Transfer
+	for rows.Next() {
+		t, err := scanTransfer(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *t)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.populateReceivedChunks(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExpireTransfer atomically claims an expired open session for cleanup.
+func (s *DB) ExpireTransfer(id string, cutoff int64) (bool, error) {
+	res, err := s.db.Exec(
+		`UPDATE transfers SET status='expired' WHERE id=? AND status='open' AND expires_at > 0 AND expires_at <= ?`,
+		id, cutoff,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // DeleteTransfer removes a transfer row (its own history, not the uploaded
@@ -773,7 +997,7 @@ func (s *DB) DeleteTransfer(id string) error {
 // restricts the rows to that device; username, if non-empty, restricts them
 // to devices stamped with that login account; pass "" for no filter.
 func (s *DB) ListTransfers(limit int, deviceID, username string) ([]Transfer, error) {
-	query := `SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at
+	query := `SELECT id,target_path,total_size,chunk_size,sha256,received_chunks,status,temp_path,total_chunks,device_id,updated_at,overwrite,created_at,expires_at
          FROM transfers`
 	args := []any{}
 	var where []string
@@ -795,20 +1019,78 @@ func (s *DB) ListTransfers(limit int, deviceID, username string) ([]Transfer, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
 	var out []Transfer
 	for rows.Next() {
 		var t Transfer
 		var chunksJSON string
 		if err := rows.Scan(
 			&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
-			&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt,
+			&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt, &t.Overwrite,
+			&t.CreatedAt, &t.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(chunksJSON), &t.ReceivedChunks)
 		out = append(out, t)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.populateReceivedChunks(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *DB) populateReceivedChunks(transfers []Transfer) error {
+	if len(transfers) == 0 {
+		return nil
+	}
+	ids := make([]string, len(transfers))
+	for i := range transfers {
+		ids[i] = transfers[i].ID
+	}
+	chunks, err := s.loadReceivedChunks(ids)
+	if err != nil {
+		return err
+	}
+	for i := range transfers {
+		transfers[i].ReceivedChunks = chunks[transfers[i].ID]
+		if transfers[i].ReceivedChunks == nil {
+			transfers[i].ReceivedChunks = []int{}
+		}
+	}
+	return nil
+}
+
+func (s *DB) loadReceivedChunks(ids []string) (map[string][]int, error) {
+	out := make(map[string][]int, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.Query(
+		`SELECT transfer_id,chunk_no FROM transfer_chunks WHERE transfer_id IN (`+placeholders+`) ORDER BY transfer_id,chunk_no`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var chunk int
+		if err := rows.Scan(&id, &chunk); err != nil {
+			return nil, err
+		}
+		out[id] = append(out[id], chunk)
 	}
 	return out, rows.Err()
 }
@@ -906,6 +1188,26 @@ func (s *DB) CreateShareToken(tokenHash, path string, expiresAt time.Time) error
 		tokenHash, path, time.Now().Unix(), expiresAt.Unix(),
 	)
 	return err
+}
+
+// LookupShareToken returns the active path for tokenHash without consuming
+// it. Callers use this to validate and open the target before atomically
+// consuming the token, so a missing or invalid target does not burn a link.
+func (s *DB) LookupShareToken(tokenHash string) (path string, ok bool, err error) {
+	var expires int64
+	err = s.db.QueryRow(
+		`SELECT path, expires FROM share_tokens WHERE token_hash=?`, tokenHash,
+	).Scan(&path, &expires)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if time.Now().Unix() > expires {
+		return "", false, nil
+	}
+	return path, true, nil
 }
 
 // ConsumeShareToken atomically looks up tokenHash, deletes it (single-use),
@@ -1007,12 +1309,17 @@ func (s *DB) SweepExpiredShareTokens() (int, error) {
 	return int(n), err
 }
 
-func scanTransfer(row *sql.Row) (*Transfer, error) {
+type transferScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTransfer(row transferScanner) (*Transfer, error) {
 	var t Transfer
 	var chunksJSON string
 	err := row.Scan(
 		&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
-		&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt,
+		&chunksJSON, &t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt, &t.Overwrite,
+		&t.CreatedAt, &t.ExpiresAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

@@ -24,11 +24,23 @@ class DownloadSaver {
       'mimeType': mimeType,
     });
 
-    // Remove the app-private staging copy now that it's in Downloads.
+    if (saved == null || saved.isEmpty) {
+      throw const DownloadSaveCanceledException();
+    }
+
+    // Remove the app-private staging copy only after the native side confirms
+    // that the public Downloads copy was created.
     try {
       if (await sourceFile.exists()) await sourceFile.delete();
     } catch (_) {}
 
-    return saved ?? 'Downloads/$fileName';
+    return saved;
   }
+}
+
+class DownloadSaveCanceledException implements Exception {
+  const DownloadSaveCanceledException();
+
+  @override
+  String toString() => 'Download save was cancelled';
 }

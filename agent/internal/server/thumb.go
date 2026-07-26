@@ -49,16 +49,20 @@ func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
 
 		data, err := rn.Get(resolved, size)
 		if err != nil {
+			if errors.Is(err, thumbs.ErrResourceLimit) {
+				writeError(w, http.StatusRequestEntityTooLarge, "RESOURCE_LIMIT", "image exceeds thumbnail resource limits")
+				return
+			}
 			if errors.Is(err, thumbs.ErrNotSupported) || os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_AVAILABLE", "no thumbnail available for this file")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 
 		w.Header().Set("Content-Type", "image/jpeg")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Cache-Control", "private, max-age=86400")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(data)
 	}

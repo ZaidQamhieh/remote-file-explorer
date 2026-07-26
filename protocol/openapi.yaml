@@ -4,20 +4,24 @@ info:
   version: 1.16.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
-    metadata; binary streams for file content. All routes except /pair, /register,
-    /login, /auth/challenge, and /health require a bearer device token. GET /v1/events
+    metadata; binary streams for file content. JSON request bodies are limited to 1 MiB,
+    reject unknown fields, and must contain exactly one value. All routes except /pair,
+    /register, /login, /auth/challenge, /health, and GET /share/{token} require a bearer device token. GET /v1/events
     provides a Server-Sent Events stream for live filesystem change events and transfer
     progress. Clients may send an optional `X-RFE-Client-Version` header (e.g.
     "1.10.0+18") on every authenticated request; the agent records this plus the
-    caller's network address against the device row and surfaces both via GET /devices
+    caller's network address against the device row at most once per minute (or
+    immediately when either value changes) and surfaces both via GET /devices
     (see Device.lastAddress / Device.lastVersion).
 
     A device's token is "admin" (Device.viaLogin=true) if it was obtained via /login or
     /register (proof of the single account's password) rather than /pair (a one-time
     code meant for an ordinary device like the phone app). Admin devices may manage
     OTHER devices: POST /pairing/generate, and PATCH/DELETE /devices/{id} targeting a
-    device other than themselves. An ordinary (non-admin) device may still manage only
-    ITSELF via DELETE /devices/{id}.
+    device other than themselves. Administrative status, metrics, transfer history,
+    users, logs, restart, Wake-on-LAN, global setting mutations, and share-link
+    listing/revocation also require an admin device. An ordinary device may list only
+    itself and may revoke or delete only itself.
 
     Pair, register, and login all require device-identity proof-of-possession: fetch a
     nonce from POST /auth/challenge, sign it with the device's permanent Ed25519 key,
@@ -52,7 +56,7 @@ paths:
 
   /status:
     get:
-      summary: Agent self-report (uptime, version, platform, disk space)
+      summary: Agent self-report (uptime, version, platform, disk space; admin-only)
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -61,11 +65,12 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AgentStatus' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
 
   /metrics:
     get:
-      summary: Live host metrics (transfer byte counters, CPU %, RAM %)
+      summary: Live host metrics (transfer byte counters, CPU %, RAM %; admin-only)
       description: >
         rxBytes/txBytes are process-lifetime cumulative totals, not a rate —
         clients diff successive readings against tsMs to derive live bytes/sec.
@@ -80,10 +85,11 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Metrics' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /transfers/list:
     get:
-      summary: List recent upload transfer sessions (web companion Transfers page)
+      summary: List recent upload transfer sessions (admin-only)
       description: >
         Read-only listing of the chunked-upload sessions the agent tracks.
         The transfers array is capped at the most recent 200 rows (the table
@@ -145,10 +151,11 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/TransferSummary' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /users:
     get:
-      summary: List login accounts (web companion Users page)
+      summary: List login accounts (admin-only)
       description: >
         Usernames and creation times only — never password hashes. RFE has no
         per-user roles or session tracking, so those Figma-style columns are
@@ -161,14 +168,15 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/UserSummary' } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /users/{username}:
     delete:
-      summary: Permanently remove a login account (web companion Users page)
+      summary: Permanently remove a login account (admin-only)
       description: >
         Every login account is a full admin today (see the /users GET note) —
         there's no self-vs-other distinction like device management has, so
-        any authenticated caller may remove any account. The one exception:
+        any admin caller may remove any account. The one exception:
         the LAST remaining account can't be deleted (code=LAST_USER), since
         that would brick password login entirely (no way to obtain a device
         token except an existing pairing code).
@@ -182,13 +190,14 @@ paths:
             username is the only remaining account. code=LAST_USER.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404':
           description: No account with that username. code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /logs:
     get:
-      summary: Tail the agent's own log output (web companion Logs page)
+      summary: Tail the agent's own log output (admin-only)
       description: >
         Last ~200 lines of the agent's journald output (Linux/systemd). Empty
         array on non-systemd hosts. Exposes no more than a paired device can
@@ -202,12 +211,13 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/LogLine' } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /agent/restart:
     post:
-      summary: Restart the agent's own service (Linux/systemd only)
+      summary: Restart the agent's own service (Linux/systemd only; admin-only)
       description: >
-        Any paired device may trigger this — restart-only, no remote stop, so
+        Only an admin device may trigger this — restart-only, no remote stop, so
         there is nothing to get permanently stuck in. Shells out to
         `systemctl --user restart rfe-agent.service`; the response is sent
         before the command runs. Returns 501 on non-Linux agents.
@@ -219,6 +229,7 @@ paths:
             application/json:
               schema: { type: object, properties: { ok: { type: boolean } } }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '501':
           description: Not supported on this platform. code=NOT_IMPLEMENTED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -364,7 +375,7 @@ paths:
 
   /wol:
     post:
-      summary: Send a Wake-on-LAN magic packet to a MAC address on the agent's LAN
+      summary: Send a Wake-on-LAN magic packet to a MAC address on the agent's LAN (admin-only)
       requestBody:
         required: true
         content:
@@ -384,14 +395,17 @@ paths:
                 properties:
                   status: { type: string, enum: [sent] }
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /share/mint:
     post:
       summary: Mint a one-time share link for a single file
       description: >
         Generates a short-lived, single-use, unauthenticated download URL for
-        one file. Returns 403 if the agent's `allowSharing` setting is
-        disabled (default). See docs/r1-share-link-threat-model.md.
+        one regular file up to 500 MiB. Returns 403 if the agent's
+        `allowSharing` setting is disabled (default). See
+        docs/r1-share-link-threat-model.md.
       security: [{ deviceToken: [] }]
       requestBody:
         required: true
@@ -418,15 +432,17 @@ paths:
           description: Share links are disabled on this agent. code=FORBIDDEN.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
 
   /share/{token}:
     get:
       summary: Fetch a shared file (UNAUTHENTICATED, single-use)
       description: >
         The only unauthenticated route in the entire agent besides /health
-        and /pair. token is single-use: the first successful (or attempted)
-        fetch deletes it. Rate-limited 10/min. Returns 404 for both "expired"
-        and "never existed" — the response never reveals which.
+        and /pair. token is single-use and is consumed only after its target
+        has been opened and validated as a regular file no larger than 500
+        MiB. Rate-limited 10/min. Returns 404 for both "expired" and "never
+        existed" — the response never reveals which.
       security: []
       parameters:
         - { name: token, in: path, required: true, schema: { type: string } }
@@ -436,23 +452,22 @@ paths:
         "429":
           description: Too many share requests (rate-limited 10/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
-
-  /share/{tokenHash}:
     delete:
-      summary: Revoke an active share link
+      summary: Revoke an active share link (admin-only)
       description: >
         Takes the SHA-256 hash of the token (as returned by POST
         /share/mint's tokenHash field), not the raw token.
       security: [{ deviceToken: [] }]
       parameters:
-        - { name: tokenHash, in: path, required: true, schema: { type: string } }
+        - { name: token, in: path, required: true, schema: { type: string }, description: "SHA-256 token hash returned by POST /share/mint; this DELETE operation does not accept the raw token." }
       responses:
         "204": { description: Revoked (or was already gone) }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /share:
     get:
-      summary: List active (unexpired) share links
+      summary: List active (unexpired) share links (admin-only)
       security: [{ deviceToken: [] }]
       responses:
         "200":
@@ -463,6 +478,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/ShareLinkSummary" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /system/drives:
     get:
@@ -482,7 +498,7 @@ paths:
       parameters:
         - { in: query, name: path, required: true, schema: { type: string } }
         - { in: query, name: cursor, schema: { type: string }, description: Pagination cursor (by name) }
-        - { in: query, name: limit, schema: { type: integer, default: 200 } }
+        - { in: query, name: limit, schema: { type: integer, default: 200, maximum: 1000 } }
       responses:
         "200":
           description: Directory listing
@@ -627,7 +643,10 @@ paths:
         Unpacks `archive` into `destDir` (created if absent). Supports `.zip`,
         `.tar.gz` and `.tgz`. Each archive entry's target is validated to stay
         within `destDir` (zip-slip guard); entries that would escape, and
-        non-regular entries (symlinks, devices), are rejected/skipped. Both
+        non-regular entries (symlinks, devices), are rejected/skipped. Extraction
+        is staged before publication. Existing directories are supported only
+        when none of the archive's top-level names collide. Expanded data is
+        capped at 20 GiB, 100,000 entries, and a bounded compression ratio. Both
         paths are jail-checked. Returns the destination directory's Entry.
       requestBody:
         required: true
@@ -645,6 +664,10 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413":
+          description: Archive exceeds extraction limits. code=RESOURCE_LIMIT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /fs/meta:
     get:
@@ -895,6 +918,10 @@ paths:
   /transfers:
     post:
       summary: Open a resumable upload session
+      description: >
+        Sessions expire after 24 hours without a received chunk. Each device
+        may reserve at most 8 active sessions / 200 GiB; the agent permits at
+        most 32 active sessions / 500 GiB total. A file may not exceed 100 GiB.
       requestBody:
         required: true
         content:
@@ -930,17 +957,27 @@ paths:
           description: >
             path already exists and overwrite=false. code=CONFLICT.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "413":
+          description: File exceeds the 100 GiB per-file maximum. code=PAYLOAD_TOO_LARGE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: Active-session or reserved-byte quota reached. code=QUOTA_EXCEEDED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}:
     get:
       summary: Get session status + missing chunks (for resume)
+      description: Visible only to the opening device or an admin device.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "410":
+          description: Session expired due to inactivity. code=TRANSFER_EXPIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
-      summary: Remove a transfer row from history (web companion Transfers page)
+      summary: Remove a transfer row from history (admin-only)
       description: >
         Deletes only the session record, not the uploaded file — for clearing
         stale "open" rows the client never finalized, or "failed" ones.
@@ -949,6 +986,7 @@ paths:
       responses:
         '204': { description: Transfer row removed }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404':
           description: No transfer with that ID. code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -956,6 +994,7 @@ paths:
   /transfers/{id}/chunks/{n}:
     put:
       summary: Upload chunk n (per-chunk checksum)
+      description: Visible only to the opening device or an admin device.
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
         - { in: path, name: n, required: true, schema: { type: integer } }
@@ -978,6 +1017,9 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
+        "410":
+          description: Session expired due to inactivity. code=TRANSFER_EXPIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}/complete:
     post:
@@ -988,6 +1030,7 @@ paths:
         A 200 response means the file is integrity-verified: it includes
         sha256 (the verified whole-file hash) and verified=true alongside the
         usual Entry fields.
+        Only the opening device or an admin device may complete the session.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200":
@@ -1008,7 +1051,14 @@ paths:
                         type: boolean
                         description: Always true on a successful complete.
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Missing chunks or a late destination collision. code=TRANSFER_INCOMPLETE or CONFLICT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "410":
+          description: Session expired due to inactivity. code=TRANSFER_EXPIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "422":
           description: Whole-file SHA-256 mismatch. code=HASH_MISMATCH.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -1025,6 +1075,9 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404":
           description: No thumbnail available for this file. code=NOT_AVAILABLE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "413":
+          description: Source image exceeds the decoder byte or pixel budget. code=RESOURCE_LIMIT.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /search:
@@ -1170,7 +1223,7 @@ paths:
               schema: { $ref: '#/components/schemas/AgentSettings' }
         '401': { $ref: '#/components/responses/Error' }
     patch:
-      summary: Update agent settings (partial)
+      summary: Update agent settings (partial; admin-only)
       security: [{ deviceToken: [] }]
       requestBody:
         content:
@@ -1184,6 +1237,7 @@ paths:
               schema: { $ref: '#/components/schemas/AgentSettings' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /settings/bandwidth:
     get:
@@ -1197,7 +1251,7 @@ paths:
               schema: { $ref: '#/components/schemas/BandwidthSettings' }
         '401': { $ref: '#/components/responses/Error' }
     put:
-      summary: Set bandwidth limits
+      summary: Set bandwidth limits (admin-only)
       security: [{ deviceToken: [] }]
       requestBody:
         required: true
@@ -1212,15 +1266,15 @@ paths:
               schema: { $ref: '#/components/schemas/BandwidthSettings' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /devices:
     get:
       summary: List paired devices
       description: >
-        Each entry includes lastAddress and lastVersion, captured from the device's most
-        recent authenticated request (client IP and the X-RFE-Client-Version header,
-        respectively). Both are "" if the device has never made an authenticated request
-        with that information.
+        An admin receives every paired device; an ordinary device receives only its own
+        row. Each entry includes lastAddress and lastVersion, captured from the device's
+        most recent authenticated request (client IP and the X-RFE-Client-Version header).
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -1501,10 +1555,13 @@ components:
             see the top-level description.
     AppRelease:
       type: object
+      required: [versionName, versionCode, size, sha256]
       properties:
         versionName: { type: string }
         versionCode: { type: integer }
         size: { type: integer, format: int64 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$", description: "SHA-256 of the complete APK." }
+        url: { type: string, format: uri, description: "Direct APK URL in the GitHub release manifest; omitted by the agent-local update endpoint." }
     Health:
       type: object
       properties:
@@ -1586,7 +1643,7 @@ components:
         deviceToken: { type: string }
         deviceId: { type: string }
         agentName: { type: string }
-        certFingerprint: { type: string, description: SHA-256 of agent TLS cert, for pinning }
+        certFingerprint: { type: string, description: "SHA-256 of agent TLS cert, for pinning" }
         address:
           type: string
           description: LAN host:port the agent is reachable at, if detected.
@@ -1646,7 +1703,7 @@ components:
       properties:
         sources: { type: array, items: { type: string } }
         destDir: { type: string }
-        duplicate: { type: boolean, default: false, description: When true, auto-rename on collision }
+        duplicate: { type: boolean, default: false, description: "When true, auto-rename on collision" }
         overwrite:
           type: boolean
           default: false
@@ -1666,7 +1723,9 @@ components:
         chunkSize: { type: integer }
         totalChunks: { type: integer }
         receivedChunks: { type: array, items: { type: integer }, description: Indices already stored }
-        status: { type: string, enum: [open, completed, failed] }
+        status: { type: string, enum: [open, publishing, completed, failed] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
 
     ArchiveEntry:
       type: object

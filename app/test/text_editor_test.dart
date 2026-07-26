@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -9,8 +10,10 @@ import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/features/preview/text_editor.dart';
 
+import 'package:shadcn_ui/shadcn_ui.dart';
+
 import 'l10n_helpers.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'shad_test_wrap.dart';
 
 // TextEditorScreen widget tests — headless (fake AgentClient, no real host).
 //
@@ -43,6 +46,7 @@ class _FakeAgentClient extends AgentClient {
   /// Queue of behaviors for successive [putContent] calls. Each entry is
   /// either an [Entry] to return, or an [Exception] to throw.
   final List<Object> putResults = [];
+  Completer<Entry>? pendingPut;
 
   /// Returned by [fetchBytes] / [meta] when reload is exercised.
   String reloadedText = 'reloaded from host';
@@ -55,6 +59,11 @@ class _FakeAgentClient extends AgentClient {
     DateTime? baseModified,
   }) async {
     putCalls.add((remotePath, utf8.decode(bytes), baseModified));
+    final pending = pendingPut;
+    if (pending != null) {
+      pendingPut = null;
+      return pending.future;
+    }
     final result =
         putResults.isNotEmpty
             ? putResults.removeAt(0)
@@ -72,6 +81,7 @@ class _FakeAgentClient extends AgentClient {
   Future<Uint8List> fetchBytes(
     String remotePath, {
     CancelToken? cancelToken,
+    int maxBytes = maxInMemoryResponseBytes,
   }) async {
     return Uint8List.fromList(utf8.encode(reloadedText));
   }
@@ -94,12 +104,14 @@ Future<void> _pumpEditor(
   Entry? entry,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      localizationsDelegates: l10nDelegates,
-      home: TextEditorScreen(
-        entry: entry ?? _textEntry(),
-        client: client,
-        initialText: initialText,
+    wrapShad(
+      MaterialApp(
+        localizationsDelegates: l10nDelegates,
+        home: TextEditorScreen(
+          entry: entry ?? _textEntry(),
+          client: client,
+          initialText: initialText,
+        ),
       ),
     ),
   );
@@ -203,6 +215,34 @@ void main() {
         expect(client.putCalls[1].$3, newModified);
       },
     );
+
+    testWidgets('edits made during a save remain dirty', (tester) async {
+      final pending = Completer<Entry>();
+      client.pendingPut = pending;
+      await _pumpEditor(tester, client);
+
+      await tester.enterText(find.byType(TextField), 'first edit');
+      await tester.pump();
+      await tester.tap(find.byIcon(LucideIcons.save));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'newer unsaved edit');
+
+      pending.complete(
+        Entry(
+          name: 'notes.txt',
+          path: '/docs/notes.txt',
+          isDir: false,
+          modified: DateTime.utc(2026, 1, 4),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(client.putCalls.single.$2, 'first edit');
+      final saveButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, LucideIcons.save),
+      );
+      expect(saveButton.onPressed, isNotNull);
+    });
   });
 
   group('STALE_WRITE (409)', () {
@@ -216,8 +256,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('File changed on disk'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Reload'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Overwrite'), findsOneWidget);
+      expect(find.widgetWithText(ShadButton, 'Reload'), findsOneWidget);
+      expect(find.widgetWithText(ShadButton, 'Overwrite'), findsOneWidget);
     });
 
     testWidgets('Reload re-fetches content and clears the dirty flag', (
@@ -234,7 +274,7 @@ void main() {
       await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(TextButton, 'Reload'));
+      await tester.tap(find.widgetWithText(ShadButton, 'Reload'));
       await tester.pumpAndSettle();
 
       final field = tester.widget<TextField>(find.byType(TextField));
@@ -265,7 +305,7 @@ void main() {
       await tester.tap(find.byIcon(LucideIcons.save));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Overwrite'));
+      await tester.tap(find.widgetWithText(ShadButton, 'Overwrite'));
       await tester.pumpAndSettle();
 
       expect(client.putCalls, hasLength(2));
@@ -310,31 +350,33 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Navigator(
-            onGenerateRoute:
-                (settings) => MaterialPageRoute(
-                  builder:
-                      (context) => Scaffold(
-                        body: Center(
-                          child: ElevatedButton(
-                            onPressed:
-                                () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => TextEditorScreen(
-                                          entry: _textEntry(),
-                                          client: client,
-                                          initialText: 'hello world',
-                                        ),
+        wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Navigator(
+              onGenerateRoute:
+                  (settings) => MaterialPageRoute(
+                    builder:
+                        (context) => Scaffold(
+                          body: Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => TextEditorScreen(
+                                            entry: _textEntry(),
+                                            client: client,
+                                            initialText: 'hello world',
+                                          ),
+                                    ),
                                   ),
-                                ),
-                            child: const Text('Open editor'),
+                              child: const Text('Open editor'),
+                            ),
                           ),
                         ),
-                      ),
-                ),
+                  ),
+            ),
           ),
         ),
       );
@@ -354,14 +396,14 @@ void main() {
       expect(find.text('Discard changes?'), findsOneWidget);
 
       // "Keep editing" dismisses the dialog without popping.
-      await tester.tap(find.widgetWithText(TextButton, 'Keep editing'));
+      await tester.tap(find.widgetWithText(ShadButton, 'Keep editing'));
       await tester.pumpAndSettle();
       expect(find.byType(TextEditorScreen), findsOneWidget);
 
       // Now pop and confirm discard.
       await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+      await tester.tap(find.widgetWithText(ShadButton, 'Discard'));
       await tester.pumpAndSettle();
 
       expect(find.byType(TextEditorScreen), findsNothing);
@@ -372,31 +414,33 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: Navigator(
-            onGenerateRoute:
-                (settings) => MaterialPageRoute(
-                  builder:
-                      (context) => Scaffold(
-                        body: Center(
-                          child: ElevatedButton(
-                            onPressed:
-                                () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => TextEditorScreen(
-                                          entry: _textEntry(),
-                                          client: client,
-                                          initialText: 'hello world',
-                                        ),
+        wrapShad(
+          MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Navigator(
+              onGenerateRoute:
+                  (settings) => MaterialPageRoute(
+                    builder:
+                        (context) => Scaffold(
+                          body: Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => TextEditorScreen(
+                                            entry: _textEntry(),
+                                            client: client,
+                                            initialText: 'hello world',
+                                          ),
+                                    ),
                                   ),
-                                ),
-                            child: const Text('Open editor'),
+                              child: const Text('Open editor'),
+                            ),
                           ),
                         ),
-                      ),
-                ),
+                  ),
+            ),
           ),
         ),
       );

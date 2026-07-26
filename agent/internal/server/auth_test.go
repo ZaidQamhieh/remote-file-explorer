@@ -6,7 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -126,6 +129,46 @@ func TestAuthMiddleware_SetsDeviceContext(t *testing.T) {
 	}
 	if gotDevice == nil || gotDevice.ID != "dev1" {
 		t.Fatalf("expected device dev1 in context, got %+v", gotDevice)
+	}
+}
+
+func TestAdminOnlyMiddleware_RejectsPairedDevice(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/status", nil)
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "phone"}))
+	rr := httptest.NewRecorder()
+
+	adminOnlyMiddleware(okHandler()).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAdminOnlyMiddleware_AllowsLoginDevice(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/status", nil)
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "admin", ViaLogin: true}))
+	rr := httptest.NewRecorder()
+
+	adminOnlyMiddleware(okHandler()).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestWOLRoute_RejectsPairedDevice(t *testing.T) {
+	db, st, _ := newAuthTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
+	router := chi.NewRouter()
+	registerSettingsAndDeviceRoutes(router, Config{Settings: st}, db, pm)
+
+	req := httptest.NewRequest(http.MethodPost, "/wol", nil)
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "phone"}))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
 

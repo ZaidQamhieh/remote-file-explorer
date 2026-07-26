@@ -2,7 +2,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -16,7 +15,7 @@ func drivesHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		drives, err := fsops.Drives()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, drives)
@@ -24,6 +23,8 @@ func drivesHandler() http.HandlerFunc {
 }
 
 // --------- /fs GET (list dir) ---------
+
+const maxListDirLimit = 1000
 
 func listDirHandler(ops *fsops.Ops) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +38,7 @@ func listDirHandler(ops *fsops.Ops) http.HandlerFunc {
 		limit := 200
 		if l := r.URL.Query().Get("limit"); l != "" {
 			if n, err := strconv.Atoi(l); err == nil && n > 0 {
-				limit = n
+				limit = min(n, maxListDirLimit)
 			}
 		}
 		listing, err := ops.ListDir(path, cursor, limit)
@@ -62,13 +63,14 @@ func deleteHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		}
 
 		// Parse optional body.
-		if r.ContentLength > 0 {
+		if r.ContentLength != 0 {
 			var body struct {
 				Paths []string `json:"paths"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-				paths = append(paths, body.Paths...)
+			if !decodeOptionalJSONBody(w, r, &body) {
+				return
 			}
+			paths = append(paths, body.Paths...)
 		}
 
 		if len(paths) == 0 {
@@ -92,7 +94,7 @@ func listTrashHandler(trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		items, err := fsops.ListTrash(trashDir)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -105,7 +107,10 @@ func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		var body struct {
 			IDs []string `json:"ids"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.IDs) == 0 {
+		if !decodeJSONBody(w, r, &body) {
+			return
+		}
+		if len(body.IDs) == 0 {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "ids required")
 			return
 		}
@@ -114,17 +119,18 @@ func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	}
 }
 
-func emptyTrashHandler(trashDir string) http.HandlerFunc {
+func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ops := opsFromContext(r.Context(), ops)
 		// Optional body {ids:[...]} deletes specific items; empty body empties all.
 		var body struct {
 			IDs []string `json:"ids"`
 		}
-		if r.ContentLength > 0 {
-			_ = json.NewDecoder(r.Body).Decode(&body)
+		if r.ContentLength != 0 && !decodeOptionalJSONBody(w, r, &body) {
+			return
 		}
-		if err := fsops.EmptyTrash(trashDir, body.IDs); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		if err := ops.EmptyTrash(trashDir, body.IDs); err != nil {
+			handleFsError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -139,7 +145,10 @@ func createFolderHandler(ops *fsops.Ops) http.HandlerFunc {
 		var req struct {
 			Path string `json:"path"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
@@ -160,7 +169,10 @@ func createFileHandler(ops *fsops.Ops) http.HandlerFunc {
 		var req struct {
 			Path string `json:"path"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
@@ -182,7 +194,10 @@ func renameHandler(ops *fsops.Ops) http.HandlerFunc {
 			Src string `json:"src"`
 			Dst string `json:"dst"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Src == "" || req.Dst == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Src == "" || req.Dst == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "src and dst required")
 			return
 		}
@@ -206,7 +221,10 @@ func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 			Dup       bool     `json:"duplicate"`
 			Overwrite bool     `json:"overwrite"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
@@ -226,7 +244,10 @@ func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 			Dup       bool     `json:"duplicate"`
 			Overwrite bool     `json:"overwrite"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
@@ -244,7 +265,10 @@ func compressHandler(ops *fsops.Ops) http.HandlerFunc {
 			Sources []string `json:"sources"`
 			Dest    string   `json:"dest"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.Dest == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if len(req.Sources) == 0 || req.Dest == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and dest required")
 			return
 		}
@@ -266,7 +290,10 @@ func extractHandler(ops *fsops.Ops) http.HandlerFunc {
 			Archive string `json:"archive"`
 			DestDir string `json:"destDir"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Archive == "" || req.DestDir == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Archive == "" || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "archive and destDir required")
 			return
 		}
@@ -341,7 +368,11 @@ func handleFsError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, fsops.ErrStale):
 		writeError(w, http.StatusConflict, "STALE_WRITE", err.Error())
+	case errors.Is(err, fsops.ErrInvalidTrashID):
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+	case errors.Is(err, fsops.ErrArchiveLimit):
+		writeError(w, http.StatusRequestEntityTooLarge, "RESOURCE_LIMIT", "archive exceeds extraction limits")
 	default:
-		writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "filesystem operation failed")
 	}
 }

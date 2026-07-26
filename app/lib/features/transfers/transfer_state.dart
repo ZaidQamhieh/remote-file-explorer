@@ -569,7 +569,8 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
       );
     }
 
-    int bytesSent = received.fold(0, (acc, ci) {
+    final receivedSet = received.toSet();
+    int bytesSent = receivedSet.fold(0, (acc, ci) {
       final start = ci * plan.chunkSize;
       final end = (start + plan.chunkSize).clamp(0, fileSize);
       return acc + (end - start);
@@ -582,7 +583,7 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
         // Bail out cleanly if paused/removed since the last chunk.
         _checkStillRunning(id);
 
-        if (received.contains(ci)) continue;
+        if (receivedSet.contains(ci)) continue;
 
         final start = ci * plan.chunkSize;
         final end = (start + plan.chunkSize).clamp(0, fileSize);

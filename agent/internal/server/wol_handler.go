@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 )
@@ -11,8 +10,7 @@ func wolRelayHandler() http.HandlerFunc {
 		var body struct {
 			MAC string `json:"mac"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, "INVALID_BODY", "expected {\"mac\": \"aa:bb:cc:dd:ee:ff\"}")
+		if !decodeJSONBody(w, r, &body) {
 			return
 		}
 		mac, err := net.ParseMAC(body.MAC)
@@ -32,12 +30,12 @@ func wolRelayHandler() http.HandlerFunc {
 
 		conn, err := net.Dial("udp4", "255.255.255.255:9")
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "WOL_FAILED", err.Error())
+			writeServerError(w, r, "WOL_FAILED", err)
 			return
 		}
 		defer conn.Close()
 		if _, err := conn.Write(packet[:]); err != nil {
-			writeError(w, http.StatusInternalServerError, "WOL_FAILED", err.Error())
+			writeServerError(w, r, "WOL_FAILED", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})

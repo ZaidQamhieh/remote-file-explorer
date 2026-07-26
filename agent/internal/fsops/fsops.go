@@ -42,6 +42,10 @@ var ErrUnsupported = errors.New("unsupported archive format")
 // file changed since then (optimistic-concurrency conflict).
 var ErrStale = errors.New("file changed since last read")
 
+// ErrInvalidTrashID is returned when a trash item identifier is not one
+// immediate child name of the agent-managed trash directories.
+var ErrInvalidTrashID = errors.New("invalid trash id")
+
 // The path-jail and access-control model (SettingsView, the read-only/jailed
 // wrappers, Resolve, resolveReal, isUnder) lives in jail.go — the security
 // boundary that every operation below passes through.
@@ -87,6 +91,16 @@ func (o *Ops) Roots() []string {
 	roots := make([]string, len(src))
 	copy(roots, src)
 	return roots
+}
+
+// CheckWritable rejects mutations when either the agent or the calling
+// device is read-only. Handlers for mutations implemented outside fsops
+// must call this immediately before changing filesystem state.
+func (o *Ops) CheckWritable() error {
+	if o.settings.IsReadOnly() {
+		return ErrReadOnly
+	}
+	return nil
 }
 
 // --------- Entry type ---------
@@ -481,6 +495,7 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 			}
 		}
 		if err := copyRecursive(resSrc, dst); err != nil {
+			_ = os.RemoveAll(dst)
 			results[i] = BatchResult{Path: src, Error: apiErr("COPY_FAILED", err.Error())}
 		} else {
 			results[i] = BatchResult{Path: src, OK: true}
@@ -665,6 +680,9 @@ func copyRecursive(src, dst string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
 		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: recursive copy does not follow symlinks: %s", ErrForbidden, src)
 	}
 	if info.IsDir() {
 		if err := os.MkdirAll(dst, info.Mode()); err != nil {

@@ -1571,7 +1571,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passphraseMismatch => 'Passphrases do not match';
 
   @override
-  String get passphraseMinLength => 'Passphrase must be at least 6 characters';
+  String get passphraseMinLength =>
+      'New backup passphrases must be at least 12 characters';
 
   @override
   String get usingDeviceVisibility => 'Using device-specific visibility';
@@ -1607,7 +1608,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get exportConfigSubtitle =>
-      'Save paired hosts, tokens, favorites, and settings to an encrypted file';
+      'Save hosts, favorites, and settings; restored hosts must be paired again';
 
   @override
   String get backupEncryptionWarning =>

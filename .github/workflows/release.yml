@@ -32,11 +32,21 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          flutter-version: "3.44.2"
 
       - name: flutter pub get
         working-directory: app
         run: flutter pub get
+
+      - name: Verify app source
+        working-directory: app
+        run: |
+          dart format --output=none --set-exit-if-changed .
+          flutter analyze
+          flutter test
+
+      - name: Verify OpenAPI contract
+        run: npx --yes @redocly/cli@2.39.0 lint protocol/openapi.yaml
 
       # Recreate the release signing material from secrets so the CI-built APK
       # is signed with the SAME upload key as local builds — without this the
@@ -88,11 +98,12 @@ jobs:
           apk="rfe-${name}-${code}.apk"
           cp app/build/app/outputs/flutter-apk/app-release.apk "$apk"
           size="$(stat -c%s "$apk")"
+          sha256="$(sha256sum "$apk" | awk '{print $1}')"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${apk}"
           # Same shape as the agent's GET /v1/app/latest (versionName/versionCode/
           # size) plus the download `url` the off-Tailscale client needs.
-          printf '{"versionName":"%s","versionCode":%s,"size":%s,"url":"%s"}\n' \
-            "$name" "$code" "$size" "$url" > latest.json
+          printf '{"versionName":"%s","versionCode":%s,"size":%s,"sha256":"%s","url":"%s"}\n' \
+            "$name" "$code" "$size" "$sha256" "$url" > latest.json
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"

@@ -1,23 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 
 import '../settings/settings_controller.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// [PlatformException.code]s meaning the device has no biometric/PIN/pattern
-/// set up at all — there's nothing to lock behind, so falling through
-/// unlocked is correct. Any other error (cancelled, lockout, unknown) must
-/// NOT unlock — that would make the lock trivially bypassable by dismissing
-/// the prompt.
-const _noAuthAvailableCodes = {
-  auth_error.notAvailable,
-  auth_error.notEnrolled,
-  auth_error.passcodeNotSet,
-  auth_error.otherOperatingSystem,
-};
+abstract class AppAuthenticator {
+  Future<bool> authenticate(String reason);
+}
+
+class LocalAppAuthenticator implements AppAuthenticator {
+  LocalAppAuthenticator([LocalAuthentication? auth])
+    : _auth = auth ?? LocalAuthentication();
+
+  final LocalAuthentication _auth;
+
+  @override
+  Future<bool> authenticate(String reason) => _auth.authenticate(
+    localizedReason: reason,
+    options: const AuthenticationOptions(
+      biometricOnly: false,
+      stickyAuth: true,
+    ),
+  );
+}
+
+final appAuthenticatorProvider = Provider<AppAuthenticator>(
+  (_) => LocalAppAuthenticator(),
+);
 
 /// How long after a successful unlock a resume event is treated as the
 /// delayed echo of that same auth flow rather than a genuine re-open.
@@ -54,10 +65,10 @@ class LockGate extends ConsumerStatefulWidget {
 
 class _LockGateState extends ConsumerState<LockGate>
     with WidgetsBindingObserver {
-  final _auth = LocalAuthentication();
   bool _locked = true;
   bool _authenticating = false;
   DateTime? _lastUnlockAt;
+  String? _authError;
 
   @override
   void initState() {
@@ -80,6 +91,13 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden) &&
+        _isEnabled) {
+      if (mounted) setState(() => _locked = true);
+      return;
+    }
     if (state == AppLifecycleState.resumed &&
         shouldRelockOnResume(
           appLockEnabled: _isEnabled,
@@ -103,28 +121,29 @@ class _LockGateState extends ConsumerState<LockGate>
     }
     if (_authenticating) return;
     _authenticating = true;
+    if (mounted) setState(() => _authError = null);
     try {
-      final ok = await _auth.authenticate(
-        localizedReason: 'Unlock Remote File Explorer',
-        options: const AuthenticationOptions(
-          biometricOnly: false,
-          // Without this, the prompt itself pausing/resuming the app is
-          // reported as an auth failure on some devices — see local_auth's
-          // README section on stickyAuth.
-          stickyAuth: true,
-        ),
-      );
+      final ok = await ref
+          .read(appAuthenticatorProvider)
+          .authenticate('Unlock Remote File Explorer');
+      if (!ok && mounted) {
+        setState(() => _authError = 'Authentication was not completed.');
+      }
       if (ok && mounted) {
         _lastUnlockAt = DateTime.now();
         setState(() => _locked = false);
       }
     } on PlatformException catch (e) {
-      if (_noAuthAvailableCodes.contains(e.code) && mounted) {
-        setState(() => _locked = false);
+      if (mounted) {
+        setState(
+          () =>
+              _authError = 'Device authentication is unavailable (${e.code}).',
+        );
       }
-      // Otherwise (cancelled, lockout, unknown) stay locked.
     } catch (_) {
-      // Unexpected error — stay locked rather than silently bypassing.
+      if (mounted) {
+        setState(() => _authError = 'Unable to authenticate on this device.');
+      }
     } finally {
       _authenticating = false;
     }
@@ -132,14 +151,27 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   Widget build(BuildContext context) {
-    final enabled = ref.watch(
-      settingsProvider.select(
-        (s) => s.valueOrNull?.app.appLockEnabled ?? false,
-      ),
+    final settings = ref.watch(settingsProvider);
+    return settings.when(
+      loading: () => _lockedView(context, loading: true),
+      error:
+          (_, __) => _lockedView(
+            context,
+            message: 'Security settings could not be loaded.',
+          ),
+      data: (value) {
+        if (!value.app.appLockEnabled || !_locked) return widget.child;
+        return _lockedView(context, message: _authError, canUnlock: true);
+      },
     );
+  }
 
-    if (!enabled || !_locked) return widget.child;
-
+  Widget _lockedView(
+    BuildContext context, {
+    bool loading = false,
+    bool canUnlock = false,
+    String? message,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: Center(
@@ -150,11 +182,23 @@ class _LockGateState extends ConsumerState<LockGate>
             const SizedBox(height: 24),
             Text('Locked', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _tryUnlock,
-              icon: const Icon(LucideIcons.fingerprint),
-              label: const Text('Unlock'),
-            ),
+            if (loading)
+              const CircularProgressIndicator()
+            else ...[
+              if (message != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(message, textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (canUnlock)
+                FilledButton.icon(
+                  onPressed: _tryUnlock,
+                  icon: const Icon(LucideIcons.fingerprint),
+                  label: const Text('Unlock'),
+                ),
+            ],
           ],
         ),
       ),

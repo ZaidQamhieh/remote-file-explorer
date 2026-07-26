@@ -38,22 +38,22 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		userFilter := r.URL.Query().Get("user")
 		transfers, err := db.ListTransfers(maxTransferRows, deviceFilter, userFilter)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		counts, err := db.CountTransfersByStatus()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		activeNow, err := db.CountActiveTransfers()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		transferDevices, err := db.ListTransferDevices()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		devices := make([]map[string]any, 0, len(transferDevices))
@@ -62,7 +62,7 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 		}
 		accounts, err := db.ListUsers()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		users := make([]string, 0, len(accounts))
@@ -125,7 +125,7 @@ func deleteTransferHandler(db *store.DB) http.HandlerFunc {
 		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
 		default:
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 		}
 	}
 }
@@ -136,7 +136,7 @@ func listUsersHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := db.ListUsers()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		out := make([]map[string]any, 0, len(users))
@@ -169,7 +169,7 @@ func deleteUserHandler(db *store.DB) http.HandlerFunc {
 		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such user")
 		default:
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 		}
 	}
 }

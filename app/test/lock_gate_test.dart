@@ -11,6 +11,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 // the app before the real (persisted) value ever loaded — the lock never
 // showed on a cold start no matter what the setting actually was.
 void main() {
+  testWidgets('never exposes protected content while settings are loading', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'app.appLockEnabled': true});
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: LockGate(child: Text('protected content'))),
+      ),
+    );
+
+    expect(find.text('protected content'), findsNothing);
+  });
+
   testWidgets('shows the lock screen on cold start when appLockEnabled is true '
       '(does not race the async settings load)', (tester) async {
     SharedPreferences.setMockInitialValues({'app.appLockEnabled': true});

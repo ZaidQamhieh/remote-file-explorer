@@ -77,3 +77,27 @@ func TestChmodHandler_MissingFields(t *testing.T) {
 		t.Errorf("status = %d, want 400", rec.Code)
 	}
 }
+
+func TestChmodHandler_ReadOnly(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "test.txt")
+	if err := os.WriteFile(f, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := chmodHandler(fsops.New([]string{dir}, true))
+	req := httptest.NewRequest(http.MethodPost, "/v1/fs/chmod", strings.NewReader(`{"path":"`+f+`","mode":"0755"}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; body: %s", rec.Code, rec.Body.String())
+	}
+	info, err := os.Stat(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Fatalf("mode = %o, want unchanged 0644", info.Mode().Perm())
+	}
+}

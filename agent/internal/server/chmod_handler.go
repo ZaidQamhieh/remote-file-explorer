@@ -2,7 +2,6 @@
 package server
 
 import (
-	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
@@ -18,7 +17,10 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 			Path string `json:"path"`
 			Mode string `json:"mode"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" || req.Mode == "" {
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Path == "" || req.Mode == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path and mode required")
 			return
 		}
@@ -26,6 +28,10 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 		parsed, err := strconv.ParseUint(req.Mode, 8, 32)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid octal mode: "+req.Mode)
+			return
+		}
+		if err := ops.CheckWritable(); err != nil {
+			handleFsError(w, err)
 			return
 		}
 
@@ -44,7 +50,7 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 				writeError(w, http.StatusForbidden, "FORBIDDEN", err.Error())
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 

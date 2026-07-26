@@ -8,14 +8,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing config (gitignored). Present locally (generated keystore) and
-// recreated on the CI runner from GitHub secrets. When absent — e.g. a plain
-// `flutter build apk --release` on a dev machine without the key — we fall back
-// to the debug key so the build still succeeds (it just won't be OTA-installable
-// over a properly signed build). See android/.gitignore + .github/workflows/release.yml.
+// Release signing config (gitignored locally and recreated in CI from secrets).
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseSigning = keystorePropertiesFile.exists()
+val releaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+if (releaseRequested && !hasReleaseSigning) {
+    throw GradleException(
+        "Release signing is not configured. Add android/key.properties and the release keystore.",
+    )
+}
 if (hasReleaseSigning) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -37,7 +41,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.zqamhieh.remote_file_explorer"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -60,12 +63,8 @@ android {
 
     buildTypes {
         release {
-            // Use the dedicated upload key when key.properties is present
-            // (local dev + CI release builds); otherwise fall back to debug.
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }

@@ -6,7 +6,10 @@ import 'package:remote_file_explorer/core/storage/visibility_prefs.dart';
 import 'package:remote_file_explorer/features/settings/file_visibility_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:shadcn_ui/shadcn_ui.dart';
+
 import 'l10n_helpers.dart';
+import 'shad_test_wrap.dart';
 
 // FileVisibilityScreen widget tests — the drill-in that replaced the old
 // inline file-visibility card: hide-dotfiles toggle, one collapsed
@@ -31,9 +34,11 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          localizationsDelegates: l10nDelegates,
-          home: FileVisibilityScreen(),
+        child: wrapShad(
+          const MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: FileVisibilityScreen(),
+          ),
         ),
       ),
     );
@@ -64,9 +69,9 @@ void main() {
   ) async {
     final container = await pumpScreen(tester);
 
-    // Switch 0 is the "Hide dotfiles" toggle; switch 1 is System junk's
-    // (the first category) master switch.
-    final switchFinder = find.byType(Switch).at(1);
+    // "Hide dotfiles" is now a ShadSwitch (SettingsTile.toggle); category
+    // master switches are still plain Switch, so the first one is index 0.
+    final switchFinder = find.byType(Switch).first;
     expect(tester.widget<Switch>(switchFinder).value, isFalse);
 
     await tester.tap(switchFinder);
@@ -92,8 +97,8 @@ void main() {
 
     expect(_appVis(container).hideDotfiles, isTrue);
 
-    // The toggle row's own tap target is the Switch, not the label text.
-    await tester.tap(find.byType(Switch).first);
+    // "Hide dotfiles" is now a ShadSwitch (SettingsTile.toggle).
+    await tester.tap(find.byType(ShadSwitch).first);
     await tester.pumpAndSettle();
 
     expect(_appVis(container).hideDotfiles, isFalse);
@@ -109,7 +114,7 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -3000));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'xyz');
+    await tester.enterText(find.byType(ShadInput), 'xyz');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 

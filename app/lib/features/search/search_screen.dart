@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
@@ -27,7 +28,6 @@ import 'widgets/glob_indicator.dart';
 import 'widgets/recent_searches_view.dart';
 import 'widgets/search_result_tile.dart';
 import 'widgets/truncation_banner.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 export 'search_types.dart';
 
@@ -58,6 +58,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   Timer? _debounce;
   CancelToken? _cancelToken;
+  int _searchGeneration = 0;
 
   /// `true` = constrain search to [widget.currentPath]; `false` = search
   /// every allowed root on the agent.
@@ -83,10 +84,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _truncated = false;
   bool _timeBudgetHit = false;
 
-  bool get _isGlob =>
-      _searchMode == SearchMode.glob ||
-      _searchMode == SearchMode.regex ||
-      isGlobQuery(_query);
+  bool get _isGlob => _searchMode == SearchMode.glob || isGlobQuery(_query);
 
   /// [_rawResults] sorted by relevance and (unless [_includeHidden])
   /// filtered through the same file-visibility prefs as the explorer
@@ -133,6 +131,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _runSearch(String value) async {
+    final generation = ++_searchGeneration;
     final q = value.trim();
     setState(() {
       _query = q;
@@ -167,7 +166,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         modifiedAfter: _datePreset.resolve(DateTime.now()),
         cancelToken: token,
       );
-      if (!mounted || _query != q) return;
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _loading = false;
         _rawResults = sortByRelevance(result.entries, q);
@@ -177,13 +176,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       unawaited(ref.read(recentSearchesProvider.notifier).record(q));
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return;
-      if (!mounted || _query != q) return;
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _loading = false;
         _error = humanizeError(e);
       });
     } catch (e) {
-      if (!mounted || _query != q) return;
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _loading = false;
         _error = humanizeError(e);
@@ -342,27 +341,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final q = _controller.text.trim();
     if (q.isEmpty) return;
     final nameCtl = TextEditingController(text: q);
-    final name = await showDialog<String>(
+    final name = await showShadDialog<String>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
+          (ctx) => ShadDialog(
             title: Text(ctx.l10n.saveSearch),
-            content: TextField(
-              controller: nameCtl,
-              decoration: InputDecoration(labelText: ctx.l10n.savedSearchName),
-              autofocus: true,
-              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-            ),
             actions: [
-              TextButton(
+              ShadButton.ghost(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(ctx.l10n.cancelButton),
               ),
-              FilledButton(
+              ShadButton(
                 onPressed: () => Navigator.pop(ctx, nameCtl.text.trim()),
                 child: Text(ctx.l10n.saveButton),
               ),
             ],
+            child: ShadInput(
+              controller: nameCtl,
+              placeholder: Text(ctx.l10n.savedSearchName),
+              autofocus: true,
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
           ),
     );
     if (name == null || name.isEmpty) return;

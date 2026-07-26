@@ -1,6 +1,7 @@
 package fsops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,11 +98,54 @@ func TestTrash_Empty(t *testing.T) {
 	if items, _ := ListTrash(trashDir); len(items) != 2 {
 		t.Fatalf("expected 2 trashed items, got %d", len(items))
 	}
-	if err := EmptyTrash(trashDir, nil); err != nil {
+	if err := ops.EmptyTrash(trashDir, nil); err != nil {
 		t.Fatalf("EmptyTrash: %v", err)
 	}
 	if items, _ := ListTrash(trashDir); len(items) != 0 {
 		t.Fatalf("trash not empty: %+v", items)
+	}
+}
+
+func TestTrash_EmptyRejectsTraversalID(t *testing.T) {
+	ops, _, trashDir := setupTrash(t)
+	victimDir := filepath.Join(filepath.Dir(trashFilesDir(trashDir)), "victim")
+	if err := os.MkdirAll(victimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(victimDir, "keep.txt")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := ops.EmptyTrash(trashDir, []string{"../victim"})
+	if err == nil {
+		t.Fatal("expected traversal ID to be rejected")
+	}
+	if got, readErr := os.ReadFile(victim); readErr != nil || string(got) != "keep" {
+		t.Fatalf("outside file changed: content=%q err=%v", got, readErr)
+	}
+}
+
+func TestTrash_RestoreRejectsTraversalID(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	outsidePayload := filepath.Join(trashDir, "victim")
+	if err := os.MkdirAll(trashInfoDir(trashDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsidePayload, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outsideInfo := filepath.Join(trashDir, "victim"+trashInfoExt)
+	if err := os.WriteFile(outsideInfo, []byte("[Trash Info]\nPath="+filepath.Join(root, "restored.txt")+"\nDeletionDate=2026-01-01T00:00:00\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := ops.RestoreFromTrash([]string{"../victim"}, trashDir)
+	if len(result) != 1 || result[0].OK || result[0].Error == nil {
+		t.Fatalf("expected traversal ID failure, got %+v", result)
+	}
+	if got, err := os.ReadFile(outsidePayload); err != nil || string(got) != "keep" {
+		t.Fatalf("outside payload changed: content=%q err=%v", got, err)
 	}
 }
 
@@ -116,6 +160,25 @@ func TestTrash_ReadOnly(t *testing.T) {
 	res := ro.MoveToTrash([]string{src}, filepath.Join(t.TempDir(), "Trash"))
 	if res[0].OK || res[0].Error == nil || res[0].Error.Code != "READ_ONLY" {
 		t.Fatalf("expected READ_ONLY, got %+v", res[0])
+	}
+}
+
+func TestTrash_EmptyReadOnly(t *testing.T) {
+	trashDir := filepath.Join(t.TempDir(), "Trash")
+	payload := filepath.Join(trashFilesDir(trashDir), "keep.txt")
+	if err := os.MkdirAll(filepath.Dir(payload), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(payload, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := New(nil, true).EmptyTrash(trashDir, nil)
+	if !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("expected ErrReadOnly, got %v", err)
+	}
+	if got, readErr := os.ReadFile(payload); readErr != nil || string(got) != "keep" {
+		t.Fatalf("trash payload changed: content=%q err=%v", got, readErr)
 	}
 }
 

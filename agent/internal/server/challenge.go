@@ -81,7 +81,8 @@ const (
 func challengeHandler(nonces *nonceStore) http.HandlerFunc {
 	limiter := newFixedWindowLimiter(challengeRateLimitAttempts, challengeRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.AllowRequest(r) {
+			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many challenge requests, try again later")
 			return
 		}
@@ -147,7 +148,7 @@ func verifyDeviceProof(db *store.DB, nonces *nonceStore, deviceID, publicKey, no
 	}
 	pinned, err := db.DevicePublicKeyByClientID(deviceID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		writeInternalError(w, nil, err)
 		return err
 	}
 	if pinned != "" && pinned != publicKey {

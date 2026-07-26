@@ -43,7 +43,16 @@ class GithubUpdateSource {
     final body = res.data;
     if (body == null || body.trim().isEmpty) return null;
     final data = jsonDecode(body) as Map<String, dynamic>;
-    return AppRelease.fromJson(data);
+    final release = AppRelease.fromJson(data);
+    final expectedPrefix =
+        'https://github.com/$githubReleaseRepo/releases/download/';
+    if (!release.hasIntegrityMetadata ||
+        release.size <= 0 ||
+        release.url == null ||
+        !release.url!.startsWith(expectedPrefix)) {
+      throw const FormatException('Invalid update manifest');
+    }
+    return release;
   }
 
   /// Downloads the APK referenced by [release]'s `url` to [localFile],

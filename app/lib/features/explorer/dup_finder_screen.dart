@@ -36,8 +36,19 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
   String? _error;
   bool _scanning = false;
   int _filesScanned = 0;
+  int _scanGeneration = 0;
+
+  bool _isCurrentScan(int generation) =>
+      mounted && generation == _scanGeneration;
+
+  @override
+  void dispose() {
+    _scanGeneration++;
+    super.dispose();
+  }
 
   Future<void> _scan() async {
+    final generation = ++_scanGeneration;
     setState(() {
       _scanning = true;
       _error = null;
@@ -46,7 +57,8 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
     try {
       final paths = <String>[];
       final sizes = <String, int>{};
-      await _collectFiles(widget.path, paths, sizes);
+      await _collectFiles(widget.path, paths, sizes, <String>{}, generation);
+      if (!_isCurrentScan(generation)) return;
       setState(() => _filesScanned = paths.length);
 
       if (paths.isEmpty) {
@@ -58,13 +70,22 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
         return;
       }
 
-      // Batch checksum in chunks of 500
+      // Files with unique sizes cannot be duplicates. Hash only candidate
+      // size groups, which avoids the dominant cost on normal trees.
+      final candidates = duplicateCandidatesBySize(paths, sizes);
+
+      // Batch checksum in chunks of 500.
       final allHashes = <String, String>{};
-      for (var i = 0; i < paths.length; i += 500) {
-        final chunk = paths.sublist(i, (i + 500).clamp(0, paths.length));
+      for (var i = 0; i < candidates.length; i += 500) {
+        if (!_isCurrentScan(generation)) return;
+        final chunk = candidates.sublist(
+          i,
+          (i + 500).clamp(0, candidates.length),
+        );
         final hashes = await widget.client.batchChecksums(chunk);
         allHashes.addAll(hashes);
       }
+      if (!_isCurrentScan(generation)) return;
 
       // Group by hash
       final byHash = <String, List<String>>{};
@@ -78,12 +99,14 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
             return sB.compareTo(sA); // largest first
           });
 
+      if (!_isCurrentScan(generation)) return;
       setState(() {
         _groups = dups;
         _sizes = sizes;
         _scanning = false;
       });
     } catch (e) {
+      if (!_isCurrentScan(generation)) return;
       setState(() {
         _error = humanizeError(e);
         _scanning = false;
@@ -95,16 +118,38 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
     String path,
     List<String> paths,
     Map<String, int> sizes,
+    Set<String> visitedDirectories,
+    int generation,
   ) async {
-    final listing = await widget.client.list(path);
-    for (final entry in listing.entries) {
-      if (entry.isDir) {
-        await _collectFiles(entry.path, paths, sizes);
-      } else {
-        paths.add(entry.path);
-        if (entry.size != null) sizes[entry.path] = entry.size!;
+    if (!visitedDirectories.add(path)) return;
+    String? cursor;
+    do {
+      if (!_isCurrentScan(generation)) return;
+      final listing = await widget.client.list(path, cursor: cursor);
+      for (final entry in listing.entries) {
+        if (entry.isDir) {
+          await _collectFiles(
+            entry.path,
+            paths,
+            sizes,
+            visitedDirectories,
+            generation,
+          );
+        } else {
+          paths.add(entry.path);
+          if (entry.size != null) sizes[entry.path] = entry.size!;
+          if (paths.length > 100000) {
+            throw StateError('duplicate scan exceeds the 100,000-file limit');
+          }
+        }
       }
-    }
+      cursor = listing.nextCursor;
+    } while (cursor != null);
+  }
+
+  void _cancelScan() {
+    _scanGeneration++;
+    setState(() => _scanning = false);
   }
 
   @override
@@ -123,6 +168,11 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
                     Text('Scanning $_filesScanned files...'),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _cancelScan,
+                      child: const Text('Cancel'),
+                    ),
                   ],
                 ),
               )
@@ -192,6 +242,23 @@ class _DupFinderScreenState extends State<DupFinderScreen> {
       ],
     );
   }
+}
+
+/// Returns only paths whose known file size occurs at least twice. Unknown
+/// sizes are retained because they cannot safely be ruled out before hashing.
+List<String> duplicateCandidatesBySize(
+  List<String> paths,
+  Map<String, int> sizes,
+) {
+  final counts = <int, int>{};
+  for (final path in paths) {
+    final size = sizes[path];
+    if (size != null) counts[size] = (counts[size] ?? 0) + 1;
+  }
+  return paths.where((path) {
+    final size = sizes[path];
+    return size == null || (counts[size] ?? 0) > 1;
+  }).toList();
 }
 
 /// Compute wasted bytes across duplicate groups.

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -142,6 +143,52 @@ func TestUpsertDeviceDedupesByClientID(t *testing.T) {
 	b, _ := db.UpsertDevice("", "Legacy", "tok-5", "", false)
 	if a == b {
 		t.Fatalf("empty client id must not dedup")
+	}
+}
+
+func TestUpsertDeviceConcurrentClientIDIsUnique(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	const workers = 32
+	ids := make(chan string, workers)
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			id, err := db.UpsertDevice("same-client", "Phone", fmt.Sprintf("token-%d", i), "key", false)
+			if err != nil {
+				errs <- err
+				return
+			}
+			ids <- id
+		}(i)
+	}
+	wg.Wait()
+	close(ids)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("concurrent upsert: %v", err)
+	}
+	var expected string
+	for id := range ids {
+		if expected == "" {
+			expected = id
+		} else if id != expected {
+			t.Fatalf("same client produced device ids %q and %q", expected, id)
+		}
+	}
+	devices, err := db.ListDevices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("expected one device row, got %d", len(devices))
 	}
 }
 
@@ -353,6 +400,27 @@ func TestConsumeShareTokenLifecycle(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("expected unknown token to be rejected")
+	}
+}
+
+func TestLookupShareTokenDoesNotConsume(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.CreateShareToken("hash-peek", "/srv/file.txt", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		path, ok, err := db.LookupShareToken("hash-peek")
+		if err != nil || !ok || path != "/srv/file.txt" {
+			t.Fatalf("lookup %d = %q, %v, %v", i, path, ok, err)
+		}
+	}
+	if _, ok, err := db.ConsumeShareToken("hash-peek"); err != nil || !ok {
+		t.Fatalf("consume after lookup: ok=%v err=%v", ok, err)
 	}
 }
 
@@ -571,6 +639,57 @@ func TestMarkChunkReceivedConcurrent(t *testing.T) {
 			t.Fatalf("chunk %d missing from received_chunks: %v", i, got.ReceivedChunks)
 		}
 	}
+	var normalizedCount int
+	if err := db.db.QueryRow(
+		`SELECT COUNT(*) FROM transfer_chunks WHERE transfer_id=?`, tr.ID,
+	).Scan(&normalizedCount); err != nil {
+		t.Fatal(err)
+	}
+	if normalizedCount != n {
+		t.Fatalf("normalized chunk rows = %d, want %d", normalizedCount, n)
+	}
+}
+
+func TestLegacyTransferChunksMigrateOnce(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := &Transfer{
+		ID:          "legacy-transfer",
+		TargetPath:  "/tmp/target",
+		TotalSize:   4096,
+		ChunkSize:   1024,
+		SHA256:      "deadbeef",
+		TempPath:    "/tmp/target.part",
+		TotalChunks: 4,
+	}
+	if err := db.CreateTransfer(tr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(`UPDATE transfers SET received_chunks='[1,3]' WHERE id=?`, tr.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(`DELETE FROM config WHERE key=?`, transferChunksMigrationKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := db.GetTransfer(tr.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(got.ReceivedChunks) != "[1 3]" {
+		t.Fatalf("migrated chunks = %v", got.ReceivedChunks)
+	}
 }
 
 func TestDeleteTransfer(t *testing.T) {
@@ -593,6 +712,45 @@ func TestDeleteTransfer(t *testing.T) {
 	}
 	if err := db.DeleteTransfer(tr.ID); err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows deleting again, got %v", err)
+	}
+}
+
+func TestConsumePairingCodeConcurrentSingleWinner(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.CreatePairingCode("ONE-CODE", time.Now().Add(time.Minute), "/guest", true); err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 32
+	start := make(chan struct{})
+	results := make(chan PairingCodeInfo, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			results <- db.ConsumePairingCode("ONE-CODE")
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	winners := 0
+	for result := range results {
+		if result.Valid {
+			winners++
+			if result.JailRoot != "/guest" || !result.ReadOnly {
+				t.Fatalf("winner lost code metadata: %+v", result)
+			}
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("valid redemptions = %d, want exactly 1", winners)
 	}
 }
 

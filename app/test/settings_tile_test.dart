@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:remote_file_explorer/features/settings/widgets/settings_tile.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
-Future<void> _pump(WidgetTester tester, Widget child) =>
-    tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
+import 'shad_test_wrap.dart';
+
+Future<void> _pump(WidgetTester tester, Widget child) => tester.pumpWidget(
+  wrapShad(MaterialApp(home: Scaffold(body: child))),
+);
 
 void main() {
   testWidgets('toggle variant renders a Switch and reports changes', (
@@ -21,7 +24,7 @@ void main() {
       ),
     );
     expect(find.text('Transfer notifications'), findsOneWidget);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(ShadSwitch));
     expect(changed, isTrue);
   });
 

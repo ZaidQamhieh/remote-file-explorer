@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/api/agent_client.dart';
@@ -196,6 +198,65 @@ void main() {
       expect(state.error, isNotNull);
       expect(state.folders, isEmpty);
     });
+
+    test(
+      'an older A to B to A response cannot overwrite the latest A',
+      () async {
+        client.pages['/root'] = Listing(
+          path: '/root',
+          entries: [_dir('/root/Initial')],
+        );
+
+        final arg = (hostId: 'h1', startPath: '/root');
+        container.listen(destinationPickerProvider(arg), (_, _) {});
+        final notifier = container.read(
+          destinationPickerProvider(arg).notifier,
+        );
+        await _waitUntil(
+          () =>
+              container.read(destinationPickerProvider(arg)).folders.isNotEmpty,
+        );
+
+        final staleResponse = Completer<Listing>();
+        client.delayedPages['/root'] = [staleResponse];
+        final staleRefresh = notifier.refresh();
+        await _waitUntil(
+          () => client.listCalls.where((call) => call == '/root').length == 2,
+        );
+
+        client.pages['/root/Documents'] = Listing(
+          path: '/root/Documents',
+          entries: [_dir('/root/Documents/Sub')],
+        );
+        notifier.navigate('/root/Documents');
+        await _waitUntil(
+          () =>
+              container.read(destinationPickerProvider(arg)).currentPath ==
+              '/root/Documents',
+        );
+
+        client.pages['/root'] = Listing(
+          path: '/root',
+          entries: [_dir('/root/Latest')],
+        );
+        notifier.navigateTo(1);
+        await _waitUntil(
+          () => container
+              .read(destinationPickerProvider(arg))
+              .folders
+              .any((entry) => entry.name == 'Latest'),
+        );
+
+        staleResponse.complete(
+          Listing(path: '/root', entries: [_dir('/root/Stale')]),
+        );
+        await staleRefresh;
+
+        final state = container.read(destinationPickerProvider(arg));
+        expect(state.currentPath, '/root');
+        expect(state.folders.map((entry) => entry.name), ['Latest']);
+      },
+    );
   });
 }
 
@@ -206,10 +267,17 @@ class _FakeAgentClient extends AgentClient {
   _FakeAgentClient({required Host host}) : super(host);
 
   final Map<String, Listing> pages = {};
+  final Map<String, List<Completer<Listing>>> delayedPages = {};
+  final List<String> listCalls = [];
   final List<String> createdFolders = [];
 
   @override
   Future<Listing> list(String path, {String? cursor, int limit = 200}) async {
+    listCalls.add(path);
+    final delayedQueue = delayedPages[path];
+    if (delayedQueue != null && delayedQueue.isNotEmpty) {
+      return delayedQueue.removeAt(0).future;
+    }
     final listing = pages[path];
     if (listing == null) {
       throw StateError('No fake page registered for path "$path"');

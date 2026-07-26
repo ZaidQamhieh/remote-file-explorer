@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,19 +77,21 @@ void main() {
     expect(await isApkReadyToInstall(release), isFalse);
   });
 
-  test(
-    'isApkReadyToInstall is true once the file matches the release size',
-    () async {
-      const release = AppRelease(
-        versionName: '1.0.0',
-        versionCode: 3,
-        size: 100,
-      );
-      final file = await apkCacheFileFor(3);
-      await file.writeAsBytes(List.filled(100, 0));
-      expect(await isApkReadyToInstall(release), isTrue);
-    },
-  );
+  test('isApkReadyToInstall verifies size and SHA-256', () async {
+    final bytes = List<int>.filled(100, 0);
+    final release = AppRelease(
+      versionName: '1.0.0',
+      versionCode: 3,
+      size: 100,
+      sha256: sha256.convert(bytes).toString(),
+    );
+    final file = await apkCacheFileFor(3);
+    await file.writeAsBytes(bytes);
+    expect(await isApkReadyToInstall(release), isTrue);
+
+    await file.writeAsBytes(List<int>.filled(100, 1));
+    expect(await isApkReadyToInstall(release), isFalse);
+  });
 
   test(
     'isApkReadyToInstall is false when the release reports no size',
@@ -103,7 +106,13 @@ void main() {
   test('sharedDownloadApk joins an overlapping call instead of downloading '
       'the same release twice (the background pre-download / manual "Update" '
       'race that corrupted the cached APK)', () async {
-    const release = AppRelease(versionName: '1.0.0', versionCode: 5, size: 10);
+    final bytes = List<int>.filled(10, 0);
+    final release = AppRelease(
+      versionName: '1.0.0',
+      versionCode: 5,
+      size: 10,
+      sha256: sha256.convert(bytes).toString(),
+    );
     final file = await apkCacheFileFor(5);
     final source = _CountingUpdateSource();
 

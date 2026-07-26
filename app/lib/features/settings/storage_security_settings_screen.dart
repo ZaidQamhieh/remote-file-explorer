@@ -8,6 +8,7 @@ import '../../core/storage/cache_manager.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/feedback.dart';
 import '../../core/ui/format.dart';
+import '../../core/ui/lock_gate.dart';
 import 'widgets/settings_hero.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/settings_section.dart';
@@ -52,7 +53,35 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
                 title: 'App Lock',
                 subtitle: 'Require biometric or PIN to open',
                 value: settings.app.appLockEnabled,
-                onChanged: notifier.setAppLockEnabled,
+                onChanged: (value) async {
+                  if (!value) {
+                    await notifier.setAppLockEnabled(false);
+                    return;
+                  }
+                  try {
+                    final verified = await ref
+                        .read(appAuthenticatorProvider)
+                        .authenticate(
+                          'Verify your identity to enable App Lock',
+                        );
+                    if (!context.mounted) return;
+                    if (!verified) {
+                      showError(
+                        context,
+                        'App Lock was not enabled because authentication failed.',
+                      );
+                      return;
+                    }
+                    await notifier.setAppLockEnabled(true);
+                  } catch (_) {
+                    if (context.mounted) {
+                      showError(
+                        context,
+                        'Set up a device PIN, pattern, or biometric before enabling App Lock.',
+                      );
+                    }
+                  }
+                },
               ),
             ],
           ),

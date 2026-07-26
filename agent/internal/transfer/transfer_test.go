@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
@@ -271,6 +272,197 @@ func TestChunkHashMismatch(t *testing.T) {
 	err = tm.WriteChunk(id, 0, content, "0000000000000000000000000000000000000000000000000000000000000000")
 	if err == nil {
 		t.Fatal("expected chunk hash mismatch error")
+	}
+}
+
+func TestWriteChunkRejectsInvalidIndexAndLength(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "bounded.bin")
+	content := []byte("0123456789abcdefghi") // 10 + 9 bytes
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 10, sha256hex(content), false, "device-a"); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		n    int
+		data []byte
+	}{
+		{name: "negative index", n: -1, data: make([]byte, 10)},
+		{name: "index past end", n: 2, data: make([]byte, 10)},
+		{name: "short non-final chunk", n: 0, data: make([]byte, 9)},
+		{name: "long final chunk", n: 1, data: make([]byte, 10)},
+		{name: "short final chunk", n: 1, data: make([]byte, 8)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tm.WriteChunk(id, tc.n, tc.data, sha256hex(tc.data))
+			if !errors.Is(err, ErrInvalidChunk) {
+				t.Fatalf("expected ErrInvalidChunk, got %v", err)
+			}
+		})
+	}
+	sess, err := tm.Status(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sess.ReceivedChunks) != 0 {
+		t.Fatalf("invalid chunks were recorded: %v", sess.ReceivedChunks)
+	}
+}
+
+func TestCompleteRejectsMissingChunks(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "incomplete.bin")
+	content := append([]byte("0123456789"), make([]byte, 10)...)
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 10, sha256hex(content), false, "device-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.WriteChunk(id, 0, content[:10], sha256hex(content[:10])); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := tm.Complete(id)
+	if !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("expected ErrIncomplete, got %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("incomplete transfer published target: %v", err)
+	}
+}
+
+func TestComplete_NoOverwritePreservesLateDestination(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "late.bin")
+	content := []byte("uploaded")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), false, "device-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("user data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := tm.Complete(id)
+	if !errors.Is(err, ErrDestinationExists) {
+		t.Fatalf("expected ErrDestinationExists, got %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "user data" {
+		t.Fatalf("late destination was overwritten: %q", got)
+	}
+}
+
+func TestComplete_OverwriteReplacesLateDestination(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "late.bin")
+	content := []byte("uploaded")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), len(content), sha256hex(content), true, "device-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := tm.Complete(id); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("overwrite session kept old content: %q", got)
+	}
+}
+
+func TestOpenSessionRejectsInvalidParameters(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	validHash := sha256hex(nil)
+	tests := []struct {
+		name      string
+		size      int64
+		chunkSize int
+		hash      string
+	}{
+		{name: "negative size", size: -1, chunkSize: 1, hash: validHash},
+		{name: "zero chunk", size: 0, chunkSize: 0, hash: validHash},
+		{name: "oversized chunk", size: 0, chunkSize: MaxChunkSize + 1, hash: validHash},
+		{name: "invalid hash", size: 0, chunkSize: 1, hash: "deadbeef"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tm.OpenSession(uuid.New().String(), filepath.Join(dataDir, tc.name), tc.size, tc.chunkSize, tc.hash, false, "device-a")
+			if !errors.Is(err, ErrInvalidSession) {
+				t.Fatalf("expected ErrInvalidSession, got %v", err)
+			}
+		})
+	}
+}
+
+func TestOpenSessionEnforcesQuotas(t *testing.T) {
+	t.Run("file size", func(t *testing.T) {
+		tm, _, dataDir := setupManager(t)
+		_, err := tm.OpenSession(uuid.New().String(), filepath.Join(dataDir, "huge"), MaxFileSize+1, 1, sha256hex(nil), false, "device-a")
+		if !errors.Is(err, ErrQuotaExceeded) {
+			t.Fatalf("expected ErrQuotaExceeded, got %v", err)
+		}
+	})
+
+	t.Run("per-device sessions", func(t *testing.T) {
+		tm, _, dataDir := setupManager(t)
+		for i := 0; i < maxOpenTransfersPerDevice; i++ {
+			_, err := tm.OpenSession(uuid.New().String(), filepath.Join(dataDir, "target-"+string(rune('a'+i))), 0, 1, sha256hex(nil), false, "device-a")
+			if err != nil {
+				t.Fatalf("open %d: %v", i, err)
+			}
+		}
+		_, err := tm.OpenSession(uuid.New().String(), filepath.Join(dataDir, "blocked"), 0, 1, sha256hex(nil), false, "device-a")
+		if !errors.Is(err, ErrQuotaExceeded) {
+			t.Fatalf("expected ErrQuotaExceeded, got %v", err)
+		}
+	})
+}
+
+func TestSweepExpiredRemovesSessionAndTempFile(t *testing.T) {
+	tm, db, _ := setupManager(t)
+	id := uuid.New().String()
+	tempPath := filepath.Join(tm.tempDir, id+".tmp")
+	if err := os.WriteFile(tempPath, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateTransfer(&store.Transfer{
+		ID: id, TargetPath: filepath.Join(t.TempDir(), "target"), TotalSize: 7,
+		ChunkSize: 7, SHA256: sha256hex([]byte("partial")), TempPath: tempPath,
+		TotalChunks: 1, DeviceID: "device-a", ExpiresAt: time.Now().Add(-time.Minute).Unix(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := tm.SweepExpired(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("swept %d sessions, want 1", n)
+	}
+	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
+		t.Fatalf("expired temp file remains: %v", err)
+	}
+	if got, err := db.GetTransfer(id); err != nil || got != nil {
+		t.Fatalf("expired row remains: %+v, %v", got, err)
 	}
 }
 

@@ -283,28 +283,38 @@ void main() {
         addTearDown(container.dispose);
         final notifier = container.read(transferQueueProvider.notifier);
 
-        final first = TransferTask.download(
-          remotePath: '/remote/a.bin',
-          localPath: '/tmp/a.bin',
-          host: _testHost,
-        );
+        // Fill every concurrency slot with a task that blocks forever, so
+        // the next one enqueued has nowhere to run — the "at the
+        // concurrency limit" queue, now that several transfers run at once.
+        final fillers = [
+          for (
+            var i = 0;
+            i < TransferQueueNotifier.maxConcurrentTransfers;
+            i++
+          )
+            TransferTask.download(
+              remotePath: '/remote/filler-$i.bin',
+              localPath: '/tmp/filler-$i.bin',
+              host: _testHost,
+            ),
+        ];
         final second = TransferTask.download(
           remotePath: '/remote/b.bin',
           localPath: '/tmp/b.bin',
           host: _testHost,
         );
-        // Enqueueing `first` immediately starts it (and it blocks forever),
-        // so `second` stays queued — exactly the "one at a time" queue.
-        notifier.enqueue(first);
+        for (final f in fillers) {
+          notifier.enqueue(f);
+        }
         notifier.enqueue(second);
 
         await _waitUntil(
           () =>
               container
                   .read(transferQueueProvider)
-                  .firstWhere((t) => t.id == first.id)
-                  .status ==
-              TransferStatus.running,
+                  .where((t) => t.status == TransferStatus.running)
+                  .length ==
+              TransferQueueNotifier.maxConcurrentTransfers,
         );
 
         final secondBefore = container
@@ -318,6 +328,56 @@ void main() {
             .read(transferQueueProvider)
             .firstWhere((t) => t.id == second.id);
         expect(secondAfter.status, TransferStatus.paused);
+      },
+    );
+
+    test(
+      'runs multiple transfers concurrently up to maxConcurrentTransfers',
+      () async {
+        final blocking = Completer<void>();
+        final blockingClient = _FakeAgentClient(
+          host: _testHost,
+          onDownload: (cancelToken) async {
+            await blocking.future; // never completes in this test
+          },
+        );
+        addTearDown(blockingClient.close);
+
+        final container = ProviderContainer(
+          overrides: [
+            transferQueueProvider.overrideWith(
+              () => TransferQueueNotifier(
+                clientFactory: (host, {deviceToken}) => blockingClient,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final notifier = container.read(transferQueueProvider.notifier);
+
+        const n = 3; // well under the concurrency limit
+        final tasks = [
+          for (var i = 0; i < n; i++)
+            TransferTask.download(
+              remotePath: '/remote/concurrent-$i.bin',
+              localPath: '/tmp/concurrent-$i.bin',
+              host: _testHost,
+            ),
+        ];
+        for (final t in tasks) {
+          notifier.enqueue(t);
+        }
+
+        await _waitUntil(
+          () =>
+              container
+                  .read(transferQueueProvider)
+                  .where((t) => t.status == TransferStatus.running)
+                  .length ==
+              n,
+        );
+        // If they ran serially, only one would ever reach `running` while
+        // the others stayed `queued` — the wait above would time out instead.
       },
     );
   });

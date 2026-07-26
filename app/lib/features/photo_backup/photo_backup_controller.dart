@@ -68,7 +68,11 @@ class PhotoBackupController {
         completed.add(assetId);
         _taskToAsset.remove(t.id);
       } else if (t.status == TransferStatus.failed) {
-        _taskToAsset.remove(t.id); // leave unmarked → retried next run
+        // A "destination already exists" failure means the PC already has
+        // this exact photo (see isAlreadyBackedUpError) — treat it as done
+        // instead of leaving it to retry (and re-fail) every future run.
+        if (isAlreadyBackedUpError(t.error)) completed.add(assetId);
+        _taskToAsset.remove(t.id);
       }
     }
     if (completed.isNotEmpty) {

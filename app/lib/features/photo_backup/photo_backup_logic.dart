@@ -35,6 +35,15 @@ String backupRemotePath({
   return '$root/$dateFolders/$name';
 }
 
+/// True when a failed upload's error means the PC already has this exact
+/// photo (a `destRoot/<name>` collision the agent rejected because
+/// `overwrite: false`) rather than a real failure. The date+name path
+/// [backupRemotePath] builds is deterministic per photo, so this collision
+/// only fires when that exact file is already sitting there — the asset
+/// should be treated as backed up, not retried forever every run.
+bool isAlreadyBackedUpError(String? error) =>
+    error != null && error.contains('already exists');
+
 /// Returns the subset of [allIds] (photo asset ids) not present in
 /// [backedUp] — i.e. the photos still needing upload, preserving order.
 List<String> pendingIds(List<String> allIds, Set<String> backedUp) =>

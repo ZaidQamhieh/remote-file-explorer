@@ -517,16 +517,36 @@ class _TransferTile extends ConsumerWidget {
   Widget? _buildActions(BuildContext context, TransferQueueNotifier notifier) {
     switch (task.status) {
       case TransferStatus.running:
-        return IconButton(
-          icon: const Icon(LucideIcons.pause),
-          tooltip: context.l10n.pauseTooltip,
-          onPressed: () => notifier.pause(task.id),
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(LucideIcons.pause),
+              tooltip: context.l10n.pauseTooltip,
+              onPressed: () => notifier.pause(task.id),
+            ),
+            IconButton(
+              icon: const Icon(LucideIcons.x),
+              tooltip: context.l10n.cancelTooltip,
+              onPressed: () => notifier.remove(task.id),
+            ),
+          ],
         );
       case TransferStatus.paused:
-        return IconButton(
-          icon: const Icon(LucideIcons.play),
-          tooltip: context.l10n.resumeTooltip,
-          onPressed: () => notifier.retry(task.id),
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(LucideIcons.play),
+              tooltip: context.l10n.resumeTooltip,
+              onPressed: () => notifier.retry(task.id),
+            ),
+            IconButton(
+              icon: const Icon(LucideIcons.x),
+              tooltip: context.l10n.cancelTooltip,
+              onPressed: () => notifier.remove(task.id),
+            ),
+          ],
         );
       case TransferStatus.failed:
         return Row(

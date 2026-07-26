@@ -51,6 +51,23 @@ void main() {
     });
   });
 
+  group('isAlreadyBackedUpError', () {
+    test('true for a destination-exists conflict message', () {
+      expect(
+        isAlreadyBackedUpError('IMG_1.jpg already exists at the destination'),
+        isTrue,
+      );
+    });
+
+    test('false for other failures', () {
+      expect(isAlreadyBackedUpError('Connection timed out'), isFalse);
+    });
+
+    test('false for null (no error)', () {
+      expect(isAlreadyBackedUpError(null), isFalse);
+    });
+  });
+
   group('pendingIds', () {
     test('excludes already-backed-up ids, preserving order', () {
       final pending = pendingIds(['a', 'b', 'c', 'd'], {'b', 'd'});

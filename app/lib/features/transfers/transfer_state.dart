@@ -258,13 +258,20 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     }
   }
 
+  /// Max transfers running at once. The notification layer
+  /// ([TransferNotifications.sync]) already aggregates progress across
+  /// however many are active, so this only had to change in one place.
+  static const int maxConcurrentTransfers = 10;
+
   void _runNext() {
-    final running = state.where((t) => t.status == TransferStatus.running);
-    if (running.isNotEmpty) return; // one at a time (foreground)
+    final runningCount =
+        state.where((t) => t.status == TransferStatus.running).length;
+    if (runningCount >= maxConcurrentTransfers) return;
     final next =
         state.where((t) => t.status == TransferStatus.queued).firstOrNull;
     if (next == null) return;
-    _execute(next.id);
+    _execute(next.id); // fire-and-forget: sets status=running synchronously
+    _runNext(); // fill any remaining concurrency slots
   }
 
   Future<void> _execute(String id) async {

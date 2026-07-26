@@ -1300,6 +1300,10 @@
 
   async function pollMetrics() {
     if (document.hidden) return; // don't poll (or make the agent read /proc) for a backgrounded tab
+    // Piggyback on this existing 2s tick to keep the Transfers page (and the
+    // Overview badge count) live instead of frozen at whatever it looked
+    // like when the page was last opened.
+    if (!$('page-transfers').classList.contains('hidden')) loadTransfers();
     try {
       const t = await api('/metrics');
       $('net-rx').textContent = fmtBytes(t.rxBytes);

@@ -249,6 +249,7 @@ class _HostCardState extends ConsumerState<HostCard> {
             _sendWol(context);
           }
         }
+
         if (widget.isHero) {
           return _HeroCardBody(
             host: widget.host,
@@ -488,8 +489,7 @@ class _Avatar extends StatefulWidget {
   State<_Avatar> createState() => _AvatarState();
 }
 
-class _AvatarState extends State<_Avatar>
-    with SingleTickerProviderStateMixin {
+class _AvatarState extends State<_Avatar> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2400),
@@ -684,8 +684,7 @@ class _HeroCardBody extends StatelessWidget {
     return FutureBuilder<List<Drive>>(
       future: drivesFuture,
       builder: (context, snap) {
-        final usage =
-            snap.data == null ? null : aggregateUsage(snap.data!);
+        final usage = snap.data == null ? null : aggregateUsage(snap.data!);
         final label =
             usage == null
                 ? context.l10n.onlineStatus
@@ -742,7 +741,11 @@ class _HeroCardBody extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Avatar(online: online, checking: checking, cardColor: scheme.surfaceContainerLow),
+                    _Avatar(
+                      online: online,
+                      checking: checking,
+                      cardColor: scheme.surfaceContainerLow,
+                    ),
                     const SizedBox(height: 5),
                     Text(
                       host.label,

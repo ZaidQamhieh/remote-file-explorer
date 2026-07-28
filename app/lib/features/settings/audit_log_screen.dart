@@ -49,7 +49,9 @@ class AuditLogScreen extends ConsumerWidget {
         error:
             (e, _) =>
                 e is AgentApiException && e.statusCode == 403
-                    ? _AdminOnlyNotice(message: context.l10n.activityLogAdminOnly)
+                    ? _AdminOnlyNotice(
+                      message: context.l10n.activityLogAdminOnly,
+                    )
                     : ErrorRetryCard(
                       message: humanizeError(e),
                       onRetry: () => ref.invalidate(auditProvider(host.id)),

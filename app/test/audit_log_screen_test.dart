@@ -64,7 +64,11 @@ void main() {
       _app(
         auditProvider('h1').overrideWith(
           (ref) async => [
-            AuditEntry(id: 1, at: DateTime(2026, 7, 28), action: 'future_event'),
+            AuditEntry(
+              id: 1,
+              at: DateTime(2026, 7, 28),
+              action: 'future_event',
+            ),
           ],
         ),
       ),

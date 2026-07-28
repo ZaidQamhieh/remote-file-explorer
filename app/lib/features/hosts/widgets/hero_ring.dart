@@ -91,7 +91,11 @@ class _DashedCirclePainter extends CustomPainter {
 /// around the center of its parent [Stack] — same trig the HTML mockup used
 /// (`idx*90-90` so the first action lands at 12 o'clock).
 class HeroActionRing extends StatelessWidget {
-  const HeroActionRing({super.key, required this.radius, required this.actions});
+  const HeroActionRing({
+    super.key,
+    required this.radius,
+    required this.actions,
+  });
 
   final double radius;
   final List<Widget> actions;

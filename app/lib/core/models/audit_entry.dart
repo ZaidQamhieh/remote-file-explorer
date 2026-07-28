@@ -27,7 +27,8 @@ class AuditEntry {
 
   factory AuditEntry.fromJson(Map<String, dynamic> json) => AuditEntry(
     id: (json['id'] as num?)?.toInt() ?? 0,
-    at: DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
+    at:
+        DateTime.tryParse(json['at'] as String? ?? '')?.toLocal() ??
         DateTime.fromMillisecondsSinceEpoch(0),
     action: json['action'] as String? ?? '',
     actor: json['actor'] as String? ?? '',

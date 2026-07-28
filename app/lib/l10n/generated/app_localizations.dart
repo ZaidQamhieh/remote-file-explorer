@@ -382,6 +382,12 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsMenuItem;
 
+  /// No description provided for @moreOptionsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get moreOptionsTooltip;
+
   /// No description provided for @nMoreDrives.
   ///
   /// In en, this message translates to:

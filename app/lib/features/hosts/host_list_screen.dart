@@ -18,9 +18,11 @@ import '../pairing/pairing_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
 
-/// Displays every paired host as a flat list of uniform [HostCard] rows —
-/// matches the mockup's Devices tab exactly: no "hero" row for the most-
-/// recently-used host, just one card style throughout.
+/// Displays every paired host: the first (most-recently-paired) as the
+/// confirmed "Circular Orbit" hero card, the rest as regular [HostCard] rows
+/// under an "Also paired" label — matches the confirmed Devices mockup
+/// (`wiki/entities/remote-file-explorer.md`, 2026-07-23). Falls back to a
+/// flat list of rows with no hero while actively searching.
 class HostListScreen extends ConsumerStatefulWidget {
   const HostListScreen({super.key});
 
@@ -168,8 +170,35 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                       Spacing.xl * 2,
                     ),
                     children: [
-                      for (int i = 0; i < hosts.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 10),
+                      // The first host is the confirmed "Circular Orbit" hero
+                      // (wiki/entities/remote-file-explorer.md, 2026-07-23) —
+                      // only in the unfiltered view, so a search match never
+                      // has to jump between hero/row shells mid-search.
+                      if (query.isEmpty) ...[
+                        AppearListItem(
+                          index: 0,
+                          child: HostCard(
+                            key: ValueKey(hosts.first.id),
+                            host: hosts.first,
+                            store: store,
+                            isHero: true,
+                            onOnlineChanged:
+                                (online) =>
+                                    _reportOnline(hosts.first.id, online),
+                          ),
+                        ),
+                        if (hosts.length > 1) ...[
+                          const SizedBox(height: Spacing.sm),
+                          SectionLabel('Also paired · ${hosts.length - 1}'),
+                        ],
+                      ],
+                      for (
+                        int i = query.isEmpty ? 1 : 0;
+                        i < hosts.length;
+                        i++
+                      ) ...[
+                        if (i > (query.isEmpty ? 1 : 0))
+                          const SizedBox(height: 10),
                         AppearListItem(
                           index: i,
                           child: HostCard(

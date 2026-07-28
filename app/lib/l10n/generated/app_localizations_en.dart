@@ -171,6 +171,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsMenuItem => 'Settings';
 
   @override
+  String get moreOptionsTooltip => 'More options';
+
+  @override
   String nMoreDrives(int count) {
     return '+$count more';
   }

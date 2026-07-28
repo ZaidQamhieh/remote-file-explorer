@@ -99,9 +99,9 @@ void main() {
       // No storage bar for an offline host.
       expect(find.byType(LinearProgressIndicator), findsNothing);
 
-      // The gear (Settings) button is replaced by the "Offline" badge —
-      // there's no settings shortcut on a card that can't be reached.
-      expect(find.byTooltip('Settings'), findsNothing);
+      // The overflow kebab (Settings/Forget) is always present, online or
+      // offline — replaces the old gear-button-vs-"Offline"-badge split.
+      expect(find.byTooltip('More options'), findsOneWidget);
     },
   );
 

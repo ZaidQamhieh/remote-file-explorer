@@ -526,6 +526,84 @@ abstract class AppLocalizations {
   /// **'Storage Insights'**
   String get storageInsightsTitle;
 
+  /// No description provided for @activityLogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity log'**
+  String get activityLogTitle;
+
+  /// No description provided for @activityLogAdminOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the PC owner\'s account can read this host\'s activity log. Sign in with the account instead of a pairing code to see it.'**
+  String get activityLogAdminOnly;
+
+  /// No description provided for @activityLogEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded yet. Pairings, logins, device changes, and share links show up here.'**
+  String get activityLogEmpty;
+
+  /// No description provided for @auditPair.
+  ///
+  /// In en, this message translates to:
+  /// **'Device paired'**
+  String get auditPair;
+
+  /// No description provided for @auditRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Account created'**
+  String get auditRegister;
+
+  /// No description provided for @auditLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get auditLogin;
+
+  /// No description provided for @auditLoginFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed sign-in'**
+  String get auditLoginFailed;
+
+  /// No description provided for @auditDeviceRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Device blocked'**
+  String get auditDeviceRevoked;
+
+  /// No description provided for @auditDeviceRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Device removed'**
+  String get auditDeviceRemoved;
+
+  /// No description provided for @auditDeviceUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Device limits changed'**
+  String get auditDeviceUpdated;
+
+  /// No description provided for @auditShareCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link created'**
+  String get auditShareCreated;
+
+  /// No description provided for @auditShareRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Share link revoked'**
+  String get auditShareRevoked;
+
+  /// No description provided for @auditAgentRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent restarted'**
+  String get auditAgentRestart;
+
   /// No description provided for @hostStorageSubtitle.
   ///
   /// In en, this message translates to:

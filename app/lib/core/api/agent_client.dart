@@ -11,6 +11,7 @@ import '../storage/offline_body_cache.dart';
 import '../app_info.dart';
 import '../models/agent_settings.dart';
 import '../models/archive_entry.dart';
+import '../models/audit_entry.dart';
 import '../models/bandwidth_settings.dart';
 import '../models/app_release.dart';
 import '../models/batch_result.dart';
@@ -794,6 +795,26 @@ class AgentClient {
   Future<List<Device>> listDevices() async {
     final data = await _get<List<dynamic>>('/devices');
     return data.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Reads the agent's audit trail (account/device/share events), newest
+  /// first. Admin-only on the agent: a code-paired device gets 403, since the
+  /// trail covers every device on that host.
+  ///
+  /// [before] pages backwards — pass the last entry's [AuditEntry.id] from the
+  /// previous page.
+  Future<List<AuditEntry>> audit({int limit = 100, int? before}) async {
+    final data = await _get<Map<String, dynamic>>(
+      '/audit',
+      queryParameters: {
+        'limit': '$limit',
+        if (before != null) 'before': '$before',
+      },
+    );
+    final entries = data['entries'] as List<dynamic>? ?? const [];
+    return entries
+        .map((e) => AuditEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Permanently removes a device row.

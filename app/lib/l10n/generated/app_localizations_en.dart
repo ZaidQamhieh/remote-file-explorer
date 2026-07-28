@@ -252,6 +252,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageInsightsTitle => 'Storage Insights';
 
   @override
+  String get activityLogTitle => 'Activity log';
+
+  @override
+  String get activityLogAdminOnly =>
+      'Only the PC owner\'s account can read this host\'s activity log. Sign in with the account instead of a pairing code to see it.';
+
+  @override
+  String get activityLogEmpty =>
+      'Nothing recorded yet. Pairings, logins, device changes, and share links show up here.';
+
+  @override
+  String get auditPair => 'Device paired';
+
+  @override
+  String get auditRegister => 'Account created';
+
+  @override
+  String get auditLogin => 'Signed in';
+
+  @override
+  String get auditLoginFailed => 'Failed sign-in';
+
+  @override
+  String get auditDeviceRevoked => 'Device blocked';
+
+  @override
+  String get auditDeviceRemoved => 'Device removed';
+
+  @override
+  String get auditDeviceUpdated => 'Device limits changed';
+
+  @override
+  String get auditShareCreated => 'Share link created';
+
+  @override
+  String get auditShareRevoked => 'Share link revoked';
+
+  @override
+  String get auditAgentRestart => 'Agent restarted';
+
+  @override
   String hostStorageSubtitle(String hostLabel, String used, String total) {
     return '$hostLabel · $used of $total used';
   }

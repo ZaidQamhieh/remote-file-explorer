@@ -22,6 +22,7 @@ import '../hosts/storage_insights_screen.dart';
 import '../hosts/widgets/connection_diagnostics_sheet.dart';
 import '../sync/sync_screen.dart';
 import 'widgets/settings_section.dart';
+import 'audit_log_screen.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -423,6 +424,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               badgeColor: Brand.online,
               title: context.l10n.connectionDiagnosticsTitle,
               onTap: () => _openConnectionDiagnostics(context),
+            ),
+            SettingsTile.nav(
+              icon: LucideIcons.scrollText,
+              badgeColor: Brand.amber,
+              title: context.l10n.activityLogTitle,
+              onTap:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => AuditLogScreen(host: widget.host),
+                    ),
+                  ),
             ),
           ],
         ),

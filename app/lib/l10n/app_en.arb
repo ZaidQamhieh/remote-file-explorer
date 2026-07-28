@@ -123,6 +123,19 @@
     "placeholders": { "hostLabel": {"type": "String"} }
   },
   "storageInsightsTitle": "Storage Insights",
+  "activityLogTitle": "Activity log",
+  "activityLogAdminOnly": "Only the PC owner's account can read this host's activity log. Sign in with the account instead of a pairing code to see it.",
+  "activityLogEmpty": "Nothing recorded yet. Pairings, logins, device changes, and share links show up here.",
+  "auditPair": "Device paired",
+  "auditRegister": "Account created",
+  "auditLogin": "Signed in",
+  "auditLoginFailed": "Failed sign-in",
+  "auditDeviceRevoked": "Device blocked",
+  "auditDeviceRemoved": "Device removed",
+  "auditDeviceUpdated": "Device limits changed",
+  "auditShareCreated": "Share link created",
+  "auditShareRevoked": "Share link revoked",
+  "auditAgentRestart": "Agent restarted",
   "hostStorageSubtitle": "{hostLabel} · {used} of {total} used",
   "@hostStorageSubtitle": {
     "placeholders": {

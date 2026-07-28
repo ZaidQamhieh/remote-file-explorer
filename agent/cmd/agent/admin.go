@@ -36,6 +36,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdReadonly(args)
 	case "status":
 		return cmdStatus(args)
+	case "audit":
+		return cmdAudit(args)
 	case "adduser":
 		return cmdAddUser(args)
 	case "install":
@@ -63,6 +65,7 @@ Usage:
   rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
   rfe-agent readonly <id> <on|off>  allow browse/download but block all writes
   rfe-agent status               show name, addresses, fingerprint, devices
+  rfe-agent audit [-n 50]        show the account/device/share audit trail
   rfe-agent adduser <username>   create the account used to log in from the
                                   phone app / web companion (prompts for a
                                   password, hidden input). Alternatively, use
@@ -218,6 +221,38 @@ func cmdDevices(args []string) error {
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
 			shortID(d.ID), d.Label, status, access, humanizeSince(d.LastSeen))
+	}
+	return tw.Flush()
+}
+
+// cmdAudit prints the audit trail newest-first — the PC-side counterpart of
+// GET /v1/audit, so the host owner can read it without a paired device.
+func cmdAudit(args []string) error {
+	fs := flag.NewFlagSet("audit", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	n := fs.Int("n", 50, "number of entries to show")
+	_ = fs.Parse(args)
+
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	entries, err := db.AuditEntries(*n, 0)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		fmt.Println("No audit entries yet.")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "WHEN\tACTION\tACTOR\tTARGET\tDETAIL")
+	for _, e := range entries {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+			e.At.Format("2006-01-02 15:04"), e.Action, e.Actor, e.Target, e.Detail)
 	}
 	return tw.Flush()
 }

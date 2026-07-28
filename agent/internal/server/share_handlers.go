@@ -119,6 +119,8 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			return
 		}
 		_ = db.LogShareMint(hash, resolved, expiresAt)
+		audit(db, r, store.AuditShareCreated, resolved,
+			"expires="+expiresAt.UTC().Format(time.RFC3339))
 
 		writeJSON(w, http.StatusOK, mintShareResponse{
 			Token:     token,
@@ -219,6 +221,7 @@ func revokeShareHandler(db *store.DB) http.HandlerFunc {
 			writeInternal(w, "delete share token", err)
 			return
 		}
+		audit(db, r, store.AuditShareRevoked, t.Path, "")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

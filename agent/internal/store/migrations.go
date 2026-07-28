@@ -20,6 +20,7 @@ import (
 var migrations = []func(*sql.Tx) error{
 	migrateBaseline,
 	migrateChunkTable,
+	migrateAuditLog,
 }
 
 // migrate brings the schema up to len(migrations).
@@ -314,5 +315,22 @@ CREATE TABLE IF NOT EXISTS transfer_chunks (
 	}
 
 	_, err = tx.Exec(`ALTER TABLE transfers DROP COLUMN received_chunks`)
+	return err
+}
+
+// migrateAuditLog adds the account/device/share audit trail (backlog #37).
+// Deliberately not a per-file operation log: file events arrive at transfer
+// volume and would bury the security-relevant ones this table exists for.
+func migrateAuditLog(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE IF NOT EXISTS audit_log (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at     INTEGER NOT NULL,
+    action TEXT    NOT NULL,
+    actor  TEXT    NOT NULL DEFAULT '',
+    target TEXT    NOT NULL DEFAULT '',
+    detail TEXT    NOT NULL DEFAULT ''
+);
+`)
 	return err
 }

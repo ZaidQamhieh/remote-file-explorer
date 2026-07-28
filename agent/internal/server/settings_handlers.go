@@ -217,6 +217,7 @@ func revokeDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 			writeInternal(w, "revoke device", err)
 			return
 		}
+		audit(db, r, store.AuditDeviceRevoked, id, "")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -236,6 +237,7 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 			writeInternal(w, "delete device", err)
 			return
 		}
+		audit(db, r, store.AuditDeviceRemoved, id, "")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -292,6 +294,8 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "device vanished mid-update")
 			return
 		}
+		audit(db, r, store.AuditDeviceUpdated, id,
+			fmt.Sprintf("jailRoot=%q readOnly=%t", updated.JailRoot, updated.ReadOnly))
 		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
 	}
 }

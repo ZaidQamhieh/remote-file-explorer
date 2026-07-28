@@ -79,7 +79,8 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.Get("/users", listUsersHandler(db))
 			r.Delete("/users/{username}", deleteUserHandler(db))
 			r.Get("/logs", listLogsHandler())
-			r.Post("/agent/restart", restartHandler())
+			r.Get("/audit", listAuditHandler(db))
+			r.Post("/agent/restart", restartHandler(db))
 		})
 
 		// Authenticated sub-router.

@@ -104,6 +104,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 				return
 			}
 		}
+		auditAs(db, req.DeviceLabel, store.AuditPair, deviceID, "from "+clientIP(r))
 
 		writeJSON(w, http.StatusOK, pairResponse{
 			DeviceToken:      token,

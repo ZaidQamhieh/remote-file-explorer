@@ -61,6 +61,10 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 		// Same error for "no such user" and "wrong password" — don't leak
 		// which one it was.
 		if user == nil || !security.VerifyPassword(user.PasswordHash, req.Password) {
+			// Records the attempted username, not whether it exists — the
+			// response still doesn't distinguish the two, but the host owner
+			// reading their own audit trail should see what was tried.
+			auditAs(db, req.Username, store.AuditLoginFailed, "", "from "+clientIP(r))
 			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
 			return
 		}
@@ -84,6 +88,8 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			writeInternal(w, "login", err)
 			return
 		}
+
+		auditAs(db, req.Username, store.AuditLogin, req.DeviceLabel, "from "+clientIP(r))
 
 		writeJSON(w, http.StatusOK, pairResponse{
 			DeviceToken:      token,

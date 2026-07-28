@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"time"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
 // restartDelay lets the HTTP response reach the caller before the restart
@@ -21,12 +23,13 @@ var (
 // by design — no remote stop endpoint — so there is nothing to get
 // permanently stuck in even if the only device that could reach the agent is
 // the one issuing the request.
-func restartHandler() http.HandlerFunc {
+func restartHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !restartSupportedFn() {
 			writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "remote restart is not supported on this platform")
 			return
 		}
+		audit(db, r, store.AuditAgentRestart, "", "")
 		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
 		go func() {
 			time.Sleep(restartDelay)

@@ -5,7 +5,21 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
+
+// auditTestDB is a bare store for handlers that only need somewhere to write
+// their audit entry.
+func auditTestDB(t *testing.T) *store.DB {
+	t.Helper()
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
 
 func TestRestartHandler_Supported(t *testing.T) {
 	origSupported, origRestart, origDelay := restartSupportedFn, restartAgentFn, restartDelay
@@ -23,7 +37,7 @@ func TestRestartHandler_Supported(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/agent/restart", nil)
 	rr := httptest.NewRecorder()
-	restartHandler()(rr, req)
+	restartHandler(auditTestDB(t))(rr, req)
 
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("want 202, got %d", rr.Code)
@@ -43,7 +57,7 @@ func TestRestartHandler_Unsupported(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/agent/restart", nil)
 	rr := httptest.NewRecorder()
-	restartHandler()(rr, req)
+	restartHandler(auditTestDB(t))(rr, req)
 
 	if rr.Code != http.StatusNotImplemented {
 		t.Fatalf("want 501, got %d", rr.Code)

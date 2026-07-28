@@ -68,7 +68,11 @@ fingerprint at pairing (TOFU)** via `HttpClient.badCertificateCallback` — a la
 mismatch is rejected. Pairing mints a **revocable per-device bearer token** stored in
 Keychain/Keystore. Agent-side authorization: root-path jail, optional read-only mode,
 device revoke/remove, `/pair` rate-limited 10/min. Path normalization enforces the jail
-against traversal/symlink escape. **There is no audit log** — don't claim one exists.
+against traversal/symlink escape. **Audit log:** account/device/share events only
+(pair, register, login incl. failures, device revoke/remove/limit change, share
+mint/revoke, agent restart) — `audit_log` table, admin-only `GET /v1/audit`,
+`rfe-agent audit` CLI. **File operations are deliberately not recorded**; they
+arrive at transfer volume and would bury everything else.
 
 **Transfers (the core engineering — recently rebuilt; touch its UI, not its logic):**
 uploads are resumable chunked sessions with per-chunk + whole-file SHA-256 and a

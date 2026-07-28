@@ -129,7 +129,7 @@ class _AuditRow extends StatelessWidget {
           ),
           const SizedBox(width: Spacing.sm),
           Text(
-            formatDate(entry.at),
+            formatRelative(entry.at),
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
         ],

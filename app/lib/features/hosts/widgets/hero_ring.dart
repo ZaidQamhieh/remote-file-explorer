@@ -96,27 +96,38 @@ class HeroActionRing extends StatelessWidget {
   final double radius;
   final List<Widget> actions;
 
+  /// Extra room around the ring so a translated action still lies INSIDE this
+  /// widget's own box. Flutter does not hit-test a child painted outside its
+  /// parent's bounds: without this the [Stack] shrink-wrapped to one action's
+  /// size, every action was translated clear of it, and all four rendered
+  /// perfectly while being completely untappable. Sized for the widest action
+  /// (58px) plus breathing room.
+  static const actionExtent = 68.0;
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      clipBehavior: Clip.none,
-      children: [
-        for (var i = 0; i < actions.length; i++)
-          Builder(
-            builder: (context) {
-              final deg = i * 90 - 90;
-              final rad = deg * math.pi / 180;
-              return Transform.translate(
-                offset: Offset(
-                  math.cos(rad) * radius,
-                  math.sin(rad) * radius,
-                ),
-                child: actions[i],
-              );
-            },
-          ),
-      ],
+    return SizedBox.square(
+      dimension: radius * 2 + actionExtent,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < actions.length; i++)
+            Builder(
+              builder: (context) {
+                final deg = i * 90 - 90;
+                final rad = deg * math.pi / 180;
+                return Transform.translate(
+                  offset: Offset(
+                    math.cos(rad) * radius,
+                    math.sin(rad) * radius,
+                  ),
+                  child: actions[i],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 }

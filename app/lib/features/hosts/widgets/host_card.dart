@@ -720,7 +720,10 @@ class _HeroCardBody extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(Spacing.md2),
       child: SizedBox(
-        height: 190,
+        // Tall enough to contain HeroActionRing's own box (2×76 + 68) — a
+        // shorter parent constrains it back down and the top/bottom actions
+        // land outside it again, which makes them untappable.
+        height: 220,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,

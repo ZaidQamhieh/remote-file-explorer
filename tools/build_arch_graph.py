@@ -33,7 +33,7 @@ from graphify.export import to_json
 # ─────────────────────────── CONFIG (edit me) ───────────────────────────
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "graphify-out"
-OBSIDIAN_DIR = Path.home() / "Documents/Obsidian Vault/Claude/graphify-remote-file-explorer"
+OBSIDIAN_DIR = Path("graphify-out/obsidian")
 
 # Path fragments whose files are excluded entirely: build noise, generated
 # code, platform boilerplate, and this tooling dir itself (not app architecture).

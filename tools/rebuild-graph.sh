@@ -2,7 +2,7 @@
 # Rebuild the Remote File Explorer architecture knowledge graph.
 # Reads graphify's cached extraction (no LLM cost) unless code changed since
 # the last `graphify` run, regenerates graph.json + GRAPH_REPORT.md + HTML +
-# the Obsidian mirror. Tune behavior in tools/build_arch_graph.py CONFIG block.
+# the Obsidian-format mirror (graphify-out/obsidian). Tune behavior in tools/build_arch_graph.py CONFIG block.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,7 +12,7 @@ if [ -z "${PY}" ] || [ ! -x "${PY}" ]; then
   mkdir -p graphify-out && printf '%s' "$PY" > graphify-out/.graphify_python
 fi
 
-OBSIDIAN_DIR="$HOME/Documents/Obsidian Vault/Claude/graphify-remote-file-explorer"
+OBSIDIAN_DIR="graphify-out/obsidian"
 
 "$PY" tools/build_arch_graph.py
 graphify export html >/dev/null

@@ -12,17 +12,5 @@
       "Bash(git push*)",
       "Bash(git tag*)"
     ]
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/next-session-guard.sh\""
-          }
-        ]
-      }
-    ]
   }
 }

@@ -46,14 +46,12 @@ flutter test --plain-name "description substring"     # single test by name
 flutter run                      # enter agent host:port on the connect screen
 ```
 
-### Release (OTA APK, from repo root)
-```sh
-./release.sh                     # build current pubspec version, publish to update channel
-./release.sh 1.9.3+18            # bump pubspec X.Y.Z+N first, then build + publish
-```
-`release.sh` builds the release APK and copies it into the agent's local update channel
-(`~/.rfe-agent/updates/`). **The build number (`+N`) must increase every release** — OTA
-update detection compares `versionCode`, not the name.
+### Release (OTA APK)
+Bump `app/pubspec.yaml` `X.Y.Z+N`, commit, push, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+The tag runs `.github/workflows/release.yml`, which publishes the GitHub Release the app's
+updater reads; confirm with `gh release list`. **The build number (`+N`) must increase every
+release** — OTA update detection compares `versionCode`, not the name. `./release.sh` only
+copies an APK into `~/.rfe-agent/updates/`, which the current app does not read; it is not a release.
 
 ## Architecture you can't see from one file
 
@@ -142,31 +140,19 @@ Bypass once if needed: `LEFTHOOK=0 git commit …`.
 ## Ops (host-side — moved from global ~/.claude/CLAUDE.md, 2026-07-02)
 
 - **Back up `~/.rfe-keystore/`** — losing it = un-updatable app.
-- Architecture Qs: `graphify query "..."` (graph at `graphify-out/`) before grepping. Never
-  `/graphify --update` on this repo (restores the unpruned hairball) — use `tools/rebuild-graph.sh`.
+- `graphify query "..."` (graph at `graphify-out/`) answers code-structure questions only; the
+  graph is code-only, so grep/Read normally for anything else. Never `/graphify --update` on this
+  repo (restores the unpruned hairball) — use `tools/rebuild-graph.sh`.
 - Agent redeploy only when `agent/` or `protocol/openapi.yaml` changes. Restart:
   `systemctl --user restart rfe-agent.service` (needs `export XDG_RUNTIME_DIR=/run/user/$(id -u)`).
 - After copying new binary: re-run `sudo setcap cap_net_bind_service=+ep`. Note
   `/proc/<pid>/exe` md5 check is Permission-denied on setcap'd binaries — verify via
   disk checksum + restart timing instead.
 
-## Cross-session handoff (`NEXT_SESSION.md`)
+## Project state
 
-`NEXT_SESSION.md` carries **unfinished work** across sessions. A `SessionStart`
-hook (`.claude/hooks/next-session-guard.sh`, wired in `.claude/settings.json`)
-auto-surfaces it — but only when line 1 reads `NEXT_SESSION_STATUS: HANDOFF`.
-The **read** is hook-enforced; the **write** is your job at the end of a turn:
-
-- **Task the user asked for is complete** → set line 1 to `CLEAR` and reset the
-  `## Open handoff` block to the "None" placeholder. Never leave a resolved
-  handoff sitting (that's what let the old file go stale).
-- **Task left unfinished** (you're stopping mid-work) → set line 1 to `HANDOFF`
-  and fill `## Open handoff`: goal, what's done, what's left, exact files/lines
-  to resume from, how to verify. Cold-session-resumable, zero re-derivation.
-
-Only touch it when the completion state actually changes — a fully-finished
-session leaves it `CLEAR`, so most sessions never write it. Durable backlog and
-architecture go in the Obsidian wiki, not here.
+Current state, open work, blockers and runbooks live in the knowledge vault card `rfe`
+(`vault read rfe`), not in this repo. Unfinished work is recorded in that card's `## Next`.
 
 ## Pointers
 

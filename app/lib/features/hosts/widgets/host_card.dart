@@ -429,196 +429,203 @@ class _CardBody extends StatelessWidget {
       button: onTap != null,
       onTap: onTap,
       label: '${host.label}, ${_statusLabel(context)}',
-      child: Pressable(
-        onTap: onTap,
-        onLongPress: onForget,
-        child: Container(
-          padding: EdgeInsets.all(isFeatured ? Spacing.md3 : Spacing.md),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: scheme.outlineVariant),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(16),
+      child: Opacity(
+        opacity: online ? 1 : 0.55,
+        child: Pressable(
+          onTap: onTap,
+          onLongPress: onForget,
+          child: Container(
+            padding: EdgeInsets.all(isFeatured ? Spacing.md3 : Spacing.md),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        LucideIcons.monitor,
+                        size: 24,
+                        color:
+                            online ? scheme.primary : scheme.onSurfaceVariant,
+                      ),
                     ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      LucideIcons.monitor,
-                      size: 24,
-                      color: online ? scheme.primary : scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                host.label,
-                                style:
-                                    isFeatured
-                                        ? textTheme.headlineSmall
-                                        : textTheme.titleMedium,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (readOnly) ...[
-                              const SizedBox(width: Spacing.xs),
-                              Tooltip(
-                                message: 'Read-only',
-                                child: SizedBox.square(
-                                  dimension: 48,
-                                  child: Center(
-                                    child: Icon(
-                                      LucideIcons.lock,
-                                      size: 16,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (online && drivesFuture != null)
-                              _LowDiskBadge(
-                                drivesFuture: drivesFuture!,
-                                thresholdBytes: lowDiskThresholdBytes,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: Spacing.xs),
-                        Semantics(
-                          label:
-                              subtitle.isEmpty
-                                  ? _statusLabel(context)
-                                  : '${_statusLabel(context)} · $subtitle',
-                          excludeSemantics: true,
-                          child: Row(
+                    const SizedBox(width: Spacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: statusColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: Spacing.xs),
-                              Text(
-                                _statusLabel(context),
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(width: Spacing.sm),
                               Expanded(
                                 child: Text(
-                                  subtitle,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
+                                  host.label,
+                                  style:
+                                      isFeatured
+                                          ? textTheme.headlineSmall
+                                          : textTheme.titleMedium,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              if (readOnly) ...[
+                                const SizedBox(width: Spacing.xs),
+                                Tooltip(
+                                  message: 'Read-only',
+                                  child: SizedBox.square(
+                                    dimension: 48,
+                                    child: Center(
+                                      child: Icon(
+                                        LucideIcons.lock,
+                                        size: 16,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (online && drivesFuture != null)
+                                _LowDiskBadge(
+                                  drivesFuture: drivesFuture!,
+                                  thresholdBytes: lowDiskThresholdBytes,
+                                ),
                             ],
                           ),
+                          const SizedBox(height: Spacing.xs),
+                          Semantics(
+                            label:
+                                subtitle.isEmpty
+                                    ? _statusLabel(context)
+                                    : '${_statusLabel(context)} · $subtitle',
+                            excludeSemantics: true,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: statusColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: Spacing.xs),
+                                Text(
+                                  _statusLabel(context),
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: Spacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    subtitle,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: Spacing.xs),
+                    IconButton(
+                      tooltip: context.l10n.refreshTooltip,
+                      onPressed: checking ? null : onRefresh,
+                      icon: const Icon(LucideIcons.refreshCw, size: 18),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 48,
+                        height: 48,
+                      ),
+                    ),
+                    _KebabMenu(
+                      onSettingsTap: onSettingsTap,
+                      onForgetTap: onForget,
+                      vertical: true,
+                      dimmed: !online,
+                    ),
+                  ],
+                ),
+                if (online && drivesFuture != null) ...[
+                  const SizedBox(height: Spacing.md),
+                  _DriveGaugeList(drivesFuture: drivesFuture!),
+                ] else if (!online && !checking) ...[
+                  const SizedBox(height: Spacing.sm),
+                  Text(
+                    'Browse cached files while this computer is offline.',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: Spacing.md),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: checking ? null : onBrowseTap,
+                          style: quickActionStyle,
+                          icon: const Icon(LucideIcons.folderOpen, size: 18),
+                          label: Text(
+                            online ? context.l10n.openButton : 'Browse cache',
+                          ),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: online && !checking ? onSearchTap : null,
+                          style: quickActionStyle,
+                          icon: const Icon(LucideIcons.search, size: 18),
+                          label: Text(context.l10n.searchButton),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: onTransfersTap,
+                          style: quickActionStyle,
+                          icon: const Icon(
+                            LucideIcons.arrowLeftRight,
+                            size: 18,
+                          ),
+                          label: Text(context.l10n.transfersMenuItem),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: onSettingsTap,
+                          style: quickActionStyle,
+                          icon: const Icon(LucideIcons.settings, size: 18),
+                          label: Text(context.l10n.settingsMenuItem),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: online && !checking ? onAppsTap : null,
+                          style: quickActionStyle,
+                          icon: const Icon(LucideIcons.monitor, size: 18),
+                          label: Text(context.l10n.hostAppsButton),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: Spacing.xs),
-                  IconButton(
-                    tooltip: context.l10n.refreshTooltip,
-                    onPressed: checking ? null : onRefresh,
-                    icon: const Icon(LucideIcons.refreshCw, size: 18),
-                    constraints: const BoxConstraints.tightFor(
-                      width: 48,
-                      height: 48,
-                    ),
-                  ),
-                  _KebabMenu(
-                    onSettingsTap: onSettingsTap,
-                    onForgetTap: onForget,
-                    vertical: true,
-                    dimmed: !online,
-                  ),
-                ],
-              ),
-              if (online && drivesFuture != null) ...[
-                const SizedBox(height: Spacing.md),
-                _DriveGaugeList(drivesFuture: drivesFuture!),
-              ] else if (!online && !checking) ...[
-                const SizedBox(height: Spacing.sm),
-                Text(
-                  'Browse cached files while this computer is offline.',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
                 ),
               ],
-              const SizedBox(height: Spacing.md),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      FilledButton.icon(
-                        onPressed: checking ? null : onBrowseTap,
-                        style: quickActionStyle,
-                        icon: const Icon(LucideIcons.folderOpen, size: 18),
-                        label: Text(
-                          online ? context.l10n.openButton : 'Browse cache',
-                        ),
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      FilledButton.tonalIcon(
-                        onPressed: online && !checking ? onSearchTap : null,
-                        style: quickActionStyle,
-                        icon: const Icon(LucideIcons.search, size: 18),
-                        label: Text(context.l10n.searchButton),
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      FilledButton.tonalIcon(
-                        onPressed: onTransfersTap,
-                        style: quickActionStyle,
-                        icon: const Icon(LucideIcons.arrowLeftRight, size: 18),
-                        label: Text(context.l10n.transfersMenuItem),
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      FilledButton.tonalIcon(
-                        onPressed: onSettingsTap,
-                        style: quickActionStyle,
-                        icon: const Icon(LucideIcons.settings, size: 18),
-                        label: Text(context.l10n.settingsMenuItem),
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      FilledButton.tonalIcon(
-                        onPressed: online && !checking ? onAppsTap : null,
-                        style: quickActionStyle,
-                        icon: const Icon(LucideIcons.monitor, size: 18),
-                        label: Text(context.l10n.hostAppsButton),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

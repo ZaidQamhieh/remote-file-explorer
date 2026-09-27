@@ -2,8 +2,13 @@
 
 ## Toolchain
 
-- **Flutter** 3.29 / Dart 3.7 (already installed at `~/flutter`).
-- **Go** 1.26 installed at `~/.local/go`. Add it to your PATH (e.g. in `~/.bashrc`):
+- **Go (agent):** `agent/go.mod` requires Go 1.25.0 or newer. CI currently installs the Go 1.25
+  series (`.github/workflows/ci.yml`), selecting its latest patch release.
+- **Flutter (app):** `app/pubspec.yaml` requires Dart `^3.7.0`; it does not declare a minimum
+  Flutter version. CI currently uses Flutter 3.44.2 (`.github/workflows/ci.yml`), which is the
+  recommended local version when you want to match CI.
+
+If Go is installed at `~/.local/go`, add it to your PATH (e.g. in `~/.bashrc`):
 
   ```sh
   export PATH="$HOME/.local/go/bin:$PATH"
@@ -19,7 +24,7 @@ go run ./cmd/agent -addr 127.0.0.1:8765 -name "my-pc"
 ```
 
 First run writes `agent-cert.pem` / `agent-key.pem`, the SQLite DB, and other state into the
-**data dir**, and logs the cert fingerprint the phone pins. The data dir is resolved with this
+**data dir**, and reports the certificate fingerprint used to establish phone trust. The data dir is resolved with this
 precedence: `-data <dir>` flag > `$RFE_DATA_DIR` env var > `~/.rfe-agent` (default). The admin CLI
 (below) resolves the data dir the same way, so `rfe-agent devices` (no flags) talks to the same DB
 as a no-args `rfe-agent` daemon.
@@ -42,9 +47,13 @@ go run ./cmd/agent remove <id>   # permanently delete a device row
 go run ./cmd/agent status        # name, addresses, fingerprint, device counts
 ```
 
-Scan the QR from the app (Add computer → Scan QR), or enter the address + code manually. These
-subcommands work whether or not the daemon is running, since they open the same on-disk DB
-directly (with a busy-timeout so concurrent daemon + CLI writes are safe).
+The pair command prints a one-time code, QR, and readable certificate fingerprint. Scan the QR
+displayed on the intended host's local screen, or obtain the QR and fingerprint through a trusted
+independent channel. For manual pairing, compare the fingerprint with `rfe-agent status` on the
+host console before entering the address, code, and fingerprint in the app. Do not trust a QR and
+fingerprint delivered together over the same untrusted network connection. These subcommands work
+whether or not the daemon is running, since they open the same on-disk DB directly (with a
+busy-timeout so concurrent daemon + CLI writes are safe).
 
 ## App
 
@@ -55,9 +64,12 @@ flutter analyze
 flutter run        # enter the agent's host:port on the connection screen
 ```
 
-Note: the app pins the agent's self-signed cert by fingerprint via
-`HttpClient.badCertificateCallback`, so it works without a public CA. On the first connection the
-fingerprint is captured (trust on first use); afterwards a mismatch is rejected.
+Note: the app verifies the agent's self-signed certificate against a SHA-256 fingerprint before
+it sends pairing codes, passwords, or authenticated requests. New enrollment requires the
+fingerprint from a trusted independent source; the app does not trust a fingerprint learned from
+the same untrusted connection. For paired hosts, the fingerprint in Keychain/Keystore secure
+storage is authoritative. If that pin is missing, the app fails closed and does not fall back to
+the legacy copy in SharedPreferences; re-pair the host to store a secure pin again.
 
 ## Layout
 
@@ -65,7 +77,10 @@ fingerprint is captured (trust on first use); afterwards a mismatch is rejected.
 app/lib/core/      api client, models, storage
 app/lib/features/  hosts, explorer, transfers, preview, pairing, settings
 agent/cmd/agent/   main (daemon) + admin.go (pair/devices/revoke/remove/status CLI)
-agent/internal/    server, fsops, transfer, search, thumbs, pairing, store, security, settings, updates
-agent/internal/discovery/  empty placeholder — mDNS not implemented
+agent/internal/    server, fsops, transfer, search, thumbs, pairing, store, security, settings, updates, mdns
 protocol/          openapi.yaml (shared contract)
 ```
+
+The agent advertises `_rfe._tcp` over mDNS/DNS-SD. The Flutter app does not currently browse for
+those advertisements; host discovery in the app still uses QR pairing or manually entered
+addresses.

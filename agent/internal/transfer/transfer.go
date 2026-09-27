@@ -14,9 +14,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
@@ -42,23 +46,49 @@ var ErrChunkOutOfRange = errors.New("chunk index out of range")
 // length the session's geometry requires.
 var ErrChunkWrongSize = errors.New("chunk has the wrong length")
 
+// ErrQuotaExceeded means the host or requesting device has reached its
+// active-session or reserved-byte limit.
+var ErrQuotaExceeded = errors.New("transfer capacity exceeded")
+
+// ErrSessionActive means an explicit delete was attempted while an operation
+// is using that session.
+var ErrSessionActive = errors.New("transfer is active")
+
+// ErrNotOpen means the session exists but no longer accepts chunks or a
+// completion request.
+var ErrNotOpen = errors.New("transfer is not open")
+
 // ErrTooLarge is returned when a session declares more bytes than
-// maxTransferSize, or than the destination filesystem can hold.
+// MaxTransferSize.
 var ErrTooLarge = errors.New("declared size exceeds the maximum")
 
-// maxTransferSize caps a single declared upload. OpenSession truncates the
-// temp file to the declared size up front, so an unbounded declaration is a
-// free sparse file of any size a client cares to name — and on filesystems
-// without sparse support, an instant disk fill (PR-12).
-//
-// ponytail: one global ceiling, not a per-device quota — add the quota when
-// there is more than one writer worth metering.
-const maxTransferSize = int64(1) << 40 // 1 TiB
+// Reservations count every open session's declared bytes, even though sparse
+// temp files may not allocate all of those bytes immediately. The declared
+// file-size and aggregate limits are explicit product ceilings that bound
+// concurrent disk reservations.
+const (
+	MaxTransferSize             int64 = 64 << 30 // 64 GiB per upload
+	MaxActiveTransfersPerDevice       = 4
+	MaxReservedBytesPerDevice   int64 = 64 << 30 // 64 GiB
+	MaxActiveTransfersPerHost         = 16
+	MaxReservedBytesPerHost     int64 = 128 << 30 // 128 GiB
+
+	// Open sessions expire after a week without a chunk or status/resume request.
+	TransferStaleAfter = 7 * 24 * time.Hour
+	staleSweepInterval = time.Hour
+)
+
+// Kept package-private for the existing transfer-package boundary tests.
+const maxTransferSize = MaxTransferSize
 
 // Manager coordinates in-progress transfer sessions.
 type Manager struct {
 	db      *store.DB
 	tempDir string // directory for temp files
+
+	mu         sync.Mutex
+	active     map[string]int  // in-process operations that own a session lease
+	completing map[string]bool // exclusive completion lease per session
 }
 
 // New creates a Manager that stores temp files under tempDir.
@@ -66,7 +96,12 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 	if err := os.MkdirAll(tempDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	return &Manager{db: db, tempDir: tempDir}, nil
+	return &Manager{
+		db:         db,
+		tempDir:    tempDir,
+		active:     make(map[string]int),
+		completing: make(map[string]bool),
+	}, nil
 }
 
 // OpenSession creates a new upload session. deviceID is the requesting
@@ -78,39 +113,35 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 // atomically at publish time, because anything created during the upload would
 // slip past this Stat (PR-50).
 func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string) (*store.Transfer, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if id == "" || filepath.Base(id) != id || id == "." || id == ".." {
+		return nil, errors.New("invalid transfer ID")
+	}
 	if size < 0 {
 		return nil, fmt.Errorf("%w: negative size", ErrTooLarge)
 	}
-	if size > maxTransferSize {
-		return nil, fmt.Errorf("%w: %d bytes declared, limit %d", ErrTooLarge, size, maxTransferSize)
+	if size > MaxTransferSize {
+		return nil, fmt.Errorf("%w: %d bytes declared, limit %d", ErrTooLarge, size, MaxTransferSize)
+	}
+	if chunkSize <= 0 {
+		return nil, errors.New("chunk size must be positive")
 	}
 	if !overwrite {
 		if _, err := os.Stat(targetPath); err == nil {
 			return nil, ErrDestinationExists
 		}
 	}
-	// ponytail: a flat ceiling, not a free-space check — free space lives
-	// behind three per-platform files in fsops and would need a new exported
-	// helper in each. The cap is what stops the abuse; add the reservation
-	// check if real disks start filling below 1 TiB.
+	if _, err := m.cleanupStaleLocked(time.Now()); err != nil {
+		return nil, fmt.Errorf("clean stale transfers before admission: %w", err)
+	}
+
 	totalChunks := int((size + int64(chunkSize) - 1) / int64(chunkSize))
 	if totalChunks == 0 {
 		totalChunks = 1
 	}
 	tempPath := filepath.Join(m.tempDir, id+".tmp")
-
-	// Pre-allocate the file.
-	f, err := os.OpenFile(tempPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("create temp file: %w", err)
-	}
-	if size > 0 {
-		if err := f.Truncate(size); err != nil {
-			f.Close()
-			return nil, fmt.Errorf("truncate: %w", err)
-		}
-	}
-	f.Close()
 
 	t := &store.Transfer{
 		ID:          id,
@@ -124,11 +155,338 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 		DeviceID:    deviceID,
 		Overwrite:   overwrite,
 	}
-	if err := m.db.CreateTransfer(t); err != nil {
-		os.Remove(tempPath)
+	created, err := m.db.CreateTransferWithinLimits(t, store.TransferLimits{
+		MaxHostSessions:   MaxActiveTransfersPerHost,
+		MaxHostBytes:      MaxReservedBytesPerHost,
+		MaxDeviceSessions: MaxActiveTransfersPerDevice,
+		MaxDeviceBytes:    MaxReservedBytesPerDevice,
+	})
+	if err != nil {
 		return nil, err
 	}
+	if !created {
+		return nil, ErrQuotaExceeded
+	}
+
+	// Persist the quota reservation first. If file allocation fails, remove the
+	// row so its open-session reservation is released immediately.
+	f, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err == nil && size > 0 {
+		err = f.Truncate(size)
+	}
+	if err == nil {
+		err = f.Close()
+	} else if f != nil {
+		_ = f.Close()
+	}
+	if err != nil {
+		if removeErr := os.Remove(tempPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			log.Printf("failed to remove incomplete transfer temp file %s: %v", id, removeErr)
+		}
+		if deleteErr := m.db.DeleteTransfer(id); deleteErr != nil {
+			log.Printf("failed to release transfer reservation %s: %v", id, deleteErr)
+		}
+		return nil, fmt.Errorf("create transfer temp file: %w", err)
+	}
 	return t, nil
+}
+
+// BeginActivity obtains an in-process lease for an open transfer. HTTP chunk
+// handlers hold this from before reading the request body through persistence,
+// so the stale sweeper cannot remove a temp file while a slow upload is active.
+// Call the returned release function exactly once (it is safe to call more).
+func (m *Manager) BeginActivity(id string) (func(), error) {
+	return m.beginActivity(id, true)
+}
+
+func (m *Manager) beginActivity(id string, requireOpen bool) (func(), error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, err := m.db.GetTransfer(id)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, ErrNotFound
+	}
+	if requireOpen && t.Status != "open" {
+		return nil, fmt.Errorf("%w: %s", ErrNotOpen, t.Status)
+	}
+	if t.Status != "open" {
+		return func() {}, nil
+	}
+	if m.completing[id] {
+		return nil, ErrSessionActive
+	}
+	if err := m.db.TouchOpenTransfer(id, time.Now().Unix()); err != nil {
+		return nil, err
+	}
+	m.active[id]++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if m.active[id] <= 1 {
+				delete(m.active, id)
+			} else {
+				m.active[id]--
+			}
+		})
+	}, nil
+}
+
+// beginCompletion obtains an exclusive lease. Chunk writes may run in
+// parallel with one another, but completion must wait until they finish and
+// prevents new chunk/status activity until publish is done.
+func (m *Manager) beginCompletion(id string) (func(), error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, err := m.db.GetTransfer(id)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, ErrNotFound
+	}
+	if t.Status != "open" {
+		return nil, fmt.Errorf("%w: %s", ErrNotOpen, t.Status)
+	}
+	if m.active[id] > 0 || m.completing[id] {
+		return nil, ErrSessionActive
+	}
+	if err := m.db.TouchOpenTransfer(id, time.Now().Unix()); err != nil {
+		return nil, err
+	}
+	m.active[id] = 1
+	m.completing[id] = true
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			delete(m.active, id)
+			delete(m.completing, id)
+		})
+	}, nil
+}
+
+// Lookup returns session metadata without refreshing its activity timestamp.
+// HTTP handlers use it to check ownership before Status or BeginActivity can
+// extend the session's retention window.
+func (m *Manager) Lookup(id string) (*store.Transfer, error) {
+	t, err := m.db.GetTransfer(id)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, ErrNotFound
+	}
+	return t, nil
+}
+
+// DeleteSession safely removes an upload session and its temporary file. An
+// active upload or completion owns a lease and cannot be removed; once this
+// method holds the manager lock, no new lease can begin before deletion ends.
+func (m *Manager) DeleteSession(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.active[id] > 0 {
+		return ErrSessionActive
+	}
+	t, err := m.db.GetTransfer(id)
+	if err != nil {
+		return err
+	}
+	if t == nil {
+		return ErrNotFound
+	}
+	if err := m.db.DeleteTransfer(id); err != nil {
+		return err
+	}
+	if tempPath, ok := m.sessionTempPath(t); ok {
+		if err := os.Remove(tempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			// The row is gone and no operation can still own this file. Leave
+			// failed removals for the age-gated orphan sweep below.
+			log.Printf("transfer %s deleted but temp cleanup failed: %v", id, err)
+		}
+	}
+	return nil
+}
+
+// CleanupStaleSessions removes expired open-session rows and their temp files.
+// The manager lock coordinates with OpenSession, activity leases, and explicit
+// deletion; conditional SQLite deletion also protects against changed rows.
+func (m *Manager) CleanupStaleSessions(now time.Time) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.cleanupStaleLocked(now)
+}
+
+func (m *Manager) cleanupStaleLocked(now time.Time) (int, error) {
+	cutoff := now.Add(-TransferStaleAfter)
+	transfers, err := m.db.ListOpenTransfers()
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	var cleanupErr error
+	for i := range transfers {
+		t := &transfers[i]
+		if m.active[t.ID] > 0 || !m.isStale(t, cutoff) {
+			continue
+		}
+		deleted, err := m.db.DeleteStaleOpenTransfer(t)
+		if err != nil {
+			if cleanupErr == nil {
+				cleanupErr = err
+			}
+			continue
+		}
+		if !deleted {
+			continue
+		}
+		removed++
+		if tempPath, ok := m.sessionTempPath(t); ok {
+			if err := os.Remove(tempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				if cleanupErr == nil {
+					cleanupErr = fmt.Errorf("remove stale transfer temp file: %w", err)
+				}
+			}
+		}
+	}
+	orphansRemoved, err := m.cleanupOrphanTempsLocked(cutoff)
+	removed += orphansRemoved
+	if cleanupErr == nil {
+		cleanupErr = err
+	}
+	return removed, cleanupErr
+}
+
+// sessionTempPath accepts only the manager-owned direct-child name generated
+// for a session. Persisted paths are never trusted as arbitrary deletion paths.
+func (m *Manager) sessionTempPath(t *store.Transfer) (string, bool) {
+	if t == nil || t.ID == "" || filepath.Base(t.ID) != t.ID || t.ID == "." || t.ID == ".." {
+		return "", false
+	}
+	expected := filepath.Join(m.tempDir, t.ID+".tmp")
+	if filepath.Clean(t.TempPath) != filepath.Clean(expected) {
+		return "", false
+	}
+	return expected, true
+}
+
+// cleanupOrphanTempsLocked removes only old regular .tmp files directly in
+// this manager's dedicated directory that no transfer row references and no
+// active lease owns. Holding m.mu prevents new sessions/leases during the
+// check-and-remove sequence; symlinks and other file types are left alone.
+func (m *Manager) cleanupOrphanTempsLocked(cutoff time.Time) (int, error) {
+	referenced, err := m.db.ListTransferTempPaths()
+	if err != nil {
+		return 0, err
+	}
+	references := make(map[string]struct{}, len(referenced))
+	for _, p := range referenced {
+		references[filepath.Clean(p)] = struct{}{}
+	}
+	entries, err := os.ReadDir(m.tempDir)
+	if err != nil {
+		return 0, fmt.Errorf("read transfer temp directory: %w", err)
+	}
+	removed := 0
+	var cleanupErr error
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		id := strings.TrimSuffix(name, ".tmp")
+		if m.active[id] > 0 {
+			continue
+		}
+		path := filepath.Join(m.tempDir, name)
+		if _, ok := references[filepath.Clean(path)]; ok {
+			continue
+		}
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			if cleanupErr == nil {
+				cleanupErr = fmt.Errorf("inspect orphan transfer temp file: %w", err)
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if cleanupErr == nil {
+				cleanupErr = fmt.Errorf("remove orphan transfer temp file: %w", err)
+			}
+			continue
+		}
+		removed++
+	}
+	return removed, cleanupErr
+}
+
+func (m *Manager) isStale(t *store.Transfer, cutoff time.Time) bool {
+	lastActivity := time.Unix(t.UpdatedAt, 0)
+	if t.UpdatedAt <= 0 {
+		tempPath, ok := m.sessionTempPath(t)
+		if !ok {
+			return false
+		}
+		info, err := os.Stat(tempPath)
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
+		if err != nil {
+			// If the file cannot be inspected, leave the session in place.
+			return false
+		}
+		lastActivity = info.ModTime()
+	}
+	return lastActivity.Before(cutoff)
+}
+
+// StartStaleCleanup performs an initial cleanup and then sweeps at interval.
+// The returned stop function shuts down the process-lifetime worker and waits
+// for it to exit.
+func (m *Manager) StartStaleCleanup(interval time.Duration) func() {
+	if interval <= 0 {
+		interval = staleSweepInterval
+	}
+	if _, err := m.CleanupStaleSessions(time.Now()); err != nil {
+		log.Printf("transfer stale-session cleanup failed: %v", err)
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	var once sync.Once
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if _, err := m.CleanupStaleSessions(time.Now()); err != nil {
+					log.Printf("transfer stale-session cleanup failed: %v", err)
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+	return func() {
+		once.Do(func() { close(stop) })
+		<-done
+	}
 }
 
 // Status returns the current state of a transfer (for resume). This is the
@@ -136,6 +494,12 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 // the set to decide what to re-send — so it loads them explicitly; GetTransfer
 // no longer carries them (PR-42).
 func (m *Manager) Status(id string) (*store.Transfer, error) {
+	release, err := m.beginActivity(id, false)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	t, err := m.db.GetTransfer(id)
 	if err != nil {
 		return nil, err
@@ -155,6 +519,12 @@ func (m *Manager) Status(id string) (*store.Transfer, error) {
 // The operation is idempotent: writing the same chunk twice with matching
 // hash is a no-op.
 func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 string) error {
+	release, err := m.BeginActivity(id)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	t, err := m.db.GetTransfer(id)
 	if err != nil {
 		return err
@@ -163,7 +533,7 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 		return ErrNotFound
 	}
 	if t.Status != "open" {
-		return fmt.Errorf("transfer is %s, not open", t.Status)
+		return fmt.Errorf("%w: %s", ErrNotOpen, t.Status)
 	}
 
 	// The chunk index drives a WriteAt offset (n * chunkSize). Unchecked, a
@@ -212,6 +582,12 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 // Complete verifies the whole-file SHA-256 and atomically renames the temp
 // file to the final destination.
 func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
+	release, err := m.beginCompletion(id)
+	if err != nil {
+		return nil, "", err
+	}
+	defer release()
+
 	t, err := m.db.GetTransfer(id)
 	if err != nil {
 		return nil, "", err
@@ -220,7 +596,7 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 		return nil, "", ErrNotFound
 	}
 	if t.Status != "open" {
-		return nil, "", fmt.Errorf("transfer is %s, not open", t.Status)
+		return nil, "", fmt.Errorf("%w: %s", ErrNotOpen, t.Status)
 	}
 
 	// Verify whole-file hash.
@@ -237,10 +613,17 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 
 	got := hex.EncodeToString(h.Sum(nil))
 	if got != t.SHA256 {
-		_ = m.db.SetTransferStatus(id, "failed")
+		if err := m.db.SetTransferStatus(id, "failed"); err != nil {
+			log.Printf("transfer %s failed hash verification but status update failed: %v", id, err)
+			if deleteErr := m.db.DeleteTransfer(id); deleteErr != nil {
+				log.Printf("failed to release transfer reservation %s after hash failure: %v", id, deleteErr)
+			}
+		}
 		// The temp file is now orphaned (the transfer can't be resumed once
 		// failed) — remove it so it doesn't leak on disk.
-		_ = os.Remove(t.TempPath)
+		if err := os.Remove(t.TempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("failed to remove mismatched transfer temp file %s: %v", id, err)
+		}
 		return nil, "", fmt.Errorf("%w: got %s want %s", ErrFileMismatch, got, t.SHA256)
 	}
 
@@ -270,6 +653,9 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 	// if recording that fails, so surface the persistence error instead of
 	// dropping it and leaving the row stuck "open" (PR-50).
 	if err := m.db.SetTransferStatus(id, "completed"); err != nil {
+		if deleteErr := m.db.DeleteTransfer(id); deleteErr != nil {
+			log.Printf("failed to release transfer reservation %s after publish: %v", id, deleteErr)
+		}
 		return nil, t.TargetPath, fmt.Errorf("transfer published to %s but recording it failed: %w", t.TargetPath, err)
 	}
 

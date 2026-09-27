@@ -12,8 +12,9 @@ A phone-as-file-explorer for your own PCs. Two components plus one shared contra
 - **`protocol/openapi.yaml`** — the REST contract both sides follow. **Source of truth.**
 
 No cloud server, no cloud database. The app reaches the agent over HTTPS/HTTP-2 on the
-LAN by IP, or anywhere via the PC's **Tailscale** address — same code path. Tailscale
-(WireGuard) provides NAT traversal, addressing, and an outer encryption layer.
+LAN by IP, optionally via the PC's **Tailscale** address, or through a user-configured
+direct HTTPS address. Tailscale (WireGuard) provides NAT traversal, addressing, and an
+outer encryption layer; direct internet access requires the PC owner to configure routing.
 
 ## Commands
 
@@ -85,8 +86,9 @@ agent/cmd/agent/   main daemon + admin.go (CLI subcommands)
 agent/internal/    server (incl. search), fsops, transfer, thumbs, pairing, store,
                    security, settings, updates, mdns, netinfo
 agent/internal/mdns/    mDNS/DNS-SD advertise + discover (zeroconf) — implemented
-agent/internal/webui/   web companion — dist/index.html is the served single-file UI
-                        (edit it directly); src/ + package.json = Tailwind tooling only
+agent/internal/webui/   web companion; edit the Vite + React + TypeScript SPA in web/src/
+                        (`web/package.json`; build with `cd agent/internal/webui/web && npm run build`)
+                        to generate ../dist/, which Go embeds into the agent binary; do not edit dist/ directly
 protocol/openapi.yaml        shared REST contract
 ```
 

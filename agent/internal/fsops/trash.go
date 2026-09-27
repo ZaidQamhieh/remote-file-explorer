@@ -156,6 +156,9 @@ func ListTrash(trashDir string) ([]TrashEntry, error) {
 // in the same store — so without this a jailed device could see the names,
 // paths, and sizes of every other device's deleted files (PR-61).
 func (o *Ops) ListTrash(trashDir string) ([]TrashEntry, error) {
+	if o.denyAll {
+		return []TrashEntry{}, nil
+	}
 	all, err := ListTrash(trashDir)
 	if err != nil {
 		return nil, err
@@ -231,6 +234,12 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 	if o.settings.IsReadOnly() {
 		return ErrReadOnly
 	}
+	// Jailed views created from an invalid/out-of-scope jail root deliberately
+	// have no roots and deny every path. Do not mistake that state for the
+	// unjailed fast path below.
+	if o.denyAll {
+		return ErrForbidden
+	}
 	roots := o.Roots()
 	if len(ids) == 0 && len(roots) == 0 {
 		if err := os.RemoveAll(trashFilesDir(trashDir)); err != nil {
@@ -253,10 +262,11 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 		}
 		if len(roots) > 0 {
 			orig, _, err := readTrashInfo(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt))
-			if err == nil {
-				if _, resolveErr := o.Resolve(orig); resolveErr != nil {
-					continue // outside the jail: skip rather than fail the whole batch
-				}
+			if err != nil {
+				continue // no trustworthy origin path: skip rather than delete
+			}
+			if _, resolveErr := o.Resolve(orig); resolveErr != nil {
+				continue // outside the jail: skip rather than fail the whole batch
 			}
 		}
 		if err := os.RemoveAll(filepath.Join(trashFilesDir(trashDir), id)); err != nil {
@@ -349,16 +359,16 @@ func readTrashInfo(path string) (originalPath string, deletedAt time.Time, err e
 	for _, line := range strings.Split(string(data), "\n") {
 		if v, ok := strings.CutPrefix(line, "Path="); ok {
 			v = strings.TrimSpace(v)
-			if dec, derr := url.PathUnescape(v); derr == nil {
-				originalPath = dec
-			} else {
-				originalPath = v
+			dec, derr := url.PathUnescape(v)
+			if derr != nil {
+				return "", time.Time{}, fmt.Errorf("malformed trashinfo path: %s", path)
 			}
+			originalPath = dec
 		} else if v, ok := strings.CutPrefix(line, "DeletionDate="); ok {
 			deletedAt, _ = time.ParseInLocation(xdgDeletionDate, strings.TrimSpace(v), time.Local)
 		}
 	}
-	if originalPath == "" {
+	if originalPath == "" || !filepath.IsAbs(originalPath) {
 		return "", time.Time{}, fmt.Errorf("malformed trashinfo: %s", path)
 	}
 	return originalPath, deletedAt, nil

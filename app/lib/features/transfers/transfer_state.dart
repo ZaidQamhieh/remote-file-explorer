@@ -39,6 +39,15 @@ enum TransferKind { upload, download }
 
 enum TransferStatus { queued, running, paused, completed, failed }
 
+class _TransferTokenUnavailable implements Exception {
+  const _TransferTokenUnavailable(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class TransferTask {
   TransferTask._({
     required this.id,
@@ -406,17 +415,32 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
 
     try {
       String? token;
+      final store = await ref.read(hostStoreProvider.future);
+      final fingerprint = AgentClient.normalizeFingerprint(
+        await store.getFingerprint(task.host.id),
+      );
+      if (fingerprint == null) {
+        // Transfer clients must use the secure pin just like interactive API
+        // clients. The legacy Host metadata copy is deliberately not a
+        // fallback when secure storage is missing.
+        throw const MissingCertPin();
+      }
       try {
-        final store = await ref.read(hostStoreProvider.future);
         token = await store.getToken(task.host.id);
       } catch (_) {
-        // Token lookup is best-effort: if secure storage is unavailable the
-        // request will simply go out unauthenticated and the agent will
-        // reject it with a normal (catchable) 401, rather than aborting the
-        // transfer before it even starts.
-        token = null;
+        throw const _TransferTokenUnavailable(
+          'Could not read this host’s device token from secure storage. Unlock secure storage and retry.',
+        );
       }
-      client = _clientFactory(task.host, deviceToken: token);
+      if (token == null || token.isEmpty) {
+        throw const _TransferTokenUnavailable(
+          'This host’s secure device token is missing. Re-pair or log in to the host before transferring.',
+        );
+      }
+      client = _clientFactory(
+        task.host.copyWith(certFingerprint: fingerprint),
+        deviceToken: token,
+      );
 
       if (task.kind == TransferKind.download) {
         await _runDownload(id, task, client, cancelToken);

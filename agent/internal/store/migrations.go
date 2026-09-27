@@ -21,6 +21,8 @@ var migrations = []func(*sql.Tx) error{
 	migrateBaseline,
 	migrateChunkTable,
 	migrateAuditLog,
+	migrateDeviceAppPermissions,
+	migrateLoginDeviceBindings,
 }
 
 // migrate brings the schema up to len(migrations).
@@ -331,6 +333,29 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target TEXT    NOT NULL DEFAULT '',
     detail TEXT    NOT NULL DEFAULT ''
 );
+`)
+	return err
+}
+
+// migrateDeviceAppPermissions adds explicit app-catalog and app-launch grants
+// per device. Existing and newly created rows default to no app access.
+func migrateDeviceAppPermissions(tx *sql.Tx) error {
+	if err := addColumn(tx, "devices", "view_apps", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	return addColumn(tx, "devices", "launch_apps", "INTEGER NOT NULL DEFAULT 0")
+}
+
+// migrateLoginDeviceBindings revokes and removes legacy admin provenance
+// where the row has no matching account. DeviceByToken also checks this
+// relationship at authorization time; persisting both changes prevents a
+// future account with the same username from reviving an orphaned token.
+func migrateLoginDeviceBindings(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+UPDATE devices SET revoked=1, via_login=0
+WHERE via_login=1 AND (username='' OR NOT EXISTS (
+    SELECT 1 FROM users WHERE users.username=devices.username
+))
 `)
 	return err
 }

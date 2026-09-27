@@ -13,7 +13,8 @@ class PairResponse {
   final String deviceId;
   final String agentName;
 
-  /// SHA-256 of the agent TLS cert (for pinning after TOFU).
+  /// SHA-256 of the agent TLS certificate. Trust it only after checking it
+  /// against the fingerprint obtained through an independent channel.
   final String? certFingerprint;
 
   /// The agent's self-reported LAN and Tailscale addresses (Wave 2), so a

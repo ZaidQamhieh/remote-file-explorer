@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const scheduledTaskName = "RFEAgent"
@@ -15,7 +16,7 @@ const scheduledTaskName = "RFEAgent"
 // matching the no-root Linux/macOS install.
 func installService(execPath string) error {
 	cmd := exec.Command("schtasks", "/create", "/tn", scheduledTaskName,
-		"/tr", execPath, "/sc", "onlogon", "/rl", "limited", "/f")
+		"/tr", `"`+execPath+`"`, "/sc", "onlogon", "/rl", "limited", "/f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -36,7 +37,74 @@ func installService(execPath string) error {
 	return nil
 }
 
+func startService() error {
+	state, err := scheduledTaskState()
+	if err != nil {
+		return err
+	}
+	if state == "not installed" {
+		return fmt.Errorf("agent is not installed; run `rfe-agent install` first")
+	}
+	cmd := exec.Command("schtasks", "/run", "/tn", scheduledTaskName)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("start scheduled task failed (%s): %w", strings.TrimSpace(string(output)), err)
+	}
+	fmt.Printf("Started scheduled task %q\n", scheduledTaskName)
+	return nil
+}
+
+func stopService() error {
+	state, err := scheduledTaskState()
+	if err != nil {
+		return err
+	}
+	if state == "not installed" {
+		return fmt.Errorf("agent is not installed; run `rfe-agent install` first")
+	}
+	if !strings.EqualFold(state, "Running") {
+		fmt.Printf("Scheduled task %q is not running (state: %s)\n", scheduledTaskName, state)
+		return nil
+	}
+	cmd := exec.Command("schtasks", "/end", "/tn", scheduledTaskName)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("stop scheduled task failed (%s): %w", strings.TrimSpace(string(output)), err)
+	}
+	fmt.Printf("Stopped scheduled task %q; it remains configured to start at login\n", scheduledTaskName)
+	return nil
+}
+
+func serviceStatus() (string, error) {
+	state, err := scheduledTaskState()
+	if err != nil {
+		return "", err
+	}
+	if state == "not installed" {
+		return state, nil
+	}
+	return "installed; state=" + state, nil
+}
+
+func scheduledTaskState() (string, error) {
+	powershell, err := exec.LookPath("powershell.exe")
+	if err != nil {
+		return "", fmt.Errorf("find PowerShell to inspect scheduled task: %w", err)
+	}
+	script := "$task = Get-ScheduledTask -TaskName '" + scheduledTaskName + "' -ErrorAction SilentlyContinue; " +
+		"if ($null -eq $task) { 'not installed' } else { [string]$task.State }"
+	cmd := exec.Command(powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("query scheduled task failed (%s): %w", strings.TrimSpace(string(output)), err)
+	}
+	state := strings.TrimSpace(string(output))
+	if state == "" {
+		return "", fmt.Errorf("query scheduled task returned no state")
+	}
+	return state, nil
+}
+
 func uninstallService() error {
+	_ = stopService()
 	cmd := exec.Command("schtasks", "/delete", "/tn", scheduledTaskName, "/f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

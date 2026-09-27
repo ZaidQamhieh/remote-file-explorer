@@ -1,6 +1,7 @@
 // Typed client for the real agent REST API (protocol/openapi.yaml — the
 // contract's source of truth). Same-origin (this bundle is served by the
 // agent itself via go:embed), so requests are relative to "/v1".
+import { sha256 } from '@noble/hashes/sha2.js';
 import { getDevicePublicKeyB64, signNonce } from './deviceIdentity';
 
 const TOKEN_KEY = 'rfe_device_token';
@@ -70,9 +71,8 @@ async function rawPut(path: string, body: ArrayBuffer, headers: Record<string, s
   }
 }
 
-async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
+function sha256Hex(data: Uint8Array): string {
+  return Array.from(sha256(data))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
@@ -80,12 +80,19 @@ async function sha256Hex(data: ArrayBuffer): Promise<string> {
 const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4MiB, under the agent's 32MiB cap
 
 /** Drives the full resumable-upload contract: open session, hash + PUT each
- * chunk, then complete. Whole file is read into memory to compute the
- * whole-file SHA-256 upfront (per POST /transfers's required `sha256` field)
- * — fine for the LAN-transfer file sizes this tool targets. */
+ * chunk, then complete. The required whole-file SHA-256 is computed in a
+ * bounded-memory first pass; upload then rereads and sends one chunk at a time. */
 async function uploadFileImpl(path: string, file: File, onProgress?: (fraction: number) => void): Promise<void> {
-  const buf = await file.arrayBuffer();
-  const wholeHash = await sha256Hex(buf);
+  const wholeHasher = sha256.create();
+  for (let start = 0; start < file.size; start += UPLOAD_CHUNK_SIZE) {
+    const end = Math.min(start + UPLOAD_CHUNK_SIZE, file.size);
+    const slice = await file.slice(start, end).arrayBuffer();
+    wholeHasher.update(new Uint8Array(slice));
+  }
+  const wholeHash = Array.from(wholeHasher.digest())
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
   const session = await post<UploadSession>('/transfers', {
     path,
     size: file.size,
@@ -95,8 +102,8 @@ async function uploadFileImpl(path: string, file: File, onProgress?: (fraction: 
   const totalChunks = session.totalChunks;
   for (let n = 0; n < totalChunks; n++) {
     const start = n * UPLOAD_CHUNK_SIZE;
-    const chunk = buf.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, buf.byteLength));
-    const chunkHash = await sha256Hex(chunk);
+    const chunk = await file.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, file.size)).arrayBuffer();
+    const chunkHash = sha256Hex(new Uint8Array(chunk));
     await rawPut(`/transfers/${session.id}/chunks/${n}`, chunk, { 'X-Chunk-Sha256': chunkHash });
     onProgress?.((n + 1) / totalChunks);
   }

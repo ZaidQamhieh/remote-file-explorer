@@ -61,8 +61,8 @@ const _switchToCode = _SwitchToCode();
 class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key, this.prefillAddress});
 
-  /// When non-null the code-entry panel opens with this address pre-filled
-  /// (e.g. from mDNS discovery).
+  /// When non-null the code-entry panel opens with this address pre-filled.
+  /// The current Flutter app does not discover hosts through mDNS.
   final String? prefillAddress;
 
   @override
@@ -583,8 +583,8 @@ class _DashedRRectPainter extends CustomPainter {
 /// Live full-screen QR scanner for the PC-pairing flow — pushed from
 /// [_QrPairingPanel]'s "Open camera viewfinder" button, matching the
 /// mockup's `scr-qr-scan` dark full-bleed scanner with a corner-bracket
-/// viewfinder + scanline. Business logic (barcode parsing, TOFU check,
-/// `AgentClient.pair`, committing to the host store) is unchanged from the
+/// viewfinder + scanline. Business logic (barcode parsing, certificate-pin
+/// verification, `AgentClient.pair`, committing to the host store) is unchanged from the
 /// original embedded-in-tab scanner — only the container moved.
 class _PairingCameraScanScreen extends ConsumerStatefulWidget {
   const _PairingCameraScanScreen();
@@ -619,12 +619,19 @@ class _PairingCameraScanScreenState
       return;
     }
 
-    final address = qr['address'] as String?;
-    final certFingerprint = qr['certFingerprint'] as String?;
-    final pairingCode = qr['pairingCode'] as String?;
+    final address = qr['address'];
+    final rawFingerprint = qr['certFingerprint'];
+    final pairingCode = qr['pairingCode'];
 
-    if (address == null || pairingCode == null) {
+    if (address is! String ||
+        rawFingerprint is! String ||
+        pairingCode is! String) {
       setState(() => _error = context.l10n.qrMissingFields);
+      return;
+    }
+    final certFingerprint = AgentClient.normalizeFingerprint(rawFingerprint);
+    if (certFingerprint == null) {
+      setState(() => _error = context.l10n.qrInvalidFingerprint);
       return;
     }
 
@@ -643,12 +650,11 @@ class _PairingCameraScanScreenState
   Future<void> _doPair({
     required String address,
     required String pairingCode,
-    String? expectedFingerprint,
+    required String expectedFingerprint,
   }) async {
-    // Probe host — no fingerprint yet (TOFU). This host isn't in the store
-    // yet (pairing hasn't completed), so it can't go through
-    // buildClientForHost/clientProvider — those require a paired host record
-    // to look up a device token. Construct directly and close when done.
+    // This host isn't in the store yet, so pairing constructs a one-off
+    // client pinned to the fingerprint embedded in the QR before requesting
+    // a challenge or sending the pairing code.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
@@ -670,18 +676,20 @@ class _PairingCameraScanScreenState
 
       final capturedFp = client.lastSeenFingerprint;
 
-      // If QR included a fingerprint, verify TOFU matches
-      if (expectedFingerprint != null &&
-          capturedFp != null &&
-          capturedFp != expectedFingerprint) {
-        throw CertPinMismatch(expectedFingerprint, capturedFp);
+      // TLS already rejected a mismatch before sending the code. Keep this
+      // postcondition as a defense against a future adapter regression.
+      if (capturedFp != expectedFingerprint) {
+        throw CertPinMismatch(
+          expectedFingerprint,
+          capturedFp ?? 'no certificate fingerprint was observed',
+        );
       }
 
       final host = Host(
         id: resp.deviceId,
         label: resp.agentName,
         address: address,
-        certFingerprint: capturedFp ?? resp.certFingerprint,
+        certFingerprint: expectedFingerprint,
         // The agent reports both addresses it knows about itself, so the
         // host is immediately reachable both at home (LAN) and away
         // (Tailscale) — no separate "add as second host" step needed.
@@ -878,6 +886,7 @@ class _ManualPairingTab extends ConsumerStatefulWidget {
 class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _addressCtrl;
+  final _fingerprintCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
@@ -891,12 +900,15 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
   @override
   void dispose() {
     _addressCtrl.dispose();
+    _fingerprintCtrl.dispose();
     _codeCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final fingerprint = AgentClient.normalizeFingerprint(_fingerprintCtrl.text);
+    if (fingerprint == null) return;
     if (_codeCtrl.text.trim().length < 8) {
       setState(() => _error = context.l10n.requiredLabel);
       return;
@@ -906,13 +918,13 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
       _error = null;
     });
 
-    // Probe host — not yet in the store (pairing hasn't completed), so this
-    // can't go through buildClientForHost/clientProvider. Construct directly
-    // and close when done.
+    // This host isn't paired yet; pin it from the out-of-band value before
+    // requesting the challenge or transmitting the pairing code.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
       address: _addressCtrl.text.trim(),
+      certFingerprint: fingerprint,
     );
     final client = AgentClient(probeHost);
 
@@ -927,12 +939,11 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
         deviceId: await _deviceId(),
       );
 
-      final capturedFp = client.lastSeenFingerprint;
       final host = Host(
         id: resp.deviceId,
         label: resp.agentName,
         address: _addressCtrl.text.trim(),
-        certFingerprint: capturedFp ?? resp.certFingerprint,
+        certFingerprint: fingerprint,
         tailscaleAddress: resp.tailscaleAddress,
       );
 
@@ -986,6 +997,8 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
                           : null,
             ),
             const SizedBox(height: Spacing.lg),
+            _FingerprintField(controller: _fingerprintCtrl),
+            const SizedBox(height: Spacing.md),
             _CodeBoxRow(controller: _codeCtrl),
             const SizedBox(height: Spacing.lg),
             const _PairingHintCard(),
@@ -1019,6 +1032,32 @@ class _ManualPairingTabState extends ConsumerState<_ManualPairingTab> {
 /// digit-entry grid, sized for the agent's real 8-character alphanumeric
 /// pairing code (see the file-level comment above `_ManualPairingTab`).
 /// Auto-advances focus forward on entry and back on backspace.
+class _FingerprintField extends StatelessWidget {
+  const _FingerprintField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    controller: controller,
+    autocorrect: false,
+    enableSuggestions: false,
+    textCapitalization: TextCapitalization.characters,
+    decoration: InputDecoration(
+      labelText: context.l10n.fingerprintLabel,
+      hintText: context.l10n.fingerprintHint,
+      helperText: context.l10n.fingerprintVerificationHelp,
+      border: const OutlineInputBorder(),
+      prefixIcon: const Icon(LucideIcons.fingerprint),
+    ),
+    validator:
+        (value) =>
+            AgentClient.normalizeFingerprint(value) == null
+                ? context.l10n.fingerprintInvalid
+                : null,
+  );
+}
+
 class _CodeBoxRow extends StatefulWidget {
   const _CodeBoxRow({required this.controller});
 
@@ -1130,6 +1169,7 @@ class _LoginTab extends ConsumerStatefulWidget {
 class _LoginTabState extends ConsumerState<_LoginTab> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _addressCtrl;
+  final _fingerprintCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
@@ -1145,6 +1185,7 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
   @override
   void dispose() {
     _addressCtrl.dispose();
+    _fingerprintCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -1152,16 +1193,20 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final fingerprint = AgentClient.normalizeFingerprint(_fingerprintCtrl.text);
+    if (fingerprint == null) return;
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    // Probe host — not yet in the store, same as _ManualPairingTab.
+    // Pin this not-yet-paired host from the out-of-band fingerprint before
+    // requesting a challenge or transmitting account credentials.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
       address: _addressCtrl.text.trim(),
+      certFingerprint: fingerprint,
     );
     final client = AgentClient(probeHost);
 
@@ -1177,12 +1222,11 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
         deviceId: await _deviceId(),
       );
 
-      final capturedFp = client.lastSeenFingerprint;
       final host = Host(
         id: resp.deviceId,
         label: resp.agentName,
         address: _addressCtrl.text.trim(),
-        certFingerprint: capturedFp ?? resp.certFingerprint,
+        certFingerprint: fingerprint,
         tailscaleAddress: resp.tailscaleAddress,
       );
 
@@ -1231,6 +1275,8 @@ class _LoginTabState extends ConsumerState<_LoginTab> {
                           ? context.l10n.requiredLabel
                           : null,
             ),
+            const SizedBox(height: Spacing.md),
+            _FingerprintField(controller: _fingerprintCtrl),
             const SizedBox(height: Spacing.md),
             TextFormField(
               controller: _usernameCtrl,
@@ -1318,6 +1364,7 @@ class _RegisterTab extends ConsumerStatefulWidget {
 class _RegisterTabState extends ConsumerState<_RegisterTab> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _addressCtrl;
+  final _fingerprintCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -1335,6 +1382,7 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
   @override
   void dispose() {
     _addressCtrl.dispose();
+    _fingerprintCtrl.dispose();
     _codeCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
@@ -1344,16 +1392,20 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final fingerprint = AgentClient.normalizeFingerprint(_fingerprintCtrl.text);
+    if (fingerprint == null) return;
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    // Probe host — not yet in the store, same as the other tabs.
+    // Pin this not-yet-paired host before requesting a challenge or
+    // transmitting the pairing code and account credentials.
     final probeHost = Host(
       id: 'pairing_probe',
       label: 'probe',
       address: _addressCtrl.text.trim(),
+      certFingerprint: fingerprint,
     );
     final client = AgentClient(probeHost);
 
@@ -1370,12 +1422,11 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
         deviceId: await _deviceId(),
       );
 
-      final capturedFp = client.lastSeenFingerprint;
       final host = Host(
         id: resp.deviceId,
         label: resp.agentName,
         address: _addressCtrl.text.trim(),
-        certFingerprint: capturedFp ?? resp.certFingerprint,
+        certFingerprint: fingerprint,
         tailscaleAddress: resp.tailscaleAddress,
       );
 
@@ -1424,6 +1475,8 @@ class _RegisterTabState extends ConsumerState<_RegisterTab> {
                           ? context.l10n.requiredLabel
                           : null,
             ),
+            const SizedBox(height: Spacing.md),
+            _FingerprintField(controller: _fingerprintCtrl),
             const SizedBox(height: Spacing.md),
             TextFormField(
               controller: _codeCtrl,

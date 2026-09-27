@@ -1,9 +1,13 @@
 package server
 
 import (
+	"container/heap"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 
 	"testing"
 
@@ -94,5 +98,112 @@ func TestRecentHandler_DefaultLimit(t *testing.T) {
 	}
 	if len(entries) != 8 {
 		t.Fatalf("expected all 8 files under the default limit, got %d", len(entries))
+	}
+}
+
+// TestRecentHandler_SetsTimeBudgetHeaderWhenBudgetExhausted verifies that an
+// exhausted budget is FLAGGED rather than failed: the handler still returns
+// 200 with a JSON array body and sets headerSearchTimeBudget="1".
+//
+// Scope, deliberately: recentTimeBudget is a compile-time constant with no
+// injection seam, so this pre-cancels the request context to reach the
+// ctx.Err() branch without a 15s sleep. That aborts the walk on its very
+// first callback, so the result set here is empty, not partial -- this test
+// pins the flag-don't-fail contract, NOT the "results collected before the
+// cutoff survive" one. Proving that needs a seam in recent.go.
+func TestRecentHandler_SetsTimeBudgetHeaderWhenBudgetExhausted(t *testing.T) {
+	ops, _ := newSearchFixture(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/fs/recent?limit=100", nil)
+	req = req.WithContext(ctx)
+	recentHandler(ops)(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if rr.Header().Get(headerSearchTimeBudget) != "1" {
+		t.Fatalf("expected %s=1 when context is cancelled, got %q", headerSearchTimeBudget, rr.Header().Get(headerSearchTimeBudget))
+	}
+
+	var entries []fsops.Entry
+	if err := json.Unmarshal(rr.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("response body should decode as JSON array, got error: %v\nbody: %s", err, rr.Body.String())
+	}
+}
+
+// TestRecentHandler_NoTimeBudgetHeaderOnNormalCompletion verifies that when
+// the walk completes normally (without context timeout), the
+// headerSearchTimeBudget header is not set.
+func TestRecentHandler_NoTimeBudgetHeaderOnNormalCompletion(t *testing.T) {
+	ops, _ := newSearchFixture(t)
+	rr, _ := doRecent(t, ops, "limit=100")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get(headerSearchTimeBudget) != "" {
+		t.Fatalf("did not expect %s to be set on normal completion, got %q", headerSearchTimeBudget, rr.Header().Get(headerSearchTimeBudget))
+	}
+}
+
+// TestWalkForRecent_SkipsUnreadableDirectory verifies that walkForRecent
+// silently skips directories with permission-denied errors and continues
+// the walk on readable parts of the tree.
+func TestWalkForRecent_SkipsUnreadableDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("test requires non-root; root bypasses permission checks")
+	}
+
+	dir := t.TempDir()
+
+	// Two readable files, one sorting BEFORE the unreadable dir and one
+	// AFTER it. The second is the load-bearing one: WalkDir visits entries in
+	// lexical order, so a walk that ABORTS on the permission error instead of
+	// skipping past it still collects "a-readable.txt" and would look correct.
+	// Only "z-readable.txt" distinguishes skipping from aborting.
+	for _, name := range []string{"a-readable.txt", "z-readable.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	// Create an unreadable subdirectory with a file inside it.
+	unreadableDir := filepath.Join(dir, "unreadable")
+	if err := os.Mkdir(unreadableDir, 0o755); err != nil {
+		t.Fatalf("mkdir unreadable: %v", err)
+	}
+	unreadableFile := filepath.Join(unreadableDir, "hidden.txt")
+	if err := os.WriteFile(unreadableFile, []byte("hidden"), 0o644); err != nil {
+		t.Fatalf("write hidden file: %v", err)
+	}
+	// Remove read permissions from the directory.
+	if err := os.Chmod(unreadableDir, 0o000); err != nil {
+		t.Fatalf("chmod unreadable dir: %v", err)
+	}
+	t.Cleanup(func() {
+		// Restore permissions so TempDir cleanup can remove it.
+		os.Chmod(unreadableDir, 0o755)
+	})
+
+	ctx := context.Background()
+	h := &recentHeap{}
+	heap.Init(h)
+	walkForRecent(ctx, dir, 100, h)
+
+	// Both readable files must be present -- the one after the unreadable
+	// directory proves the walk continued past it -- and hidden.txt must not.
+	got := map[string]bool{}
+	for _, e := range *h {
+		got[e.Name] = true
+	}
+	if len(got) != 2 || !got["a-readable.txt"] || !got["z-readable.txt"] {
+		t.Fatalf("expected both readable files, got %v", got)
+	}
+	if got["hidden.txt"] {
+		t.Fatal("hidden.txt leaked out of the unreadable directory")
 	}
 }

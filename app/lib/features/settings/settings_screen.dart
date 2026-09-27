@@ -49,12 +49,17 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   AgentClient? _client;
+  Host? _routeHost;
   AgentSettings? _settings;
   BandwidthSettings _bandwidth = const BandwidthSettings();
+  String? _fingerprint;
   List<Device> _devices = const [];
   List<Drive> _drives = const [];
+  final Set<String> _updatingAppCapabilities = <String>{};
   bool _loading = true;
   String? _error;
+
+  Host get _currentHost => _routeHost ?? widget.host;
 
   @override
   void initState() {
@@ -78,19 +83,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // after an error).
       _client?.close();
       final client = await buildClientForHost(ref.read, widget.host.id);
+      final agentSettings = await client.getSettings();
       final results = await Future.wait<dynamic>([
-        client.getSettings(),
         client.listDevices(),
         client.drives(),
-        // Agent may not support the bandwidth endpoint yet — use defaults.
-        client.getBandwidth().catchError((_) => const BandwidthSettings()),
+        // Bandwidth is a host-wide setting; paired devices do not need to
+        // fetch it because they cannot manage that policy.
+        agentSettings.canManageHost
+            ? client.getBandwidth().catchError((_) => const BandwidthSettings())
+            : Future.value(const BandwidthSettings()),
       ]);
       setState(() {
         _client = client;
-        _settings = results[0] as AgentSettings;
-        _devices = results[1] as List<Device>;
-        _drives = results[2] as List<Drive>;
-        _bandwidth = results[3] as BandwidthSettings;
+        _fingerprint = client.host.certFingerprint;
+        _settings = agentSettings;
+        _devices = results[0] as List<Device>;
+        _drives = results[1] as List<Drive>;
+        _bandwidth = results[2] as BandwidthSettings;
         _loading = false;
       });
     } catch (e) {
@@ -131,6 +140,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         showError(context, context.l10n.updateFailed(humanizeError(e)));
       }
+    }
+  }
+
+  Future<void> _updateDeviceAppCapabilities(
+    Device device, {
+    bool? viewApps,
+    bool? launchApps,
+  }) async {
+    final client = _client;
+    if (client == null || !device.hasAppCapabilities) return;
+
+    final nextViewApps = viewApps ?? device.viewApps ?? false;
+    final currentLaunchApps =
+        device.viewApps == true && device.launchApps == true;
+    final nextLaunchApps =
+        viewApps == false ? false : (launchApps ?? currentLaunchApps);
+    setState(() => _updatingAppCapabilities.add(device.id));
+
+    try {
+      await client.updateDeviceAppCapabilities(
+        device.id,
+        viewApps: nextViewApps,
+        launchApps: nextLaunchApps,
+      );
+      if (!mounted) return;
+      setState(() {
+        _devices = [
+          for (final current in _devices)
+            if (current.id == device.id)
+              current.copyWith(
+                viewApps: nextViewApps,
+                launchApps: nextLaunchApps,
+              )
+            else
+              current,
+        ];
+      });
+    } catch (e) {
+      if (mounted) {
+        showError(context, context.l10n.updateFailed(humanizeError(e)));
+      }
+    } finally {
+      if (mounted) setState(() => _updatingAppCapabilities.remove(device.id));
     }
   }
 
@@ -197,14 +249,113 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _openConnectionDiagnostics(BuildContext context) async {
     final store = await ref.read(hostStoreProvider.future);
     final token = await store.getToken(widget.host.id);
+    final fingerprint = await store.getFingerprint(widget.host.id);
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder:
-          (_) =>
-              ConnectionDiagnosticsSheet(host: widget.host, deviceToken: token),
+          (_) => ConnectionDiagnosticsSheet(
+            host: _currentHost,
+            deviceToken: token,
+            secureFingerprint: fingerprint,
+          ),
     );
+  }
+
+  Future<void> _editInternetAddress() async {
+    final controller = TextEditingController(
+      text: _currentHost.internetAddress ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(ctx.l10n.internetRouteDialogTitle),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText: ctx.l10n.internetRouteAddressLabel,
+                      hintText: ctx.l10n.internetRouteAddressHint,
+                      helperText: ctx.l10n.internetRouteAddressHelper,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return null;
+                      return Host.isValidInternetAddress(value)
+                          ? null
+                          : ctx.l10n.internetRouteAddressInvalid;
+                    },
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  Text(
+                    ctx.l10n.internetRouteOwnerSetupNote,
+                    style: TextStyle(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.l10n.cancelButton),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState?.validate() == true) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text(ctx.l10n.saveButton),
+              ),
+            ],
+          ),
+    );
+    final address = controller.text;
+    controller.dispose();
+    if (saved != true || !mounted) return;
+
+    final oldHost = _currentHost;
+    final updatedHost =
+        address.isEmpty
+            ? oldHost.copyWith(clearInternetAddress: true)
+            : oldHost.copyWith(internetAddress: address);
+    final store = await ref.read(hostStoreProvider.future);
+    await store.updateHost(updatedHost);
+    if (!mounted) return;
+    setState(() => _routeHost = updatedHost);
+    ref.invalidate(hostByIdProvider(widget.host.id));
+    await _load();
+    if (mounted) {
+      showSuccess(
+        context,
+        address.isEmpty
+            ? context.l10n.internetRouteRemoved
+            : context.l10n.internetRouteSaved,
+      );
+    }
+  }
+
+  String _routeName(BuildContext context, String address) {
+    return switch (_currentHost.routeForAddress(address)) {
+      HostRoute.lan => context.l10n.routeLanName,
+      HostRoute.tailscale => context.l10n.routeTailscaleName,
+      HostRoute.directHttps => context.l10n.routeInternetName,
+      HostRoute.custom => context.l10n.routeCustomName,
+    };
   }
 
   Future<void> _revokeAccess() async {
@@ -273,7 +424,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fingerprint = _shortFingerprint(widget.host.certFingerprint);
+    final fingerprint = _shortFingerprint(_fingerprint);
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -317,6 +468,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildBody(BuildContext context) {
     final s = _settings!;
     final scheme = Theme.of(context).colorScheme;
+    final routeHost = _currentHost;
+    final activeAddress = _client?.activeAddress;
     final drivesWithCapacity =
         _drives.where((d) => (d.totalBytes ?? 0) > 0).toList();
     return ListView(
@@ -327,55 +480,136 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Spacing.xl,
       ),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.xs,
-            0,
-            Spacing.xs,
-            Spacing.md,
+        if (s.canManageHost)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.xs,
+              0,
+              Spacing.xs,
+              Spacing.md,
+            ),
+            child: Text(
+              context.l10n.securityWarning,
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+            ),
           ),
-          child: Text(
-            context.l10n.securityWarning,
-            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-          ),
-        ),
         SettingsSection(
           title: context.l10n.agentSection,
           children: [
-            SettingsTile.value(
-              icon: LucideIcons.server,
-              badgeColor: scheme.primary,
-              title: context.l10n.agentNameLabel,
-              value: s.agentName,
-              onTap: _editName,
-            ),
+            if (s.canManageHost)
+              SettingsTile.value(
+                icon: LucideIcons.server,
+                badgeColor: scheme.primary,
+                title: context.l10n.agentNameLabel,
+                value: s.agentName,
+                onTap: _editName,
+              )
+            else
+              _InfoRow(
+                icon: LucideIcons.server,
+                title: context.l10n.agentNameLabel,
+                subtitle: s.agentName,
+              ),
           ],
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.accessSection,
           children: [
-            SettingsTile.toggle(
-              icon: LucideIcons.lock,
-              badgeColor: scheme.primary,
-              title: context.l10n.readOnlyMode,
+            if (s.canManageHost) ...[
+              SettingsTile.toggle(
+                icon: LucideIcons.lock,
+                badgeColor: scheme.primary,
+                title: context.l10n.readOnlyMode,
+                subtitle:
+                    s.readOnly
+                        ? context.l10n.writesRejected
+                        : context.l10n.phoneCanModify,
+                value: s.readOnly,
+                onChanged: (v) => _patch(readOnly: v),
+              ),
+              SettingsTile.toggle(
+                icon: LucideIcons.link,
+                badgeColor: scheme.primary,
+                title: context.l10n.enableShareLinks,
+                subtitle:
+                    s.allowSharing
+                        ? context.l10n.shareLinksEnabledHint
+                        : context.l10n.shareLinksDisabledHint,
+                value: s.allowSharing,
+                onChanged: (v) => _patch(allowSharing: v),
+              ),
+            ] else ...[
+              _InfoRow(
+                icon: LucideIcons.lock,
+                title: context.l10n.readOnlyMode,
+                subtitle:
+                    s.readOnly
+                        ? context.l10n.writesRejected
+                        : context.l10n.phoneCanModify,
+              ),
+              _InfoRow(
+                icon: LucideIcons.link,
+                title: context.l10n.enableShareLinks,
+                subtitle:
+                    s.allowSharing
+                        ? context.l10n.shareLinksEnabledHint
+                        : context.l10n.shareLinksDisabledHint,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: Spacing.md),
+        SettingsSection(
+          title: context.l10n.connectionRoutesTitle,
+          children: [
+            _InfoRow(
+              icon: LucideIcons.radio,
+              title: context.l10n.currentRouteLabel,
               subtitle:
-                  s.readOnly
-                      ? context.l10n.writesRejected
-                      : context.l10n.phoneCanModify,
-              value: s.readOnly,
-              onChanged: (v) => _patch(readOnly: v),
+                  activeAddress == null
+                      ? context.l10n.currentRouteUnavailable
+                      : context.l10n.currentRouteDescription(
+                        _routeName(context, activeAddress),
+                        activeAddress,
+                      ),
             ),
-            SettingsTile.toggle(
-              icon: LucideIcons.link,
-              badgeColor: scheme.primary,
-              title: context.l10n.enableShareLinks,
+            _InfoRow(
+              icon: LucideIcons.wifi,
+              title: context.l10n.routeLanName,
+              subtitle: routeHost.address,
+            ),
+            if (routeHost.tailscaleAddress != null &&
+                routeHost.tailscaleAddress != routeHost.address)
+              _InfoRow(
+                icon: LucideIcons.network,
+                title: context.l10n.routeTailscaleName,
+                subtitle: routeHost.tailscaleAddress,
+              ),
+            _InfoRow(
+              icon: LucideIcons.globe,
+              title: context.l10n.routeInternetName,
               subtitle:
-                  s.allowSharing
-                      ? context.l10n.shareLinksEnabledHint
-                      : context.l10n.shareLinksDisabledHint,
-              value: s.allowSharing,
-              onChanged: (v) => _patch(allowSharing: v),
+                  routeHost.internetAddress ?? context.l10n.routeNotConfigured,
+            ),
+            SettingsTile.nav(
+              icon: LucideIcons.settings2,
+              badgeColor: scheme.primary,
+              title: context.l10n.editInternetRouteTitle,
+              subtitle: context.l10n.editInternetRouteSubtitle,
+              onTap: _editInternetAddress,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.xs,
+                Spacing.xs,
+                Spacing.xs,
+                0,
+              ),
+              child: Text(
+                context.l10n.routePriorityAndSecurityHint,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+              ),
             ),
           ],
         ),
@@ -383,30 +617,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SettingsSection(
           title: context.l10n.limitsSection,
           children: [
-            ..._BandwidthSection(
-              bandwidth: _bandwidth,
-              onChanged: (bw) async {
-                final client = _client;
-                if (client == null) return;
-                final prev = _bandwidth;
-                setState(() => _bandwidth = bw);
-                try {
-                  final updated = await client.setBandwidth(
-                    maxUploadBytesPerSec: bw.maxUploadBytesPerSec,
-                    maxDownloadBytesPerSec: bw.maxDownloadBytesPerSec,
-                  );
-                  setState(() => _bandwidth = updated);
-                } catch (e) {
-                  setState(() => _bandwidth = prev);
-                  if (mounted) {
-                    showError(
-                      this.context,
-                      this.context.l10n.updateFailed(humanizeError(e)),
+            if (s.canManageHost)
+              ..._BandwidthSection(
+                bandwidth: _bandwidth,
+                onChanged: (bw) async {
+                  final client = _client;
+                  if (client == null) return;
+                  final prev = _bandwidth;
+                  setState(() => _bandwidth = bw);
+                  try {
+                    final updated = await client.setBandwidth(
+                      maxUploadBytesPerSec: bw.maxUploadBytesPerSec,
+                      maxDownloadBytesPerSec: bw.maxDownloadBytesPerSec,
                     );
+                    setState(() => _bandwidth = updated);
+                  } catch (e) {
+                    setState(() => _bandwidth = prev);
+                    if (mounted) {
+                      showError(
+                        this.context,
+                        this.context.l10n.updateFailed(humanizeError(e)),
+                      );
+                    }
                   }
-                }
-              },
-            ).rows,
+                },
+              ).rows,
             SettingsTile.nav(
               icon: LucideIcons.chartPie,
               badgeColor: Brand.accent,
@@ -425,25 +660,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: context.l10n.connectionDiagnosticsTitle,
               onTap: () => _openConnectionDiagnostics(context),
             ),
-            SettingsTile.nav(
-              icon: LucideIcons.scrollText,
-              badgeColor: Brand.amber,
-              title: context.l10n.activityLogTitle,
-              onTap:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => AuditLogScreen(host: widget.host),
+            if (s.canManageHost)
+              SettingsTile.nav(
+                icon: LucideIcons.scrollText,
+                badgeColor: Brand.amber,
+                title: context.l10n.activityLogTitle,
+                onTap:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => AuditLogScreen(host: widget.host),
+                      ),
                     ),
-                  ),
-            ),
+              ),
           ],
         ),
         const SizedBox(height: Spacing.md),
         SettingsSection(
           title: context.l10n.allowedFoldersSection,
           children: [
-            if (s.roots.isEmpty)
+            if (s.accessDenied)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(LucideIcons.lock, color: scheme.error, size: 18),
+                    const SizedBox(width: Spacing.xs),
+                    Expanded(
+                      child: Text(
+                        'This device has no folder access. Ask the PC owner to review its folder restriction.',
+                        style: TextStyle(color: scheme.error),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (s.roots.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
                 child: Text(
@@ -1082,6 +1335,64 @@ class _DeviceRow extends StatelessWidget {
                         color: scheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
+                    ),
+                  ),
+                if (screen._settings?.isAdmin == true && d.hasAppCapabilities)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.l10n.appAccessTitle,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          context.l10n.appAccessDefaultOffHint,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(context.l10n.viewAppsLabel),
+                          subtitle: Text(context.l10n.viewAppsDescription),
+                          value: d.viewApps ?? false,
+                          onChanged:
+                              screen._updatingAppCapabilities.contains(d.id)
+                                  ? null
+                                  : (enabled) =>
+                                      screen._updateDeviceAppCapabilities(
+                                        d,
+                                        viewApps: enabled,
+                                      ),
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(context.l10n.launchAppsLabel),
+                          subtitle: Text(context.l10n.launchAppsDescription),
+                          value:
+                              (d.viewApps ?? false) && (d.launchApps ?? false),
+                          onChanged:
+                              !(d.viewApps ?? false) ||
+                                      screen._updatingAppCapabilities.contains(
+                                        d.id,
+                                      )
+                                  ? null
+                                  : (enabled) =>
+                                      screen._updateDeviceAppCapabilities(
+                                        d,
+                                        launchApps: enabled,
+                                      ),
+                        ),
+                      ],
                     ),
                   ),
               ],

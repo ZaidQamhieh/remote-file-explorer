@@ -20,6 +20,7 @@ const (
 	AuditShareCreated  = "share_created"
 	AuditShareRevoked  = "share_revoked"
 	AuditAgentRestart  = "agent_restart"
+	AuditAppLaunch     = "app_launch"
 )
 
 // auditRetention is the number of most recent entries kept. The log records

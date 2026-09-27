@@ -56,14 +56,80 @@ type settingsBody struct {
 
 func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":        st.IsReadOnly(),
-			"roots":           st.Roots(),
-			"agentName":       st.AgentName(),
-			"allowSharing":    st.IsAllowSharing(),
-			"photoBackupRoot": st.PhotoBackupRoot(),
-		})
+		writeJSON(w, http.StatusOK, settingsJSON(st, r))
 	}
+}
+
+// settingsJSON returns global configuration only to password-authenticated
+// admin devices. For ordinary paired devices it reports the effective policy
+// applied to this request, so unrelated host-wide paths and unavailable photo
+// backup destinations are not disclosed.
+func settingsJSON(st *settings.Store, r *http.Request) map[string]any {
+	device := deviceFromContext(r)
+	admin := isAdminDevice(device)
+	// Authenticated routes install request-scoped Ops via deviceJailMiddleware.
+	// Construct the same effective view as a fallback for direct handler use,
+	// such as the server's unit-level handler seams.
+	effectiveOps := fsops.NewWithSettings(st)
+	if device != nil {
+		if device.JailRoot != "" {
+			effectiveOps = effectiveOps.Jailed(device.JailRoot)
+		}
+		if device.ReadOnly {
+			effectiveOps = effectiveOps.ReadOnly()
+		}
+	}
+	effectiveOps = opsFromContext(r.Context(), effectiveOps)
+	backupRoot := st.PhotoBackupRoot()
+	// This is a policy check only: it confirms that the destination is inside
+	// the caller's effective roots and that writes are not blocked by policy.
+	// The eventual filesystem operation can still fail due to OS permissions.
+	backupAvailable := backupRoot != "" && !effectiveOps.IsReadOnly()
+	if backupAvailable {
+		_, err := effectiveOps.Resolve(backupRoot)
+		backupAvailable = err == nil
+	}
+	if admin {
+		return map[string]any{
+			"isAdmin":               true,
+			"effectiveScope":        "global",
+			"accessDenied":          false,
+			"readOnly":              st.IsReadOnly(),
+			"roots":                 st.Roots(),
+			"agentName":             st.AgentName(),
+			"allowSharing":          st.IsAllowSharing(),
+			"photoBackupConfigured": backupRoot != "",
+			"photoBackupAvailable":  backupAvailable,
+			"photoBackupRoot":       backupRoot,
+		}
+	}
+
+	effectiveRoots := effectiveOps.Roots()
+	// Preserve the JSON array contract for denyAll; encoding a nil Go slice
+	// would send `null`, which is ambiguous for generated API clients.
+	if effectiveRoots == nil {
+		effectiveRoots = []string{}
+	}
+	globalRoots := st.Roots()
+	// An empty effective root list normally means unrestricted access. It
+	// means no access only when this device has an explicit jail that falls
+	// outside every configured host root (Ops.Jailed's denyAll case).
+	accessDenied := device != nil && device.JailRoot != "" && len(globalRoots) > 0 && len(effectiveRoots) == 0
+	response := map[string]any{
+		"isAdmin":               false,
+		"effectiveScope":        "device",
+		"readOnly":              effectiveOps.IsReadOnly(),
+		"roots":                 effectiveRoots,
+		"accessDenied":          accessDenied,
+		"agentName":             st.AgentName(),
+		"allowSharing":          st.IsAllowSharing(),
+		"photoBackupConfigured": backupRoot != "",
+		"photoBackupAvailable":  backupAvailable,
+	}
+	if backupAvailable {
+		response["photoBackupRoot"] = backupRoot
+	}
+	return response
 }
 
 func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
@@ -109,13 +175,7 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"readOnly":        st.IsReadOnly(),
-			"roots":           st.Roots(),
-			"agentName":       st.AgentName(),
-			"allowSharing":    st.IsAllowSharing(),
-			"photoBackupRoot": st.PhotoBackupRoot(),
-		})
+		writeJSON(w, http.StatusOK, settingsJSON(st, r))
 	}
 }
 
@@ -123,6 +183,10 @@ func patchSettingsHandler(st *settings.Store) http.HandlerFunc {
 
 func getBandwidthHandler(st *settings.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "admin device required")
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"maxUploadBytesPerSec":   st.MaxUploadBytesPerSec(),
 			"maxDownloadBytesPerSec": st.MaxDownloadBytesPerSec(),
@@ -178,18 +242,43 @@ func deviceJSON(d store.Device, cur *store.Device) map[string]any {
 		"lastVersion": d.LastVersion,
 		"jailRoot":    d.JailRoot,
 		"readOnly":    d.ReadOnly,
+		"viewApps":    d.ViewApps,
+		"launchApps":  d.LaunchApps,
 		"viaLogin":    d.ViaLogin,
 	}
 }
 
 func listDevicesHandler(db *store.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		cur := deviceFromContext(r)
+		if !isAdminDevice(cur) {
+			if cur == nil {
+				writeJSON(w, http.StatusOK, []map[string]any{})
+				return
+			}
+			self, err := db.GetDeviceByID(cur.ID)
+			if err != nil {
+				writeInternal(w, "list caller device", err)
+				return
+			}
+			if self == nil {
+				writeJSON(w, http.StatusOK, []map[string]any{})
+				return
+			}
+			writeJSON(w, http.StatusOK, []map[string]any{{
+				"id":       self.ID,
+				"label":    self.Label,
+				"created":  self.Created.Unix(),
+				"lastSeen": self.LastSeen.Unix(),
+				"current":  true,
+			}})
+			return
+		}
 		devices, err := db.ListDevices()
 		if err != nil {
 			writeInternal(w, "list devices", err)
 			return
 		}
-		cur := deviceFromContext(r)
 		out := make([]map[string]any, 0, len(devices))
 		for _, d := range devices {
 			out = append(out, deviceJSON(d, cur))
@@ -242,12 +331,13 @@ func deleteDeviceHandler(db *store.DB) func(http.ResponseWriter, *http.Request, 
 	}
 }
 
-// deviceJailBody is the PATCH /v1/devices/{id} request body: partial updates
-// to another device's per-device path jail and/or read-only flag, mirroring
-// settingsBody's pointer-field pattern (only fields present are changed).
-type deviceJailBody struct {
-	JailRoot *string `json:"jailRoot"`
-	ReadOnly *bool   `json:"readOnly"`
+// deviceUpdateBody is the PATCH /v1/devices/{id} request body. Pointer fields
+// distinguish an omitted permission from an explicit false value.
+type deviceUpdateBody struct {
+	JailRoot   *string `json:"jailRoot"`
+	ReadOnly   *bool   `json:"readOnly"`
+	ViewApps   *bool   `json:"viewApps"`
+	LaunchApps *bool   `json:"launchApps"`
 }
 
 // setDeviceJailHandler implements PATCH /v1/devices/{id}: sets a target
@@ -272,9 +362,21 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such device")
 			return
 		}
-		var b deviceJailBody
+		var b deviceUpdateBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+			return
+		}
+		viewApps := target.ViewApps
+		launchApps := target.LaunchApps
+		if b.ViewApps != nil {
+			viewApps = *b.ViewApps
+		}
+		if b.LaunchApps != nil {
+			launchApps = *b.LaunchApps
+		}
+		if launchApps && !viewApps {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "launchApps requires viewApps")
 			return
 		}
 		if b.JailRoot != nil {
@@ -289,13 +391,19 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
+		if b.ViewApps != nil || b.LaunchApps != nil {
+			if err := db.SetDeviceAppPermissions(id, viewApps, launchApps); err != nil {
+				writeInternal(w, "set device app permissions", err)
+				return
+			}
+		}
 		updated, err := db.GetDeviceByID(id)
 		if err != nil || updated == nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "device vanished mid-update")
 			return
 		}
 		audit(db, r, store.AuditDeviceUpdated, id,
-			fmt.Sprintf("jailRoot=%q readOnly=%t", updated.JailRoot, updated.ReadOnly))
+			fmt.Sprintf("jailRoot=%q readOnly=%t viewApps=%t launchApps=%t", updated.JailRoot, updated.ReadOnly, updated.ViewApps, updated.LaunchApps))
 		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
 	}
 }

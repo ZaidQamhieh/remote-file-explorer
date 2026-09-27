@@ -53,14 +53,27 @@ class HostStore {
     await _saveHosts(hosts);
   }
 
-  /// Commits a freshly-paired [host] plus its [token] and (if TOFU pinned)
-  /// [fingerprint] as one unit (PR-37).
+  /// Replaces stored metadata without changing the host's list position.
+  /// Falls back to [addHost] if the host is not present yet.
+  Future<void> updateHost(Host host) async {
+    final hosts = listHosts();
+    final index = hosts.indexWhere((stored) => stored.id == host.id);
+    if (index < 0) {
+      await addHost(host);
+      return;
+    }
+    hosts[index] = host;
+    await _saveHosts(hosts);
+  }
+
+  /// Commits a freshly-paired [host], its [token], and the supplied secure
+  /// certificate [fingerprint] as one unit (PR-37).
   ///
   /// Every pairing flow (QR/manual/login/register) used to call
   /// [addHost]/[setToken]/[setFingerprint] as three separate awaits; a
   /// failure between them (e.g. secure-storage write failure) left a host
-  /// visible in the list with no token — unusable — or no pinned
-  /// fingerprint — TOFU silently lost. Delegates to [commitPairingSteps] so
+  /// visible in the list with no token — unusable — or without its secure
+  /// fingerprint pin. Delegates to [commitPairingSteps] so
   /// the rollback ordering is unit-testable without a real secure storage.
   Future<void> commitPairing(
     Host host, {
@@ -115,7 +128,7 @@ class HostStore {
       _secure.write(key: _tokenKey(hostId), value: token);
 
   // ---------------------------------------------------------------------------
-  // Cert fingerprint (sensitive; mirrors host.certFingerprint for quick lookup)
+  // Secure certificate fingerprint pin (authoritative for trust decisions)
   // ---------------------------------------------------------------------------
 
   Future<String?> getFingerprint(String hostId) =>

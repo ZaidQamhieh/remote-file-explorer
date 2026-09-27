@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
@@ -57,15 +58,31 @@ bool isSafeLocalName(String name) {
   return true;
 }
 
-/// Finds the receiver's own paired [Host] whose `certFingerprint` matches
-/// [certFingerprint] — i.e. the same agent the sender is paired to — or
-/// returns null if this device isn't paired to that PC.
+/// Finds the receiver's own paired [Host] whose secure-store certificate pin
+/// matches [certFingerprint] — i.e. the same agent the sender is paired to —
+/// or returns null if this device isn't paired to that PC.
 ///
-/// Pure and unit-testable on its own (see `test/features/handoff/`):
-/// `Host.id` is per-device and NOT comparable across phones (it's the
-/// device's own row in the agent's `devices` table), so matching must go
-/// through `certFingerprint`, which is identical for every device paired to
-/// the same agent.
+/// Only this secure-store-backed matcher is used by the QR receiver.
+Future<Host?> matchHandoffHostFromStore(
+  HostStore store,
+  String certFingerprint,
+) async {
+  final expected = AgentClient.normalizeFingerprint(certFingerprint);
+  if (expected == null) return null;
+  for (final host in store.listHosts()) {
+    final pinned = AgentClient.normalizeFingerprint(
+      await store.getFingerprint(host.id),
+    );
+    if (pinned == expected) {
+      return host.copyWith(certFingerprint: pinned);
+    }
+  }
+  return null;
+}
+
+/// Legacy in-memory comparator retained for existing unit tests only.
+/// Production QR receive flow must use [matchHandoffHostFromStore] so the
+/// SharedPreferences copy cannot establish host identity.
 Host? matchHandoffHost(List<Host> hosts, String certFingerprint) {
   for (final host in hosts) {
     if (host.certFingerprint == certFingerprint) return host;
@@ -108,8 +125,14 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
 
     setState(() => _processing = true);
     try {
-      final store = await ref.read(hostStoreProvider.future);
-      final host = matchHandoffHost(store.listHosts(), payload.certFingerprint);
+      Host? host;
+      try {
+        final store = await ref.read(hostStoreProvider.future);
+        host = await matchHandoffHostFromStore(store, payload.certFingerprint);
+      } catch (_) {
+        if (mounted) showError(context, context.l10n.qrHandoffPinReadFailed);
+        return;
+      }
       if (host == null) {
         if (mounted) showError(context, context.l10n.qrHandoffNoHostMatch);
         return;

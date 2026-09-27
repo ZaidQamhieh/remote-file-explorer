@@ -88,17 +88,27 @@ func (s *DB) ListUsers() ([]User, error) {
 // be no way to obtain a device token except an existing pairing code).
 var ErrLastUser = errors.New("cannot delete the last remaining user")
 
+// ErrLoginAccountChanged is returned when an account changes after the login
+// handler verifies its password but before the device token is committed.
+var ErrLoginAccountChanged = errors.New("login account changed")
+
 // DeleteUser permanently removes a login account. Returns ErrLastUser if
 // username is the only account, or sql.ErrNoRows if no such account exists.
 func (s *DB) DeleteUser(username string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var count int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return err
 	}
 	if count <= 1 {
 		return ErrLastUser
 	}
-	res, err := s.db.Exec(`DELETE FROM users WHERE username=?`, username)
+	res, err := tx.Exec(`DELETE FROM users WHERE username=?`, username)
 	if err != nil {
 		return err
 	}
@@ -109,5 +119,12 @@ func (s *DB) DeleteUser(username string) error {
 	if n == 0 {
 		return sql.ErrNoRows
 	}
-	return nil
+	// Revoke password-login sessions in the same transaction as the account
+	// removal. Code-paired devices are intentionally unaffected.
+	if _, err := tx.Exec(
+		`UPDATE devices SET revoked=1 WHERE via_login=1 AND username=?`, username,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

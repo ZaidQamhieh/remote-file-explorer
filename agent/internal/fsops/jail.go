@@ -59,6 +59,13 @@ func (o *Ops) ReadOnly() *Ops {
 	return &Ops{settings: roSettings{base: o.settings}, denyAll: o.denyAll}
 }
 
+// IsDenyAll reports whether this Ops has been explicitly configured to deny
+// every path. This is distinct from Roots() returning an empty slice: an
+// empty root list normally means an unjailed Ops that permits all paths.
+// Callers that derive a browsable surface from Roots() must check this before
+// treating an empty slice as unrestricted access or applying a fallback root.
+func (o *Ops) IsDenyAll() bool { return o.denyAll }
+
 // Jailed returns an Ops whose effective roots are the intersection of o's
 // base roots and extraRoot (a per-device path jail, e.g. Device.JailRoot).
 //

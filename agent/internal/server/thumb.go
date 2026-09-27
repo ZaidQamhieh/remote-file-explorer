@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -17,9 +18,14 @@ const defaultThumbSize = 256
 // maxThumbSize caps the requested size to keep rendering cost bounded.
 const maxThumbSize = 1024
 
+// maxConcurrentThumbRequests bounds endpoint work, including cache reads and
+// callers waiting on a coalesced render. Requests above this limit fail fast.
+const maxConcurrentThumbRequests = 8
+
 // --------- /thumb GET ---------
 
 func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
+	endpointSlots := make(chan struct{}, maxConcurrentThumbRequests)
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		path := r.URL.Query().Get("path")
@@ -41,14 +47,26 @@ func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
 			size = maxThumbSize
 		}
 
+		select {
+		case endpointSlots <- struct{}{}:
+			defer func() { <-endpointSlots }()
+		default:
+			w.Header().Set("Retry-After", "1")
+			writeError(w, http.StatusTooManyRequests, "THUMB_BUSY", "too many thumbnail requests; retry shortly")
+			return
+		}
+
 		resolved, err := ops.Resolve(path)
 		if err != nil {
 			handleFsError(w, err)
 			return
 		}
 
-		data, err := rn.Get(resolved, size)
+		data, err := rn.GetContext(r.Context(), resolved, size)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return
+			}
 			if errors.Is(err, thumbs.ErrNotSupported) || os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_AVAILABLE", "no thumbnail available for this file")
 				return

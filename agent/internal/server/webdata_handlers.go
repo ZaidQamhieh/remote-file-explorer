@@ -7,9 +7,7 @@ package server
 import (
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"path"
 	"regexp"
@@ -20,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
 // goLogPrefix matches the "2006/01/02 15:04:05 " stamp Go's log.Printf
@@ -149,10 +148,15 @@ func listTransfersHandler(db *store.DB) http.HandlerFunc {
 
 // --------- DELETE /transfers/{id} ---------
 
-// deleteTransferHandler removes a transfer row from history. This does not
-// touch the uploaded file itself — it only clears the session record, e.g. a
-// stale "open" row the client never finalized, or a "failed" one.
-func deleteTransferHandler(db *store.DB) http.HandlerFunc {
+// deleteTransferHandler removes an inactive transfer session and its temp
+// file. Production supplies the manager so deletion shares its activity lease
+// with uploads/completion and the stale sweeper. The variadic form preserves
+// the handler's DB-only test seam for records without temp files.
+func deleteTransferHandler(db *store.DB, managers ...*transfer.Manager) http.HandlerFunc {
+	var manager *transfer.Manager
+	if len(managers) > 0 {
+		manager = managers[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		// Only the device that opened the session (or an admin) may drop its
@@ -169,20 +173,20 @@ func deleteTransferHandler(db *store.DB) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
 			return
 		}
-		// Drop the session's temp file too. Deleting the row alone orphans it:
-		// nothing else knows the path, so the bytes sit in the temp dir
-		// forever (PR-12). A completed session already moved its temp away.
-		if t.Status != "completed" && t.TempPath != "" {
-			if rmErr := os.Remove(t.TempPath); rmErr != nil && !os.IsNotExist(rmErr) {
-				log.Printf("delete transfer %s: remove temp file: %v", id, rmErr)
-			}
+		if manager != nil {
+			err = manager.DeleteSession(id)
+		} else {
+			err = db.DeleteTransfer(id)
 		}
-		err = db.DeleteTransfer(id)
 		switch {
 		case err == nil:
 			w.WriteHeader(http.StatusNoContent)
 		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
+		case errors.Is(err, transfer.ErrNotFound):
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no such transfer")
+		case errors.Is(err, transfer.ErrSessionActive):
+			writeError(w, http.StatusConflict, "TRANSFER_ACTIVE", "transfer is currently in use; retry after the request finishes")
 		default:
 			writeInternal(w, "delete transfer", err)
 		}

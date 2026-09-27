@@ -50,7 +50,8 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// Keep RemoteAddr as the socket peer. There is no configured trusted proxy,
+	// so RealIP would let callers forge the source address with forwarded headers.
 	r.Use(middleware.Recoverer)
 
 	nonces := newNonceStore()
@@ -65,7 +66,16 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			// Transfer history is scoped to the caller inside the handlers:
 			// a non-admin sees only its own sessions (PR-03).
 			r.Get("/transfers/list", listTransfersHandler(db))
-			r.Delete("/transfers/{id}", deleteTransferHandler(db))
+			r.Delete("/transfers/{id}", deleteTransferHandler(db, tm))
+		})
+
+		// Host app catalog and launch are authenticated separately from the
+		// filesystem jail. Both handlers enforce the caller's explicit app
+		// capabilities; ViaLogin/admin provenance grants no implicit access.
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware(db))
+			r.Get("/apps", listAppsHandler())
+			r.Post("/apps/{id}/launch", launchAppHandler(db))
 		})
 
 		// Admin-only control plane: whole-host telemetry, login-account

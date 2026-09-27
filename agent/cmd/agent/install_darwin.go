@@ -3,10 +3,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const launchdLabel = "com.rfe.agent"
@@ -36,7 +39,7 @@ func installService(execPath string) error {
 	<true/>
 </dict>
 </plist>
-`, launchdLabel, execPath)
+`, launchdLabel, plistXMLText(execPath))
 	if err := os.WriteFile(path, []byte(plist), 0o644); err != nil {
 		return fmt.Errorf("write plist: %w", err)
 	}
@@ -52,18 +55,99 @@ func installService(execPath string) error {
 	return nil
 }
 
+func startService() error {
+	path, err := launchAgentPlistPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("agent is not installed; run `rfe-agent install` first")
+		}
+		return fmt.Errorf("check LaunchAgent file: %w", err)
+	}
+	domain := launchAgentDomain()
+	bootstrap := exec.Command("launchctl", "bootstrap", domain, path)
+	if output, err := bootstrap.CombinedOutput(); err == nil {
+		fmt.Printf("Started %s\n", launchdLabel)
+		return nil
+	} else {
+		// The job may already be loaded after a prior start or login. In that
+		// case, kickstart it; if it is not loaded, preserve the bootstrap error.
+		kickstart := exec.Command("launchctl", "kickstart", "-k", domain+"/"+launchdLabel)
+		if kickOutput, kickErr := kickstart.CombinedOutput(); kickErr == nil {
+			fmt.Printf("Started %s\n", launchdLabel)
+			return nil
+		} else {
+			return fmt.Errorf("launchctl bootstrap failed (%s): %v; kickstart failed (%s): %v",
+				strings.TrimSpace(string(output)), err, strings.TrimSpace(string(kickOutput)), kickErr)
+		}
+	}
+}
+
+func stopService() error {
+	path, err := launchAgentPlistPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("agent is not installed; run `rfe-agent install` first")
+		}
+		return fmt.Errorf("check LaunchAgent file: %w", err)
+	}
+	cmd := exec.Command("launchctl", "bootout", launchAgentDomain()+"/"+launchdLabel)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("launchctl bootout failed (%s): %w", strings.TrimSpace(string(output)), err)
+	}
+	fmt.Printf("Stopped %s; it remains configured to start at login\n", launchdLabel)
+	return nil
+}
+
+func serviceStatus() (string, error) {
+	path, err := launchAgentPlistPath()
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return "not installed", nil
+		}
+		return "", fmt.Errorf("check LaunchAgent file: %w", err)
+	}
+	cmd := exec.Command("launchctl", "print", launchAgentDomain()+"/"+launchdLabel)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "installed; state unavailable (service not loaded or GUI session unavailable)", nil
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "state = ") {
+			return "installed; state=" + strings.TrimSpace(strings.TrimPrefix(line, "state = ")), nil
+		}
+	}
+	return "installed; loaded (launchd state not reported)", nil
+}
+
+func launchAgentDomain() string {
+	return fmt.Sprintf("gui/%d", os.Getuid())
+}
+
+func plistXMLText(value string) string {
+	var encoded bytes.Buffer
+	_ = xml.EscapeText(&encoded, []byte(value))
+	return encoded.String()
+}
+
 func uninstallService() error {
 	path, err := launchAgentPlistPath()
 	if err != nil {
 		return err
 	}
 
-	// Best-effort: unload even if it's already stopped, so a half-installed
+	// Best-effort: unload even if it is already stopped, so a half-installed
 	// state still cleans up.
-	cmd := exec.Command("launchctl", "unload", "-w", path)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	_ = cmd.Run()
+	_ = stopService()
 
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove plist: %w", err)

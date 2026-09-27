@@ -5,15 +5,18 @@
 Two components plus a shared contract:
 
 - **`app/`** — Flutter mobile app (Android-focused, v1.42+). All UI + client orchestration.
-- **`agent/`** — Go host service on each Windows/Linux computer. Owns filesystem access, the
+- **`agent/`** — Go host service on each Windows/macOS/Linux computer. Owns filesystem access, the
   transfer engine, search, thumbnails, settings, and the device/token store.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow (source of truth).
 
-The app talks to the agent over **HTTPS (HTTP/2) + TLS**, reachable on the LAN by IP or, from
-anywhere, via the computer's **Tailscale** address — same code path. mDNS auto-discovery on the
-LAN is implemented (`agent/internal/mdns`) so the phone can find an agent without manual IP
-entry. Because Tailscale (WireGuard) already provides NAT traversal, stable addressing, and
-encryption, there is **no cloud server and no cloud database**.
+The app talks to the agent over **HTTPS (HTTP/2) + TLS**. On a local network it can connect by
+IP or hostname without a VPN. **Tailscale is optional** and provides a private remote route when
+installed on both devices; without it, remote access requires another routable path. The agent
+advertises `_rfe._tcp` over mDNS/DNS-SD, but the Flutter app does not currently browse for those
+records, so in-app host discovery still relies on QR pairing or manually entered addresses. The
+app can save a direct HTTPS hostname or IP as a final connection fallback. The PC owner must
+configure DNS, router NAT, and firewall access; the app does not modify network settings. The
+project currently has **no cloud relay or cloud database**.
 
 ## Key decisions
 
@@ -21,21 +24,39 @@ encryption, there is **no cloud server and no cloud database**.
 |------|----------|
 | Mobile framework | Flutter (Riverpod, dio, flutter_secure_storage) |
 | Backend | Custom Go host agent — single static binary, runs as a service |
-| Remote access | Tailscale (already in use) + LAN by IP/hostname; mDNS auto-discovery |
-| Transport security | TLS with self-signed cert; phone pins the SHA-256 fingerprint at pairing (TOFU) |
-| Storage | SQLite on the agent; local DB + Keychain/Keystore on the phone |
+| Connection routes | LAN, optional Tailscale, then a user-configured direct HTTPS address; no built-in relay |
+| Agent discovery | Agent-side mDNS/DNS-SD advertisement; Flutter app-side browsing is not implemented |
+| Transport security | TLS with a self-signed cert; enrollment pins a SHA-256 fingerprint obtained out of band |
+| Pin storage | `HostStore` Keychain/Keystore secure storage is authoritative; the SharedPreferences copy is not a trust source |
+| Storage | SQLite on the agent; app metadata locally and tokens/pins in Keychain/Keystore secure storage |
+| Host app launch | Current-user registrations: Windows AppsFolder, Linux XDG desktop, and macOS standard `.app` folders; per-device grants default off; launch by opaque ID only |
 
 ## Security model (summary)
 
-1. TLS everywhere; fingerprint pinning on top of Tailscale's WireGuard layer.
-2. Device pairing (via `rfe-agent pair`, QR or manual entry) issues a revocable bearer token
-   (stored in Keychain/Keystore on the phone).
-3. Per-agent authorization: root-path jail, optional read-only mode, device revocation/removal,
-   `/pair` rate limiting (10/min).
-4. Strict path normalization + jail enforcement against traversal/symlink escape.
+1. TLS is used for all app-agent API traffic. New pairing requires a fingerprint from a trusted
+   independent source (for example, the intended host's local display or console); the app checks
+   the pin before sending pairing codes, passwords, or authenticated request data. Tailscale may
+   add a private network route, but certificate pinning is independent of it. Direct HTTPS still
+   uses the same pin; a TLS-terminating proxy with a different certificate is not supported.
+2. Paired-device fingerprints and bearer tokens are stored in Keychain/Keystore secure storage.
+   The secure-store fingerprint is authoritative; a missing or invalid value fails closed and is
+   never recovered from the legacy SharedPreferences host record.
+3. Device pairing (via `rfe-agent pair`, QR or manual entry) issues a revocable bearer token.
+   Per-agent authorization includes a root-path jail, optional read-only mode, device
+   revocation/removal, and `/pair` rate limiting (10/min). App-catalog viewing and app launching
+   are separate per-device grants, default off; admin provenance does not bypass them.
+4. Strict path normalization + jail enforcement guards against traversal and symlink escape.
+5. App launch accepts only an opaque ID from the agent's current-user app catalog. The agent
+   re-resolves it before launch, does not accept client paths/commands/arguments, checks for an
+   interactive desktop session, applies rate/concurrency limits, and audits the result. Catalog
+   support is Windows and Linux registered desktop entries plus macOS `.app` bundles in standard
+   application folders; arbitrary executables, macOS aliases, and apps outside those folders are
+   not included.
 
-There is currently no audit log — device actions (revoke/remove, settings changes) are not
-recorded to a persistent log; this is a possible future addition.
+The agent has a persistent SQLite audit trail for account, device, share-link, app-launch, and
+restart events (including pair/register/login, device changes, share creation/revocation, app
+launch outcomes, and agent restart). The audit endpoint is admin-only. File operations are
+deliberately not recorded in that trail.
 
 ## Transfers (the core engineering)
 
@@ -60,7 +81,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 
 | File | Responsibility |
 |------|----------------|
-| `core/api/agent_client.dart` (~840) | **The one pinned HTTP client.** ALL network + content access goes through it (dio, TOFU cert pin, bearer token). No raw dio anywhere else. |
+| `core/api/agent_client.dart` (~840) | **The one pinned HTTP client.** App-agent requests use Dio, verify the secure-store/out-of-band certificate pin before request data is sent, and add the bearer token only for pinned hosts. |
 | `features/explorer/explorer_state.dart` (~590) | **`ExplorerNotifier`** — the state hub. Every explorer mutation (navigate, select, sort, refresh, file ops) goes through it; widgets never call `AgentClient` directly. |
 | `features/explorer/explorer_screen.dart` (~950) | The central browse UI (list/grid, breadcrumb, selection, drag, view options) — wires widgets to `ExplorerNotifier`. |
 | `core/settings/settings_controller.dart` (~480) | Two-tier settings: app defaults + per-device overrides; the resolution logic both screens read. |
@@ -71,7 +92,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 |------|-------|----------------|
 | api | `api/providers.dart` | Riverpod providers exposing `AgentClient` + derived state. |
 | backup | `backup/{backup_service,config_backup}.dart` | Full-app backup/restore + settings-only config export/import. |
-| models | `models/{entry,listing,device,health,drive,host,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
+| models | `models/{entry,listing,device,health,drive,host,host_app,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
 | notifications | `notifications/notification_service.dart` | Local notification channel setup + dispatch (transfer progress/completion). |
 | platform | `platform/{file_opener,transfer_notifications,wol}.dart` | Platform-channel glue: open-with, native transfer notifications, Wake-on-LAN send. |
 | security | `security/device_identity.dart` | Generates/persists the phone's device identity keypair (paired token binding). |
@@ -88,7 +109,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 | Feature | Key files | Responsibility |
 |---------|-----------|----------------|
 | home | `home_shell.dart`, `home_state.dart`, `widgets/app_bottom_nav.dart` | Top-level app shell + bottom nav tab state, hosting the other feature screens. |
-| hosts | `host_list_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer/host list + per-host card and storage gauge. |
+| hosts | `host_list_screen.dart`, `host_apps_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer list, per-host card/storage gauge, and host app catalog/Run screen. |
 | explorer | (hub files above) + `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
 | bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
 | preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
@@ -124,9 +145,10 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/search_index.go` | Background index rebuild backing `search.go`. |
 | `internal/server/thumb.go` | Thumbnail endpoint. |
 | `internal/server/settings_handlers.go` | Live-mutable agent settings endpoints. |
+| `internal/server/apps_handlers.go` + `apps_{linux,windows,darwin,other}.go` | Per-device app catalog/launch routes and OS-specific current-user app inventory/launch adapters. |
 | `internal/server/update_handlers.go` | `/v1/app/latest` + `/v1/app/download` (serves APKs from `updates/`). |
 | `internal/server/pair.go` | Pairing endpoint (consumes a DB code, issues a token). |
-| `internal/server/ratelimit.go` | `/pair` rate limiter (10/min). |
+| `internal/server/ratelimit.go` | Pairing, app-catalog, and app-launch rate limiters. |
 | `internal/server/share_handlers.go` | One-time share-link mint/serve/revoke/list — see `docs/r1-share-link-threat-model.md`. |
 | `internal/server/sse_handler.go` | Server-sent-events endpoint — server-side half of the PR-59 finding (client parser lives in the frozen `app/lib` tree). |
 | `internal/server/status_handlers.go` + `status_disk_{unix,windows}.go` | `/v1/health`/status endpoint, incl. OS-specific disk-space lookup. |
@@ -151,8 +173,8 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/store/store.go` | SQLite store: devices, tokens, pairing codes, transfer bitmaps. Busy-timeout DSN for daemon+CLI concurrency. |
 | `internal/updates/updates.go` | Update-channel management (the `updates/` dir). |
 | `internal/netinfo/netinfo.go` | LAN + Tailscale address detection. |
-| `internal/mdns/mdns.go` | mDNS/DNS-SD advertisement (`_rfe._tcp`) so the phone can discover an agent on the LAN without typing an IP. |
-| `internal/webui/` (`webui.go` + `src/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. Tailwind CSS built from `src/input.css` via `npm run build:css`; markup (`dist/index.html`) is vanilla, no build step. |
+| `internal/mdns/mdns.go` | Agent-side mDNS/DNS-SD advertisement (`_rfe._tcp`). The Flutter app does not currently browse these records; users still scan a pairing QR or enter the address. |
+| `internal/webui/` (`webui.go`, `web/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. The Vite + React + TypeScript source lives in `web/`; run `npm run build` there to generate `dist/`, which Go embeds into the agent binary. Edit `web/src/` and rebuild; treat `dist/` as generated output. |
 
 ## Test → source map (used by `scripts/test-affected.sh`)
 

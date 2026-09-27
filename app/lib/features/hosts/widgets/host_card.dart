@@ -17,8 +17,9 @@ import '../../../core/ui/pressable.dart';
 import '../../explorer/drives_view.dart';
 import '../../explorer/explorer_screen.dart';
 import '../../home/home_state.dart';
+import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
-import 'hero_ring.dart';
+import '../host_apps_screen.dart';
 import 'storage_gauge.dart';
 
 /// Picks the root screen to open when browsing [host], based on its most
@@ -33,15 +34,8 @@ Widget explorerRootFor(Health? health, Host host) {
   return isWindows ? DrivesView(host: host) : ExplorerScreen(host: host);
 }
 
-/// A single host's row: icon-badge with a status dot, name/subtitle line, a
-/// storage-usage bar when online, and a trailing overflow-menu kebab into
-/// [SettingsScreen]/forget — matches the confirmed "Floating profile" Devices
-/// mockup (`wiki/entities/remote-file-explorer.md`, 2026-07-23).
-///
-/// When [isHero] is true, the same ping/health/drives state instead feeds
-/// [_HeroCardBody] — the confirmed "Circular Orbit" hero shell — for the
-/// first (most-recently-paired) host in the list. Every network call and tap
-/// handler is shared between the two shells; only the outer visuals differ.
+/// A host dashboard card with status, active route/version, drive gauges, and
+/// direct Browse/Search/Transfers/Settings actions.
 ///
 /// Pings the host's `/health` on mount to determine online/offline state and,
 /// when online, fetches `AgentClient.drives()` for the storage bar (gracefully
@@ -63,8 +57,8 @@ class HostCard extends ConsumerStatefulWidget {
   /// Purely a display callback — doesn't affect the ping/health logic below.
   final ValueChanged<bool>? onOnlineChanged;
 
-  /// Renders the confirmed "Circular Orbit" hero shell instead of the
-  /// regular row. Set by [HostListScreen] for the first host only.
+  /// Gives the first, most-recently-paired host a slightly stronger title
+  /// hierarchy while keeping the same dashboard layout and actions.
   final bool isHero;
 
   @override
@@ -75,9 +69,9 @@ class _HostCardState extends ConsumerState<HostCard> {
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
 
-  /// Address the most recent successful client used — drives the "· Tailscale"
-  /// subtitle suffix. `null` while unknown (offline / not yet pinged).
-  bool? _isTailscaleActive;
+  /// Address used by the most recent successful client, so the card can show
+  /// whether it is reached over LAN, Tailscale, or the direct HTTPS route.
+  String? _activeAddress;
 
   /// Last-seen timestamp loaded from the store, shown when offline.
   DateTime? _lastSeen;
@@ -104,7 +98,7 @@ class _HostCardState extends ConsumerState<HostCard> {
       if (mounted) {
         setState(() {
           _lastSeen = now;
-          _isTailscaleActive = client!.isActiveAddressTailscale;
+          _activeAddress = client!.activeAddress;
         });
       }
       // _drivesFuture stays in flight after _ping returns (its own
@@ -178,10 +172,60 @@ class _HostCardState extends ConsumerState<HostCard> {
     );
   }
 
+  void _openApps(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => HostAppsScreen(host: widget.host)),
+    );
+  }
+
   /// Switches to the Transfers tab (index 2, see [selectedTabIndexProvider]'s
-  /// doc comment) — the hero shell's "Transfers" cardinal action.
+  /// doc comment) while keeping this host selected for per-host transfer views.
   void _openTransfers() {
+    ref.read(activeHostProvider.notifier).state = ActiveHost(
+      host: widget.host,
+      health: null,
+    );
     ref.read(selectedTabIndexProvider.notifier).state = 2;
+  }
+
+  /// Opens the same full search screen as the explorer's search action. If a
+  /// result is chosen, switch to Files at that result's parent directory.
+  Future<void> _openSearch(BuildContext context) async {
+    final health = await _pingFuture;
+    if (!mounted || health == null) return;
+
+    AgentClient? client;
+    try {
+      client = await buildClientForHost(ref.read, widget.host.id);
+      if (!context.mounted) return;
+      final path = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder:
+              (_) => SearchScreen(
+                host: widget.host,
+                client: client!,
+                currentPath: '/',
+              ),
+        ),
+      );
+      if (!mounted || path == null) return;
+      ref.read(activeHostProvider.notifier).state = ActiveHost(
+        host: widget.host,
+        health: health,
+        initialPath: path,
+      );
+      ref.read(selectedTabIndexProvider.notifier).state = 1;
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.errorLabel(humanizeError(error))),
+          ),
+        );
+      }
+    } finally {
+      client?.close();
+    }
   }
 
   Future<void> _sendWol(BuildContext context) async {
@@ -250,27 +294,15 @@ class _HostCardState extends ConsumerState<HostCard> {
           }
         }
 
-        if (widget.isHero) {
-          return _HeroCardBody(
-            host: widget.host,
-            online: online,
-            checking: checking,
-            drivesFuture: _drivesFuture,
-            onOpen: onTap,
-            onSettingsTap: () => _openSettings(context),
-            onTransfersTap: _openTransfers,
-            onRefresh: () => setState(() => _pingFuture = _ping()),
-            onForget: () => _confirmRemove(context),
-          );
-        }
         return _CardBody(
           host: widget.host,
           health: snap.data,
           online: online,
           checking: checking,
-          isTailscaleActive: _isTailscaleActive,
+          activeAddress: _activeAddress,
           lastSeen: _lastSeen,
           drivesFuture: _drivesFuture,
+          isFeatured: widget.isHero,
           lowDiskThresholdBytes:
               ref
                   .watch(settingsProvider)
@@ -278,9 +310,16 @@ class _HostCardState extends ConsumerState<HostCard> {
                   ?.app
                   .lowDiskThresholdBytes ??
               0,
-          onTap: onTap,
-          onLongPress: () => _confirmRemove(context),
+          onTap:
+              checking || (!online && widget.host.macAddress == null)
+                  ? null
+                  : onTap,
+          onBrowseTap: () => _openExplorer(context),
+          onSearchTap: () => _openSearch(context),
+          onTransfersTap: _openTransfers,
+          onAppsTap: () => _openApps(context),
           onSettingsTap: () => _openSettings(context),
+          onRefresh: () => setState(() => _pingFuture = _ping()),
           onForget: () => _confirmRemove(context),
         );
       },
@@ -289,14 +328,7 @@ class _HostCardState extends ConsumerState<HostCard> {
 }
 
 // ---------------------------------------------------------------------------
-// Card body — rebuilt directly from the mockup's actual CSS (docs/mockup-
-// reference/mockup.css): `.card` (background/1px border/r-lg/14px padding,
-// no Material Card/elevation), `.avatar`+`.pulse-dot` (40x40 gradient box,
-// r-md, with an 11x11 ring-bordered status dot overlapping its corner),
-// `.row-title`/`.row-sub` (14px/500 and 11.5px sizes), `.progress` (5px
-// full-round bar), and a trailing `.iconbtn` (34x34 circular tap target,
-// online) or `.badge.neutral` pill (offline) — no ListTile/IconButton/
-// ShadCard, no Material ripple (see [Pressable]).
+// Expressive M3 host dashboard card.
 // ---------------------------------------------------------------------------
 
 class _CardBody extends StatelessWidget {
@@ -305,13 +337,18 @@ class _CardBody extends StatelessWidget {
     required this.health,
     required this.online,
     required this.checking,
-    required this.isTailscaleActive,
+    required this.activeAddress,
     required this.lastSeen,
     required this.drivesFuture,
+    required this.isFeatured,
     required this.lowDiskThresholdBytes,
     required this.onTap,
-    required this.onLongPress,
+    required this.onBrowseTap,
+    required this.onSearchTap,
+    required this.onTransfersTap,
+    required this.onAppsTap,
     required this.onSettingsTap,
+    required this.onRefresh,
     required this.onForget,
   });
 
@@ -319,38 +356,43 @@ class _CardBody extends StatelessWidget {
   final Health? health;
   final bool online;
   final bool checking;
-  final bool? isTailscaleActive;
+  final String? activeAddress;
   final DateTime? lastSeen;
   final Future<List<Drive>>? drivesFuture;
+  final bool isFeatured;
   final int lowDiskThresholdBytes;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback? onTap;
+  final VoidCallback onBrowseTap;
+  final VoidCallback onSearchTap;
+  final VoidCallback onTransfersTap;
+  final VoidCallback onAppsTap;
   final VoidCallback onSettingsTap;
+  final VoidCallback onRefresh;
   final VoidCallback onForget;
 
-  /// `runtime.GOOS` as reported by `/health` ("windows"/"linux"/"darwin"),
-  /// capitalized. The mockup shows a full OS+version string ("Windows 11",
-  /// "Ubuntu 24.04") — the agent's `/health` endpoint only reports the bare
-  /// OS name, no version, so that detail can't be shown without fabricating
-  /// it.
-  String? _osLabel() {
-    final os = health?.os;
-    if (os == null || os.isEmpty) return null;
-    return os[0].toUpperCase() + os.substring(1);
+  String _routeLabel(BuildContext context) {
+    final route = host.routeForAddress(activeAddress ?? host.address);
+    return switch (route) {
+      HostRoute.lan => context.l10n.networkLan,
+      HostRoute.tailscale => context.l10n.networkTailscale,
+      HostRoute.directHttps => context.l10n.networkInternet,
+      HostRoute.custom => 'Custom route',
+    };
   }
 
   String _subtitle(BuildContext context) {
+    if (!online || checking) return '';
+    final version = health?.version.trim() ?? '';
+    final route = _routeLabel(context);
+    return version.isEmpty ? route : 'v$version · $route';
+  }
+
+  String _statusLabel(BuildContext context) {
     if (checking) return context.l10n.checkingStatus;
-    if (!online) {
-      return lastSeen != null
-          ? context.l10n.statusOfflineLastSeen(_relative(context, lastSeen!))
-          : context.l10n.offlineStatus;
-    }
-    final parts = <String>[host.address];
-    final os = _osLabel();
-    if (os != null) parts.add(os);
-    if (isTailscaleActive == true) parts.add(context.l10n.networkTailscale);
-    return parts.join(' · ');
+    if (online) return context.l10n.onlineStatus;
+    return lastSeen != null
+        ? context.l10n.statusOfflineLastSeen(_relative(context, lastSeen!))
+        : context.l10n.offlineStatus;
   }
 
   String _relative(BuildContext context, DateTime at) {
@@ -358,7 +400,7 @@ class _CardBody extends StatelessWidget {
     final diff = DateTime.now().difference(at);
     if (diff.inSeconds < 5) return l.relativeJustNow;
     if (diff.inMinutes < 1) return l.relativeSecondsAgo(diff.inSeconds);
-    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inHours);
+    if (diff.inHours < 1) return l.relativeMinutesAgo(diff.inMinutes);
     if (diff.inDays < 1) return l.relativeHoursAgo(diff.inHours);
     return l.relativeDaysAgo(diff.inDays);
   }
@@ -366,100 +408,214 @@ class _CardBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final readOnly = online && health?.readOnly == true;
-    final dimmed = !online && !checking;
-    final cardColor = scheme.surface;
+    final statusColor =
+        checking
+            ? scheme.outline
+            : online
+            ? Brand.online
+            : scheme.onSurfaceVariant;
+    final subtitle = _subtitle(context);
+    final quickActionStyle = FilledButton.styleFrom(
+      minimumSize: const Size(0, 48),
+      tapTargetSize: MaterialTapTargetSize.padded,
+    );
 
-    return Opacity(
-      opacity: dimmed ? 0.55 : 1,
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      button: onTap != null,
+      onTap: onTap,
+      label: '${host.label}, ${_statusLabel(context)}',
       child: Pressable(
-        onTap: checking ? null : onTap,
-        onLongPress: onLongPress,
+        onTap: onTap,
+        onLongPress: onForget,
         child: Container(
-          padding: const EdgeInsets.all(14),
-          // Mockup `.row.flt`: diagonal gradient + drop shadow for visual
-          // weight (owner: "too plain"). Ported as theme-relative surface
-          // tones rather than the mockup's fixed dark hex, so it still reads
-          // correctly in light theme.
+          padding: EdgeInsets.all(isFeatured ? Spacing.md3 : Spacing.md),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [scheme.surfaceContainerHigh, cardColor],
-            ),
-            borderRadius: Radii.cardR,
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: scheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: scheme.shadow.withValues(alpha: .25),
-                offset: const Offset(0, 6),
-                blurRadius: 14,
-              ),
-            ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Avatar(online: online, checking: checking, cardColor: cardColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      LucideIcons.monitor,
+                      size: 24,
+                      color: online ? scheme.primary : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            host.label,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                host.label,
+                                style:
+                                    isFeatured
+                                        ? textTheme.headlineSmall
+                                        : textTheme.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            if (readOnly) ...[
+                              const SizedBox(width: Spacing.xs),
+                              Tooltip(
+                                message: 'Read-only',
+                                child: SizedBox.square(
+                                  dimension: 48,
+                                  child: Center(
+                                    child: Icon(
+                                      LucideIcons.lock,
+                                      size: 16,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (online && drivesFuture != null)
+                              _LowDiskBadge(
+                                drivesFuture: drivesFuture!,
+                                thresholdBytes: lowDiskThresholdBytes,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: Spacing.xs),
+                        Semantics(
+                          label:
+                              subtitle.isEmpty
+                                  ? _statusLabel(context)
+                                  : '${_statusLabel(context)} · $subtitle',
+                          excludeSemantics: true,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: statusColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: Spacing.xs),
+                              Text(
+                                _statusLabel(context),
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(width: Spacing.sm),
+                              Expanded(
+                                child: Text(
+                                  subtitle,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        if (readOnly) ...[
-                          const SizedBox(width: 4),
-                          Tooltip(
-                            message: 'Read-only',
-                            child: Icon(
-                              LucideIcons.lock,
-                              size: 14,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        if (online && drivesFuture != null)
-                          _LowDiskBadge(
-                            drivesFuture: drivesFuture!,
-                            thresholdBytes: lowDiskThresholdBytes,
-                          ),
                       ],
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      _subtitle(context),
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(width: Spacing.xs),
+                  IconButton(
+                    tooltip: context.l10n.refreshTooltip,
+                    onPressed: checking ? null : onRefresh,
+                    icon: const Icon(LucideIcons.refreshCw, size: 18),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
                     ),
-                    if (online && drivesFuture != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 7),
-                        child: _StorageBar(drivesFuture: drivesFuture!),
-                      ),
-                  ],
-                ),
+                  ),
+                  _KebabMenu(
+                    onSettingsTap: onSettingsTap,
+                    onForgetTap: onForget,
+                    vertical: true,
+                    dimmed: !online,
+                  ),
+                ],
               ),
-              const SizedBox(width: Spacing.sm),
-              _KebabMenu(
-                onSettingsTap: onSettingsTap,
-                onForgetTap: onForget,
-                vertical: true,
-                dimmed: !online,
+              if (online && drivesFuture != null) ...[
+                const SizedBox(height: Spacing.md),
+                _DriveGaugeList(drivesFuture: drivesFuture!),
+              ] else if (!online && !checking) ...[
+                const SizedBox(height: Spacing.sm),
+                Text(
+                  'Browse cached files while this computer is offline.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: Spacing.md),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: checking ? null : onBrowseTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.folderOpen, size: 18),
+                        label: Text(
+                          online ? context.l10n.openButton : 'Browse cache',
+                        ),
+                      ),
+                      const SizedBox(width: Spacing.sm),
+                      FilledButton.tonalIcon(
+                        onPressed: online && !checking ? onSearchTap : null,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.search, size: 18),
+                        label: Text(context.l10n.searchButton),
+                      ),
+                      const SizedBox(width: Spacing.sm),
+                      FilledButton.tonalIcon(
+                        onPressed: onTransfersTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.arrowLeftRight, size: 18),
+                        label: Text(context.l10n.transfersMenuItem),
+                      ),
+                      const SizedBox(width: Spacing.sm),
+                      FilledButton.tonalIcon(
+                        onPressed: onSettingsTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.settings, size: 18),
+                        label: Text(context.l10n.settingsMenuItem),
+                      ),
+                      const SizedBox(width: Spacing.sm),
+                      FilledButton.tonalIcon(
+                        onPressed: online && !checking ? onAppsTap : null,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.monitor, size: 18),
+                        label: Text(context.l10n.hostAppsButton),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -469,435 +625,125 @@ class _CardBody extends StatelessWidget {
   }
 }
 
-/// The mockup's `.flt-badge`: a 38x38 circular blue-tinted badge that bobs
-/// continuously while online (`floatY`, 2.4s ease-in-out), plus `.flt-led`:
-/// a 9x9 corner dot that glows via a pulsing box-shadow (`floatLedGlow`,
-/// 2.2s) while online. Both animations stop and the badge/dot mute to grey
-/// when offline or still checking.
-class _Avatar extends StatefulWidget {
-  const _Avatar({
-    required this.online,
-    required this.checking,
-    required this.cardColor,
-  });
-
-  final bool online;
-  final bool checking;
-  final Color cardColor;
-
-  @override
-  State<_Avatar> createState() => _AvatarState();
-}
-
-class _AvatarState extends State<_Avatar> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2400),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final animate = widget.online && !widget.checking;
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) {
-        final bob = animate ? -6 * Curves.easeInOut.transform(_c.value) : 0.0;
-        return Transform.translate(offset: Offset(0, bob), child: child);
-      },
-      child: SizedBox(
-        width: 38,
-        height: 38,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient:
-                    animate
-                        ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Brand.seed.withValues(alpha: .32),
-                            Brand.seed.withValues(alpha: .08),
-                          ],
-                        )
-                        : null,
-                color:
-                    animate
-                        ? null
-                        : scheme.onSurfaceVariant.withValues(alpha: .14),
-                border: Border.all(
-                  color:
-                      animate
-                          ? Brand.seed.withValues(alpha: .35)
-                          : scheme.onSurfaceVariant.withValues(alpha: .22),
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                LucideIcons.cloud,
-                size: 18,
-                color: animate ? Brand.seed : scheme.onSurfaceVariant,
-              ),
-            ),
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: _PresenceDot(
-                cardColor: widget.cardColor,
-                checking: widget.checking,
-                animate: animate,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PresenceDot extends StatefulWidget {
-  const _PresenceDot({
-    required this.cardColor,
-    required this.checking,
-    required this.animate,
-  });
-
-  final Color cardColor;
-  final bool checking;
-  final bool animate;
-
-  @override
-  State<_PresenceDot> createState() => _PresenceDotState();
-}
-
-class _PresenceDotState extends State<_PresenceDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2200),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color =
-        widget.checking
-            ? scheme.outlineVariant
-            : (widget.animate ? Brand.online : Brand.offline);
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        final glow = widget.animate ? _c.value : 0.0;
-        return Container(
-          width: 9,
-          height: 9,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            border: Border.all(color: widget.cardColor, width: 1.5),
-            boxShadow:
-                widget.animate
-                    ? [
-                      BoxShadow(
-                        color: Brand.online.withValues(alpha: .6),
-                        blurRadius: 4 + glow * 6,
-                        spreadRadius: glow * 3,
-                      ),
-                    ]
-                    : null,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// The confirmed "Circular Orbit" hero shell (`wiki/entities/remote-file-
-/// explorer.md`, 2026-07-23): a slow-spinning dashed ring ([HeroOrbitRing])
-/// around a center plate ([_Avatar] + name + status), with 4 real actions —
-/// Open, Transfers, Settings, Refresh — at the ring's cardinal points
-/// ([HeroActionRing]), plus a static overflow kebab top-right.
-///
-/// Rendered for the first (most-recently-paired) host only; every other host
-/// still renders as the regular [_CardBody] row. Shares its parent
-/// [_HostCardState]'s ping/health/drives state — this widget adds no network
-/// calls of its own.
-class _HeroCardBody extends StatelessWidget {
-  const _HeroCardBody({
-    required this.host,
-    required this.online,
-    required this.checking,
-    required this.drivesFuture,
-    required this.onOpen,
-    required this.onSettingsTap,
-    required this.onTransfersTap,
-    required this.onRefresh,
-    required this.onForget,
-  });
-
-  final Host host;
-  final bool online;
-  final bool checking;
-  final Future<List<Drive>>? drivesFuture;
-  final VoidCallback onOpen;
-  final VoidCallback onSettingsTap;
-  final VoidCallback onTransfersTap;
-  final VoidCallback onRefresh;
-  final VoidCallback onForget;
-
-  /// "N% used" once drive usage resolves; otherwise a plain online/offline/
-  /// checking word. There's no real "battery"-style percentage for a PC, so
-  /// unlike the original mockup's placeholder "43%" this always ties to an
-  /// actual number when one is available.
-  Widget _statusLine(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    if (checking) {
-      return Text(
-        context.l10n.checkingStatus,
-        style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
-      );
-    }
-    if (!online || drivesFuture == null) {
-      return Text(
-        online ? context.l10n.onlineStatus : context.l10n.offlineStatus,
-        style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
-      );
-    }
-    return FutureBuilder<List<Drive>>(
-      future: drivesFuture,
-      builder: (context, snap) {
-        final usage = snap.data == null ? null : aggregateUsage(snap.data!);
-        final label =
-            usage == null
-                ? context.l10n.onlineStatus
-                : '${(usage.usedFraction * 100).round()}% used';
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.only(right: 5),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Brand.online,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    const ringDiameter = 130.0;
-    const plateDiameter = 76.0;
-    return Padding(
-      padding: const EdgeInsets.all(Spacing.md2),
-      child: SizedBox(
-        // Tall enough to contain HeroActionRing's own box (2×76 + 68) — a
-        // shorter parent constrains it back down and the top/bottom actions
-        // land outside it again, which makes them untappable.
-        height: 220,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            const HeroOrbitRing(diameter: ringDiameter),
-            Container(
-              width: plateDiameter,
-              height: plateDiameter,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: scheme.surfaceContainerLow,
-              ),
-              alignment: Alignment.center,
-              child: Pressable(
-                onTap: checking ? null : onOpen,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _Avatar(
-                      online: online,
-                      checking: checking,
-                      cardColor: scheme.surfaceContainerLow,
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      host.label,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 2),
-                    _statusLine(context),
-                  ],
-                ),
-              ),
-            ),
-            HeroActionRing(
-              radius: 76,
-              actions: [
-                _HeroAction(
-                  icon: LucideIcons.folderOpen,
-                  label: context.l10n.openButton,
-                  onTap: checking ? null : onOpen,
-                ),
-                _HeroAction(
-                  icon: LucideIcons.arrowLeftRight,
-                  label: context.l10n.transfersMenuItem,
-                  onTap: onTransfersTap,
-                ),
-                _HeroAction(
-                  icon: LucideIcons.settings,
-                  label: context.l10n.settingsMenuItem,
-                  onTap: onSettingsTap,
-                ),
-                _HeroAction(
-                  icon: LucideIcons.refreshCw,
-                  label: context.l10n.refreshTooltip,
-                  onTap: checking ? null : onRefresh,
-                ),
-              ],
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: _KebabMenu(
-                onSettingsTap: onSettingsTap,
-                onForgetTap: onForget,
-                vertical: false,
-                dimmed: !online,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One of the hero ring's 4 cardinal actions: icon over a small label,
-/// matching the mockup's `.act` — no fill, [Pressable]'s scale-down for
-/// feedback instead of Material ripple.
-class _HeroAction extends StatelessWidget {
-  const _HeroAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Pressable(
-      onTap: onTap,
-      child: SizedBox(
-        width: 58,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 17, color: scheme.primary),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface.withValues(alpha: .85),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The mockup's `.progress`: a 5px, fully-rounded track+fill bar. Reuses
-/// [aggregateUsage] (shared with [StorageInsightsScreen]) for the real
-/// storage-usage figure; renders nothing while unresolved or when the agent
-/// has no usable capacity data (e.g. predates `/system/drives`).
-class _StorageBar extends StatelessWidget {
-  const _StorageBar({required this.drivesFuture});
+/// Shows up to three real per-drive gauges on a host card, with an explicit
+/// expansion affordance for machines that report more roots or volumes.
+class _DriveGaugeList extends StatefulWidget {
+  const _DriveGaugeList({required this.drivesFuture});
 
   final Future<List<Drive>> drivesFuture;
 
   @override
+  State<_DriveGaugeList> createState() => _DriveGaugeListState();
+}
+
+class _DriveGaugeListState extends State<_DriveGaugeList> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Drive>>(
-      future: drivesFuture,
+      future: widget.drivesFuture,
       builder: (context, snap) {
-        final drives = snap.data;
-        if (drives == null) return const SizedBox.shrink();
-        final usage = aggregateUsage(drives);
-        if (usage == null) return const SizedBox.shrink();
-        final scheme = Theme.of(context).colorScheme;
-        // Amber past 70% used, matching the mockup's high-usage example.
-        final fillColor = usage.usedFraction >= 0.7 ? Brand.amber : Brand.seed;
+        final drives =
+            (snap.data ?? const <Drive>[])
+                .where((drive) => usedFraction(drive) != null)
+                .toList();
+        if (drives.isEmpty) return const SizedBox.shrink();
+        final visible = _expanded ? drives : drives.take(3).toList();
+
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
-                borderRadius: Radii.stadiumR,
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: usage.usedFraction.clamp(0, 1),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: fillColor,
-                    borderRadius: Radii.stadiumR,
-                  ),
+            for (final drive in visible) ...[
+              _DriveGauge(drive: drive),
+              const SizedBox(height: Spacing.sm),
+            ],
+            if (drives.length > 3)
+              TextButton.icon(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+                ),
+                icon: Icon(
+                  _expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                  size: 18,
+                ),
+                label: Text(
+                  _expanded
+                      ? 'Show fewer drives'
+                      : '+${drives.length - 3} more drives',
                 ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '${formatSize(usage.totalBytes - usage.freeBytes)} / '
-              '${formatSize(usage.totalBytes)}',
-              style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
-            ),
           ],
         );
       },
+    );
+  }
+}
+
+/// Exposes a drive's name, used percentage, and capacity as one meaningful
+/// screen-reader item while retaining the visible label and progress bar.
+class _DriveGauge extends StatelessWidget {
+  const _DriveGauge({required this.drive});
+
+  final Drive drive;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = usedFraction(drive);
+    if (fraction == null) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final label = drive.label?.isNotEmpty == true ? drive.label! : drive.path;
+    final free = drive.freeBytes!;
+    final total = drive.totalBytes!;
+    final value =
+        '${(fraction * 100).round()}% used · ${formatSize(free)} free of '
+        '${formatSize(total)}';
+
+    return Semantics(
+      label: label,
+      value: value,
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: Spacing.sm),
+                Text(
+                  '${formatSize(free)} free · ${formatSize(total)}',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.xs),
+            ClipRRect(
+              borderRadius: Radii.stadiumR,
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 8,
+                backgroundColor: scheme.tertiaryContainer,
+                valueColor: AlwaysStoppedAnimation(scheme.tertiary),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -928,7 +774,11 @@ class _KebabMenu extends StatelessWidget {
       tooltip: context.l10n.moreOptionsTooltip,
       padding: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: Radii.chipR),
-      child: _DotsChip(vertical: vertical, dimmed: dimmed),
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Center(child: _DotsChip(vertical: vertical, dimmed: dimmed)),
+      ),
       onSelected: (action) => action(),
       itemBuilder:
           (context) => [
@@ -1014,11 +864,8 @@ class _DotsChip extends StatelessWidget {
   }
 }
 
-/// Small inline warning icon shown next to the host name when any drive is
-/// under the configured threshold. Full per-drive detail lives in
-/// [StorageInsightsScreen], reachable from the settings screen. Not part of
-/// the mockup (which has no live drive data to show one for) — a real,
-/// working addition rather than a fabricated one.
+/// Screen-reader labeled warning when a volume falls below the configured
+/// free-space threshold. Full per-drive detail is shown in the storage gauges.
 class _LowDiskBadge extends StatelessWidget {
   const _LowDiskBadge({
     required this.drivesFuture,
@@ -1044,10 +891,15 @@ class _LowDiskBadge extends StatelessWidget {
           padding: const EdgeInsets.only(left: Spacing.xs),
           child: Tooltip(
             message: context.l10n.lowDiskWarning,
-            child: Icon(
-              LucideIcons.triangleAlert,
-              size: 14,
-              color: Theme.of(context).colorScheme.error,
+            child: SizedBox.square(
+              dimension: 48,
+              child: Center(
+                child: Icon(
+                  LucideIcons.triangleAlert,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
             ),
           ),
         );

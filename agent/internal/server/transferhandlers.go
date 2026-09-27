@@ -75,6 +75,7 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			writeInternal(w, "download", err)
 			return
 		}
+		setUntrustedFileResponseHeaders(w, info.Name())
 		w = countingWriter{w}
 
 		// Apply download bandwidth throttle if configured.
@@ -127,6 +128,21 @@ func contentTypeForName(name string) string {
 		return m
 	}
 	return "application/octet-stream"
+}
+
+// setUntrustedFileResponseHeaders prevents content fetched from arbitrary
+// host files from becoming executable same-origin web content. Native clients
+// still receive the original bytes and media type; Content-Disposition only
+// changes browser handling.
+func setUntrustedFileResponseHeaders(w http.ResponseWriter, name string) {
+	filename := mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(name)})
+	if filename == "" {
+		filename = "attachment"
+	}
+	w.Header().Set("Content-Disposition", filename)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	w.Header().Set("Cache-Control", "no-store")
 }
 
 // MaxContentBytes caps the size of a PUT /v1/content request body.
@@ -231,6 +247,10 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", err.Error())
 				return
 			}
+			if errors.Is(err, transfer.ErrQuotaExceeded) {
+				writeError(w, http.StatusTooManyRequests, "RESOURCE_LIMIT", "upload capacity is full; finish or remove an existing session before opening another")
+				return
+			}
 			writeInternal(w, "open transfer", err)
 			return
 		}
@@ -258,7 +278,7 @@ func callerOwnsTransfer(r *http.Request, t *store.Transfer) bool {
 func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		t, err := tm.Status(id)
+		t, err := tm.Lookup(id)
 		if err != nil {
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
@@ -269,6 +289,18 @@ func transferStatusHandler(tm *transfer.Manager) http.HandlerFunc {
 		}
 		if !callerOwnsTransfer(r, t) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			return
+		}
+		// Only an authorized owner refreshes the retention clock.
+		t, err = tm.Status(id)
+		if err != nil {
+			if errors.Is(err, transfer.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			} else if errors.Is(err, transfer.ErrSessionActive) {
+				writeError(w, http.StatusConflict, "TRANSFER_ACTIVE", "transfer completion is in progress; retry after it finishes")
+			} else {
+				writeInternal(w, "transfer status", err)
+			}
 			return
 		}
 		writeJSON(w, http.StatusOK, transferSession(t))
@@ -296,7 +328,7 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 			return
 		}
 
-		t, err := tm.Status(id)
+		t, err := tm.Lookup(id)
 		if err != nil {
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
@@ -309,6 +341,27 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
+		// Hold an activity lease before consuming or throttling the request body.
+		// This closes the gap where a slow upload had not yet reached WriteChunk
+		// and could otherwise be mistaken for an abandoned session.
+		release, err := tm.BeginActivity(id)
+		if err != nil {
+			if errors.Is(err, transfer.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+				return
+			}
+			if errors.Is(err, transfer.ErrSessionActive) {
+				writeError(w, http.StatusConflict, "TRANSFER_ACTIVE", "transfer completion is in progress; retry after it finishes")
+				return
+			}
+			if errors.Is(err, transfer.ErrNotOpen) {
+				writeError(w, http.StatusConflict, "TRANSFER_NOT_OPEN", "transfer is no longer open")
+				return
+			}
+			writeInternal(w, "begin upload activity", err)
+			return
+		}
+		defer release()
 
 		// Cap the request body to the session's chunk size. The final chunk
 		// may be smaller, which is fine since this is just an upper bound.
@@ -347,6 +400,14 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 				writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 				return
 			}
+			if errors.Is(err, transfer.ErrNotOpen) {
+				writeError(w, http.StatusConflict, "TRANSFER_NOT_OPEN", "transfer is no longer open")
+				return
+			}
+			if errors.Is(err, transfer.ErrSessionActive) {
+				writeError(w, http.StatusConflict, "TRANSFER_ACTIVE", "transfer completion is in progress; retry after it finishes")
+				return
+			}
 			writeInternal(w, "upload chunk", err)
 			return
 		}
@@ -369,16 +430,27 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		// device must not be able to "complete" (i.e. trigger the final
 		// rename for) a session targeting a path outside its own jail.
 		var verifiedSHA256 string
-		if t, err := tm.Status(id); err == nil && t != nil {
-			if !callerOwnsTransfer(r, t) {
+		t, err := tm.Lookup(id)
+		if err != nil {
+			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
-				return
+			} else {
+				writeInternal(w, "complete transfer status", err)
 			}
-			verifiedSHA256 = t.SHA256
-			if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
-				handleFsError(w, resolveErr)
-				return
-			}
+			return
+		}
+		if t == nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			return
+		}
+		if !callerOwnsTransfer(r, t) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			return
+		}
+		verifiedSHA256 = t.SHA256
+		if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
+			handleFsError(w, resolveErr)
+			return
 		}
 
 		_, targetPath, err := tm.Complete(id)
@@ -395,6 +467,14 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 			// session was opened with overwrite=false (PR-50).
 			if errors.Is(err, transfer.ErrDestinationExists) {
 				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
+				return
+			}
+			if errors.Is(err, transfer.ErrNotOpen) {
+				writeError(w, http.StatusConflict, "TRANSFER_NOT_OPEN", "transfer is no longer open")
+				return
+			}
+			if errors.Is(err, transfer.ErrSessionActive) {
+				writeError(w, http.StatusConflict, "TRANSFER_ACTIVE", "transfer has another active operation; retry after it finishes")
 				return
 			}
 			writeInternal(w, "complete transfer", err)

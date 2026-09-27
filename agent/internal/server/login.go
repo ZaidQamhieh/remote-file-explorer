@@ -10,6 +10,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -83,8 +84,13 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 		// Device row + the account that authenticated it, in one transaction
 		// (PR-45) — a failure between them used to leave a working token whose
 		// device had no username recorded.
-		deviceID, err := db.LoginDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, req.Username)
+		deviceID, err := db.LoginDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, req.Username, user.PasswordHash)
 		if err != nil {
+			if errors.Is(err, store.ErrLoginAccountChanged) {
+				auditAs(db, req.Username, store.AuditLoginFailed, req.DeviceLabel, "account changed during login")
+				writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
+				return
+			}
 			writeInternal(w, "login", err)
 			return
 		}

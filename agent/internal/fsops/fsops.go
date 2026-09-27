@@ -269,6 +269,13 @@ func Drives() ([]Drive, error) {
 // narrows every other listing, instead of always exposing the full host
 // topology regardless of jail).
 func (o *Ops) Drives() ([]Drive, error) {
+	if o.IsDenyAll() {
+		// Roots() intentionally returns an empty slice for denyAll, but the
+		// generic empty-roots behavior below means "no jail". Keep these
+		// states separate so an invalid per-device jail cannot expose the
+		// host's drive topology.
+		return []Drive{}, nil
+	}
 	all, err := platformDrives()
 	if err != nil {
 		return nil, err

@@ -93,6 +93,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkTailscale => 'Tailscale';
 
   @override
+  String get networkInternet => 'Direct HTTPS';
+
+  @override
   String hostSubtitleVersionNetwork(String version, String network) {
     return 'v$version · $network';
   }
@@ -200,6 +203,74 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDiagnosticsTitle => 'Connection Diagnostics';
 
   @override
+  String get connectionRoutesTitle => 'Connection routes';
+
+  @override
+  String get currentRouteLabel => 'Current route';
+
+  @override
+  String get currentRouteUnavailable => 'No route is connected right now.';
+
+  @override
+  String currentRouteDescription(String route, String address) {
+    return 'Connected through $route · $address';
+  }
+
+  @override
+  String get routeLanName => 'Local network (LAN)';
+
+  @override
+  String get routeTailscaleName => 'Tailscale';
+
+  @override
+  String get routeInternetName => 'Direct HTTPS';
+
+  @override
+  String get routeCustomName => 'Custom route';
+
+  @override
+  String get routeNotConfigured => 'Not configured';
+
+  @override
+  String get editInternetRouteTitle => 'Set up direct HTTPS';
+
+  @override
+  String get editInternetRouteSubtitle =>
+      'Connect over the internet without a VPN';
+
+  @override
+  String get routePriorityAndSecurityHint =>
+      'The app tries LAN, then Tailscale, then this address. Every route still requires the paired host’s pinned certificate.';
+
+  @override
+  String get internetRouteDialogTitle => 'Direct HTTPS address';
+
+  @override
+  String get internetRouteAddressLabel => 'Hostname or IP address';
+
+  @override
+  String get internetRouteAddressHint =>
+      'files.example.com or 203.0.113.8:8765';
+
+  @override
+  String get internetRouteAddressHelper =>
+      'Enter the authority only. HTTPS is used automatically. Leave empty to remove this route.';
+
+  @override
+  String get internetRouteAddressInvalid =>
+      'Enter a hostname or IP address with an optional port. Do not include a scheme, path, query, or credentials.';
+
+  @override
+  String get internetRouteOwnerSetupNote =>
+      'The PC owner must configure public DNS, router NAT, and firewall access. This app will not open ports or change router or firewall settings.';
+
+  @override
+  String get internetRouteSaved => 'Direct HTTPS route saved';
+
+  @override
+  String get internetRouteRemoved => 'Direct HTTPS route removed';
+
+  @override
   String get retestButton => 'Re-test';
 
   @override
@@ -212,6 +283,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagTlsPinned => 'TLS fingerprint pinned';
 
   @override
+  String get diagAuthentication => 'Authenticated access';
+
+  @override
   String get diagLatency => 'Latency';
 
   @override
@@ -219,6 +293,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagPinnedBadge => 'Pinned';
+
+  @override
+  String get diagPinRequiredBadge => 'Pin required';
 
   @override
   String get diagMismatchBadge => 'Mismatch';
@@ -230,6 +307,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagOkBadge => 'OK';
 
   @override
+  String get diagAuthAcceptedBadge => 'Allowed';
+
+  @override
+  String get diagAuthDeniedBadge => 'Denied';
+
+  @override
+  String get diagAuthUnknownBadge => 'Not checked';
+
+  @override
   String get diagLanDirect => 'LAN direct';
 
   @override
@@ -237,6 +323,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get probeError => 'Error';
+
+  @override
+  String get probeDnsFailedBadge => 'DNS failed';
+
+  @override
+  String get probeNoResponseBadge => 'No response';
+
+  @override
+  String get probePinMismatchHint =>
+      'The server certificate does not match this paired host. Stop and verify the address before reconnecting.';
+
+  @override
+  String get probeMissingPinHint =>
+      'The saved certificate pin is missing. Re-pair only through a trusted local setup.';
+
+  @override
+  String get probeDnsHint =>
+      'The hostname did not resolve. Check its spelling and DNS record.';
+
+  @override
+  String get probeReachabilityHint =>
+      'The host did not respond. Check that it is online and reachable from this network.';
+
+  @override
+  String get probeAuthRejectedHint =>
+      'The certificate matched, but this device was denied. Sign in again or ask the host owner to restore access.';
+
+  @override
+  String get probeGenericHint =>
+      'The route could not be verified. Check the host address and agent status.';
 
   @override
   String probeLatencyMs(int ms) {
@@ -943,7 +1059,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pairingScanHint =>
-      'Align the QR code from the desktop app within the frame';
+      'Scan the pairing QR displayed on the intended host\'s screen while you are there. Otherwise, obtain it through a trusted independent channel; a QR and fingerprint received together over the same untrusted connection do not prove the host\'s identity.';
 
   @override
   String get enterCodeManuallyButton => 'Enter code manually instead';
@@ -960,6 +1076,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentAddressHint => '192.168.1.10:8765';
+
+  @override
+  String get fingerprintLabel => 'Host certificate fingerprint';
+
+  @override
+  String get fingerprintHint => '64-character SHA-256 fingerprint';
+
+  @override
+  String get fingerprintVerificationHelp =>
+      'Before continuing, get the fingerprint from a trusted independent source, such as the host console running rfe-agent status. Do not trust a fingerprint sent over the same untrusted network connection.';
+
+  @override
+  String get fingerprintInvalid =>
+      'Enter a valid 64-character SHA-256 fingerprint.';
+
+  @override
+  String get qrInvalidFingerprint =>
+      'This QR code does not contain a valid host fingerprint. Update the host agent or use manual pairing.';
 
   @override
   String get pairingCodeLabel => 'Pairing code';
@@ -1280,6 +1414,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get forgetThisDeviceButton => 'Forget this device';
+
+  @override
+  String get appAccessTitle => 'App access';
+
+  @override
+  String get appAccessDefaultOffHint =>
+      'New paired devices start with both permissions off.';
+
+  @override
+  String get viewAppsLabel => 'View installed apps';
+
+  @override
+  String get viewAppsDescription =>
+      'Show this computer’s available apps on this device.';
+
+  @override
+  String get launchAppsLabel => 'Launch apps';
+
+  @override
+  String get launchAppsDescription =>
+      'Allow this device to open approved apps on this computer.';
 
   @override
   String get aboutSection => 'About';
@@ -1611,7 +1766,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get qrHandoffNoFingerprint =>
-      'Can\'t share — this host has no pinned certificate.';
+      'Can\'t share — this host has no trusted secure-store pin. Re-pair the host to restore its pin.';
+
+  @override
+  String get qrHandoffPinReadFailed =>
+      'Couldn\'t read trusted host pins from secure storage. Unlock secure storage and try again.';
 
   @override
   String get qrHandoffCopyButton => 'Copy details';
@@ -1631,7 +1790,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get qrHandoffNoHostMatch =>
-      'You\'re not paired to this PC — pair first, then scan again.';
+      'No paired PC has a matching secure certificate pin. Re-pair that host, then scan again.';
 
   @override
   String get backUpNow => 'Back up now';
@@ -2405,4 +2564,89 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get watchButton => 'Watch';
+
+  @override
+  String get hostAppsButton => 'Apps';
+
+  @override
+  String get hostAppsTitle => 'Apps on this computer';
+
+  @override
+  String get hostAppsRefreshTooltip => 'Refresh app list';
+
+  @override
+  String get hostAppsLoading => 'Loading available apps…';
+
+  @override
+  String get hostAppsInstruction => 'Select an app to start on this computer.';
+
+  @override
+  String get hostAppsLaunchPermissionOffHint =>
+      'The host admin allows viewing this app list but has not allowed this device to launch apps.';
+
+  @override
+  String get hostAppsLoadFailed =>
+      'Could not load the app list. Check the connection and try again.';
+
+  @override
+  String get hostAppsUnsupported =>
+      'This host agent does not support app listing yet. Update it to a version with app support.';
+
+  @override
+  String get hostAppsAccessDeniedTitle => 'App access is turned off';
+
+  @override
+  String get hostAppsAccessDeniedMessage =>
+      'An admin must enable app access for this device in the computer’s settings.';
+
+  @override
+  String get hostAppsEmptyTitle => 'No launchable apps found';
+
+  @override
+  String get hostAppsEmptyMessage =>
+      'The computer did not report any apps that are available to launch.';
+
+  @override
+  String get hostAppRunButton => 'Run';
+
+  @override
+  String get hostAppStartingButton => 'Starting…';
+
+  @override
+  String get hostAppsLaunchDenied =>
+      'An admin must enable app launching for this device in the computer’s settings.';
+
+  @override
+  String get hostAppLaunchBusy =>
+      'Another app is starting on this computer. Wait a moment and try again.';
+
+  @override
+  String get hostAppLaunchRateLimited =>
+      'Too many app launch requests. Wait a moment before trying again.';
+
+  @override
+  String get hostAppNoInteractiveSession =>
+      'No interactive desktop session is available. Sign in to the computer’s desktop and try again.';
+
+  @override
+  String get hostAppLauncherUnavailable =>
+      'The app launcher is unavailable on this computer. Update or restart the host agent, then try again.';
+
+  @override
+  String get hostAppNoLongerAvailable =>
+      'This app is no longer available. The app list is being refreshed.';
+
+  @override
+  String get hostAppInvalidEntry =>
+      'This app entry is invalid. The app list is being refreshed.';
+
+  @override
+  String hostAppLaunchFailed(String appName) {
+    return 'Could not start $appName. Check that it opens on the computer, then try again.';
+  }
+
+  @override
+  String hostAppLaunchStarted(String appName, String hostLabel) {
+    return 'Starting $appName on $hostLabel.';
+  }
 }

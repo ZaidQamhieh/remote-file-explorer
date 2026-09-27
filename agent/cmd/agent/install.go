@@ -24,6 +24,16 @@ func cmdUninstall(args []string) error {
 	return uninstallService()
 }
 
+// cmdStart starts the already-installed user-level service.
+func cmdStart(args []string) error {
+	return startService()
+}
+
+// cmdStop stops the service while keeping its start-at-login registration.
+func cmdStop(args []string) error {
+	return stopService()
+}
+
 // resolveExecutable returns the real, symlink-resolved path to the running
 // binary, so the installed auto-start entry keeps working even if the
 // process was launched via a symlink (e.g. some package managers, `go

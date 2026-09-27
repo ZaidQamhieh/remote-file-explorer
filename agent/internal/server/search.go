@@ -330,9 +330,11 @@ func searchHandler(ops *fsops.Ops, idx *SearchIndex) http.HandlerFunc {
 			roots = []string{resolved}
 		} else {
 			roots = ops.Roots()
-			if len(roots) == 0 {
+			if len(roots) == 0 && !ops.IsDenyAll() {
 				// No jail configured — fall back to the user's home directory
-				// so an empty root doesn't mean "walk the entire filesystem".
+				// so an ordinary unjailed device doesn't walk the entire
+				// filesystem. A deny-all jail also has no roots, but must not
+				// gain access through this fallback.
 				if home, err := os.UserHomeDir(); err == nil && home != "" {
 					roots = []string{home}
 				}

@@ -34,7 +34,7 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/transfer"
 )
 
-const version = "1.3.0"
+var version = "1.3.0"
 
 func main() {
 	args := os.Args[1:]
@@ -286,6 +286,8 @@ func runServe(args []string) {
 	if err != nil {
 		log.Fatalf("transfer: %v", err)
 	}
+	stopTransferCleanup := tm.StartStaleCleanup(0)
+	defer stopTransferCleanup()
 
 	pm := pairing.New(db, lanAddr, tsAddr, fingerprint)
 	log.Printf("run `rfe-agent pair` to add a device")

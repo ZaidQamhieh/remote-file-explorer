@@ -84,7 +84,7 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 			roots = []string{resolved}
 		} else {
 			roots = ops.Roots()
-			if len(roots) == 0 {
+			if len(roots) == 0 && !ops.IsDenyAll() {
 				if home, err := os.UserHomeDir(); err == nil && home != "" {
 					roots = []string{home}
 				}

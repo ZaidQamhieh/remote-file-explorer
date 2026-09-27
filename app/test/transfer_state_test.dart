@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
@@ -14,7 +13,6 @@ import 'package:remote_file_explorer/core/models/upload_session.dart';
 import 'package:remote_file_explorer/core/storage/transfer_queue_store.dart';
 import 'package:remote_file_explorer/features/transfers/chunk_planner.dart';
 import 'package:remote_file_explorer/features/transfers/transfer_state.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
@@ -32,37 +30,18 @@ Future<void> _waitUntil(
   }
 }
 
+TransferQueueNotifier _testTransferQueueNotifier({
+  AgentClient Function(Host host, {String? deviceToken})? clientFactory,
+  TransferQueueStore? store,
+}) => TransferQueueNotifier(
+  clientFactory: clientFactory,
+  store: store,
+  credentialsLoader:
+      (host) async => (fingerprint: 'a' * 64, token: 'test-device-token'),
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const secureStorageChannel = MethodChannel(
-    'plugins.it_nomads.com/flutter_secure_storage',
-  );
-
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorageChannel, (call) async {
-          final arguments = (call.arguments as Map).cast<String, dynamic>();
-          switch (call.method) {
-            case 'read':
-              return switch (arguments['key']) {
-                'rfe_fp_h1' => 'a' * 64,
-                'rfe_token_h1' => 'test-device-token',
-                _ => null,
-              };
-            case 'write':
-            case 'delete':
-              return null;
-            default:
-              return null;
-          }
-        });
-  });
-
-  tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(secureStorageChannel, null);
-  });
 
   // ---------------------------------------------------------------------
   // Bug 6 — unique task ids
@@ -244,7 +223,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -306,7 +285,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => blockingClient,
               ),
             ),
@@ -393,7 +372,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -452,7 +431,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -519,7 +498,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -575,7 +554,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -669,7 +648,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -739,7 +718,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -796,7 +775,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -849,7 +828,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => hangingClient,
                 store: store,
               ),

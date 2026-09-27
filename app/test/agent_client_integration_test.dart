@@ -635,6 +635,7 @@ void main() {
         label: 'Fallback2',
         address: '127.0.0.1:$closedPort', // unreachable primary
         tailscaleAddress: '127.0.0.1:${server.port}',
+        certFingerprint: server.certSha256Hex,
       );
       final client = AgentClient(host);
       addTearDown(client.close);

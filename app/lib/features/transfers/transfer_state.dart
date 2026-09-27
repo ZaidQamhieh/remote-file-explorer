@@ -246,18 +246,25 @@ class _DigestSink implements Sink<Digest> {
 // Queue notifier (Riverpod 3.x Notifier)
 // ---------------------------------------------------------------------------
 
+typedef TransferCredentials = ({String? fingerprint, String? token});
+typedef TransferCredentialsLoader =
+    Future<TransferCredentials> Function(Host host);
+
 class TransferQueueNotifier extends Notifier<List<TransferTask>> {
   TransferQueueNotifier({
     AgentClient Function(Host host, {String? deviceToken})? clientFactory,
     TransferQueueStore? store,
+    TransferCredentialsLoader? credentialsLoader,
   }) : _clientFactory = clientFactory ?? AgentClient.new,
-       _store = store ?? TransferQueueStore();
+       _store = store ?? TransferQueueStore(),
+       _credentialsLoader = credentialsLoader;
 
   /// Builds the [AgentClient] used to run a transfer. Overridable so tests
   /// can substitute a fake client without spinning up real Dio/TLS/network.
   final AgentClient Function(Host host, {String? deviceToken}) _clientFactory;
 
   final TransferQueueStore _store;
+  final TransferCredentialsLoader? _credentialsLoader;
 
   /// Chains persistence writes so they always apply in call order. Each
   /// `_persist()` call snapshots the *current* state and only starts its
@@ -414,23 +421,31 @@ class TransferQueueNotifier extends Notifier<List<TransferTask>> {
     AgentClient? client;
 
     try {
+      String? fingerprint;
       String? token;
-      final store = await ref.read(hostStoreProvider.future);
-      final fingerprint = AgentClient.normalizeFingerprint(
-        await store.getFingerprint(task.host.id),
-      );
+      final credentialsLoader = _credentialsLoader;
+      if (credentialsLoader != null) {
+        final credentials = await credentialsLoader(task.host);
+        fingerprint = AgentClient.normalizeFingerprint(credentials.fingerprint);
+        token = credentials.token;
+      } else {
+        final store = await ref.read(hostStoreProvider.future);
+        fingerprint = AgentClient.normalizeFingerprint(
+          await store.getFingerprint(task.host.id),
+        );
+        try {
+          token = await store.getToken(task.host.id);
+        } catch (_) {
+          throw const _TransferTokenUnavailable(
+            'Could not read this host’s device token from secure storage. Unlock secure storage and retry.',
+          );
+        }
+      }
       if (fingerprint == null) {
         // Transfer clients must use the secure pin just like interactive API
         // clients. The legacy Host metadata copy is deliberately not a
         // fallback when secure storage is missing.
         throw const MissingCertPin();
-      }
-      try {
-        token = await store.getToken(task.host.id);
-      } catch (_) {
-        throw const _TransferTokenUnavailable(
-          'Could not read this host’s device token from secure storage. Unlock secure storage and retry.',
-        );
       }
       if (token == null || token.isEmpty) {
         throw const _TransferTokenUnavailable(

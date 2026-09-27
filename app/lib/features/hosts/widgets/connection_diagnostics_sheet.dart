@@ -366,6 +366,7 @@ class _DiagChecks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     final reachable = result.reachable;
     final failureBadge = switch (result.failure) {
       _ProbeFailure.none => l.diagOkBadge,
@@ -376,12 +377,11 @@ class _DiagChecks extends StatelessWidget {
       _ProbeFailure.other => l.probeError,
     };
 
+    final pin = fingerprint;
     final fingerprintPreview =
-        fingerprint == null
+        pin == null
             ? null
-            : (fingerprint.length > 12
-                ? '${fingerprint.substring(0, 12)}…'
-                : fingerprint);
+            : (pin.length > 12 ? '${pin.substring(0, 12)}…' : pin);
 
     final rows = [
       _DiagRow(

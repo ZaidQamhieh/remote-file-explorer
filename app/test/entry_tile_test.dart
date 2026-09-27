@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart' show CancelToken;
 import 'package:remote_file_explorer/core/api/agent_client.dart';
 import 'package:remote_file_explorer/core/models/entry.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
@@ -19,8 +20,11 @@ class _FakeAgentClient extends AgentClient {
     : super(const Host(id: 'h1', label: 'PC', address: '127.0.0.1:1'));
 
   @override
-  Future<Uint8List?> thumbnail(String remotePath, {int size = 256}) async =>
-      null;
+  Future<Uint8List?> thumbnail(
+    String remotePath, {
+    int size = 256,
+    CancelToken? cancelToken,
+  }) async => null;
 }
 
 void main() {

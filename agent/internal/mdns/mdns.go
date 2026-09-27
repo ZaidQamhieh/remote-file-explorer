@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/grandcat/zeroconf"
+	"github.com/libp2p/zeroconf/v2"
 )
 
 const (
@@ -87,24 +87,31 @@ func (s *Service) Stop() {
 // Discover searches for RFE agents on the local network for the given
 // duration. Returns discovered entries. Intended for testing.
 func Discover(ctx context.Context) ([]*zeroconf.ServiceEntry, error) {
-	resolver, err := zeroconf.NewResolver(nil)
-	if err != nil {
-		return nil, err
-	}
-
 	entries := make(chan *zeroconf.ServiceEntry)
-	var results []*zeroconf.ServiceEntry
-
+	browseDone := make(chan error, 1)
 	go func() {
-		for e := range entries {
-			results = append(results, e)
-		}
+		browseDone <- zeroconf.Browse(ctx, serviceType, domain, entries)
 	}()
 
-	if err := resolver.Browse(ctx, serviceType, domain, entries); err != nil {
-		return nil, err
+	var results []*zeroconf.ServiceEntry
+	entriesOpen := true
+	browseFinished := false
+	for entriesOpen || !browseFinished {
+		select {
+		case entry, ok := <-entries:
+			if !ok {
+				entriesOpen = false
+				continue
+			}
+			results = append(results, entry)
+		case err := <-browseDone:
+			if err != nil {
+				return nil, err
+			}
+			browseFinished = true
+			browseDone = nil
+		}
 	}
 
-	<-ctx.Done()
 	return results, nil
 }

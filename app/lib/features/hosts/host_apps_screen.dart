@@ -35,7 +35,7 @@ class _HostAppsScreenState extends ConsumerState<HostAppsScreen> {
 
   Future<void> _refresh() async {
     try {
-      await ref.refresh(hostAppsProvider(widget.host.id).future);
+      final _ = await ref.refresh(hostAppsProvider(widget.host.id).future);
     } catch (_) {
       // The provider renders the new loading/error state; don't let a refresh
       // gesture leak the request exception to Flutter's global error handler.

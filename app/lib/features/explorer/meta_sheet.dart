@@ -568,12 +568,13 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
       showError(context, context.l10n.qrHandoffNoFingerprint);
       return;
     }
+    final certFingerprint = fp;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder:
           (_) => QrGenerateSheet(
-            certFingerprint: fp,
+            certFingerprint: certFingerprint,
             path: _entry.path,
             name: _entry.name,
           ),

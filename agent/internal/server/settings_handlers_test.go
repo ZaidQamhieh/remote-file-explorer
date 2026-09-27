@@ -55,7 +55,7 @@ func TestSettingsHandler_GetAndPatch(t *testing.T) {
 
 	// GET reflects defaults.
 	rr := httptest.NewRecorder()
-	getSettingsHandler(st)(rr, httptest.NewRequest(http.MethodGet, "/v1/settings", nil))
+	getSettingsHandler(st)(rr, asAdmin(httptest.NewRequest(http.MethodGet, "/v1/settings", nil)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("GET code = %d", rr.Code)
 	}
@@ -83,30 +83,40 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	_ = db.CreateDevice("id-gone", "gone", "tok-gone")
 	_ = db.TouchDevice("id-keep", "192.168.1.42", "1.10.0+18")
 
-	// Current device = the keeper (simulate auth context).
+	// Keep an ordinary paired device for self-revoke coverage.
 	cur, _ := db.DeviceByToken("tok-keep")
+	adminID, err := db.UpsertDevice("", "admin-session", "tok-admin", "", true)
+	if err != nil {
+		t.Fatalf("upsert admin: %v", err)
+	}
+	admin, _ := db.GetDeviceByID(adminID)
 
-	// LIST marks current.
+	// An admin can list all devices; its own row is marked current.
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/devices", nil)
-	req = req.WithContext(withDevice(req.Context(), cur))
+	req = req.WithContext(withDevice(req.Context(), admin))
 	listDevicesHandler(db)(rr, req)
 	var list []map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &list)
-	if len(list) != 2 {
-		t.Fatalf("expected 2 devices, got %d", len(list))
+	if len(list) != 3 {
+		t.Fatalf("expected 3 devices, got %d", len(list))
 	}
 
 	// The keeper's row reflects its recorded address/version; the untouched
 	// device's row has the empty-string defaults.
-	var keeper, goneRow map[string]any
+	var keeper, goneRow, adminRow map[string]any
 	for _, d := range list {
 		switch d["id"] {
 		case "id-keep":
 			keeper = d
 		case "id-gone":
 			goneRow = d
+		case adminID:
+			adminRow = d
 		}
+	}
+	if adminRow == nil || adminRow["current"] != true {
+		t.Fatalf("expected admin device to be marked current, got %v", adminRow)
 	}
 	if keeper == nil || keeper["lastAddress"] != "192.168.1.42" || keeper["lastVersion"] != "1.10.0+18" {
 		t.Fatalf("expected keeper lastAddress/lastVersion recorded, got %v", keeper)
@@ -149,11 +159,6 @@ func TestDevicesHandler_ListAndRevoke(t *testing.T) {
 	}
 
 	// An admin device (via_login=true) MAY revoke another device.
-	adminID, err := db.UpsertDevice("", "admin-session", "tok-admin", "", true)
-	if err != nil {
-		t.Fatalf("upsert admin: %v", err)
-	}
-	admin, _ := db.GetDeviceByID(adminID)
 	rrAdmin := httptest.NewRecorder()
 	reqAdmin := httptest.NewRequest(http.MethodDelete, "/v1/devices/id-gone", nil)
 	reqAdmin = reqAdmin.WithContext(withDevice(reqAdmin.Context(), admin))
@@ -528,7 +533,7 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 
 	// GET defaults to zero (unlimited).
 	rr := httptest.NewRecorder()
-	getBandwidthHandler(st)(rr, httptest.NewRequest(http.MethodGet, "/v1/settings/bandwidth", nil))
+	getBandwidthHandler(st)(rr, asAdmin(httptest.NewRequest(http.MethodGet, "/v1/settings/bandwidth", nil)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("GET code = %d", rr.Code)
 	}

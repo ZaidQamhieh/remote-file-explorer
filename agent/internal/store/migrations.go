@@ -23,6 +23,7 @@ var migrations = []func(*sql.Tx) error{
 	migrateAuditLog,
 	migrateDeviceAppPermissions,
 	migrateLoginDeviceBindings,
+	migrateDeviceFilePermissions,
 }
 
 // migrate brings the schema up to len(migrations).
@@ -68,6 +69,26 @@ func addColumn(tx *sql.Tx, table, column, spec string) error {
 		return nil
 	}
 	return err
+}
+
+func hasColumn(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // migrateBaseline is the schema as it stood when versioning was introduced:
@@ -357,5 +378,46 @@ WHERE via_login=1 AND (username='' OR NOT EXISTS (
     SELECT 1 FROM users WHERE users.username=devices.username
 ))
 `)
+	return err
+}
+
+// migrateDeviceFilePermissions adds independent filesystem capabilities. New
+// paired rows start browse-only; existing rows are backfilled to preserve
+// their prior effective access (with the existing read-only master honored).
+func migrateDeviceFilePermissions(tx *sql.Tx) error {
+	columns := []struct{ name, spec string }{
+		{"can_browse", "INTEGER NOT NULL DEFAULT 1"},
+		{"can_download", "INTEGER NOT NULL DEFAULT 0"},
+		{"can_upload", "INTEGER NOT NULL DEFAULT 0"},
+		{"can_modify", "INTEGER NOT NULL DEFAULT 0"},
+		{"can_delete", "INTEGER NOT NULL DEFAULT 0"},
+		{"can_share", "INTEGER NOT NULL DEFAULT 0"},
+	}
+	hadCapabilityColumns := false
+	for _, col := range columns {
+		exists, err := hasColumn(tx, "devices", col.name)
+		if err != nil {
+			return err
+		}
+		hadCapabilityColumns = hadCapabilityColumns || exists
+		if err := addColumn(tx, "devices", col.name, col.spec); err != nil {
+			return err
+		}
+	}
+	// If the migration is replayed, don't reset grants which an admin has
+	// already customized after its first successful application.
+	if hadCapabilityColumns {
+		return nil
+	}
+	// The migration runs once against rows already present at upgrade time.
+	// Preserve the old full-file-access behavior for those rows; read-only was
+	// already a master write guard, so it remains dominant for writes.
+	_, err := tx.Exec(`UPDATE devices SET
+can_browse=1,
+can_download=1,
+can_upload=CASE WHEN read_only=0 THEN 1 ELSE 0 END,
+can_modify=CASE WHEN read_only=0 THEN 1 ELSE 0 END,
+can_delete=CASE WHEN read_only=0 THEN 1 ELSE 0 END,
+can_share=1`)
 	return err
 }

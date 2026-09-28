@@ -275,6 +275,44 @@ void main() {
       });
       expect(d.jailRoot, '');
     });
+
+    test(
+      'parses independent file capabilities and preserves old-agent absence',
+      () {
+        final d = Device.fromJson({
+          'id': 'guest',
+          'label': 'Guest phone',
+          'created': 1,
+          'lastSeen': 2,
+          'revoked': false,
+          'current': false,
+          'browse': true,
+          'download': false,
+          'upload': true,
+          'modify': false,
+          'delete': true,
+          'share': false,
+        });
+        expect(d.hasFileCapabilities, isTrue);
+        expect(d.browse, isTrue);
+        expect(d.download, isFalse);
+        expect(d.upload, isTrue);
+        expect(d.modify, isFalse);
+        expect(d.delete, isTrue);
+        expect(d.share, isFalse);
+
+        final old = Device.fromJson({
+          'id': 'old',
+          'label': 'Old agent',
+          'created': 1,
+          'lastSeen': 2,
+          'revoked': false,
+          'current': false,
+        });
+        expect(old.hasFileCapabilities, isFalse);
+        expect(old.browse, isNull);
+      },
+    );
   });
 
   group('AppRelease', () {

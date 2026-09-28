@@ -997,6 +997,31 @@ class AgentClient {
     );
   }
 
+  /// Updates all per-device filesystem capabilities in one PATCH request.
+  /// Sending the full set keeps the UI's admin switches in sync while the
+  /// server continues to support individual fields for other clients.
+  Future<void> updateDeviceFileCapabilities(
+    String id, {
+    required bool browse,
+    required bool download,
+    required bool upload,
+    required bool modify,
+    required bool delete,
+    required bool share,
+  }) async {
+    await _patch<void>(
+      '/devices/$id',
+      data: {
+        'browse': browse,
+        'download': download,
+        'upload': upload,
+        'modify': modify,
+        'delete': delete,
+        'share': share,
+      },
+    );
+  }
+
   /// Reads the agent's audit trail (account/device/share events), newest
   /// first. Admin-only on the agent: a code-paired device gets 403, since the
   /// trail covers every device on that host.

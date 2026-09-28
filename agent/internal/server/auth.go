@@ -88,6 +88,63 @@ func deviceJailMiddleware(baseOps *fsops.Ops) func(http.Handler) http.Handler {
 	}
 }
 
+type fileCapability string
+
+const (
+	capBrowse   fileCapability = "browse"
+	capDownload fileCapability = "download"
+	capUpload   fileCapability = "upload"
+	capModify   fileCapability = "modify"
+	capDelete   fileCapability = "delete"
+	capShare    fileCapability = "share"
+)
+
+// requireFileCapabilities enforces per-device file-action grants after auth.
+// Login/register devices are the owner and retain full file access; the
+// global read-only setting and filesystem roots are still enforced by Ops.
+func requireFileCapabilities(required ...fileCapability) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			device := deviceFromContext(r)
+			if device == nil {
+				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "device required")
+				return
+			}
+			if !device.ViaLogin {
+				for _, capability := range required {
+					if !deviceHasCapability(device, capability) {
+						writeError(w, http.StatusForbidden, "CAPABILITY_DENIED", "device lacks "+string(capability)+" permission")
+						return
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func deviceHasCapability(device *store.Device, capability fileCapability) bool {
+	if device == nil {
+		return false
+	}
+	switch capability {
+	case capBrowse:
+		return device.CanBrowse
+	case capDownload:
+		return device.CanDownload
+	case capUpload:
+		return device.CanUpload
+	case capModify:
+		return device.CanModify
+	case capDelete:
+		return device.CanDelete
+	case capShare:
+		return device.CanShare
+	default:
+		return false
+	}
+}
+
 // opsFromContext returns the per-request *fsops.Ops injected by
 // deviceJailMiddleware, or baseOps if the context has none (e.g. in unit
 // tests that call handlers directly without the middleware chain).

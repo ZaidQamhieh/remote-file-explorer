@@ -379,6 +379,11 @@ func TestRegisterTransferRoutes_ReadOnlyWiring(t *testing.T) {
 	roOps := fsops.New([]string{t.TempDir()}, true)
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(withDevice(req.Context(), &store.Device{ViaLogin: true})))
+		})
+	})
 	r.Route("/v1", func(r chi.Router) {
 		registerTransferRoutes(r, tm, Config{}, roOps)
 	})

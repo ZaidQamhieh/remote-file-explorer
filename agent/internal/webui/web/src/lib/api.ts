@@ -165,6 +165,12 @@ export interface Device {
   jailRoot?: string;
   readOnly?: boolean;
   viaLogin?: boolean;
+  browse?: boolean;
+  download?: boolean;
+  upload?: boolean;
+  modify?: boolean;
+  delete?: boolean;
+  share?: boolean;
 }
 export interface Entry {
   name: string;
@@ -284,7 +290,8 @@ export const api = {
 
   // devices
   listDevices: () => get<Device[]>('/devices'),
-  patchDevice: (id: string, body: Partial<Pick<Device, 'jailRoot' | 'readOnly'>> & { revoked?: boolean }) =>
+  patchDevice: (id: string, body: Partial<Pick<Device,
+    'jailRoot' | 'readOnly' | 'browse' | 'download' | 'upload' | 'modify' | 'delete' | 'share'>> & { revoked?: boolean }) =>
     patch<Device>(`/devices/${id}`, body),
   deleteDevice: (id: string) => del<void>(`/devices/${id}`),
   generatePairingCode: async () => {

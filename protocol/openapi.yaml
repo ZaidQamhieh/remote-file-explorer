@@ -19,6 +19,14 @@ info:
     device other than themselves. An ordinary (non-admin) device may still manage only
     ITSELF via DELETE /devices/{id}.
 
+    File-action permissions are independent per device: browse, download,
+    upload, modify, delete, and share. Existing devices retain their prior
+    access when this model is introduced; future code-paired devices start
+    browse-only. Owner devices bypass these per-device file grants, while the
+    agent's global read-only policy, configured roots, per-device jail/read-only
+    controls, and global share-link switch remain in force. A denied file action
+    returns HTTP 403 with code `CAPABILITY_DENIED`.
+
     Pair, register, and login all require device-identity proof-of-possession: fetch a
     nonce from POST /auth/challenge, sign it with the device's permanent Ed25519 key,
     and send the (devicePublicKey, nonce, signature) triple. The agent pins the public
@@ -317,6 +325,12 @@ paths:
   /pair:
     post:
       summary: Complete device pairing (unauthenticated; consumes one-time pairing code)
+      description: >
+        Newly created code-paired devices start with browse enabled and
+        download, upload, modify, delete, and share disabled. Re-pairing an
+        existing paired device preserves its current grants. If an existing
+        owner-login device is converted back to an ordinary paired device, it
+        returns to the browse-only default.
       security: []
       requestBody:
         required: true
@@ -1429,9 +1443,14 @@ paths:
         Requires the CALLER to be an admin device (Device.viaLogin=true — see
         the top-level description). An ordinary (non-admin) device gets 403
         FORBIDDEN regardless of `{id}`, including targeting itself. These
-        `jailRoot`, `readOnly`, `viewApps`, and `launchApps` are optional and
+        `jailRoot`, `readOnly`, `viewApps`, `launchApps`, `browse`, `download`,
+        `upload`, `modify`, `delete`, and `share` are optional and
         independently applied (only fields present in the body are changed),
-        mirroring PATCH /settings. App permissions default to false for every
+        mirroring PATCH /settings. Existing devices retain their former access
+        when upgraded. New paired devices default to browse-only; login/register
+        owner devices retain full file access and bypass per-device file grants.
+        Global read-only, configured roots, per-device jail/read-only controls,
+        and global sharing remain in force. App permissions default to false for every
         device. `launchApps=true` requires the effective `viewApps` value to
         also be true. `viaLogin` remains authentication provenance/admin status
         and is not controlled by these app permissions. The jail and readOnly
@@ -1460,6 +1479,30 @@ paths:
                   type: boolean
                   default: false
                   description: Allows launching approved apps; requires viewApps=true.
+                browse:
+                  type: boolean
+                  default: true
+                  description: Allows listing directories, drives, search results, trash, metadata, and archive entries.
+                download:
+                  type: boolean
+                  default: false
+                  description: Allows file downloads and byte-derived thumbnail/checksum reads.
+                upload:
+                  type: boolean
+                  default: false
+                  description: Allows PUT /content and resumable upload transfers, including overwrite because the transfer overwrite option is not separately gated by modify.
+                modify:
+                  type: boolean
+                  default: false
+                  description: Allows create, rename, copy, move, archive, chmod, and trash restore operations.
+                delete:
+                  type: boolean
+                  default: false
+                  description: Allows permanent and trash-backed filesystem deletion, plus emptying trash.
+                share:
+                  type: boolean
+                  default: false
+                  description: Allows minting a share link when browse and global sharing are also allowed. Disabling this grant revokes the device's active links.
       responses:
         '200':
           description: Updated device
@@ -1846,6 +1889,32 @@ components:
             Returned on the full device records available to admin devices;
             ordinary paired devices receive only their own minimal record from
             GET /devices.
+        browse:
+          type: boolean
+          default: true
+          description: >
+            Allows file and directory discovery endpoints. Existing rows are
+            migrated with this enabled; new paired devices start browse-only.
+        download:
+          type: boolean
+          default: false
+          description: Allows file-content reads and byte-derived thumbnail/checksum endpoints.
+        upload:
+          type: boolean
+          default: false
+          description: Allows content writes and resumable transfers; upload overwrite is covered by this grant.
+        modify:
+          type: boolean
+          default: false
+          description: Allows create, rename, copy, move, compress, extract, chmod, and trash restore.
+        delete:
+          type: boolean
+          default: false
+          description: Allows filesystem deletion and emptying trash.
+        share:
+          type: boolean
+          default: false
+          description: Allows minting share links with browse and the global sharing switch enabled.
         viaLogin:
           type: boolean
           description: >

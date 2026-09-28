@@ -647,4 +647,42 @@ void main() {
       expect(putHandlerCalls, 0);
     });
   });
+
+  group('device file capabilities', () {
+    test('PATCH sends the complete independent permission set', () async {
+      Map<String, dynamic>? seenBody;
+      String? seenPath;
+      server.handler = (req) async {
+        seenPath = req.uri.path;
+        seenBody =
+            jsonDecode(
+                  await req.cast<List<int>>().transform(utf8.decoder).join(),
+                )
+                as Map<String, dynamic>;
+        await _writeJson(req, 200, {});
+      };
+      final client = AgentClient(hostFor(server), deviceToken: 'owner-token');
+      addTearDown(client.close);
+
+      await client.updateDeviceFileCapabilities(
+        'guest-1',
+        browse: true,
+        download: false,
+        upload: true,
+        modify: false,
+        delete: true,
+        share: false,
+      );
+
+      expect(seenPath, '/v1/devices/guest-1');
+      expect(seenBody, {
+        'browse': true,
+        'download': false,
+        'upload': true,
+        'modify': false,
+        'delete': true,
+        'share': false,
+      });
+    });
+  });
 }

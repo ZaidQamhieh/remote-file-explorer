@@ -31,6 +31,17 @@ function DeviceCard({ device }: { device: Device }) {
   });
 
   const online = isOnline(device);
+  const hasFileCapabilities =
+    device.browse != null && device.download != null && device.upload != null &&
+    device.modify != null && device.delete != null && device.share != null;
+  const filePermissions = [
+    ['Browse files', device.browse ?? false, () => patch.mutate({ browse: !device.browse })],
+    ['Download files', device.download ?? false, () => patch.mutate({ download: !device.download })],
+    ['Upload files', device.upload ?? false, () => patch.mutate({ upload: !device.upload })],
+    ['Modify files', device.modify ?? false, () => patch.mutate({ modify: !device.modify })],
+    ['Delete files', device.delete ?? false, () => patch.mutate({ delete: !device.delete })],
+    ['Create share links', device.share ?? false, () => patch.mutate({ share: !device.share })],
+  ] as const;
 
   return (
     <div className="device-card">
@@ -90,6 +101,30 @@ function DeviceCard({ device }: { device: Device }) {
           Save
         </button>
       </div>
+
+      {hasFileCapabilities && (
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8 }}>
+          <div className="field-title" style={{ marginBottom: 4 }}>File permissions</div>
+          <div className="field-sub" style={{ marginBottom: 6 }}>
+            Upload includes overwrite. Global read-only, configured roots, this device's jail, and global sharing still apply.
+          </div>
+          {device.viaLogin ? (
+            <div className="field-sub">Owner access keeps full file permissions.</div>
+          ) : filePermissions.map(([label, enabled, toggle]) => (
+            <div className="field-row" style={{ padding: '6px 0' }} key={label}>
+              <div className="field-main"><div className="field-title">{label}</div></div>
+              <button
+                type="button"
+                aria-label={`${label}: ${enabled ? 'enabled' : 'disabled'}`}
+                aria-pressed={enabled}
+                className={`switch${enabled ? ' on' : ''}`}
+                disabled={patch.isPending}
+                onClick={toggle}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       <button
         className="btn btn-danger btn-sm"

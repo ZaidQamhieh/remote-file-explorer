@@ -103,9 +103,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 			registerSettingsAndDeviceRoutes(r, cfg, db, pm)
 			registerShareRoutes(r, cfg, db, ops)
-			r.Get("/system/drives", drivesHandler(ops))
-			r.Get("/search", searchHandler(ops, searchIndex))
-			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
+			r.With(requireFileCapabilities(capBrowse)).Get("/system/drives", drivesHandler(ops))
+			r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, searchIndex))
+			r.With(requireFileCapabilities(capDownload)).Get("/thumb", thumbHandler(ops, thumbRenderer))
 			registerUpdateRoutes(r, cfg)
 			registerFsRoutes(r, cfg, ops)
 			registerTrashRoutes(r, cfg, ops)
@@ -163,7 +163,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 // endpoints (mint/revoke/list — serving the file itself is unauthenticated,
 // see registerUnauthRoutes).
 func registerShareRoutes(r chi.Router, cfg Config, db *store.DB, ops *fsops.Ops) {
-	r.Post("/share/mint", mintShareHandler(cfg, db, ops))
+	r.With(requireFileCapabilities(capShare, capBrowse)).Post("/share/mint", mintShareHandler(cfg, db, ops))
 	r.Delete("/share/{tokenHash}", revokeShareHandler(db))
 	r.Get("/share", listSharesHandler(db))
 }
@@ -176,35 +176,35 @@ func registerUpdateRoutes(r chi.Router, cfg Config) {
 
 // registerFsRoutes wires the filesystem CRUD/browse endpoints.
 func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/fs", listDirHandler(ops))
-	r.Delete("/fs", deleteHandler(ops, cfg.TrashDir))
-	r.Post("/fs/folder", createFolderHandler(ops))
-	r.Post("/fs/file", createFileHandler(ops))
-	r.Patch("/fs/rename", renameHandler(ops))
-	r.Post("/fs/copy", copyHandler(ops))
-	r.Post("/fs/move", moveHandler(ops))
-	r.Post("/fs/compress", compressHandler(ops))
-	r.Post("/fs/extract", extractHandler(ops))
-	r.Get("/fs/meta", metaHandler(ops))
-	r.Get("/fs/checksum", checksumHandler(ops))
-	r.Post("/fs/chmod", chmodHandler(ops))
-	r.Get("/fs/archive", archivePeekHandler(ops))
-	r.Post("/fs/checksums", batchChecksumHandler(ops))
-	r.Get("/fs/recent", recentHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs", listDirHandler(ops))
+	r.With(requireFileCapabilities(capDelete)).Delete("/fs", deleteHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/folder", createFolderHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/file", createFileHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Patch("/fs/rename", renameHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/copy", copyHandler(ops))
+	r.With(requireFileCapabilities(capModify, capDelete)).Post("/fs/move", moveHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/compress", compressHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/extract", extractHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/meta", metaHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Get("/fs/checksum", checksumHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/chmod", chmodHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/archive", archivePeekHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Post("/fs/checksums", batchChecksumHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/recent", recentHandler(ops))
 }
 
 // registerTrashRoutes wires the trash list/restore/empty endpoints.
 func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/trash", listTrashHandler(ops, cfg.TrashDir))
-	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
-	r.Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capBrowse)).Get("/trash", listTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capModify)).Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capDelete)).Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
 }
 
 // registerContentRoutes wires whole-file download/write (as opposed to the
 // chunked transfer endpoints in registerTransferRoutes).
 func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/content", downloadHandler(ops, cfg.Settings))
-	r.Put("/content", writeContentHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Get("/content", downloadHandler(ops, cfg.Settings))
+	r.With(requireFileCapabilities(capUpload)).Put("/content", writeContentHandler(ops))
 }
 
 // registerTransferRoutes wires the resumable chunked upload session
@@ -214,6 +214,7 @@ func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 func registerTransferRoutes(r chi.Router, tm *transfer.Manager, cfg Config, ops *fsops.Ops) {
 	r.Get("/transfers/{id}", transferStatusHandler(tm))
 	r.Group(func(r chi.Router) {
+		r.Use(requireFileCapabilities(capUpload))
 		r.Use(requireWritable(ops))
 		r.Post("/transfers", openTransferHandler(tm, ops))
 		r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))

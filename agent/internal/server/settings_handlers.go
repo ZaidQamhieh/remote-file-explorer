@@ -244,6 +244,12 @@ func deviceJSON(d store.Device, cur *store.Device) map[string]any {
 		"readOnly":    d.ReadOnly,
 		"viewApps":    d.ViewApps,
 		"launchApps":  d.LaunchApps,
+		"browse":      d.CanBrowse,
+		"download":    d.CanDownload,
+		"upload":      d.CanUpload,
+		"modify":      d.CanModify,
+		"delete":      d.CanDelete,
+		"share":       d.CanShare,
 		"viaLogin":    d.ViaLogin,
 	}
 }
@@ -338,6 +344,12 @@ type deviceUpdateBody struct {
 	ReadOnly   *bool   `json:"readOnly"`
 	ViewApps   *bool   `json:"viewApps"`
 	LaunchApps *bool   `json:"launchApps"`
+	Browse     *bool   `json:"browse"`
+	Download   *bool   `json:"download"`
+	Upload     *bool   `json:"upload"`
+	Modify     *bool   `json:"modify"`
+	Delete     *bool   `json:"delete"`
+	Share      *bool   `json:"share"`
 }
 
 // setDeviceJailHandler implements PATCH /v1/devices/{id}: sets a target
@@ -397,13 +409,41 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 				return
 			}
 		}
+		if b.Browse != nil || b.Download != nil || b.Upload != nil || b.Modify != nil || b.Delete != nil || b.Share != nil {
+			browse, download := target.CanBrowse, target.CanDownload
+			upload, modify, del, share := target.CanUpload, target.CanModify, target.CanDelete, target.CanShare
+			if b.Browse != nil {
+				browse = *b.Browse
+			}
+			if b.Download != nil {
+				download = *b.Download
+			}
+			if b.Upload != nil {
+				upload = *b.Upload
+			}
+			if b.Modify != nil {
+				modify = *b.Modify
+			}
+			if b.Delete != nil {
+				del = *b.Delete
+			}
+			if b.Share != nil {
+				share = *b.Share
+			}
+			if err := db.SetDeviceFilePermissions(id, browse, download, upload, modify, del, share); err != nil {
+				writeInternal(w, "set device file permissions", err)
+				return
+			}
+		}
 		updated, err := db.GetDeviceByID(id)
 		if err != nil || updated == nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL", "device vanished mid-update")
 			return
 		}
 		audit(db, r, store.AuditDeviceUpdated, id,
-			fmt.Sprintf("jailRoot=%q readOnly=%t viewApps=%t launchApps=%t", updated.JailRoot, updated.ReadOnly, updated.ViewApps, updated.LaunchApps))
+			fmt.Sprintf("jailRoot=%q readOnly=%t viewApps=%t launchApps=%t browse=%t download=%t upload=%t modify=%t delete=%t share=%t",
+				updated.JailRoot, updated.ReadOnly, updated.ViewApps, updated.LaunchApps,
+				updated.CanBrowse, updated.CanDownload, updated.CanUpload, updated.CanModify, updated.CanDelete, updated.CanShare))
 		writeJSON(w, http.StatusOK, deviceJSON(*updated, cur))
 	}
 }

@@ -13,6 +13,12 @@ class Device {
     this.jailRoot = '',
     this.viewApps,
     this.launchApps,
+    this.browse,
+    this.download,
+    this.upload,
+    this.modify,
+    this.delete,
+    this.share,
   });
 
   final String id;
@@ -46,11 +52,37 @@ class Device {
   /// agent predates per-device app capabilities.
   final bool? launchApps;
 
+  /// Per-device file actions. Null when the connected agent predates these
+  /// capabilities, so settings controls can stay hidden on older hosts.
+  final bool? browse;
+  final bool? download;
+  final bool? upload;
+  final bool? modify;
+  final bool? delete;
+  final bool? share;
+
   /// Older agents omit both app capability fields; hide their controls rather
   /// than presenting an inaccurate default-off state.
   bool get hasAppCapabilities => viewApps != null && launchApps != null;
 
-  Device copyWith({bool? viewApps, bool? launchApps}) => Device(
+  bool get hasFileCapabilities =>
+      browse != null &&
+      download != null &&
+      upload != null &&
+      modify != null &&
+      delete != null &&
+      share != null;
+
+  Device copyWith({
+    bool? viewApps,
+    bool? launchApps,
+    bool? browse,
+    bool? download,
+    bool? upload,
+    bool? modify,
+    bool? delete,
+    bool? share,
+  }) => Device(
     id: id,
     label: label,
     created: created,
@@ -63,6 +95,12 @@ class Device {
     jailRoot: jailRoot,
     viewApps: viewApps ?? this.viewApps,
     launchApps: launchApps ?? this.launchApps,
+    browse: browse ?? this.browse,
+    download: download ?? this.download,
+    upload: upload ?? this.upload,
+    modify: modify ?? this.modify,
+    delete: delete ?? this.delete,
+    share: share ?? this.share,
   );
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
@@ -82,5 +120,11 @@ class Device {
     jailRoot: json['jailRoot'] as String? ?? '',
     viewApps: json['viewApps'] as bool?,
     launchApps: json['launchApps'] as bool?,
+    browse: json['browse'] as bool?,
+    download: json['download'] as bool?,
+    upload: json['upload'] as bool?,
+    modify: json['modify'] as bool?,
+    delete: json['delete'] as bool?,
+    share: json['share'] as bool?,
   );
 }

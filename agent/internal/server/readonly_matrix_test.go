@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
 // TestRouteMatrix_ReadOnlyBlocksEveryMutation is the PR-81 regression: a
@@ -33,6 +34,12 @@ func TestRouteMatrix_ReadOnlyBlocksEveryMutation(t *testing.T) {
 	roOps := fsops.New([]string{root}, true)
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(withDevice(req.Context(), &store.Device{ViaLogin: true})))
+		})
+	})
+	r.Use(deviceJailMiddleware(roOps))
 	r.Route("/v1", func(r chi.Router) {
 		registerFsRoutes(r, cfg, roOps)
 		registerTrashRoutes(r, cfg, roOps)

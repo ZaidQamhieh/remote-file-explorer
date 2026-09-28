@@ -41,14 +41,29 @@ const (
 	maxThumbSourceBytes = 64 << 20 // 64 MiB on-disk source cap
 	maxThumbPixels      = 40_000_000
 	// A conservative estimate for the decoded source plus resize working data.
-	decodeBytesPerPixel = 8
-	decodeMemoryBudget  = 384 << 20
-	maxThumbCacheBytes  = 512 << 20
+	decodeBytesPerPixel  = 8
+	decodeMemoryBudget   = 384 << 20
+	maxConcurrentDecodes = 4
+	maxThumbCacheBytes   = 512 << 20
 )
 
 // fullDecodeBudget bounds aggregate memory pressure across simultaneous image
 // decodes. It admits a large image only when the estimated working set fits.
 var fullDecodeBudget = newDecodeBudget(decodeMemoryBudget)
+
+// fullDecodeSem bounds CPU-heavy decode, resize, and encode work independently
+// of the weighted memory budget. In particular, many tiny images each use
+// little memory and could otherwise start an unbounded number of decoders.
+var fullDecodeSem = make(chan struct{}, maxConcurrentDecodes)
+
+func acquireDecodeSlot(ctx context.Context, sem chan struct{}) (func(), error) {
+	select {
+	case sem <- struct{}{}:
+		return func() { <-sem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 // headerDecodeSem bounds the lightweight config-decoding phase too, including
 // work that cannot be interrupted once an image decoder starts reading.
@@ -350,6 +365,11 @@ func renderOpened(ctx context.Context, cf *os.File, maxSize int) ([]byte, error)
 	if width > maxThumbPixels/height {
 		return nil, fmt.Errorf("%w: %dx%d exceeds pixel budget", ErrNotSupported, cfg.Width, cfg.Height)
 	}
+	releaseDecodeSlot, err := acquireDecodeSlot(ctx, fullDecodeSem)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseDecodeSlot()
 	pixels := width * height
 
 	decodeWeight := pixels * decodeBytesPerPixel

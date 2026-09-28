@@ -27,6 +27,7 @@ type keyedLimiter struct {
 	window      time.Duration
 	perKey      map[string]*fixedWindowLimiter
 	maxKeys     int
+	overflow    *fixedWindowLimiter
 }
 
 func newKeyedLimiter(maxAttempts int, window time.Duration) *keyedLimiter {
@@ -35,6 +36,7 @@ func newKeyedLimiter(maxAttempts int, window time.Duration) *keyedLimiter {
 		window:      window,
 		perKey:      make(map[string]*fixedWindowLimiter),
 		maxKeys:     4096,
+		overflow:    newFixedWindowLimiter(maxAttempts, window),
 	}
 }
 
@@ -46,6 +48,12 @@ func (k *keyedLimiter) Allow(key string) bool {
 	if !ok {
 		if len(k.perKey) >= k.maxKeys {
 			k.pruneLocked()
+		}
+		// Do not grow the map if every bucket is still active. A distributed
+		// caller can use a fresh source address per request; keep memory bounded
+		// by sending previously unseen keys through one shared overflow window.
+		if len(k.perKey) >= k.maxKeys {
+			return k.overflow.Allow()
 		}
 		l = newFixedWindowLimiter(k.maxAttempts, k.window)
 		k.perKey[key] = l

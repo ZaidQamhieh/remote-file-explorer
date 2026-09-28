@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"runtime"
@@ -296,7 +297,16 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
 		return false
 	}
-	if dec.More() {
+	// More is meaningful only while iterating an array or object; after a
+	// top-level value it does not detect a second JSON document. Decode once
+	// more and require EOF so ambiguous bodies cannot be interpreted differently
+	// by intermediaries or future handler code.
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "request body too large")
+			return false
+		}
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "unexpected trailing data")
 		return false
 	}

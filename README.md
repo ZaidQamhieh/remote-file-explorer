@@ -56,6 +56,15 @@ path, or arguments. Launch attempts are rate-limited and recorded in the host au
 agent is running without an active desktop session, launching is unavailable until that user signs
 in to the desktop. This applies to all three host platforms.
 
+## Device file access
+
+New devices paired with a one-time code can browse files, but start without download, upload,
+modify, delete, share-link, or app-catalog access. An owner device authenticated with the host
+account can grant these permissions separately in **Settings → Devices**. Existing devices keep
+their prior file access when upgraded. Upload permission also allows replacing an existing file;
+the host's configured roots, per-device jail, read-only mode, and global share-link switch continue
+to apply.
+
 ## Install the host agent
 
 Download the matching host binary, verify its SHA-256 checksum, install it for the signed-in user,

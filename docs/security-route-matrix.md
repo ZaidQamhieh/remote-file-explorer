@@ -54,10 +54,16 @@ bypass per-device file grants; configured roots, global/per-device read-only, an
 remain effective. One limitation remains: upload authorization also permits overwriting because
 the transfer engine's overwrite check is not separately wired to the `modify` grant. Share links
 are public one-use bearer credentials; disabling a device's share grant deletes its outstanding
-tokens, but changing its jail does not retroactively change links already minted. The code also
-retains a path-based filesystem jail check; a local process able to race filesystem components
-may exploit time-of-check/time-of-use gaps until descriptor-relative operations replace the
-check-then-open pattern.
+tokens, but changing its jail does not retroactively change links already minted.
+
+Configured and per-device jails use rooted filesystem handles for the server's file operations,
+recursive walks, thumbnail reads, and upload publication; upload completion rechecks the current
+request's effective jail before publishing. `os.Root` prevents symlink traversal outside the opened
+root, but it does not block mount-point or Linux bind-mount traversal, `/proc` special files, or
+Unix device files. Linux adversarial symlink-race tests run locally; Windows and macOS server tests
+were cross-compiled but not runtime-tested in this environment. When the target filesystem does
+not support hard links, overwrite=false upload publication uses rooted `O_EXCL` copying: it never
+replaces an existing destination, but the destination can be visible before the full copy finishes.
 
 ## Transport and reachability
 

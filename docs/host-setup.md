@@ -141,7 +141,10 @@ host's certificate fingerprint. On the phone, open **Add computer → Scan QR**.
 fingerprint shown by the phone matches the value displayed in the trusted host terminal (or another
 trusted, independent channel) before completing pairing. A QR and fingerprint received together
 through an untrusted network are not independent proof of the host's identity. Pairing codes expire
-and can only be used once.
+and can only be used once. A newly code-paired device starts with browse access only. Sign in or
+register a host account on an owner device to grant download, upload, modify, delete, share-link,
+and app-catalog permissions separately under **Settings → Devices**. The host's configured roots,
+per-device jail, read-only mode, and global share-link switch continue to limit access.
 
 ## 6. Manage the local agent
 

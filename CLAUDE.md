@@ -66,8 +66,12 @@ concurrent writes safe).
 fingerprint at pairing (TOFU)** via `HttpClient.badCertificateCallback` — a later
 mismatch is rejected. Pairing mints a **revocable per-device bearer token** stored in
 Keychain/Keystore. Agent-side authorization: root-path jail, optional read-only mode,
-device revoke/remove, `/pair` rate-limited 10/min. Path normalization enforces the jail
-against traversal/symlink escape. **Audit log:** account/device/share events only
+device revoke/remove, `/pair` rate-limited 10/min, and independent per-device
+browse/download/upload/modify/delete/share grants. Existing devices preserve their effective
+access on upgrade; new code-paired devices start browse-only; password-authenticated owner
+devices bypass these file grants, while global policy, roots, jail, and read-only controls still
+apply. Server file operations use rooted filesystem handles to prevent symlink escapes during
+access. **Audit log:** account/device/share events only
 (pair, register, login incl. failures, device revoke/remove/limit change, share
 mint/revoke, agent restart) — `audit_log` table, admin-only `GET /v1/audit`,
 `rfe-agent audit` CLI. **File operations are deliberately not recorded**; they

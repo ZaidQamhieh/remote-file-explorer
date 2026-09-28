@@ -50,7 +50,10 @@ project currently has **no cloud relay or cloud database**.
    per-device file grants, while configured roots, global and per-device read-only, per-device
    jail, and the global share switch remain in force. App-catalog viewing and app launching
    remain separate per-device grants, default off; admin provenance does not bypass them.
-4. Strict path normalization + jail enforcement guards against traversal and symlink escape.
+4. Strict path normalization + rooted filesystem operations enforce configured and per-device
+   jails against traversal and symlink escape during file access. This does not fence mount points,
+   Linux bind mounts, `/proc` special files, or Unix device files inside an allowed root; see the
+   route/security matrix for platform verification limits.
 5. App launch accepts only an opaque ID from the agent's current-user app catalog. The agent
    re-resolves it before launch, does not accept client paths/commands/arguments, checks for an
    interactive desktop session, applies rate/concurrency limits, and audits the result. Catalog
@@ -74,7 +77,11 @@ changing transfer-session enforcement.
 ## Transfers (the core engineering)
 
 - **Upload:** resumable chunked sessions. Per-chunk + whole-file SHA-256; received-chunk bitmap in
-  SQLite for resume; atomic temp→final rename on completion. Chunks can upload in parallel.
+  SQLite for resume. Server completion streams the verified open temp file through the current
+  request's rooted filesystem operations into the destination. Overwrite uses a same-directory
+  atomic rename; overwrite=false uses hard-link publication where available, with a rooted
+  `O_EXCL` copy fallback on filesystems that do not support hard links. That fallback can expose
+  partial content while copying, but never replaces an existing file. Chunks can upload in parallel.
 - **Download:** HTTP Range requests; resume from last offset; optional parallel ranges.
 
 See `../protocol/openapi.yaml` for the full API surface.
@@ -170,12 +177,12 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/throughput.go` | Process-lifetime cumulative rx/tx byte counters exposed via metrics. |
 | `internal/server/wol_handler.go` | Wake-on-LAN send endpoint. |
 | `internal/server/webdata_handlers.go` | List endpoints (+ user removal) backing the web companion's Transfers/Users/Logs pages. |
-| `internal/fsops/fsops.go` | Core listing + file ops, built on `jail.go`'s path resolution. |
-| `internal/fsops/jail.go` | **Path jail + normalization** (traversal/symlink defense) — the security boundary for every fs operation; `Resolve` is the single chokepoint. |
+| `internal/fsops/fsops.go` | Core listing + file ops, implemented through `jail.go`'s request-scoped rooted paths and open handles. |
+| `internal/fsops/jail.go` | **Path jail + rooted operations** (normalization, symlink defense, descriptor-relative access) — opens the active root and confines server filesystem operations to it. `Resolve` remains a path validation API, not a race-resistant handle. |
 | `internal/fsops/archive.go` | Compress (zip) / Extract (zip, tar.gz), both routed through `Resolve`. |
 | `internal/fsops/trash.go` | Move-to-trash / restore, XDG Trash-layout (`files/` + `info/*.trashinfo`). |
 | `internal/fsops/{drives_*,birthtime_*}.go` | OS-specific drive enumeration + file birthtime. |
-| `internal/transfer/transfer.go` | **Resumable chunked transfer engine** — SHA-256, received-chunk bitmap, atomic rename. Touch its UI, not its logic. |
+| `internal/transfer/transfer.go` | **Resumable chunked transfer engine** — SHA-256, received-chunk bitmap, and server-supplied publication callback. Its legacy direct API remains for package callers; server writes publish through rooted `fsops`. |
 | `internal/transfer/throttle.go` | Rate-limited `io.ReadSeeker` wrapper for bandwidth-capped transfers. |
 | `internal/thumbs/thumbs.go` | Thumbnail generation. |
 | `internal/pairing/pairing.go` | DB-backed pairing codes (`Mint`/`Consume`). |

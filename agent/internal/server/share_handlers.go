@@ -87,7 +87,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			handleFsError(w, err)
 			return
 		}
-		info, err := os.Stat(resolved)
+		info, err := reqOps.Stat(req.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
@@ -180,19 +180,13 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		// Defense in depth (T3): re-validate the minted path against the
-		// agent's CURRENT jail config, in case roots changed since mint time.
-		resolved, err := ops.Resolve(path)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
-			return
-		}
-
+		// OpenFile re-validates the minted path against the agent's CURRENT
+		// jail config and opens it through the rooted filesystem boundary.
 		// The file may have been deleted/moved since mint (T6-adjacent).
 		// O_NONBLOCK prevents a path swapped to a FIFO from pinning an HTTP
 		// handler while Open waits for a writer. It has no effect for regular
 		// files; validate the opened descriptor before sending any bytes.
-		f, err := os.OpenFile(resolved, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		f, err := ops.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
 			return

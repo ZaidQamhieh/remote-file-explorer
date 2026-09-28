@@ -97,7 +97,7 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 		h := &recentHeap{}
 		heap.Init(h)
 		for _, root := range roots {
-			walkForRecent(ctx, root, limit, h)
+			walkForRecentWithOps(ctx, ops, root, limit, h)
 			if ctx.Err() != nil {
 				break
 			}
@@ -117,7 +117,25 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 // silently; other walk errors are ignored too, matching search.go's
 // best-effort behavior.
 func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
-	_ = filepath.WalkDir(root, func(entryPath string, d fs.DirEntry, err error) error {
+	openedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return
+	}
+	defer openedRoot.Close()
+	walkForRecentRoot(ctx, openedRoot, root, limit, h)
+}
+
+func walkForRecentWithOps(ctx context.Context, ops *fsops.Ops, rootPath string, limit int, h *recentHeap) {
+	openedRoot, err := ops.OpenDir(rootPath)
+	if err != nil {
+		return
+	}
+	defer openedRoot.Close()
+	walkForRecentRoot(ctx, openedRoot, rootPath, limit, h)
+}
+
+func walkForRecentRoot(ctx context.Context, root *os.Root, rootPath string, limit int, h *recentHeap) {
+	_ = fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -133,8 +151,12 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 			}
 			return nil
 		}
+		entryPath := rootPath
+		if relPath != "." {
+			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
+		}
 		if d.IsDir() {
-			if entryPath != root && shouldSkipVirtualDir(entryPath) {
+			if relPath != "." && shouldSkipVirtualDir(entryPath) {
 				return fs.SkipDir
 			}
 			return nil
@@ -144,7 +166,7 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 		if infoErr != nil {
 			return nil
 		}
-		entry := fsops.EntryFromInfo(info, entryPath)
+		entry := fsops.EntryFromInfoNoSniff(info, entryPath)
 
 		if h.Len() < limit {
 			heap.Push(h, entry)

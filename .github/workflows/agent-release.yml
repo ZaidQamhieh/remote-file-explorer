@@ -103,7 +103,24 @@ jobs:
       - name: Create SHA-256 manifest
         run: |
           set -euo pipefail
-          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 6
+          mapfile -t archives < <(find dist -type f -name 'agent-v*' | sort)
+          if [[ "${#archives[@]}" -ne 6 ]]; then
+            echo "::error::Expected six host archives, found ${#archives[@]}"
+            find dist -maxdepth 4 -print
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
+            name="${archive##*/}"
+            if [[ "$archive" != "dist/$name" ]]; then
+              if [[ -e "dist/$name" ]]; then
+                echo "::error::Duplicate host archive name '$name'"
+                exit 1
+              fi
+              mv "$archive" "dist/$name"
+            fi
+          done
+          find dist -depth -mindepth 1 -type d -empty -delete
+          test "$(find dist -mindepth 1 -maxdepth 1 -type f -name 'agent-v*' | wc -l)" -eq 6
           (cd dist && sha256sum agent-v* > SHA256SUMS)
           cat dist/SHA256SUMS
 

@@ -16,6 +16,7 @@ import '../../core/ui/feedback.dart';
 import '../../core/ui/gradient_button.dart';
 import '../../core/ui/pressable.dart';
 import '../../core/ui/screen_header.dart';
+import 'lan_discovery.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Fetches a fresh challenge nonce from [client] and signs it with this
@@ -53,8 +54,8 @@ class _SwitchToCode {
 
 const _switchToCode = _SwitchToCode();
 
-/// Entry point for pairing a new host. Landing UI matches the mockup: a
-/// "Scan QR / Enter Code" segmented control over the primary flow, with
+/// Entry point for pairing a new host. QR, local-network discovery, and
+/// manual code entry use the same certificate-pinned pairing flow, with
 /// account Login/Register — real capabilities (see `_LoginTab`/
 /// `_RegisterTab`) that have no equivalent in the mockup at all — reachable
 /// as secondary links underneath rather than dropped.
@@ -62,7 +63,7 @@ class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key, this.prefillAddress});
 
   /// When non-null the code-entry panel opens with this address pre-filled.
-  /// The current Flutter app does not discover hosts through mDNS.
+  /// Optional address to prefill when entering code manually.
   final String? prefillAddress;
 
   @override
@@ -70,7 +71,8 @@ class PairingScreen extends ConsumerStatefulWidget {
 }
 
 class _PairingScreenState extends ConsumerState<PairingScreen> {
-  bool _codeMode = false;
+  int _selectedMode = 0;
+  String? _discoveredAddress;
 
   Future<void> _openCameraScan() async {
     final result = await Navigator.of(context).push<Object?>(
@@ -82,7 +84,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     if (result is Host) {
       Navigator.of(context).pop(result);
     } else if (result is _SwitchToCode) {
-      setState(() => _codeMode = true);
+      setState(() => _selectedMode = 2);
     }
   }
 
@@ -128,17 +130,33 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
               Spacing.sm,
             ),
             child: _SegmentedControl(
-              options: [context.l10n.scanQrTab, context.l10n.enterCodeTab],
-              selectedIndex: _codeMode ? 1 : 0,
-              onChanged: (i) => setState(() => _codeMode = i == 1),
+              options: [
+                context.l10n.scanQrTab,
+                context.l10n.lanDiscoveryTab,
+                context.l10n.enterCodeTab,
+              ],
+              selectedIndex: _selectedMode,
+              onChanged: (i) => setState(() => _selectedMode = i),
             ),
           ),
           Expanded(
             child: IndexedStack(
-              index: _codeMode ? 1 : 0,
+              index: _selectedMode,
               children: [
                 _QrPairingPanel(onOpenCamera: _openCameraScan),
-                _ManualPairingTab(prefillAddress: widget.prefillAddress),
+                _LanDiscoveryPanel(
+                  onSelect:
+                      (address) => setState(() {
+                        _discoveredAddress = address;
+                        _selectedMode = 2;
+                      }),
+                ),
+                KeyedSubtree(
+                  key: ValueKey(_discoveredAddress),
+                  child: _ManualPairingTab(
+                    prefillAddress: _discoveredAddress ?? widget.prefillAddress,
+                  ),
+                ),
               ],
             ),
           ),
@@ -155,6 +173,174 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
                 TextButton(
                   onPressed: _openRegister,
                   child: Text(context.l10n.registerTab),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LanDiscoveryPanel extends StatefulWidget {
+  const _LanDiscoveryPanel({required this.onSelect});
+
+  final ValueChanged<String> onSelect;
+
+  @override
+  State<_LanDiscoveryPanel> createState() => _LanDiscoveryPanelState();
+}
+
+class _LanDiscoveryPanelState extends State<_LanDiscoveryPanel> {
+  List<DiscoveredAgent> _agents = const [];
+  bool _scanning = false;
+  bool _hasSearched = false;
+  bool _failed = false;
+
+  Future<void> _scan() async {
+    if (_scanning) {
+      try {
+        await LanDiscovery.stop();
+      } catch (_) {
+        // The scan may already have ended at its timeout.
+      }
+      return;
+    }
+    setState(() {
+      _scanning = true;
+      _hasSearched = true;
+      _failed = false;
+      _agents = const [];
+    });
+    try {
+      final agents = await LanDiscovery.scan();
+      if (mounted) setState(() => _agents = agents);
+    } on PlatformException {
+      if (mounted) setState(() => _failed = true);
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_scanning) {
+      LanDiscovery.stop().ignore();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (!LanDiscovery.isSupported) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.lg),
+          child: Text(
+            context.l10n.lanDiscoveryUnavailable,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.lg,
+        Spacing.sm,
+        Spacing.lg,
+        Spacing.lg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.l10n.lanDiscoveryIntro,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: Spacing.md),
+          FilledButton.icon(
+            onPressed: _scan,
+            icon: Icon(_scanning ? LucideIcons.x : LucideIcons.radar),
+            label: Text(
+              _scanning
+                  ? context.l10n.stopLocalSearch
+                  : context.l10n.scanLocalNetwork,
+            ),
+          ),
+          if (_scanning) ...[
+            const SizedBox(height: Spacing.md),
+            const LinearProgressIndicator(),
+            const SizedBox(height: Spacing.sm),
+            Text(
+              context.l10n.searchingLocalNetwork,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (_failed) ...[
+            const SizedBox(height: Spacing.md),
+            Text(
+              context.l10n.lanDiscoveryFailed,
+              style: TextStyle(color: scheme.error),
+            ),
+          ] else if (!_scanning && _hasSearched && _agents.isEmpty) ...[
+            const SizedBox(height: Spacing.md),
+            Text(
+              context.l10n.noLocalAgentsFound,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+          for (final agent in _agents) ...[
+            const SizedBox(height: Spacing.sm),
+            Card(
+              child: ListTile(
+                leading: Icon(LucideIcons.computer, color: scheme.primary),
+                title: Text(agent.name),
+                subtitle: Text(agent.authority),
+                trailing: TextButton(
+                  onPressed: () => widget.onSelect(agent.authority),
+                  child: Text(context.l10n.useAddress),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: Spacing.lg),
+          Container(
+            padding: const EdgeInsets.all(Spacing.md),
+            decoration: BoxDecoration(
+              color: scheme.tertiaryContainer.withValues(alpha: 0.5),
+              borderRadius: Radii.cardR,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  LucideIcons.shieldAlert,
+                  size: 18,
+                  color: scheme.onTertiaryContainer,
+                ),
+                const SizedBox(width: Spacing.md2),
+                Expanded(
+                  child: Text(
+                    context.l10n.discoveryTrustWarning,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: scheme.onTertiaryContainer,
+                      height: 1.45,
+                    ),
+                  ),
                 ),
               ],
             ),

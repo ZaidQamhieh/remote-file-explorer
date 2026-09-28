@@ -82,6 +82,8 @@ agent/internal/    server, fsops, transfer, search, thumbs, pairing, store, secu
 protocol/          openapi.yaml (shared contract)
 ```
 
-The agent advertises `_rfe._tcp` over mDNS/DNS-SD. The Flutter app does not currently browse for
-those advertisements; host discovery in the app still uses QR pairing or manually entered
-addresses.
+The agent advertises `_rfe._tcp` over mDNS/DNS-SD. On Android, Add computer → Find on LAN runs a
+bounded, user-started system DNS-SD scan and lists IPv4 address candidates. Selecting one only
+prefills the ordinary code-pairing form; the TLS certificate fingerprint must still be obtained
+through a trusted independent channel before the pairing code is sent. QR and manual address
+entry remain available. iOS is out of scope for this Android-first app.

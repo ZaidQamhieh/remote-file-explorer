@@ -14,9 +14,11 @@ hostname without a VPN. **Tailscale is optional** for remote access; the app can
 direct HTTPS hostname or IP as a fallback route. That route works only after the PC owner configures
 public DNS (if needed), router NAT, and firewall access to the agent. The app never opens ports or
 changes router settings, and its pinned certificate means a TLS-terminating proxy with a different
-certificate is not compatible. The agent advertises itself over mDNS/DNS-SD, but the Flutter app
-does not currently browse those records, so add a host by scanning its pairing QR or entering its
-address. The project has no cloud relay or cloud database. See `docs/` for the full architecture.
+certificate is not compatible. The agent advertises itself over mDNS/DNS-SD; the Android app can
+list local IPv4 candidates from Add computer → Find on LAN, then still requires the normal
+certificate-pin and pairing-code checks. mDNS does not authenticate a host. QR pairing and manual
+address entry remain available. The project has no cloud relay or cloud database. See `docs/` for
+the full architecture.
 
 ## Status
 

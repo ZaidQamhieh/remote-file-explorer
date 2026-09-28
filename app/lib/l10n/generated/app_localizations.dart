@@ -1738,11 +1738,71 @@ abstract class AppLocalizations {
   /// **'Scan QR'**
   String get scanQrTab;
 
+  /// No description provided for @lanDiscoveryTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Find on LAN'**
+  String get lanDiscoveryTab;
+
   /// No description provided for @enterCodeTab.
   ///
   /// In en, this message translates to:
   /// **'Enter Code'**
   String get enterCodeTab;
+
+  /// No description provided for @lanDiscoveryIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this local network for RFE computers. When one is found, use its address in the existing secure pairing flow.'**
+  String get lanDiscoveryIntro;
+
+  /// No description provided for @scanLocalNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Search local network'**
+  String get scanLocalNetwork;
+
+  /// No description provided for @stopLocalSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop search'**
+  String get stopLocalSearch;
+
+  /// No description provided for @searchingLocalNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for RFE computers…'**
+  String get searchingLocalNetwork;
+
+  /// No description provided for @noLocalAgentsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No RFE computers found. Check that the host is running and both devices are on the same local network, or use QR/manual pairing.'**
+  String get noLocalAgentsFound;
+
+  /// No description provided for @lanDiscoveryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Local network discovery is available on Android. You can still pair by QR code or enter the host address manually.'**
+  String get lanDiscoveryUnavailable;
+
+  /// No description provided for @lanDiscoveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not search the local network. Try again or use QR/manual pairing.'**
+  String get lanDiscoveryFailed;
+
+  /// No description provided for @useAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Use address'**
+  String get useAddress;
+
+  /// No description provided for @discoveryTrustWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'A computer found on the network is not trusted yet. Verify its certificate fingerprint through a trusted channel and enter the one-time pairing code before connecting.'**
+  String get discoveryTrustWarning;
 
   /// No description provided for @openCameraViewfinder.
   ///

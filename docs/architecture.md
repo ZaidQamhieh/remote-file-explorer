@@ -12,9 +12,10 @@ Two components plus a shared contract:
 The app talks to the agent over **HTTPS (HTTP/2) + TLS**. On a local network it can connect by
 IP or hostname without a VPN. **Tailscale is optional** and provides a private remote route when
 installed on both devices; without it, remote access requires another routable path. The agent
-advertises `_rfe._tcp` over mDNS/DNS-SD, but the Flutter app does not currently browse for those
-records, so in-app host discovery still relies on QR pairing or manually entered addresses. The
-app can save a direct HTTPS hostname or IP as a final connection fallback. The PC owner must
+advertises `_rfe._tcp` over mDNS/DNS-SD, and Android can browse for IPv4 candidates from the
+Add computer screen. QR pairing and manual addresses remain available. Discovery only supplies
+an address; the user still verifies the TLS fingerprint independently and enters a pairing code.
+The app can save a direct HTTPS hostname or IP as a final connection fallback. The PC owner must
 configure DNS, router NAT, and firewall access; the app does not modify network settings. The
 project currently has **no cloud relay or cloud database**.
 
@@ -25,7 +26,7 @@ project currently has **no cloud relay or cloud database**.
 | Mobile framework | Flutter (Riverpod, dio, flutter_secure_storage) |
 | Backend | Custom Go host agent — single static binary, runs as a service |
 | Connection routes | LAN, optional Tailscale, then a user-configured direct HTTPS address; no built-in relay |
-| Agent discovery | Agent-side mDNS/DNS-SD advertisement; Flutter app-side browsing is not implemented |
+| Agent discovery | Agent-side `_rfe._tcp` advertisement; Android app performs an explicit, bounded mDNS scan and lists IPv4 candidates |
 | Transport security | TLS with a self-signed cert; enrollment pins a SHA-256 fingerprint obtained out of band |
 | Pin storage | `HostStore` Keychain/Keystore secure storage is authoritative; the SharedPreferences copy is not a trust source |
 | Storage | SQLite on the agent; app metadata locally and tokens/pins in Keychain/Keystore secure storage |
@@ -136,7 +137,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 | search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |
 | settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,device_file_access_controls,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings and independent file-action grants, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
 | transfers | `transfer_manager.dart`, `transfer_state.dart`, `chunk_planner.dart`, `transfer_speed.dart`, `widgets/mini_transfer_bar.dart` | Transfer queue/center: manager orchestration, state, chunk planning, speed/ETA, mini bar. |
-| pairing | `pairing_screen.dart` | QR scan / manual pairing flow. |
+| pairing | `pairing_screen.dart`, `lan_discovery.dart` | QR, manual, and Android LAN discovery entry points; discovery feeds into the existing pinned pairing flow. |
 | handoff | `qr_generate_screen.dart`, `qr_scan_screen.dart` | Device-to-device handoff via QR (distinct from agent pairing). |
 | onboarding | `onboarding_screen.dart` | First-run intro flow. |
 | photo_backup | `photo_backup_controller.dart`, `photo_backup_logic.dart`, `photo_backup_prefs.dart`, `photo_backup_screen.dart` | Camera-roll auto-backup to a host: controller/logic split, prefs, settings UI. |
@@ -193,7 +194,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/store/store.go` | SQLite store: devices, tokens, pairing codes, transfer bitmaps. Busy-timeout DSN for daemon+CLI concurrency. |
 | `internal/updates/updates.go` | Update-channel management (the `updates/` dir). |
 | `internal/netinfo/netinfo.go` | LAN + Tailscale address detection. |
-| `internal/mdns/mdns.go` | Agent-side mDNS/DNS-SD advertisement (`_rfe._tcp`). The Flutter app does not currently browse these records; users still scan a pairing QR or enter the address. |
+| `internal/mdns/mdns.go` | Agent-side mDNS/DNS-SD advertisement (`_rfe._tcp`) consumed by Android's explicit local-network discovery scan. |
 | `internal/webui/` (`webui.go`, `web/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. The Vite + React + TypeScript source lives in `web/`; run `npm run build` there to generate `dist/`, which Go embeds into the agent binary. Edit `web/src/` and rebuild; treat `dist/` as generated output. |
 
 ## Test → source map (used by `scripts/test-affected.sh`)

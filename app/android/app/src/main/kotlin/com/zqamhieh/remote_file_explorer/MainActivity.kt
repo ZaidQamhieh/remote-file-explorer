@@ -7,10 +7,15 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -20,17 +25,31 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.net.Inet4Address
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "rfe/downloads"
     private val transfersChannelName = "rfe/transfers"
     private val intentsChannelName = "rfe/intents"
+    private val discoveryChannelName = "rfe/discovery"
+    private val discoveryServiceType = "_rfe._tcp."
+    private val discoveryTimeoutMs = 8_000L
 
     /** Set by Tasker's "Send Intent" (or any caller) to jump to a host's explorer. */
     private val actionOpenHost = "com.zqamhieh.remote_file_explorer.OPEN_HOST"
     private val extraHostId = "hostId"
 
     private var intentChannel: MethodChannel? = null
+    private var discoveryManager: NsdManager? = null
+    private var discoveryListener: NsdManager.DiscoveryListener? = null
+    private var discoveryResult: MethodChannel.Result? = null
+    private var discoveryTimeout: Runnable? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+    private val discoveryCandidates = linkedMapOf<String, Map<String, Any>>()
+    private val resolvingServices = mutableSetOf<String>()
+    private val discoveryLock = Any()
+    private var discoveryActive = false
+    private val discoveryHandler = Handler(Looper.getMainLooper())
 
     /**
      * Host id from an [actionOpenHost] intent that started the activity cold —
@@ -96,6 +115,17 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, discoveryChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "scan" -> startLanDiscovery(result)
+                    "stop" -> {
+                        finishLanDiscovery()
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, transfersChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -184,6 +214,153 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * Browses only for the RFE DNS-SD service on the current LAN. The records
+     * are untrusted address candidates; pairing still verifies the out-of-band
+     * TLS fingerprint before sending a code or credentials.
+     */
+    @Suppress("DEPRECATION")
+    private fun startLanDiscovery(result: MethodChannel.Result) {
+        if (discoveryResult != null) {
+            result.error("SCAN_BUSY", "A local network search is already running", null)
+            return
+        }
+
+        val manager = getSystemService(Context.NSD_SERVICE) as? NsdManager
+        if (manager == null) {
+            result.error("DISCOVERY_UNAVAILABLE", "Android local network discovery is unavailable", null)
+            return
+        }
+
+        discoveryManager = manager
+        discoveryResult = result
+        synchronized(discoveryLock) {
+            discoveryActive = true
+            discoveryCandidates.clear()
+            resolvingServices.clear()
+        }
+
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(serviceType: String) {
+                // Timeout is armed before the platform call, so even a lost
+                // start callback cannot leave discovery running indefinitely.
+            }
+
+            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                if (!serviceInfo.serviceType.startsWith("_rfe._tcp")) return
+                val key = "${serviceInfo.serviceName}|${serviceInfo.serviceType}"
+                val shouldResolve = synchronized(discoveryLock) {
+                    discoveryActive && discoveryCandidates.size < 64 && resolvingServices.add(key)
+                }
+                if (!shouldResolve) return
+                try {
+                    manager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                        override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                            synchronized(discoveryLock) { resolvingServices.remove(key) }
+                        }
+
+                        override fun onServiceResolved(info: NsdServiceInfo) {
+                            synchronized(discoveryLock) { resolvingServices.remove(key) }
+                            val address = info.host as? Inet4Address ?: return
+                            val hostAddress = address.hostAddress ?: return
+                            if (info.port !in 1..65535) return
+                            val name = info.serviceName.trim().ifEmpty { "RFE computer" }
+                            val authority = "$hostAddress:${info.port}"
+                            synchronized(discoveryLock) {
+                                if (discoveryActive) {
+                                    discoveryCandidates[authority] = mapOf(
+                                        "name" to name.take(128),
+                                        "address" to hostAddress,
+                                        "port" to info.port,
+                                    )
+                                }
+                            }
+                        }
+                    })
+                } catch (_: RuntimeException) {
+                    synchronized(discoveryLock) { resolvingServices.remove(key) }
+                }
+            }
+
+            override fun onServiceLost(serviceInfo: NsdServiceInfo) = Unit
+
+            override fun onDiscoveryStopped(serviceType: String) = Unit
+
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                finishLanDiscovery(
+                    "DISCOVERY_FAILED",
+                    "Could not start local network search (Android error $errorCode)",
+                )
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                finishLanDiscovery(
+                    "DISCOVERY_FAILED",
+                    "Could not stop local network search (Android error $errorCode)",
+                )
+            }
+        }
+
+        discoveryListener = listener
+        try {
+            val wifiManager = getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            multicastLock = wifiManager?.createMulticastLock("rfe-lan-discovery")?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+            val timeout = Runnable { finishLanDiscovery() }
+            discoveryTimeout = timeout
+            discoveryHandler.postDelayed(timeout, discoveryTimeoutMs)
+            manager.discoverServices(
+                discoveryServiceType,
+                NsdManager.PROTOCOL_DNS_SD,
+                listener,
+            )
+        } catch (error: RuntimeException) {
+            finishLanDiscovery("DISCOVERY_FAILED", error.message ?: "Could not search the local network")
+        }
+    }
+
+    private fun finishLanDiscovery(errorCode: String? = null, errorMessage: String? = null) {
+        discoveryTimeout?.let(discoveryHandler::removeCallbacks)
+        discoveryTimeout = null
+        multicastLock?.let { lock ->
+            if (lock.isHeld) lock.release()
+        }
+        multicastLock = null
+
+        val listener = discoveryListener
+        discoveryListener = null
+        if (listener != null) {
+            try {
+                discoveryManager?.stopServiceDiscovery(listener)
+            } catch (_: RuntimeException) {
+                // The platform may already have stopped after a start failure.
+            }
+        }
+
+        val result = discoveryResult
+        discoveryResult = null
+        val candidates = synchronized(discoveryLock) {
+            discoveryActive = false
+            resolvingServices.clear()
+            discoveryCandidates.values.toList()
+        }
+        if (result != null) {
+            if (errorCode != null) {
+                result.error(errorCode, errorMessage, null)
+            } else {
+                result.success(candidates)
+            }
+        }
+        discoveryManager = null
+    }
+
+    override fun onDestroy() {
+        finishLanDiscovery()
+        super.onDestroy()
     }
 
     /**

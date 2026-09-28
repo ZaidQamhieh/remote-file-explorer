@@ -1052,7 +1052,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanQrTab => 'Scan QR';
 
   @override
+  String get lanDiscoveryTab => 'Find on LAN';
+
+  @override
   String get enterCodeTab => 'Enter Code';
+
+  @override
+  String get lanDiscoveryIntro =>
+      'Search this local network for RFE computers. When one is found, use its address in the existing secure pairing flow.';
+
+  @override
+  String get scanLocalNetwork => 'Search local network';
+
+  @override
+  String get stopLocalSearch => 'Stop search';
+
+  @override
+  String get searchingLocalNetwork => 'Looking for RFE computers…';
+
+  @override
+  String get noLocalAgentsFound =>
+      'No RFE computers found. Check that the host is running and both devices are on the same local network, or use QR/manual pairing.';
+
+  @override
+  String get lanDiscoveryUnavailable =>
+      'Local network discovery is available on Android. You can still pair by QR code or enter the host address manually.';
+
+  @override
+  String get lanDiscoveryFailed =>
+      'Could not search the local network. Try again or use QR/manual pairing.';
+
+  @override
+  String get useAddress => 'Use address';
+
+  @override
+  String get discoveryTrustWarning =>
+      'A computer found on the network is not trusted yet. Verify its certificate fingerprint through a trusted channel and enter the one-time pairing code before connecting.';
 
   @override
   String get openCameraViewfinder => 'Open camera viewfinder';

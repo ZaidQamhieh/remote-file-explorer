@@ -87,3 +87,8 @@ bounded, user-started system DNS-SD scan and lists IPv4 address candidates. Sele
 prefills the ordinary code-pairing form; the TLS certificate fingerprint must still be obtained
 through a trusted independent channel before the pairing code is sent. QR and manual address
 entry remain available. iOS is out of scope for this Android-first app.
+
+A brand-new agent database defaults its allowed root to a dedicated `RFE Files` folder under the
+signed-in user's home. Pass `-roots <path>` to select another root; unrestricted access requires an
+explicit empty `-roots` value or owner settings. Existing saved root policies are retained.
+`rfe-agent setup` provides the interactive first-run folder, service, and pairing flow.

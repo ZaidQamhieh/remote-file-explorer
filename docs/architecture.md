@@ -51,6 +51,9 @@ project currently has **no cloud relay or cloud database**.
    per-device file grants, while configured roots, global and per-device read-only, per-device
    jail, and the global share switch remain in force. App-catalog viewing and app launching
    remain separate per-device grants, default off; admin provenance does not bypass them.
+   A new agent database is restricted to a dedicated `RFE Files` folder under the signed-in
+   user's home by default; an empty global root list is an explicit unrestricted-access setting.
+   Existing saved root policies are preserved during upgrades.
 4. Strict path normalization + rooted filesystem operations enforce configured and per-device
    jails against traversal and symlink escape during file access. This does not fence mount points,
    Linux bind mounts, `/proc` special files, or Unix device files inside an allowed root; see the

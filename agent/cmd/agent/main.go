@@ -2,8 +2,8 @@
 // API to paired mobile devices over TLS, reachable on the LAN or via Tailscale.
 //
 // Invoked with no arguments (or a leading flag, or "serve") it runs the daemon.
-// Other first arguments are admin subcommands — see admin.go (pair, devices,
-// revoke, remove, status).
+// Other first arguments are admin subcommands — see admin.go (setup, pair,
+// devices, revoke, remove, status).
 package main
 
 import (
@@ -57,11 +57,12 @@ func main() {
 // serveFlags holds the parsed `-addr`/`-name`/`-data`/`-read-only`/`-roots`
 // flags for runServe.
 type serveFlags struct {
-	addr     string
-	name     string
-	dataDir  string
-	readOnly bool
-	roots    string
+	addr          string
+	name          string
+	dataDir       string
+	readOnly      bool
+	roots         string
+	rootsExplicit bool
 }
 
 func parseServeFlags(args []string) serveFlags {
@@ -70,9 +71,22 @@ func parseServeFlags(args []string) serveFlags {
 	name := fs.String("name", hostName(), "agent display name shown to the phone")
 	dataDir := fs.String("data", defaultDataDir(), "directory for certs, db, and state (precedence: -data > $RFE_DATA_DIR > ~/.rfe-agent)")
 	readOnly := fs.Bool("read-only", false, "reject all write operations")
-	roots := fs.String("roots", "", "comma-separated allowed root paths (empty = allow all)")
+	roots := fs.String("roots", defaultAllowedRoot(), "comma-separated allowed roots (default: ~/RFE Files; explicitly empty = allow all)")
 	_ = fs.Parse(args)
-	return serveFlags{addr: *addr, name: *name, dataDir: *dataDir, readOnly: *readOnly, roots: *roots}
+	rootsExplicit := false
+	fs.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "roots" {
+			rootsExplicit = true
+		}
+	})
+	return serveFlags{
+		addr:          *addr,
+		name:          *name,
+		dataDir:       *dataDir,
+		readOnly:      *readOnly,
+		roots:         *roots,
+		rootsExplicit: rootsExplicit,
+	}
 }
 
 // serveDirs holds the on-disk directories runServe creates under dataDir.
@@ -117,6 +131,17 @@ func parseSeedRoots(roots string) []string {
 		}
 	}
 	return seedRoots
+}
+
+// defaultAllowedRoot keeps a brand-new agent inside a dedicated RFE Files
+// folder under the signed-in user's home unless the operator explicitly
+// supplies another root or -roots "". Existing databases preserve their policy.
+func defaultAllowedRoot() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return defaultSetupRoot(home)
 }
 
 // newHTTPServer builds the *http.Server for the agent's TLS listener.
@@ -259,6 +284,14 @@ func waitForShutdown(srvs ...*http.Server) {
 func runServe(args []string) {
 	startTime := time.Now()
 	flags := parseServeFlags(args)
+	if flags.roots == "" && !flags.rootsExplicit {
+		log.Fatal("cannot determine the signed-in user's home folder; pass -roots <path>, or explicitly pass an empty -roots value for unrestricted access")
+	}
+	if !flags.rootsExplicit {
+		if err := ensureDefaultShareRoot(flags.roots); err != nil {
+			log.Fatalf("default allowed folder: %v", err)
+		}
+	}
 
 	if err := os.MkdirAll(flags.dataDir, 0o700); err != nil {
 		log.Fatalf("data dir: %v", err)

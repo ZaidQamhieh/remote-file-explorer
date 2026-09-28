@@ -522,6 +522,15 @@ func (s *DB) GetConfig(key string) (string, error) {
 	return val, err
 }
 
+// HasConfig reports whether a config key exists, including keys whose value is
+// intentionally empty. This distinction is needed for settings where empty is
+// a valid persisted value (for example, an explicitly unrestricted root list).
+func (s *DB) HasConfig(key string) (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM config WHERE key=?)`, key).Scan(&exists)
+	return exists != 0, err
+}
+
 // SetConfig upserts a config value.
 func (s *DB) SetConfig(key, value string) error {
 	_, err := s.db.Exec(

@@ -94,10 +94,38 @@ Expand-Archive -LiteralPath "$HOME\Downloads\agent-v1.3.0-windows-amd64.zip" -De
 $agent = Join-Path $installDir 'rfe-agent.exe'
 ```
 
-## 4. Start it and enable start-at-login
+## 4. First-run setup and start-at-login
 
-Run `install` from the same user account that will own the files. This registers a per-user service
-and starts it immediately:
+For a new host profile, run the setup command from the same signed-in user account that should
+own the files:
+
+Linux/macOS:
+
+```sh
+"$HOME/.local/bin/rfe-agent" setup
+```
+
+Windows PowerShell:
+
+```powershell
+& $agent setup
+```
+
+Setup defaults the accessible folder to a dedicated `RFE Files` directory under that user's home.
+You can choose a different
+existing folder with `setup --root <path>`; on a headless host, pass `--root` instead of using the
+interactive prompt. It saves the folder jail, creates the host certificate, installs and starts
+the per-user login service, then prints the first one-time pairing code and QR. It does not open
+firewall ports, change router settings, or configure public DNS. Setup only initializes a new
+agent database; if agent data already exists, it stops without changing that installation.
+Existing agents keep their saved root policy during upgrades. If an older installation ran with
+no configured roots, review **Web Companion → Settings → Allowed folders** before allowing remote
+access. An empty saved root policy can expose the whole filesystem, including the agent's private
+data directory. The owner can add one or more explicit roots there without recreating the host
+identity or devices.
+
+If you prefer to configure the service separately, run `install` from the same user account that
+will own the files. This registers a per-user service and starts it immediately:
 
 | Host | Command |
 | --- | --- |
@@ -136,8 +164,9 @@ Windows PowerShell:
 & $agent pair
 ```
 
-The command prints a one-time pairing code, a QR, LAN/Tailscale addresses when available, and the
-host's certificate fingerprint. On the phone, open **Add computer → Scan QR**. Verify that the
+`setup` prints a one-time pairing code and QR, and `pair` can create another when needed. The
+pairing command also prints LAN/Tailscale addresses when available and the host's certificate
+fingerprint. On the phone, open **Add computer → Scan QR**. Verify that the
 fingerprint shown by the phone matches the value displayed in the trusted host terminal (or another
 trusted, independent channel) before completing pairing. A QR and fingerprint received together
 through an untrusted network are not independent proof of the host's identity. Pairing codes expire

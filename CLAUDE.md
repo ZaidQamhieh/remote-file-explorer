@@ -29,12 +29,16 @@ go build -o bin/agent ./cmd/agent             # build static binary
 Admin CLI (opens the on-disk DB directly — works whether or not the daemon is running):
 ```sh
 go run ./cmd/agent pair          # mint a one-time pairing code + print QR
+go run ./cmd/agent setup         # first-run folder setup + per-user service + pairing QR
 go run ./cmd/agent devices       # list paired devices
 go run ./cmd/agent revoke <id>   # block a device
 go run ./cmd/agent remove <id>   # delete a device row
 go run ./cmd/agent jail <id> <path>  # confine a device to <path> ("" clears it)
 go run ./cmd/agent status        # name, addresses, fingerprint, counts
 ```
+New agent databases default to a dedicated `RFE Files` folder under the signed-in user's home.
+Unrestricted filesystem access must be explicitly selected with an empty `-roots` value or owner
+settings; existing saved root policies are preserved.
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`
 
 ### App (Flutter 3.44.2 / Dart 3.12, in `app/`)

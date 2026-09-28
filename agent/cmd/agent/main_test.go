@@ -33,6 +33,8 @@ func TestWebListenBindAddr(t *testing.T) {
 }
 
 func TestServeConfigurationHelpers(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	t.Setenv("RFE_DATA_DIR", "/tmp/from-env")
 	flags := parseServeFlags([]string{"-addr", "127.0.0.1:8765", "-name", "desk", "-data", "/tmp/from-flag", "-read-only", "-roots", " /srv/a, ,/srv/b "})
 	if flags.addr != "127.0.0.1:8765" || flags.name != "desk" || flags.dataDir != "/tmp/from-flag" || !flags.readOnly || flags.roots != " /srv/a, ,/srv/b " {
@@ -43,6 +45,12 @@ func TestServeConfigurationHelpers(t *testing.T) {
 	}
 	if got := parseSeedRoots(""); len(got) != 0 {
 		t.Fatalf("empty roots = %#v, want empty", got)
+	}
+	if flags := parseServeFlags(nil); filepath.Clean(flags.roots) != filepath.Join(home, "RFE Files") || flags.rootsExplicit {
+		t.Fatalf("default roots = (%q, explicit=%v), want RFE Files under home and implicit", flags.roots, flags.rootsExplicit)
+	}
+	if flags := parseServeFlags([]string{"-roots", ""}); flags.roots != "" || !flags.rootsExplicit {
+		t.Fatalf("explicit empty roots = (%q, explicit=%v), want unrestricted empty value", flags.roots, flags.rootsExplicit)
 	}
 }
 

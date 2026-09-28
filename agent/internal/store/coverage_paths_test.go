@@ -253,8 +253,14 @@ func TestLoginUsersAndConfigPersistence(t *testing.T) {
 	if value, err := db.GetConfig("missing"); err != nil || value != "" {
 		t.Fatalf("missing config = (%q, %v)", value, err)
 	}
+	if exists, err := db.HasConfig("missing"); err != nil || exists {
+		t.Fatalf("missing config exists = (%v, %v), want false", exists, err)
+	}
 	if err := db.SetConfig("theme", "dark"); err != nil {
 		t.Fatal(err)
+	}
+	if exists, err := db.HasConfig("theme"); err != nil || !exists {
+		t.Fatalf("theme config exists = (%v, %v), want true", exists, err)
 	}
 	if err := db.SetConfig("theme", "light"); err != nil {
 		t.Fatal(err)

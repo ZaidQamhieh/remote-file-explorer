@@ -69,11 +69,13 @@ to apply.
 
 ## Install the host agent
 
-Download the matching host binary, verify its SHA-256 checksum, install it for the signed-in user,
-and pair the phone using a host-generated QR and independently verified certificate fingerprint.
+Download the matching host binary, verify its SHA-256 checksum, and run `rfe-agent setup`. New
+agent databases default to a dedicated `RFE Files` folder under the signed-in user's home,
+including when the daemon is started directly. Setup installs a user-level start-at-login service
+and prints a pairing QR. Use `rfe-agent setup --root <path>` to choose another existing folder.
 The [host setup guide](docs/host-setup.md) has exact steps for Windows, macOS, and Linux, including
-start-at-login, service controls, and uninstall. Connections use HTTPS only; the installer does not
-configure a firewall, router, or public DNS. The native app pins the agent certificate, while
+service controls and uninstall. Connections use HTTPS only; setup does not configure a firewall,
+router, or public DNS. The native app pins the agent certificate, while
 public web-companion access needs an owner-managed browser-trusted certificate/proxy path and is not
 ready out of the box.
 

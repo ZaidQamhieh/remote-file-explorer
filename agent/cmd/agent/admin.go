@@ -42,6 +42,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdAddUser(args)
 	case "install":
 		return cmdInstall(args)
+	case "setup":
+		return cmdSetup(args)
 	case "uninstall":
 		return cmdUninstall(args)
 	case "start":
@@ -80,6 +82,9 @@ Usage:
                                   (systemd --user unit on Linux, launchd
                                   LaunchAgent on macOS, Scheduled Task on
                                   Windows — no root/admin required)
+  rfe-agent setup [-root <path>] first-run setup: restrict access to a folder,
+                                  install the per-user service, and print a
+                                  one-time pairing QR (defaults to your home)
   rfe-agent start                start the installed per-user agent
   rfe-agent stop                 stop it until you start it or next login
   rfe-agent uninstall            stop and remove the auto-start entry

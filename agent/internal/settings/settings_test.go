@@ -34,6 +34,20 @@ func TestLoad_SeedsUnsetKeys(t *testing.T) {
 	}
 }
 
+func TestLoad_PreservesExplicitlyEmptyRootPolicy(t *testing.T) {
+	db := newDB(t)
+	if err := db.SetConfig(keyRoots, ""); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(db, false, []string{"/home/seed"}, "my-pc")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := s.Roots(); len(got) != 0 {
+		t.Fatalf("explicitly empty roots were replaced by defaults: %#v", got)
+	}
+}
+
 func TestSetters_PersistAndApply(t *testing.T) {
 	db := newDB(t)
 	s, err := Load(db, false, nil, "pc")

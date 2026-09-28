@@ -2,8 +2,9 @@
 
 ## Toolchain
 
-- **Go (agent):** `agent/go.mod` requires Go 1.25.0 or newer. CI currently installs the Go 1.25
-  series (`.github/workflows/ci.yml`), selecting its latest patch release.
+- **Go (agent):** `agent/go.mod` requires Go 1.25.0 or newer. CI and host releases use Go 1.26.6
+  (`.github/workflows/ci.yml` and `.github/workflows/agent-release.yml`) so builds use the patched
+  standard library and can install the current `govulncheck` release.
 - **Flutter (app):** `app/pubspec.yaml` requires Dart `^3.7.0`; it does not declare a minimum
   Flutter version. CI currently uses Flutter 3.44.2 (`.github/workflows/ci.yml`), which is the
   recommended local version when you want to match CI.

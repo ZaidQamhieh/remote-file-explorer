@@ -13,7 +13,7 @@ import {
   Upload,
   Link as LinkIcon,
 } from 'lucide-react';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 
 const NAV_ITEMS = [
   { label: 'Overview', to: '/app/overview', icon: LayoutGrid },

@@ -14,8 +14,8 @@ import {
   LogOut,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
-import { useToast } from '@/lib/toast';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
 import { CommandPalette } from './CommandPalette';
 
 const NAV = [

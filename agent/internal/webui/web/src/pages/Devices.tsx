@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Monitor, Smartphone, Shield, Trash2 } from 'lucide-react';
 import { api, type Device } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 
 function formatAgo(unixSeconds: number): string {
   const s = Date.now() / 1000 - unixSeconds;

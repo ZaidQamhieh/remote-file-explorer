@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 
 type Level = 'info' | 'warn' | 'error';
 const FILTERS = ['all', 'info', 'warn', 'error'] as const;

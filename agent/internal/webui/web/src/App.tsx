@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { Login } from '@/pages/auth/Login';
 import { PairCode } from '@/pages/auth/PairCode';
 import { Register } from '@/pages/auth/Register';

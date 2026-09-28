@@ -21,7 +21,7 @@ import {
   Check,
 } from 'lucide-react';
 import { api, ApiError, contentUrl, type Entry, type ShareLink, type ShareLinkSummary, type TrashEntry } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 import { DataTable } from '@/components/DataTable';
 import { Dialog } from '@/components/Dialog';
 

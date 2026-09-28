@@ -43,8 +43,13 @@ project currently has **no cloud relay or cloud database**.
    never recovered from the legacy SharedPreferences host record.
 3. Device pairing (via `rfe-agent pair`, QR or manual entry) issues a revocable bearer token.
    Per-agent authorization includes a root-path jail, optional read-only mode, device
-   revocation/removal, and `/pair` rate limiting (10/min). App-catalog viewing and app launching
-   are separate per-device grants, default off; admin provenance does not bypass them.
+   revocation/removal, and `/pair` rate limiting (10/min). Browse, download, upload, modify,
+   delete, and share are independent per-device file-action grants. Existing devices retain
+   their prior access during migration; new code-paired devices start browse-only; devices
+   authenticated by the account password retain full file access. Owner provenance bypasses
+   per-device file grants, while configured roots, global and per-device read-only, per-device
+   jail, and the global share switch remain in force. App-catalog viewing and app launching
+   remain separate per-device grants, default off; admin provenance does not bypass them.
 4. Strict path normalization + jail enforcement guards against traversal and symlink escape.
 5. App launch accepts only an opaque ID from the agent's current-user app catalog. The agent
    re-resolves it before launch, does not accept client paths/commands/arguments, checks for an
@@ -60,10 +65,11 @@ deliberately not recorded in that trail.
 
 For the full route-by-route authentication and authorization inventory, including explicit gaps,
 see [`security-route-matrix.md`](security-route-matrix.md). The current device model provides
-administrator provenance, a per-device path jail, a read-only switch, and separate app-view/app-
-launch grants. It does not yet offer independent per-device grants for browse, download, upload,
-modify, delete, and share; ordinary paired devices otherwise retain those filesystem operations
-within their effective jail unless read-only is enabled.
+administrator provenance, a per-device path jail, a read-only switch, separate app-view/app-
+launch grants, and independent per-device browse, download, upload, modify, delete, and share
+grants. Upload currently covers both new writes and the transfer engine's overwrite option;
+overwrite cannot be separately required to hold the modify grant at the route boundary without
+changing transfer-session enforcement.
 
 ## Transfers (the core engineering)
 
@@ -121,7 +127,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 | bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
 | preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
 | search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |
-| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
+| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,device_file_access_controls,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings and independent file-action grants, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
 | transfers | `transfer_manager.dart`, `transfer_state.dart`, `chunk_planner.dart`, `transfer_speed.dart`, `widgets/mini_transfer_bar.dart` | Transfer queue/center: manager orchestration, state, chunk planning, speed/ETA, mini bar. |
 | pairing | `pairing_screen.dart` | QR scan / manual pairing flow. |
 | handoff | `qr_generate_screen.dart`, `qr_scan_screen.dart` | Device-to-device handoff via QR (distinct from agent pairing). |

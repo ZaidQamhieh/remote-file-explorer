@@ -23,6 +23,7 @@ import '../hosts/widgets/connection_diagnostics_sheet.dart';
 import '../sync/sync_screen.dart';
 import 'widgets/settings_section.dart';
 import 'audit_log_screen.dart';
+import 'widgets/device_file_access_controls.dart';
 import 'widgets/settings_tile.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -55,7 +56,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _fingerprint;
   List<Device> _devices = const [];
   List<Drive> _drives = const [];
-  final Set<String> _updatingAppCapabilities = <String>{};
+  final Set<String> _updatingDeviceCapabilities = <String>{};
   bool _loading = true;
   String? _error;
 
@@ -156,7 +157,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         device.viewApps == true && device.launchApps == true;
     final nextLaunchApps =
         viewApps == false ? false : (launchApps ?? currentLaunchApps);
-    setState(() => _updatingAppCapabilities.add(device.id));
+    setState(() => _updatingDeviceCapabilities.add(device.id));
 
     try {
       await client.updateDeviceAppCapabilities(
@@ -164,7 +165,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         viewApps: nextViewApps,
         launchApps: nextLaunchApps,
       );
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _devices = [
           for (final current in _devices)
@@ -182,7 +185,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         showError(context, context.l10n.updateFailed(humanizeError(e)));
       }
     } finally {
-      if (mounted) setState(() => _updatingAppCapabilities.remove(device.id));
+      if (mounted) {
+        setState(() => _updatingDeviceCapabilities.remove(device.id));
+      }
+    }
+  }
+
+  Future<void> _updateDeviceFileCapabilities(
+    Device device, {
+    bool? browse,
+    bool? download,
+    bool? upload,
+    bool? modify,
+    bool? delete,
+    bool? share,
+  }) async {
+    final client = _client;
+    if (client == null || !device.hasFileCapabilities || device.viaLogin) {
+      return;
+    }
+
+    final nextBrowse = browse ?? device.browse!;
+    final nextDownload = download ?? device.download!;
+    final nextUpload = upload ?? device.upload!;
+    final nextModify = modify ?? device.modify!;
+    final nextDelete = delete ?? device.delete!;
+    final nextShare = share ?? device.share!;
+    setState(() => _updatingDeviceCapabilities.add(device.id));
+
+    try {
+      await client.updateDeviceFileCapabilities(
+        device.id,
+        browse: nextBrowse,
+        download: nextDownload,
+        upload: nextUpload,
+        modify: nextModify,
+        delete: nextDelete,
+        share: nextShare,
+      );
+      if (!mounted) return;
+      setState(() {
+        _devices = [
+          for (final current in _devices)
+            if (current.id == device.id)
+              current.copyWith(
+                browse: nextBrowse,
+                download: nextDownload,
+                upload: nextUpload,
+                modify: nextModify,
+                delete: nextDelete,
+                share: nextShare,
+              )
+            else
+              current,
+        ];
+      });
+    } catch (e) {
+      if (mounted) {
+        showError(context, context.l10n.updateFailed(humanizeError(e)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _updatingDeviceCapabilities.remove(device.id));
+      }
     }
   }
 
@@ -1365,7 +1430,7 @@ class _DeviceRow extends StatelessWidget {
                           subtitle: Text(context.l10n.viewAppsDescription),
                           value: d.viewApps ?? false,
                           onChanged:
-                              screen._updatingAppCapabilities.contains(d.id)
+                              screen._updatingDeviceCapabilities.contains(d.id)
                                   ? null
                                   : (enabled) =>
                                       screen._updateDeviceAppCapabilities(
@@ -1382,9 +1447,8 @@ class _DeviceRow extends StatelessWidget {
                               (d.viewApps ?? false) && (d.launchApps ?? false),
                           onChanged:
                               !(d.viewApps ?? false) ||
-                                      screen._updatingAppCapabilities.contains(
-                                        d.id,
-                                      )
+                                      screen._updatingDeviceCapabilities
+                                          .contains(d.id)
                                   ? null
                                   : (enabled) =>
                                       screen._updateDeviceAppCapabilities(
@@ -1393,6 +1457,58 @@ class _DeviceRow extends StatelessWidget {
                                       ),
                         ),
                       ],
+                    ),
+                  ),
+                if (screen._settings?.isAdmin == true &&
+                    d.hasFileCapabilities &&
+                    !d.viaLogin)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: DeviceFileAccessControls(
+                      device: d,
+                      updating: screen._updatingDeviceCapabilities.contains(
+                        d.id,
+                      ),
+                      onChanged: (capability, enabled) {
+                        switch (capability) {
+                          case DeviceFileCapability.browse:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              browse: enabled,
+                            );
+                            break;
+                          case DeviceFileCapability.download:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              download: enabled,
+                            );
+                            break;
+                          case DeviceFileCapability.upload:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              upload: enabled,
+                            );
+                            break;
+                          case DeviceFileCapability.modify:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              modify: enabled,
+                            );
+                            break;
+                          case DeviceFileCapability.delete:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              delete: enabled,
+                            );
+                            break;
+                          case DeviceFileCapability.share:
+                            screen._updateDeviceFileCapabilities(
+                              d,
+                              share: enabled,
+                            );
+                            break;
+                        }
+                      },
                     ),
                   ),
               ],

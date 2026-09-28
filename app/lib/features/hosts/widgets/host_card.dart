@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -38,9 +40,9 @@ Widget explorerRootFor(Health? health, Host host) {
 /// A host dashboard card with status, active route/version, drive gauges, and
 /// direct Browse/Search/Transfers/Settings actions.
 ///
-/// Pings the host's `/health` on mount to determine online/offline state and,
-/// when online, fetches `AgentClient.drives()` for the storage bar (gracefully
-/// skipped if the agent predates that endpoint).
+/// Pings the host's `/health` on mount and once a minute while the Devices tab
+/// is visible. Drive usage is refreshed every five minutes and skipped if the
+/// agent predates that endpoint.
 class HostCard extends ConsumerStatefulWidget {
   const HostCard({
     super.key,
@@ -66,9 +68,17 @@ class HostCard extends ConsumerStatefulWidget {
   ConsumerState<HostCard> createState() => _HostCardState();
 }
 
-class _HostCardState extends ConsumerState<HostCard> {
+class _HostCardState extends ConsumerState<HostCard>
+    with WidgetsBindingObserver {
+  static const _statusRefreshInterval = Duration(minutes: 1);
+  static const _driveRefreshInterval = Duration(minutes: 5);
+
   late Future<Health?> _pingFuture;
   Future<List<Drive>>? _drivesFuture;
+  late final Timer _statusRefreshTimer;
+  DateTime? _lastDriveRefresh;
+  bool _pingInProgress = false;
+  bool _appForeground = false;
 
   /// Address used by the most recent successful client, so the card can show
   /// whether it is reached over LAN, Tailscale, or the direct HTTPS route.
@@ -80,11 +90,24 @@ class _HostCardState extends ConsumerState<HostCard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appForeground =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _lastSeen = widget.store.getLastSeen(widget.host.id);
-    _pingFuture = _ping();
+    _pingFuture = _ping(forceDriveRefresh: true);
+    _statusRefreshTimer = Timer.periodic(_statusRefreshInterval, (_) {
+      _refreshIfVisible();
+    });
   }
 
-  Future<Health?> _ping() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appForeground = state == AppLifecycleState.resumed;
+    if (_appForeground) _refreshIfVisible(forceDriveRefresh: true);
+  }
+
+  Future<Health?> _ping({bool forceDriveRefresh = false}) async {
+    _pingInProgress = true;
     AgentClient? client;
     try {
       client = await buildClientForHost(
@@ -108,12 +131,43 @@ class _HostCardState extends ConsumerState<HostCard> {
       // until IT finishes, not close as soon as _ping does (PR-36: this used
       // to close in a `finally` here regardless, racing this still-pending
       // request against a closed connection).
-      _drivesFuture = _loadDrives(client).whenComplete(client.close);
+      final shouldRefreshDrives =
+          forceDriveRefresh ||
+          _drivesFuture == null ||
+          _lastDriveRefresh == null ||
+          DateTime.now().difference(_lastDriveRefresh!) >=
+              _driveRefreshInterval;
+      if (shouldRefreshDrives) {
+        _lastDriveRefresh = DateTime.now();
+        final driveClient = client;
+        _drivesFuture = _loadDrives(
+          driveClient,
+        ).whenComplete(driveClient.close);
+        client = null;
+      } else {
+        client.close();
+        client = null;
+      }
       return health;
     } catch (_) {
       client?.close();
       return null;
+    } finally {
+      _pingInProgress = false;
     }
+  }
+
+  void _refreshIfVisible({bool forceDriveRefresh = false}) {
+    if (!mounted ||
+        _pingInProgress ||
+        !_appForeground ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+        ref.read(selectedTabIndexProvider) != 0) {
+      return;
+    }
+    setState(() {
+      _pingFuture = _ping(forceDriveRefresh: forceDriveRefresh);
+    });
   }
 
   /// Fetches drives for the storage-usage bar. Returns an empty list on any
@@ -274,6 +328,9 @@ class _HostCardState extends ConsumerState<HostCard> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(selectedTabIndexProvider, (previous, next) {
+      if (next == 0) _refreshIfVisible(forceDriveRefresh: true);
+    });
     return FutureBuilder<Health?>(
       future: _pingFuture,
       builder: (context, snap) {
@@ -320,11 +377,20 @@ class _HostCardState extends ConsumerState<HostCard> {
           onTransfersTap: _openTransfers,
           onAppsTap: () => _openApps(context),
           onSettingsTap: () => _openSettings(context),
-          onRefresh: () => setState(() => _pingFuture = _ping()),
+          onRefresh:
+              () =>
+                  setState(() => _pingFuture = _ping(forceDriveRefresh: true)),
           onForget: () => _confirmRemove(context),
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _statusRefreshTimer.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
 

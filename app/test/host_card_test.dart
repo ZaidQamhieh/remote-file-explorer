@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
 import 'package:remote_file_explorer/core/storage/host_store.dart';
+import 'package:remote_file_explorer/features/home/home_state.dart';
 import 'package:remote_file_explorer/features/hosts/widgets/host_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,12 +26,15 @@ const _secureChannel = MethodChannel(
   'plugins.it_nomads.com/flutter_secure_storage',
 );
 
+var _secureReadCount = 0;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const host = Host(id: 'h1', label: 'main-pc', address: '127.0.0.1:1');
 
   setUp(() {
+    _secureReadCount = 0;
     SharedPreferences.setMockInitialValues({
       'rfe_hosts_v1': [jsonEncode(host.toJson())],
     });
@@ -38,6 +42,7 @@ void main() {
         .setMockMethodCallHandler(_secureChannel, (call) async {
           switch (call.method) {
             case 'read':
+              _secureReadCount++;
               return null;
             case 'write':
             case 'delete':
@@ -133,5 +138,74 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Forget this computer?'), findsOneWidget);
+  });
+
+  testWidgets('returning to Devices refreshes host status', (tester) async {
+    final store = await buildStore();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Expanded(child: HostCard(host: host, store: store)),
+                  Consumer(
+                    builder:
+                        (context, ref, _) => Row(
+                          children: [
+                            TextButton(
+                              key: const ValueKey('files-tab'),
+                              onPressed:
+                                  () =>
+                                      ref
+                                          .read(
+                                            selectedTabIndexProvider.notifier,
+                                          )
+                                          .state = 1,
+                              child: const Text('Files'),
+                            ),
+                            TextButton(
+                              key: const ValueKey('devices-tab'),
+                              onPressed:
+                                  () =>
+                                      ref
+                                          .read(
+                                            selectedTabIndexProvider.notifier,
+                                          )
+                                          .state = 0,
+                              child: const Text('Devices'),
+                            ),
+                          ],
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var i = 0; i < 30; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    });
+
+    final initialReads = _secureReadCount;
+    await tester.tap(find.byKey(const ValueKey('files-tab')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('devices-tab')));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await tester.pump();
+    });
+
+    expect(_secureReadCount, greaterThan(initialReads));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }

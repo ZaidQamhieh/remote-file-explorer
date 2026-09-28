@@ -58,6 +58,13 @@ restart events (including pair/register/login, device changes, share creation/re
 launch outcomes, and agent restart). The audit endpoint is admin-only. File operations are
 deliberately not recorded in that trail.
 
+For the full route-by-route authentication and authorization inventory, including explicit gaps,
+see [`security-route-matrix.md`](security-route-matrix.md). The current device model provides
+administrator provenance, a per-device path jail, a read-only switch, and separate app-view/app-
+launch grants. It does not yet offer independent per-device grants for browse, download, upload,
+modify, delete, and share; ordinary paired devices otherwise retain those filesystem operations
+within their effective jail unless read-only is enabled.
+
 ## Transfers (the core engineering)
 
 - **Upload:** resumable chunked sessions. Per-chunk + whole-file SHA-256; received-chunk bitmap in

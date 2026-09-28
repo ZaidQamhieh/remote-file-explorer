@@ -79,12 +79,13 @@ func (o *Ops) MoveToTrash(paths []string, trashDir string) []BatchResult {
 
 	results := make([]BatchResult, len(paths))
 	for i, p := range paths {
-		resolved, err := o.Resolve(p)
+		resolved, err := o.access(p)
 		if err != nil {
 			results[i] = BatchResult{Path: p, Error: apiErr("FORBIDDEN", err.Error())}
 			continue
 		}
-		if _, err := os.Lstat(resolved); err != nil {
+		if _, err := resolved.lstat(); err != nil {
+			resolved.close()
 			if os.IsNotExist(err) {
 				results[i] = BatchResult{Path: p, Error: apiErr("PATH_NOT_FOUND", err.Error())}
 			} else {
@@ -93,18 +94,22 @@ func (o *Ops) MoveToTrash(paths []string, trashDir string) []BatchResult {
 			continue
 		}
 
-		id := uniqueTrashName(trashDir, filepath.Base(resolved))
+		id := uniqueTrashName(trashDir, filepath.Base(resolved.full))
 		dest := filepath.Join(trashFilesDir(trashDir), id)
-		if err := moveOrCopy(resolved, dest); err != nil {
+		destPath := &securePath{full: dest}
+		if err := moveAcrossRootsSecure(resolved, destPath); err != nil {
+			resolved.close()
 			results[i] = BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
 			continue
 		}
-		if err := writeTrashInfo(trashDir, id, resolved); err != nil {
+		if err := writeTrashInfo(trashDir, id, resolved.full); err != nil {
 			// Roll the file back so a sidecar failure doesn't orphan the data.
-			_ = moveOrCopy(dest, resolved)
+			_ = moveAcrossRootsSecure(destPath, resolved)
+			resolved.close()
 			results[i] = BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
 			continue
 		}
+		resolved.close()
 		results[i] = BatchResult{Path: p, OK: true}
 	}
 	return results
@@ -196,29 +201,38 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 			results[i] = BatchResult{Path: id, Error: apiErr("PATH_NOT_FOUND", "no such trash item")}
 			continue
 		}
-		dest, err := o.Resolve(orig)
+		dest, err := o.access(orig)
 		if err != nil {
 			results[i] = BatchResult{Path: id, Error: apiErr("FORBIDDEN", err.Error())}
 			continue
 		}
 		src := filepath.Join(trashFilesDir(trashDir), id)
-		if _, err := os.Lstat(src); err != nil {
+		srcPath := &securePath{full: src}
+		if _, err := srcPath.lstat(); err != nil {
+			dest.close()
 			results[i] = BatchResult{Path: id, Error: apiErr("PATH_NOT_FOUND", "trash payload missing")}
 			continue
 		}
-		if _, err := os.Stat(dest); err == nil {
-			dest = autoRename(dest)
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		if _, err := dest.stat(); err == nil {
+			dest = autoRenameSecure(dest)
+		} else if !os.IsNotExist(err) {
+			dest.close()
 			results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED", err.Error())}
 			continue
 		}
-		if err := moveOrCopy(src, dest); err != nil {
+		if err := dest.parent().mkdirAll(0o755); err != nil {
+			dest.close()
+			results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED", err.Error())}
+			continue
+		}
+		if err := moveAcrossRootsSecure(srcPath, dest); err != nil {
+			dest.close()
 			results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED", err.Error())}
 			continue
 		}
 		_ = os.Remove(infoPath)
-		results[i] = BatchResult{Path: dest, OK: true}
+		results[i] = BatchResult{Path: dest.full, OK: true}
+		dest.close()
 	}
 	return results
 }
@@ -297,20 +311,22 @@ func errResults(paths []string, code string, err error) []BatchResult {
 	return res
 }
 
-// moveOrCopy renames src to dst, falling back to a recursive copy + remove
-// when the two are on different filesystems (os.Rename returns EXDEV).
-func moveOrCopy(src, dst string) error {
-	err := os.Rename(src, dst)
+// moveAcrossRootsSecure uses descriptor-relative rename when both paths share
+// a root. When one side is the agent-managed trash store outside the user's
+// jail, it copies through the rooted source/destination handles, then removes
+// the source through its handle.
+func moveAcrossRootsSecure(src, dst *securePath) error {
+	err := src.renameTo(dst)
 	if err == nil {
 		return nil
 	}
-	if !errors.Is(err, syscall.EXDEV) {
+	if src.root == dst.root && !errors.Is(err, syscall.EXDEV) {
 		return err
 	}
-	if err := copyRecursive(src, dst); err != nil {
+	if err := copySecureRecursive(src, dst); err != nil {
 		return err
 	}
-	return os.RemoveAll(src)
+	return src.removeAll()
 }
 
 // uniqueTrashName returns a name not already used by either files/ or info/.

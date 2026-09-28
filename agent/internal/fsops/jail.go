@@ -1,18 +1,22 @@
 package fsops
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 // This file holds the agent's path-jail and access-control model — the
-// security boundary for every filesystem operation. Resolve is the single
-// chokepoint all reads and writes pass through; the SettingsView wrappers
-// (read-only / per-device jail) compose the live permission state. Keeping it
-// separate from the plain file CRUD in fsops.go makes the trust boundary easy
-// to audit and to test in isolation (see jail_test.go / fsops_test.go).
+// security boundary for every filesystem operation. Resolve performs logical
+// path authorization; Ops methods then use operation-scoped os.Root handles
+// (access/accessPair below) so filesystem use remains inside the jail even if
+// names are swapped after authorization. The SettingsView wrappers (read-only
+// / per-device jail) compose the live permission state.
 
 // SettingsView supplies the live read-only flag and jail roots. fsops reads
 // through it on every operation so changes apply without reconstructing Ops.
@@ -105,7 +109,10 @@ func (o *Ops) Jailed(extraRoot string) *Ops {
 	return &Ops{settings: jailedSettings{base: o.settings, roots: nil}, denyAll: true}
 }
 
-// Resolve cleans p and checks it against the jail.
+// Resolve cleans p and checks it against the jail, returning its resolved
+// absolute path. The returned string is an authorization result, not a
+// race-resistant filesystem handle: callers doing filesystem I/O must use an
+// Ops method. A path can change between Resolve and a later os.* call.
 // It also resolves symlinks to prevent symlink-escape attacks:
 // if the resolved real path is outside every allowed root the request is
 // rejected. When allowedRoots is empty any clean absolute path is accepted.
@@ -196,4 +203,334 @@ func isUnder(p, root string) bool {
 		return true
 	}
 	return strings.HasPrefix(p, root+string(filepath.Separator))
+}
+
+// securePath is an operation-scoped view of a path. When an Ops instance is
+// jailed, all filesystem access is relative to an os.Root handle opened on the
+// jail directory. This keeps symlink and rename races inside that directory
+// tree. The full path is retained only for API responses and MIME decisions.
+// Unjailed Ops retain their historical path-based behavior because they have
+// no jail boundary to escape.
+type securePath struct {
+	full string
+	root *os.Root
+	name string
+}
+
+func (p *securePath) close() {
+	if p != nil && p.root != nil {
+		_ = p.root.Close()
+	}
+}
+
+func (p *securePath) child(name string) *securePath {
+	if p == nil {
+		return nil
+	}
+	return &securePath{
+		full: filepath.Join(p.full, name),
+		root: p.root,
+		name: filepath.Join(p.name, name),
+	}
+}
+
+func (p *securePath) parent() *securePath {
+	if p == nil {
+		return nil
+	}
+	return &securePath{
+		full: filepath.Dir(p.full),
+		root: p.root,
+		name: filepath.Dir(p.name),
+	}
+}
+
+func (p *securePath) open() (*os.File, error) {
+	if p.root != nil {
+		return p.root.Open(p.name)
+	}
+	return os.Open(p.full)
+}
+
+func (p *securePath) openFile(flag int, perm os.FileMode) (*os.File, error) {
+	if p.root != nil {
+		return p.root.OpenFile(p.name, flag, perm)
+	}
+	return os.OpenFile(p.full, flag, perm)
+}
+
+func (p *securePath) stat() (os.FileInfo, error) {
+	if p.root != nil {
+		return p.root.Stat(p.name)
+	}
+	return os.Stat(p.full)
+}
+
+func (p *securePath) lstat() (os.FileInfo, error) {
+	if p.root != nil {
+		return p.root.Lstat(p.name)
+	}
+	return os.Lstat(p.full)
+}
+
+func (p *securePath) readlink() (string, error) {
+	if p.root != nil {
+		return p.root.Readlink(p.name)
+	}
+	return os.Readlink(p.full)
+}
+
+func (p *securePath) mkdirAll(perm os.FileMode) error {
+	if p.root != nil {
+		return p.root.MkdirAll(p.name, perm)
+	}
+	return os.MkdirAll(p.full, perm)
+}
+
+func (p *securePath) remove() error {
+	if p.root != nil {
+		return p.root.Remove(p.name)
+	}
+	return os.Remove(p.full)
+}
+
+func (p *securePath) removeAll() error {
+	if p.root != nil {
+		return p.root.RemoveAll(p.name)
+	}
+	return os.RemoveAll(p.full)
+}
+
+func (p *securePath) renameTo(dst *securePath) error {
+	if p.root != nil && p.root == dst.root {
+		return p.root.Rename(p.name, dst.name)
+	}
+	if p.root == nil && dst.root == nil {
+		return os.Rename(p.full, dst.full)
+	}
+	return fmt.Errorf("cannot atomically rename across filesystem jail roots")
+}
+
+// createTemp creates an exclusive temporary file in the same directory as p
+// and returns both its secure handle and the open file. The returned path
+// shares p's root handle so cleanup and rename remain descriptor-relative.
+func (p *securePath) createTemp(pattern string) (*securePath, *os.File, error) {
+	if p.root == nil {
+		f, err := os.CreateTemp(filepath.Dir(p.full), pattern)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &securePath{full: f.Name()}, f, nil
+	}
+	dir := filepath.Dir(p.name)
+	for range 20 {
+		var b [16]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, nil, err
+		}
+		base := strings.ReplaceAll(pattern, "*", hex.EncodeToString(b[:]))
+		name := filepath.Join(dir, base)
+		f, err := p.root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return &securePath{full: filepath.Join(filepath.Dir(p.full), base), root: p.root, name: name}, f, nil
+	}
+	return nil, nil, fmt.Errorf("could not create a unique temporary file")
+}
+
+// access opens the configured jail root and produces a path relative to its
+// handle. The root's identity is checked before and after OpenRoot so replacing
+// the configured directory with a symlink or another directory during setup
+// fails closed. Once opened, os.Root pins the directory even if its name is
+// concurrently renamed.
+func (o *Ops) access(path string) (*securePath, error) {
+	resolved, err := o.Resolve(path)
+	if err != nil {
+		return nil, err
+	}
+	rootName := o.allowedRootFor(resolved)
+	if rootName == "" {
+		return &securePath{full: resolved}, nil
+	}
+	root, err := openJailRoot(rootName)
+	if err != nil {
+		return nil, fmt.Errorf("open jail root: %w", err)
+	}
+	name, err := filepath.Rel(rootName, resolved)
+	if err != nil || name == ".." || strings.HasPrefix(name, ".."+string(filepath.Separator)) {
+		root.Close()
+		return nil, fmt.Errorf("%w: %s", ErrForbidden, path)
+	}
+	if name == "" {
+		name = "."
+	}
+	return &securePath{full: resolved, root: root, name: name}, nil
+}
+
+func (o *Ops) allowedRootFor(resolved string) string {
+	for _, root := range o.settings.Roots() {
+		if isUnder(resolved, root) {
+			return root
+		}
+	}
+	return ""
+}
+
+func openJailRoot(name string) (*os.Root, error) {
+	before, err := os.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("configured jail root is not a real directory")
+	}
+	root, err := os.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	after, err := root.Stat(".")
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	if !os.SameFile(before, after) {
+		root.Close()
+		return nil, fmt.Errorf("configured jail root changed while it was opened")
+	}
+	return root, nil
+}
+
+// accessPair shares one root descriptor when both paths are authorized by the
+// same configured jail. This is required for race-resistant Root.Rename and
+// also anchors both sides of copy/move to one directory identity.
+func (o *Ops) accessPair(src, dst string) (*securePath, *securePath, error) {
+	resolvedSrc, err := o.Resolve(src)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolvedDst, err := o.Resolve(dst)
+	if err != nil {
+		return nil, nil, err
+	}
+	srcRoot := o.allowedRootFor(resolvedSrc)
+	dstRoot := o.allowedRootFor(resolvedDst)
+	if srcRoot == dstRoot {
+		if srcRoot == "" {
+			return &securePath{full: resolvedSrc}, &securePath{full: resolvedDst}, nil
+		}
+		root, err := openJailRoot(srcRoot)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open jail root: %w", err)
+		}
+		srcName, err := filepath.Rel(srcRoot, resolvedSrc)
+		if err != nil {
+			root.Close()
+			return nil, nil, err
+		}
+		dstName, err := filepath.Rel(srcRoot, resolvedDst)
+		if err != nil {
+			root.Close()
+			return nil, nil, err
+		}
+		if srcName == "" {
+			srcName = "."
+		}
+		if dstName == "" {
+			dstName = "."
+		}
+		return &securePath{full: resolvedSrc, root: root, name: srcName}, &securePath{full: resolvedDst, root: root, name: dstName}, nil
+	}
+	s, err := o.access(resolvedSrc)
+	if err != nil {
+		return nil, nil, err
+	}
+	d, err := o.access(resolvedDst)
+	if err != nil {
+		s.close()
+		return nil, nil, err
+	}
+	return s, d, nil
+}
+
+// Open opens path for reading while keeping access inside the configured jail.
+// Callers must close the returned file. Use this instead of Resolve followed
+// by os.Open so a path or symlink swap cannot redirect the read.
+func (o *Ops) Open(path string) (*os.File, error) {
+	p, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	f, err := p.open()
+	p.close()
+	return f, err
+}
+
+// OpenFile opens path with the supplied flags relative to the configured jail
+// when one is active. Callers must close the returned file. This protects the
+// opened path, but a later rename by the caller must also be rooted; prefer an
+// Ops method such as WriteContent for atomic replacements.
+func (o *Ops) OpenFile(path string, flag int, perm os.FileMode) (*os.File, error) {
+	p, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	f, err := p.openFile(flag, perm)
+	p.close()
+	return f, err
+}
+
+// OpenDir opens path as a new directory root. Every path used with the
+// returned handle is confined beneath this directory, and callers must close
+// it. This is intended for safe recursive walks of a browsed directory.
+func (o *Ops) OpenDir(path string) (*os.Root, error) {
+	p, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	defer p.close()
+	if p.root != nil {
+		return p.root.OpenRoot(p.name)
+	}
+	return os.OpenRoot(p.full)
+}
+
+// Stat returns metadata for path through the active jail root.
+func (o *Ops) Stat(path string) (os.FileInfo, error) {
+	p, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	defer p.close()
+	return p.stat()
+}
+
+// Lstat returns metadata for path without following the final symlink.
+func (o *Ops) Lstat(path string) (os.FileInfo, error) {
+	p, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	defer p.close()
+	return p.lstat()
+}
+
+// Chmod changes a file's mode using an open file handle rather than a
+// path-based chmod. Opening follows in-jail links only after access has
+// canonicalized and authorized their targets.
+func (o *Ops) Chmod(path string, mode os.FileMode) error {
+	p, err := o.access(path)
+	if err != nil {
+		return err
+	}
+	defer p.close()
+	f, err := p.open()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Chmod(mode)
 }

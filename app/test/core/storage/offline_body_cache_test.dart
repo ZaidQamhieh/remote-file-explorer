@@ -61,6 +61,20 @@ void main() {
     expect(await offlineCache.get('h1', '/foo/bar.txt'), isNull);
   });
 
+  test('empty and multi-chunk bodies roundtrip', () async {
+    final offlineCache = cache();
+    final empty = Uint8List(0);
+    final multiChunk = Uint8List.fromList(
+      List<int>.generate(256 * 1024 + 31, (index) => index % 251),
+    );
+
+    await offlineCache.put('h1', '/empty.bin', empty);
+    await offlineCache.put('h1', '/large.bin', multiChunk);
+
+    expect(await offlineCache.get('h1', '/empty.bin'), equals(empty));
+    expect(await offlineCache.get('h1', '/large.bin'), equals(multiChunk));
+  });
+
   test(
     'cached file contains ciphertext and key remains outside cache files',
     () async {
@@ -106,6 +120,10 @@ void main() {
     stored[stored.length - 1] ^= 0xff;
     await file.writeAsBytes(stored, flush: true);
 
+    // has() deliberately reports envelope presence and key availability;
+    // authentication is checked by get() when the body is actually needed.
+    expect(await offlineCache.has('h1', '/file.txt'), isTrue);
+
     await expectLater(
       offlineCache.get('h1', '/file.txt'),
       throwsA(isA<OfflineBodyCacheIntegrityException>()),
@@ -113,6 +131,43 @@ void main() {
     expect(await file.exists(), isFalse);
     expect(await offlineCache.has('h1', '/file.txt'), isFalse);
   });
+
+  test(
+    'concurrent reads only see complete old or new bodies during put',
+    () async {
+      final offlineCache = cache();
+      final oldBody = Uint8List(512 * 1024)..fillRange(0, 512 * 1024, 0x31);
+      final newBody = Uint8List(512 * 1024)..fillRange(0, 512 * 1024, 0x72);
+      await offlineCache.put('h1', '/changing.bin', oldBody);
+
+      bool isBody(Uint8List? actual, int byte) =>
+          actual != null &&
+          actual.length == oldBody.length &&
+          actual.every((value) => value == byte);
+
+      var writing = true;
+      final observations = <Object>[];
+      final readers = List<Future<void>>.generate(3, (_) async {
+        while (writing) {
+          try {
+            final result = await offlineCache.get('h1', '/changing.bin');
+            if (!isBody(result, 0x31) && !isBody(result, 0x72)) {
+              observations.add(StateError('Reader saw an incomplete body'));
+            }
+          } catch (error) {
+            observations.add(error);
+          }
+        }
+      });
+
+      await offlineCache.put('h1', '/changing.bin', newBody);
+      writing = false;
+      await Future.wait(readers);
+
+      expect(observations, isEmpty);
+      expect(await offlineCache.get('h1', '/changing.bin'), equals(newBody));
+    },
+  );
 
   test('missing secure key makes old encrypted bodies unavailable', () async {
     final firstCache = cache();
@@ -153,6 +208,22 @@ void main() {
     expect(await legacy.exists(), isFalse);
     expect(await offlineCache.totalBytes(), 0);
   });
+
+  test(
+    'orphaned encrypted temporary files are removed on initialization',
+    () async {
+      final dir = getCacheDir();
+      await dir.create(recursive: true);
+      final orphan = File(
+        '${dir.path}/${cacheFilename('h1', '/file.txt')}.tmp-abcdefghijklmnop',
+      );
+      await orphan.writeAsBytes(List<int>.filled(64, 0x5a));
+
+      final offlineCache = cache();
+      expect(await offlineCache.totalBytes(), 0);
+      expect(await orphan.exists(), isFalse);
+    },
+  );
 
   test('evictHost removes only that host entries', () async {
     final offlineCache = cache();

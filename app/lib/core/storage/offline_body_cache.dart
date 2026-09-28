@@ -33,7 +33,7 @@ class OfflineBodyCacheIntegrityException implements Exception {
 class _SecureStorageKeyStore implements OfflineBodyCacheKeyStore {
   _SecureStorageKeyStore(this._storage);
 
-  static const _keyName = 'rfe.offline_body_cache.aes_gcm_key.v1';
+  static const _keyName = 'rfe.offline_body_cache.chacha20_poly1305_key.v2';
   final FlutterSecureStorage _storage;
 
   @override
@@ -60,13 +60,15 @@ class _SecureStorageKeyStore implements OfflineBodyCacheKeyStore {
   }
 }
 
-/// Persists AES-GCM encrypted file bodies for offline access.
+/// Persists ChaCha20-Poly1305 encrypted file bodies for offline access.
 ///
 /// Body files remain in `<app-support>/offline_cache`, with the same
 /// host/path-derived name used by the previous plaintext implementation. Each
 /// file contains a format marker, a 12-byte nonce, a 16-byte authentication
-/// tag, and ciphertext. The AES-256 key is generated once and stored only in
-/// platform secure storage; it is never written beside the cache files.
+/// tag, and ciphertext. The 256-bit key is generated once and stored only in
+/// platform secure storage; it is never written beside the cache files. Bodies
+/// are encrypted in bounded chunks to keep peak memory close to the caller's
+/// input size rather than allocating multiple body-sized copies.
 class OfflineBodyCache {
   OfflineBodyCache({
     Directory? baseDir,
@@ -86,17 +88,19 @@ class OfflineBodyCache {
     0x4f,
     0x42,
     0x43,
-    0x01,
+    0x02,
     0x0a,
   ];
+  static const int _chunkSize = 64 * 1024;
   static const int _nonceLength = 12;
   static const int _macLength = 16;
   static const int _headerLength = 8 + _nonceLength + _macLength;
   static Future<void> _secureKeyLock = Future<void>.value();
+  static final Map<String, Future<void>> _fileLocks = <String, Future<void>>{};
 
   final Directory? _baseDir;
   final OfflineBodyCacheKeyStore _keyStore;
-  final AesGcm _cipher = AesGcm.with256bits();
+  final StreamingCipher _cipher = Chacha20.poly1305Aead();
   Future<Directory>? _directoryFuture;
   Future<Uint8List>? _keyFuture;
 
@@ -111,6 +115,7 @@ class OfflineBodyCache {
     }
 
     try {
+      await _removeOrphanedTempFiles(dir);
       await _removeLegacyPlaintext(dir);
       return dir;
     } catch (_) {
@@ -134,10 +139,11 @@ class OfflineBodyCache {
       File('${dir.path}/${_key(hostId, path)}');
 
   Uint8List _associatedData(String hostId, String path) => Uint8List.fromList(
-    utf8.encode('rfe:offline-body-cache:v1\u0000${_identity(hostId, path)}'),
+    utf8.encode('rfe:offline-body-cache:v2\u0000${_identity(hostId, path)}'),
   );
 
-  /// Sums the on-disk size of encrypted cached files, across all hosts.
+  /// Sums all files stored by the cache, including an in-progress encrypted
+  /// replacement, so concurrent callers retain the same conservative budget.
   Future<int> totalBytes() async {
     final dir = await _dir();
     var total = 0;
@@ -155,64 +161,132 @@ class OfflineBodyCache {
   Future<void> put(String hostId, String path, Uint8List bytes) async {
     final dir = await _dir();
     final key = await _getOrCreateKey();
-    final nonce = _randomBytes(_nonceLength);
-    final box = await _cipher.encrypt(
-      bytes,
-      secretKey: SecretKey(key),
-      nonce: nonce,
-      aad: _associatedData(hostId, path),
+    final file = _fileFor(dir, hostId, path);
+    return _withFileLock(file.path, () async {
+      await _putFile(file, key, hostId, path, bytes);
+    });
+  }
+
+  Future<void> _putFile(
+    File file,
+    Uint8List key,
+    String hostId,
+    String path,
+    Uint8List bytes,
+  ) async {
+    final temp = File(
+      '${file.path}.tmp-${base64UrlEncode(_randomBytes(12)).replaceAll('=', '')}',
     );
-    final envelope = Uint8List.fromList(<int>[
-      ..._magic,
-      ...nonce,
-      ...box.mac.bytes,
-      ...box.cipherText,
-    ]);
-    await _fileFor(dir, hostId, path).writeAsBytes(envelope, flush: true);
+    await _withFileLock(temp.path, () async {
+      await _writeTempAndReplace(file, temp, key, hostId, path, bytes);
+    });
+  }
+
+  Future<void> _writeTempAndReplace(
+    File file,
+    File temp,
+    Uint8List key,
+    String hostId,
+    String path,
+    Uint8List bytes,
+  ) async {
+    RandomAccessFile? handle;
+    try {
+      await temp.create(exclusive: true);
+      handle = await temp.open(mode: FileMode.write);
+      final nonce = _cipher.newNonce();
+      await handle.writeFrom(<int>[
+        ..._magic,
+        ...nonce,
+        ...List<int>.filled(_macLength, 0),
+      ]);
+
+      Mac? mac;
+      final encryptedChunks = _cipher.encryptStream(
+        _chunks(bytes),
+        secretKey: SecretKey(key),
+        nonce: nonce,
+        aad: _associatedData(hostId, path),
+        onMac: (value) => mac = value,
+      );
+      await for (final chunk in encryptedChunks) {
+        await handle.writeFrom(chunk);
+      }
+      final finalMac = mac;
+      if (finalMac == null || finalMac.bytes.length != _macLength) {
+        throw StateError(
+          'Offline cache encryption did not produce a valid MAC',
+        );
+      }
+      await handle.setPosition(_magic.length + _nonceLength);
+      await handle.writeFrom(finalMac.bytes);
+      await handle.flush();
+      await handle.close();
+      handle = null;
+
+      // The completed encrypted file is on the same filesystem as the target,
+      // so readers see either the old envelope or the complete replacement.
+      await temp.rename(file.path);
+    } catch (_) {
+      if (handle != null) await handle.close();
+      if (temp.existsSync()) await temp.delete();
+      rethrow;
+    }
   }
 
   Future<Uint8List?> get(String hostId, String path) async {
     final file = _fileFor(await _dir(), hostId, path);
-    if (!file.existsSync()) return null;
+    return _withFileLock(file.path, () async {
+      if (!file.existsSync()) return null;
 
-    final envelope = await file.readAsBytes();
-    if (!_hasMagic(envelope)) {
-      await file.delete();
-      return null;
-    }
+      final header = await _readHeader(file);
+      if (!_hasMagic(header)) {
+        await file.delete();
+        return null;
+      }
 
-    final key = await _readExistingKey();
-    if (key == null) {
-      await file.delete();
-      return null;
-    }
+      final key = await _readExistingKey();
+      if (key == null) {
+        await file.delete();
+        return null;
+      }
 
-    try {
-      return await _decrypt(envelope, key, hostId, path);
-    } on Object {
-      await file.delete();
-      throw const OfflineBodyCacheIntegrityException();
-    }
+      try {
+        final body = await _decryptFile(file, key, hostId, path, collect: true);
+        return body;
+      } on Object {
+        await file.delete();
+        throw const OfflineBodyCacheIntegrityException();
+      }
+    });
   }
 
+  /// Reports whether an encrypted cache envelope exists and its secure-store
+  /// key is available. This is intentionally an inexpensive, existence-only
+  /// check: [get] performs full authenticated decryption and removes tampered
+  /// entries before returning an integrity error.
   Future<bool> has(String hostId, String path) async {
     final file = _fileFor(await _dir(), hostId, path);
-    if (!file.existsSync()) return false;
-    final envelope = await file.readAsBytes();
-    if (!_hasMagic(envelope)) {
-      await file.delete();
-      return false;
-    }
-    if (await _readExistingKey() == null) {
-      await file.delete();
-      return false;
-    }
-    return true;
+    return _withFileLock(file.path, () async {
+      if (!file.existsSync()) return false;
+      final header = await _readHeader(file);
+      if (!_hasMagic(header)) {
+        await file.delete();
+        return false;
+      }
+      if (await _readExistingKey() == null) {
+        await file.delete();
+        return false;
+      }
+      return true;
+    });
   }
 
   Future<void> remove(String hostId, String path) async {
     final file = _fileFor(await _dir(), hostId, path);
-    if (file.existsSync()) await file.delete();
+    await _withFileLock(file.path, () async {
+      if (file.existsSync()) await file.delete();
+    });
   }
 
   /// Deletes all cached files belonging to [hostId] (call on host unpair).
@@ -223,7 +297,9 @@ class OfflineBodyCache {
       if (entity is! File) continue;
       final identity = _decodeIdentity(entity.uri.pathSegments.last);
       if (identity != null && identity.startsWith(prefix)) {
-        await entity.delete();
+        await _withFileLock(entity.path, () async {
+          if (entity.existsSync()) await entity.delete();
+        });
       }
     }
   }
@@ -233,6 +309,13 @@ class OfflineBodyCache {
     return Uint8List.fromList(
       List<int>.generate(length, (_) => random.nextInt(256), growable: false),
     );
+  }
+
+  Stream<Uint8List> _chunks(Uint8List bytes) async* {
+    for (var offset = 0; offset < bytes.length; offset += _chunkSize) {
+      final end = min(offset + _chunkSize, bytes.length);
+      yield Uint8List.sublistView(bytes, offset, end);
+    }
   }
 
   Future<Uint8List> _getOrCreateKey() {
@@ -279,6 +362,23 @@ class OfflineBodyCache {
     }
   }
 
+  static Future<T> _withFileLock<T>(
+    String path,
+    Future<T> Function() action,
+  ) async {
+    final previous = _fileLocks[path] ?? Future<void>.value();
+    final release = Completer<void>();
+    final current = release.future;
+    _fileLocks[path] = current;
+    await previous;
+    try {
+      return await action();
+    } finally {
+      if (identical(_fileLocks[path], current)) _fileLocks.remove(path);
+      release.complete();
+    }
+  }
+
   Uint8List _validateKey(Uint8List key) {
     if (key.length != 32) {
       throw StateError('Offline cache secure key must be 32 bytes');
@@ -294,30 +394,82 @@ class OfflineBodyCache {
     return true;
   }
 
-  Future<Uint8List> _decrypt(
-    Uint8List envelope,
-    Uint8List key,
-    String hostId,
-    String path,
-  ) async {
-    if (!_hasMagic(envelope)) {
-      throw const FormatException('Invalid cache envelope');
+  Future<Uint8List> _readHeader(File file) async {
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      return await handle.read(_headerLength);
+    } finally {
+      await handle.close();
     }
-    final nonce = envelope.sublist(_magic.length, _magic.length + _nonceLength);
-    final macStart = _magic.length + _nonceLength;
-    final mac = Mac(envelope.sublist(macStart, macStart + _macLength));
-    final ciphertext = envelope.sublist(_headerLength);
-    final cleartext = await _cipher.decrypt(
-      SecretBox(ciphertext, nonce: nonce, mac: mac),
-      secretKey: SecretKey(key),
-      aad: _associatedData(hostId, path),
-    );
-    return Uint8List.fromList(cleartext);
   }
 
-  /// Removes old plaintext files and any encrypted-looking entry that cannot
-  /// be authenticated with the secure-store key. Only authenticated envelopes
-  /// survive the upgrade sweep.
+  Stream<Uint8List> _readCiphertextChunks(File file) async* {
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      await handle.setPosition(_headerLength);
+      while (true) {
+        final chunk = await handle.read(_chunkSize);
+        if (chunk.isEmpty) return;
+        yield chunk;
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+
+  Future<Uint8List?> _decryptFile(
+    File file,
+    Uint8List key,
+    String hostId,
+    String path, {
+    required bool collect,
+  }) async {
+    final header = await _readHeader(file);
+    if (!_hasMagic(header)) {
+      throw const FormatException('Invalid cache envelope');
+    }
+    final nonce = header.sublist(_magic.length, _magic.length + _nonceLength);
+    final macStart = _magic.length + _nonceLength;
+    final mac = Mac(header.sublist(macStart, macStart + _macLength));
+    final fileLength = await file.length();
+    if (fileLength < _headerLength) {
+      throw const FormatException('Truncated cache envelope');
+    }
+    final bodyLength = fileLength - _headerLength;
+    final output = collect ? Uint8List(bodyLength) : null;
+    var outputOffset = 0;
+    final clearChunks = _cipher.decryptStream(
+      _readCiphertextChunks(file),
+      secretKey: SecretKey(key),
+      nonce: nonce,
+      mac: Future<Mac>.value(mac),
+      aad: _associatedData(hostId, path),
+    );
+    try {
+      await for (final chunk in clearChunks) {
+        final result = output;
+        if (result != null) {
+          if (outputOffset + chunk.length > result.length) {
+            throw const FormatException('Invalid cache ciphertext length');
+          }
+          result.setRange(outputOffset, outputOffset + chunk.length, chunk);
+          outputOffset += chunk.length;
+        }
+        if (chunk is Uint8List) chunk.fillRange(0, chunk.length, 0);
+      }
+      if (output != null && outputOffset != output.length) {
+        throw const FormatException('Invalid cache plaintext length');
+      }
+      return output;
+    } on Object {
+      output?.fillRange(0, output.length, 0);
+      rethrow;
+    }
+  }
+
+  /// Removes old plaintext files and any current-format envelope that cannot
+  /// be authenticated with the secure-store key. Only authenticated v2
+  /// envelopes survive the upgrade sweep; older cache formats are disposable.
   Future<void> _removeLegacyPlaintext(Directory dir) async {
     Uint8List? key;
     var keyChecked = false;
@@ -325,34 +477,43 @@ class OfflineBodyCache {
       if (entity is! File) continue;
       final identity = _decodeIdentity(entity.uri.pathSegments.last);
       if (identity == null) continue;
+      await _withFileLock(entity.path, () async {
+        if (!entity.existsSync()) return;
+        final header = await _readHeader(entity);
+        if (!_hasMagic(header)) {
+          await entity.delete();
+          return;
+        }
 
-      final bytes = await entity.readAsBytes();
-      if (!_hasMagic(bytes)) {
-        await entity.delete();
-        continue;
-      }
+        if (!keyChecked) {
+          key = await _readExistingKey();
+          keyChecked = true;
+        }
+        final validationKey = key;
+        if (validationKey == null) {
+          await entity.delete();
+          return;
+        }
 
-      if (!keyChecked) {
-        key = await _readExistingKey();
-        keyChecked = true;
-      }
-      if (key == null) {
-        await entity.delete();
-        continue;
-      }
-
-      final separator = identity.indexOf(':');
-      if (separator < 0) {
-        await entity.delete();
-        continue;
-      }
-      final hostId = identity.substring(0, separator);
-      final path = identity.substring(separator + 1);
-      try {
-        await _decrypt(bytes, key, hostId, path);
-      } on Object {
-        await entity.delete();
-      }
+        final separator = identity.indexOf(':');
+        if (separator < 0) {
+          await entity.delete();
+          return;
+        }
+        final hostId = identity.substring(0, separator);
+        final path = identity.substring(separator + 1);
+        try {
+          await _decryptFile(
+            entity,
+            validationKey,
+            hostId,
+            path,
+            collect: false,
+          );
+        } on Object {
+          await entity.delete();
+        }
+      });
     }
   }
 
@@ -360,13 +521,33 @@ class OfflineBodyCache {
     await for (final entity in dir.list()) {
       if (entity is! File) continue;
       if (_decodeIdentity(entity.uri.pathSegments.last) != null) {
-        try {
-          await entity.delete();
-        } catch (_) {
-          // Preserve the original secure-store error. The current operation
-          // still fails closed and will not return any cached body.
-        }
+        await _withFileLock(entity.path, () async {
+          try {
+            if (entity.existsSync()) await entity.delete();
+          } catch (_) {
+            // Preserve the original secure-store error. The current operation
+            // still fails closed and will not return any cached body.
+          }
+        });
       }
+    }
+  }
+
+  Future<void> _removeOrphanedTempFiles(Directory dir) async {
+    final suffixPattern = RegExp(r'^[A-Za-z0-9_-]{16}$');
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final filename = entity.uri.pathSegments.last;
+      final marker = filename.indexOf('.tmp-');
+      if (marker <= 0 ||
+          filename.indexOf('.tmp-', marker + 5) >= 0 ||
+          _decodeIdentity(filename.substring(0, marker)) == null ||
+          !suffixPattern.hasMatch(filename.substring(marker + 5))) {
+        continue;
+      }
+      await _withFileLock(entity.path, () async {
+        if (entity.existsSync()) await entity.delete();
+      });
     }
   }
 

@@ -159,7 +159,8 @@ void main() {
 
     expect(
       find.text(
-        'Could not load the app list. Check the connection and try again.',
+        'Could not load the app list. Check the connection and try again.\n'
+        'Bad state: offline',
       ),
       findsOneWidget,
     );

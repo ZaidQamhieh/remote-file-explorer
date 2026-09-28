@@ -17,24 +17,26 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/ui/feedback.dart';
 import '../../../core/ui/format.dart';
 import '../../../core/ui/pressable.dart';
-import '../../explorer/drives_view.dart';
-import '../../explorer/explorer_screen.dart';
+import '../../explorer/host_root_view.dart';
 import '../../home/home_state.dart';
 import '../../search/search_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../host_apps_screen.dart';
 import 'storage_gauge.dart';
 
-/// Picks the root screen to open when browsing [host], based on its most
-/// recent `/health` response.
-///
-/// Windows hosts (`health.os == 'windows'`, case-insensitive) open the drive
-/// list ([DrivesView]) since `/` isn't a meaningful path there. Any other (or
-/// unknown/offline, `health == null`) OS opens [ExplorerScreen] rooted at `/`
-/// as before.
-Widget explorerRootFor(Health? health, Host host) {
-  final isWindows = health?.os.toLowerCase() == 'windows';
-  return isWindows ? DrivesView(host: host) : ExplorerScreen(host: host);
+/// Resolves the caller's effective file roots before opening the browser.
+Widget explorerRootFor(
+  Health? health,
+  Host host, {
+  String? initialPath,
+  required HostRootSelection onSelectRoot,
+}) {
+  return HostRootView(
+    host: host,
+    health: health,
+    initialPath: initialPath,
+    onSelectRoot: onSelectRoot,
+  );
 }
 
 /// A host dashboard card with status, active route/version, drive gauges, and
@@ -252,6 +254,13 @@ class _HostCardState extends ConsumerState<HostCard>
     AgentClient? client;
     try {
       client = await buildClientForHost(ref.read, widget.host.id);
+      final agentSettings = await client.getSettings();
+      if (agentSettings.accessDenied) {
+        if (context.mounted) {
+          showInfo(context, 'This device has no file access on this computer.');
+        }
+        return;
+      }
       if (!context.mounted) return;
       final path = await Navigator.of(context).push<String>(
         MaterialPageRoute(
@@ -259,7 +268,10 @@ class _HostCardState extends ConsumerState<HostCard>
               (_) => SearchScreen(
                 host: widget.host,
                 client: client!,
-                currentPath: '/',
+                currentPath:
+                    agentSettings.roots.isEmpty
+                        ? '/'
+                        : agentSettings.roots.first,
               ),
         ),
       );
@@ -587,23 +599,38 @@ class _CardBody extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: Spacing.xs),
-                                Text(
-                                  _statusLabel(context),
-                                  style: textTheme.labelMedium?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(width: Spacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    subtitle,
-                                    style: textTheme.bodySmall?.copyWith(
+                                if (subtitle.isEmpty)
+                                  Expanded(
+                                    child: Text(
+                                      _statusLabel(context),
+                                      style: textTheme.labelMedium?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                else ...[
+                                  Text(
+                                    _statusLabel(context),
+                                    style: textTheme.labelMedium?.copyWith(
                                       color: scheme.onSurfaceVariant,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
+                                  const SizedBox(width: Spacing.sm),
+                                  Expanded(
+                                    child: Text(
+                                      subtitle,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -643,51 +670,43 @@ class _CardBody extends StatelessWidget {
                 const SizedBox(height: Spacing.md),
                 ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 48),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        FilledButton.icon(
-                          onPressed: checking ? null : onBrowseTap,
-                          style: quickActionStyle,
-                          icon: const Icon(LucideIcons.folderOpen, size: 18),
-                          label: Text(
-                            online ? context.l10n.openButton : 'Browse cache',
-                          ),
+                  child: Wrap(
+                    spacing: Spacing.sm,
+                    runSpacing: Spacing.sm,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: checking ? null : onBrowseTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.folderOpen, size: 18),
+                        label: Text(
+                          online ? context.l10n.openButton : 'Browse cache',
                         ),
-                        const SizedBox(width: Spacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: online && !checking ? onSearchTap : null,
-                          style: quickActionStyle,
-                          icon: const Icon(LucideIcons.search, size: 18),
-                          label: Text(context.l10n.searchButton),
-                        ),
-                        const SizedBox(width: Spacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: onTransfersTap,
-                          style: quickActionStyle,
-                          icon: const Icon(
-                            LucideIcons.arrowLeftRight,
-                            size: 18,
-                          ),
-                          label: Text(context.l10n.transfersMenuItem),
-                        ),
-                        const SizedBox(width: Spacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: onSettingsTap,
-                          style: quickActionStyle,
-                          icon: const Icon(LucideIcons.settings, size: 18),
-                          label: Text(context.l10n.settingsMenuItem),
-                        ),
-                        const SizedBox(width: Spacing.sm),
-                        FilledButton.tonalIcon(
-                          onPressed: online && !checking ? onAppsTap : null,
-                          style: quickActionStyle,
-                          icon: const Icon(LucideIcons.monitor, size: 18),
-                          label: Text(context.l10n.hostAppsButton),
-                        ),
-                      ],
-                    ),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: online && !checking ? onSearchTap : null,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.search, size: 18),
+                        label: Text(context.l10n.searchButton),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: onTransfersTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.arrowLeftRight, size: 18),
+                        label: Text(context.l10n.transfersMenuItem),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: onSettingsTap,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.settings, size: 18),
+                        label: Text(context.l10n.settingsMenuItem),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: online && !checking ? onAppsTap : null,
+                        style: quickActionStyle,
+                        icon: const Icon(LucideIcons.monitor, size: 18),
+                        label: Text(context.l10n.hostAppsButton),
+                      ),
+                    ],
                   ),
                 ),
               ],

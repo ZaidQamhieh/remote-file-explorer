@@ -68,6 +68,11 @@ their prior file access when upgraded. Upload permission also allows replacing a
 the host's configured roots, per-device jail, read-only mode, and global share-link switch continue
 to apply.
 
+The Files tab starts from the roots available to the current device instead of assuming that the
+host's `/` path is accessible. Restricted devices see only their effective shared folders;
+unrestricted devices use the host's drive list or filesystem root. Bookmarks and search results
+open from a matching allowed root, and stale locations stay clamped to that root.
+
 ## Install the host agent
 
 Download the matching host binary, verify its SHA-256 checksum, and run `rfe-agent setup`. New

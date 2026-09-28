@@ -110,6 +110,43 @@ void main() {
     },
   );
 
+  testWidgets('offline status truncates cleanly on a narrow screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({
+      'rfe_hosts_v1': [jsonEncode(host.toJson())],
+      'rfe_last_seen_h1':
+          DateTime.now()
+              .subtract(const Duration(days: 61))
+              .millisecondsSinceEpoch,
+    });
+    final store = await buildStore();
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: l10nDelegates,
+            home: Scaffold(
+              body: HostCard(host: host, store: store, isHero: true),
+            ),
+          ),
+        ),
+      );
+      for (var i = 0; i < 30; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    });
+
+    expect(find.text('main-pc'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('long-press opens the forget-device confirmation', (
     tester,
   ) async {

@@ -58,7 +58,10 @@ project currently has **no cloud relay or cloud database**.
 4. Strict path normalization + rooted filesystem operations enforce configured and per-device
    jails against traversal and symlink escape during file access. This does not fence mount points,
    Linux bind mounts, `/proc` special files, or Unix device files inside an allowed root; see the
-   route/security matrix for platform verification limits.
+   route/security matrix for platform verification limits. The mobile Files tab reads the
+   authenticated `/settings` response to show the caller's effective roots. It opens restricted
+   hosts at one of those roots and clamps bookmark navigation to the selected root, rather than
+   attempting to list `/` outside the jail.
 5. The app catalog shows visible user-facing entries from the agent's current-user OS catalogs.
    Each item carries a `launchable` flag; unsupported entries remain visible with Run disabled.
    Launch accepts only an opaque ID, re-resolves it before launch, rejects non-launchable items,
@@ -148,7 +151,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 |---------|-----------|----------------|
 | home | `home_shell.dart`, `home_state.dart`, `widgets/app_bottom_nav.dart` | Top-level app shell + bottom nav tab state, hosting the other feature screens. |
 | hosts | `host_list_screen.dart`, `host_apps_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer list, per-host card/storage gauge, and host app catalog/Run screen. |
-| explorer | (hub files above) + `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
+| explorer | (hub files above) + `host_root_view.dart`, `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `host_root_view.dart` resolves the caller's allowed roots before browsing; `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
 | bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
 | preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
 | search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |

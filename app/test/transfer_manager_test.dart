@@ -8,6 +8,13 @@ import 'package:remote_file_explorer/features/transfers/transfer_state.dart';
 const _testHost = Host(id: 'h1', label: 'Test PC', address: '127.0.0.1:1');
 
 void main() {
+  test('transfer sampler initializes without a build-time state read', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(container.read(transferSamplerProvider), isEmpty);
+  });
+
   // -------------------------------------------------------------------------
   // computeSpeedEta — pure function
   // -------------------------------------------------------------------------

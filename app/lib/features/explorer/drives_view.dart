@@ -36,9 +36,10 @@ final drivesProvider = FutureProvider.autoDispose.family<List<Drive>, String>((
 });
 
 class DrivesView extends ConsumerWidget {
-  const DrivesView({super.key, required this.host});
+  const DrivesView({super.key, required this.host, this.onSelectDrive});
 
   final Host host;
+  final ValueChanged<String>? onSelectDrive;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,7 +89,11 @@ class DrivesView extends ConsumerWidget {
                               color:
                                   Theme.of(context).colorScheme.outlineVariant,
                             ),
-                          _DriveTile(drive: drives[i], host: host),
+                          _DriveTile(
+                            drive: drives[i],
+                            host: host,
+                            onSelectDrive: onSelectDrive,
+                          ),
                         ],
                       ],
                     ),
@@ -125,10 +130,15 @@ class DrivesView extends ConsumerWidget {
 }
 
 class _DriveTile extends StatelessWidget {
-  const _DriveTile({required this.drive, required this.host});
+  const _DriveTile({
+    required this.drive,
+    required this.host,
+    this.onSelectDrive,
+  });
 
   final Drive drive;
   final Host host;
+  final ValueChanged<String>? onSelectDrive;
 
   @override
   Widget build(BuildContext context) {
@@ -160,12 +170,18 @@ class _DriveTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       trailing: const Icon(LucideIcons.chevronRight),
-      onTap:
-          () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ExplorerScreen(host: host, rootPath: drive.path),
-            ),
+      onTap: () {
+        final onSelect = onSelectDrive;
+        if (onSelect != null) {
+          onSelect(drive.path);
+          return;
+        }
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ExplorerScreen(host: host, rootPath: drive.path),
           ),
+        );
+      },
     );
   }
 }

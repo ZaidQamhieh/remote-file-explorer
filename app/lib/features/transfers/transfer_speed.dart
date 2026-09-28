@@ -145,6 +145,8 @@ class TransferSamplerNotifier extends Notifier<Map<String, SpeedEta>> {
   /// Ring buffer of recent samples per task id.
   final Map<String, List<_Sample>> _samples = {};
 
+  bool _disposed = false;
+
   /// Epoch the sampler measures `elapsedMs` from (lazily set on first sample).
   DateTime? _epoch;
 
@@ -152,14 +154,21 @@ class TransferSamplerNotifier extends Notifier<Map<String, SpeedEta>> {
 
   @override
   Map<String, SpeedEta> build() {
-    // React to queue changes: (re)start the timer when work appears, stop it
-    // when the queue drains, and prune samples for tasks that left.
+    // React to later queue changes. Do not fire the listener synchronously
+    // from build: _onQueueChanged updates this notifier's state, which is not
+    // initialized until build returns.
     ref.listen<List<TransferTask>>(
       transferQueueProvider,
       (_, next) => _onQueueChanged(next),
-      fireImmediately: true,
     );
-    ref.onDispose(_stop);
+    ref.onDispose(() {
+      _disposed = true;
+      _stop();
+    });
+    scheduleMicrotask(() {
+      if (_disposed) return;
+      _onQueueChanged(ref.read(transferQueueProvider));
+    });
     return const {};
   }
 

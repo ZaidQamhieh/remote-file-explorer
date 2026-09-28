@@ -8,6 +8,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/models/host_app.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/ui/feedback.dart';
 import '../../core/ui/screen_header.dart';
 import '../../core/ui/state_views.dart';
 
@@ -159,7 +160,8 @@ class _HostAppsScreenState extends ConsumerState<HostAppsScreen> {
             );
           }
           return ErrorRetryCard(
-            message: context.l10n.hostAppsLoadFailed,
+            message:
+                '${context.l10n.hostAppsLoadFailed}\n${humanizeError(error)}',
             onRetry: _retry,
           );
         },

@@ -167,8 +167,8 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/dupfinder_handler.go` | Batch-checksum endpoint backing the app's duplicate finder. |
 | `internal/server/recent.go` | Recent-files endpoint — a live recursive walk, like `search.go`, not a persistent index. |
 | `internal/server/transferhandlers.go` | Upload-session + chunk PUT + download-range endpoints. |
-| `internal/server/search.go` | Search endpoint (recursive walk). |
-| `internal/server/search_index.go` | Background index rebuild backing `search.go`. |
+| `internal/server/search.go` | Search endpoint (indexed fast path, bounded recursive fallback before the first build). |
+| `internal/server/search_index.go` | Five-minute index rebuild through open rooted walks; each request filters results by its effective roots. No content sniffing; 2M-entry and 128 MiB estimated per-snapshot caps signal partial results when reached. |
 | `internal/server/thumb.go` | Thumbnail endpoint. |
 | `internal/server/settings_handlers.go` | Live-mutable agent settings endpoints. |
 | `internal/server/apps_handlers.go` + `apps_{linux,windows,darwin,other}.go` | Per-device app catalog/launch routes and OS-specific current-user app inventory/launch adapters. |

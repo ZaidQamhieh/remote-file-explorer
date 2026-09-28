@@ -3,6 +3,7 @@ package server
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -56,6 +57,24 @@ func TestSearchIndex_RebuildRespectsLimit(t *testing.T) {
 	}
 	if !truncated || len(results) != 2 {
 		t.Fatalf("want truncated=true and 2 results, got truncated=%v len=%d", truncated, len(results))
+	}
+}
+
+func TestSearchIndexQueryReportsPartialIndex(t *testing.T) {
+	ops, root := newSearchFixture(t)
+	idx := &SearchIndex{ops: ops}
+	idx.rebuild()
+	idx.mu.Lock()
+	idx.stats.Truncated = true
+	idx.mu.Unlock()
+
+	filters, _, _ := parseSearchFilters(map[string][]string{"q": {"photo"}})
+	results, truncated, ok := idx.query(filters, []string{root}, 100)
+	if !ok || len(results) == 0 {
+		t.Fatalf("query = (%d results, truncated=%t, ok=%t), want results from the built index", len(results), truncated, ok)
+	}
+	if !truncated {
+		t.Fatal("query omitted the partial-index signal when it was below the result limit")
 	}
 }
 
@@ -121,6 +140,71 @@ func TestSearchIndex_DoesNotSniffDuringWalk(t *testing.T) {
 	}
 	if got := entries[0].entry.MimeType; got != "application/octet-stream" {
 		t.Fatalf("index walk sniffed file contents (mime %q); it must classify by extension alone", got)
+	}
+}
+
+func TestSearchIndex_DoesNotFollowSymlinkOutsideOpenedRoot(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret-marker.txt"), []byte("private"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "outside-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	idx := &SearchIndex{ops: fsops.New([]string{root}, false)}
+	idx.rebuild()
+	filters, _, _ := parseSearchFilters(map[string][]string{"q": {""}})
+	results, _, ok := idx.query(filters, []string{root}, 100)
+	if !ok {
+		t.Fatal("search index did not become ready")
+	}
+	foundLink := false
+	for _, result := range results {
+		if result.Name == "secret-marker.txt" {
+			t.Fatal("search indexed an entry from outside the opened root")
+		}
+		if result.Name == "outside-link" {
+			foundLink = true
+			if result.IsDir {
+				t.Fatal("search followed an outside symlink while reading its metadata")
+			}
+		}
+	}
+	if !foundLink {
+		t.Fatal("expected the in-root symlink entry to remain visible")
+	}
+}
+
+func TestCollectAllRootHonorsEstimatedMemoryBudget(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	openedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer openedRoot.Close()
+
+	info, err := os.Stat(filepath.Join(root, "a.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := fsops.EntryFromRootInfo(openedRoot, root, "a.txt", info)
+	limit := indexedEntryEstimatedBytes(indexedEntry{
+		entry:     entry,
+		lowerName: strings.ToLower(entry.Name),
+	})
+	var entries []indexedEntry
+	var estimated int64
+	truncated := collectAllRoot(openedRoot, root, &entries, &estimated, 100, limit)
+	if !truncated || len(entries) != 1 || estimated != limit {
+		t.Fatalf("memory-limited walk = (truncated=%t entries=%d estimated=%d limit=%d), want one entry at the limit", truncated, len(entries), estimated, limit)
 	}
 }
 

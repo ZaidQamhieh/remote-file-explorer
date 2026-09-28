@@ -827,6 +827,27 @@ func EntryFromInfoNoSniff(info os.FileInfo, fullPath string) Entry {
 	return entryFromInfo(info, fullPath, false)
 }
 
+// EntryFromRootInfo builds a no-sniff entry from metadata returned by a walk
+// over root.FS(). Symlink metadata is resolved through the same open root, so
+// the walk cannot stat or readlink a target outside that root. relativePath
+// is the slash-separated path supplied by fs.WalkDir; rootPath is retained
+// only as the API-visible full path.
+func EntryFromRootInfo(root *os.Root, rootPath, relativePath string, info os.FileInfo) Entry {
+	if root == nil || info == nil {
+		return Entry{}
+	}
+	relative := filepath.FromSlash(relativePath)
+	fullPath := rootPath
+	if relative != "." {
+		fullPath = filepath.Join(rootPath, relative)
+	}
+	return entryFromSecureInfo(info, &securePath{
+		full: fullPath,
+		root: root,
+		name: relative,
+	}, false)
+}
+
 func entryFromInfo(info os.FileInfo, fullPath string, sniff bool) Entry {
 	isSymlink := info.Mode()&os.ModeSymlink != 0
 	// info comes from Lstat/Readdir, which never follows symlinks — a symlink

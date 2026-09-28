@@ -195,8 +195,12 @@ func (idx *SearchIndex) query(
 	if !idx.ready {
 		return nil, false, false
 	}
+	// Prepare path-boundary strings once per query. Search may inspect millions
+	// of entries, so rebuilding each root's descendant prefix inside the loop
+	// needlessly allocates once per entry and root.
+	rootScopes := prepareRootScopes(roots)
 	for _, ie := range idx.entries {
-		if !underAnyRoot(ie.entry.Path, roots) {
+		if !underAnyRootScopes(ie.entry.Path, rootScopes) {
 			continue
 		}
 		if !filters.matchLower(ie.lowerName) {
@@ -213,11 +217,28 @@ func (idx *SearchIndex) query(
 	return results, false, true
 }
 
-// underAnyRoot reports whether path is root itself or inside it, for at
-// least one of roots.
-func underAnyRoot(path string, roots []string) bool {
+type rootScope struct {
+	root             string
+	descendantPrefix string
+}
+
+func prepareRootScopes(roots []string) []rootScope {
+	scopes := make([]rootScope, 0, len(roots))
+	separator := string(filepath.Separator)
 	for _, root := range roots {
-		if path == root || strings.HasPrefix(path, strings.TrimSuffix(root, string(filepath.Separator))+string(filepath.Separator)) {
+		scopes = append(scopes, rootScope{
+			root:             root,
+			descendantPrefix: strings.TrimSuffix(root, separator) + separator,
+		})
+	}
+	return scopes
+}
+
+// underAnyRootScopes reports whether path is a root itself or inside one of
+// the already-prepared roots. It performs no per-root string construction.
+func underAnyRootScopes(path string, scopes []rootScope) bool {
+	for _, scope := range scopes {
+		if path == scope.root || strings.HasPrefix(path, scope.descendantPrefix) {
 			return true
 		}
 	}

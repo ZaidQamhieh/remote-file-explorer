@@ -59,6 +59,50 @@ func TestSearchIndex_RebuildRespectsLimit(t *testing.T) {
 	}
 }
 
+func TestUnderAnyRootScopesPreservesPathBoundaries(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "allowed")
+	scopes := prepareRootScopes([]string{root})
+
+	for _, tc := range []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "root itself", path: root, want: true},
+		{name: "child", path: filepath.Join(root, "file.txt"), want: true},
+		{name: "nested child", path: filepath.Join(root, "folder", "file.txt"), want: true},
+		{name: "shared prefix sibling", path: root + "-other" + string(filepath.Separator) + "file.txt", want: false},
+		{name: "outside", path: filepath.Join(base, "other", "file.txt"), want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := underAnyRootScopes(tc.path, scopes); got != tc.want {
+				t.Fatalf("underAnyRootScopes(%q) = %t, want %t", tc.path, got, tc.want)
+			}
+		})
+	}
+
+	rootWithSeparator := root + string(filepath.Separator)
+	trailingSeparatorScopes := prepareRootScopes([]string{rootWithSeparator})
+	if child := filepath.Join(root, "file.txt"); !underAnyRootScopes(child, trailingSeparatorScopes) {
+		t.Fatalf("root with a trailing separator did not include child %q", child)
+	}
+}
+
+func TestRootScopeMembershipDoesNotAllocatePerEntry(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "allowed")
+	path := filepath.Join(root, "nested", "file.txt")
+	scopes := prepareRootScopes([]string{root, filepath.Dir(root)})
+	allocations := testing.AllocsPerRun(100, func() {
+		if !underAnyRootScopes(path, scopes) {
+			t.Fatal("expected path to be inside a prepared root")
+		}
+	})
+	if allocations != 0 {
+		t.Fatalf("prepared membership check allocated %.2f times per entry, want 0", allocations)
+	}
+}
+
 // TestSearchIndex_DoesNotSniffDuringWalk is the PR-47 regression: the index
 // walk must classify by extension only. EntryFromInfo opens extensionless
 // files to sniff them, which across a whole tree is an open+read per file on

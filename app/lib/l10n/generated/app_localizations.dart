@@ -4339,7 +4339,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostAppsSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Search by app name or description'**
+  /// **'Search apps by name'**
   String get hostAppsSearchHint;
 
   /// No description provided for @hostAppsClearSearchTooltip.
@@ -4363,7 +4363,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostAppsNoMatchesMessage.
   ///
   /// In en, this message translates to:
-  /// **'Try another app name or description.'**
+  /// **'Try another app name.'**
   String get hostAppsNoMatchesMessage;
 
   /// No description provided for @hostAppsPlatformWindows.

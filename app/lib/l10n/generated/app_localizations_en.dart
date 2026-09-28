@@ -2599,7 +2599,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get hostAppsSearchHint => 'Search by app name or description';
+  String get hostAppsSearchHint => 'Search apps by name';
 
   @override
   String get hostAppsClearSearchTooltip => 'Clear app search';
@@ -2619,7 +2619,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostAppsNoMatchesTitle => 'No matching apps';
 
   @override
-  String get hostAppsNoMatchesMessage => 'Try another app name or description.';
+  String get hostAppsNoMatchesMessage => 'Try another app name.';
 
   @override
   String get hostAppsPlatformWindows => 'Windows';

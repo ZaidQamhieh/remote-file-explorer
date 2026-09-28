@@ -190,7 +190,31 @@ func (rn *Renderer) GetContext(ctx context.Context, srcPath string, maxSize int)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(srcPath)
+	f, err := os.Open(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	return rn.GetFileContext(ctx, f, srcPath, maxSize)
+}
+
+// GetFileContext returns a thumbnail for an already-open source file. It
+// consumes and closes source, including when it joins an in-flight render or
+// returns a cache hit. Callers that enforce filesystem access boundaries
+// should open the file through that boundary and pass the handle here.
+func (rn *Renderer) GetFileContext(ctx context.Context, source *os.File, cacheKey string, maxSize int) ([]byte, error) {
+	if source == nil {
+		return nil, fmt.Errorf("thumbnail source file is nil")
+	}
+	owned := false
+	defer func() {
+		if !owned {
+			_ = source.Close()
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := source.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +222,7 @@ func (rn *Renderer) GetContext(ctx context.Context, srcPath string, maxSize int)
 		return nil, fmt.Errorf("%w: source is not a regular file", ErrNotSupported)
 	}
 
-	cachePath := rn.cachePath(srcPath, maxSize, info.ModTime().UnixNano())
+	cachePath := rn.cachePath(cacheKey, maxSize, info.ModTime().UnixNano())
 
 	if data, err := os.ReadFile(cachePath); err == nil {
 		return data, nil
@@ -212,6 +236,8 @@ func (rn *Renderer) GetContext(ctx context.Context, srcPath string, maxSize int)
 	if ok && call.ctx.Err() == nil && !call.finished {
 		call.waiters++
 		rn.mu.Unlock()
+		_ = source.Close()
+		owned = true
 		return rn.waitForCall(ctx, cachePath, call)
 	}
 	workCtx, cancel := context.WithCancel(context.Background())
@@ -219,7 +245,8 @@ func (rn *Renderer) GetContext(ctx context.Context, srcPath string, maxSize int)
 	rn.inFlight[cachePath] = call
 	rn.mu.Unlock()
 
-	go rn.renderCall(cachePath, srcPath, maxSize, call)
+	owned = true
+	go rn.renderCall(cachePath, source, maxSize, call)
 	return rn.waitForCall(ctx, cachePath, call)
 }
 
@@ -243,8 +270,8 @@ func (rn *Renderer) waitForCall(ctx context.Context, cachePath string, call *ren
 	}
 }
 
-func (rn *Renderer) renderCall(cachePath, srcPath string, maxSize int, call *renderCall) {
-	data, renderErr := render(call.ctx, srcPath, maxSize)
+func (rn *Renderer) renderCall(cachePath string, source *os.File, maxSize int, call *renderCall) {
+	data, renderErr := renderOpened(call.ctx, source, maxSize)
 	if renderErr == nil && call.ctx.Err() == nil {
 		if err := rn.writeCache(cachePath, data); err != nil {
 			// Cache write failures shouldn't prevent serving the thumbnail.
@@ -272,6 +299,15 @@ func Render(srcPath string, maxSize int) ([]byte, error) {
 }
 
 func render(ctx context.Context, srcPath string, maxSize int) ([]byte, error) {
+	cf, err := os.Open(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	return renderOpened(ctx, cf, maxSize)
+}
+
+func renderOpened(ctx context.Context, cf *os.File, maxSize int) ([]byte, error) {
+	defer cf.Close()
 	if maxSize <= 0 {
 		maxSize = 256
 	}
@@ -281,7 +317,7 @@ func render(ctx context.Context, srcPath string, maxSize int) ([]byte, error) {
 
 	// Bound the source before decoding (PR-09): on-disk size, then decoded
 	// pixel dimensions read from the header without a full decode.
-	info, err := os.Stat(srcPath)
+	info, err := cf.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -291,29 +327,13 @@ func render(ctx context.Context, srcPath string, maxSize int) ([]byte, error) {
 	if info.Size() > maxThumbSourceBytes {
 		return nil, fmt.Errorf("%w: source exceeds %d bytes", ErrNotSupported, int64(maxThumbSourceBytes))
 	}
+	if _, err := cf.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
 	select {
 	case headerDecodeSem <- struct{}{}:
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	}
-	cf, err := os.Open(srcPath)
-	if err != nil {
-		<-headerDecodeSem
-		return nil, err
-	}
-	defer cf.Close()
-	openedInfo, err := cf.Stat()
-	if err != nil {
-		<-headerDecodeSem
-		return nil, err
-	}
-	if !openedInfo.Mode().IsRegular() {
-		<-headerDecodeSem
-		return nil, fmt.Errorf("%w: opened source is not a regular file", ErrNotSupported)
-	}
-	if openedInfo.Size() > maxThumbSourceBytes {
-		<-headerDecodeSem
-		return nil, fmt.Errorf("%w: source exceeds %d bytes", ErrNotSupported, int64(maxThumbSourceBytes))
 	}
 	cfg, _, cfgErr := image.DecodeConfig(cf)
 	<-headerDecodeSem

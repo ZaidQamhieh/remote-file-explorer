@@ -56,13 +56,19 @@ func thumbHandler(ops *fsops.Ops, rn *thumbs.Renderer) http.HandlerFunc {
 			return
 		}
 
-		resolved, err := ops.Resolve(path)
+		source, err := ops.Open(path)
 		if err != nil {
-			handleFsError(w, err)
+			if errors.Is(err, fsops.ErrForbidden) {
+				handleFsError(w, err)
+			} else if os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "NOT_AVAILABLE", "no thumbnail available for this file")
+			} else {
+				writeInternal(w, "thumbnail", err)
+			}
 			return
 		}
 
-		data, err := rn.GetContext(r.Context(), resolved, size)
+		data, err := rn.GetFileContext(r.Context(), source, path, size)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return

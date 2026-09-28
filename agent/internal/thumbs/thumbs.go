@@ -56,6 +56,15 @@ var fullDecodeBudget = newDecodeBudget(decodeMemoryBudget)
 // little memory and could otherwise start an unbounded number of decoders.
 var fullDecodeSem = make(chan struct{}, maxConcurrentDecodes)
 
+func acquireDecodeSlot(ctx context.Context, sem chan struct{}) (func(), error) {
+	select {
+	case sem <- struct{}{}:
+		return func() { <-sem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // headerDecodeSem bounds the lightweight config-decoding phase too, including
 // work that cannot be interrupted once an image decoder starts reading.
 var headerDecodeSem = make(chan struct{}, 8)
@@ -356,12 +365,11 @@ func renderOpened(ctx context.Context, cf *os.File, maxSize int) ([]byte, error)
 	if width > maxThumbPixels/height {
 		return nil, fmt.Errorf("%w: %dx%d exceeds pixel budget", ErrNotSupported, cfg.Width, cfg.Height)
 	}
-	select {
-	case fullDecodeSem <- struct{}{}:
-		defer func() { <-fullDecodeSem }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	releaseDecodeSlot, err := acquireDecodeSlot(ctx, fullDecodeSem)
+	if err != nil {
+		return nil, err
 	}
+	defer releaseDecodeSlot()
 	pixels := width * height
 
 	decodeWeight := pixels * decodeBytesPerPixel

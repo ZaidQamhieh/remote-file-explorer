@@ -1,12 +1,27 @@
 # Feature Roadmap — Remote File Explorer
 
-**Status: PLANNED, NOT STARTED.** Written 2026-06-12. Companion to
-`docs/ui-redesign-plan.md` (UI waves A–F) and `docs/ui-design-spec.md`
-(Expressive M3 visuals). Features here are sequenced *around* the UI waves —
-suggested interleaving at the bottom.
+**Status snapshot: 2026-09-28.** This roadmap was written on 2026-06-12; the
+original descriptions below are retained for context, while this snapshot
+records what the current source tree now contains. The companion UI brief is
+[`ui-redesign-plan.md`](ui-redesign-plan.md), with visuals in
+[`ui-design-spec.md`](ui-design-spec.md).
+
+| Roadmap area | Current status |
+|---|---|
+| File visibility | Delivered: dotfiles, hidden extensions/names, presets, reveal controls, and per-host settings. |
+| Tier 1 #1–5, #7–8 | Delivered: share-to-app upload, archives, storage insights, trash, recents, biometric lock, and per-device read-only. |
+| Tier 1 #6 | Partial: video uses ranged network playback; audio preview downloads bounded content before playback. |
+| Tier 2 #9–11, #13 | Delivered: foreground transfer notifications, SSE live updates, camera-roll backup, and offline pins with encrypted cached bodies. |
+| Tier 2 #12 | Partial: the host advertises mDNS; the mobile app does not yet discover hosts from it. |
+| Horizon audit log | Delivered for account, device, share, launch, and restart events, with an in-app viewer. File-operation auditing remains out of scope. |
+| PC-to-PC copy, home-screen widget, launcher shortcuts, dual-pane explorer | Not started. |
+
+This status describes implemented code, not a claim that every OS/device flow
+has received a full owner-run acceptance test.
 
 Effort: S (≤1 agent dispatch) · M (2–3) · L (multi-session) · XL (its own plan
-doc). Impact: ★ to ★★★ for a personal phone↔PC tool over Tailscale.
+doc). Impact: ★ to ★★★ for a personal phone↔PC tool over LAN, Tailscale, or
+direct HTTPS.
 
 ---
 

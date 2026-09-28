@@ -92,6 +92,8 @@ class _HostAppsScreenState extends ConsumerState<HostAppsScreen> {
       return context.l10n.hostAppsLaunchDenied;
     }
     switch (error.code) {
+      case 'APP_NOT_LAUNCHABLE':
+        return context.l10n.hostAppCannotRun;
       case 'APP_LAUNCH_BUSY':
         return context.l10n.hostAppLaunchBusy;
       case 'APP_LAUNCH_RATE_LIMITED':
@@ -366,6 +368,17 @@ class _HostAppCard extends StatelessWidget {
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
+                if (!app.launchable) ...[
+                  const SizedBox(height: Spacing.xs),
+                  Text(
+                    context.l10n.hostAppCannotRun,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
                 if (app.description?.trim().isNotEmpty ?? false) ...[
                   const SizedBox(height: Spacing.xs),
                   Text(
@@ -382,7 +395,8 @@ class _HostAppCard extends StatelessWidget {
           ),
           const SizedBox(width: Spacing.sm),
           FilledButton.tonalIcon(
-            onPressed: !launchAllowed || launching ? null : onRun,
+            onPressed:
+                !launchAllowed || !app.launchable || launching ? null : onRun,
             icon:
                 launching
                     ? const SizedBox.square(

@@ -1,4 +1,4 @@
-/// A launchable app exposed by a paired host's approved app catalog.
+/// An app entry exposed by a paired host's supported app catalog.
 ///
 /// [id] is an opaque server-issued identifier. It must never be treated as a
 /// filesystem path or command line; launch requests send only this value.
@@ -6,12 +6,17 @@ class HostApp {
   const HostApp({
     required this.id,
     required this.name,
+    required this.launchable,
     this.description,
     this.icon,
   });
 
   final String id;
   final String name;
+
+  /// Whether the host has a supported native action for starting this entry.
+  /// The server checks this again against its current catalog when launching.
+  final bool launchable;
 
   /// Optional plain-text metadata. UI surfaces should avoid exposing paths or
   /// command details from the host.
@@ -29,6 +34,8 @@ class HostApp {
     return HostApp(
       id: id,
       name: name,
+      // Older agents returned only entries their native adapter could launch.
+      launchable: json['launchable'] as bool? ?? true,
       description: json['description'] as String?,
       icon: json['icon'] as String?,
     );

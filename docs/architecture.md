@@ -58,12 +58,14 @@ project currently has **no cloud relay or cloud database**.
    jails against traversal and symlink escape during file access. This does not fence mount points,
    Linux bind mounts, `/proc` special files, or Unix device files inside an allowed root; see the
    route/security matrix for platform verification limits.
-5. App launch accepts only an opaque ID from the agent's current-user app catalog. The agent
-   re-resolves it before launch, does not accept client paths/commands/arguments, checks for an
-   interactive desktop session, applies rate/concurrency limits, and audits the result. Catalog
-   support is Windows and Linux registered desktop entries plus macOS `.app` bundles in standard
-   application folders; arbitrary executables, macOS aliases, and apps outside those folders are
-   not included.
+5. The app catalog shows visible user-facing entries from the agent's current-user OS catalogs.
+   Each item carries a `launchable` flag; unsupported entries remain visible with Run disabled.
+   Launch accepts only an opaque ID, re-resolves it before launch, rejects non-launchable items,
+   does not accept client paths/commands/arguments, checks for an interactive desktop session,
+   applies rate/concurrency limits, and audits the result. Catalog support is Windows AppsFolder,
+   Linux XDG desktop entries, and macOS `.app` bundles in standard application folders; this is not
+   an inventory of arbitrary executables or every installed package. macOS aliases and apps outside
+   those folders are not included.
 
 The agent has a persistent SQLite audit trail for account, device, share-link, app-launch, and
 restart events (including pair/register/login, device changes, share creation/revocation, app

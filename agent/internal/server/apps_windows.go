@@ -97,9 +97,10 @@ func listHostApps() (string, []appRecord, error) {
 			continue
 		}
 		apps = append(apps, appRecord{
-			ID:        windowsAppID(aumid),
-			Name:      name,
-			launchRef: aumid,
+			ID:         windowsAppID(aumid),
+			Name:       name,
+			Launchable: true,
+			launchRef:  aumid,
 		})
 	}
 	sort.Slice(apps, func(i, j int) bool {
@@ -113,6 +114,9 @@ func listHostApps() (string, []appRecord, error) {
 }
 
 func launchHostApp(_ context.Context, requested appRecord) error {
+	if !requested.Launchable {
+		return errAppNotLaunchable
+	}
 	if !windowsHasActiveInteractiveSession() {
 		return errNoDesktopSession
 	}
@@ -133,6 +137,9 @@ func launchHostApp(_ context.Context, requested appRecord) error {
 	}
 	if current == nil {
 		return errAppNotFound
+	}
+	if !current.Launchable {
+		return errAppNotLaunchable
 	}
 	if !safeAUMIDPattern.MatchString(current.launchRef) {
 		return errAppNotFound

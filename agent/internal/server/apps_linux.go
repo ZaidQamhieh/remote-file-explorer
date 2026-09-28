@@ -63,7 +63,7 @@ func listHostApps() (string, []appRecord, error) {
 				return nil
 			}
 			name, icon, fields, err := readDesktopApplication(path)
-			if err != nil || !desktopEntryVisible(fields) || !desktopEntryLaunchable(fields) {
+			if err != nil || !desktopEntryVisible(fields) {
 				return nil
 			}
 			name = safeAppDisplay(name)
@@ -73,12 +73,17 @@ func listHostApps() (string, []appRecord, error) {
 			if !safeIconNamePattern.MatchString(icon) {
 				icon = ""
 			}
-			apps = append(apps, appRecord{
-				ID:        desktopAppID(desktopID),
-				Name:      name,
-				Icon:      icon,
-				launchRef: path,
-			})
+			launchable := desktopEntryLaunchable(fields)
+			app := appRecord{
+				ID:         desktopAppID(desktopID),
+				Name:       name,
+				Icon:       icon,
+				Launchable: launchable,
+			}
+			if launchable {
+				app.launchRef = path
+			}
+			apps = append(apps, app)
 			return nil
 		})
 		if visited > maxDesktopEntries {
@@ -97,6 +102,9 @@ func listHostApps() (string, []appRecord, error) {
 }
 
 func launchHostApp(ctx context.Context, requested appRecord) error {
+	if !requested.Launchable {
+		return errAppNotLaunchable
+	}
 	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
 		return errNoDesktopSession
 	}
@@ -121,6 +129,9 @@ func launchHostApp(ctx context.Context, requested appRecord) error {
 	}
 	if current == nil {
 		return errAppNotFound
+	}
+	if !current.Launchable {
+		return errAppNotLaunchable
 	}
 
 	launchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

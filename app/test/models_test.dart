@@ -6,6 +6,7 @@ import 'package:remote_file_explorer/core/models/health.dart';
 import 'package:remote_file_explorer/core/models/agent_settings.dart';
 import 'package:remote_file_explorer/core/models/device.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
+import 'package:remote_file_explorer/core/models/host_app.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/core/models/pair_response.dart';
 import 'package:remote_file_explorer/core/models/upload_session.dart';
@@ -192,6 +193,27 @@ void main() {
       expect(h2.label, 'B');
       expect(h2.id, '1');
       expect(h2.address, 'a:1');
+    });
+  });
+
+  group('HostApp.fromJson', () {
+    test(
+      'parses launchability without exposing internal launch references',
+      () {
+        final app = HostApp.fromJson({
+          'id': 'opaque-app-id',
+          'name': 'Editor',
+          'launchable': true,
+          'launchRef': '/private/local/path',
+        });
+        expect(app.launchable, isTrue);
+        expect(app.name, 'Editor');
+      },
+    );
+
+    test('keeps older host catalog entries launchable for compatibility', () {
+      final app = HostApp.fromJson({'id': 'legacy', 'name': 'Legacy app'});
+      expect(app.launchable, isTrue);
     });
   });
 

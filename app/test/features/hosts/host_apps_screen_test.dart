@@ -33,12 +33,14 @@ void main() {
           HostApp(
             id: 'editor',
             name: 'Writer',
+            launchable: true,
             description: 'A document editor',
             icon: 'office',
           ),
           HostApp(
             id: 'browser',
             name: 'Web Explorer',
+            launchable: true,
             description: 'Browse the internet',
             icon: 'browser',
           ),
@@ -47,7 +49,7 @@ void main() {
       await tester.pumpWidget(_screen(catalog));
       await tester.pumpAndSettle();
 
-      expect(find.text('Registered apps'), findsOneWidget);
+      expect(find.text('Apps found'), findsOneWidget);
       expect(find.text('Linux app catalog'), findsOneWidget);
       expect(find.text('2 apps'), findsOneWidget);
       expect(find.text('A document editor'), findsOneWidget);
@@ -76,7 +78,7 @@ void main() {
     const catalog = HostAppCatalog(
       platform: 'windows',
       launchAllowed: false,
-      apps: [HostApp(id: 'paint', name: 'Paint')],
+      apps: [HostApp(id: 'paint', name: 'Paint', launchable: true)],
     );
     await tester.pumpWidget(_screen(catalog));
     await tester.pumpAndSettle();
@@ -85,6 +87,28 @@ void main() {
       find.text(
         'The host admin allows viewing this app list but has not allowed this device to launch apps.',
       ),
+      findsOneWidget,
+    );
+    final runButton = tester.widget<FilledButton>(
+      find.ancestor(of: find.text('Run'), matching: find.byType(FilledButton)),
+    );
+    expect(runButton.onPressed, isNull);
+  });
+
+  testWidgets('shows discovered apps without a supported Run action', (
+    tester,
+  ) async {
+    const catalog = HostAppCatalog(
+      platform: 'linux',
+      launchAllowed: true,
+      apps: [HostApp(id: 'legacy', name: 'Legacy App', launchable: false)],
+    );
+    await tester.pumpWidget(_screen(catalog));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Legacy App'), findsOneWidget);
+    expect(
+      find.text('Listed, but this app cannot be started remotely.'),
       findsOneWidget,
     );
     final runButton = tester.widget<FilledButton>(
@@ -106,7 +130,7 @@ void main() {
 
     expect(find.text('macOS app catalog'), findsOneWidget);
     expect(find.text('0 apps'), findsOneWidget);
-    expect(find.text('No registered apps found'), findsOneWidget);
+    expect(find.text('No apps found'), findsOneWidget);
     expect(
       find.text(
         'This computer did not report apps in its supported app catalog.',

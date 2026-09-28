@@ -131,24 +131,27 @@ func TestListHostAppsMasksDuplicatesAndFiltersUnsafeEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listHostApps: %v", err)
 	}
-	if platform != "linux" || len(apps) != 2 {
+	if platform != "linux" || len(apps) != 3 {
 		t.Fatalf("catalog = platform %q, %d apps (%+v)", platform, len(apps), apps)
 	}
-	if apps[0].Name != "alpha" || apps[1].Name != "Zeta  App" {
+	if apps[0].Name != "alpha" || apps[1].Name != "Not Launchable" || apps[2].Name != "Zeta  App" {
 		t.Fatalf("catalog order or display sanitization incorrect: %+v", apps)
 	}
-	if apps[0].Icon != "good-icon_1" || apps[1].Icon != "" {
+	if apps[0].Icon != "good-icon_1" || apps[2].Icon != "" {
 		t.Fatalf("unsafe icons were not filtered: %+v", apps)
 	}
-	if apps[0].launchRef == "" || apps[0].ID != desktopAppID("alpha.desktop") {
+	if apps[0].launchRef == "" || apps[0].ID != desktopAppID("alpha.desktop") || !apps[0].Launchable {
 		t.Fatalf("catalog record lacks local registration reference or stable ID: %+v", apps[0])
+	}
+	if apps[1].Launchable || apps[1].launchRef != "" || apps[1].ID != desktopAppID("no-exec.desktop") {
+		t.Fatalf("non-launchable registration should be listed without a launch reference: %+v", apps[1])
 	}
 }
 
 func TestLaunchHostAppRevalidatesCatalogAndUsesNativeLauncher(t *testing.T) {
 	dataHome := setAppCatalogDirs(t, t.TempDir())
 	entry := writeDesktopEntry(t, filepath.Join(dataHome, "applications"), "safe.desktop", "[Desktop Entry]\nType=Application\nName=Safe App\nExec=/bin/true\n")
-	requested := appRecord{ID: desktopAppID("safe.desktop"), launchRef: "/client/controlled/path"}
+	requested := appRecord{ID: desktopAppID("safe.desktop"), Launchable: true, launchRef: "/client/controlled/path"}
 	db, err := store.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +170,7 @@ func TestLaunchHostAppRevalidatesCatalogAndUsesNativeLauncher(t *testing.T) {
 	if err := json.Unmarshal(listRR.Body.Bytes(), &catalog); err != nil {
 		t.Fatal(err)
 	}
-	if catalog.Platform != "linux" || catalog.LaunchAllowed || len(catalog.Apps) != 1 || catalog.Apps[0].Name != "Safe App" {
+	if catalog.Platform != "linux" || catalog.LaunchAllowed || len(catalog.Apps) != 1 || catalog.Apps[0].Name != "Safe App" || !catalog.Apps[0].Launchable {
 		t.Fatalf("app catalog response = %+v", catalog)
 	}
 	launchDevice := &store.Device{ID: "app-launch-integration", ViewApps: true, LaunchApps: true}
@@ -221,5 +224,28 @@ func TestLaunchHostAppRevalidatesCatalogAndUsesNativeLauncher(t *testing.T) {
 	}
 	if !strings.Contains(entries[0].Detail, "outcome=not_found") || !strings.Contains(entries[1].Detail, "outcome=started") || !strings.Contains(entries[2].Detail, "outcome=no_interactive_session") {
 		t.Fatalf("app launch audit outcomes incorrect: %+v", entries)
+	}
+}
+
+func TestLaunchAppHandlerRejectsDiscoveredNonLaunchableEntry(t *testing.T) {
+	dataHome := setAppCatalogDirs(t, t.TempDir())
+	writeDesktopEntry(t, filepath.Join(dataHome, "applications"), "unavailable.desktop", "[Desktop Entry]\nType=Application\nName=Unavailable App\n")
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	device := &store.Device{ID: "non-launchable-app-client", ViewApps: true, LaunchApps: true}
+	req := appRequestWithID(http.MethodPost, desktopAppID("unavailable.desktop"))
+	req = req.WithContext(withDevice(req.Context(), device))
+	rr := httptest.NewRecorder()
+	launchAppHandler(db)(rr, req)
+	if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), "APP_NOT_LAUNCHABLE") {
+		t.Fatalf("non-launchable app response = %d: %s", rr.Code, rr.Body.String())
+	}
+	entries, err := db.AuditEntries(10, 0)
+	if err != nil || len(entries) != 1 || !strings.Contains(entries[0].Detail, "outcome=not_launchable") {
+		t.Fatalf("non-launchable audit = (%+v, %v)", entries, err)
 	}
 }

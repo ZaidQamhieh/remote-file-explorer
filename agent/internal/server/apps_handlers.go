@@ -24,6 +24,7 @@ var (
 	errLauncherMissing  = errors.New("native app launcher unavailable")
 	errAppStartFailed   = errors.New("native app launch failed")
 	errAppNotFound      = errors.New("app is not in the current catalog")
+	errAppNotLaunchable = errors.New("app has no supported launch action")
 )
 
 // appRecord contains only safe display data for the API. launchRef is an
@@ -33,6 +34,7 @@ type appRecord struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
+	Launchable  bool   `json:"launchable"`
 	launchRef   string
 }
 
@@ -122,6 +124,11 @@ func launchAppHandler(db *store.DB) http.HandlerFunc {
 		if selected == nil {
 			auditAppLaunch(db, r, id, "", "not_found")
 			writeError(w, http.StatusNotFound, "APP_NOT_FOUND", "app is no longer available in the host catalog")
+			return
+		}
+		if !selected.Launchable {
+			auditAppLaunch(db, r, id, selected.Name, "not_launchable")
+			writeError(w, http.StatusConflict, "APP_NOT_LAUNCHABLE", "this app has no supported launch action")
 			return
 		}
 

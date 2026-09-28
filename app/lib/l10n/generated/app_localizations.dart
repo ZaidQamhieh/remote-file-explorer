@@ -4381,7 +4381,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostAppsCatalogTitle.
   ///
   /// In en, this message translates to:
-  /// **'Registered apps'**
+  /// **'Apps found'**
   String get hostAppsCatalogTitle;
 
   /// No description provided for @hostAppsCatalogScope.
@@ -4489,7 +4489,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostAppsEmptyTitle.
   ///
   /// In en, this message translates to:
-  /// **'No registered apps found'**
+  /// **'No apps found'**
   String get hostAppsEmptyTitle;
 
   /// No description provided for @hostAppsEmptyMessage.
@@ -4509,6 +4509,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Starting…'**
   String get hostAppStartingButton;
+
+  /// No description provided for @hostAppCannotRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Listed, but this app cannot be started remotely.'**
+  String get hostAppCannotRun;
 
   /// No description provided for @hostAppsLaunchDenied.
   ///

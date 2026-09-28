@@ -47,10 +47,11 @@ account is required.
 
 Each paired device starts with app-list and app-launch access turned off. An admin device can
 grant either permission in that computer's Settings under Devices → App access. Launch permission
-requires list permission. The Apps button shows launchable apps registered for the host's current
-user: Windows AppsFolder entries, Linux XDG desktop entries, or macOS apps in standard application
-folders. This is a catalog of registered desktop apps, not every executable file on the computer;
-macOS aliases and apps outside those folders are not included.
+requires list permission. The Apps button shows user-facing entries discovered in the host's
+supported catalog: Windows AppsFolder entries, Linux XDG desktop entries, or macOS apps in
+standard application folders. Entries without a supported launch action remain visible with Run
+disabled. The list is not an inventory of every executable or installed package; macOS aliases
+and apps outside those folders are not included.
 
 Run requests contain only a host-issued opaque app ID. The agent resolves it against the current
 catalog and starts the app in the interactive desktop session; it does not accept a client command,

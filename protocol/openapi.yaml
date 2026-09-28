@@ -1620,11 +1620,15 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /apps:
     get:
-      summary: List apps registered for the current host user
+      summary: List apps discovered for the current host user
       description: >
-        Returns display metadata and stable opaque IDs for apps registered in
-        the current user's launchable app catalog. Linux reads XDG application
-        desktop entries and launches them through GIO. Windows reads the
+        Returns display metadata and stable opaque IDs for user-facing apps
+        discovered in the current user's supported OS catalog. The catalog
+        includes visible registrations that do not have a supported launch
+        action; those entries have launchable=false. It is not an inventory of
+        every executable or every installed package. Linux reads visible XDG
+        application desktop entries and launches eligible entries through
+        GIO. Windows reads the
         current user's AppsFolder registrations and launches by validated
         AUMID through Explorer. macOS scans standard `.app` bundle locations
         and launches the selected bundle through Launch Services. The response
@@ -1653,12 +1657,13 @@ paths:
 
   /apps/{id}/launch:
     post:
-      summary: Launch a registered host app
+      summary: Launch a host app catalog entry
       description: >
         The request contains no command, path, arguments, or environment. The
         agent strictly validates the opaque catalog ID, rebuilds the current
-        inventory, resolves that ID locally, and invokes the platform's native
-        app launcher without elevation. Both ViewApps=true and LaunchApps=true
+        inventory, resolves that ID locally, rejects entries marked
+        launchable=false, and invokes the platform's native app launcher
+        without elevation. Both ViewApps=true and LaunchApps=true
         are required for every caller, including devices authenticated via
         /login or /register. Linux launches the registered XDG desktop entry
         with GIO. A 202 response means the native launcher accepted the
@@ -1691,7 +1696,9 @@ paths:
           description: Caller lacks either ViewApps or LaunchApps capability
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
+        '409':
+          description: Another launch is active, or this catalog entry cannot be launched
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '429': { $ref: '#/components/responses/Error' }
         '501': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
@@ -1762,13 +1769,16 @@ components:
           items: { $ref: '#/components/schemas/HostApp' }
     HostApp:
       type: object
-      required: [id, name]
+      required: [id, name, launchable]
       properties:
         id:
           type: string
           pattern: '^app_[0-9a-f]{64}$'
           description: Opaque stable ID; it does not encode a local path or command.
         name: { type: string, description: Safe display name from the app registration. }
+        launchable:
+          type: boolean
+          description: Whether this discovered entry has a supported native launch action; launch requests are rejected when false.
         description: { type: string, description: Optional plain-text description. }
         icon:
           type: string

@@ -2616,7 +2616,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostAppsInstruction => 'Select an app to start on this computer.';
 
   @override
-  String get hostAppsCatalogTitle => 'Registered apps';
+  String get hostAppsCatalogTitle => 'Apps found';
 
   @override
   String get hostAppsCatalogScope =>
@@ -2693,7 +2693,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'An admin must enable app access for this device in the computer’s settings.';
 
   @override
-  String get hostAppsEmptyTitle => 'No registered apps found';
+  String get hostAppsEmptyTitle => 'No apps found';
 
   @override
   String get hostAppsEmptyMessage =>
@@ -2704,6 +2704,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hostAppStartingButton => 'Starting…';
+
+  @override
+  String get hostAppCannotRun =>
+      'Listed, but this app cannot be started remotely.';
 
   @override
   String get hostAppsLaunchDenied =>

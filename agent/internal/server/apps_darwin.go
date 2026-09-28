@@ -228,10 +228,11 @@ func inspectMacApp(ctx context.Context, plutil, bundlePath string, root macAppRo
 	}
 	icon := safeMacIconName(metadata.Icon)
 	return appRecord{
-		ID:        macAppID(identity),
-		Name:      name,
-		Icon:      icon,
-		launchRef: bundlePath,
+		ID:         macAppID(identity),
+		Name:       name,
+		Icon:       icon,
+		Launchable: true,
+		launchRef:  bundlePath,
 	}, identity, true
 }
 
@@ -271,6 +272,9 @@ func macAppID(identity string) string {
 }
 
 func launchHostApp(ctx context.Context, requested appRecord) error {
+	if !requested.Launchable {
+		return errAppNotLaunchable
+	}
 	if !macHasActiveGUIUserSession() {
 		return errNoDesktopSession
 	}
@@ -287,6 +291,9 @@ func launchHostApp(ctx context.Context, requested appRecord) error {
 	}
 	if current == nil {
 		return errAppNotFound
+	}
+	if !current.Launchable {
+		return errAppNotLaunchable
 	}
 	if !filepath.IsAbs(current.launchRef) {
 		return errAppNotFound

@@ -39,14 +39,14 @@ safe.
 | # | Threat | Likelihood | Impact | Mitigation |
 |---|--------|-----------|--------|------------|
 | T1 | Link forwarded to unintended recipient | Medium | High | Token is single-use + expiring; once fetched it's gone |
-| T2 | Brute-force token guessing | Low | High | Token = 32 bytes crypto/rand → 2^256 space; rate-limit `/share/` to 10 req/min (reuse existing rate-limit middleware) |
+| T2 | Brute-force token guessing | Low | High | Token = 32 bytes crypto/rand → 2^256 space; allow 10 requests/min per source IP. Keep at most 4096 IP buckets, pruning expired entries and returning 429 to new IPs while the table is full. |
 | T3 | Path traversal via crafted share request | Low | Critical | Share token is bound to an absolute, jail-checked path at mint time; `/share/:token` never accepts a path parameter |
 | T4 | Token leaked in server logs | Medium | Medium | Agent logs the token as `sha256(token)[:8]` only, never the raw value |
 | T5 | Share feature enabled without user knowledge | Low | High | Host-level `"allowSharing": false` default; must be explicitly enabled in agent settings |
 | T6 | Expired token still served (clock drift) | Low | Low | Tokens are deleted from DB on first serve OR on expiry sweep — whichever comes first |
-| T7 | Serving a directory instead of a file | Low | High | Mint-time check: stat the path, reject if not a regular file |
-| T8 | Large file exhausting agent bandwidth | Medium | Medium | Optional max-file-size cap in agent settings (default 500 MB); owner can raise/remove |
-| T9 | No audit trail | Medium | Medium | Each share mint + serve is logged to a `share_log` table in SQLite (token hash, path, minted_at, served_at, requester IP) |
+| T7 | Serving a directory or special file instead of a regular file | Low | High | Reject non-regular files at mint; open with nonblocking semantics and verify the opened descriptor is still a regular file before serving |
+| T8 | Large file exhausting agent bandwidth | Medium | Medium | Hard limit of 500 MiB per file at mint and serve; there is no setting to raise or remove the limit. If a file grows past the cap after mint, fetch returns 413 and consumes the one-time token. |
+| T9 | No audit trail | Medium | Medium | Mint is returned only after the `share_log` row is written; serving writes the requester IP to SQLite. If the serve audit write fails after token consumption, the failure is written to the local process log and delivery proceeds so an audit outage does not silently consume the link without serving it. |
 
 ---
 

@@ -1,12 +1,27 @@
 # Feature Roadmap — Remote File Explorer
 
-**Status: PLANNED, NOT STARTED.** Written 2026-06-12. Companion to
-`docs/ui-redesign-plan.md` (UI waves A–F) and `docs/ui-design-spec.md`
-(Expressive M3 visuals). Features here are sequenced *around* the UI waves —
-suggested interleaving at the bottom.
+**Status snapshot: 2026-09-28.** This roadmap was written on 2026-06-12; the
+original descriptions below are retained for context, while this snapshot
+records what the current source tree now contains. The companion UI brief is
+[`ui-redesign-plan.md`](ui-redesign-plan.md), with visuals in
+[`ui-design-spec.md`](ui-design-spec.md).
+
+| Roadmap area | Current status |
+|---|---|
+| File visibility | Delivered: dotfiles, hidden extensions/names, presets, reveal controls, and per-host settings. |
+| Tier 1 #1–5, #7–8 | Delivered: share-to-app upload, archives, storage insights, trash, recents, biometric lock, and per-device read-only. |
+| Tier 1 #6 | Partial: video uses ranged network playback; audio preview downloads bounded content before playback. |
+| Tier 2 #9–11, #13 | Delivered: foreground transfer notifications, SSE live updates, camera-roll backup, and offline pins with encrypted cached bodies. |
+| Tier 2 #12 | Delivered on Android: user-started LAN DNS-SD discovery lists IPv4 host candidates and hands the chosen address to secure pairing. QR/manual paths remain available. |
+| Horizon audit log | Delivered for account, device, share, launch, and restart events, with an in-app viewer. File-operation auditing remains out of scope. |
+| PC-to-PC copy, home-screen widget, launcher shortcuts, dual-pane explorer | Not started. |
+
+This status describes implemented code, not a claim that every OS/device flow
+has received a full owner-run acceptance test.
 
 Effort: S (≤1 agent dispatch) · M (2–3) · L (multi-session) · XL (its own plan
-doc). Impact: ★ to ★★★ for a personal phone↔PC tool over Tailscale.
+doc). Impact: ★ to ★★★ for a personal phone↔PC tool over LAN, Tailscale, or
+direct HTTPS.
 
 ---
 
@@ -81,7 +96,7 @@ session-reveal state, settings persistence, search include-hidden param.
 | 9 | **Background transfers + notifications** | L | ★★★ | Android foreground service so uploads/downloads survive app switch; progress notification with pause/cancel actions; completion notifications. Already on the engineering backlog — the transfer engine was rebuilt to be resumable, this is the payoff. Do before/with photo backup. |
 | 10 | **Live events channel** | L | ★★ | `GET /v1/events` SSE (simpler than WS through proxies): fs-change events (fsnotify on open listings), transfer progress push. Kills pull-to-refresh. Spec it properly in the OpenAPI first — contract-first this time. |
 | 11 | **Camera-roll backup (photo sync)** | XL | ★★★ | Phone→PC one-way sync of DCIM: hash-based dedupe (agent already hashes), date-folder layout, Wi-Fi-only + charging rules, runs on the background-transfer service (#9 is a hard prerequisite). This turns the app into a personal Google-Photos-backup replacement — biggest strategic feature in the doc. |
-| 12 | **mDNS discovery** | M | ★ | `internal/discovery/` placeholder exists. Agent broadcasts `_rfe._tcp`; pairing screen lists discovered agents (LAN only; Tailscale users rarely need it — hence ★). |
+| 12 | **mDNS discovery** | M | ★ | Agent advertises `_rfe._tcp`; Android pairing screen lists IPv4 candidates after a user-started bounded scan. Discovery is not identity verification; QR/manual paths remain available. |
 | 13 | **Available-offline pins** | L | ★★ | Mark folders "keep offline": pinned listings + file bodies cached locally, refreshed opportunistically (or by #10 events). Read-only offline access. |
 
 ## Horizon / ambitious

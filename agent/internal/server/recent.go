@@ -20,16 +20,64 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 )
 
 const (
-	recentDefaultLimit = 100
-	recentMaxLimit     = 500
-	recentTimeBudget   = 15 * time.Second
+	recentDefaultLimit       = 100
+	recentMaxLimit           = 500
+	recentMaxConcurrentScans = 2
+	recentBusyRetryAfter     = "1"
+	recentTimeBudget         = 15 * time.Second
+	recentCacheTTL           = 5 * time.Second
 )
+
+// recentResultCache keeps one short-lived result for the current jail and
+// query. Recent-file reads are usually repeated by refresh/rebuild flows; a
+// brief cache prevents each refresh from walking the same tree again. The
+// single entry bounds memory and naturally discards arbitrary root queries.
+type recentResultCache struct {
+	mu        sync.Mutex
+	key       string
+	expiresAt time.Time
+	entries   []fsops.Entry
+}
+
+func (c *recentResultCache) load(key string, now time.Time) ([]fsops.Entry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if key == "" || c.key != key || !now.Before(c.expiresAt) {
+		return nil, false
+	}
+	entries := make([]fsops.Entry, len(c.entries))
+	copy(entries, c.entries)
+	return entries, true
+}
+
+func (c *recentResultCache) store(key string, entries []fsops.Entry, now time.Time) {
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	c.key = key
+	c.expiresAt = now.Add(recentCacheTTL)
+	c.entries = make([]fsops.Entry, len(entries))
+	copy(c.entries, entries)
+	c.mu.Unlock()
+}
+
+func recentCacheKey(roots []string, limit int) string {
+	if len(roots) == 0 {
+		return ""
+	}
+	orderedRoots := append([]string(nil), roots...)
+	sort.Strings(orderedRoots)
+	// NUL cannot occur in a filesystem path, so it safely separates roots.
+	return strconv.Itoa(limit) + "\x00" + strings.Join(orderedRoots, "\x00")
+}
 
 // recentHeap is a min-heap of fsops.Entry keyed by Modified time — the
 // oldest entry is always at the root, so it's the one to evict when a newer
@@ -60,6 +108,15 @@ func (h recentHeap) sortedNewestFirst() []fsops.Entry {
 // recentHandler lists the most recently modified files (not directories)
 // under the agent's configured roots — GET /v1/fs/recent?limit=&root=.
 func recentHandler(ops *fsops.Ops) http.HandlerFunc {
+	return recentHandlerWithWalker(ops, walkForRecentWithOps)
+}
+
+// recentHandlerWithWalker applies a per-handler admission limit to the
+// expensive recursive walks. A server registers one handler for this route,
+// so the limit is shared by concurrent requests to /fs/recent.
+func recentHandlerWithWalker(ops *fsops.Ops, walk func(context.Context, *fsops.Ops, string, int, *recentHeap)) http.HandlerFunc {
+	scans := make(chan struct{}, recentMaxConcurrentScans)
+	var cache recentResultCache
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()
@@ -84,11 +141,27 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 			roots = []string{resolved}
 		} else {
 			roots = ops.Roots()
-			if len(roots) == 0 {
+			if len(roots) == 0 && !ops.IsDenyAll() {
 				if home, err := os.UserHomeDir(); err == nil && home != "" {
 					roots = []string{home}
 				}
 			}
+		}
+		cacheKey := recentCacheKey(roots, limit)
+		if r.Context().Err() == nil {
+			if entries, ok := cache.load(cacheKey, time.Now()); ok {
+				writeJSON(w, http.StatusOK, entries)
+				return
+			}
+		}
+
+		select {
+		case scans <- struct{}{}:
+			defer func() { <-scans }()
+		default:
+			w.Header().Set("Retry-After", recentBusyRetryAfter)
+			writeError(w, http.StatusTooManyRequests, "RECENT_BUSY", "recent-file scan capacity is full; retry shortly")
+			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), recentTimeBudget)
@@ -97,7 +170,7 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 		h := &recentHeap{}
 		heap.Init(h)
 		for _, root := range roots {
-			walkForRecent(ctx, root, limit, h)
+			walk(ctx, ops, root, limit, h)
 			if ctx.Err() != nil {
 				break
 			}
@@ -107,7 +180,11 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 			w.Header().Set(headerSearchTimeBudget, "1")
 		}
 
-		writeJSON(w, http.StatusOK, h.sortedNewestFirst())
+		entries := h.sortedNewestFirst()
+		if ctx.Err() == nil {
+			cache.store(cacheKey, entries, time.Now())
+		}
+		writeJSON(w, http.StatusOK, entries)
 	}
 }
 
@@ -117,7 +194,25 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 // silently; other walk errors are ignored too, matching search.go's
 // best-effort behavior.
 func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
-	_ = filepath.WalkDir(root, func(entryPath string, d fs.DirEntry, err error) error {
+	openedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return
+	}
+	defer openedRoot.Close()
+	walkForRecentRoot(ctx, openedRoot, root, limit, h)
+}
+
+func walkForRecentWithOps(ctx context.Context, ops *fsops.Ops, rootPath string, limit int, h *recentHeap) {
+	openedRoot, err := ops.OpenDir(rootPath)
+	if err != nil {
+		return
+	}
+	defer openedRoot.Close()
+	walkForRecentRoot(ctx, openedRoot, rootPath, limit, h)
+}
+
+func walkForRecentRoot(ctx context.Context, root *os.Root, rootPath string, limit int, h *recentHeap) {
+	_ = fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -133,8 +228,12 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 			}
 			return nil
 		}
+		entryPath := rootPath
+		if relPath != "." {
+			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
+		}
 		if d.IsDir() {
-			if entryPath != root && shouldSkipVirtualDir(entryPath) {
+			if relPath != "." && shouldSkipVirtualDir(entryPath) {
 				return fs.SkipDir
 			}
 			return nil
@@ -144,7 +243,7 @@ func walkForRecent(ctx context.Context, root string, limit int, h *recentHeap) {
 		if infoErr != nil {
 			return nil
 		}
-		entry := fsops.EntryFromInfo(info, entryPath)
+		entry := fsops.EntryFromInfoNoSniff(info, entryPath)
 
 		if h.Len() < limit {
 			heap.Push(h, entry)

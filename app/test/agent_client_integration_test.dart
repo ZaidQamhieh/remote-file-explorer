@@ -147,11 +147,16 @@ void main() {
     server.handler = null;
   });
 
-  Host hostFor(_FakeAgentServer s, {String? pin, String? deviceToken}) => Host(
+  Host hostFor(
+    _FakeAgentServer s, {
+    String? pin,
+    String? deviceToken,
+    bool allowUnpinnedPreflight = false,
+  }) => Host(
     id: 'test-host',
     label: 'Test',
     address: '127.0.0.1:${s.port}',
-    certFingerprint: pin,
+    certFingerprint: allowUnpinnedPreflight ? null : (pin ?? s.certSha256Hex),
   );
 
   group('TLS pinning (TOFU)', () {
@@ -159,7 +164,9 @@ void main() {
       'unpinned host accepts the self-signed cert and captures the fingerprint',
       () async {
         server.handler = (req) => _writeJson(req, 200, {'status': 'ok'});
-        final client = AgentClient(hostFor(server));
+        final client = AgentClient(
+          hostFor(server, allowUnpinnedPreflight: true),
+        );
         addTearDown(client.close);
 
         final health = await client.health();
@@ -628,6 +635,7 @@ void main() {
         label: 'Fallback2',
         address: '127.0.0.1:$closedPort', // unreachable primary
         tailscaleAddress: '127.0.0.1:${server.port}',
+        certFingerprint: server.certSha256Hex,
       );
       final client = AgentClient(host);
       addTearDown(client.close);
@@ -637,6 +645,44 @@ void main() {
         throwsA(isA<AgentApiException>()),
       );
       expect(putHandlerCalls, 0);
+    });
+  });
+
+  group('device file capabilities', () {
+    test('PATCH sends the complete independent permission set', () async {
+      Map<String, dynamic>? seenBody;
+      String? seenPath;
+      server.handler = (req) async {
+        seenPath = req.uri.path;
+        seenBody =
+            jsonDecode(
+                  await req.cast<List<int>>().transform(utf8.decoder).join(),
+                )
+                as Map<String, dynamic>;
+        await _writeJson(req, 200, {});
+      };
+      final client = AgentClient(hostFor(server), deviceToken: 'owner-token');
+      addTearDown(client.close);
+
+      await client.updateDeviceFileCapabilities(
+        'guest-1',
+        browse: true,
+        download: false,
+        upload: true,
+        modify: false,
+        delete: true,
+        share: false,
+      );
+
+      expect(seenPath, '/v1/devices/guest-1');
+      expect(seenBody, {
+        'browse': true,
+        'download': false,
+        'upload': true,
+        'modify': false,
+        'delete': true,
+        'share': false,
+      });
     });
   });
 }

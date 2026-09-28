@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -8,7 +10,6 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/models/health.dart';
 import '../../../core/models/host.dart';
 import '../../../core/theme/tokens.dart';
-import '../../../core/ui/feedback.dart';
 import '../../../core/ui/pressable.dart';
 
 class ConnectionDiagnosticsSheet extends StatefulWidget {
@@ -16,10 +17,12 @@ class ConnectionDiagnosticsSheet extends StatefulWidget {
     super.key,
     required this.host,
     required this.deviceToken,
+    required this.secureFingerprint,
   });
 
   final Host host;
   final String? deviceToken;
+  final String? secureFingerprint;
 
   @override
   State<ConnectionDiagnosticsSheet> createState() =>
@@ -28,27 +31,28 @@ class ConnectionDiagnosticsSheet extends StatefulWidget {
 
 class _ProbeResult {
   const _ProbeResult({
+    required this.route,
     required this.address,
-    required this.label,
     this.latencyMs,
     this.health,
-    this.error,
-    this.certMismatch = false,
+    this.failure = _ProbeFailure.none,
+    this.auth = _AuthOutcome.notChecked,
   });
 
+  final HostRoute route;
   final String address;
-  final String label;
   final int? latencyMs;
   final Health? health;
-  final String? error;
-
-  /// Whether the failure was specifically a pinned-fingerprint mismatch
-  /// ([CertPinMismatch]), rather than an unreachable host — used to tell
-  /// "TLS fingerprint pinned" apart from a plain connection failure.
-  final bool certMismatch;
+  final _ProbeFailure failure;
+  final _AuthOutcome auth;
 
   bool get reachable => health != null;
+  bool get certMismatch => failure == _ProbeFailure.pinMismatch;
 }
+
+enum _ProbeFailure { none, missingPin, pinMismatch, dns, unreachable, other }
+
+enum _AuthOutcome { notChecked, accepted, denied }
 
 class _ConnectionDiagnosticsSheetState
     extends State<ConnectionDiagnosticsSheet> {
@@ -61,13 +65,23 @@ class _ConnectionDiagnosticsSheetState
     _runProbes();
   }
 
-  Future<_ProbeResult> _probe(String address, String label) async {
+  Future<_ProbeResult> _probe(HostRoute route, String address) async {
+    final fingerprint = AgentClient.normalizeFingerprint(
+      widget.secureFingerprint,
+    );
+    if (fingerprint == null) {
+      return _ProbeResult(
+        route: route,
+        address: address,
+        failure: _ProbeFailure.missingPin,
+      );
+    }
     final client = AgentClient(
       Host(
         id: widget.host.id,
         label: widget.host.label,
         address: address,
-        certFingerprint: widget.host.certFingerprint,
+        certFingerprint: fingerprint,
       ),
       deviceToken: widget.deviceToken,
     );
@@ -75,22 +89,35 @@ class _ConnectionDiagnosticsSheetState
       final sw = Stopwatch()..start();
       final health = await client.health().timeout(const Duration(seconds: 5));
       sw.stop();
+      var auth = _AuthOutcome.notChecked;
+      try {
+        await client.fetchStatus().timeout(const Duration(seconds: 5));
+        auth = _AuthOutcome.accepted;
+      } on AgentApiException catch (e) {
+        if (e.statusCode == 401 || e.statusCode == 403) {
+          auth = _AuthOutcome.denied;
+        }
+      } on CertPinMismatch {
+        rethrow;
+      } on MissingCertPin {
+        rethrow;
+      } catch (_) {
+        // Health already established route reachability and pinned TLS. If an
+        // auth-only check fails for a transient or legacy reason, report its
+        // outcome as unknown instead of misclassifying the route as offline.
+      }
       return _ProbeResult(
+        route: route,
         address: address,
-        label: label,
         latencyMs: sw.elapsedMilliseconds,
         health: health,
+        auth: auth,
       );
     } catch (e) {
-      final msg =
-          e is TimeoutException
-              ? 'Timed out'
-              : humanizeError(e).replaceFirst('Exception: ', '');
       return _ProbeResult(
+        route: route,
         address: address,
-        label: label,
-        error: msg,
-        certMismatch: e is CertPinMismatch,
+        failure: _probeFailure(e),
       );
     } finally {
       client.close();
@@ -103,13 +130,10 @@ class _ConnectionDiagnosticsSheetState
       _results = null;
     });
 
-    final futures = <Future<_ProbeResult>>[];
-    futures.add(_probe(widget.host.address, 'LAN'));
-    final ts = widget.host.tailscaleAddress;
-    if (ts != null && ts != widget.host.address) {
-      futures.add(_probe(ts, 'Tailscale'));
-    }
-
+    final futures = [
+      for (final route in widget.host.routeAddresses)
+        _probe(route.route, route.address),
+    ];
     final results = await Future.wait(futures);
     if (mounted) {
       setState(() {
@@ -178,19 +202,13 @@ class _ConnectionDiagnosticsSheetState
                       child: Center(child: CircularProgressIndicator()),
                     )
                   else if (results != null)
-                    // One block of checks per probed address. The mockup
-                    // shows a single fixed set of 4 checks for one
-                    // connection; this app genuinely probes both LAN and
-                    // Tailscale addresses when both are known, so both
-                    // render (labelled) rather than dropping the second
-                    // address's real diagnostic data.
                     for (var i = 0; i < results.length; i++) ...[
                       if (results.length > 1) ...[
                         if (i > 0) const SizedBox(height: Spacing.md),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           child: Text(
-                            results[i].label,
+                            _routeName(context, results[i].route),
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
@@ -201,7 +219,12 @@ class _ConnectionDiagnosticsSheetState
                         ),
                         const SizedBox(height: Spacing.xs),
                       ],
-                      _DiagChecks(host: widget.host, result: results[i]),
+                      _DiagChecks(
+                        fingerprint: AgentClient.normalizeFingerprint(
+                          widget.secureFingerprint,
+                        ),
+                        result: results[i],
+                      ),
                     ],
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 16, 4, 6),
@@ -215,6 +238,75 @@ class _ConnectionDiagnosticsSheetState
       ),
     );
   }
+
+  String _routeName(BuildContext context, HostRoute route) => switch (route) {
+    HostRoute.lan => context.l10n.routeLanName,
+    HostRoute.tailscale => context.l10n.routeTailscaleName,
+    HostRoute.directHttps => context.l10n.routeInternetName,
+    HostRoute.custom => context.l10n.routeCustomName,
+  };
+}
+
+_ProbeFailure _probeFailure(Object error) {
+  if (error is CertPinMismatch) return _ProbeFailure.pinMismatch;
+  if (error is MissingCertPin) return _ProbeFailure.missingPin;
+
+  Object? cause;
+  DioExceptionType? dioType;
+  if (error is AgentApiException) {
+    cause = error.cause;
+    dioType = error.dioType;
+  } else if (error is DioException) {
+    cause = error.error;
+    dioType = error.type;
+  }
+  if (_containsPinMismatch(cause)) return _ProbeFailure.pinMismatch;
+  if (_isDnsFailure(cause)) return _ProbeFailure.dns;
+  if (error is TimeoutException ||
+      dioType == DioExceptionType.connectionTimeout ||
+      dioType == DioExceptionType.connectionError ||
+      dioType == DioExceptionType.sendTimeout ||
+      dioType == DioExceptionType.receiveTimeout) {
+    return _ProbeFailure.unreachable;
+  }
+  return _ProbeFailure.other;
+}
+
+bool _containsPinMismatch(Object? error) {
+  var cause = error;
+  while (cause != null) {
+    if (cause is CertPinMismatch) return true;
+    if (cause is DioException) {
+      cause = cause.error;
+    } else if (cause is AgentApiException) {
+      cause = cause.cause;
+    } else {
+      return false;
+    }
+  }
+  return false;
+}
+
+bool _isDnsFailure(Object? error) {
+  var cause = error;
+  while (cause != null) {
+    if (cause is SocketException) {
+      final message =
+          '${cause.message} ${cause.osError?.message ?? ''}'.toLowerCase();
+      return message.contains('failed host lookup') ||
+          message.contains('name or service not known') ||
+          message.contains('nodename nor servname') ||
+          message.contains('no address associated with hostname');
+    }
+    if (cause is DioException) {
+      cause = cause.error;
+    } else if (cause is AgentApiException) {
+      cause = cause.cause;
+    } else {
+      return false;
+    }
+  }
+  return false;
 }
 
 /// The mockup's `.btn.btn-ghost.btn-block` — text then a trailing refresh
@@ -263,45 +355,52 @@ class _RunAgainButton extends StatelessWidget {
   }
 }
 
-/// The 4-row check list for one probed address — the mockup's fixed
-/// DNS/TLS/Latency/Path rows, adapted to what this app can actually verify:
-///
-/// - "Host reachable" replaces the mockup's "DNS resolves": the app connects
-///   by raw IP (LAN) or Tailscale address, never a DNS name, so there's no
-///   real DNS-resolution step to report — reachability is the closest real
-///   analog (and is literally the first thing the probe checks).
-/// - "TLS fingerprint pinned" reflects the TOFU pin check
-///   (`CertPinMismatch`) — a successful `/health` call already proves the
-///   pin matched, since the client's `badCertificateCallback` would have
-///   rejected the connection otherwise.
-/// - "Latency" and "Path" are the probe's own real measurements.
+/// Reports DNS/reachability, pinned TLS, authenticated access, latency, and
+/// route metadata for one independently probed address.
 class _DiagChecks extends StatelessWidget {
-  const _DiagChecks({required this.host, required this.result});
+  const _DiagChecks({required this.fingerprint, required this.result});
 
-  final Host host;
+  final String? fingerprint;
   final _ProbeResult result;
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     final reachable = result.reachable;
+    final failureBadge = switch (result.failure) {
+      _ProbeFailure.none => l.diagOkBadge,
+      _ProbeFailure.missingPin => l.diagPinRequiredBadge,
+      _ProbeFailure.pinMismatch => l.diagMismatchBadge,
+      _ProbeFailure.dns => l.probeDnsFailedBadge,
+      _ProbeFailure.unreachable => l.probeNoResponseBadge,
+      _ProbeFailure.other => l.probeError,
+    };
 
-    final fingerprint = host.certFingerprint;
+    final pin = fingerprint;
     final fingerprintPreview =
-        fingerprint == null
+        pin == null
             ? null
-            : (fingerprint.length > 12
-                ? '${fingerprint.substring(0, 12)}…'
-                : fingerprint);
+            : (pin.length > 12 ? '${pin.substring(0, 12)}…' : pin);
 
     final rows = [
       _DiagRow(
         icon: reachable ? LucideIcons.check : LucideIcons.x,
-        tint: reachable ? Brand.online : Brand.red,
+        tint:
+            reachable
+                ? Brand.online
+                : (result.failure == _ProbeFailure.pinMismatch
+                    ? Brand.red
+                    : Colors.grey),
         title: l.diagHostReachable,
         subtitle: result.address,
-        badgeText: reachable ? l.diagOkBadge : (result.error ?? l.probeError),
-        badgeColor: reachable ? Brand.online : Brand.red,
+        badgeText: failureBadge,
+        badgeColor:
+            reachable
+                ? Brand.online
+                : (result.failure == _ProbeFailure.pinMismatch
+                    ? Brand.red
+                    : Colors.grey),
       ),
       _DiagRow(
         icon:
@@ -317,11 +416,41 @@ class _DiagChecks extends StatelessWidget {
         badgeText:
             result.certMismatch
                 ? l.diagMismatchBadge
-                : (reachable ? l.diagPinnedBadge : l.diagUnknownBadge),
+                : (reachable
+                    ? l.diagPinnedBadge
+                    : (result.failure == _ProbeFailure.missingPin
+                        ? l.diagPinRequiredBadge
+                        : l.diagUnknownBadge)),
         badgeColor:
             result.certMismatch
                 ? Brand.red
                 : (reachable ? Brand.online : Colors.grey),
+      ),
+      _DiagRow(
+        icon:
+            result.auth == _AuthOutcome.accepted
+                ? LucideIcons.check
+                : (result.auth == _AuthOutcome.denied
+                    ? LucideIcons.x
+                    : LucideIcons.shield),
+        tint:
+            result.auth == _AuthOutcome.accepted
+                ? Brand.online
+                : (result.auth == _AuthOutcome.denied
+                    ? Brand.red
+                    : Colors.grey),
+        title: l.diagAuthentication,
+        badgeText: switch (result.auth) {
+          _AuthOutcome.accepted => l.diagAuthAcceptedBadge,
+          _AuthOutcome.denied => l.diagAuthDeniedBadge,
+          _AuthOutcome.notChecked => l.diagAuthUnknownBadge,
+        },
+        badgeColor:
+            result.auth == _AuthOutcome.accepted
+                ? Brand.online
+                : (result.auth == _AuthOutcome.denied
+                    ? Brand.red
+                    : Colors.grey),
       ),
       _DiagRow(
         icon: LucideIcons.gauge,
@@ -335,17 +464,42 @@ class _DiagChecks extends StatelessWidget {
         icon: LucideIcons.route,
         tint: Brand.seed,
         title: l.diagPath,
-        badgeText:
-            reachable
-                ? (result.label == 'Tailscale'
-                    ? l.networkTailscale
-                    : l.diagLanDirect)
-                : l.offlineStatus,
+        badgeText: switch (result.route) {
+          HostRoute.lan => l.diagLanDirect,
+          HostRoute.tailscale => l.networkTailscale,
+          HostRoute.directHttps => l.routeInternetName,
+          HostRoute.custom => l.routeCustomName,
+        },
         badgeColor: reachable ? Brand.seed : Colors.grey,
         showDivider: false,
       ),
     ];
-    return Column(children: rows);
+    final hint = switch (result.failure) {
+      _ProbeFailure.pinMismatch => l.probePinMismatchHint,
+      _ProbeFailure.missingPin => l.probeMissingPinHint,
+      _ProbeFailure.dns => l.probeDnsHint,
+      _ProbeFailure.unreachable => l.probeReachabilityHint,
+      _ProbeFailure.other => l.probeGenericHint,
+      _ProbeFailure.none when result.auth == _AuthOutcome.denied =>
+        l.probeAuthRejectedHint,
+      _ProbeFailure.none => null,
+    };
+    return Column(
+      children: [
+        ...rows,
+        if (hint != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                hint,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 

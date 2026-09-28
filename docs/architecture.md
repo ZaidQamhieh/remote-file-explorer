@@ -5,15 +5,19 @@
 Two components plus a shared contract:
 
 - **`app/`** — Flutter mobile app (Android-focused, v1.42+). All UI + client orchestration.
-- **`agent/`** — Go host service on each Windows/Linux computer. Owns filesystem access, the
+- **`agent/`** — Go host service on each Windows/macOS/Linux computer. Owns filesystem access, the
   transfer engine, search, thumbnails, settings, and the device/token store.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow (source of truth).
 
-The app talks to the agent over **HTTPS (HTTP/2) + TLS**, reachable on the LAN by IP or, from
-anywhere, via the computer's **Tailscale** address — same code path. mDNS auto-discovery on the
-LAN is implemented (`agent/internal/mdns`) so the phone can find an agent without manual IP
-entry. Because Tailscale (WireGuard) already provides NAT traversal, stable addressing, and
-encryption, there is **no cloud server and no cloud database**.
+The app talks to the agent over **HTTPS (HTTP/2) + TLS**. On a local network it can connect by
+IP or hostname without a VPN. **Tailscale is optional** and provides a private remote route when
+installed on both devices; without it, remote access requires another routable path. The agent
+advertises `_rfe._tcp` over mDNS/DNS-SD, and Android can browse for IPv4 candidates from the
+Add computer screen. QR pairing and manual addresses remain available. Discovery only supplies
+an address; the user still verifies the TLS fingerprint independently and enters a pairing code.
+The app can save a direct HTTPS hostname or IP as a final connection fallback. The PC owner must
+configure DNS, router NAT, and firewall access; the app does not modify network settings. The
+project currently has **no cloud relay or cloud database**.
 
 ## Key decisions
 
@@ -21,26 +25,84 @@ encryption, there is **no cloud server and no cloud database**.
 |------|----------|
 | Mobile framework | Flutter (Riverpod, dio, flutter_secure_storage) |
 | Backend | Custom Go host agent — single static binary, runs as a service |
-| Remote access | Tailscale (already in use) + LAN by IP/hostname; mDNS auto-discovery |
-| Transport security | TLS with self-signed cert; phone pins the SHA-256 fingerprint at pairing (TOFU) |
-| Storage | SQLite on the agent; local DB + Keychain/Keystore on the phone |
+| Connection routes | LAN, optional Tailscale, then a user-configured direct HTTPS address; no built-in relay |
+| Agent discovery | Agent-side `_rfe._tcp` advertisement; Android app performs an explicit, bounded mDNS scan and lists IPv4 candidates |
+| Transport security | TLS with a self-signed cert; enrollment pins a SHA-256 fingerprint obtained out of band |
+| Pin storage | `HostStore` Keychain/Keystore secure storage is authoritative; the SharedPreferences copy is not a trust source |
+| Storage | SQLite on the agent; app metadata locally and tokens/pins in Keychain/Keystore secure storage |
+| Browser authentication | Embedded web companion uses a Secure, HttpOnly, SameSite=Strict session cookie and same-origin request checks; it does not store its bearer token in Web Storage |
+| Host app launch | Current-user registrations: Windows AppsFolder, Linux XDG desktop, and macOS standard `.app` folders; per-device grants default off; launch by opaque ID only |
 
 ## Security model (summary)
 
-1. TLS everywhere; fingerprint pinning on top of Tailscale's WireGuard layer.
-2. Device pairing (via `rfe-agent pair`, QR or manual entry) issues a revocable bearer token
-   (stored in Keychain/Keystore on the phone).
-3. Per-agent authorization: root-path jail, optional read-only mode, device revocation/removal,
-   `/pair` rate limiting (10/min).
-4. Strict path normalization + jail enforcement against traversal/symlink escape.
+1. TLS is used for all app-agent API traffic. New pairing requires a fingerprint from a trusted
+   independent source (for example, the intended host's local display or console); the app checks
+   the pin before sending pairing codes, passwords, or authenticated request data. Tailscale may
+   add a private network route, but certificate pinning is independent of it. Direct HTTPS still
+   uses the same pin; a TLS-terminating proxy with a different certificate is not supported.
+2. Paired-device fingerprints and bearer tokens are stored in Keychain/Keystore secure storage.
+   The secure-store fingerprint is authoritative; a missing or invalid value fails closed and is
+   never recovered from the legacy SharedPreferences host record.
+3. Device pairing (via `rfe-agent pair`, QR or manual entry) issues a revocable bearer token.
+   Per-agent authorization includes a root-path jail, optional read-only mode, device
+   revocation/removal, and `/pair` rate limiting (10/min). Browse, download, upload, modify,
+   delete, and share are independent per-device file-action grants. Existing devices retain
+   their prior access during migration; new code-paired devices start browse-only; devices
+   authenticated by the account password retain full file access. Owner provenance bypasses
+   per-device file grants, while configured roots, global and per-device read-only, per-device
+   jail, and the global share switch remain in force. App-catalog viewing and app launching
+   remain separate per-device grants, default off; admin provenance does not bypass them.
+   A new agent database is restricted to a dedicated `RFE Files` folder under the signed-in
+   user's home by default; an empty global root list is an explicit unrestricted-access setting.
+   Existing saved root policies are preserved during upgrades.
+4. Strict path normalization + rooted filesystem operations enforce configured and per-device
+   jails against traversal and symlink escape during file access. This does not fence mount points,
+   Linux bind mounts, `/proc` special files, or Unix device files inside an allowed root; see the
+   route/security matrix for platform verification limits. The mobile Files tab reads the
+   authenticated `/settings` response to show the caller's effective roots. It opens restricted
+   hosts at one of those roots and clamps bookmark navigation to the selected root, rather than
+   attempting to list `/` outside the jail.
+5. The app catalog shows visible user-facing entries from the agent's current-user OS catalogs.
+   Each item carries a `launchable` flag; unsupported entries remain visible with Run disabled.
+   Launch accepts only an opaque ID, re-resolves it before launch, rejects non-launchable items,
+   does not accept client paths/commands/arguments, checks for an interactive desktop session,
+   applies rate/concurrency limits, and audits the result. Catalog support is Windows AppsFolder,
+   Linux XDG desktop entries, and macOS `.app` bundles in standard application folders; this is not
+   an inventory of arbitrary executables or every installed package. macOS aliases and apps outside
+   those folders are not included.
 
-There is currently no audit log — device actions (revoke/remove, settings changes) are not
-recorded to a persistent log; this is a possible future addition.
+The agent has a persistent SQLite audit trail for account, device, share-link, app-launch, and
+restart events (including pair/register/login, device changes, share creation/revocation, app
+launch outcomes, and agent restart). The audit endpoint is admin-only. File operations are
+deliberately not recorded in that trail.
+
+The embedded browser companion receives its device credential in a `/v1`-scoped HttpOnly
+session cookie rather than JavaScript-readable storage. It adds a custom request header, and
+cookie authentication checks same-origin Fetch Metadata and any supplied `Origin`. Sign-out
+clears this browser cookie but leaves the device paired; revocation remains an explicit device
+management action. HttpOnly limits credential extraction by page scripts but cannot stop a live
+same-origin script compromise from issuing requests, so the CSP and escaped React rendering are
+still important controls. The browser's Ed25519 private key is stored as a non-extractable
+IndexedDB `CryptoKey`, with an automatic one-time migration from the earlier localStorage format.
+API responses use `Cache-Control: no-store` by default; thumbnails retain their explicit private
+cache policy.
+
+For the full route-by-route authentication and authorization inventory, including explicit gaps,
+see [`security-route-matrix.md`](security-route-matrix.md). The current device model provides
+administrator provenance, a per-device path jail, a read-only switch, separate app-view/app-
+launch grants, and independent per-device browse, download, upload, modify, delete, and share
+grants. New-file transfers require `upload`; small content writes and transfer sessions that
+request overwrite require `modify`. Overwrite permission is re-checked for every chunk and at
+upload completion.
 
 ## Transfers (the core engineering)
 
 - **Upload:** resumable chunked sessions. Per-chunk + whole-file SHA-256; received-chunk bitmap in
-  SQLite for resume; atomic temp→final rename on completion. Chunks can upload in parallel.
+  SQLite for resume. Server completion streams the verified open temp file through the current
+  request's rooted filesystem operations into the destination. Overwrite uses a same-directory
+  atomic rename; overwrite=false uses hard-link publication where available, with a rooted
+  `O_EXCL` copy fallback on filesystems that do not support hard links. That fallback can expose
+  partial content while copying, but never replaces an existing file. Chunks can upload in parallel.
 - **Download:** HTTP Range requests; resume from last offset; optional parallel ranges.
 
 See `../protocol/openapi.yaml` for the full API surface.
@@ -60,7 +122,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 
 | File | Responsibility |
 |------|----------------|
-| `core/api/agent_client.dart` (~840) | **The one pinned HTTP client.** ALL network + content access goes through it (dio, TOFU cert pin, bearer token). No raw dio anywhere else. |
+| `core/api/agent_client.dart` (~840) | **The one pinned HTTP client.** App-agent requests use Dio, verify the secure-store/out-of-band certificate pin before request data is sent, and add the bearer token only for pinned hosts. |
 | `features/explorer/explorer_state.dart` (~590) | **`ExplorerNotifier`** — the state hub. Every explorer mutation (navigate, select, sort, refresh, file ops) goes through it; widgets never call `AgentClient` directly. |
 | `features/explorer/explorer_screen.dart` (~950) | The central browse UI (list/grid, breadcrumb, selection, drag, view options) — wires widgets to `ExplorerNotifier`. |
 | `core/settings/settings_controller.dart` (~480) | Two-tier settings: app defaults + per-device overrides; the resolution logic both screens read. |
@@ -71,7 +133,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 |------|-------|----------------|
 | api | `api/providers.dart` | Riverpod providers exposing `AgentClient` + derived state. |
 | backup | `backup/{backup_service,config_backup}.dart` | Full-app backup/restore + settings-only config export/import. |
-| models | `models/{entry,listing,device,health,drive,host,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
+| models | `models/{entry,listing,device,health,drive,host,host_app,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
 | notifications | `notifications/notification_service.dart` | Local notification channel setup + dispatch (transfer progress/completion). |
 | platform | `platform/{file_opener,transfer_notifications,wol}.dart` | Platform-channel glue: open-with, native transfer notifications, Wake-on-LAN send. |
 | security | `security/device_identity.dart` | Generates/persists the phone's device identity keypair (paired token binding). |
@@ -88,14 +150,14 @@ See `../protocol/openapi.yaml` for the full API surface.
 | Feature | Key files | Responsibility |
 |---------|-----------|----------------|
 | home | `home_shell.dart`, `home_state.dart`, `widgets/app_bottom_nav.dart` | Top-level app shell + bottom nav tab state, hosting the other feature screens. |
-| hosts | `host_list_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer/host list + per-host card and storage gauge. |
-| explorer | (hub files above) + `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
+| hosts | `host_list_screen.dart`, `host_apps_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer list, per-host card/storage gauge, and host app catalog/Run screen. |
+| explorer | (hub files above) + `host_root_view.dart`, `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `host_root_view.dart` resolves the caller's allowed roots before browsing; `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
 | bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
 | preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
 | search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |
-| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
+| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,device_file_access_controls,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings and independent file-action grants, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
 | transfers | `transfer_manager.dart`, `transfer_state.dart`, `chunk_planner.dart`, `transfer_speed.dart`, `widgets/mini_transfer_bar.dart` | Transfer queue/center: manager orchestration, state, chunk planning, speed/ETA, mini bar. |
-| pairing | `pairing_screen.dart` | QR scan / manual pairing flow. |
+| pairing | `pairing_screen.dart`, `lan_discovery.dart` | QR, manual, and Android LAN discovery entry points; discovery feeds into the existing pinned pairing flow. |
 | handoff | `qr_generate_screen.dart`, `qr_scan_screen.dart` | Device-to-device handoff via QR (distinct from agent pairing). |
 | onboarding | `onboarding_screen.dart` | First-run intro flow. |
 | photo_backup | `photo_backup_controller.dart`, `photo_backup_logic.dart`, `photo_backup_prefs.dart`, `photo_backup_screen.dart` | Camera-roll auto-backup to a host: controller/logic split, prefs, settings UI. |
@@ -118,15 +180,16 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/archive_handler.go` | Compress/extract endpoints (fronts `fsops/archive.go`). |
 | `internal/server/chmod_handler.go` | chmod endpoint. |
 | `internal/server/dupfinder_handler.go` | Batch-checksum endpoint backing the app's duplicate finder. |
-| `internal/server/recent.go` | Recent-files endpoint — a live recursive walk, like `search.go`, not a persistent index. |
+| `internal/server/recent.go` | Recent-files endpoint — jail-scoped live recursive walks with a five-second cache for complete results, not a persistent index. |
 | `internal/server/transferhandlers.go` | Upload-session + chunk PUT + download-range endpoints. |
-| `internal/server/search.go` | Search endpoint (recursive walk). |
-| `internal/server/search_index.go` | Background index rebuild backing `search.go`. |
+| `internal/server/search.go` | Search endpoint (indexed fast path, bounded recursive fallback before the first build). |
+| `internal/server/search_index.go` | Five-minute index rebuild through open rooted walks; each request filters results by its effective roots. No content sniffing; 2M-entry and 128 MiB estimated per-snapshot caps signal partial results when reached. |
 | `internal/server/thumb.go` | Thumbnail endpoint. |
 | `internal/server/settings_handlers.go` | Live-mutable agent settings endpoints. |
+| `internal/server/apps_handlers.go` + `apps_{linux,windows,darwin,other}.go` | Per-device app catalog/launch routes and OS-specific current-user app inventory/launch adapters. |
 | `internal/server/update_handlers.go` | `/v1/app/latest` + `/v1/app/download` (serves APKs from `updates/`). |
 | `internal/server/pair.go` | Pairing endpoint (consumes a DB code, issues a token). |
-| `internal/server/ratelimit.go` | `/pair` rate limiter (10/min). |
+| `internal/server/ratelimit.go` | Pairing, app-catalog, and app-launch rate limiters. |
 | `internal/server/share_handlers.go` | One-time share-link mint/serve/revoke/list — see `docs/r1-share-link-threat-model.md`. |
 | `internal/server/sse_handler.go` | Server-sent-events endpoint — server-side half of the PR-59 finding (client parser lives in the frozen `app/lib` tree). |
 | `internal/server/status_handlers.go` + `status_disk_{unix,windows}.go` | `/v1/health`/status endpoint, incl. OS-specific disk-space lookup. |
@@ -135,12 +198,12 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/throughput.go` | Process-lifetime cumulative rx/tx byte counters exposed via metrics. |
 | `internal/server/wol_handler.go` | Wake-on-LAN send endpoint. |
 | `internal/server/webdata_handlers.go` | List endpoints (+ user removal) backing the web companion's Transfers/Users/Logs pages. |
-| `internal/fsops/fsops.go` | Core listing + file ops, built on `jail.go`'s path resolution. |
-| `internal/fsops/jail.go` | **Path jail + normalization** (traversal/symlink defense) — the security boundary for every fs operation; `Resolve` is the single chokepoint. |
+| `internal/fsops/fsops.go` | Core listing + file ops, implemented through `jail.go`'s request-scoped rooted paths and open handles. |
+| `internal/fsops/jail.go` | **Path jail + rooted operations** (normalization, symlink defense, descriptor-relative access) — opens the active root and confines server filesystem operations to it. `Resolve` remains a path validation API, not a race-resistant handle. |
 | `internal/fsops/archive.go` | Compress (zip) / Extract (zip, tar.gz), both routed through `Resolve`. |
 | `internal/fsops/trash.go` | Move-to-trash / restore, XDG Trash-layout (`files/` + `info/*.trashinfo`). |
 | `internal/fsops/{drives_*,birthtime_*}.go` | OS-specific drive enumeration + file birthtime. |
-| `internal/transfer/transfer.go` | **Resumable chunked transfer engine** — SHA-256, received-chunk bitmap, atomic rename. Touch its UI, not its logic. |
+| `internal/transfer/transfer.go` | **Resumable chunked transfer engine** — SHA-256, received-chunk bitmap, and server-supplied publication callback. Its legacy direct API remains for package callers; server writes publish through rooted `fsops`. |
 | `internal/transfer/throttle.go` | Rate-limited `io.ReadSeeker` wrapper for bandwidth-capped transfers. |
 | `internal/thumbs/thumbs.go` | Thumbnail generation. |
 | `internal/pairing/pairing.go` | DB-backed pairing codes (`Mint`/`Consume`). |
@@ -151,8 +214,8 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/store/store.go` | SQLite store: devices, tokens, pairing codes, transfer bitmaps. Busy-timeout DSN for daemon+CLI concurrency. |
 | `internal/updates/updates.go` | Update-channel management (the `updates/` dir). |
 | `internal/netinfo/netinfo.go` | LAN + Tailscale address detection. |
-| `internal/mdns/mdns.go` | mDNS/DNS-SD advertisement (`_rfe._tcp`) so the phone can discover an agent on the LAN without typing an IP. |
-| `internal/webui/` (`webui.go` + `src/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. Tailwind CSS built from `src/input.css` via `npm run build:css`; markup (`dist/index.html`) is vanilla, no build step. |
+| `internal/mdns/mdns.go` | Agent-side mDNS/DNS-SD advertisement (`_rfe._tcp`) consumed by Android's explicit local-network discovery scan. |
+| `internal/webui/` (`webui.go`, `web/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. The Vite + React + TypeScript source lives in `web/`; run `npm run build` there to generate `dist/`, which Go embeds into the agent binary. Edit `web/src/` and rebuild; treat `dist/` as generated output. |
 
 ## Test → source map (used by `scripts/test-affected.sh`)
 

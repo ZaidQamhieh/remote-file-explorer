@@ -52,6 +52,8 @@ typedef RefReader = T Function<T>(ProviderListenable<T> provider);
 /// widget's `WidgetRef` (e.g. `ref.read`).
 ///
 /// Throws if [hostId] doesn't correspond to a paired host.
+/// [probeLanFirst] is for short host-card health probes: a successful LAN
+/// probe refreshes the preferred route for subsequently-created clients.
 Future<AgentClient> buildClientForHost(
   RefReader read,
   String hostId, {
@@ -62,9 +64,17 @@ Future<AgentClient> buildClientForHost(
     throw StateError('No paired host with id "$hostId"');
   }
   final store = await read(hostStoreProvider.future);
+  final fingerprint = AgentClient.normalizeFingerprint(
+    await store.getFingerprint(hostId),
+  );
+  if (fingerprint == null) {
+    // Never recover a missing secure pin from Host.certFingerprint, which is
+    // only the legacy SharedPreferences copy of this value.
+    throw const MissingCertPin();
+  }
   final token = await store.getToken(hostId);
   final client = AgentClient(
-    host,
+    host.copyWith(certFingerprint: fingerprint),
     deviceToken: token,
     probeLanFirst: probeLanFirst,
   );

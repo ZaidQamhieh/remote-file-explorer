@@ -28,6 +28,14 @@ type Device struct {
 	ReadOnly    bool
 	PublicKey   string
 	ViaLogin    bool
+	ViewApps    bool
+	LaunchApps  bool
+	CanBrowse   bool
+	CanDownload bool
+	CanUpload   bool
+	CanModify   bool
+	CanDelete   bool
+	CanShare    bool
 }
 
 // CreateDevice inserts a new device row. token is the raw bearer token —
@@ -109,8 +117,16 @@ func upsertDeviceTx(tx *sql.Tx, clientID, label, token, publicKey string, viaLog
 		if err == nil {
 			// Same phone re-pairing: rotate token, clear revoked, refresh label.
 			if _, err := tx.Exec(
-				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=?, via_login=? WHERE id=?`,
-				hash, label, now, publicKey, viaLoginInt, existingID,
+				`UPDATE devices SET token_hash=?, label=?, last_seen=?, revoked=0, public_key=?, via_login=?,
+can_browse=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 1 ELSE can_browse END,
+can_download=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 0 ELSE can_download END,
+can_upload=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 0 ELSE can_upload END,
+can_modify=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 0 ELSE can_modify END,
+can_delete=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 0 ELSE can_delete END,
+can_share=CASE WHEN ?=1 THEN 1 WHEN via_login=1 THEN 0 ELSE can_share END
+WHERE id=?`,
+				hash, label, now, publicKey, viaLoginInt,
+				viaLoginInt, viaLoginInt, viaLoginInt, viaLoginInt, viaLoginInt, viaLoginInt, existingID,
 			); err != nil {
 				return "", err
 			}
@@ -122,9 +138,14 @@ func upsertDeviceTx(tx *sql.Tx, clientID, label, token, publicKey string, viaLog
 	}
 
 	id := uuid.New().String()
+	browse, download, upload, modify, del, share := 1, 0, 0, 0, 0, 0
+	if viaLogin {
+		download, upload, modify, del, share = 1, 1, 1, 1, 1
+	}
 	if _, err := tx.Exec(
-		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key,via_login) VALUES (?,?,?,?,?,0,?,?,?)`,
-		id, label, hash, now, now, clientID, publicKey, viaLoginInt,
+		`INSERT INTO devices (id,label,token_hash,created,last_seen,revoked,client_id,public_key,via_login,
+can_browse,can_download,can_upload,can_modify,can_delete,can_share) VALUES (?,?,?,?,?,0,?,?,?,?,?,?,?,?,?)`,
+		id, label, hash, now, now, clientID, publicKey, viaLoginInt, browse, download, upload, modify, del, share,
 	); err != nil {
 		return "", err
 	}
@@ -178,12 +199,25 @@ func (s *DB) RegisterAccount(clientID, label, token, publicKey, username, passwo
 // LoginDevice records a successful password login: the device row and the
 // account that authenticated it land together, so a failure can't leave a
 // usable token stamped with no username (PR-45).
-func (s *DB) LoginDevice(clientID, label, token, publicKey, username string) (string, error) {
+func (s *DB) LoginDevice(clientID, label, token, publicKey, username, passwordHash string) (string, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// The account may have been deleted or replaced after the handler checked
+	// the password. Bind token creation to the same credential row atomically.
+	var accountMatches int
+	if err := tx.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM users WHERE username=? AND password_hash=?)`,
+		username, passwordHash,
+	).Scan(&accountMatches); err != nil {
+		return "", err
+	}
+	if accountMatches == 0 {
+		return "", ErrLoginAccountChanged
+	}
 
 	deviceID, err := upsertDeviceTx(tx, clientID, label, token, publicKey, true)
 	if err != nil {
@@ -203,7 +237,11 @@ func (s *DB) LoginDevice(clientID, label, token, publicKey, username string) (st
 func (s *DB) DeviceByToken(token string) (*Device, error) {
 	hash := hashToken(token)
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices WHERE token_hash=?`, hash,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,
+	via_login,view_apps,launch_apps,can_browse,can_download,can_upload,can_modify,can_delete,can_share FROM devices
+WHERE token_hash=? AND (via_login=0 OR (via_login=1 AND username<>'' AND EXISTS(
+    SELECT 1 FROM users WHERE users.username=devices.username
+)))`, hash,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -236,8 +274,8 @@ func (s *DB) TouchDevice(id, address, version string) error {
 func scanDevice(row *sql.Row) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked, readOnly, viaLogin int
-	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin)
+	var revoked, readOnly, viaLogin, viewApps, launchApps, browse, download, upload, modify, del, share int
+	err := row.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin, &viewApps, &launchApps, &browse, &download, &upload, &modify, &del, &share)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +284,10 @@ func scanDevice(row *sql.Row) (*Device, error) {
 	d.Revoked = revoked != 0
 	d.ReadOnly = readOnly != 0
 	d.ViaLogin = viaLogin != 0
+	d.ViewApps = viewApps != 0
+	d.LaunchApps = launchApps != 0
+	d.CanBrowse, d.CanDownload, d.CanUpload = browse != 0, download != 0, upload != 0
+	d.CanModify, d.CanDelete, d.CanShare = modify != 0, del != 0, share != 0
 	return &d, nil
 }
 
@@ -257,8 +299,8 @@ type rowScanner interface {
 func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	var d Device
 	var created, lastSeen int64
-	var revoked, readOnly, viaLogin int
-	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin); err != nil {
+	var revoked, readOnly, viaLogin, viewApps, launchApps, browse, download, upload, modify, del, share int
+	if err := sc.Scan(&d.ID, &d.Label, &d.TokenHash, &created, &lastSeen, &revoked, &d.LastAddress, &d.LastVersion, &d.JailRoot, &readOnly, &d.PublicKey, &viaLogin, &viewApps, &launchApps, &browse, &download, &upload, &modify, &del, &share); err != nil {
 		return nil, err
 	}
 	d.Created = time.Unix(created, 0)
@@ -266,13 +308,17 @@ func scanDeviceFrom(sc rowScanner) (*Device, error) {
 	d.Revoked = revoked != 0
 	d.ReadOnly = readOnly != 0
 	d.ViaLogin = viaLogin != 0
+	d.ViewApps = viewApps != 0
+	d.LaunchApps = launchApps != 0
+	d.CanBrowse, d.CanDownload, d.CanUpload = browse != 0, download != 0, upload != 0
+	d.CanModify, d.CanDelete, d.CanShare = modify != 0, del != 0, share != 0
 	return &d, nil
 }
 
 // ListDevices returns all paired devices (including revoked), oldest first.
 func (s *DB) ListDevices() ([]Device, error) {
 	rows, err := s.db.Query(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices ORDER BY created`)
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login,view_apps,launch_apps,can_browse,can_download,can_upload,can_modify,can_delete,can_share FROM devices ORDER BY created`)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +381,7 @@ func (s *DB) DeleteDevice(id string) error {
 // GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
 func (s *DB) GetDeviceByID(id string) (*Device, error) {
 	row := s.db.QueryRow(
-		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login FROM devices WHERE id=?`, id,
+		`SELECT id,label,token_hash,created,last_seen,revoked,last_address,last_version,jail_root,read_only,public_key,via_login,view_apps,launch_apps,can_browse,can_download,can_upload,can_modify,can_delete,can_share FROM devices WHERE id=?`, id,
 	)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -362,6 +408,48 @@ func (s *DB) SetDeviceReadOnly(id string, ro bool) error {
 	}
 	_, err := s.db.Exec(`UPDATE devices SET read_only=? WHERE id=?`, v, id)
 	return err
+}
+
+// SetDeviceAppPermissions updates a device's app-catalog and app-launch
+// permissions together. The server validates the implication that launching
+// also requires app visibility before calling this method.
+func (s *DB) SetDeviceAppPermissions(id string, viewApps, launchApps bool) error {
+	view := 0
+	if viewApps {
+		view = 1
+	}
+	launch := 0
+	if launchApps {
+		launch = 1
+	}
+	_, err := s.db.Exec(`UPDATE devices SET view_apps=?, launch_apps=? WHERE id=?`, view, launch, id)
+	return err
+}
+
+// SetDeviceFilePermissions atomically updates the independent filesystem
+// capabilities managed by the admin device settings endpoint.
+func (s *DB) SetDeviceFilePermissions(id string, browse, download, upload, modify, del, share bool) error {
+	values := []int{0, 0, 0, 0, 0, 0}
+	for i, enabled := range []bool{browse, download, upload, modify, del, share} {
+		if enabled {
+			values[i] = 1
+		}
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`UPDATE devices SET can_browse=?,can_download=?,can_upload=?,can_modify=?,can_delete=?,can_share=? WHERE id=?`,
+		values[0], values[1], values[2], values[3], values[4], values[5], id); err != nil {
+		return err
+	}
+	if !share {
+		if _, err := tx.Exec(`DELETE FROM share_tokens WHERE device_id=?`, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // --------- pairing codes ---------
@@ -432,6 +520,15 @@ func (s *DB) GetConfig(key string) (string, error) {
 		return "", nil
 	}
 	return val, err
+}
+
+// HasConfig reports whether a config key exists, including keys whose value is
+// intentionally empty. This distinction is needed for settings where empty is
+// a valid persisted value (for example, an explicitly unrestricted root list).
+func (s *DB) HasConfig(key string) (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM config WHERE key=?)`, key).Scan(&exists)
+	return exists != 0, err
 }
 
 // SetConfig upserts a config value.

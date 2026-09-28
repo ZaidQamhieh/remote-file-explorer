@@ -1,15 +1,19 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.17.0
+  version: 1.18.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
-    /login, /auth/challenge, and /health require a bearer device token. Clients may
-    send an optional `X-RFE-Client-Version` header (e.g.
+    /login, /auth/challenge, /auth/logout, and /health require a bearer device token. The
+    embedded browser companion can instead use its same-origin HttpOnly session cookie;
+    it requests that mode with `X-RFE-Web-Session: 1`, and the agent omits `deviceToken`
+    from the authentication response. Native clients continue to receive bearer tokens.
+    Clients may send an optional `X-RFE-Client-Version` header (e.g.
     "1.10.0+18") on every authenticated request; the agent records this plus the
-    caller's network address against the device row and surfaces both via GET /devices
-    (see Device.lastAddress / Device.lastVersion).
+    caller's network address against the device row. Admin devices see those fields
+    for all devices via GET /devices (see Device.lastAddress / Device.lastVersion);
+    ordinary paired devices receive only their own minimal device record.
 
     A device's token is "admin" (Device.viaLogin=true) if it was obtained via /login or
     /register (proof of the single account's password) rather than /pair (a one-time
@@ -17,6 +21,14 @@ info:
     OTHER devices: POST /pairing/generate, and PATCH/DELETE /devices/{id} targeting a
     device other than themselves. An ordinary (non-admin) device may still manage only
     ITSELF via DELETE /devices/{id}.
+
+    File-action permissions are independent per device: browse, download,
+    upload, modify, delete, and share. Existing devices retain their prior
+    access when this model is introduced; future code-paired devices start
+    browse-only. Owner devices bypass these per-device file grants, while the
+    agent's global read-only policy, configured roots, per-device jail/read-only
+    controls, and global share-link switch remain in force. A denied file action
+    returns HTTP 403 with code `CAPABILITY_DENIED`.
 
     Pair, register, and login all require device-identity proof-of-possession: fetch a
     nonce from POST /auth/challenge, sign it with the device's permanent Ed25519 key,
@@ -45,8 +57,8 @@ paths:
         Reachable without a token, but only `status` is guaranteed for an
         unauthenticated (or invalid-token) caller — name/version/os/readOnly/
         address/tailscaleAddress/macAddress are only included for a caller
-        presenting a valid, non-revoked device bearer token, so an unpaired
-        caller can't fingerprint or map the host.
+        presenting a valid, non-revoked device bearer token or valid same-origin
+        browser session, so an unpaired caller can't fingerprint or map the host.
       security: []
       responses:
         "200":
@@ -313,9 +325,28 @@ paths:
           description: Too many challenge requests (rate-limited at 30/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
+  /auth/logout:
+    post:
+      summary: Clear the embedded browser's session cookie
+      description: >
+        Clears the RFE browser session cookie. This does not revoke the paired
+        device token; use DELETE /devices/{id} to revoke the device itself.
+        The route is safe to call without a session and has no effect on native
+        bearer-token clients.
+      security: []
+      responses:
+        "204": { description: Browser session cookie cleared }
+        "405": { description: Method not allowed }
+
   /pair:
     post:
       summary: Complete device pairing (unauthenticated; consumes one-time pairing code)
+      description: >
+        Newly created code-paired devices start with browse enabled and
+        download, upload, modify, delete, and share disabled. Re-pairing an
+        existing paired device preserves its current grants. If an existing
+        owner-login device is converted back to an ordinary paired device, it
+        returns to the browse-only default.
       security: []
       requestBody:
         required: true
@@ -461,7 +492,8 @@ paths:
       description: >
         Generates a short-lived, single-use, unauthenticated download URL for
         one file. Returns 403 if the agent's `allowSharing` setting is
-        disabled (default). See docs/r1-share-link-threat-model.md.
+        disabled (default). Only regular files up to 500 MiB are accepted.
+        See docs/r1-share-link-threat-model.md.
       security: [{ deviceToken: [] }]
       requestBody:
         required: true
@@ -488,6 +520,9 @@ paths:
           description: Share links are disabled on this agent. code=FORBIDDEN.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
+        "413":
+          description: The file exceeds the 500 MiB share limit. code=FILE_TOO_LARGE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /share/{token}:
     get:
@@ -495,16 +530,22 @@ paths:
       description: >
         The only unauthenticated route in the entire agent besides /health
         and /pair. token is single-use: the first successful (or attempted)
-        fetch deletes it. Rate-limited 10/min. Returns 404 for both "expired"
-        and "never existed" — the response never reveals which.
+        fetch deletes it. Requests are limited to 10/min per source IP; the
+        agent keeps at most 4096 IP buckets and rejects new IPs while the
+        table is full. The opened file must still be regular and at most
+        500 MiB. Returns 404 for both "expired" and "never existed" — the
+        response never reveals which.
       security: []
       parameters:
         - { name: token, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: File bytes, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/Error" }
+        "413":
+          description: The file exceeds the 500 MiB share limit. The single-use token is consumed. code=FILE_TOO_LARGE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
-          description: Too many share requests (rate-limited 10/min). code=RATE_LIMITED.
+          description: Too many share requests from this source IP, or the bounded rate-limit table is full. code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     delete:
       summary: Revoke an active share link
@@ -927,11 +968,11 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
     put:
-      summary: Write (replace) a small text file's content, atomically
+      summary: Write a small text file's content, atomically (modify grant)
       description: >
         Writes the request body to path, replacing its current content. The
         write is atomic (temp file + rename) and the existing file's mode is
-        preserved. The body is capped at 5 MiB; larger payloads are rejected
+        preserved. This route requires the device's `modify` grant. The body is capped at 5 MiB; larger payloads are rejected
         with 413. Pass baseModified (the `modified` value last read for this
         file via /fs/meta or /fs) to get optimistic-concurrency protection —
         if the file's mtime no longer matches, the write is rejected with 409
@@ -963,6 +1004,14 @@ paths:
   /transfers:
     post:
       summary: Open a resumable upload session
+      description: >
+        Declared upload size is capped at 64 GiB. Admission reserves the full
+        declared size: at most 4 open sessions and 64 GiB per device, and 16
+        open sessions and 128 GiB across the host. Reaching either session or
+        byte quota returns 429 RESOURCE_LIMIT. Reservations bound RFE's
+        concurrent declared uploads; they do not guarantee free disk space or
+        account for unrelated host writes. Open sessions with no chunk or
+        status/resume activity expire after 7 days; the agent sweeps hourly.
       requestBody:
         required: true
         content:
@@ -972,9 +1021,18 @@ paths:
               required: [path, size, sha256, chunkSize]
               properties:
                 path: { type: string }
-                size: { type: integer, format: int64 }
+                size:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  maximum: 68719476736
+                  description: Maximum 64 GiB per upload.
                 sha256: { type: string }
-                chunkSize: { type: integer }
+                chunkSize:
+                  type: integer
+                  minimum: 1
+                  maximum: 33554432
+                  description: Maximum 32 MiB per chunk.
                 overwrite:
                   type: boolean
                   default: false
@@ -984,8 +1042,10 @@ paths:
                     recorded on the session and re-checked atomically at
                     POST /transfers/{id}/complete, so a file that appears
                     during the upload also conflicts (409) instead of being
-                    silently replaced. When true, an existing file at path is
-                    replaced once the upload completes.
+                    silently replaced. When true, the caller must also hold
+                    `modify` when opening the session, uploading chunks, and
+                    completing it. An existing file is replaced only after
+                    the checks pass.
       responses:
         "201":
           description: Session opened
@@ -998,28 +1058,52 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            Path outside the caller's jail, or the agent/device is read-only.
-            code=FORBIDDEN or READ_ONLY. Every mutating transfer route honours
-            read-only, the same as the /fs routes.
+            Path outside the caller's jail, the agent/device is read-only, or
+            overwrite=true without the modify grant. code=FORBIDDEN,
+            READ_ONLY, or CAPABILITY_DENIED. Every mutating transfer route
+            honours read-only, the same as the /fs routes.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "409":
           description: >
             path already exists and overwrite=false. code=CONFLICT.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "413":
+          description: Declared upload exceeds the 64 GiB per-upload maximum. code=PAYLOAD_TOO_LARGE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: >
+            Per-device or host-wide active-session/reserved-byte quota is full.
+            Finish or delete an existing session before opening another.
+            No Retry-After is supplied because capacity can become available
+            as soon as another upload finishes. code=RESOURCE_LIMIT.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}:
     get:
       summary: Get session status + missing chunks (for resume)
+      description: >
+        A successful status/resume request by the session owner refreshes the
+        session's activity time. Open sessions with no chunk or owner
+        status/resume activity for 7 days are eligible for the agent's hourly
+        stale-session sweep.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
         "401": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Completion currently holds the session lease. code=TRANSFER_ACTIVE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
     delete:
-      summary: Remove a transfer row from history (web companion Transfers page)
+      summary: Delete an inactive transfer session (web companion Transfers page)
       description: >
-        Deletes only the session record, not the uploaded file — for clearing
-        stale "open" rows the client never finalized, or "failed" ones.
+        Deletes the session record and its temporary upload file; it never
+        deletes a file already published at the destination. Deletion is
+        coordinated with chunk uploads, completion, and stale cleanup. If a
+        session operation is active, deletion returns 409 TRANSFER_ACTIVE and
+        removes nothing. An old unreferenced `.tmp` file left after a previous
+        deletion failure is removed by age-gated cleanup once it is older than
+        the 7-day retention period.
 
         Scoped to the session's owner: only the device that opened it, or an
         admin device, may remove the row. Anyone else gets 404 — the same
@@ -1030,6 +1114,9 @@ paths:
       responses:
         '204': { description: Transfer row removed }
         '401': { $ref: '#/components/responses/Error' }
+        '409':
+          description: An active session operation currently holds the transfer. code=TRANSFER_ACTIVE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '404':
           description: >
             No transfer with that ID, or it belongs to another device.
@@ -1060,10 +1147,14 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            The agent or the calling device is read-only. code=READ_ONLY.
+            The agent or the calling device is read-only, or the session uses
+            overwrite=true without the modify grant. code=READ_ONLY or
+            CAPABILITY_DENIED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Chunk hash mismatch, the transfer is no longer open, or completion currently holds the session. code=CHUNK_HASH_MISMATCH, TRANSFER_NOT_OPEN, or TRANSFER_ACTIVE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "413": { $ref: "#/components/responses/Error" }
 
   /transfers/{id}/complete:
@@ -1079,7 +1170,8 @@ paths:
         The publish honours the session's overwrite flag atomically: with
         overwrite=false a file that appeared at the destination during the
         upload yields 409 CONFLICT and is left untouched, rather than being
-        replaced.
+        replaced. If overwrite=true, the caller must still hold the `modify`
+        grant; that permission is re-checked when the file is published.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200":
@@ -1102,14 +1194,17 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            Path outside the caller's jail, or the agent/device is read-only.
-            code=FORBIDDEN or READ_ONLY.
+            Path outside the caller's jail, the agent/device is read-only, or
+            overwrite=true without the modify grant. code=FORBIDDEN,
+            READ_ONLY, or CAPABILITY_DENIED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
         "409":
           description: >
             The destination was created during the upload and the session was
-            opened with overwrite=false. code=CONFLICT.
+            opened with overwrite=false (CONFLICT), or the session is no
+            longer open (TRANSFER_NOT_OPEN), or another chunk/status request
+            currently holds the session (TRANSFER_ACTIVE).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "422":
           description: Whole-file SHA-256 mismatch. code=HASH_MISMATCH.
@@ -1127,6 +1222,13 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "404":
           description: No thumbnail available for this file. code=NOT_AVAILABLE.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: Thumbnail work is at capacity. code=THUMB_BUSY; retry after the Retry-After interval.
+          headers:
+            Retry-After:
+              schema: { type: integer, example: 1 }
+              description: Minimum seconds to wait before retrying.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /search:
@@ -1237,11 +1339,14 @@ paths:
         are never included), newest first. Unlike /search, this can't stop
         early once it has `limit` candidates — it keeps a bounded top-K
         (min-heap) of the best candidates seen so far, so the full walk
-        (bounded by the same 15s time budget) still has to run. Same
-        time-budget signaling as /search: X-Search-Time-Budget is set when
-        the budget expired before the walk finished — results are then
-        partial (the most recent files *seen*, not guaranteed to be the
-        true most-recent files in the tree).
+        (bounded by the same 15s time budget) still has to run. Complete
+        results may be reused for up to five seconds for the same effective
+        roots, requested root and limit. Partial results are not cached.
+        X-Search-Time-Budget is set when a refresh exceeds the budget; results
+        are then partial (the most recent files seen, not guaranteed to be
+        the true most-recent files in the tree). At most two scans run
+        concurrently per agent process. Additional uncached requests receive
+        429 code=RECENT_BUSY with Retry-After: 1.
       parameters:
         - { in: query, name: root, schema: { type: string } }
         - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }
@@ -1259,10 +1364,29 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/Entry" } }
         "401": { $ref: "#/components/responses/Error" }
+        "429":
+          description: Recent-file scan capacity is full. code=RECENT_BUSY.
+          headers:
+            Retry-After:
+              schema: { type: integer, example: 1 }
+              description: Minimum seconds to wait before retrying.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /settings:
     get:
       summary: Get agent settings
+      description: >
+        Admin devices (`isAdmin=true`) receive host-wide settings. Ordinary
+        paired devices receive `effectiveScope=device`, with roots and readOnly
+        reflecting the policy applied to that device's request. The response
+        omits unrelated host-wide settings; `agentName` and `allowSharing` are
+        intentionally shared so clients can identify the host and show the
+        share-link policy. It returns the photo-backup
+        destination to a paired device only when that device's effective roots
+        allow the path and its effective policy permits writes; this is a
+        policy check and does not guarantee the operating system will permit
+        the eventual write. Otherwise the configured/available booleans report
+        the state without disclosing the destination.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -1272,7 +1396,8 @@ paths:
               schema: { $ref: '#/components/schemas/AgentSettings' }
         '401': { $ref: '#/components/responses/Error' }
     patch:
-      summary: Update agent settings (partial)
+      summary: Update host-wide agent settings (admin-only, partial)
+      description: Requires an admin device authenticated through /login or /register.
       security: [{ deviceToken: [] }]
       requestBody:
         content:
@@ -1286,10 +1411,16 @@ paths:
               schema: { $ref: '#/components/schemas/AgentSettings' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Caller is not an admin device.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /settings/bandwidth:
     get:
       summary: Get bandwidth limits
+      description: Admin-only host-wide policy.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -1298,8 +1429,10 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/BandwidthSettings' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
     put:
-      summary: Set bandwidth limits
+      summary: Set bandwidth limits (admin-only)
+      description: Requires an admin device authenticated through /login or /register.
       security: [{ deviceToken: [] }]
       requestBody:
         required: true
@@ -1314,15 +1447,18 @@ paths:
               schema: { $ref: '#/components/schemas/BandwidthSettings' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /devices:
     get:
-      summary: List paired devices
+      summary: List paired devices or the caller's own device
       description: >
-        Each entry includes lastAddress and lastVersion, captured from the device's most
-        recent authenticated request (client IP and the X-RFE-Client-Version header,
-        respectively). Both are "" if the device has never made an authenticated request
-        with that information.
+        Admin devices receive the full paired-device list. Each entry includes
+        lastAddress and lastVersion, captured from the device's most recent
+        authenticated request. Ordinary paired devices receive a one-element
+        array containing only their own minimal record (`id`, `label`, `created`,
+        `lastSeen`, and `current`). Their response does not disclose other
+        clients' labels, addresses, versions, jails, or revocation state.
       security: [{ deviceToken: [] }]
       responses:
         '200':
@@ -1335,15 +1471,24 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
   /devices/{id}:
     patch:
-      summary: Set a device's per-device path jail (H2) and/or read-only flag (#8) — admin-only
+      summary: Set per-device access controls — admin-only
       description: >
         Requires the CALLER to be an admin device (Device.viaLogin=true — see
         the top-level description). An ordinary (non-admin) device gets 403
-        FORBIDDEN regardless of `{id}`, including targeting itself. Both
-        fields are optional and independently applied (only fields present in
-        the body are changed), mirroring PATCH /settings. Equivalent to the
-        `rfe-agent jail <device-id> <path>` / `rfe-agent readonly <id>
-        <on|off>` admin CLI commands, which remain available for PC-side use.
+        FORBIDDEN regardless of `{id}`, including targeting itself. These
+        `jailRoot`, `readOnly`, `viewApps`, `launchApps`, `browse`, `download`,
+        `upload`, `modify`, `delete`, and `share` are optional and
+        independently applied (only fields present in the body are changed),
+        mirroring PATCH /settings. Existing devices retain their former access
+        when upgraded. New paired devices default to browse-only; login/register
+        owner devices retain full file access and bypass per-device file grants.
+        Global read-only, configured roots, per-device jail/read-only controls,
+        and global sharing remain in force. App permissions default to false for every
+        device. `launchApps=true` requires the effective `viewApps` value to
+        also be true. `viaLogin` remains authentication provenance/admin status
+        and is not controlled by these app permissions. The jail and readOnly
+        fields are also manageable with the `rfe-agent jail <device-id> <path>`
+        / `rfe-agent readonly <id> <on|off>` admin CLI commands.
       security: [{ deviceToken: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -1359,6 +1504,38 @@ paths:
                   description: Absolute path, or "" to clear the per-device jail.
                 readOnly:
                   type: boolean
+                viewApps:
+                  type: boolean
+                  default: false
+                  description: Allows this device to see the host app catalog.
+                launchApps:
+                  type: boolean
+                  default: false
+                  description: Allows launching approved apps; requires viewApps=true.
+                browse:
+                  type: boolean
+                  default: true
+                  description: Allows listing directories, drives, search results, trash, metadata, and archive entries.
+                download:
+                  type: boolean
+                  default: false
+                  description: Allows file downloads and byte-derived thumbnail/checksum reads.
+                upload:
+                  type: boolean
+                  default: false
+                  description: Allows new-file resumable upload transfers. Sessions with overwrite=true also require modify.
+                modify:
+                  type: boolean
+                  default: false
+                  description: Allows PUT /content, create, rename, copy, move, archive, chmod, trash restore, and overwriting an upload destination.
+                delete:
+                  type: boolean
+                  default: false
+                  description: Allows permanent and trash-backed filesystem deletion, plus emptying trash.
+                share:
+                  type: boolean
+                  default: false
+                  description: Allows minting a share link when browse and global sharing are also allowed. Disabling this grant revokes the device's active links.
       responses:
         '200':
           description: Updated device
@@ -1367,8 +1544,10 @@ paths:
               schema: { $ref: '#/components/schemas/Device' }
         '400':
           description: >
-            Invalid JSON body, or jailRoot is not absolute / does not resolve
-            within the agent's configured global roots. code=BAD_REQUEST.
+            Invalid JSON body, jailRoot is not absolute / does not resolve
+            within the agent's configured global roots, or the effective app
+            permissions request launchApps=true with viewApps=false.
+            code=BAD_REQUEST.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         '401': { $ref: '#/components/responses/Error' }
         '403':
@@ -1472,6 +1651,94 @@ paths:
         '403':
           description: Caller is not an admin device. code=FORBIDDEN.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /apps:
+    get:
+      summary: List apps discovered for the current host user
+      description: >
+        Returns display metadata and stable opaque IDs for user-facing apps
+        discovered in the current user's supported OS catalog. The catalog
+        includes visible registrations that do not have a supported launch
+        action; those entries have launchable=false. It is not an inventory of
+        every executable or every installed package. Linux reads visible XDG
+        application desktop entries and launches eligible entries through
+        GIO. Windows reads the
+        current user's AppsFolder registrations and launches by validated
+        AUMID through Explorer. macOS scans standard `.app` bundle locations
+        and launches the selected bundle through Launch Services. The response
+        never contains local paths, executable paths, raw commands, arguments,
+        or environment values. The caller must have ViewApps=true. ViaLogin/
+        admin status does not bypass this device capability. `launchAllowed`
+        reflects the caller's LaunchApps grant so view-only devices can hide
+        launch controls; POST /apps/{id}/launch still checks both capabilities
+        on every request.
+      security: [{ deviceToken: [] }]
+      responses:
+        '200':
+          description: Current host app catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HostAppCatalog' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '501':
+          description: Host platform does not yet have a safe catalog implementation
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: App inventory provider is unavailable
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /apps/{id}/launch:
+    post:
+      summary: Launch a host app catalog entry
+      description: >
+        The request contains no command, path, arguments, or environment. The
+        agent strictly validates the opaque catalog ID, rebuilds the current
+        inventory, resolves that ID locally, rejects entries marked
+        launchable=false, and invokes the platform's native app launcher
+        without elevation. Both ViewApps=true and LaunchApps=true
+        are required for every caller, including devices authenticated via
+        /login or /register. Linux launches the registered XDG desktop entry
+        with GIO. A 202 response means the native launcher accepted the
+        handoff; it cannot guarantee that the app completed startup. Windows
+        resolves the validated AUMID in the current user's AppsFolder; macOS
+        resolves the ID against standard `.app` bundle locations and launches
+        the bundle through Launch Services. Launch attempts and outcomes are
+        recorded with the actor, opaque app ID, display name when known, and
+        outcome only.
+      security: [{ deviceToken: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^app_[0-9a-f]{64}$' }
+          description: Opaque stable ID returned by GET /apps.
+      responses:
+        '202':
+          description: Native launcher accepted the app launch request
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [started] }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Caller lacks either ViewApps or LaunchApps capability
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409':
+          description: Another launch is active, or this catalog entry cannot be launched
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503':
+          description: No interactive desktop session, or native launcher unavailable
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
   /app/latest:
     get:
       summary: Latest available Android APK
@@ -1520,9 +1787,51 @@ components:
                     error: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    HostAppCatalog:
+      type: object
+      required: [platform, launchAllowed, apps]
+      properties:
+        platform:
+          type: string
+          description: Host operating system identifier, such as linux or windows.
+        launchAllowed:
+          type: boolean
+          description: Whether this caller has LaunchApps enabled; POST always rechecks both app capabilities.
+        apps:
+          type: array
+          items: { $ref: '#/components/schemas/HostApp' }
+    HostApp:
+      type: object
+      required: [id, name, launchable]
+      properties:
+        id:
+          type: string
+          pattern: '^app_[0-9a-f]{64}$'
+          description: Opaque stable ID; it does not encode a local path or command.
+        name: { type: string, description: Safe display name from the app registration. }
+        launchable:
+          type: boolean
+          description: Whether this discovered entry has a supported native launch action; launch requests are rejected when false.
+        description: { type: string, description: Optional plain-text description. }
+        icon:
+          type: string
+          description: Optional safe icon theme name; local icon paths are omitted.
     AgentSettings:
       type: object
       properties:
+        isAdmin:
+          type: boolean
+          description: True when the caller may manage host-wide settings and other devices.
+        effectiveScope:
+          type: string
+          enum: [global, device]
+          description: Global host policy for admins, or this device's effective policy for paired clients.
+        accessDenied:
+          type: boolean
+          description: >
+            For paired clients, true when a per-device jail falls outside all
+            configured host roots. In that state an empty roots list means no
+            filesystem access, not unrestricted access. False for admins.
         readOnly: { type: boolean }
         roots:
           type: array
@@ -1533,12 +1842,23 @@ components:
           description: >
             Host-level gate for R1 one-time share links (default false).
             POST /share/mint returns 403 while this is false.
+        photoBackupConfigured:
+          type: boolean
+          description: Whether a photo-backup destination is configured; safe to return to all devices.
+        photoBackupAvailable:
+          type: boolean
+          description: >
+            Whether the effective path roots and read-only policy permit this
+            caller to write to the configured photo-backup destination. This
+            does not guarantee operating-system filesystem permissions. For
+            paired clients, photoBackupRoot is returned only when this is true.
         photoBackupRoot:
           type: string
           description: >
             PC-side destination folder for phone photo backup, set from the
-            web companion Settings page only. Empty means not configured —
-            phones must refuse to back up rather than pick their own path.
+            web companion Settings page only. Returned to admins and to paired
+            clients only when photoBackupAvailable is true. Empty means no
+            destination was disclosed.
     ShareLink:
       type: object
       properties:
@@ -1594,6 +1914,50 @@ components:
             READ_ONLY, independent of the agent's global read-only mode. Set
             via `rfe-agent readonly <id> <on|off>` on the PC, or by an admin
             device via PATCH /devices/{id}.
+        viewApps:
+          type: boolean
+          default: false
+          description: >
+            Whether this device may view the host app catalog. Defaults to
+            false for all devices. Returned on the full device records available
+            to admin devices; ordinary paired devices receive only their own
+            minimal record from GET /devices.
+        launchApps:
+          type: boolean
+          default: false
+          description: >
+            Whether this device may request launch of an approved host app.
+            Defaults to false and requires viewApps=true. This permission does
+            not grant host administration or arbitrary command execution.
+            Returned on the full device records available to admin devices;
+            ordinary paired devices receive only their own minimal record from
+            GET /devices.
+        browse:
+          type: boolean
+          default: true
+          description: >
+            Allows file and directory discovery endpoints. Existing rows are
+            migrated with this enabled; new paired devices start browse-only.
+        download:
+          type: boolean
+          default: false
+          description: Allows file-content reads and byte-derived thumbnail/checksum endpoints.
+        upload:
+          type: boolean
+          default: false
+          description: Allows content writes and resumable transfers; upload overwrite is covered by this grant.
+        modify:
+          type: boolean
+          default: false
+          description: Allows create, rename, copy, move, compress, extract, chmod, and trash restore.
+        delete:
+          type: boolean
+          default: false
+          description: Allows filesystem deletion and emptying trash.
+        share:
+          type: boolean
+          default: false
+          description: Allows minting share links with browse and the global sharing switch enabled.
         viaLogin:
           type: boolean
           description: >
@@ -1685,7 +2049,11 @@ components:
     PairResponse:
       type: object
       properties:
-        deviceToken: { type: string }
+        deviceToken:
+          type: string
+          description: >
+            Returned to native clients. Omitted when the embedded browser
+            requests an HttpOnly cookie with X-RFE-Web-Session: 1.
         deviceId: { type: string }
         agentName: { type: string }
         certFingerprint: { type: string, description: "SHA-256 of agent TLS cert, for pinning" }
@@ -1859,9 +2227,14 @@ components:
             - CHUNK_HASH_MISMATCH
             - HASH_MISMATCH
             - NOT_AVAILABLE
+            - THUMB_BUSY
+            - RECENT_BUSY
             - INVALID_CODE
             - DELETE_FAILED
             - RATE_LIMITED
+            - RESOURCE_LIMIT
+            - TRANSFER_ACTIVE
+            - TRANSFER_NOT_OPEN
             - PAYLOAD_TOO_LARGE
             - NOT_FOUND
             - INTERNAL
@@ -1882,10 +2255,21 @@ components:
               X-Chunk-Sha256.
             - `HASH_MISMATCH` (422): whole-file SHA-256 did not match on complete.
             - `NOT_AVAILABLE` (404): no thumbnail/preview available for this file.
+            - `THUMB_BUSY` (429): thumbnail request capacity is full; retry after the `Retry-After` interval.
+            - `RECENT_BUSY` (429): two recursive recent-file scans are already active; retry after the `Retry-After` interval.
             - `INVALID_CODE` (401): pairing code invalid or expired.
             - `DELETE_FAILED`: per-item batch-delete failure (returned inside a
               BatchResult entry, not as a top-level HTTP error).
             - `RATE_LIMITED` (429): too many /pair attempts (10/min).
+            - `RESOURCE_LIMIT` (429): upload admission reached the per-device
+              (4 sessions / 64 GiB) or host-wide (16 sessions / 128 GiB)
+              session or reserved-byte quota. Retry after completing or
+              deleting an existing session; no fixed Retry-After is provided.
+            - `TRANSFER_ACTIVE` (409): an operation conflicts with active
+              session work; completion is exclusive, and DELETE is rejected
+              while another request holds the session.
+            - `TRANSFER_NOT_OPEN` (409): the session is completed or failed
+              and no longer accepts chunks or completion.
             - `PAYLOAD_TOO_LARGE` (413): chunk body exceeds the session's chunkSize.
             - `INTERNAL` (500): unexpected server error.
         message: { type: string }

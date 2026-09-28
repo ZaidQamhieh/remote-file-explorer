@@ -6,6 +6,7 @@ import 'package:remote_file_explorer/core/models/health.dart';
 import 'package:remote_file_explorer/core/models/agent_settings.dart';
 import 'package:remote_file_explorer/core/models/device.dart';
 import 'package:remote_file_explorer/core/models/host.dart';
+import 'package:remote_file_explorer/core/models/host_app.dart';
 import 'package:remote_file_explorer/core/models/listing.dart';
 import 'package:remote_file_explorer/core/models/pair_response.dart';
 import 'package:remote_file_explorer/core/models/upload_session.dart';
@@ -195,6 +196,27 @@ void main() {
     });
   });
 
+  group('HostApp.fromJson', () {
+    test(
+      'parses launchability without exposing internal launch references',
+      () {
+        final app = HostApp.fromJson({
+          'id': 'opaque-app-id',
+          'name': 'Editor',
+          'launchable': true,
+          'launchRef': '/private/local/path',
+        });
+        expect(app.launchable, isTrue);
+        expect(app.name, 'Editor');
+      },
+    );
+
+    test('keeps older host catalog entries launchable for compatibility', () {
+      final app = HostApp.fromJson({'id': 'legacy', 'name': 'Legacy app'});
+      expect(app.launchable, isTrue);
+    });
+  });
+
   group('AgentSettings', () {
     test('parses and round-trips', () {
       final s = AgentSettings.fromJson({
@@ -275,6 +297,44 @@ void main() {
       });
       expect(d.jailRoot, '');
     });
+
+    test(
+      'parses independent file capabilities and preserves old-agent absence',
+      () {
+        final d = Device.fromJson({
+          'id': 'guest',
+          'label': 'Guest phone',
+          'created': 1,
+          'lastSeen': 2,
+          'revoked': false,
+          'current': false,
+          'browse': true,
+          'download': false,
+          'upload': true,
+          'modify': false,
+          'delete': true,
+          'share': false,
+        });
+        expect(d.hasFileCapabilities, isTrue);
+        expect(d.browse, isTrue);
+        expect(d.download, isFalse);
+        expect(d.upload, isTrue);
+        expect(d.modify, isFalse);
+        expect(d.delete, isTrue);
+        expect(d.share, isFalse);
+
+        final old = Device.fromJson({
+          'id': 'old',
+          'label': 'Old agent',
+          'created': 1,
+          'lastSeen': 2,
+          'revoked': false,
+          'current': false,
+        });
+        expect(old.hasFileCapabilities, isFalse);
+        expect(old.browse, isNull);
+      },
+    );
   });
 
   group('AppRelease', () {

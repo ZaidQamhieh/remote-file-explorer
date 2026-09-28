@@ -135,6 +135,10 @@ func TestPairHandler_ValidPairing(t *testing.T) {
 	if resp.AgentName != "test-pc" {
 		t.Fatalf("expected agentName test-pc, got %s", resp.AgentName)
 	}
+	paired, err := db.GetDeviceByID(resp.DeviceID)
+	if err != nil || paired == nil || !paired.CanBrowse || paired.CanDownload || paired.CanUpload || paired.CanModify || paired.CanDelete || paired.CanShare {
+		t.Fatalf("newly paired device should be browse-only: (%+v, %v)", paired, err)
+	}
 }
 
 // TestGeneratePairingHandler_IncludesScannableQR verifies POST /pairing/generate

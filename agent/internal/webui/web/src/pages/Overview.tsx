@@ -12,7 +12,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { api, type Metrics } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 
 function formatAgo(unixSeconds: number): string {
   const s = Date.now() / 1000 - unixSeconds;

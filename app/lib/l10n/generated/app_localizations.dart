@@ -262,6 +262,12 @@ abstract class AppLocalizations {
   /// **'Tailscale'**
   String get networkTailscale;
 
+  /// No description provided for @networkInternet.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct HTTPS'**
+  String get networkInternet;
+
   /// No description provided for @hostSubtitleVersionNetwork.
   ///
   /// In en, this message translates to:
@@ -430,6 +436,126 @@ abstract class AppLocalizations {
   /// **'Connection Diagnostics'**
   String get connectionDiagnosticsTitle;
 
+  /// No description provided for @connectionRoutesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection routes'**
+  String get connectionRoutesTitle;
+
+  /// No description provided for @currentRouteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current route'**
+  String get currentRouteLabel;
+
+  /// No description provided for @currentRouteUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No route is connected right now.'**
+  String get currentRouteUnavailable;
+
+  /// No description provided for @currentRouteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected through {route} · {address}'**
+  String currentRouteDescription(String route, String address);
+
+  /// No description provided for @routeLanName.
+  ///
+  /// In en, this message translates to:
+  /// **'Local network (LAN)'**
+  String get routeLanName;
+
+  /// No description provided for @routeTailscaleName.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale'**
+  String get routeTailscaleName;
+
+  /// No description provided for @routeInternetName.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct HTTPS'**
+  String get routeInternetName;
+
+  /// No description provided for @routeCustomName.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom route'**
+  String get routeCustomName;
+
+  /// No description provided for @routeNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured'**
+  String get routeNotConfigured;
+
+  /// No description provided for @editInternetRouteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up direct HTTPS'**
+  String get editInternetRouteTitle;
+
+  /// No description provided for @editInternetRouteSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect over the internet without a VPN'**
+  String get editInternetRouteSubtitle;
+
+  /// No description provided for @routePriorityAndSecurityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The app tries LAN, then Tailscale, then this address. Every route still requires the paired host’s pinned certificate.'**
+  String get routePriorityAndSecurityHint;
+
+  /// No description provided for @internetRouteDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct HTTPS address'**
+  String get internetRouteDialogTitle;
+
+  /// No description provided for @internetRouteAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hostname or IP address'**
+  String get internetRouteAddressLabel;
+
+  /// No description provided for @internetRouteAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'files.example.com or 203.0.113.8:8765'**
+  String get internetRouteAddressHint;
+
+  /// No description provided for @internetRouteAddressHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the authority only. HTTPS is used automatically. Leave empty to remove this route.'**
+  String get internetRouteAddressHelper;
+
+  /// No description provided for @internetRouteAddressInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a hostname or IP address with an optional port. Do not include a scheme, path, query, or credentials.'**
+  String get internetRouteAddressInvalid;
+
+  /// No description provided for @internetRouteOwnerSetupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The PC owner must configure public DNS, router NAT, and firewall access. This app will not open ports or change router or firewall settings.'**
+  String get internetRouteOwnerSetupNote;
+
+  /// No description provided for @internetRouteSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct HTTPS route saved'**
+  String get internetRouteSaved;
+
+  /// No description provided for @internetRouteRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct HTTPS route removed'**
+  String get internetRouteRemoved;
+
   /// No description provided for @retestButton.
   ///
   /// In en, this message translates to:
@@ -454,6 +580,12 @@ abstract class AppLocalizations {
   /// **'TLS fingerprint pinned'**
   String get diagTlsPinned;
 
+  /// No description provided for @diagAuthentication.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticated access'**
+  String get diagAuthentication;
+
   /// No description provided for @diagLatency.
   ///
   /// In en, this message translates to:
@@ -471,6 +603,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pinned'**
   String get diagPinnedBadge;
+
+  /// No description provided for @diagPinRequiredBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin required'**
+  String get diagPinRequiredBadge;
 
   /// No description provided for @diagMismatchBadge.
   ///
@@ -490,6 +628,24 @@ abstract class AppLocalizations {
   /// **'OK'**
   String get diagOkBadge;
 
+  /// No description provided for @diagAuthAcceptedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed'**
+  String get diagAuthAcceptedBadge;
+
+  /// No description provided for @diagAuthDeniedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Denied'**
+  String get diagAuthDeniedBadge;
+
+  /// No description provided for @diagAuthUnknownBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get diagAuthUnknownBadge;
+
   /// No description provided for @diagLanDirect.
   ///
   /// In en, this message translates to:
@@ -507,6 +663,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error'**
   String get probeError;
+
+  /// No description provided for @probeDnsFailedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'DNS failed'**
+  String get probeDnsFailedBadge;
+
+  /// No description provided for @probeNoResponseBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'No response'**
+  String get probeNoResponseBadge;
+
+  /// No description provided for @probePinMismatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The server certificate does not match this paired host. Stop and verify the address before reconnecting.'**
+  String get probePinMismatchHint;
+
+  /// No description provided for @probeMissingPinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved certificate pin is missing. Re-pair only through a trusted local setup.'**
+  String get probeMissingPinHint;
+
+  /// No description provided for @probeDnsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The hostname did not resolve. Check its spelling and DNS record.'**
+  String get probeDnsHint;
+
+  /// No description provided for @probeReachabilityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The host did not respond. Check that it is online and reachable from this network.'**
+  String get probeReachabilityHint;
+
+  /// No description provided for @probeAuthRejectedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The certificate matched, but this device was denied. Sign in again or ask the host owner to restore access.'**
+  String get probeAuthRejectedHint;
+
+  /// No description provided for @probeGenericHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The route could not be verified. Check the host address and agent status.'**
+  String get probeGenericHint;
 
   /// No description provided for @probeLatencyMs.
   ///
@@ -1534,11 +1738,71 @@ abstract class AppLocalizations {
   /// **'Scan QR'**
   String get scanQrTab;
 
+  /// No description provided for @lanDiscoveryTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Find on LAN'**
+  String get lanDiscoveryTab;
+
   /// No description provided for @enterCodeTab.
   ///
   /// In en, this message translates to:
   /// **'Enter Code'**
   String get enterCodeTab;
+
+  /// No description provided for @lanDiscoveryIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this local network for RFE computers. When one is found, use its address in the existing secure pairing flow.'**
+  String get lanDiscoveryIntro;
+
+  /// No description provided for @scanLocalNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Search local network'**
+  String get scanLocalNetwork;
+
+  /// No description provided for @stopLocalSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop search'**
+  String get stopLocalSearch;
+
+  /// No description provided for @searchingLocalNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for RFE computers…'**
+  String get searchingLocalNetwork;
+
+  /// No description provided for @noLocalAgentsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No RFE computers found. Check that the host is running and both devices are on the same local network, or use QR/manual pairing.'**
+  String get noLocalAgentsFound;
+
+  /// No description provided for @lanDiscoveryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Local network discovery is available on Android. You can still pair by QR code or enter the host address manually.'**
+  String get lanDiscoveryUnavailable;
+
+  /// No description provided for @lanDiscoveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not search the local network. Try again or use QR/manual pairing.'**
+  String get lanDiscoveryFailed;
+
+  /// No description provided for @useAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Use address'**
+  String get useAddress;
+
+  /// No description provided for @discoveryTrustWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'A computer found on the network is not trusted yet. Verify its certificate fingerprint through a trusted channel and enter the one-time pairing code before connecting.'**
+  String get discoveryTrustWarning;
 
   /// No description provided for @openCameraViewfinder.
   ///
@@ -1549,7 +1813,7 @@ abstract class AppLocalizations {
   /// No description provided for @pairingScanHint.
   ///
   /// In en, this message translates to:
-  /// **'Align the QR code from the desktop app within the frame'**
+  /// **'Scan the pairing QR displayed on the intended host\'s screen while you are there. Otherwise, obtain it through a trusted independent channel; a QR and fingerprint received together over the same untrusted connection do not prove the host\'s identity.'**
   String get pairingScanHint;
 
   /// No description provided for @enterCodeManuallyButton.
@@ -1581,6 +1845,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'192.168.1.10:8765'**
   String get agentAddressHint;
+
+  /// No description provided for @fingerprintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Host certificate fingerprint'**
+  String get fingerprintLabel;
+
+  /// No description provided for @fingerprintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'64-character SHA-256 fingerprint'**
+  String get fingerprintHint;
+
+  /// No description provided for @fingerprintVerificationHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Before continuing, get the fingerprint from a trusted independent source, such as the host console running rfe-agent status. Do not trust a fingerprint sent over the same untrusted network connection.'**
+  String get fingerprintVerificationHelp;
+
+  /// No description provided for @fingerprintInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid 64-character SHA-256 fingerprint.'**
+  String get fingerprintInvalid;
+
+  /// No description provided for @qrInvalidFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'This QR code does not contain a valid host fingerprint. Update the host agent or use manual pairing.'**
+  String get qrInvalidFingerprint;
 
   /// No description provided for @pairingCodeLabel.
   ///
@@ -2140,6 +2434,42 @@ abstract class AppLocalizations {
   /// **'Forget this device'**
   String get forgetThisDeviceButton;
 
+  /// No description provided for @appAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'App access'**
+  String get appAccessTitle;
+
+  /// No description provided for @appAccessDefaultOffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New paired devices start with both permissions off.'**
+  String get appAccessDefaultOffHint;
+
+  /// No description provided for @viewAppsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'View installed apps'**
+  String get viewAppsLabel;
+
+  /// No description provided for @viewAppsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this computer’s available apps on this device.'**
+  String get viewAppsDescription;
+
+  /// No description provided for @launchAppsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Launch apps'**
+  String get launchAppsLabel;
+
+  /// No description provided for @launchAppsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this device to open approved apps on this computer.'**
+  String get launchAppsDescription;
+
   /// No description provided for @aboutSection.
   ///
   /// In en, this message translates to:
@@ -2677,8 +3007,14 @@ abstract class AppLocalizations {
   /// No description provided for @qrHandoffNoFingerprint.
   ///
   /// In en, this message translates to:
-  /// **'Can\'t share — this host has no pinned certificate.'**
+  /// **'Can\'t share — this host has no trusted secure-store pin. Re-pair the host to restore its pin.'**
   String get qrHandoffNoFingerprint;
+
+  /// No description provided for @qrHandoffPinReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read trusted host pins from secure storage. Unlock secure storage and try again.'**
+  String get qrHandoffPinReadFailed;
 
   /// No description provided for @qrHandoffCopyButton.
   ///
@@ -2713,7 +3049,7 @@ abstract class AppLocalizations {
   /// No description provided for @qrHandoffNoHostMatch.
   ///
   /// In en, this message translates to:
-  /// **'You\'re not paired to this PC — pair first, then scan again.'**
+  /// **'No paired PC has a matching secure certificate pin. Re-pair that host, then scan again.'**
   String get qrHandoffNoHostMatch;
 
   /// No description provided for @backUpNow.
@@ -4011,6 +4347,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Watch'**
   String get watchButton;
+
+  /// No description provided for @hostAppsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Apps'**
+  String get hostAppsButton;
+
+  /// No description provided for @hostAppsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apps on this computer'**
+  String get hostAppsTitle;
+
+  /// No description provided for @hostAppsRefreshTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh app list'**
+  String get hostAppsRefreshTooltip;
+
+  /// No description provided for @hostAppsLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading available apps…'**
+  String get hostAppsLoading;
+
+  /// No description provided for @hostAppsInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an app to start on this computer.'**
+  String get hostAppsInstruction;
+
+  /// No description provided for @hostAppsCatalogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apps found'**
+  String get hostAppsCatalogTitle;
+
+  /// No description provided for @hostAppsCatalogScope.
+  ///
+  /// In en, this message translates to:
+  /// **'From this computer’s supported app catalog. Some installed apps may not appear.'**
+  String get hostAppsCatalogScope;
+
+  /// No description provided for @hostAppsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 app} other{{count} apps}}'**
+  String hostAppsCount(int count);
+
+  /// No description provided for @hostAppsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search apps by name'**
+  String get hostAppsSearchHint;
+
+  /// No description provided for @hostAppsClearSearchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear app search'**
+  String get hostAppsClearSearchTooltip;
+
+  /// No description provided for @hostAppsMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 match} other{{count} matches}}'**
+  String hostAppsMatches(int count);
+
+  /// No description provided for @hostAppsNoMatchesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching apps'**
+  String get hostAppsNoMatchesTitle;
+
+  /// No description provided for @hostAppsNoMatchesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another app name.'**
+  String get hostAppsNoMatchesMessage;
+
+  /// No description provided for @hostAppsPlatformWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get hostAppsPlatformWindows;
+
+  /// No description provided for @hostAppsPlatformLinux.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux'**
+  String get hostAppsPlatformLinux;
+
+  /// No description provided for @hostAppsPlatformMacOS.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS'**
+  String get hostAppsPlatformMacOS;
+
+  /// No description provided for @hostAppsPlatformUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer'**
+  String get hostAppsPlatformUnknown;
+
+  /// No description provided for @hostAppsCatalogPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'{platform} app catalog'**
+  String hostAppsCatalogPlatform(String platform);
+
+  /// No description provided for @hostAppsLaunchPermissionOffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The host admin allows viewing this app list but has not allowed this device to launch apps.'**
+  String get hostAppsLaunchPermissionOffHint;
+
+  /// No description provided for @hostAppsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the app list. Check the connection and try again.'**
+  String get hostAppsLoadFailed;
+
+  /// No description provided for @hostAppsUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This host agent does not support app listing yet. Update it to a version with app support.'**
+  String get hostAppsUnsupported;
+
+  /// No description provided for @hostAppsAccessDeniedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'App access is turned off'**
+  String get hostAppsAccessDeniedTitle;
+
+  /// No description provided for @hostAppsAccessDeniedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin must enable app access for this device in the computer’s settings.'**
+  String get hostAppsAccessDeniedMessage;
+
+  /// No description provided for @hostAppsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps found'**
+  String get hostAppsEmptyTitle;
+
+  /// No description provided for @hostAppsEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This computer did not report apps in its supported app catalog.'**
+  String get hostAppsEmptyMessage;
+
+  /// No description provided for @hostAppRunButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get hostAppRunButton;
+
+  /// No description provided for @hostAppStartingButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get hostAppStartingButton;
+
+  /// No description provided for @hostAppCannotRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Listed, but this app cannot be started remotely.'**
+  String get hostAppCannotRun;
+
+  /// No description provided for @hostAppsLaunchDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin must enable app launching for this device in the computer’s settings.'**
+  String get hostAppsLaunchDenied;
+
+  /// No description provided for @hostAppLaunchBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Another app is starting on this computer. Wait a moment and try again.'**
+  String get hostAppLaunchBusy;
+
+  /// No description provided for @hostAppLaunchRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many app launch requests. Wait a moment before trying again.'**
+  String get hostAppLaunchRateLimited;
+
+  /// No description provided for @hostAppNoInteractiveSession.
+  ///
+  /// In en, this message translates to:
+  /// **'No interactive desktop session is available. Sign in to the computer’s desktop and try again.'**
+  String get hostAppNoInteractiveSession;
+
+  /// No description provided for @hostAppLauncherUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The app launcher is unavailable on this computer. Update or restart the host agent, then try again.'**
+  String get hostAppLauncherUnavailable;
+
+  /// No description provided for @hostAppNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This app is no longer available. The app list is being refreshed.'**
+  String get hostAppNoLongerAvailable;
+
+  /// No description provided for @hostAppInvalidEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'This app entry is invalid. The app list is being refreshed.'**
+  String get hostAppInvalidEntry;
+
+  /// No description provided for @hostAppLaunchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start {appName}. Check that it opens on the computer, then try again.'**
+  String hostAppLaunchFailed(String appName);
+
+  /// No description provided for @hostAppLaunchStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting {appName} on {hostLabel}.'**
+  String hostAppLaunchStarted(String appName, String hostLabel);
 }
 
 class _AppLocalizationsDelegate

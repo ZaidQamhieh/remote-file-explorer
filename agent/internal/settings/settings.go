@@ -59,11 +59,15 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 		s.readOnly = ro == "true"
 	}
 
+	rootsConfigured, err := db.HasConfig(keyRoots)
+	if err != nil {
+		return nil, err
+	}
 	rts, err := db.GetConfig(keyRoots)
 	if err != nil {
 		return nil, err
 	}
-	if rts == "" {
+	if !rootsConfigured {
 		s.roots = normalizeRoots(seedRoots)
 		if err := db.SetConfig(keyRoots, joinRoots(s.roots)); err != nil {
 			return nil, err

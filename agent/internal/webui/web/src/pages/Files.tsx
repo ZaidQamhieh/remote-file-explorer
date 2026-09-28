@@ -21,7 +21,7 @@ import {
   Check,
 } from 'lucide-react';
 import { api, ApiError, contentUrl, type Entry, type ShareLink, type ShareLinkSummary, type TrashEntry } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 import { DataTable } from '@/components/DataTable';
 import { Dialog } from '@/components/Dialog';
 
@@ -151,6 +151,33 @@ export function Files() {
     onError: (err) => toast(err instanceof ApiError ? err.message : 'Failed to create share link'),
   });
 
+  async function downloadFile(entry: Entry) {
+    try {
+      const response = await fetch(contentUrl(entry.path), {
+        headers: { 'X-RFE-Web-Session': '1' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new ApiError(response.status, data?.code ?? 'UNKNOWN', data?.message ?? response.statusText);
+      }
+
+      // Never navigate the browser to host-controlled file content. Fetch with
+      // the device credential, then trigger a save from a download-only blob.
+      const objectURL = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = objectURL;
+      link.download = entry.name;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectURL), 60_000);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Download failed');
+    }
+  }
+
   function toggleSelect(p: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -257,15 +284,13 @@ export function Files() {
                 </DropdownMenu.Item>
                 {!entry.isDir && (
                   <DropdownMenu.Item asChild>
-                    <a
+                    <button
                       className="cmdk-item"
                       style={{ width: '100%', textDecoration: 'none' }}
-                      href={contentUrl(entry.path)}
-                      target="_blank"
-                      rel="noreferrer"
+                      onClick={() => void downloadFile(entry)}
                     >
                       <Download /> Download
-                    </a>
+                    </button>
                   </DropdownMenu.Item>
                 )}
                 <DropdownMenu.Item asChild>
@@ -306,9 +331,9 @@ export function Files() {
       header: '',
       cell: ({ row }) =>
         !row.original.isDir ? (
-          <a className="btn btn-ghost btn-sm" href={contentUrl(row.original.path)} target="_blank" rel="noreferrer">
-            Preview
-          </a>
+          <button className="btn btn-ghost btn-sm" onClick={() => void downloadFile(row.original)}>
+            Download
+          </button>
         ) : null,
     },
   ];

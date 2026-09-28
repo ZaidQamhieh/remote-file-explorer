@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 
 function formatRate(bytesPerSec: number): string {
   if (bytesPerSec <= 0) return 'Unlimited';

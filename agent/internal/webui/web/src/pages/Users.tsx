@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Trash2, Users as UsersIcon } from 'lucide-react';
 import { api, ApiError, type UserAccount } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 import { Dialog } from '@/components/Dialog';
 
 function since(created: number): string {

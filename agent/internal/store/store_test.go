@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -185,6 +186,116 @@ func TestPairingCodeLifecycle(t *testing.T) {
 	info := db.ConsumePairingCode("GUEST01")
 	if !info.Valid || info.JailRoot != "/home/pc/Shared" || !info.ReadOnly {
 		t.Fatalf("expected guest defaults to round-trip, got %+v", info)
+	}
+}
+
+func TestFilePermissions_MigrationAndDefaults(t *testing.T) {
+	dir := t.TempDir()
+	legacy, err := sql.Open("sqlite", filepath.Join(dir, "agent.db"))
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	_, err = legacy.Exec(`CREATE TABLE devices (
+id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
+client_id TEXT NOT NULL DEFAULT '',
+created INTEGER NOT NULL, last_seen INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0,
+last_address TEXT NOT NULL DEFAULT '', last_version TEXT NOT NULL DEFAULT '',
+jail_root TEXT NOT NULL DEFAULT '', read_only INTEGER NOT NULL DEFAULT 0,
+public_key TEXT NOT NULL DEFAULT '', via_login INTEGER NOT NULL DEFAULT 0,
+username TEXT NOT NULL DEFAULT '', view_apps INTEGER NOT NULL DEFAULT 0,
+launch_apps INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO devices (id,label,token_hash,created,last_seen,read_only) VALUES
+('legacy-rw','legacy rw','hash-rw',1,1,0),
+('legacy-ro','legacy ro','hash-ro',1,1,1);
+PRAGMA user_version=5;`)
+	if err != nil {
+		t.Fatalf("seed legacy db: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
+
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("upgrade db: %v", err)
+	}
+	defer db.Close()
+	for id, wantWrite := range map[string]bool{"legacy-rw": true, "legacy-ro": false} {
+		d, err := db.GetDeviceByID(id)
+		if err != nil || d == nil {
+			t.Fatalf("get %s: (%+v, %v)", id, d, err)
+		}
+		if !d.CanBrowse || !d.CanDownload || d.CanUpload != wantWrite || d.CanModify != wantWrite || d.CanDelete != wantWrite || !d.CanShare {
+			t.Fatalf("migrated %s permissions = %+v, want legacy access preserved", id, d)
+		}
+	}
+
+	pairedID, err := db.UpsertDevice("new-paired", "phone", "pair-token", "", false)
+	if err != nil {
+		t.Fatalf("create paired device: %v", err)
+	}
+	paired, _ := db.GetDeviceByID(pairedID)
+	if paired == nil || !paired.CanBrowse || paired.CanDownload || paired.CanUpload || paired.CanModify || paired.CanDelete || paired.CanShare {
+		t.Fatalf("new paired device permissions = %+v, want browse-only", paired)
+	}
+	if err := db.SetDeviceFilePermissions(pairedID, false, true, false, true, false, true); err != nil {
+		t.Fatalf("customize paired grants: %v", err)
+	}
+	replay, err := db.db.Begin()
+	if err != nil {
+		t.Fatalf("begin replayed migration: %v", err)
+	}
+	if err := migrateDeviceFilePermissions(replay); err != nil {
+		t.Fatalf("replay migration: %v", err)
+	}
+	if err := replay.Commit(); err != nil {
+		t.Fatalf("commit replayed migration: %v", err)
+	}
+	paired, _ = db.GetDeviceByID(pairedID)
+	if paired == nil || paired.CanBrowse || !paired.CanDownload || paired.CanUpload || !paired.CanModify || paired.CanDelete || !paired.CanShare {
+		t.Fatalf("replayed migration overwrote customized grants: %+v", paired)
+	}
+
+	ownerID, err := db.UpsertDevice("new-owner", "owner", "owner-token", "", true)
+	if err != nil {
+		t.Fatalf("create owner device: %v", err)
+	}
+	owner, _ := db.GetDeviceByID(ownerID)
+	if owner == nil || !owner.ViaLogin || !owner.CanBrowse || !owner.CanDownload || !owner.CanUpload || !owner.CanModify || !owner.CanDelete || !owner.CanShare {
+		t.Fatalf("owner device permissions = %+v, want all grants", owner)
+	}
+	downgradedID, err := db.UpsertDevice("new-owner", "phone", "owner-repair-token", "", false)
+	if err != nil || downgradedID != ownerID {
+		t.Fatalf("re-pair owner device: id=%q err=%v", downgradedID, err)
+	}
+	downgraded, _ := db.GetDeviceByID(ownerID)
+	if downgraded == nil || downgraded.ViaLogin || !downgraded.CanBrowse || downgraded.CanDownload || downgraded.CanUpload || downgraded.CanModify || downgraded.CanDelete || downgraded.CanShare {
+		t.Fatalf("owner-to-paired transition permissions = %+v, want browse-only", downgraded)
+	}
+}
+
+func TestSetDeviceFilePermissionsAndRevokesShares(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	if err := db.CreateDevice("device", "phone", "token"); err != nil {
+		t.Fatalf("create device: %v", err)
+	}
+	if err := db.CreateShareToken("active-share", "/tmp/file", "device", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create share: %v", err)
+	}
+	if err := db.SetDeviceFilePermissions("device", true, false, true, false, true, false); err != nil {
+		t.Fatalf("set file permissions: %v", err)
+	}
+	d, err := db.GetDeviceByID("device")
+	if err != nil || d == nil || !d.CanBrowse || d.CanDownload || !d.CanUpload || d.CanModify || !d.CanDelete || d.CanShare {
+		t.Fatalf("updated permissions = (%+v, %v)", d, err)
+	}
+	if token, err := db.GetShareToken("active-share"); err != nil || token != nil {
+		t.Fatalf("revoked grant must remove active share: (%+v, %v)", token, err)
 	}
 }
 

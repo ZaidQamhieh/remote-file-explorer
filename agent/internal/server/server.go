@@ -50,12 +50,24 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// Keep RemoteAddr as the socket peer. There is no configured trusted proxy,
+	// so RealIP would let callers forge the source address with forwarded headers.
 	r.Use(middleware.Recoverer)
 
 	nonces := newNonceStore()
 
 	r.Route("/v1", func(r chi.Router) {
+		// API responses often contain private file or host metadata. Do not let
+		// browsers or intermediate caches retain them; the thumbnail handler
+		// explicitly opts into its existing private cache policy.
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Cache-Control", "no-store")
+				w.Header().Set("X-Content-Type-Options", "nosniff")
+				w.Header().Set("Referrer-Policy", "no-referrer")
+				next.ServeHTTP(w, req)
+			})
+		})
 		registerUnauthRoutes(r, cfg, db, pm, ops, nonces)
 
 		// Authenticated, no path jail (non-filesystem endpoints).
@@ -65,7 +77,16 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			// Transfer history is scoped to the caller inside the handlers:
 			// a non-admin sees only its own sessions (PR-03).
 			r.Get("/transfers/list", listTransfersHandler(db))
-			r.Delete("/transfers/{id}", deleteTransferHandler(db))
+			r.Delete("/transfers/{id}", deleteTransferHandler(db, tm))
+		})
+
+		// Host app catalog and launch are authenticated separately from the
+		// filesystem jail. Both handlers enforce the caller's explicit app
+		// capabilities; ViaLogin/admin provenance grants no implicit access.
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware(db))
+			r.Get("/apps", listAppsHandler())
+			r.Post("/apps/{id}/launch", launchAppHandler(db))
 		})
 
 		// Admin-only control plane: whole-host telemetry, login-account
@@ -93,9 +114,9 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 
 			registerSettingsAndDeviceRoutes(r, cfg, db, pm)
 			registerShareRoutes(r, cfg, db, ops)
-			r.Get("/system/drives", drivesHandler(ops))
-			r.Get("/search", searchHandler(ops, searchIndex))
-			r.Get("/thumb", thumbHandler(ops, thumbRenderer))
+			r.With(requireFileCapabilities(capBrowse)).Get("/system/drives", drivesHandler(ops))
+			r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, searchIndex))
+			r.With(requireFileCapabilities(capDownload)).Get("/thumb", thumbHandler(ops, thumbRenderer))
 			registerUpdateRoutes(r, cfg)
 			registerFsRoutes(r, cfg, ops)
 			registerTrashRoutes(r, cfg, ops)
@@ -113,12 +134,13 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 }
 
 // registerUnauthRoutes wires the routes reachable without a bearer token:
-// health, pairing, registration, login, the device-identity challenge, and
-// the single-use share-link fetch (rate-limited and expiring — see
-// docs/r1-share-link-threat-model.md).
+// health, pairing, registration, login, the device-identity challenge,
+// browser-session logout, and the single-use share-link fetch (rate-limited
+// and expiring — see docs/r1-share-link-threat-model.md).
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops, nonces *nonceStore) {
 	r.Get("/health", healthHandler(cfg, db))
 	r.Post("/auth/challenge", challengeHandler(nonces))
+	r.Post("/auth/logout", logoutHandler)
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/register", registerHandler(cfg, db, pm, nonces))
 	r.Post("/login", loginHandler(cfg, db, nonces))
@@ -153,7 +175,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 // endpoints (mint/revoke/list — serving the file itself is unauthenticated,
 // see registerUnauthRoutes).
 func registerShareRoutes(r chi.Router, cfg Config, db *store.DB, ops *fsops.Ops) {
-	r.Post("/share/mint", mintShareHandler(cfg, db, ops))
+	r.With(requireFileCapabilities(capShare, capBrowse)).Post("/share/mint", mintShareHandler(cfg, db, ops))
 	r.Delete("/share/{tokenHash}", revokeShareHandler(db))
 	r.Get("/share", listSharesHandler(db))
 }
@@ -166,35 +188,36 @@ func registerUpdateRoutes(r chi.Router, cfg Config) {
 
 // registerFsRoutes wires the filesystem CRUD/browse endpoints.
 func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/fs", listDirHandler(ops))
-	r.Delete("/fs", deleteHandler(ops, cfg.TrashDir))
-	r.Post("/fs/folder", createFolderHandler(ops))
-	r.Post("/fs/file", createFileHandler(ops))
-	r.Patch("/fs/rename", renameHandler(ops))
-	r.Post("/fs/copy", copyHandler(ops))
-	r.Post("/fs/move", moveHandler(ops))
-	r.Post("/fs/compress", compressHandler(ops))
-	r.Post("/fs/extract", extractHandler(ops))
-	r.Get("/fs/meta", metaHandler(ops))
-	r.Get("/fs/checksum", checksumHandler(ops))
-	r.Post("/fs/chmod", chmodHandler(ops))
-	r.Get("/fs/archive", archivePeekHandler(ops))
-	r.Post("/fs/checksums", batchChecksumHandler(ops))
-	r.Get("/fs/recent", recentHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs", listDirHandler(ops))
+	r.With(requireFileCapabilities(capDelete)).Delete("/fs", deleteHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/folder", createFolderHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/file", createFileHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Patch("/fs/rename", renameHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/copy", copyHandler(ops))
+	r.With(requireFileCapabilities(capModify, capDelete)).Post("/fs/move", moveHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/compress", compressHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/extract", extractHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/meta", metaHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Get("/fs/checksum", checksumHandler(ops))
+	r.With(requireFileCapabilities(capModify)).Post("/fs/chmod", chmodHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/archive", archivePeekHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Post("/fs/checksums", batchChecksumHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/recent", recentHandler(ops))
 }
 
 // registerTrashRoutes wires the trash list/restore/empty endpoints.
 func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/trash", listTrashHandler(ops, cfg.TrashDir))
-	r.Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
-	r.Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capBrowse)).Get("/trash", listTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capModify)).Post("/trash/restore", restoreTrashHandler(ops, cfg.TrashDir))
+	r.With(requireFileCapabilities(capDelete)).Delete("/trash", emptyTrashHandler(ops, cfg.TrashDir))
 }
 
 // registerContentRoutes wires whole-file download/write (as opposed to the
 // chunked transfer endpoints in registerTransferRoutes).
 func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
-	r.Get("/content", downloadHandler(ops, cfg.Settings))
-	r.Put("/content", writeContentHandler(ops))
+	r.With(requireFileCapabilities(capDownload)).Get("/content", downloadHandler(ops, cfg.Settings))
+	// Replacing an existing text file is a modification, not an upload.
+	r.With(requireFileCapabilities(capModify)).Put("/content", writeContentHandler(ops))
 }
 
 // registerTransferRoutes wires the resumable chunked upload session
@@ -204,6 +227,7 @@ func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 func registerTransferRoutes(r chi.Router, tm *transfer.Manager, cfg Config, ops *fsops.Ops) {
 	r.Get("/transfers/{id}", transferStatusHandler(tm))
 	r.Group(func(r chi.Router) {
+		r.Use(requireFileCapabilities(capUpload))
 		r.Use(requireWritable(ops))
 		r.Post("/transfers", openTransferHandler(tm, ops))
 		r.Put("/transfers/{id}/chunks/{n}", uploadChunkHandler(tm, cfg.Settings))
@@ -281,7 +305,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 // --------- health ---------
 
-// healthHandler is deliberately reachable without a bearer token (a phone
+// healthHandler is deliberately reachable without a device credential (a phone
 // probing reachability/latency shouldn't need one), but the topology detail
 // below is not: name/OS/version/read-only/addresses/MAC let an unauthenticated
 // caller fingerprint and map the host (PR-61). Every real caller (host-card
@@ -312,16 +336,23 @@ func healthHandler(cfg Config, db *store.DB) http.HandlerFunc {
 	}
 }
 
-// authorizedDevice reports whether r carries a bearer token for a known,
-// non-revoked device — the same check authMiddleware makes, but without its
-// side effects (device-touch, context injection) or its hard 401, since
-// healthHandler degrades rather than rejects an unauthenticated caller.
+// authorizedDevice reports whether r carries a valid bearer token or
+// same-origin browser session for a known, non-revoked device, without the
+// side effects of authMiddleware.
 func authorizedDevice(r *http.Request, db *store.DB) bool {
 	hdr := r.Header.Get("Authorization")
-	parts := strings.SplitN(hdr, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+	var token string
+	if hdr != "" {
+		parts := strings.SplitN(hdr, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return false
+		}
+		token = strings.TrimSpace(parts[1])
+	} else if cookie, err := r.Cookie(webSessionCookie); err == nil && validWebSessionRequest(r) {
+		token = cookie.Value
+	} else {
 		return false
 	}
-	device, err := db.DeviceByToken(strings.TrimSpace(parts[1]))
+	device, err := db.DeviceByToken(token)
 	return err == nil && device != nil && !device.Revoked
 }

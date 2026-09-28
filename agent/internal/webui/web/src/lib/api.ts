@@ -1,16 +1,14 @@
 // Typed client for the real agent REST API (protocol/openapi.yaml — the
 // contract's source of truth). Same-origin (this bundle is served by the
 // agent itself via go:embed), so requests are relative to "/v1".
+import { sha256 } from '@noble/hashes/sha2.js';
 import { getDevicePublicKeyB64, signNonce } from './deviceIdentity';
 
-const TOKEN_KEY = 'rfe_device_token';
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+// Remove the JavaScript-readable bearer token stored by older companion
+// builds. Existing browser sessions must sign in again to receive an HttpOnly
+// session cookie.
+export function clearLegacyBrowserToken(): void {
+  try { localStorage.removeItem('rfe_device_token'); } catch { /* storage may be disabled */ }
 }
 
 export class ApiError extends Error {
@@ -27,18 +25,14 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  opts: { auth?: boolean } = { auth: true },
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { 'X-RFE-Web-Session': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (opts.auth !== false) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
   const res = await fetch(`/v1${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
   });
   if (res.status === 204) return undefined as T;
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -58,11 +52,11 @@ const del = <T>(path: string) => request<T>('DELETE', path);
 // Chunk uploads are raw octet-stream bodies with a custom header, not JSON —
 // bypasses the JSON-only `request` helper above.
 async function rawPut(path: string, body: ArrayBuffer, headers: Record<string, string>): Promise<void> {
-  const token = getToken();
   const res = await fetch(`/v1${path}`, {
     method: 'PUT',
-    headers: { ...headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { ...headers, 'X-RFE-Web-Session': '1' },
     body,
+    credentials: 'same-origin',
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -70,9 +64,8 @@ async function rawPut(path: string, body: ArrayBuffer, headers: Record<string, s
   }
 }
 
-async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
+function sha256Hex(data: Uint8Array): string {
+  return Array.from(sha256(data))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
@@ -80,12 +73,19 @@ async function sha256Hex(data: ArrayBuffer): Promise<string> {
 const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024; // 4MiB, under the agent's 32MiB cap
 
 /** Drives the full resumable-upload contract: open session, hash + PUT each
- * chunk, then complete. Whole file is read into memory to compute the
- * whole-file SHA-256 upfront (per POST /transfers's required `sha256` field)
- * — fine for the LAN-transfer file sizes this tool targets. */
+ * chunk, then complete. The required whole-file SHA-256 is computed in a
+ * bounded-memory first pass; upload then rereads and sends one chunk at a time. */
 async function uploadFileImpl(path: string, file: File, onProgress?: (fraction: number) => void): Promise<void> {
-  const buf = await file.arrayBuffer();
-  const wholeHash = await sha256Hex(buf);
+  const wholeHasher = sha256.create();
+  for (let start = 0; start < file.size; start += UPLOAD_CHUNK_SIZE) {
+    const end = Math.min(start + UPLOAD_CHUNK_SIZE, file.size);
+    const slice = await file.slice(start, end).arrayBuffer();
+    wholeHasher.update(new Uint8Array(slice));
+  }
+  const wholeHash = Array.from(wholeHasher.digest())
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
   const session = await post<UploadSession>('/transfers', {
     path,
     size: file.size,
@@ -95,8 +95,8 @@ async function uploadFileImpl(path: string, file: File, onProgress?: (fraction: 
   const totalChunks = session.totalChunks;
   for (let n = 0; n < totalChunks; n++) {
     const start = n * UPLOAD_CHUNK_SIZE;
-    const chunk = buf.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, buf.byteLength));
-    const chunkHash = await sha256Hex(chunk);
+    const chunk = await file.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, file.size)).arrayBuffer();
+    const chunkHash = sha256Hex(new Uint8Array(chunk));
     await rawPut(`/transfers/${session.id}/chunks/${n}`, chunk, { 'X-Chunk-Sha256': chunkHash });
     onProgress?.((n + 1) / totalChunks);
   }
@@ -139,7 +139,7 @@ export interface Metrics {
   tsMs: number;
 }
 export interface PairResponse {
-  deviceToken: string;
+  deviceToken?: string;
   deviceId: string;
   agentName: string;
   certFingerprint: string;
@@ -158,6 +158,12 @@ export interface Device {
   jailRoot?: string;
   readOnly?: boolean;
   viaLogin?: boolean;
+  browse?: boolean;
+  download?: boolean;
+  upload?: boolean;
+  modify?: boolean;
+  delete?: boolean;
+  share?: boolean;
 }
 export interface Entry {
   name: string;
@@ -274,10 +280,12 @@ export const api = {
     const proof = await proofFields();
     return post<PairResponse>('/pair', { pairingCode, deviceLabel, ...proof });
   },
+  logoutSession: () => request<void>('POST', '/auth/logout'),
 
   // devices
   listDevices: () => get<Device[]>('/devices'),
-  patchDevice: (id: string, body: Partial<Pick<Device, 'jailRoot' | 'readOnly'>> & { revoked?: boolean }) =>
+  patchDevice: (id: string, body: Partial<Pick<Device,
+    'jailRoot' | 'readOnly' | 'browse' | 'download' | 'upload' | 'modify' | 'delete' | 'share'>> & { revoked?: boolean }) =>
     patch<Device>(`/devices/${id}`, body),
   deleteDevice: (id: string) => del<void>(`/devices/${id}`),
   generatePairingCode: async () => {

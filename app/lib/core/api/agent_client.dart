@@ -21,6 +21,7 @@ import '../models/entry.dart';
 import '../models/agent_status.dart';
 import '../models/health.dart';
 import '../models/host.dart';
+import '../models/host_app.dart';
 import '../models/listing.dart';
 import '../models/pair_response.dart';
 import '../models/search_result.dart';
@@ -39,12 +40,30 @@ class CertPinMismatch implements Exception {
       '(expected $expected, got $actual)';
 }
 
+/// Thrown when an operation requiring a trusted agent is attempted without a
+/// valid certificate fingerprint from the secure host store or pairing input.
+class MissingCertPin implements Exception {
+  const MissingCertPin();
+
+  @override
+  String toString() =>
+      'The host certificate fingerprint is missing or invalid. Re-pair the host to restore its secure pin.';
+}
+
 /// Thrown when an API call returns an HTTP error.
 class AgentApiException implements Exception {
-  AgentApiException(this.statusCode, this.code, this.message);
+  AgentApiException(
+    this.statusCode,
+    this.code,
+    this.message, {
+    this.dioType,
+    this.cause,
+  });
   final int statusCode;
   final String code;
   final String message;
+  final DioExceptionType? dioType;
+  final Object? cause;
   @override
   String toString() => 'AgentApiException($statusCode): $code — $message';
 }
@@ -203,22 +222,38 @@ Future<Uint8List> collectBytesCapped(
 
 /// HTTPS client for a single host agent.
 ///
-/// The agent uses a self-signed certificate, so standard CA validation is
-/// bypassed and replaced with **fingerprint pinning**: if [Host.certFingerprint]
-/// is set, the leaf certificate's SHA-256 must match it. When it is null we are
-/// pairing for the first time (trust on first use) and the caller captures the
-/// fingerprint via [lastSeenFingerprint].
+/// The agent uses a self-signed certificate, so this client validates its leaf
+/// certificate against a SHA-256 pin before allowing HTTP request bytes onto
+/// the connection. Only health and challenge preflight calls are available to
+/// an unpinned client; pairing credentials and all authenticated operations
+/// require an out-of-band pin first.
 class AgentClient {
   AgentClient(this.host, {String? deviceToken, bool probeLanFirst = false})
-    : _addresses = host.addresses {
+    : _addresses = host.addresses,
+      _deviceToken = deviceToken,
+      _pinnedFingerprint = normalizeFingerprint(host.certFingerprint) {
+    if (host.certFingerprint != null && _pinnedFingerprint == null) {
+      throw const MissingCertPin();
+    }
+    if (deviceToken != null && _pinnedFingerprint == null) {
+      throw const MissingCertPin();
+    }
+
     final adapter = IOHttpClientAdapter(
       createHttpClient: () {
-        final client = HttpClient();
+        // An empty trust store is intentional: it guarantees that even a
+        // publicly trusted certificate reaches badCertificateCallback, where
+        // the exact leaf fingerprint is checked before HttpClient.openUrl
+        // completes and before Dio writes headers or a request body.
+        final client = HttpClient(
+          context: SecurityContext(withTrustedRoots: false),
+        );
         client.badCertificateCallback = (cert, host, port) {
           final fp = sha256.convert(cert.der).toString();
           lastSeenFingerprint = fp;
-          final pinned = this.host.certFingerprint;
-          if (pinned == null) return true; // TOFU: accept and capture
+          _seenFingerprintsByAuthority['${host.toLowerCase()}:$port'] = fp;
+          final pinned = _pinnedFingerprint;
+          if (pinned == null) return true; // preflight only; API gate below
           if (fp == pinned) return true;
           throw CertPinMismatch(pinned, fp);
         };
@@ -241,41 +276,106 @@ class AgentClient {
       BaseOptions(
         baseUrl: _baseUrlFor(_addresses[_addrIndex]),
         connectTimeout: Duration(seconds: probeLanFirst ? 3 : 10),
-        headers: {
-          if (deviceToken != null) 'Authorization': 'Bearer $deviceToken',
-          'X-RFE-Client-Version': appClientVersion,
-        },
+        followRedirects: false,
+        headers: {'X-RFE-Client-Version': appClientVersion},
       ),
     )..httpClientAdapter = adapter;
 
-    // Dual-address fallback: if the active address is unreachable (e.g. the
-    // LAN address while we're away from home), retry the same request against
-    // the next candidate (typically the Tailscale address) and, on success,
-    // stick with it for the rest of this client's life.
+    // Keep credentials out of Dio's default headers. Request policy runs
+    // before the adapter opens a socket, and only adds a bearer token after a
+    // valid pin is present. This also covers direct Dio calls used by streamed
+    // downloads, uploads, search, and previews.
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (_pinnedFingerprint == null &&
+              !_isSafeUnpinnedPreflight(options)) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                error: const MissingCertPin(),
+              ),
+            );
+            return;
+          }
+          options.headers.removeWhere(
+            (key, _) => key.toLowerCase() == 'authorization',
+          );
+          if (_pinnedFingerprint != null && _deviceToken != null) {
+            options.headers['Authorization'] = 'Bearer $_deviceToken';
+          }
+          handler.next(options);
+        },
+      ),
+    );
+
+    // Route fallback: on a genuine connectivity failure, replay only GET and
+    // HEAD against the other configured addresses in priority order. This can
+    // move from a previously successful Tailscale/direct route back to LAN
+    // after the device returns home. Every retry uses the same HTTPS-only
+    // adapter and certificate pin. Certificate failures and HTTP responses
+    // are never treated as connectivity failures.
     _dio.interceptors.add(
       InterceptorsWrapper(
         onError: (e, handler) async {
-          final isConnectionFailure =
-              e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout;
-          if (!isConnectionFailure ||
+          final sourceIndex =
+              _indexForBaseUrl(e.requestOptions.baseUrl) ?? _addrIndex;
+          if (!isConnectivityFailure(e.type) ||
+              _isPinMismatch(e) ||
+              e.requestOptions.extra['rfeRouteRetry'] == true ||
               !isSafeToRetryOnFallback(e.requestOptions.method) ||
-              _addrIndex + 1 >= _addresses.length) {
+              _addresses.length < 2) {
             return handler.next(e);
           }
-          _addrIndex++;
-          final newBase = _baseUrlFor(_addresses[_addrIndex]);
-          _dio.options.baseUrl = newBase;
-          _dio.options.connectTimeout = const Duration(seconds: 10);
-          try {
-            final retried = await _dio.fetch(
-              e.requestOptions..baseUrl = newBase,
+
+          for (
+            var candidateIndex = 0;
+            candidateIndex < _addresses.length;
+            candidateIndex++
+          ) {
+            if (candidateIndex == sourceIndex) continue;
+            final candidateBase = _baseUrlFor(_addresses[candidateIndex]);
+            final retryOptions = e.requestOptions.copyWith(
+              baseUrl: candidateBase,
+              extra: {...e.requestOptions.extra, 'rfeRouteRetry': true},
             );
-            _lastGoodAddrIndex[host.id] = _addrIndex;
-            return handler.resolve(retried);
-          } on DioException catch (e2) {
-            return handler.next(e2);
+            try {
+              final retried = await _dio.fetch<dynamic>(retryOptions);
+              _addrIndex = candidateIndex;
+              _dio.options.baseUrl = candidateBase;
+              _lastGoodAddrIndex[host.id] = candidateIndex;
+              return handler.resolve(retried);
+            } on DioException catch (retryError) {
+              // A pin mismatch is a security failure, not a reason to try
+              // another URL. Other HTTP responses also stop fallback because
+              // they prove that the route reached an agent.
+              if (_isPinMismatch(retryError)) {
+                return handler.next(retryError);
+              }
+              if (retryError.response != null) {
+                _addrIndex = candidateIndex;
+                _dio.options.baseUrl = candidateBase;
+                _lastGoodAddrIndex[host.id] = candidateIndex;
+                return handler.next(retryError);
+              }
+              if (!isConnectivityFailure(retryError.type)) {
+                return handler.next(retryError);
+              }
+            }
           }
+          return handler.next(e);
+        },
+        onResponse: (response, handler) {
+          // Host cards deliberately probe LAN first. Remember that successful
+          // route so clients created later in this session return to LAN too.
+          // Ignore late responses from a route superseded by another request.
+          final responseIndex = _indexForBaseUrl(
+            response.requestOptions.baseUrl,
+          );
+          if (responseIndex != null && responseIndex == _addrIndex) {
+            _lastGoodAddrIndex[host.id] = responseIndex;
+          }
+          handler.next(response);
         },
       ),
     );
@@ -290,16 +390,35 @@ class AgentClient {
 
   static String _baseUrlFor(String address) => 'https://$address/v1';
 
+  /// Canonical lowercase hex form for a SHA-256 certificate fingerprint.
+  /// Colons are accepted for copy/paste from tools that group hex bytes.
+  static String? normalizeFingerprint(String? fingerprint) {
+    if (fingerprint == null) return null;
+    final normalized = fingerprint.trim().replaceAll(':', '').toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(normalized)) return null;
+    return normalized;
+  }
+
+  static bool _isSafeUnpinnedPreflight(RequestOptions options) {
+    final path = options.uri.path;
+    final method = options.method.toUpperCase();
+    return (path == '/v1/health' && method == 'GET') ||
+        (path == '/v1/auth/challenge' && method == 'POST');
+  }
+
   /// Remembers, per host id, which candidate address last succeeded — so the
   /// next [AgentClient] for that host starts there instead of probing again.
   static final Map<String, int> _lastGoodAddrIndex = {};
+  final Map<String, String> _seenFingerprintsByAuthority = {};
 
   final Host host;
+  final String? _deviceToken;
+  final String? _pinnedFingerprint;
   late final Dio _dio;
   late final List<String> _addresses;
   late int _addrIndex;
 
-  /// Fingerprint observed on the most recent TLS handshake (for TOFU capture).
+  /// Fingerprint observed on the most recent TLS handshake.
   String? lastSeenFingerprint;
 
   /// When set, [fetchBytes] writes to this cache on success and reads from it
@@ -320,15 +439,37 @@ class AgentClient {
   bool compressDownloadsOnCellular = true;
 
   /// The address (`host:port`, no scheme) this client is currently talking
-  /// to — initially whichever candidate worked last time, and updated if a
-  /// request falls back to the next candidate (see the retry interceptor in
-  /// the constructor). Used by the UI to show "LAN" vs "Tailscale".
+  /// to — initially whichever candidate worked last time, and updated after
+  /// a successful fallback (see the retry interceptor in the constructor).
+  /// Used by the UI to show the current route.
   String get activeAddress => _addresses[_addrIndex];
 
   /// Whether [activeAddress] is the host's Tailscale address (as opposed to
   /// its primary/LAN address).
-  bool get isActiveAddressTailscale =>
-      host.tailscaleAddress != null && activeAddress == host.tailscaleAddress;
+  bool get isActiveAddressTailscale => activeRoute == HostRoute.tailscale;
+
+  /// The configured route metadata for [activeAddress].
+  HostRoute get activeRoute => host.routeForAddress(activeAddress);
+
+  int? _indexForBaseUrl(String baseUrl) {
+    final index = _addresses.indexWhere(
+      (address) => _baseUrlFor(address) == baseUrl,
+    );
+    return index < 0 ? null : index;
+  }
+
+  bool _isPinMismatch(DioException error) =>
+      _pinMismatchCause(error) != null ||
+      _pinMismatchForOptions(error.requestOptions) != null;
+
+  CertPinMismatch? _pinMismatchForOptions(RequestOptions options) {
+    final uri = options.uri;
+    final actual =
+        _seenFingerprintsByAuthority['${uri.host.toLowerCase()}:${uri.port}'];
+    final expected = _pinnedFingerprint;
+    if (actual == null || expected == null || actual == expected) return null;
+    return CertPinMismatch(expected, actual);
+  }
 
   // ---------------------------------------------------------------------------
   // Internal helpers
@@ -370,7 +511,11 @@ class AgentClient {
     return null;
   }
 
-  static AgentApiException _apiError(DioException e) {
+  AgentApiException _apiError(DioException e) {
+    final pinMismatch =
+        _pinMismatchCause(e) ?? _pinMismatchForOptions(e.requestOptions);
+    if (pinMismatch != null) throw pinMismatch;
+    if (e.error is MissingCertPin) throw e.error as MissingCertPin;
     final data = e.response?.data;
     if (data is Map<String, dynamic>) {
       return AgentApiException(
@@ -392,21 +537,40 @@ class AgentClient {
           0,
           'CONNECTION',
           'Connection lost — check your network and try again.',
+          dioType: e.type,
+          cause: e.error,
         );
       default:
         return AgentApiException(
           e.response?.statusCode ?? 0,
           'UNKNOWN',
           e.message ?? e.toString(),
+          dioType: e.type,
+          cause: e.error,
         );
     }
+  }
+
+  static CertPinMismatch? _pinMismatchCause(Object? error) {
+    var cause = error;
+    while (cause != null) {
+      if (cause is CertPinMismatch) return cause;
+      if (cause is DioException) {
+        cause = cause.error;
+      } else if (cause is AgentApiException) {
+        cause = cause.cause;
+      } else {
+        return null;
+      }
+    }
+    return null;
   }
 
   /// Converts [e] to an [AgentApiException] and throws it — *unless* [e] is
   /// a cancellation (from a [CancelToken] passed in by the caller), in which
   /// case the original [DioException] is rethrown unchanged so callers can
   /// distinguish "user paused/canceled" from a real API/network failure.
-  static Never _throwTransferError(DioException e) {
+  Never _throwTransferError(DioException e) {
     if (e.type == DioExceptionType.cancel) {
       throw e;
     }
@@ -500,11 +664,12 @@ class AgentClient {
 
   /// Pair this device with the agent.
   ///
-  /// Returns the [PairResponse] which contains the device token. The caller
-  /// should capture [lastSeenFingerprint] (TOFU) immediately after and verify
-  /// it against any fingerprint obtained via QR. [devicePublicKey]/[nonce]/
-  /// [signature] prove possession of this device's identity key — see
-  /// [DeviceIdentity] and [challenge].
+  /// The caller must construct this client with the agent's certificate
+  /// fingerprint obtained through a trusted independent channel. The TLS pin
+  /// is checked before the pairing code or other request data is sent. Returns
+  /// the [PairResponse], which contains the device token.
+  /// [devicePublicKey]/[nonce]/[signature] prove possession of this device's
+  /// identity key — see [DeviceIdentity] and [challenge].
   Future<PairResponse> pair({
     required String pairingCode,
     required String deviceLabel,
@@ -797,6 +962,66 @@ class AgentClient {
     return data.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Lists the host's app catalog using this paired device's pinned,
+  /// authenticated connection. The server filters entries according to the
+  /// device's current app-view permission.
+  Future<HostAppCatalog> listApps() async {
+    final data = await _get<Map<String, dynamic>>('/apps');
+    return HostAppCatalog.fromJson(data);
+  }
+
+  /// Requests launch of one server-issued opaque app ID. No path, executable,
+  /// or command-line arguments are accepted from the caller.
+  Future<void> launchApp(String id) async {
+    final response = await _post<Map<String, dynamic>>(
+      '/apps/${Uri.encodeComponent(id)}/launch',
+    );
+    if (response['status'] != 'started') {
+      throw const FormatException('Unexpected app launch response.');
+    }
+  }
+
+  /// Updates whether a paired device may view or launch approved apps.
+  ///
+  /// The host enforces this policy on every app-catalog and launch request;
+  /// callers should always send both values so disabling catalog access also
+  /// disables launch access in the same operation.
+  Future<void> updateDeviceAppCapabilities(
+    String id, {
+    required bool viewApps,
+    required bool launchApps,
+  }) async {
+    await _patch<void>(
+      '/devices/$id',
+      data: {'viewApps': viewApps, 'launchApps': launchApps},
+    );
+  }
+
+  /// Updates all per-device filesystem capabilities in one PATCH request.
+  /// Sending the full set keeps the UI's admin switches in sync while the
+  /// server continues to support individual fields for other clients.
+  Future<void> updateDeviceFileCapabilities(
+    String id, {
+    required bool browse,
+    required bool download,
+    required bool upload,
+    required bool modify,
+    required bool delete,
+    required bool share,
+  }) async {
+    await _patch<void>(
+      '/devices/$id',
+      data: {
+        'browse': browse,
+        'download': download,
+        'upload': upload,
+        'modify': modify,
+        'delete': delete,
+        'share': share,
+      },
+    );
+  }
+
   /// Reads the agent's audit trail (account/device/share events), newest
   /// first. Admin-only on the agent: a code-paired device gets 403, since the
   /// trail covers every device on that host.
@@ -1031,23 +1256,73 @@ class AgentClient {
   /// Returns `null` when the agent has no thumbnail for this file (e.g. a
   /// non-image, or a format it can't decode — reported as a 404 with code
   /// `NOT_AVAILABLE`); callers should fall back to a generic icon in that
-  /// case rather than treating it as an error.
-  Future<Uint8List?> thumbnail(String remotePath, {int size = 256}) async {
-    try {
-      final res = await _dio.get<List<int>>(
-        '/thumb',
-        queryParameters: {'path': remotePath, 'size': size},
-        options: Options(responseType: ResponseType.bytes),
-      );
-      final data = res.data;
-      if (data == null) return null;
-      return Uint8List.fromList(data);
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (status == 404 || _errorCode(e.response?.data) == 'NOT_AVAILABLE') {
-        return null;
+  /// case rather than treating it as an error. A capacity response
+  /// (`429 THUMB_BUSY`) is retried at most three times, honoring a bounded
+  /// `Retry-After` delay when provided.
+  Future<Uint8List?> thumbnail(
+    String remotePath, {
+    int size = 256,
+    CancelToken? cancelToken,
+  }) async {
+    var busyRetries = 0;
+    while (true) {
+      try {
+        final res = await _dio.get<List<int>>(
+          '/thumb',
+          queryParameters: {'path': remotePath, 'size': size},
+          options: Options(responseType: ResponseType.bytes),
+          cancelToken: cancelToken,
+        );
+        final data = res.data;
+        if (data == null) return null;
+        return Uint8List.fromList(data);
+      } on DioException catch (e) {
+        final status = e.response?.statusCode;
+        if (status == 404 || _errorCode(e.response?.data) == 'NOT_AVAILABLE') {
+          return null;
+        }
+        if (e.type == DioExceptionType.cancel) rethrow;
+
+        if (status == 429 &&
+            _errorCode(e.response?.data) == 'THUMB_BUSY' &&
+            busyRetries < 3) {
+          busyRetries++;
+          final retryAfter = int.tryParse(
+            e.response?.headers.value('retry-after') ?? '',
+          );
+          final delay =
+              retryAfter == null
+                  ? Duration(milliseconds: 200 * busyRetries)
+                  : Duration(seconds: retryAfter.clamp(1, 2).toInt());
+          await _waitForThumbnailRetry(delay, cancelToken, e.requestOptions);
+          continue;
+        }
+
+        throw _apiError(e);
       }
-      throw _apiError(e);
+    }
+  }
+
+  static Future<void> _waitForThumbnailRetry(
+    Duration delay,
+    CancelToken? cancelToken,
+    RequestOptions requestOptions,
+  ) async {
+    if (cancelToken == null) {
+      await Future<void>.delayed(delay);
+      return;
+    }
+    if (cancelToken.isCancelled) throw cancelToken.cancelError!;
+    await Future.any<void>([
+      Future<void>.delayed(delay),
+      cancelToken.whenCancel.then<void>((error) => throw error),
+    ]);
+    if (cancelToken.isCancelled) {
+      throw cancelToken.cancelError ??
+          DioException.requestCancelled(
+            requestOptions: requestOptions,
+            reason: 'thumbnail request cancelled',
+          );
     }
   }
 

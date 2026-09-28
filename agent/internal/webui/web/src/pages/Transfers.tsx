@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Search, Trash2, File as FileIcon, ArrowLeftRight } from 'lucide-react';
 import { api, ApiError, type TransferRow } from '@/lib/api';
-import { useToast } from '@/lib/toast';
+import { useToast } from '@/lib/toast-context';
 import { DataTable } from '@/components/DataTable';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'failed';

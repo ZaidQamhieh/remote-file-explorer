@@ -27,20 +27,16 @@ class HomeShell extends ConsumerWidget {
     final index = ref.watch(selectedTabIndexProvider);
     final active = ref.watch(activeHostProvider);
 
-    // Does the Files tab render ExplorerScreen rooted at '/' directly (not
-    // DrivesView, which has no folder-depth/selection state of its own)?
-    // Mirrors the windows check in `explorerRootFor`.
-    final showsExplorerRoot =
-        active != null &&
-        (active.initialPath != null ||
-            active.health?.os.toLowerCase() != 'windows');
+    // The root picker and drive list don't use ExplorerScreen state. Once a
+    // root is selected, keep back-navigation scoped to that exact root.
+    final showsExplorerRoot = active?.rootPath != null;
 
     (bool atRoot, bool multiSelect)? explorer;
     if (showsExplorerRoot) {
       explorer = ref.watch(
         explorerProvider((
-          hostId: active.host.id,
-          rootPath: '/',
+          hostId: active!.host.id,
+          rootPath: active.rootPath!,
         )).select((s) => (s.atRoot, s.multiSelect)),
       );
     }
@@ -108,8 +104,8 @@ class HomeShell extends ConsumerWidget {
 }
 
 /// Files tab body: an empty state until a host is picked from the Servers
-/// tab (or a bookmark/intent sets [activeHostProvider]), then the same
-/// drives-vs-explorer root [explorerRootFor] already picks for a direct push.
+/// tab (or a bookmark/intent sets [activeHostProvider]), then [HostRootView]
+/// resolves the folders this paired device is allowed to browse.
 class _FilesTab extends ConsumerWidget {
   const _FilesTab();
 
@@ -142,9 +138,30 @@ class _FilesTab extends ConsumerWidget {
       );
     }
     final body =
-        active.initialPath != null
-            ? ExplorerScreen(host: active.host, initialPath: active.initialPath)
-            : explorerRootFor(active.health, active.host);
+        active.rootPath != null
+            ? ExplorerScreen(
+              host: active.host,
+              rootPath: active.rootPath!,
+              initialPath: active.initialPath,
+            )
+            : explorerRootFor(
+              active.health,
+              active.host,
+              initialPath: active.initialPath,
+              onSelectRoot: (rootPath, initialPath) {
+                final current = ref.read(activeHostProvider);
+                if (current?.host.id != active.host.id ||
+                    current?.initialPath != active.initialPath) {
+                  return;
+                }
+                ref.read(activeHostProvider.notifier).state = ActiveHost(
+                  host: active.host,
+                  health: active.health,
+                  rootPath: rootPath,
+                  initialPath: initialPath,
+                );
+              },
+            );
     // Keyed on the ActiveHost instance (a fresh object every "open" action):
     // without this, re-selecting a different bookmark/host while this tab's
     // ExplorerScreen is already mounted only updates its widget properties

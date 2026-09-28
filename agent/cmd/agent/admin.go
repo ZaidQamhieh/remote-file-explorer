@@ -42,8 +42,14 @@ func runAdmin(cmd string, args []string) error {
 		return cmdAddUser(args)
 	case "install":
 		return cmdInstall(args)
+	case "setup":
+		return cmdSetup(args)
 	case "uninstall":
 		return cmdUninstall(args)
+	case "start":
+		return cmdStart(args)
+	case "stop":
+		return cmdStop(args)
 	case "help", "-h", "--help":
 		printAdminUsage(os.Stdout)
 		return nil
@@ -76,7 +82,12 @@ Usage:
                                   (systemd --user unit on Linux, launchd
                                   LaunchAgent on macOS, Scheduled Task on
                                   Windows — no root/admin required)
-  rfe-agent uninstall            remove whatever "install" set up
+  rfe-agent setup [-root <path>] first-run setup: restrict access to a folder,
+                                  install the per-user service, and print a
+                                  one-time pairing QR (defaults to your home)
+  rfe-agent start                start the installed per-user agent
+  rfe-agent stop                 stop it until you start it or next login
+  rfe-agent uninstall            stop and remove the auto-start entry
 
 Common flags: -data <dir> (or $RFE_DATA_DIR; default ~/.rfe-agent)
 `)
@@ -128,6 +139,7 @@ func cmdPair(args []string) error {
 	}
 
 	fmt.Printf("Pairing code: %s   (expires in %s)\n", code, *ttl)
+	fmt.Printf("Fingerprint:  %s\n", fingerprint)
 	fmt.Printf("LAN:          %s\n", orNone(lan))
 	fmt.Printf("Tailscale:    %s\n", orNone(ts))
 	fmt.Println()
@@ -438,6 +450,11 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Tailscale:   %s\n", orNone(ts))
 	fmt.Printf("fingerprint: %s\n", fingerprint)
 	fmt.Printf("devices:     %d active, %d total\n", active, len(devices))
+	service, err := serviceStatus()
+	if err != nil {
+		return fmt.Errorf("read local service status: %w", err)
+	}
+	fmt.Printf("service:     %s\n", service)
 	return nil
 }
 

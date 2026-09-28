@@ -34,7 +34,7 @@ jobs:
   release:
     name: Build & publish APK
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
     steps:

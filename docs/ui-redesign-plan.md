@@ -1,15 +1,16 @@
 # UI Redesign Plan — Remote File Explorer
 
-**Status: PLANNED, NOT STARTED.** Written 2026-06-12 after the search-v2 release
-(app v1.7.0+13, agent v1.1.0). This is the execution brief for a future session.
-Visual direction lives in `docs/ui-design-spec.md` (Expressive M3, approved
-2026-06-12) — spec wins on visuals, this plan wins on scope/sequencing.
+**Status snapshot: 2026-09-28.** This execution brief was written on 2026-06-12
+and its main UI waves have since been implemented. Waves A–E are delivered.
+Wave F's theme and accessibility foundations are present; the tablet two-pane
+stretch goal and full-device text-scaling/landscape visual acceptance remain
+open. Visual direction lives in `docs/ui-design-spec.md` (Expressive M3,
+approved 2026-06-12).
 
-**How to run this plan:** the orchestrator (brain) dispatches Sonnet agents per
-wave with disjoint file ownership, verifies `flutter analyze` + `flutter test`
-(currently 106 tests — must never drop) between waves, commits per wave, and
-ships via `./release.sh X.Y.Z+N` at the end. See `HANDOFF.md` for the
-deployment runbook and `docs/development.md` for toolchain paths.
+This file preserves the original acceptance brief and sequencing notes. The
+test count and release instructions below were written before the waves landed;
+use `docs/development.md` and the current GitHub workflows for today's commands
+and release process.
 
 ---
 

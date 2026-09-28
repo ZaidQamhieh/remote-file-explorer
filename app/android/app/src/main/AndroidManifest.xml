@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Network access to the host agent (LAN / Tailscale over HTTPS). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Briefly receive Wi-Fi multicast packets during user-started mDNS search. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <!-- Camera for scanning the pairing QR code. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <!-- In-app updater: hand the downloaded APK to Android's package installer

@@ -30,6 +30,16 @@ Future<void> _waitUntil(
   }
 }
 
+TransferQueueNotifier _testTransferQueueNotifier({
+  AgentClient Function(Host host, {String? deviceToken})? clientFactory,
+  TransferQueueStore? store,
+}) => TransferQueueNotifier(
+  clientFactory: clientFactory,
+  store: store,
+  credentialsLoader:
+      (host) async => (fingerprint: 'a' * 64, token: 'test-device-token'),
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -213,7 +223,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -275,7 +285,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => blockingClient,
               ),
             ),
@@ -362,7 +372,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -421,7 +431,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -488,7 +498,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -544,7 +554,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -638,7 +648,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => client,
               ),
             ),
@@ -708,7 +718,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -765,7 +775,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           transferQueueProvider.overrideWith(
-            () => TransferQueueNotifier(
+            () => _testTransferQueueNotifier(
               clientFactory: (host, {deviceToken}) => client,
             ),
           ),
@@ -818,7 +828,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             transferQueueProvider.overrideWith(
-              () => TransferQueueNotifier(
+              () => _testTransferQueueNotifier(
                 clientFactory: (host, {deviceToken}) => hangingClient,
                 store: store,
               ),

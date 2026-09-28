@@ -409,6 +409,26 @@ func TestHealthHandler_AuthenticatedGetsFullDetail(t *testing.T) {
 	}
 }
 
+func TestHealthHandler_WebSessionCookieGetsFullDetail(t *testing.T) {
+	db, st, token := newAuthTestDeps(t)
+	cfg := Config{Name: "test-pc", Version: "1.0.0", Settings: st}
+	req := httptest.NewRequest(http.MethodGet, "https://agent.example:8765/v1/health", nil)
+	req.AddCookie(&http.Cookie{Name: webSessionCookie, Value: token})
+	req.Header.Set(webSessionHeader, "1")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Origin", "https://agent.example:8765")
+	rr := httptest.NewRecorder()
+	healthHandler(cfg, db)(rr, req)
+
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["name"] != "test-pc" {
+		t.Fatalf("expected browser session to receive authenticated detail, got %v", resp)
+	}
+}
+
 func TestHealthHandler_RevokedTokenGetsMinimalFingerprint(t *testing.T) {
 	db, st, token := newAuthTestDeps(t)
 	if err := db.RevokeDevice("dev1"); err != nil {

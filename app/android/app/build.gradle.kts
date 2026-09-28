@@ -8,15 +8,31 @@ plugins {
 }
 
 // Release signing config (gitignored). Present locally (generated keystore) and
-// recreated on the CI runner from GitHub secrets. When absent — e.g. a plain
-// `flutter build apk --release` on a dev machine without the key — we fall back
-// to the debug key so the build still succeeds (it just won't be OTA-installable
-// over a properly signed build). See android/.gitignore + .github/workflows/release.yml.
+// recreated on the CI runner from GitHub secrets. Debug builds remain usable
+// without release credentials; release task graphs are rejected below unless
+// production signing is configured or a local test override is explicit.
+// See android/.gitignore + .github/workflows/release.yml.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseSigning = keystorePropertiesFile.exists()
+val allowDebugSigning = project.hasProperty("allowDebugSigning")
 if (hasReleaseSigning) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+// Gradle configures every build type before it knows which variant task will
+// run. Keep local debug installs working without release secrets, but reject
+// any task graph that actually contains a release variant unless the owner
+// explicitly opted into a debug-signed local release build.
+if (!hasReleaseSigning && !allowDebugSigning) {
+    gradle.taskGraph.whenReady {
+        if (allTasks.any { it.name.contains("Release", ignoreCase = true) }) {
+            throw GradleException(
+                "Release build has no key.properties. Provide production " +
+                    "signing, or pass -PallowDebugSigning for a local test build."
+            )
+        }
+    }
 }
 
 android {
@@ -56,19 +72,12 @@ android {
     buildTypes {
         release {
             // Use the dedicated upload key when key.properties is present
-            // (local dev + CI release builds). A release without it would be
-            // debug-signed and rejected as an OTA upgrade, so fail loudly rather
-            // than silently ship it (PR-69); pass -PallowDebugSigning to opt into
-            // a debug-signed release for local testing only.
+            // (local dev + CI release builds). The task-graph guard above
+            // prevents a release build from using the debug key accidentally.
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
-            } else if (project.hasProperty("allowDebugSigning")) {
-                signingConfigs.getByName("debug")
             } else {
-                throw GradleException(
-                    "Release build has no key.properties. Provide production " +
-                        "signing, or pass -PallowDebugSigning for a local test build."
-                )
+                signingConfigs.getByName("debug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

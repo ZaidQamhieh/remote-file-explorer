@@ -12,8 +12,9 @@ A phone-as-file-explorer for your own PCs. Two components plus one shared contra
 - **`protocol/openapi.yaml`** — the REST contract both sides follow. **Source of truth.**
 
 No cloud server, no cloud database. The app reaches the agent over HTTPS/HTTP-2 on the
-LAN by IP, or anywhere via the PC's **Tailscale** address — same code path. Tailscale
-(WireGuard) provides NAT traversal, addressing, and an outer encryption layer.
+LAN by IP, optionally via the PC's **Tailscale** address, or through a user-configured
+direct HTTPS address. Tailscale (WireGuard) provides NAT traversal, addressing, and an
+outer encryption layer; direct internet access requires the PC owner to configure routing.
 
 ## Commands
 
@@ -28,12 +29,16 @@ go build -o bin/agent ./cmd/agent             # build static binary
 Admin CLI (opens the on-disk DB directly — works whether or not the daemon is running):
 ```sh
 go run ./cmd/agent pair          # mint a one-time pairing code + print QR
+go run ./cmd/agent setup         # first-run folder setup + per-user service + pairing QR
 go run ./cmd/agent devices       # list paired devices
 go run ./cmd/agent revoke <id>   # block a device
 go run ./cmd/agent remove <id>   # delete a device row
 go run ./cmd/agent jail <id> <path>  # confine a device to <path> ("" clears it)
 go run ./cmd/agent status        # name, addresses, fingerprint, counts
 ```
+New agent databases default to a dedicated `RFE Files` folder under the signed-in user's home.
+Unrestricted filesystem access must be explicitly selected with an empty `-roots` value or owner
+settings; existing saved root policies are preserved.
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`
 
 ### App (Flutter 3.44.2 / Dart 3.12, in `app/`)
@@ -65,8 +70,12 @@ concurrent writes safe).
 fingerprint at pairing (TOFU)** via `HttpClient.badCertificateCallback` — a later
 mismatch is rejected. Pairing mints a **revocable per-device bearer token** stored in
 Keychain/Keystore. Agent-side authorization: root-path jail, optional read-only mode,
-device revoke/remove, `/pair` rate-limited 10/min. Path normalization enforces the jail
-against traversal/symlink escape. **Audit log:** account/device/share events only
+device revoke/remove, `/pair` rate-limited 10/min, and independent per-device
+browse/download/upload/modify/delete/share grants. Existing devices preserve their effective
+access on upgrade; new code-paired devices start browse-only; password-authenticated owner
+devices bypass these file grants, while global policy, roots, jail, and read-only controls still
+apply. Server file operations use rooted filesystem handles to prevent symlink escapes during
+access. **Audit log:** account/device/share events only
 (pair, register, login incl. failures, device revoke/remove/limit change, share
 mint/revoke, agent restart) — `audit_log` table, admin-only `GET /v1/audit`,
 `rfe-agent audit` CLI. **File operations are deliberately not recorded**; they
@@ -85,8 +94,9 @@ agent/cmd/agent/   main daemon + admin.go (CLI subcommands)
 agent/internal/    server (incl. search), fsops, transfer, thumbs, pairing, store,
                    security, settings, updates, mdns, netinfo
 agent/internal/mdns/    mDNS/DNS-SD advertise + discover (zeroconf) — implemented
-agent/internal/webui/   web companion — dist/index.html is the served single-file UI
-                        (edit it directly); src/ + package.json = Tailwind tooling only
+agent/internal/webui/   web companion; edit the Vite + React + TypeScript SPA in web/src/
+                        (`web/package.json`; build with `cd agent/internal/webui/web && npm run build`)
+                        to generate ../dist/, which Go embeds into the agent binary; do not edit dist/ directly
 protocol/openapi.yaml        shared REST contract
 ```
 

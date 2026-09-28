@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api/agent_client.dart';
@@ -52,6 +54,129 @@ class _ThumbnailCache {
   }
 }
 
+/// Deduplicates thumbnail requests by cache key and limits process-wide HTTP
+/// fetch concurrency. A subscription can leave the queue before dispatch or
+/// cancel an active request once its last widget has detached.
+class _ThumbnailFetchQueue {
+  _ThumbnailFetchQueue._();
+  static final _ThumbnailFetchQueue instance = _ThumbnailFetchQueue._();
+
+  static const int _maxConcurrent = 4;
+
+  final Map<String, _ThumbnailFetch> _inFlight = <String, _ThumbnailFetch>{};
+  final List<_ThumbnailFetch> _pending = <_ThumbnailFetch>[];
+  int _active = 0;
+
+  _ThumbnailRequest request(
+    String key,
+    Future<Uint8List?> Function(CancelToken token) load,
+  ) {
+    final job = _inFlight.putIfAbsent(key, () {
+      final created = _ThumbnailFetch(key, load);
+      _pending.add(created);
+      return created;
+    });
+    final subscription = _ThumbnailSubscription(job);
+    job.subscriptions.add(subscription);
+    _pump();
+    return _ThumbnailRequest(this, subscription);
+  }
+
+  void cancel(_ThumbnailSubscription subscription) {
+    if (subscription.completed) return;
+    final job = subscription.job;
+    subscription.complete(null);
+    if (job.subscriptions.isNotEmpty) return;
+
+    job.abandoned = true;
+    if (identical(_inFlight[job.key], job)) _inFlight.remove(job.key);
+    if (job.started) {
+      job.cancelToken.cancel('No thumbnail widgets are waiting');
+    } else {
+      _pending.remove(job);
+    }
+    _pump();
+  }
+
+  void _pump() {
+    while (_active < _maxConcurrent && _pending.isNotEmpty) {
+      final job = _pending.removeAt(0);
+      if (job.abandoned || job.subscriptions.isEmpty) continue;
+      job.started = true;
+      _active++;
+      unawaited(_run(job));
+    }
+  }
+
+  Future<void> _run(_ThumbnailFetch job) async {
+    try {
+      final data = await job.load(job.cancelToken);
+      if (!job.abandoned) {
+        _ThumbnailCache.instance.put(job.key, data);
+        for (final subscription in job.subscriptions.toList()) {
+          subscription.complete(data);
+        }
+      }
+    } catch (error, stackTrace) {
+      if (!job.abandoned) {
+        for (final subscription in job.subscriptions.toList()) {
+          subscription.completeError(error, stackTrace);
+        }
+      }
+    } finally {
+      if (identical(_inFlight[job.key], job)) _inFlight.remove(job.key);
+      _active--;
+      _pump();
+    }
+  }
+}
+
+class _ThumbnailFetch {
+  _ThumbnailFetch(this.key, this.load);
+
+  final String key;
+  final Future<Uint8List?> Function(CancelToken token) load;
+  final CancelToken cancelToken = CancelToken();
+  final Set<_ThumbnailSubscription> subscriptions = <_ThumbnailSubscription>{};
+  bool started = false;
+  bool abandoned = false;
+}
+
+class _ThumbnailSubscription {
+  _ThumbnailSubscription(this.job);
+
+  final _ThumbnailFetch job;
+  final Completer<Uint8List?> _completer = Completer<Uint8List?>();
+  bool completed = false;
+
+  Future<Uint8List?> get future => _completer.future;
+
+  void complete(Uint8List? data) {
+    if (completed) return;
+    completed = true;
+    job.subscriptions.remove(this);
+    _completer.complete(data);
+  }
+
+  void completeError(Object error, StackTrace stackTrace) {
+    if (completed) return;
+    completed = true;
+    job.subscriptions.remove(this);
+    _completer.completeError(error, stackTrace);
+  }
+}
+
+class _ThumbnailRequest {
+  _ThumbnailRequest(this._queue, this._subscription);
+
+  final _ThumbnailFetchQueue _queue;
+  final _ThumbnailSubscription _subscription;
+
+  Future<Uint8List?> get future => _subscription.future;
+
+  void cancel() => _queue.cancel(_subscription);
+}
+
 /// Displays a server-rendered thumbnail for image [entry]s, fetched through
 /// [client] and cached in-memory for the lifetime of the app.
 ///
@@ -81,8 +206,11 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
   Uint8List? _bytes;
   bool _loading = false;
   bool _failed = false;
+  _ThumbnailRequest? _request;
 
-  String get _cacheKey => thumbnailCacheKey(
+  String get _cacheKey => _cacheKeyFor(widget);
+
+  static String _cacheKeyFor(ThumbnailImage widget) => thumbnailCacheKey(
     hostId: widget.client.host.id,
     path: widget.entry.path,
     size: widget.size,
@@ -99,10 +227,13 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
   @override
   void didUpdateWidget(covariant ThumbnailImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.entry.path != widget.entry.path ||
-        oldWidget.size != widget.size) {
+    if (_cacheKeyFor(oldWidget) != _cacheKey ||
+        (oldWidget.entry.mimeType ?? '') != (widget.entry.mimeType ?? '')) {
+      _request?.cancel();
+      _request = null;
       _bytes = null;
       _failed = false;
+      _loading = false;
       _load();
     }
   }
@@ -115,9 +246,12 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
 
     final cache = _ThumbnailCache.instance;
     if (cache.contains(_cacheKey)) {
+      _request?.cancel();
+      _request = null;
       final cached = cache.get(_cacheKey);
       _bytes = cached;
       _failed = cached == null;
+      _loading = false;
       return;
     }
 
@@ -125,26 +259,54 @@ class _ThumbnailImageState extends State<ThumbnailImage> {
     // this state on to a different entry/size can recognize itself as stale
     // and skip applying its (now-wrong) result (PR-16).
     final requestKey = _cacheKey;
+    final requestClient = widget.client;
+    final requestPath = widget.entry.path;
+    final requestSize = widget.size;
     _loading = true;
-    widget.client
-        .thumbnail(widget.entry.path, size: widget.size)
-        .then((data) {
-          cache.put(requestKey, data);
-          if (!mounted || requestKey != _cacheKey) return;
+    final request = _ThumbnailFetchQueue.instance.request(
+      requestKey,
+      (token) => requestClient.thumbnail(
+        requestPath,
+        size: requestSize,
+        cancelToken: token,
+      ),
+    );
+    _request = request;
+    unawaited(
+      request.future.then<void>(
+        (data) {
+          if (!mounted ||
+              !identical(request, _request) ||
+              requestKey != _cacheKey) {
+            return;
+          }
+          _request = null;
           setState(() {
             _bytes = data;
             _failed = data == null;
             _loading = false;
           });
-        })
-        .catchError((Object _) {
-          cache.put(requestKey, null);
-          if (!mounted || requestKey != _cacheKey) return;
+        },
+        onError: (Object _, StackTrace __) {
+          if (!mounted ||
+              !identical(request, _request) ||
+              requestKey != _cacheKey) {
+            return;
+          }
+          _request = null;
           setState(() {
             _failed = true;
             _loading = false;
           });
-        });
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _request?.cancel();
+    super.dispose();
   }
 
   @override

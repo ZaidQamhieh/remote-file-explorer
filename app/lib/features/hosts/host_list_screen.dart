@@ -6,8 +6,6 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/host_store.dart';
 import '../../core/ui/feedback.dart';
-import '../../core/ui/gradient_blob_hero.dart';
-import '../../core/ui/gradient_button.dart';
 import '../../core/ui/grouped_card.dart';
 import '../../core/ui/pressable.dart';
 import '../../core/theme/motion.dart';
@@ -18,11 +16,9 @@ import '../pairing/pairing_screen.dart';
 import '../settings/update_banner.dart';
 import 'widgets/host_card.dart';
 
-/// Displays every paired host: the first (most-recently-paired) as the
-/// confirmed "Circular Orbit" hero card, the rest as regular [HostCard] rows
-/// under an "Also paired" label — matches the confirmed Devices mockup
-/// (`wiki/entities/remote-file-explorer.md`, 2026-07-23). Falls back to a
-/// flat list of rows with no hero while actively searching.
+/// Displays every paired host as a dashboard card. The first (most-recently
+/// paired) card gets the stronger title hierarchy; search results keep the
+/// same status, storage, and quick-action layout.
 class HostListScreen extends ConsumerStatefulWidget {
   const HostListScreen({super.key});
 
@@ -170,10 +166,8 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                       Spacing.xl * 2,
                     ),
                     children: [
-                      // The first host is the confirmed "Circular Orbit" hero
-                      // (wiki/entities/remote-file-explorer.md, 2026-07-23) —
-                      // only in the unfiltered view, so a search match never
-                      // has to jump between hero/row shells mid-search.
+                      // The first (most recently paired) host gets a little
+                      // more title emphasis when the full list is visible.
                       if (query.isEmpty) ...[
                         AppearListItem(
                           index: 0,
@@ -211,18 +205,10 @@ class _HostListScreenState extends ConsumerState<HostListScreen> {
                         ),
                       ],
                       const SizedBox(height: Spacing.md),
-                      const SectionLabel('This device'),
-                      // The mockup's "Show my pairing code" button implies
-                      // this phone displays a code for a PC to scan — but
-                      // this app's actual TOFU pairing flow runs the other
-                      // way (the agent mints the code, the phone scans it;
-                      // see `agent pair` in CLAUDE.md). There's no real
-                      // "phone shows its own code" flow to wire this to, so
-                      // it opens the existing add-a-computer pairing flow
-                      // instead of fabricating a fake code display.
+                      const SectionLabel('Add another computer'),
                       _GhostButton(
-                        icon: LucideIcons.qrCode,
-                        label: 'Show my pairing code',
+                        icon: LucideIcons.plus,
+                        label: context.l10n.addComputerButton,
                         onTap: () => HostListScreen.addComputer(context, ref),
                       ),
                     ],
@@ -254,6 +240,7 @@ class _DeviceSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
+      constraints: const BoxConstraints(minHeight: 48),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -289,8 +276,8 @@ class _DeviceSearchBar extends StatelessWidget {
   }
 }
 
-/// The mockup's `.iconbtn`: bare 34x34 circular tap target, 19px icon, no
-/// fill, no Material ripple ([Pressable]'s scale-down instead).
+/// Icon-only app-bar action with a 48dp hit target and a single accessible
+/// label from its tooltip.
 class _AppbarIconBtn extends StatelessWidget {
   const _AppbarIconBtn({
     required this.icon,
@@ -305,23 +292,30 @@ class _AppbarIconBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: Pressable(
-        onTap: onTap,
-        pressedScale: 0.92,
-        child: SizedBox(
-          width: 34,
-          height: 34,
-          child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: Tooltip(
+          message: tooltip,
+          child: Pressable(
+            onTap: onTap,
+            pressedScale: 0.92,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(icon, size: 19, color: scheme.onSurfaceVariant),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// The mockup's `.btn` + `.btn-ghost`: 1px bordered pill, `surface-2` fill,
-/// 13.5px/600 label — no `OutlinedButton`.
+/// Full-width pairing action with explicit button semantics and a 48dp minimum
+/// height.
 class _GhostButton extends StatelessWidget {
   const _GhostButton({
     required this.icon,
@@ -336,30 +330,38 @@ class _GhostButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Pressable(
+    return Semantics(
+      button: true,
+      label: label,
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          border: Border.all(color: scheme.outlineVariant),
-          borderRadius: Radii.smR,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: scheme.onSurface),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
-              ),
+      child: ExcludeSemantics(
+        child: Pressable(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: Radii.smR,
             ),
-          ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: scheme.onSurface),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -367,9 +369,7 @@ class _GhostButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — "pair your first PC" hero. Not shown in the mockup (its
-// Devices tab always has 3 mock hosts), so this keeps the existing hero
-// rather than inventing a design that isn't specified anywhere.
+// Empty state — clear first-run pairing path using the approved M3 hero.
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
@@ -388,7 +388,22 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const GradientBlobHero(icon: LucideIcons.monitor, size: 120),
+            ExcludeSemantics(
+              child: Container(
+                width: 112,
+                height: 112,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.devices_rounded,
+                  size: 48,
+                  color: scheme.onPrimaryContainer,
+                ),
+              ),
+            ),
             const SizedBox(height: Spacing.lg),
             Text(
               context.l10n.emptyStatePairTitle,
@@ -397,7 +412,7 @@ class _EmptyState extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: Spacing.sm),
+            const SizedBox(height: Spacing.md),
             Text(
               context.l10n.emptyStatePairBody,
               style: textTheme.bodyMedium?.copyWith(
@@ -406,10 +421,11 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: Spacing.lg),
-            GradientButton(
+            FilledButton.icon(
               onPressed: onScan,
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
               icon: const Icon(LucideIcons.scanQrCode),
-              child: Text(context.l10n.scanQrCodeButton),
+              label: Text(context.l10n.scanQrCodeButton),
             ),
           ],
         ),

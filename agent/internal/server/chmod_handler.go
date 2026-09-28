@@ -2,6 +2,7 @@
 package server
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"os"
@@ -35,13 +36,11 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		resolved, err := ops.Resolve(req.Path)
-		if err != nil {
-			handleFsError(w, err)
-			return
-		}
-
-		if err := os.Chmod(resolved, fs.FileMode(parsed)); err != nil {
+		if err := ops.Chmod(req.Path, fs.FileMode(parsed)); err != nil {
+			if errors.Is(err, fsops.ErrForbidden) {
+				handleFsError(w, err)
+				return
+			}
 			if os.IsNotExist(err) {
 				handleFsError(w, fsops.ErrNotFound)
 				return
@@ -54,7 +53,7 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		entry, err := ops.Meta(resolved)
+		entry, err := ops.Meta(req.Path)
 		if err != nil {
 			handleFsError(w, err)
 			return

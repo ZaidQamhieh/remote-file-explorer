@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../core/api/agent_client.dart';
 import '../../core/l10n_ext.dart';
+import '../../core/models/host.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/storage/cache_manager.dart';
@@ -88,9 +90,8 @@ class StorageSecuritySettingsScreen extends ConsumerWidget {
   }
 }
 
-/// Lists paired hosts' pinned TLS fingerprints (TOFU — see `agent_client.dart`)
-/// with a "Forget" action, matching the mockup's `settings-security`
-/// "Trusted certificates" card.
+/// Lists paired hosts' secure-store TLS fingerprints with a "Forget" action,
+/// matching the mockup's `settings-security` "Trusted certificates" card.
 ///
 /// "Forget" reuses the exact same local-only `HostStore.removeHost` +
 /// `hostStoreProvider` invalidation [HostCard]'s existing "Forget this
@@ -105,25 +106,26 @@ class _TrustedCertificatesSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hostsAsync = ref.watch(hostStoreProvider);
+    final certificatesAsync = ref.watch(_trustedCertificatesProvider);
     return SettingsSection(
       title: 'Trusted certificates',
       padded: false,
       children: [
-        hostsAsync.when(
+        certificatesAsync.when(
           loading:
               () => const Padding(
                 padding: EdgeInsets.all(Spacing.md),
                 child: Center(child: CircularProgressIndicator()),
               ),
-          error: (_, __) => const SizedBox.shrink(),
-          data: (store) {
-            final hosts =
-                store
-                    .listHosts()
-                    .where((h) => h.certFingerprint != null)
-                    .toList();
-            if (hosts.isEmpty) {
+          error:
+              (_, __) => const Padding(
+                padding: EdgeInsets.all(Spacing.md),
+                child: Text(
+                  'Could not read trusted certificates from secure storage.',
+                ),
+              ),
+          data: (certificates) {
+            if (certificates.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.all(Spacing.md),
                 child: Text(
@@ -136,7 +138,7 @@ class _TrustedCertificatesSection extends ConsumerWidget {
             }
             return Column(
               children: [
-                for (var i = 0; i < hosts.length; i++) ...[
+                for (var i = 0; i < certificates.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -150,7 +152,7 @@ class _TrustedCertificatesSection extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                hosts[i].label,
+                                certificates[i].host.label,
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -158,7 +160,7 @@ class _TrustedCertificatesSection extends ConsumerWidget {
                               ),
                               const SizedBox(height: 1),
                               Text(
-                                _formatFingerprint(hosts[i].certFingerprint!),
+                                _formatFingerprint(certificates[i].fingerprint),
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontFamily: 'JetBrains Mono',
@@ -179,8 +181,8 @@ class _TrustedCertificatesSection extends ConsumerWidget {
                               () => _forget(
                                 context,
                                 ref,
-                                hosts[i].id,
-                                hosts[i].label,
+                                certificates[i].host.id,
+                                certificates[i].host.label,
                               ),
                         ),
                       ],
@@ -225,6 +227,27 @@ class _TrustedCertificatesSection extends ConsumerWidget {
     ref.invalidate(hostStoreProvider);
   }
 }
+
+class _TrustedCertificate {
+  const _TrustedCertificate(this.host, this.fingerprint);
+
+  final Host host;
+  final String fingerprint;
+}
+
+final _trustedCertificatesProvider =
+    FutureProvider.autoDispose<List<_TrustedCertificate>>((ref) async {
+      final store = await ref.watch(hostStoreProvider.future);
+      final certificates = <_TrustedCertificate>[];
+      for (final host in store.listHosts()) {
+        final fingerprint = AgentClient.normalizeFingerprint(
+          await store.getFingerprint(host.id),
+        );
+        if (fingerprint == null) continue;
+        certificates.add(_TrustedCertificate(host, fingerprint));
+      }
+      return certificates;
+    });
 
 /// `abcd1234ef…` → `ab:cd:12:34:ef…`, truncated to 5 byte-pairs — purely a
 /// display transform (no change to the stored fingerprint), matching the

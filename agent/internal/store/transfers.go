@@ -26,6 +26,21 @@ type Transfer struct {
 	Overwrite      bool  // may Complete replace an existing target? (PR-50)
 }
 
+// TransferHistoryRetention is how long the host keeps completed/failed upload
+// session metadata for the web companion's recent activity view. Uploaded
+// destination files are never removed by this policy.
+const TransferHistoryRetention = 90 * 24 * time.Hour
+
+// TransferLimits caps open sessions and their declared-byte reservations.
+// Limits are enforced in the same SQLite INSERT statement that creates the
+// reservation row, so concurrent callers cannot both pass a stale count.
+type TransferLimits struct {
+	MaxHostSessions   int
+	MaxHostBytes      int64
+	MaxDeviceSessions int
+	MaxDeviceBytes    int64
+}
+
 // ExpectedChunkLen returns exactly how many bytes chunk n must carry: a full
 // ChunkSize for every chunk but the last, and the remainder for the last one.
 // A zero-length transfer has one empty chunk. Out-of-range n returns -1, which
@@ -58,6 +73,29 @@ func (s *DB) CreateTransfer(t *Transfer) error {
 	return err
 }
 
+// CreateTransferWithinLimits atomically reserves one open session if both the
+// host-wide and per-device session/byte quotas permit it. The returned bool
+// is false when a quota is full; a database error is returned separately.
+func (s *DB) CreateTransferWithinLimits(t *Transfer, limits TransferLimits) (bool, error) {
+	res, err := s.db.Exec(`
+INSERT INTO transfers (id,target_path,total_size,chunk_size,sha256,status,temp_path,total_chunks,device_id,overwrite)
+SELECT ?,?,?,?,?, 'open',?,?,?,?
+WHERE (SELECT COUNT(*) FROM transfers WHERE status='open') < ?
+  AND COALESCE((SELECT SUM(total_size) FROM transfers WHERE status='open'),0) <= ? - ?
+  AND (SELECT COUNT(*) FROM transfers WHERE status='open' AND device_id=?) < ?
+  AND COALESCE((SELECT SUM(total_size) FROM transfers WHERE status='open' AND device_id=?),0) <= ? - ?`,
+		t.ID, t.TargetPath, t.TotalSize, t.ChunkSize, t.SHA256,
+		t.TempPath, t.TotalChunks, t.DeviceID, t.Overwrite,
+		limits.MaxHostSessions, limits.MaxHostBytes, t.TotalSize,
+		t.DeviceID, limits.MaxDeviceSessions, t.DeviceID, limits.MaxDeviceBytes, t.TotalSize,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
 // GetTransfer retrieves a transfer by ID.
 func (s *DB) GetTransfer(id string) (*Transfer, error) {
 	row := s.db.QueryRow(
@@ -66,6 +104,96 @@ func (s *DB) GetTransfer(id string) (*Transfer, error) {
          FROM transfers WHERE id=?`, id,
 	)
 	return scanTransfer(row)
+}
+
+// TouchOpenTransfer marks a status/resume request as activity so the stale
+// transfer sweeper does not expire a session while its owner is reconnecting.
+func (s *DB) TouchOpenTransfer(id string, at int64) error {
+	_, err := s.db.Exec(
+		`UPDATE transfers SET updated_at=? WHERE id=? AND status='open'`, at, id,
+	)
+	return err
+}
+
+// ListOpenTransfers returns open sessions for the manager's stale-session
+// sweep. It intentionally loads only persisted session metadata, not the
+// potentially large received-chunk set.
+func (s *DB) ListOpenTransfers() ([]Transfer, error) {
+	rows, err := s.db.Query(`
+SELECT id,target_path,total_size,chunk_size,sha256,status,temp_path,total_chunks,device_id,updated_at,overwrite,
+       (SELECT COUNT(*) FROM transfer_chunks c WHERE c.transfer_id=transfers.id)
+FROM transfers WHERE status='open' ORDER BY rowid ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Transfer
+	for rows.Next() {
+		var t Transfer
+		if err := rows.Scan(
+			&t.ID, &t.TargetPath, &t.TotalSize, &t.ChunkSize, &t.SHA256,
+			&t.Status, &t.TempPath, &t.TotalChunks, &t.DeviceID, &t.UpdatedAt,
+			&t.Overwrite, &t.ReceivedCount,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ListTransferTempPaths returns temp paths still owned by open sessions.
+// Terminal rows cannot resume and their old temp files may be swept after the
+// retention period if an earlier remove failed.
+func (s *DB) ListTransferTempPaths() ([]string, error) {
+	rows, err := s.db.Query(`SELECT temp_path FROM transfers WHERE status='open' AND temp_path<>''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
+// DeleteStaleOpenTransfer deletes an open row only if its activity timestamp
+// and received-chunk count still match the sweep snapshot. Chunk deletion and
+// row deletion are one transaction so no orphan chunk rows remain.
+func (s *DB) DeleteStaleOpenTransfer(t *Transfer) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("begin stale transfer delete: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+
+	res, err := tx.Exec(`
+DELETE FROM transfers
+WHERE id=? AND status='open' AND updated_at=?
+  AND (SELECT COUNT(*) FROM transfer_chunks c WHERE c.transfer_id=transfers.id)=?`,
+		t.ID, t.UpdatedAt, t.ReceivedCount,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n == 0 {
+		return false, err
+	}
+	if _, err := tx.Exec(`DELETE FROM transfer_chunks WHERE transfer_id=?`, t.ID); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // MarkChunkReceived atomically records chunk n as received.
@@ -138,22 +266,60 @@ func (s *DB) ChunkNumbers(id string) ([]int, error) {
 	return out, rows.Err()
 }
 
-// SetTransferStatus updates the status of a transfer.
+// SetTransferStatus updates the status of a transfer and starts the history
+// retention window when the session reaches a terminal state.
 func (s *DB) SetTransferStatus(id, status string) error {
-	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
+	terminalAt := int64(0)
+	if status == "completed" || status == "failed" {
+		terminalAt = time.Now().Unix()
+	}
+	_, err := s.db.Exec(`UPDATE transfers SET status=?, terminal_at=? WHERE id=?`, status, terminalAt, id)
 	return err
 }
 
-// DeleteTransfer removes a transfer row (its own history, not the uploaded
-// file). Used by the web companion to clear stale "open" or "failed" rows —
-// the table otherwise accumulates every session ever opened forever.
+// PruneTerminalTransfersBefore removes completed/failed transfer metadata
+// older than cutoffUnix, together with its chunk rows, in one transaction.
+// Open sessions and legacy terminal rows without a trustworthy terminal time
+// are preserved.
+func (s *DB) PruneTerminalTransfersBefore(cutoffUnix int64) (int, error) {
+	const eligible = `status IN ('completed','failed') AND terminal_at>0 AND terminal_at<?`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin terminal transfer prune: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+
+	if _, err := tx.Exec(`DELETE FROM transfer_chunks WHERE transfer_id IN (
+SELECT id FROM transfers WHERE `+eligible+`
+)`, cutoffUnix); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec(`DELETE FROM transfers WHERE `+eligible, cutoffUnix)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(deleted), nil
+}
+
+// DeleteTransfer removes a transfer row and its chunk rows (its own history,
+// not the uploaded file). Used by the web companion to clear a session.
 func (s *DB) DeleteTransfer(id string) error {
-	// Chunk rows are keyed by transfer_id with no foreign key, so they must be
-	// cleared explicitly or they outlive the session forever (PR-42).
-	if _, err := s.db.Exec(`DELETE FROM transfer_chunks WHERE transfer_id=?`, id); err != nil {
+	// Chunk rows are keyed by transfer_id with no foreign key, so remove them
+	// atomically with the session row or they can outlive a failed deletion.
+	tx, err := s.db.Begin()
+	if err != nil {
 		return err
 	}
-	res, err := s.db.Exec(`DELETE FROM transfers WHERE id=?`, id)
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+
+	res, err := tx.Exec(`DELETE FROM transfers WHERE id=?`, id)
 	if err != nil {
 		return err
 	}
@@ -164,14 +330,16 @@ func (s *DB) DeleteTransfer(id string) error {
 	if n == 0 {
 		return sql.ErrNoRows
 	}
-	return nil
+	if _, err := tx.Exec(`DELETE FROM transfer_chunks WHERE transfer_id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ListTransfers returns the most recent transfer rows, newest first (rowid
 // desc — the table has no created column, and rowid is monotonic with insert
-// order). Capped at limit because the table accumulates every upload session
-// ever opened (mostly stale "open" rows the client never finalized) — the
-// web companion only shows recent activity, and the summary counts come from
+// order). Capped at limit because the web companion only shows recent activity
+// and the summary counts come from
 // CountTransfersByStatus, not len() of this list. deviceID, if non-empty,
 // restricts the rows to that device; username, if non-empty, restricts them
 // to devices stamped with that login account; pass "" for no filter.

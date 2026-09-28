@@ -7,16 +7,21 @@ import '../../core/models/host.dart';
 /// (0 = Servers, 1 = Files, 2 = Transfers, 3 = Settings).
 final selectedTabIndexProvider = StateProvider<int>((ref) => 0);
 
-/// The host currently browsed in the Files tab, the path to jump to on open
-/// (set by a bookmark), and the last-known [Health] ping (picks the drive
-/// list vs a `/`-rooted listing for Windows hosts — see [explorerRootFor]).
-/// Null means no host has been opened yet — the Files tab shows an empty
-/// state.
+/// The host currently browsed in the Files tab, the selected effective root,
+/// an optional path to jump to (set by a bookmark), and the last-known health
+/// response. A null root means the app is resolving the host's available
+/// roots or showing the root picker. A null host means no host is selected.
 class ActiveHost {
-  const ActiveHost({required this.host, this.health, this.initialPath});
+  const ActiveHost({
+    required this.host,
+    this.health,
+    this.rootPath,
+    this.initialPath,
+  });
 
   final Host host;
   final Health? health;
+  final String? rootPath;
   final String? initialPath;
 }
 

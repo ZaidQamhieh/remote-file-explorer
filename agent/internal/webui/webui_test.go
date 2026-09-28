@@ -26,4 +26,13 @@ func TestHandlerSPAFallback(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "<div id=\"root\">") {
 		t.Fatalf("client route /app/files: body doesn't look like index.html: %q", rr.Body.String())
 	}
+	csp := rr.Header().Get("Content-Security-Policy")
+	for _, directive := range []string{"script-src 'self'", "frame-src 'none'", "frame-ancestors 'none'", "form-action 'self'", "object-src 'none'"} {
+		if !strings.Contains(csp, directive) {
+			t.Errorf("CSP is missing %q: %s", directive, csp)
+		}
+	}
+	if rr.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", rr.Header().Get("Cache-Control"))
+	}
 }

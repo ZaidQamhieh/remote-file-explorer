@@ -8,6 +8,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/models/entry.dart';
 import '../../core/models/host.dart';
 import '../../core/storage/favorites.dart';
+import '../../core/storage/host_store.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui/entry_leading.dart';
 import '../../core/ui/feedback.dart';
@@ -553,17 +554,27 @@ class _MetaSheetState extends ConsumerState<MetaSheet> {
   /// scan to fetch this file directly with its own credentials — see
   /// `qr_scan_screen.dart` for the receiving side.
   Future<void> _sendViaQr(BuildContext context) async {
-    final fp = widget.host.certFingerprint;
+    String? fp;
+    try {
+      final store = await ref.read(hostStoreProvider.future);
+      fp = AgentClient.normalizeFingerprint(
+        await store.getFingerprint(widget.host.id),
+      );
+    } catch (_) {
+      // Do not generate a handoff QR from the legacy SharedPreferences copy.
+    }
+    if (!context.mounted) return;
     if (fp == null) {
       showError(context, context.l10n.qrHandoffNoFingerprint);
       return;
     }
+    final certFingerprint = fp;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder:
           (_) => QrGenerateSheet(
-            certFingerprint: fp,
+            certFingerprint: certFingerprint,
             path: _entry.path,
             name: _entry.name,
           ),

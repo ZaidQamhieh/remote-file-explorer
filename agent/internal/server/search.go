@@ -330,9 +330,11 @@ func searchHandler(ops *fsops.Ops, idx *SearchIndex) http.HandlerFunc {
 			roots = []string{resolved}
 		} else {
 			roots = ops.Roots()
-			if len(roots) == 0 {
+			if len(roots) == 0 && !ops.IsDenyAll() {
 				// No jail configured — fall back to the user's home directory
-				// so an empty root doesn't mean "walk the entire filesystem".
+				// so an ordinary unjailed device doesn't walk the entire
+				// filesystem. A deny-all jail also has no roots, but must not
+				// gain access through this fallback.
 				if home, err := os.UserHomeDir(); err == nil && home != "" {
 					roots = []string{home}
 				}
@@ -366,7 +368,7 @@ func searchHandler(ops *fsops.Ops, idx *SearchIndex) http.HandlerFunc {
 		results := make([]fsops.Entry, 0, limit)
 		hitLimit := false
 		for _, root := range roots {
-			walkForMatches(ctx, root, filters, limit, &results, &hitLimit)
+			walkForMatches(ctx, ops, root, filters, limit, &results, &hitLimit)
 			if hitLimit || ctx.Err() != nil {
 				break
 			}
@@ -399,17 +401,12 @@ func tryDirectPathLookup(ops *fsops.Ops, q string, roots []string, filters *sear
 		}
 	}
 	for _, c := range candidates {
-		resolved, err := ops.Resolve(filepath.Clean(c))
+		entry, err := ops.Meta(filepath.Clean(c))
 		if err != nil {
 			continue
 		}
-		info, err := os.Lstat(resolved)
-		if err != nil {
-			continue
-		}
-		entry := fsops.EntryFromInfo(info, resolved)
-		if filters.matchEntry(&entry) {
-			return entry, true
+		if filters.matchEntry(entry) {
+			return *entry, true
 		}
 	}
 	return fsops.Entry{}, false
@@ -465,8 +462,13 @@ func shouldSkipVirtualDir(path string) bool {
 // ignored too — search is best-effort. *hitLimit is set to true only when
 // the walk stops because limit was reached by a matching entry (not merely
 // because the time budget expired).
-func walkForMatches(ctx context.Context, root string, filters *searchFilters, limit int, results *[]fsops.Entry, hitLimit *bool) {
-	_ = filepath.WalkDir(root, func(entryPath string, d fs.DirEntry, err error) error {
+func walkForMatches(ctx context.Context, ops *fsops.Ops, rootPath string, filters *searchFilters, limit int, results *[]fsops.Entry, hitLimit *bool) {
+	root, err := ops.OpenDir(rootPath)
+	if err != nil {
+		return
+	}
+	defer root.Close()
+	_ = fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -483,20 +485,24 @@ func walkForMatches(ctx context.Context, root string, filters *searchFilters, li
 			}
 			return nil
 		}
-		if d.IsDir() && entryPath != root && shouldSkipVirtualDir(entryPath) {
+		entryPath := rootPath
+		if relPath != "." {
+			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
+		}
+		if d.IsDir() && relPath != "." && shouldSkipVirtualDir(entryPath) {
 			return fs.SkipDir
 		}
 
 		// Don't match the root itself — only its contents.
-		if entryPath != root && filters.matchName(d.Name()) {
+		if relPath != "." && filters.matchName(d.Name()) {
 			info, infoErr := d.Info()
 			if infoErr == nil {
-				entry := fsops.EntryFromInfo(info, entryPath)
+				entry := fsops.EntryFromInfoNoSniff(info, entryPath)
 				if filters.matchEntry(&entry) {
 					*results = append(*results, entry)
 					if len(*results) >= limit {
 						*hitLimit = true
-						return filepath.SkipAll
+						return fs.SkipAll
 					}
 				}
 			}

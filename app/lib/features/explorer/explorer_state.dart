@@ -432,9 +432,12 @@ class ExplorerNotifier
   }
 
   /// Jump directly to an absolute [path] (e.g. a favorite), rebuilding the
-  /// breadcrumb stack from the root so back/breadcrumb navigation still works.
+  /// breadcrumb stack from this explorer's root so navigation stays inside
+  /// the effective host/device folder jail.
   void jumpTo(String path) {
-    state = state.copyWith(pathStack: buildPathStack(path));
+    state = state.copyWith(
+      pathStack: buildPathStackWithinRoot(arg.rootPath, path),
+    );
     _load();
   }
 
@@ -775,4 +778,19 @@ List<String> buildPathStack(String path) {
     stack.add(cur);
   }
   return stack;
+}
+
+/// Builds a bookmark/deep-link stack that begins at [rootPath]. If [path] is
+/// outside the selected jail, the stack stays at the jail root instead.
+List<String> buildPathStackWithinRoot(String rootPath, String path) {
+  final pathStack = buildPathStack(path);
+  final root = buildPathStack(rootPath).last;
+  final isWindows = root.contains('\\');
+  final rootIndex = pathStack.indexWhere((candidate) {
+    if (isWindows) return candidate.toLowerCase() == root.toLowerCase();
+    return candidate == root;
+  });
+  return rootIndex < 0
+      ? [rootPath]
+      : [rootPath, ...pathStack.skip(rootIndex + 1)];
 }

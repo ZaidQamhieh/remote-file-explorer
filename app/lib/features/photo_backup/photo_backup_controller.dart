@@ -136,9 +136,18 @@ class PhotoBackupController {
     // the phone's — fetched fresh every run rather than cached, so a change
     // on the PC takes effect on the very next backup without a phone update.
     String photoBackupRoot;
+    bool backupConfigured;
+    bool backupAvailable;
     final client = await buildClientForHost(_ref.read, host.id);
     try {
-      photoBackupRoot = (await client.getSettings()).photoBackupRoot;
+      final backupSettings = await client.getSettings();
+      photoBackupRoot = backupSettings.photoBackupRoot;
+      // Older agents have no availability field and expose the path when
+      // configured. Keep that behavior only when the field is absent.
+      backupConfigured =
+          backupSettings.photoBackupConfigured || photoBackupRoot.isNotEmpty;
+      backupAvailable =
+          backupSettings.photoBackupAvailable ?? photoBackupRoot.isNotEmpty;
     } catch (e) {
       return PhotoBackupRunResult(
         PhotoBackupOutcome.skipped,
@@ -147,8 +156,15 @@ class PhotoBackupController {
     } finally {
       client.close();
     }
-    if (photoBackupRoot.isEmpty) {
+    if (!backupConfigured) {
       return const PhotoBackupRunResult(PhotoBackupOutcome.serverNotConfigured);
+    }
+    if (!backupAvailable || photoBackupRoot.isEmpty) {
+      return PhotoBackupRunResult(
+        PhotoBackupOutcome.skipped,
+        message:
+            'Photo backup is configured on ${host.label}, but this device\'s access policy does not allow its destination. Ask the PC owner to adjust access or read-only settings.',
+      );
     }
 
     final selected = prefs.albumIds.toSet();

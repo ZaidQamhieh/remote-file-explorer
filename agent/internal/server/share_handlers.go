@@ -10,9 +10,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"net"
+	"io"
+	"log"
 	"net/http"
 	"os"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,12 +27,14 @@ import (
 const (
 	shareDefaultExpiry = 15 * time.Minute
 	shareMaxExpiry     = 24 * time.Hour
+	shareMaxFileSize   = 500 << 20 // 500 MiB per the R1 threat model.
 
 	// T2: the token is 32 bytes of crypto/rand (2^256 space) so brute force is
 	// already infeasible, but the unauthenticated /share/{token} route is
 	// rate-limited anyway, matching /pair's defense-in-depth posture.
 	shareRateLimitAttempts = 10
 	shareRateLimitWindow   = time.Minute
+	shareRateLimitMaxIPs   = 4096
 
 	// shareSweepInterval is how often StartShareSweeper deletes expired
 	// share tokens (T6).
@@ -82,7 +87,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			handleFsError(w, err)
 			return
 		}
-		info, err := os.Stat(resolved)
+		info, err := reqOps.Stat(req.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
@@ -91,8 +96,12 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			}
 			return
 		}
-		if info.IsDir() {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "cannot share a directory")
+		if !info.Mode().IsRegular() {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "only regular files can be shared")
+			return
+		}
+		if info.Size() > shareMaxFileSize {
+			writeError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "shared files may not exceed 500 MiB")
 			return
 		}
 
@@ -118,7 +127,13 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			writeInternal(w, "create share token", err)
 			return
 		}
-		_ = db.LogShareMint(hash, resolved, expiresAt)
+		if err := db.LogShareMint(hash, resolved, expiresAt); err != nil {
+			if cleanupErr := db.DeleteShareToken(hash); cleanupErr != nil {
+				log.Printf("share audit: remove unaudited token %s: %v", hash[:8], cleanupErr)
+			}
+			writeInternal(w, "record share mint", err)
+			return
+		}
 		audit(db, r, store.AuditShareCreated, resolved,
 			"expires="+expiresAt.UTC().Format(time.RFC3339))
 
@@ -144,9 +159,9 @@ func shareURL(cfg Config, token string) string {
 // --------- GET /v1/share/{token} (UNAUTHENTICATED — see package doc) ---------
 
 func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
-	limiter := newFixedWindowLimiter(shareRateLimitAttempts, shareRateLimitWindow)
+	limiter := newShareIPLimiter(shareRateLimitAttempts, shareRateLimitWindow, shareRateLimitMaxIPs)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !limiter.allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many share requests, try again later")
 			return
 		}
@@ -165,35 +180,109 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		// Defense in depth (T3): re-validate the minted path against the
-		// agent's CURRENT jail config, in case roots changed since mint time.
-		resolved, err := ops.Resolve(path)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
-			return
-		}
-
+		// OpenFile re-validates the minted path against the agent's CURRENT
+		// jail config and opens it through the rooted filesystem boundary.
 		// The file may have been deleted/moved since mint (T6-adjacent).
-		f, err := os.Open(resolved)
+		// O_NONBLOCK prevents a path swapped to a FIFO from pinning an HTTP
+		// handler while Open waits for a writer. It has no effect for regular
+		// files; validate the opened descriptor before sending any bytes.
+		f, err := ops.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
 			return
 		}
 		defer f.Close()
 		info, err := f.Stat()
-		if err != nil || info.IsDir() {
+		if err != nil || !info.Mode().IsRegular() {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
 			return
 		}
-
-		ip := r.RemoteAddr
-		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
-			ip = host
+		if info.Size() > shareMaxFileSize {
+			writeError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "shared files may not exceed 500 MiB")
+			return
 		}
-		_ = db.LogShareServed(hash, ip)
+		setUntrustedFileResponseHeaders(w, info.Name())
 
-		http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+		if err := db.LogShareServed(hash, clientIP(r)); err != nil {
+			// ConsumeShareToken has already committed the one-time deletion.
+			// Keep serving the file rather than making an audit outage consume
+			// the link without delivering it; report the audit failure locally.
+			log.Printf("share audit: record serve %s: %v", hash[:8], err)
+		}
+
+		// Bound ServeContent to the descriptor size observed above. A writer
+		// may append to the same inode after Stat; a section reader prevents
+		// that race from streaming more than the checked size/cap.
+		content := io.NewSectionReader(f, 0, info.Size())
+		http.ServeContent(w, r, info.Name(), info.ModTime(), content)
 	}
+}
+
+type shareIPRateEntry struct {
+	windowStart time.Time
+	hits        int
+}
+
+// shareIPLimiter keeps a fixed-size, per-source-IP budget for the public
+// single-use share endpoint. When the map is full, expired entries are
+// removed; if it is still full, new source IPs are denied until a slot ages
+// out. Existing IPs retain independent budgets and cannot be starved by one
+// noisy peer, and attacker-controlled source churn cannot grow memory without
+// bound.
+type shareIPLimiter struct {
+	mu          sync.Mutex
+	maxAttempts int
+	window      time.Duration
+	maxIPs      int
+	entries     map[string]shareIPRateEntry
+}
+
+func newShareIPLimiter(maxAttempts int, window time.Duration, maxIPs int) *shareIPLimiter {
+	if maxIPs < 1 {
+		maxIPs = 1
+	}
+	return &shareIPLimiter{
+		maxAttempts: maxAttempts,
+		window:      window,
+		maxIPs:      maxIPs,
+		entries:     make(map[string]shareIPRateEntry),
+	}
+}
+
+func (l *shareIPLimiter) allow(ip string) bool {
+	return l.allowAt(ip, time.Now())
+}
+
+func (l *shareIPLimiter) allowAt(ip string, now time.Time) bool {
+	if ip == "" {
+		ip = "<unknown>"
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	entry, exists := l.entries[ip]
+	if exists && now.Sub(entry.windowStart) < l.window {
+		if entry.hits >= l.maxAttempts {
+			return false
+		}
+		entry.hits++
+		l.entries[ip] = entry
+		return true
+	}
+
+	if len(l.entries) >= l.maxIPs {
+		cutoff := now.Add(-l.window)
+		for key, stale := range l.entries {
+			if !stale.windowStart.After(cutoff) {
+				delete(l.entries, key)
+			}
+		}
+		if _, exists = l.entries[ip]; !exists && len(l.entries) >= l.maxIPs {
+			return false
+		}
+	}
+	l.entries[ip] = shareIPRateEntry{windowStart: now, hits: 1}
+	return true
 }
 
 // --------- DELETE /v1/share/{tokenHash} (authenticated) ---------

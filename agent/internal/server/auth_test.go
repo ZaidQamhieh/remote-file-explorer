@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -126,6 +127,85 @@ func TestAuthMiddleware_SetsDeviceContext(t *testing.T) {
 	}
 	if gotDevice == nil || gotDevice.ID != "dev1" {
 		t.Fatalf("expected device dev1 in context, got %+v", gotDevice)
+	}
+}
+
+func TestAuthMiddleware_WebSessionCookieRequiresSameOriginMarker(t *testing.T) {
+	db, _, token := newAuthTestDeps(t)
+	handler := authMiddleware(db)(okHandler())
+
+	request := httptest.NewRequest(http.MethodGet, "https://agent.example:8765/v1/status", nil)
+	request.AddCookie(&http.Cookie{Name: webSessionCookie, Value: token})
+	request.Header.Set(webSessionHeader, "1")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set("Origin", "https://agent.example:8765")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("same-origin web session returned %d: %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "https://agent.example:8765/v1/status", nil)
+	request.AddCookie(&http.Cookie{Name: webSessionCookie, Value: token})
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cookie without marker returned %d, want 403", response.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "https://agent.example:8765/v1/status", nil)
+	request.AddCookie(&http.Cookie{Name: webSessionCookie, Value: token})
+	request.Header.Set(webSessionHeader, "1")
+	request.Header.Set("Sec-Fetch-Site", "same-site")
+	request.Header.Set("Origin", "https://other.example")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin web session returned %d, want 403", response.Code)
+	}
+}
+
+func TestWritePairResponseKeepsBrowserTokenHttpOnly(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "https://agent.example:8765/v1/login", nil)
+	request.Header.Set(webSessionHeader, "1")
+	response := httptest.NewRecorder()
+	writePairResponse(response, request, pairResponse{DeviceToken: "secret-token", DeviceID: "device-1"})
+
+	if strings.Contains(response.Body.String(), "secret-token") || strings.Contains(response.Body.String(), `"deviceToken"`) {
+		t.Fatalf("browser response exposed the bearer token: %s", response.Body.String())
+	}
+	cookie := response.Result().Cookies()
+	if len(cookie) != 1 {
+		t.Fatalf("got %d cookies, want one", len(cookie))
+	}
+	if c := cookie[0]; c.Name != webSessionCookie || c.Value != "secret-token" || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/v1" {
+		t.Fatalf("unexpected browser session cookie: %+v", c)
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("auth response Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "https://agent.example:8765/v1/login", nil)
+	response = httptest.NewRecorder()
+	writePairResponse(response, request, pairResponse{DeviceToken: "native-token"})
+	if !strings.Contains(response.Body.String(), `"deviceToken":"native-token"`) {
+		t.Fatalf("native response did not preserve bearer-token contract: %s", response.Body.String())
+	}
+}
+
+func TestLogoutHandlerClearsOnlyBrowserCookie(t *testing.T) {
+	response := httptest.NewRecorder()
+	logoutHandler(response, httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("logout status = %d, want 204", response.Code)
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("logout emitted %d cookies, want one", len(cookies))
+	}
+	if c := cookies[0]; c.Name != webSessionCookie || c.Value != "" || c.MaxAge >= 0 || !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/v1" {
+		t.Fatalf("unexpected logout cookie: %+v", c)
 	}
 }
 

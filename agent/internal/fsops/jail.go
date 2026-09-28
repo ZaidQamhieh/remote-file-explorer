@@ -311,6 +311,16 @@ func (p *securePath) renameTo(dst *securePath) error {
 	return fmt.Errorf("cannot atomically rename across filesystem jail roots")
 }
 
+func (p *securePath) linkTo(dst *securePath) error {
+	if p.root != nil && p.root == dst.root {
+		return p.root.Link(p.name, dst.name)
+	}
+	if p.root == nil && dst.root == nil {
+		return os.Link(p.full, dst.full)
+	}
+	return fmt.Errorf("cannot hard-link across filesystem jail roots")
+}
+
 // createTemp creates an exclusive temporary file in the same directory as p
 // and returns both its secure handle and the open file. The returned path
 // shares p's root handle so cleanup and rename remain descriptor-relative.

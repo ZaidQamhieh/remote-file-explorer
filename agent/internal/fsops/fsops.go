@@ -439,6 +439,115 @@ func (o *Ops) WriteContent(path string, data []byte, baseModified *time.Time) (*
 	return o.Meta(resolved.full)
 }
 
+// PublishReader streams src into a same-directory temporary file and publishes
+// it at path with rooted operations. Overwrite uses an atomic rename. Without
+// overwrite it first uses a hard link for atomic no-replace publication. If
+// the destination filesystem does not support hard links, it falls back to an
+// O_EXCL copy, preserving the no-replace behavior of older transfer
+// publication. The temporary and destination names are operated on through
+// the same os.Root when a jail is configured.
+func (o *Ops) PublishReader(path string, src io.Reader, overwrite bool) (os.FileInfo, error) {
+	if o.settings.IsReadOnly() {
+		return nil, ErrReadOnly
+	}
+	if src == nil {
+		return nil, fmt.Errorf("publish source is nil")
+	}
+	resolved, err := o.access(path)
+	if err != nil {
+		return nil, err
+	}
+	defer resolved.close()
+
+	if err := resolved.parent().mkdirAll(0o755); err != nil {
+		return nil, err
+	}
+	tmpPath, tmp, err := resolved.createTemp(".rfe-upload-*")
+	if err != nil {
+		return nil, err
+	}
+	cleanup := func() { _ = tmpPath.remove() }
+	if _, err := io.Copy(tmp, src); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return nil, err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return nil, err
+	}
+	info, err := tmp.Stat()
+	if err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	if overwrite {
+		if err := tmpPath.renameTo(resolved); err != nil {
+			cleanup()
+			return nil, err
+		}
+		return info, nil
+	}
+	if err := tmpPath.linkTo(resolved); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			cleanup()
+			return nil, ErrConflict
+		}
+		if copyErr := copyNoReplaceRooted(tmpPath, resolved); copyErr != nil {
+			cleanup()
+			if errors.Is(copyErr, os.ErrExist) {
+				return nil, ErrConflict
+			}
+			return nil, copyErr
+		}
+	}
+	// The destination now refers to the fully-written inode. Removing the
+	// temporary name is cleanup only; publication has already succeeded.
+	_ = tmpPath.remove()
+	return info, nil
+}
+
+// copyNoReplaceRooted is the compatibility fallback for filesystems that
+// reject hard links. O_EXCL still makes destination creation race-safe, and
+// both opens/removal stay rooted; as with the prior fallback, the destination
+// may be visible while its bytes are being copied.
+func copyNoReplaceRooted(src, dst *securePath) error {
+	in, err := src.open()
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := dst.openFile(os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	cleanup := func() {
+		_ = out.Close()
+		_ = dst.remove()
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		cleanup()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = dst.remove()
+		return err
+	}
+	return nil
+}
+
 // --------- Rename ---------
 
 // Rename moves src to dst.

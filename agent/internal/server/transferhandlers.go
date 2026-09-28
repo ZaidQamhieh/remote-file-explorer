@@ -234,8 +234,12 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 		}
 
 		id := uuid.New().String()
-		t, err := tm.OpenSession(id, resolved, req.Size, req.ChunkSize, req.SHA256, req.Overwrite, deviceID)
+		t, err := tm.OpenSessionWithStat(id, resolved, req.Size, req.ChunkSize, req.SHA256, req.Overwrite, deviceID, ops.Stat)
 		if err != nil {
+			if errors.Is(err, fsops.ErrForbidden) || errors.Is(err, fsops.ErrReadOnly) {
+				handleFsError(w, err)
+				return
+			}
 			if errors.Is(err, transfer.ErrDestinationExists) {
 				writeError(w, http.StatusConflict, "CONFLICT", "destination already exists")
 				return
@@ -420,12 +424,10 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		ops := opsFromContext(r.Context(), ops)
 		id := chi.URLParam(r, "id")
 
-		// Re-check the session's target path against the calling device's
-		// jail before completing. The path was already validated against the
-		// jail in effect at /transfers (POST) time, but a transfer session
-		// isn't otherwise scoped to the device that opened it — so a jailed
-		// device must not be able to "complete" (i.e. trigger the final
-		// rename for) a session targeting a path outside its own jail.
+		// The publisher callback below re-authorizes the target through this
+		// request's effective Ops and performs the final placement using the
+		// same rooted filesystem boundary. A prior Resolve check is not enough
+		// because the path can change between authorization and rename.
 		var verifiedSHA256 string
 		t, err := tm.Lookup(id)
 		if err != nil {
@@ -445,13 +447,18 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 			return
 		}
 		verifiedSHA256 = t.SHA256
-		if _, resolveErr := ops.Resolve(t.TargetPath); resolveErr != nil {
-			handleFsError(w, resolveErr)
-			return
-		}
-
-		_, targetPath, err := tm.Complete(id)
+		_, targetPath, err := tm.CompleteWithPublisher(id, func(path string, source io.Reader, overwrite bool) (os.FileInfo, error) {
+			info, publishErr := ops.PublishReader(path, source, overwrite)
+			if errors.Is(publishErr, fsops.ErrConflict) {
+				return nil, transfer.ErrDestinationExists
+			}
+			return info, publishErr
+		})
 		if err != nil {
+			if errors.Is(err, fsops.ErrForbidden) || errors.Is(err, fsops.ErrReadOnly) {
+				handleFsError(w, err)
+				return
+			}
 			if errors.Is(err, transfer.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 				return

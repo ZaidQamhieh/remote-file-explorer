@@ -54,14 +54,11 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
-		resolved, err := ops.Resolve(path)
+		f, err := ops.Open(path)
 		if err != nil {
-			handleFsError(w, err)
-			return
-		}
-		f, err := os.Open(resolved)
-		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, fsops.ErrForbidden) {
+				handleFsError(w, err)
+			} else if os.IsNotExist(err) {
 				writeError(w, http.StatusNotFound, "PATH_NOT_FOUND", "file not found")
 			} else {
 				writeInternal(w, "download", err)

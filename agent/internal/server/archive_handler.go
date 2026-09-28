@@ -5,11 +5,13 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -45,12 +47,25 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		if _, err := os.Stat(resolved); err != nil {
-			if os.IsNotExist(err) {
+		f, err := ops.OpenFile(resolved, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		if err != nil {
+			if errors.Is(err, fsops.ErrForbidden) {
+				handleFsError(w, err)
+			} else if os.IsNotExist(err) {
 				handleFsError(w, fsops.ErrNotFound)
-				return
+			} else {
+				writeInternal(w, "archive open", err)
 			}
+			return
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
 			writeInternal(w, "archive stat", err)
+			return
+		}
+		if !info.Mode().IsRegular() {
+			handleFsError(w, fsops.ErrUnsupported)
 			return
 		}
 
@@ -58,11 +73,11 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 		lower := strings.ToLower(resolved)
 		switch {
 		case strings.HasSuffix(lower, ".zip"):
-			entries, err = peekZip(resolved, limit)
+			entries, err = peekZipFile(f, limit)
 		case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
-			entries, err = peekTarGz(resolved, limit)
+			entries, err = peekTarGzFile(f, limit)
 		case strings.HasSuffix(lower, ".tar"):
-			entries, err = peekTar(resolved, limit)
+			entries, err = peekTarFile(f, limit)
 		default:
 			handleFsError(w, fsops.ErrUnsupported)
 			return
@@ -75,12 +90,15 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 	}
 }
 
-func peekZip(path string, limit int) ([]ArchiveEntry, error) {
-	zr, err := zip.OpenReader(path)
+func peekZipFile(file *os.File, limit int) ([]ArchiveEntry, error) {
+	info, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
-	defer zr.Close()
+	zr, err := zip.NewReader(file, info.Size())
+	if err != nil {
+		return nil, err
+	}
 
 	entries := make([]ArchiveEntry, 0, min(len(zr.File), limit))
 	for i, f := range zr.File {
@@ -97,14 +115,11 @@ func peekZip(path string, limit int) ([]ArchiveEntry, error) {
 	return entries, nil
 }
 
-func peekTarGz(path string, limit int) ([]ArchiveEntry, error) {
-	f, err := os.Open(path)
-	if err != nil {
+func peekTarGzFile(file *os.File, limit int) ([]ArchiveEntry, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	defer f.Close()
-
-	gz, err := gzip.NewReader(f)
+	gz, err := gzip.NewReader(file)
 	if err != nil {
 		return nil, err
 	}
@@ -113,14 +128,11 @@ func peekTarGz(path string, limit int) ([]ArchiveEntry, error) {
 	return readTarEntries(tar.NewReader(gz), limit)
 }
 
-func peekTar(path string, limit int) ([]ArchiveEntry, error) {
-	f, err := os.Open(path)
-	if err != nil {
+func peekTarFile(file *os.File, limit int) ([]ArchiveEntry, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	defer f.Close()
-
-	return readTarEntries(tar.NewReader(f), limit)
+	return readTarEntries(tar.NewReader(file), limit)
 }
 
 func readTarEntries(tr *tar.Reader, limit int) ([]ArchiveEntry, error) {

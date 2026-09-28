@@ -102,7 +102,11 @@ func (idx *SearchIndex) rebuild() time.Duration {
 
 	entries := make([]indexedEntry, 0, 4096)
 	for _, root := range roots {
-		collectAll(root, &entries)
+		openedRoot, err := idx.ops.OpenDir(root)
+		if err == nil {
+			collectAllRoot(openedRoot, root, &entries)
+			openedRoot.Close()
+		}
 		if len(entries) >= indexMaxEntries {
 			break
 		}
@@ -128,7 +132,16 @@ func (idx *SearchIndex) rebuild() time.Duration {
 // collectAll appends every entry under root (skipping virtual pseudo-fs
 // dirs, same as walkForMatches) to *entries, stopping at indexMaxEntries.
 func collectAll(root string, entries *[]indexedEntry) {
-	_ = filepath.WalkDir(root, func(entryPath string, d fs.DirEntry, err error) error {
+	openedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return
+	}
+	defer openedRoot.Close()
+	collectAllRoot(openedRoot, root, entries)
+}
+
+func collectAllRoot(root *os.Root, rootPath string, entries *[]indexedEntry) {
+	_ = fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if len(*entries) >= indexMaxEntries {
 			return filepath.SkipAll
 		}
@@ -144,10 +157,14 @@ func collectAll(root string, entries *[]indexedEntry) {
 			}
 			return nil
 		}
-		if d.IsDir() && entryPath != root && shouldSkipVirtualDir(entryPath) {
+		entryPath := rootPath
+		if relPath != "." {
+			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
+		}
+		if d.IsDir() && relPath != "." && shouldSkipVirtualDir(entryPath) {
 			return fs.SkipDir
 		}
-		if entryPath == root {
+		if relPath == "." {
 			return nil
 		}
 		info, infoErr := d.Info()

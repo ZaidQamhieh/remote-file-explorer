@@ -90,3 +90,7 @@ while the session is open. The companion's CSP and React's escaped text renderin
 that defense-in-depth boundary. Browser device private keys are migrated from legacy Web Storage
 to non-extractable Ed25519 `CryptoKey` objects in IndexedDB. API responses default to `no-store`;
 the thumbnail handler keeps its explicit private cache policy.
+
+For the status of findings carried over from the July production-readiness audit, see
+[`audit-reconciliation.md`](audit-reconciliation.md). The original aggregate count is not treated
+as closed because its itemized report was unavailable for this review.

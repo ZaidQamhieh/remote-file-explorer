@@ -36,7 +36,7 @@ This is a code review map, not a claim that the host is ready for public exposur
 | `POST /v1/wol` | Paired, non-read-only device | Read-only devices cannot send Wake-on-LAN. |
 | `POST /v1/share/mint` | `share` + `browse`, global sharing enabled, and an in-jail regular file; owner bypasses the grants | Share tokens are hashed at rest and audited. Disabling a device's share grant deletes its active links. Public tokens remain one-use bearer credentials until used or revoked. |
 | `GET /v1/share`, `DELETE /v1/share/{tokenHash}` | Paired device; list/revoke are owner-scoped | Devices can still inspect/revoke existing links after the share-mint grant is removed. |
-| `GET /v1/system/drives`, `/search`, `/fs`, `/fs/meta`, `/fs/archive`, `/fs/recent`, `GET /v1/trash` | `browse`; path operations constrained by the effective jail | Directory, metadata, search, archive-entry and trash discovery. |
+| `GET /v1/system/drives`, `/search`, `/fs`, `/fs/meta`, `/fs/archive`, `/fs/recent`, `GET /v1/trash` | `browse`; path operations constrained by the effective jail | Directory, metadata, search, archive-entry and trash discovery. `/fs/recent` still walks the full tree (15s budget), with at most two scans active per process; excess requests receive `429 RECENT_BUSY`. |
 | `GET /v1/thumb`, `/fs/checksum`, `POST /v1/fs/checksums`, `GET /v1/content` | `download`; path reads constrained by the effective jail | Thumbnails/checksums are byte-derived reads. `/app/latest` and `/app/download` are authenticated agent-update routes, not user-file downloads. |
 | `PUT /v1/content` | `modify`, writable effective policy, and effective jail | Small text writes can create or replace content, so they use the same grant as other file modifications. |
 | `POST /v1/transfers`, `PUT /v1/transfers/{id}/chunks/{n}`, `POST /v1/transfers/{id}/complete` | `upload`, writable effective policy, and effective jail; `modify` is also required throughout sessions whose overwrite flag is true | Overwrite permission is checked when opening the session, for each chunk, and again at completion, so a later grant removal blocks publication. |
@@ -66,6 +66,11 @@ Unix device files. Linux adversarial symlink-race tests run locally; Windows and
 were cross-compiled but not runtime-tested in this environment. When the target filesystem does
 not support hard links, overwrite=false upload publication uses rooted `O_EXCL` copying: it never
 replaces an existing destination, but the destination can be visible before the full copy finishes.
+
+`GET /v1/fs/recent` still scans its selected tree for up to 15 seconds per request. The handler
+admits at most two such walks concurrently per process; additional requests receive `429
+RECENT_BUSY` with `Retry-After: 1`. This bounds concurrent scan load but does not remove the
+underlying full-tree scan cost.
 
 ## Transport and reachability
 

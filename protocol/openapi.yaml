@@ -1343,7 +1343,9 @@ paths:
         time-budget signaling as /search: X-Search-Time-Budget is set when
         the budget expired before the walk finished — results are then
         partial (the most recent files *seen*, not guaranteed to be the
-        true most-recent files in the tree).
+        true most-recent files in the tree). At most two recent-file scans
+        run concurrently per agent process. Additional requests receive 429
+        code=RECENT_BUSY with Retry-After: 1.
       parameters:
         - { in: query, name: root, schema: { type: string } }
         - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }
@@ -1361,6 +1363,13 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/Entry" } }
         "401": { $ref: "#/components/responses/Error" }
+        "429":
+          description: Recent-file scan capacity is full. code=RECENT_BUSY.
+          headers:
+            Retry-After:
+              schema: { type: integer, example: 1 }
+              description: Minimum seconds to wait before retrying.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /settings:
     get:
@@ -2218,6 +2227,7 @@ components:
             - HASH_MISMATCH
             - NOT_AVAILABLE
             - THUMB_BUSY
+            - RECENT_BUSY
             - INVALID_CODE
             - DELETE_FAILED
             - RATE_LIMITED
@@ -2245,6 +2255,7 @@ components:
             - `HASH_MISMATCH` (422): whole-file SHA-256 did not match on complete.
             - `NOT_AVAILABLE` (404): no thumbnail/preview available for this file.
             - `THUMB_BUSY` (429): thumbnail request capacity is full; retry after the `Retry-After` interval.
+            - `RECENT_BUSY` (429): two recursive recent-file scans are already active; retry after the `Retry-After` interval.
             - `INVALID_CODE` (401): pairing code invalid or expired.
             - `DELETE_FAILED`: per-item batch-delete failure (returned inside a
               BatchResult entry, not as a top-level HTTP error).

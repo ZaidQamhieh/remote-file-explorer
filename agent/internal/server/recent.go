@@ -26,9 +26,11 @@ import (
 )
 
 const (
-	recentDefaultLimit = 100
-	recentMaxLimit     = 500
-	recentTimeBudget   = 15 * time.Second
+	recentDefaultLimit       = 100
+	recentMaxLimit           = 500
+	recentMaxConcurrentScans = 2
+	recentBusyRetryAfter     = "1"
+	recentTimeBudget         = 15 * time.Second
 )
 
 // recentHeap is a min-heap of fsops.Entry keyed by Modified time — the
@@ -60,6 +62,14 @@ func (h recentHeap) sortedNewestFirst() []fsops.Entry {
 // recentHandler lists the most recently modified files (not directories)
 // under the agent's configured roots — GET /v1/fs/recent?limit=&root=.
 func recentHandler(ops *fsops.Ops) http.HandlerFunc {
+	return recentHandlerWithWalker(ops, walkForRecentWithOps)
+}
+
+// recentHandlerWithWalker applies a per-handler admission limit to the
+// expensive recursive walks. A server registers one handler for this route,
+// so the limit is shared by concurrent requests to /fs/recent.
+func recentHandlerWithWalker(ops *fsops.Ops, walk func(context.Context, *fsops.Ops, string, int, *recentHeap)) http.HandlerFunc {
+	scans := make(chan struct{}, recentMaxConcurrentScans)
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()
@@ -91,13 +101,22 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 			}
 		}
 
+		select {
+		case scans <- struct{}{}:
+			defer func() { <-scans }()
+		default:
+			w.Header().Set("Retry-After", recentBusyRetryAfter)
+			writeError(w, http.StatusTooManyRequests, "RECENT_BUSY", "recent-file scan capacity is full; retry shortly")
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), recentTimeBudget)
 		defer cancel()
 
 		h := &recentHeap{}
 		heap.Init(h)
 		for _, root := range roots {
-			walkForRecentWithOps(ctx, ops, root, limit, h)
+			walk(ctx, ops, root, limit, h)
 			if ctx.Err() != nil {
 				break
 			}

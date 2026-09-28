@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"time"
 
 	"testing"
 
@@ -147,6 +148,63 @@ func TestRecentHandler_NoTimeBudgetHeaderOnNormalCompletion(t *testing.T) {
 	}
 	if rr.Header().Get(headerSearchTimeBudget) != "" {
 		t.Fatalf("did not expect %s to be set on normal completion, got %q", headerSearchTimeBudget, rr.Header().Get(headerSearchTimeBudget))
+	}
+}
+
+func TestRecentHandler_LimitsConcurrentScans(t *testing.T) {
+	ops, _ := newSearchFixture(t)
+	entered := make(chan struct{}, recentMaxConcurrentScans)
+	release := make(chan struct{})
+	handler := recentHandlerWithWalker(ops, func(context.Context, *fsops.Ops, string, int, *recentHeap) {
+		entered <- struct{}{}
+		<-release
+	})
+	responses := make(chan *httptest.ResponseRecorder, recentMaxConcurrentScans)
+	for range recentMaxConcurrentScans {
+		go func() {
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/v1/fs/recent", nil)
+			handler(rr, req)
+			responses <- rr
+		}()
+	}
+
+	for range recentMaxConcurrentScans {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			close(release)
+			t.Fatal("expected concurrent scans to enter the walker")
+		}
+	}
+
+	busy := httptest.NewRecorder()
+	busyRequest := httptest.NewRequest(http.MethodGet, "/v1/fs/recent", nil)
+	handler(busy, busyRequest)
+	if busy.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 when scan capacity is full, got %d: %s", busy.Code, busy.Body.String())
+	}
+	if got := busy.Header().Get("Retry-After"); got != recentBusyRetryAfter {
+		t.Fatalf("expected Retry-After=%q, got %q", recentBusyRetryAfter, got)
+	}
+	var apiErr apiError
+	if err := json.Unmarshal(busy.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("decode busy response: %v", err)
+	}
+	if apiErr.Code != "RECENT_BUSY" {
+		t.Fatalf("expected RECENT_BUSY error code, got %q", apiErr.Code)
+	}
+
+	close(release)
+	for range recentMaxConcurrentScans {
+		select {
+		case rr := <-responses:
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected admitted scan to complete with 200, got %d: %s", rr.Code, rr.Body.String())
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("admitted scan did not finish after release")
+		}
 	}
 }
 

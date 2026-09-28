@@ -228,13 +228,12 @@ func walkForRecentRoot(ctx context.Context, root *os.Root, rootPath string, limi
 			}
 			return nil
 		}
-		entryPath := rootPath
-		if relPath != "." {
-			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
-		}
 		if d.IsDir() {
-			if relPath != "." && shouldSkipVirtualDir(entryPath) {
-				return fs.SkipDir
+			if relPath != "." {
+				dirPath := filepath.Join(rootPath, filepath.FromSlash(relPath))
+				if shouldSkipVirtualDir(dirPath) {
+					return fs.SkipDir
+				}
 			}
 			return nil
 		}
@@ -242,6 +241,17 @@ func walkForRecentRoot(ctx context.Context, root *os.Root, rootPath string, limi
 		info, infoErr := d.Info()
 		if infoErr != nil {
 			return nil
+		}
+		// Most files in a large tree will not make the top-K result. Compare
+		// metadata first so those entries do not allocate a joined path or a
+		// complete fsops.Entry (including MIME/name strings).
+		if h.Len() >= limit && !info.ModTime().After((*h)[0].Modified) {
+			return nil
+		}
+
+		entryPath := rootPath
+		if relPath != "." {
+			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
 		}
 		entry := fsops.EntryFromInfoNoSniff(info, entryPath)
 

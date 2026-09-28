@@ -7,8 +7,8 @@ This is a code review map, not a claim that the host is ready for public exposur
 
 | Class | Meaning |
 | --- | --- |
-| Public bootstrap | No bearer token. Only health probing, identity challenge, pairing/account bootstrap, and the one-time share fetch are mounted this way. |
-| Browser session | Embedded web companion uses a `Secure`, `HttpOnly`, `SameSite=Strict` cookie scoped to `/v1`, plus a custom same-origin request header. The token is omitted from the browser's auth JSON response. |
+| Public bootstrap | No bearer token. Health probing, identity challenge, pairing/account bootstrap, browser-session logout, and the one-time share fetch are mounted this way. Challenge/pair/login have per-source rate limits with a 4,096-key cap and shared overflow window; registration has a global rate limit. Pair/register/login bodies are capped at 1 MiB. |
+| Browser session | Embedded web companion uses a `Secure`, `HttpOnly`, `SameSite=Strict` cookie scoped to `/v1`, plus a custom same-origin request header. The token is omitted from the browser's auth JSON response. The browser relies on normal HTTPS certificate validation; JavaScript cannot pin the server leaf certificate. |
 | Paired device | Valid, non-revoked bearer token. The request gets the device's jail and read-only state in middleware; file routes also check required per-device capabilities. |
 | Owner device | A paired device minted through password login/registration (`via_login`). Owner-only handlers use `adminOnly` or a handler-level `isAdminDevice` check. File capability gates are bypassed for owner devices; global policy and effective path roots remain in force. |
 | File capability | One of `browse`, `download`, `upload`, `modify`, `delete`, or `share`. Missing grants return 403 `CAPABILITY_DENIED`; grants never confer owner/admin privileges. |
@@ -20,10 +20,11 @@ This is a code review map, not a claim that the host is ready for public exposur
 | Route(s) | Gate and scope | Sensitive behavior / review note |
 | --- | --- | --- |
 | `GET /v1/health` | Public minimal response; valid bearer or same-origin browser session may receive additional host details | Does not expose topology details to an unauthenticated caller. |
-| `POST /v1/auth/challenge`, `/pair`, `/register`, `/login` | Public bootstrap; nonce/pairing constraints and rate limits apply where implemented | Pairing/account credentials must be sent over the agent's HTTPS listener; the app pins the host certificate before sending them. |
+| `POST /v1/auth/challenge`, `/pair`, `/register`, `/login` | Public bootstrap; nonce proof is single-use; all four are rate-limited; per-source limiter state is capped at 4,096 keys, and excess unseen source addresses share an overflow window. Pair/register/login bodies are capped at 1 MiB. | The native app pins a fingerprint obtained independently before sending a code or credentials. The embedded browser has no leaf-pin check: browser login/pair/register must use a browser-trusted HTTPS certificate. Do not bypass a self-signed-certificate warning on an untrusted network. Register requires the one-time code and creates the sole login account; login/register devices carry owner privileges. |
 | `POST /v1/auth/logout` | Public cookie clearing endpoint | Clears only the embedded browser's session cookie; it does not revoke the device. Native clients continue using bearer tokens. |
 | `GET /v1/share/{token}` | Public, single-use, expiring random token, per-IP rate-limited | The handler rechecks the current global path jail, opens and validates a regular file, limits the response to the checked size, and sets download-safe browser headers. This is the only intentionally public content route. |
 | `GET /v1/status` | Any paired device | Returns agent version, uptime, platform, and data-volume capacity. |
+| `GET /v1/app/latest`, `GET /v1/app/download` | Any paired device | Authenticated agent-update metadata and APK; these routes do not read user-selected filesystem paths and do not require file-download capability. |
 | `GET /v1/transfers/list`, `GET/DELETE /v1/transfers/{id}` | Paired device; list and individual rows are scoped to the creator, with owner access | Foreign IDs are hidden as 404. Upload creation/chunk/completion additionally require `upload` and writable effective policy. |
 | `GET /v1/apps` | `viewApps` grant | Catalog is separate from launch permission. |
 | `POST /v1/apps/{id}/launch` | Both `viewApps` and `launchApps`; opaque ID re-resolved from the current native catalog; rate and concurrency limits; audit event | No client command, executable path, or arguments are accepted. GUI session and platform checks apply. |
@@ -36,13 +37,13 @@ This is a code review map, not a claim that the host is ready for public exposur
 | `POST /v1/wol` | Paired, non-read-only device | Read-only devices cannot send Wake-on-LAN. |
 | `POST /v1/share/mint` | `share` + `browse`, global sharing enabled, and an in-jail regular file; owner bypasses the grants | Share tokens are hashed at rest and audited. Disabling a device's share grant deletes its active links. Public tokens remain one-use bearer credentials until used or revoked. |
 | `GET /v1/share`, `DELETE /v1/share/{tokenHash}` | Paired device; list/revoke are owner-scoped | Devices can still inspect/revoke existing links after the share-mint grant is removed. |
-| `GET /v1/system/drives`, `/search`, `/fs`, `/fs/meta`, `/fs/archive`, `/fs/recent`, `GET /v1/trash` | `browse`; path operations constrained by the effective jail | Directory, metadata, search, archive-entry and trash discovery. `/fs/recent` still walks the full tree (15s budget), with at most two scans active per process; excess requests receive `429 RECENT_BUSY`. |
+| `GET /v1/system/drives`, `/search`, `/fs`, `/fs/meta`, `/fs/archive`, `/fs/recent`, `GET /v1/trash` | `browse`; filesystem paths are constrained by configured and per-device roots when present | Directory, metadata, search, archive-entry and trash discovery. Without configured roots or a per-device jail, the agent account's OS-level accessible paths remain in scope. `/fs/recent` still walks the full tree (15s budget), with at most two scans active per process; excess requests receive `429 RECENT_BUSY`. |
 | `GET /v1/thumb`, `/fs/checksum`, `POST /v1/fs/checksums`, `GET /v1/content` | `download`; path reads constrained by the effective jail | Thumbnails/checksums are byte-derived reads. `/app/latest` and `/app/download` are authenticated agent-update routes, not user-file downloads. |
 | `PUT /v1/content` | `modify`, writable effective policy, and effective jail | Small text writes can create or replace content, so they use the same grant as other file modifications. |
 | `POST /v1/transfers`, `PUT /v1/transfers/{id}/chunks/{n}`, `POST /v1/transfers/{id}/complete` | `upload`, writable effective policy, and effective jail; `modify` is also required throughout sessions whose overwrite flag is true | Overwrite permission is checked when opening the session, for each chunk, and again at completion, so a later grant removal blocks publication. |
 | `POST /v1/fs/folder`, `/fs/file`, `/fs/rename`, `/fs/copy`, `/fs/compress`, `/fs/extract`, `/fs/chmod`, `POST /v1/trash/restore` | `modify`, writable effective policy, and effective jail | Copy is modify-only; restore is classified as modify. Batch handlers can return per-item errors after route authorization. |
 | `POST /v1/fs/move` | `modify` + `delete`, writable effective policy, and effective jail | Moving changes the destination and removes the source. |
-| `DELETE /v1/fs`, `/v1/trash` | `delete`, writable effective policy, and effective jail | Includes filesystem deletion and empty-trash. |
+| `DELETE /v1/fs`, `/v1/trash` | `delete`, writable effective policy, and effective jail for user paths | Includes filesystem deletion and empty-trash. With a device jail, empty-trash filters entries by recorded origin; an unjailed device can empty the shared trash store. |
 
 ## Authorization coverage and residual limits
 
@@ -91,6 +92,16 @@ while the session is open. The companion's CSP and React's escaped text renderin
 that defense-in-depth boundary. Browser device private keys are migrated from legacy Web Storage
 to non-extractable Ed25519 `CryptoKey` objects in IndexedDB. API responses default to `no-store`;
 the thumbnail handler keeps its explicit private cache policy.
+
+Browser authentication still depends on the browser validating the HTTPS certificate: unlike
+the native app, page JavaScript cannot inspect and pin the peer certificate. The default agent
+certificate is self-signed, so browser access over an untrusted network requires an owner-managed
+browser-trusted certificate and a correct TLS proxy configuration.
+
+The shared JSON decoder enforces a 1 MiB request limit and requires a single JSON document. The
+public `/pair`, `/register`, and `/login` handlers use it before parsing request bodies. This review
+did not run tests; regression coverage should assert oversized and concatenated JSON bodies are
+rejected for each of those routes.
 
 For the status of findings carried over from the July production-readiness audit, see
 [`audit-reconciliation.md`](audit-reconciliation.md). The original aggregate count is not treated

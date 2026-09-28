@@ -2581,6 +2581,64 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostAppsInstruction => 'Select an app to start on this computer.';
 
   @override
+  String get hostAppsCatalogTitle => 'Registered apps';
+
+  @override
+  String get hostAppsCatalogScope =>
+      'From this computer’s supported app catalog. Some installed apps may not appear.';
+
+  @override
+  String hostAppsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count apps',
+      one: '1 app',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get hostAppsSearchHint => 'Search by app name or description';
+
+  @override
+  String get hostAppsClearSearchTooltip => 'Clear app search';
+
+  @override
+  String hostAppsMatches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count matches',
+      one: '1 match',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get hostAppsNoMatchesTitle => 'No matching apps';
+
+  @override
+  String get hostAppsNoMatchesMessage => 'Try another app name or description.';
+
+  @override
+  String get hostAppsPlatformWindows => 'Windows';
+
+  @override
+  String get hostAppsPlatformLinux => 'Linux';
+
+  @override
+  String get hostAppsPlatformMacOS => 'macOS';
+
+  @override
+  String get hostAppsPlatformUnknown => 'Computer';
+
+  @override
+  String hostAppsCatalogPlatform(String platform) {
+    return '$platform app catalog';
+  }
+
+  @override
   String get hostAppsLaunchPermissionOffHint =>
       'The host admin allows viewing this app list but has not allowed this device to launch apps.';
 
@@ -2600,11 +2658,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'An admin must enable app access for this device in the computer’s settings.';
 
   @override
-  String get hostAppsEmptyTitle => 'No launchable apps found';
+  String get hostAppsEmptyTitle => 'No registered apps found';
 
   @override
   String get hostAppsEmptyMessage =>
-      'The computer did not report any apps that are available to launch.';
+      'This computer did not report apps in its supported app catalog.';
 
   @override
   String get hostAppRunButton => 'Run';

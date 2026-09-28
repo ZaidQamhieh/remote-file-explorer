@@ -4318,6 +4318,84 @@ abstract class AppLocalizations {
   /// **'Select an app to start on this computer.'**
   String get hostAppsInstruction;
 
+  /// No description provided for @hostAppsCatalogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered apps'**
+  String get hostAppsCatalogTitle;
+
+  /// No description provided for @hostAppsCatalogScope.
+  ///
+  /// In en, this message translates to:
+  /// **'From this computer’s supported app catalog. Some installed apps may not appear.'**
+  String get hostAppsCatalogScope;
+
+  /// No description provided for @hostAppsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 app} other{{count} apps}}'**
+  String hostAppsCount(int count);
+
+  /// No description provided for @hostAppsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by app name or description'**
+  String get hostAppsSearchHint;
+
+  /// No description provided for @hostAppsClearSearchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear app search'**
+  String get hostAppsClearSearchTooltip;
+
+  /// No description provided for @hostAppsMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 match} other{{count} matches}}'**
+  String hostAppsMatches(int count);
+
+  /// No description provided for @hostAppsNoMatchesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching apps'**
+  String get hostAppsNoMatchesTitle;
+
+  /// No description provided for @hostAppsNoMatchesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another app name or description.'**
+  String get hostAppsNoMatchesMessage;
+
+  /// No description provided for @hostAppsPlatformWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get hostAppsPlatformWindows;
+
+  /// No description provided for @hostAppsPlatformLinux.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux'**
+  String get hostAppsPlatformLinux;
+
+  /// No description provided for @hostAppsPlatformMacOS.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS'**
+  String get hostAppsPlatformMacOS;
+
+  /// No description provided for @hostAppsPlatformUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer'**
+  String get hostAppsPlatformUnknown;
+
+  /// No description provided for @hostAppsCatalogPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'{platform} app catalog'**
+  String hostAppsCatalogPlatform(String platform);
+
   /// No description provided for @hostAppsLaunchPermissionOffHint.
   ///
   /// In en, this message translates to:
@@ -4351,13 +4429,13 @@ abstract class AppLocalizations {
   /// No description provided for @hostAppsEmptyTitle.
   ///
   /// In en, this message translates to:
-  /// **'No launchable apps found'**
+  /// **'No registered apps found'**
   String get hostAppsEmptyTitle;
 
   /// No description provided for @hostAppsEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'The computer did not report any apps that are available to launch.'**
+  /// **'This computer did not report apps in its supported app catalog.'**
   String get hostAppsEmptyMessage;
 
   /// No description provided for @hostAppRunButton.

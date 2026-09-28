@@ -113,6 +113,18 @@ func New(db *store.DB, tempDir string) (*Manager, error) {
 // atomically at publish time, because anything created during the upload would
 // slip past this Stat (PR-50).
 func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string) (*store.Transfer, error) {
+	return m.openSession(id, targetPath, size, chunkSize, sha256hex, overwrite, deviceID, nil)
+}
+
+// OpenSessionWithStat creates a session while checking an overwrite=false
+// destination through the caller's effective filesystem view. Server callers
+// should pass Ops.Stat so this early conflict check cannot escape a device
+// jail; Complete still makes the authoritative atomic no-replace decision.
+func (m *Manager) OpenSessionWithStat(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string, stat func(string) (os.FileInfo, error)) (*store.Transfer, error) {
+	return m.openSession(id, targetPath, size, chunkSize, sha256hex, overwrite, deviceID, stat)
+}
+
+func (m *Manager) openSession(id, targetPath string, size int64, chunkSize int, sha256hex string, overwrite bool, deviceID string, stat func(string) (os.FileInfo, error)) (*store.Transfer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -129,8 +141,14 @@ func (m *Manager) OpenSession(id, targetPath string, size int64, chunkSize int, 
 		return nil, errors.New("chunk size must be positive")
 	}
 	if !overwrite {
-		if _, err := os.Stat(targetPath); err == nil {
+		statPath := stat
+		if statPath == nil {
+			statPath = func(path string) (os.FileInfo, error) { return os.Stat(path) }
+		}
+		if _, err := statPath(targetPath); err == nil {
 			return nil, ErrDestinationExists
+		} else if stat != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
 	}
 	if _, err := m.cleanupStaleLocked(time.Now()); err != nil {
@@ -582,6 +600,18 @@ func (m *Manager) WriteChunk(id string, n int, chunkData []byte, chunkSHA256 str
 // Complete verifies the whole-file SHA-256 and atomically renames the temp
 // file to the final destination.
 func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
+	return m.complete(id, nil)
+}
+
+// CompleteWithPublisher verifies the central transfer file and then invokes
+// publish with that same open, rewound file handle. Server callers should
+// publish through the current request's Ops so jail authorization and the
+// final atomic placement use one rooted filesystem boundary.
+func (m *Manager) CompleteWithPublisher(id string, publish func(string, io.Reader, bool) (os.FileInfo, error)) (os.FileInfo, string, error) {
+	return m.complete(id, publish)
+}
+
+func (m *Manager) complete(id string, publisher func(string, io.Reader, bool) (os.FileInfo, error)) (os.FileInfo, string, error) {
 	release, err := m.beginCompletion(id)
 	if err != nil {
 		return nil, "", err
@@ -606,13 +636,13 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 	}
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, "", fmt.Errorf("hash file: %w", err)
 	}
-	f.Close()
 
 	got := hex.EncodeToString(h.Sum(nil))
 	if got != t.SHA256 {
+		_ = f.Close()
 		if err := m.db.SetTransferStatus(id, "failed"); err != nil {
 			log.Printf("transfer %s failed hash verification but status update failed: %v", id, err)
 			if deleteErr := m.db.DeleteTransfer(id); deleteErr != nil {
@@ -626,27 +656,39 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 		}
 		return nil, "", fmt.Errorf("%w: got %s want %s", ErrFileMismatch, got, t.SHA256)
 	}
-
-	// Ensure parent directory exists.
-	if err := os.MkdirAll(filepath.Dir(t.TargetPath), 0o755); err != nil {
-		return nil, "", err
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		_ = f.Close()
+		return nil, "", fmt.Errorf("rewind temp: %w", err)
 	}
 
-	// Move temp → final. os.Rename is atomic when both are on the same
-	// filesystem; when the destination is on a different mount (e.g. an
-	// external backup drive) it fails with EXDEV, so fall back to a
-	// copy-into-dest-dir + atomic-rename-within-dest. Without this every
-	// cross-filesystem transfer's Complete failed here, leaving the row
-	// stuck "open" forever (see the photo-backup leak).
-	//
-	// overwrite=false is checked again here, atomically: OpenSession's Stat
-	// happens before the upload, so a file created during it would otherwise
-	// be silently replaced at this rename (PR-50).
-	if err := publish(t.TempPath, t.TargetPath, t.Overwrite); err != nil {
-		if errors.Is(err, ErrDestinationExists) {
+	var info os.FileInfo
+	if publisher != nil {
+		info, err = publisher(t.TargetPath, f, t.Overwrite)
+		_ = f.Close()
+		if err != nil {
+			if errors.Is(err, ErrDestinationExists) {
+				return nil, "", err
+			}
+			return nil, "", fmt.Errorf("publish: %w", err)
+		}
+		if err := os.Remove(t.TempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("transfer %s published but central temp cleanup failed: %v", id, err)
+		}
+	} else {
+		_ = f.Close()
+		// Ensure parent directory exists.
+		if err := os.MkdirAll(filepath.Dir(t.TargetPath), 0o755); err != nil {
 			return nil, "", err
 		}
-		return nil, "", fmt.Errorf("rename: %w", err)
+
+		// Preserve the path-based API for internal non-server callers. Server
+		// requests use CompleteWithPublisher and a rooted Ops publisher.
+		if err := publish(t.TempPath, t.TargetPath, t.Overwrite); err != nil {
+			if errors.Is(err, ErrDestinationExists) {
+				return nil, "", err
+			}
+			return nil, "", fmt.Errorf("rename: %w", err)
+		}
 	}
 
 	// The bytes are on disk under the final name — the transfer succeeded even
@@ -659,9 +701,11 @@ func (m *Manager) Complete(id string) (os.FileInfo, string, error) {
 		return nil, t.TargetPath, fmt.Errorf("transfer published to %s but recording it failed: %w", t.TargetPath, err)
 	}
 
-	info, err := os.Stat(t.TargetPath)
-	if err != nil {
-		return nil, t.TargetPath, nil
+	if publisher == nil {
+		info, err = os.Stat(t.TargetPath)
+		if err != nil {
+			return nil, t.TargetPath, nil
+		}
 	}
 	return info, t.TargetPath, nil
 }

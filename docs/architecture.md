@@ -30,6 +30,7 @@ project currently has **no cloud relay or cloud database**.
 | Transport security | TLS with a self-signed cert; enrollment pins a SHA-256 fingerprint obtained out of band |
 | Pin storage | `HostStore` Keychain/Keystore secure storage is authoritative; the SharedPreferences copy is not a trust source |
 | Storage | SQLite on the agent; app metadata locally and tokens/pins in Keychain/Keystore secure storage |
+| Browser authentication | Embedded web companion uses a Secure, HttpOnly, SameSite=Strict session cookie and same-origin request checks; it does not store its bearer token in Web Storage |
 | Host app launch | Current-user registrations: Windows AppsFolder, Linux XDG desktop, and macOS standard `.app` folders; per-device grants default off; launch by opaque ID only |
 
 ## Security model (summary)
@@ -72,13 +73,24 @@ restart events (including pair/register/login, device changes, share creation/re
 launch outcomes, and agent restart). The audit endpoint is admin-only. File operations are
 deliberately not recorded in that trail.
 
+The embedded browser companion receives its device credential in a `/v1`-scoped HttpOnly
+session cookie rather than JavaScript-readable storage. It adds a custom request header, and
+cookie authentication checks same-origin Fetch Metadata and any supplied `Origin`. Sign-out
+clears this browser cookie but leaves the device paired; revocation remains an explicit device
+management action. HttpOnly limits credential extraction by page scripts but cannot stop a live
+same-origin script compromise from issuing requests, so the CSP and escaped React rendering are
+still important controls. The browser's Ed25519 private key is stored as a non-extractable
+IndexedDB `CryptoKey`, with an automatic one-time migration from the earlier localStorage format.
+API responses use `Cache-Control: no-store` by default; thumbnails retain their explicit private
+cache policy.
+
 For the full route-by-route authentication and authorization inventory, including explicit gaps,
 see [`security-route-matrix.md`](security-route-matrix.md). The current device model provides
 administrator provenance, a per-device path jail, a read-only switch, separate app-view/app-
 launch grants, and independent per-device browse, download, upload, modify, delete, and share
-grants. Upload currently covers both new writes and the transfer engine's overwrite option;
-overwrite cannot be separately required to hold the modify grant at the route boundary without
-changing transfer-session enforcement.
+grants. New-file transfers require `upload`; small content writes and transfer sessions that
+request overwrite require `modify`. Overwrite permission is re-checked for every chunk and at
+upload completion.
 
 ## Transfers (the core engineering)
 

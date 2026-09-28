@@ -221,6 +221,9 @@ func openTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerFunc 
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "chunkSize exceeds maximum of 32MiB")
 			return
 		}
+		if req.Overwrite && !requireDeviceFileCapabilities(w, r, capModify) {
+			return
+		}
 		// Validate path is in jail.
 		resolved, err := ops.Resolve(req.Path)
 		if err != nil {
@@ -342,6 +345,9 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 			return
 		}
+		if t.Overwrite && !requireDeviceFileCapabilities(w, r, capModify) {
+			return
+		}
 		// Hold an activity lease before consuming or throttling the request body.
 		// This closes the gap where a slow upload had not yet reached WriteChunk
 		// and could otherwise be mistaken for an abandoned session.
@@ -444,6 +450,9 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 		}
 		if !callerOwnsTransfer(r, t) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
+			return
+		}
+		if t.Overwrite && !requireDeviceFileCapabilities(w, r, capModify) {
 			return
 		}
 		verifiedSHA256 = t.SHA256

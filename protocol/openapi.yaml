@@ -1,12 +1,15 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.17.0
+  version: 1.18.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
-    /login, /auth/challenge, and /health require a bearer device token. Clients may
-    send an optional `X-RFE-Client-Version` header (e.g.
+    /login, /auth/challenge, /auth/logout, and /health require a bearer device token. The
+    embedded browser companion can instead use its same-origin HttpOnly session cookie;
+    it requests that mode with `X-RFE-Web-Session: 1`, and the agent omits `deviceToken`
+    from the authentication response. Native clients continue to receive bearer tokens.
+    Clients may send an optional `X-RFE-Client-Version` header (e.g.
     "1.10.0+18") on every authenticated request; the agent records this plus the
     caller's network address against the device row. Admin devices see those fields
     for all devices via GET /devices (see Device.lastAddress / Device.lastVersion);
@@ -54,8 +57,8 @@ paths:
         Reachable without a token, but only `status` is guaranteed for an
         unauthenticated (or invalid-token) caller — name/version/os/readOnly/
         address/tailscaleAddress/macAddress are only included for a caller
-        presenting a valid, non-revoked device bearer token, so an unpaired
-        caller can't fingerprint or map the host.
+        presenting a valid, non-revoked device bearer token or valid same-origin
+        browser session, so an unpaired caller can't fingerprint or map the host.
       security: []
       responses:
         "200":
@@ -321,6 +324,19 @@ paths:
         "429":
           description: Too many challenge requests (rate-limited at 30/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /auth/logout:
+    post:
+      summary: Clear the embedded browser's session cookie
+      description: >
+        Clears the RFE browser session cookie. This does not revoke the paired
+        device token; use DELETE /devices/{id} to revoke the device itself.
+        The route is safe to call without a session and has no effect on native
+        bearer-token clients.
+      security: []
+      responses:
+        "204": { description: Browser session cookie cleared }
+        "405": { description: Method not allowed }
 
   /pair:
     post:
@@ -952,11 +968,11 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
     put:
-      summary: Write (replace) a small text file's content, atomically
+      summary: Write a small text file's content, atomically (modify grant)
       description: >
         Writes the request body to path, replacing its current content. The
         write is atomic (temp file + rename) and the existing file's mode is
-        preserved. The body is capped at 5 MiB; larger payloads are rejected
+        preserved. This route requires the device's `modify` grant. The body is capped at 5 MiB; larger payloads are rejected
         with 413. Pass baseModified (the `modified` value last read for this
         file via /fs/meta or /fs) to get optimistic-concurrency protection —
         if the file's mtime no longer matches, the write is rejected with 409
@@ -1026,8 +1042,10 @@ paths:
                     recorded on the session and re-checked atomically at
                     POST /transfers/{id}/complete, so a file that appears
                     during the upload also conflicts (409) instead of being
-                    silently replaced. When true, an existing file at path is
-                    replaced once the upload completes.
+                    silently replaced. When true, the caller must also hold
+                    `modify` when opening the session, uploading chunks, and
+                    completing it. An existing file is replaced only after
+                    the checks pass.
       responses:
         "201":
           description: Session opened
@@ -1040,9 +1058,10 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            Path outside the caller's jail, or the agent/device is read-only.
-            code=FORBIDDEN or READ_ONLY. Every mutating transfer route honours
-            read-only, the same as the /fs routes.
+            Path outside the caller's jail, the agent/device is read-only, or
+            overwrite=true without the modify grant. code=FORBIDDEN,
+            READ_ONLY, or CAPABILITY_DENIED. Every mutating transfer route
+            honours read-only, the same as the /fs routes.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "409":
           description: >
@@ -1128,7 +1147,9 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            The agent or the calling device is read-only. code=READ_ONLY.
+            The agent or the calling device is read-only, or the session uses
+            overwrite=true without the modify grant. code=READ_ONLY or
+            CAPABILITY_DENIED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
         "409":
@@ -1149,7 +1170,8 @@ paths:
         The publish honours the session's overwrite flag atomically: with
         overwrite=false a file that appeared at the destination during the
         upload yields 409 CONFLICT and is left untouched, rather than being
-        replaced.
+        replaced. If overwrite=true, the caller must still hold the `modify`
+        grant; that permission is re-checked when the file is published.
       parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
       responses:
         "200":
@@ -1172,8 +1194,9 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403":
           description: >
-            Path outside the caller's jail, or the agent/device is read-only.
-            code=FORBIDDEN or READ_ONLY.
+            Path outside the caller's jail, the agent/device is read-only, or
+            overwrite=true without the modify grant. code=FORBIDDEN,
+            READ_ONLY, or CAPABILITY_DENIED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/Error" }
         "409":
@@ -1490,11 +1513,11 @@ paths:
                 upload:
                   type: boolean
                   default: false
-                  description: Allows PUT /content and resumable upload transfers, including overwrite because the transfer overwrite option is not separately gated by modify.
+                  description: Allows new-file resumable upload transfers. Sessions with overwrite=true also require modify.
                 modify:
                   type: boolean
                   default: false
-                  description: Allows create, rename, copy, move, archive, chmod, and trash restore operations.
+                  description: Allows PUT /content, create, rename, copy, move, archive, chmod, trash restore, and overwriting an upload destination.
                 delete:
                   type: boolean
                   default: false
@@ -2016,7 +2039,11 @@ components:
     PairResponse:
       type: object
       properties:
-        deviceToken: { type: string }
+        deviceToken:
+          type: string
+          description: >
+            Returned to native clients. Omitted when the embedded browser
+            requests an HttpOnly cookie with X-RFE-Web-Session: 1.
         deviceId: { type: string }
         agentName: { type: string }
         certFingerprint: { type: string, description: "SHA-256 of agent TLS cert, for pinning" }

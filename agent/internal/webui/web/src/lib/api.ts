@@ -4,14 +4,11 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { getDevicePublicKeyB64, signNonce } from './deviceIdentity';
 
-const TOKEN_KEY = 'rfe_device_token';
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+// Remove the JavaScript-readable bearer token stored by older companion
+// builds. Existing browser sessions must sign in again to receive an HttpOnly
+// session cookie.
+export function clearLegacyBrowserToken(): void {
+  try { localStorage.removeItem('rfe_device_token'); } catch { /* storage may be disabled */ }
 }
 
 export class ApiError extends Error {
@@ -28,18 +25,14 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  opts: { auth?: boolean } = { auth: true },
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { 'X-RFE-Web-Session': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (opts.auth !== false) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
   const res = await fetch(`/v1${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
   });
   if (res.status === 204) return undefined as T;
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -59,11 +52,11 @@ const del = <T>(path: string) => request<T>('DELETE', path);
 // Chunk uploads are raw octet-stream bodies with a custom header, not JSON —
 // bypasses the JSON-only `request` helper above.
 async function rawPut(path: string, body: ArrayBuffer, headers: Record<string, string>): Promise<void> {
-  const token = getToken();
   const res = await fetch(`/v1${path}`, {
     method: 'PUT',
-    headers: { ...headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { ...headers, 'X-RFE-Web-Session': '1' },
     body,
+    credentials: 'same-origin',
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -146,7 +139,7 @@ export interface Metrics {
   tsMs: number;
 }
 export interface PairResponse {
-  deviceToken: string;
+  deviceToken?: string;
   deviceId: string;
   agentName: string;
   certFingerprint: string;
@@ -287,6 +280,7 @@ export const api = {
     const proof = await proofFields();
     return post<PairResponse>('/pair', { pairingCode, deviceLabel, ...proof });
   },
+  logoutSession: () => request<void>('POST', '/auth/logout'),
 
   // devices
   listDevices: () => get<Device[]>('/devices'),

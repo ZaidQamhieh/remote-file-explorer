@@ -8,6 +8,7 @@ This is a code review map, not a claim that the host is ready for public exposur
 | Class | Meaning |
 | --- | --- |
 | Public bootstrap | No bearer token. Only health probing, identity challenge, pairing/account bootstrap, and the one-time share fetch are mounted this way. |
+| Browser session | Embedded web companion uses a `Secure`, `HttpOnly`, `SameSite=Strict` cookie scoped to `/v1`, plus a custom same-origin request header. The token is omitted from the browser's auth JSON response. |
 | Paired device | Valid, non-revoked bearer token. The request gets the device's jail and read-only state in middleware; file routes also check required per-device capabilities. |
 | Owner device | A paired device minted through password login/registration (`via_login`). Owner-only handlers use `adminOnly` or a handler-level `isAdminDevice` check. File capability gates are bypassed for owner devices; global policy and effective path roots remain in force. |
 | File capability | One of `browse`, `download`, `upload`, `modify`, `delete`, or `share`. Missing grants return 403 `CAPABILITY_DENIED`; grants never confer owner/admin privileges. |
@@ -18,8 +19,9 @@ This is a code review map, not a claim that the host is ready for public exposur
 
 | Route(s) | Gate and scope | Sensitive behavior / review note |
 | --- | --- | --- |
-| `GET /v1/health` | Public minimal response; valid bearer may receive the additional host details | Does not expose topology details to an unauthenticated caller. |
+| `GET /v1/health` | Public minimal response; valid bearer or same-origin browser session may receive additional host details | Does not expose topology details to an unauthenticated caller. |
 | `POST /v1/auth/challenge`, `/pair`, `/register`, `/login` | Public bootstrap; nonce/pairing constraints and rate limits apply where implemented | Pairing/account credentials must be sent over the agent's HTTPS listener; the app pins the host certificate before sending them. |
+| `POST /v1/auth/logout` | Public cookie clearing endpoint | Clears only the embedded browser's session cookie; it does not revoke the device. Native clients continue using bearer tokens. |
 | `GET /v1/share/{token}` | Public, single-use, expiring random token, per-IP rate-limited | The handler rechecks the current global path jail, opens and validates a regular file, limits the response to the checked size, and sets download-safe browser headers. This is the only intentionally public content route. |
 | `GET /v1/status` | Any paired device | Returns agent version, uptime, platform, and data-volume capacity. |
 | `GET /v1/transfers/list`, `GET/DELETE /v1/transfers/{id}` | Paired device; list and individual rows are scoped to the creator, with owner access | Foreign IDs are hidden as 404. Upload creation/chunk/completion additionally require `upload` and writable effective policy. |
@@ -36,12 +38,13 @@ This is a code review map, not a claim that the host is ready for public exposur
 | `GET /v1/share`, `DELETE /v1/share/{tokenHash}` | Paired device; list/revoke are owner-scoped | Devices can still inspect/revoke existing links after the share-mint grant is removed. |
 | `GET /v1/system/drives`, `/search`, `/fs`, `/fs/meta`, `/fs/archive`, `/fs/recent`, `GET /v1/trash` | `browse`; path operations constrained by the effective jail | Directory, metadata, search, archive-entry and trash discovery. |
 | `GET /v1/thumb`, `/fs/checksum`, `POST /v1/fs/checksums`, `GET /v1/content` | `download`; path reads constrained by the effective jail | Thumbnails/checksums are byte-derived reads. `/app/latest` and `/app/download` are authenticated agent-update routes, not user-file downloads. |
-| `PUT /v1/content`, `POST /v1/transfers`, `PUT /v1/transfers/{id}/chunks/{n}`, `POST /v1/transfers/{id}/complete` | `upload`, writable effective policy, and effective jail | Content writes and resumable uploads. Upload covers overwrites too; there is no separate `modify` check for replacing an existing target because the transfer engine owns that decision. |
+| `PUT /v1/content` | `modify`, writable effective policy, and effective jail | Small text writes can create or replace content, so they use the same grant as other file modifications. |
+| `POST /v1/transfers`, `PUT /v1/transfers/{id}/chunks/{n}`, `POST /v1/transfers/{id}/complete` | `upload`, writable effective policy, and effective jail; `modify` is also required throughout sessions whose overwrite flag is true | Overwrite permission is checked when opening the session, for each chunk, and again at completion, so a later grant removal blocks publication. |
 | `POST /v1/fs/folder`, `/fs/file`, `/fs/rename`, `/fs/copy`, `/fs/compress`, `/fs/extract`, `/fs/chmod`, `POST /v1/trash/restore` | `modify`, writable effective policy, and effective jail | Copy is modify-only; restore is classified as modify. Batch handlers can return per-item errors after route authorization. |
 | `POST /v1/fs/move` | `modify` + `delete`, writable effective policy, and effective jail | Moving changes the destination and removes the source. |
 | `DELETE /v1/fs`, `/v1/trash` | `delete`, writable effective policy, and effective jail | Includes filesystem deletion and empty-trash. |
 
-## Authorization coverage and remaining gap
+## Authorization coverage and residual limits
 
 Tests include route-level read-only and per-device file-capability matrices, migration/default
 tests, owner-vs-device settings/device-management tests, app grant checks, and transfer/share
@@ -51,10 +54,9 @@ The migration preserves prior access for existing devices: browse, download, and
 enabled; upload, modify, and delete remain enabled only for devices that were not read-only.
 Newly paired devices start browse-only. Login/register owner devices retain full file access and
 bypass per-device file grants; configured roots, global/per-device read-only, and per-device jail
-remain effective. One limitation remains: upload authorization also permits overwriting because
-the transfer engine's overwrite check is not separately wired to the `modify` grant. Share links
-are public one-use bearer credentials; disabling a device's share grant deletes its outstanding
-tokens, but changing its jail does not retroactively change links already minted.
+remain effective. Share links are public one-use bearer credentials; disabling a device's share
+grant deletes its outstanding tokens, but changing its jail does not retroactively change links
+already minted.
 
 Configured and per-device jails use rooted filesystem handles for the server's file operations,
 recursive walks, thumbnail reads, and upload publication; upload completion rechecks the current
@@ -72,3 +74,14 @@ listener may also bind port 443. There is no plaintext HTTP mode. The mobile app
 certificate independently of whether the address is LAN, Tailscale, or owner-configured direct
 HTTPS. The application does not configure router forwarding, DNS, firewall rules, or a relay.
 Direct internet reachability therefore remains an explicit host-owner network setup.
+
+The embedded web companion does not persist its bearer token in Web Storage. Login, pairing,
+and registration set a session cookie with `Secure`, `HttpOnly`, `SameSite=Strict`, and a `/v1`
+path; cookie-authenticated requests also require the companion's custom header and same-origin
+Fetch Metadata / `Origin` checks. The cookie is a browser convenience for the existing device
+token and is cleared on sign-out; it does not revoke the device. `HttpOnly` prevents page scripts
+from reading the token, but an active same-origin script compromise could still issue requests
+while the session is open. The companion's CSP and React's escaped text rendering remain part of
+that defense-in-depth boundary. Browser device private keys are migrated from legacy Web Storage
+to non-extractable Ed25519 `CryptoKey` objects in IndexedDB. API responses default to `no-store`;
+the thumbnail handler keeps its explicit private cache policy.

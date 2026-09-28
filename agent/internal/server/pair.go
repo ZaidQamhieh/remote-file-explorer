@@ -40,12 +40,28 @@ type pairRequest struct {
 }
 
 type pairResponse struct {
-	DeviceToken      string `json:"deviceToken"`
+	DeviceToken      string `json:"deviceToken,omitempty"`
 	DeviceID         string `json:"deviceId"`
 	AgentName        string `json:"agentName"`
 	CertFingerprint  string `json:"certFingerprint"`
 	Address          string `json:"address"`
 	TailscaleAddress string `json:"tailscaleAddress,omitempty"`
+}
+
+// writePairResponse preserves the bearer-token response for native clients.
+// The embedded browser receives the credential only as an HttpOnly cookie so
+// page scripts cannot read or export it.
+func writePairResponse(w http.ResponseWriter, r *http.Request, response pairResponse) {
+	if isWebSessionRequest(r) {
+		setWebSessionCookie(w, response.DeviceToken)
+		response.DeviceToken = ""
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	clearWebSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {
@@ -106,7 +122,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		}
 		auditAs(db, req.DeviceLabel, store.AuditPair, deviceID, "from "+clientIP(r))
 
-		writeJSON(w, http.StatusOK, pairResponse{
+		writePairResponse(w, r, pairResponse{
 			DeviceToken:      token,
 			DeviceID:         deviceID,
 			AgentName:        cfg.Name,

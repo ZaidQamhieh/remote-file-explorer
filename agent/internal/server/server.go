@@ -57,6 +57,17 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 	nonces := newNonceStore()
 
 	r.Route("/v1", func(r chi.Router) {
+		// API responses often contain private file or host metadata. Do not let
+		// browsers or intermediate caches retain them; the thumbnail handler
+		// explicitly opts into its existing private cache policy.
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Cache-Control", "no-store")
+				w.Header().Set("X-Content-Type-Options", "nosniff")
+				w.Header().Set("Referrer-Policy", "no-referrer")
+				next.ServeHTTP(w, req)
+			})
+		})
 		registerUnauthRoutes(r, cfg, db, pm, ops, nonces)
 
 		// Authenticated, no path jail (non-filesystem endpoints).
@@ -123,12 +134,13 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 }
 
 // registerUnauthRoutes wires the routes reachable without a bearer token:
-// health, pairing, registration, login, the device-identity challenge, and
-// the single-use share-link fetch (rate-limited and expiring — see
-// docs/r1-share-link-threat-model.md).
+// health, pairing, registration, login, the device-identity challenge,
+// browser-session logout, and the single-use share-link fetch (rate-limited
+// and expiring — see docs/r1-share-link-threat-model.md).
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops, nonces *nonceStore) {
 	r.Get("/health", healthHandler(cfg, db))
 	r.Post("/auth/challenge", challengeHandler(nonces))
+	r.Post("/auth/logout", logoutHandler)
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/register", registerHandler(cfg, db, pm, nonces))
 	r.Post("/login", loginHandler(cfg, db, nonces))
@@ -204,7 +216,8 @@ func registerTrashRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 // chunked transfer endpoints in registerTransferRoutes).
 func registerContentRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 	r.With(requireFileCapabilities(capDownload)).Get("/content", downloadHandler(ops, cfg.Settings))
-	r.With(requireFileCapabilities(capUpload)).Put("/content", writeContentHandler(ops))
+	// Replacing an existing text file is a modification, not an upload.
+	r.With(requireFileCapabilities(capModify)).Put("/content", writeContentHandler(ops))
 }
 
 // registerTransferRoutes wires the resumable chunked upload session
@@ -292,7 +305,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 // --------- health ---------
 
-// healthHandler is deliberately reachable without a bearer token (a phone
+// healthHandler is deliberately reachable without a device credential (a phone
 // probing reachability/latency shouldn't need one), but the topology detail
 // below is not: name/OS/version/read-only/addresses/MAC let an unauthenticated
 // caller fingerprint and map the host (PR-61). Every real caller (host-card
@@ -323,16 +336,23 @@ func healthHandler(cfg Config, db *store.DB) http.HandlerFunc {
 	}
 }
 
-// authorizedDevice reports whether r carries a bearer token for a known,
-// non-revoked device — the same check authMiddleware makes, but without its
-// side effects (device-touch, context injection) or its hard 401, since
-// healthHandler degrades rather than rejects an unauthenticated caller.
+// authorizedDevice reports whether r carries a valid bearer token or
+// same-origin browser session for a known, non-revoked device, without the
+// side effects of authMiddleware.
 func authorizedDevice(r *http.Request, db *store.DB) bool {
 	hdr := r.Header.Get("Authorization")
-	parts := strings.SplitN(hdr, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+	var token string
+	if hdr != "" {
+		parts := strings.SplitN(hdr, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return false
+		}
+		token = strings.TrimSpace(parts[1])
+	} else if cookie, err := r.Cookie(webSessionCookie); err == nil && validWebSessionRequest(r) {
+		token = cookie.Value
+	} else {
 		return false
 	}
-	device, err := db.DeviceByToken(strings.TrimSpace(parts[1]))
+	device, err := db.DeviceByToken(token)
 	return err == nil && device != nil && !device.Revoked
 }

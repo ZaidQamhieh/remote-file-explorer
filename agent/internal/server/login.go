@@ -97,7 +97,7 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 
 		auditAs(db, req.Username, store.AuditLogin, req.DeviceLabel, "from "+clientIP(r))
 
-		writeJSON(w, http.StatusOK, pairResponse{
+		writePairResponse(w, r, pairResponse{
 			DeviceToken:      token,
 			DeviceID:         deviceID,
 			AgentName:        cfg.Name,

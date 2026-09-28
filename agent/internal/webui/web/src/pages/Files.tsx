@@ -20,7 +20,7 @@ import {
   Download,
   Check,
 } from 'lucide-react';
-import { api, ApiError, contentUrl, getToken, type Entry, type ShareLink, type ShareLinkSummary, type TrashEntry } from '@/lib/api';
+import { api, ApiError, contentUrl, type Entry, type ShareLink, type ShareLinkSummary, type TrashEntry } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { DataTable } from '@/components/DataTable';
 import { Dialog } from '@/components/Dialog';
@@ -153,9 +153,9 @@ export function Files() {
 
   async function downloadFile(entry: Entry) {
     try {
-      const token = getToken();
       const response = await fetch(contentUrl(entry.path), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { 'X-RFE-Web-Session': '1' },
+        credentials: 'same-origin',
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));

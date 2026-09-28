@@ -212,6 +212,8 @@ input[type=text]:focus, input[type=number]:focus, input[type=password]:focus{ bo
 .empty h4{ margin:0; color:var(--text); font-size:14.5px; }
 .empty p{ margin:0; font-size:12.5px; max-width:280px; line-height:1.5; }
 
+.auth-checking{ min-height:100vh; display:grid; place-items:center; color:var(--text-dim); font-size:14px; }
+
 /* command palette (cmdk) */
 .cmdk-backdrop{ position:fixed; inset:0; background:rgba(5,6,10,.6); backdrop-filter:blur(2px); z-index:100; opacity:0; pointer-events:none; transition:opacity .18s var(--ease); }
 .cmdk-backdrop.active{ opacity:1; pointer-events:auto; }

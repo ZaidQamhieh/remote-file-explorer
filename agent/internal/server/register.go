@@ -119,7 +119,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		}
 		auditAs(db, req.Username, store.AuditRegister, req.DeviceLabel, "from "+clientIP(r))
 
-		writeJSON(w, http.StatusOK, pairResponse{
+		writePairResponse(w, r, pairResponse{
 			DeviceToken:      token,
 			DeviceID:         deviceID,
 			AgentName:        cfg.Name,

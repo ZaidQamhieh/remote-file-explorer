@@ -79,6 +79,35 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           "$(go env GOPATH)/bin/govulncheck" ./...
 
+  web:
+    name: Web companion
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent/internal/webui/web
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: agent/internal/webui/web/package-lock.json
+
+      - name: Install web companion dependencies
+        run: npm ci
+
+      - name: Build embedded web companion
+        run: npm run build
+
+      - name: Verify embedded bundle is current
+        run: |
+          git diff --exit-code -- agent/internal/webui/dist
+          test -z "$(git ls-files --others --exclude-standard -- agent/internal/webui/dist)"
+
+      - name: Lint web companion
+        run: npm run lint
+
   contract:
     name: OpenAPI contract
     runs-on: ubuntu-latest

@@ -181,10 +181,57 @@ func TestOpenTransferHandler_OverwriteBypassesConflict(t *testing.T) {
 	body := `{"path":"` + target + `","size":11,"sha256":"` + sha256hex([]byte("hello world")) + `","chunkSize":1024,"overwrite":true}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/transfers", strings.NewReader(body))
+	req = asAdmin(req)
 	openTransferHandler(tm, ops)(rr, req)
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCompleteTransferOverwriteRechecksModifyGrant(t *testing.T) {
+	tm, ops := newTestTransferManager(t)
+	target := filepath.Join(t.TempDir(), "replace.bin")
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, 0, 1024, sha256hex(nil), true, "guest"); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	req := withURLParam(httptest.NewRequest(http.MethodPost, "/v1/transfers/"+id+"/complete", nil), map[string]string{"id": id})
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "guest", CanUpload: true, CanModify: false}))
+	rr := httptest.NewRecorder()
+	completeTransferHandler(tm, ops)(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("overwrite completion without modify should return 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var apiErr apiError
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Code != "CAPABILITY_DENIED" {
+		t.Fatalf("want CAPABILITY_DENIED, got %+v (%v)", apiErr, err)
+	}
+}
+
+func TestUploadChunkOverwriteRechecksModifyGrant(t *testing.T) {
+	tm, _ := newTestTransferManager(t)
+	target := filepath.Join(t.TempDir(), "replace.bin")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, 0, 1024, sha256hex(nil), true, "guest"); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+
+	req := withURLParam(httptest.NewRequest(http.MethodPut, "/v1/transfers/"+id+"/chunks/0", nil), map[string]string{"id": id, "n": "0"})
+	req.Header.Set("X-Chunk-Sha256", sha256hex(nil))
+	req = req.WithContext(withDevice(req.Context(), &store.Device{ID: "guest", CanUpload: true, CanModify: false}))
+	rr := httptest.NewRecorder()
+	uploadChunkHandler(tm)(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("overwrite chunk without modify should return 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var apiErr apiError
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil || apiErr.Code != "CAPABILITY_DENIED" {
+		t.Fatalf("want CAPABILITY_DENIED, got %+v (%v)", apiErr, err)
 	}
 }
 

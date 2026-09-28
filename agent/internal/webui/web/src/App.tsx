@@ -13,7 +13,8 @@ import { Logs } from '@/pages/Logs';
 import { Settings } from '@/pages/Settings';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { authenticated } = useAuth();
+  const { authenticated, ready } = useAuth();
+  if (!ready) return <div role="status" className="auth-checking">Checking session…</div>;
   if (!authenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }

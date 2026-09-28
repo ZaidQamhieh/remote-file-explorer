@@ -24,6 +24,35 @@ var migrations = []func(*sql.Tx) error{
 	migrateDeviceAppPermissions,
 	migrateLoginDeviceBindings,
 	migrateDeviceFilePermissions,
+	migrateTransferHistoryRetention,
+}
+
+// migrateTransferHistoryRetention adds an explicit completion timestamp so
+// terminal transfer rows can be pruned without treating the last uploaded
+// chunk as the completion date. Existing history gets a full retention window
+// starting at upgrade time; opening the upgrade must not immediately erase it.
+func migrateTransferHistoryRetention(tx *sql.Tx) error {
+	var exists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='transfers'`).Scan(&exists); err != nil {
+		return err
+	}
+	// Some narrowly scoped legacy stores contain only the tables they use.
+	// There is nothing to migrate until transfer storage exists.
+	if exists == 0 {
+		return nil
+	}
+	if err := addColumn(tx, "transfers", "terminal_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+UPDATE transfers
+SET terminal_at=CAST(strftime('%s','now') AS INTEGER)
+WHERE status IN ('completed','failed') AND terminal_at=0;
+CREATE INDEX IF NOT EXISTS idx_transfers_terminal_at ON transfers(status, terminal_at);
+`); err != nil {
+		return err
+	}
+	return nil
 }
 
 // migrate brings the schema up to len(migrations).
@@ -259,8 +288,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_client_id ON devices(client_id) WH
 		return err
 	}
 	// PR-43: index the transfer-listing/cleanup access patterns (admin pages
-	// filter by status/recency and by device). No retention job yet — that is a
-	// separate background sweeper.
+	// filter by status/recency and by device).
 	if _, err := tx.Exec(`
 CREATE INDEX IF NOT EXISTS idx_transfers_status_updated ON transfers(status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_transfers_device_updated ON transfers(device_id, updated_at);

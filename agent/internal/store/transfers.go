@@ -26,6 +26,11 @@ type Transfer struct {
 	Overwrite      bool  // may Complete replace an existing target? (PR-50)
 }
 
+// TransferHistoryRetention is how long the host keeps completed/failed upload
+// session metadata for the web companion's recent activity view. Uploaded
+// destination files are never removed by this policy.
+const TransferHistoryRetention = 90 * 24 * time.Hour
+
 // TransferLimits caps open sessions and their declared-byte reservations.
 // Limits are enforced in the same SQLite INSERT statement that creates the
 // reservation row, so concurrent callers cannot both pass a stale count.
@@ -261,15 +266,50 @@ func (s *DB) ChunkNumbers(id string) ([]int, error) {
 	return out, rows.Err()
 }
 
-// SetTransferStatus updates the status of a transfer.
+// SetTransferStatus updates the status of a transfer and starts the history
+// retention window when the session reaches a terminal state.
 func (s *DB) SetTransferStatus(id, status string) error {
-	_, err := s.db.Exec(`UPDATE transfers SET status=? WHERE id=?`, status, id)
+	terminalAt := int64(0)
+	if status == "completed" || status == "failed" {
+		terminalAt = time.Now().Unix()
+	}
+	_, err := s.db.Exec(`UPDATE transfers SET status=?, terminal_at=? WHERE id=?`, status, terminalAt, id)
 	return err
 }
 
-// DeleteTransfer removes a transfer row (its own history, not the uploaded
-// file). Used by the web companion to clear stale "open" or "failed" rows —
-// the table otherwise accumulates every session ever opened forever.
+// PruneTerminalTransfersBefore removes completed/failed transfer metadata
+// older than cutoffUnix, together with its chunk rows, in one transaction.
+// Open sessions and legacy terminal rows without a trustworthy terminal time
+// are preserved.
+func (s *DB) PruneTerminalTransfersBefore(cutoffUnix int64) (int, error) {
+	const eligible = `status IN ('completed','failed') AND terminal_at>0 AND terminal_at<?`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin terminal transfer prune: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+
+	if _, err := tx.Exec(`DELETE FROM transfer_chunks WHERE transfer_id IN (
+SELECT id FROM transfers WHERE `+eligible+`
+)`, cutoffUnix); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec(`DELETE FROM transfers WHERE `+eligible, cutoffUnix)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(deleted), nil
+}
+
+// DeleteTransfer removes a transfer row and its chunk rows (its own history,
+// not the uploaded file). Used by the web companion to clear a session.
 func (s *DB) DeleteTransfer(id string) error {
 	// Chunk rows are keyed by transfer_id with no foreign key, so remove them
 	// atomically with the session row or they can outlive a failed deletion.
@@ -298,9 +338,8 @@ func (s *DB) DeleteTransfer(id string) error {
 
 // ListTransfers returns the most recent transfer rows, newest first (rowid
 // desc — the table has no created column, and rowid is monotonic with insert
-// order). Capped at limit because the table accumulates every upload session
-// ever opened (mostly stale "open" rows the client never finalized) — the
-// web companion only shows recent activity, and the summary counts come from
+// order). Capped at limit because the web companion only shows recent activity
+// and the summary counts come from
 // CountTransfersByStatus, not len() of this list. deviceID, if non-empty,
 // restricts the rows to that device; username, if non-empty, restricts them
 // to devices stamped with that login account; pass "" for no filter.

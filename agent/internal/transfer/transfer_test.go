@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
@@ -27,6 +28,44 @@ func setupManager(t *testing.T) (*Manager, *store.DB, string) {
 		t.Fatalf("New: %v", err)
 	}
 	return tm, db, dataDir
+}
+
+func TestCleanupStaleSessionsPrunesOldTerminalHistory(t *testing.T) {
+	tm, db, dataDir := setupManager(t)
+	old := &store.Transfer{
+		ID: "old-completed", TargetPath: filepath.Join(dataDir, "uploaded.bin"),
+		TotalSize: 4, ChunkSize: 4, SHA256: sha256hex([]byte("data")),
+		TempPath: filepath.Join(dataDir, "tmp", "old-completed.tmp"), TotalChunks: 1,
+	}
+	if err := db.CreateTransfer(old); err != nil {
+		t.Fatalf("create terminal transfer: %v", err)
+	}
+	if err := db.SetTransferStatus(old.ID, "completed"); err != nil {
+		t.Fatalf("mark terminal: %v", err)
+	}
+	open := &store.Transfer{
+		ID: "still-open", TargetPath: filepath.Join(dataDir, "open.bin"),
+		TotalSize: 4, ChunkSize: 4, SHA256: sha256hex([]byte("data")),
+		TempPath: filepath.Join(dataDir, "tmp", "still-open.tmp"), TotalChunks: 1,
+	}
+	if err := db.CreateTransfer(open); err != nil {
+		t.Fatalf("create open transfer: %v", err)
+	}
+	cleanupAt := time.Now().Add(store.TransferHistoryRetention + time.Second)
+	if err := db.TouchOpenTransfer(open.ID, cleanupAt.Unix()); err != nil {
+		t.Fatalf("keep open transfer fresh: %v", err)
+	}
+
+	removed, err := tm.CleanupStaleSessions(cleanupAt)
+	if err != nil || removed != 1 {
+		t.Fatalf("cleanup = (%d, %v), want one expired terminal row", removed, err)
+	}
+	if got, err := db.GetTransfer(old.ID); err != nil || got != nil {
+		t.Fatalf("old terminal history remains: transfer=%+v err=%v", got, err)
+	}
+	if got, err := db.GetTransfer(open.ID); err != nil || got == nil || got.Status != "open" {
+		t.Fatalf("open transfer was pruned: transfer=%+v err=%v", got, err)
+	}
 }
 
 // TestOpenSession verifies a session is created and retrievable.

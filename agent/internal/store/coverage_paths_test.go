@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -143,6 +144,107 @@ func TestTransferOpenRowsTouchListsAndDeleteStaleSnapshot(t *testing.T) {
 	}
 	if deleted, err := db.DeleteStaleOpenTransfer(&snapshot); err != nil || deleted {
 		t.Fatalf("deleting removed snapshot = (%v, %v), want false/nil", deleted, err)
+	}
+}
+
+func TestPruneTerminalTransfersBeforeKeepsRecentAndOpenRows(t *testing.T) {
+	db := openCoverageDB(t)
+	cutoff := time.Now().Unix()
+	rows := []*Transfer{
+		coverageTransfer("expired-completed", "phone", 4),
+		coverageTransfer("expired-failed", "phone", 4),
+		coverageTransfer("recent-completed", "phone", 4),
+		coverageTransfer("at-cutoff", "phone", 4),
+		coverageTransfer("open-old", "phone", 4),
+		coverageTransfer("legacy-terminal", "phone", 4),
+	}
+	for _, row := range rows {
+		if err := db.CreateTransfer(row); err != nil {
+			t.Fatalf("create %s: %v", row.ID, err)
+		}
+	}
+	for _, id := range []string{"expired-completed", "recent-completed", "at-cutoff"} {
+		if err := db.SetTransferStatus(id, "completed"); err != nil {
+			t.Fatalf("mark %s completed: %v", id, err)
+		}
+	}
+	if err := db.SetTransferStatus("expired-failed", "failed"); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if err := db.MarkChunkReceived("expired-completed", 0); err != nil {
+		t.Fatalf("add expired completed chunk: %v", err)
+	}
+	if err := db.MarkChunkReceived("expired-failed", 0); err != nil {
+		t.Fatalf("add expired failed chunk: %v", err)
+	}
+	if _, err := db.db.Exec(`UPDATE transfers SET terminal_at=CASE id
+WHEN 'expired-completed' THEN ?
+WHEN 'expired-failed' THEN ?
+WHEN 'at-cutoff' THEN ?
+WHEN 'recent-completed' THEN ?
+ELSE terminal_at END`, cutoff-1, cutoff-1, cutoff, cutoff+1); err != nil {
+		t.Fatalf("seed terminal timestamps: %v", err)
+	}
+	// An old last-activity time must not make an open upload eligible for
+	// terminal-history pruning. Zero terminal_at also preserves legacy rows.
+	if _, err := db.db.Exec(`UPDATE transfers SET updated_at=1 WHERE id='open-old'`); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := db.PruneTerminalTransfersBefore(cutoff)
+	if err != nil || deleted != 2 {
+		t.Fatalf("pruned %d terminal rows, err=%v; want two expired rows", deleted, err)
+	}
+	for _, id := range []string{"expired-completed", "expired-failed"} {
+		var count int
+		if err := db.db.QueryRow(`SELECT COUNT(*) FROM transfers WHERE id=?`, id).Scan(&count); err != nil || count != 0 {
+			t.Errorf("expired row %q remains: count=%d err=%v", id, count, err)
+		}
+		if found, err := db.HasChunk(id, 0); err != nil || found {
+			t.Errorf("expired chunk for %q remains: found=%v err=%v", id, found, err)
+		}
+	}
+	for _, id := range []string{"recent-completed", "at-cutoff", "open-old", "legacy-terminal"} {
+		var count int
+		if err := db.db.QueryRow(`SELECT COUNT(*) FROM transfers WHERE id=?`, id).Scan(&count); err != nil || count != 1 {
+			t.Errorf("protected row %q missing: count=%d err=%v", id, count, err)
+		}
+	}
+}
+
+func TestTransferHistoryMigrationBackfillsOnce(t *testing.T) {
+	db := openCoverageDB(t)
+	if err := db.CreateTransfer(coverageTransfer("old-completed", "phone", 4)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetTransferStatus("old-completed", "completed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(`UPDATE transfers SET terminal_at=0 WHERE id='old-completed'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, len(migrations)-1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.migrate(); err != nil {
+		t.Fatalf("run retention migration: %v", err)
+	}
+	var first int64
+	if err := db.db.QueryRow(`SELECT terminal_at FROM transfers WHERE id='old-completed'`).Scan(&first); err != nil || first <= 0 {
+		t.Fatalf("legacy terminal history was not backfilled: terminal_at=%d err=%v", first, err)
+	}
+	if _, err := db.db.Exec(`UPDATE transfers SET terminal_at=1234 WHERE id='old-completed'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, len(migrations)-1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.migrate(); err != nil {
+		t.Fatalf("replay retention migration: %v", err)
+	}
+	var second int64
+	if err := db.db.QueryRow(`SELECT terminal_at FROM transfers WHERE id='old-completed'`).Scan(&second); err != nil || second != 1234 {
+		t.Fatalf("migration replay reset established terminal_at: got %d err=%v", second, err)
 	}
 }
 

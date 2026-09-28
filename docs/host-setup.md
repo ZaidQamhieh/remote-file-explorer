@@ -211,6 +211,11 @@ leaves them untouched; a manual delete during active work returns `409 TRANSFER_
 temporary-file removal fails after a session row was deleted, a later age-gated cleanup removes the
 unreferenced file once it is older than the same 7-day period.
 
+Completed and failed transfer activity records are kept for **90 days** after the transfer reaches
+that state, then removed by the agent's hourly cleanup. This only removes transfer metadata and
+chunk bookkeeping from the agent database; it never deletes the destination file that was uploaded.
+Existing terminal history receives a full 90-day window when an agent upgrades to this policy.
+
 ## Release tags
 
 Host agent binaries are released separately from the Android app. A maintainer publishes them by

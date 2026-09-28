@@ -335,9 +335,9 @@ func (m *Manager) DeleteSession(id string) error {
 	return nil
 }
 
-// CleanupStaleSessions removes expired open-session rows and their temp files.
-// The manager lock coordinates with OpenSession, activity leases, and explicit
-// deletion; conditional SQLite deletion also protects against changed rows.
+// CleanupStaleSessions removes expired open-session rows and terminal history
+// older than the retention window, then sweeps orphan temp files. The manager
+// lock coordinates with OpenSession, activity leases, and explicit deletion.
 func (m *Manager) CleanupStaleSessions(now time.Time) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -376,6 +376,11 @@ func (m *Manager) cleanupStaleLocked(now time.Time) (int, error) {
 			}
 		}
 	}
+	pruned, err := m.db.PruneTerminalTransfersBefore(now.Add(-store.TransferHistoryRetention).Unix())
+	if err != nil && cleanupErr == nil {
+		cleanupErr = fmt.Errorf("prune terminal transfer history: %w", err)
+	}
+	removed += pruned
 	orphansRemoved, err := m.cleanupOrphanTempsLocked(cutoff)
 	removed += orphansRemoved
 	if cleanupErr == nil {

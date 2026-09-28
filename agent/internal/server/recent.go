@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -31,7 +32,52 @@ const (
 	recentMaxConcurrentScans = 2
 	recentBusyRetryAfter     = "1"
 	recentTimeBudget         = 15 * time.Second
+	recentCacheTTL           = 5 * time.Second
 )
+
+// recentResultCache keeps one short-lived result for the current jail and
+// query. Recent-file reads are usually repeated by refresh/rebuild flows; a
+// brief cache prevents each refresh from walking the same tree again. The
+// single entry bounds memory and naturally discards arbitrary root queries.
+type recentResultCache struct {
+	mu        sync.Mutex
+	key       string
+	expiresAt time.Time
+	entries   []fsops.Entry
+}
+
+func (c *recentResultCache) load(key string, now time.Time) ([]fsops.Entry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if key == "" || c.key != key || !now.Before(c.expiresAt) {
+		return nil, false
+	}
+	entries := make([]fsops.Entry, len(c.entries))
+	copy(entries, c.entries)
+	return entries, true
+}
+
+func (c *recentResultCache) store(key string, entries []fsops.Entry, now time.Time) {
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	c.key = key
+	c.expiresAt = now.Add(recentCacheTTL)
+	c.entries = make([]fsops.Entry, len(entries))
+	copy(c.entries, entries)
+	c.mu.Unlock()
+}
+
+func recentCacheKey(roots []string, limit int) string {
+	if len(roots) == 0 {
+		return ""
+	}
+	orderedRoots := append([]string(nil), roots...)
+	sort.Strings(orderedRoots)
+	// NUL cannot occur in a filesystem path, so it safely separates roots.
+	return strconv.Itoa(limit) + "\x00" + strings.Join(orderedRoots, "\x00")
+}
 
 // recentHeap is a min-heap of fsops.Entry keyed by Modified time — the
 // oldest entry is always at the root, so it's the one to evict when a newer
@@ -70,6 +116,7 @@ func recentHandler(ops *fsops.Ops) http.HandlerFunc {
 // so the limit is shared by concurrent requests to /fs/recent.
 func recentHandlerWithWalker(ops *fsops.Ops, walk func(context.Context, *fsops.Ops, string, int, *recentHeap)) http.HandlerFunc {
 	scans := make(chan struct{}, recentMaxConcurrentScans)
+	var cache recentResultCache
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()
@@ -100,6 +147,13 @@ func recentHandlerWithWalker(ops *fsops.Ops, walk func(context.Context, *fsops.O
 				}
 			}
 		}
+		cacheKey := recentCacheKey(roots, limit)
+		if r.Context().Err() == nil {
+			if entries, ok := cache.load(cacheKey, time.Now()); ok {
+				writeJSON(w, http.StatusOK, entries)
+				return
+			}
+		}
 
 		select {
 		case scans <- struct{}{}:
@@ -126,7 +180,11 @@ func recentHandlerWithWalker(ops *fsops.Ops, walk func(context.Context, *fsops.O
 			w.Header().Set(headerSearchTimeBudget, "1")
 		}
 
-		writeJSON(w, http.StatusOK, h.sortedNewestFirst())
+		entries := h.sortedNewestFirst()
+		if ctx.Err() == nil {
+			cache.store(cacheKey, entries, time.Now())
+		}
+		writeJSON(w, http.StatusOK, entries)
 	}
 }
 

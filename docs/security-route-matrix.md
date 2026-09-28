@@ -67,10 +67,11 @@ were cross-compiled but not runtime-tested in this environment. When the target 
 not support hard links, overwrite=false upload publication uses rooted `O_EXCL` copying: it never
 replaces an existing destination, but the destination can be visible before the full copy finishes.
 
-`GET /v1/fs/recent` still scans its selected tree for up to 15 seconds per request. The handler
-admits at most two such walks concurrently per process; additional requests receive `429
-RECENT_BUSY` with `Retry-After: 1`. This bounds concurrent scan load but does not remove the
-underlying full-tree scan cost.
+`GET /v1/fs/recent` scans its selected tree for up to 15 seconds on a cache miss. A complete
+result is reused for up to five seconds for the same effective roots and limit; partial results
+are never cached. The handler admits at most two walks concurrently per process; additional
+uncached requests receive `429 RECENT_BUSY` with `Retry-After: 1`. The endpoint still needs a
+full-tree refresh after cache expiry.
 
 ## Transport and reachability
 

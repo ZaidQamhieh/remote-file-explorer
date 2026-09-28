@@ -180,7 +180,7 @@ See `../protocol/openapi.yaml` for the full API surface.
 | `internal/server/archive_handler.go` | Compress/extract endpoints (fronts `fsops/archive.go`). |
 | `internal/server/chmod_handler.go` | chmod endpoint. |
 | `internal/server/dupfinder_handler.go` | Batch-checksum endpoint backing the app's duplicate finder. |
-| `internal/server/recent.go` | Recent-files endpoint — a live recursive walk, like `search.go`, not a persistent index. |
+| `internal/server/recent.go` | Recent-files endpoint — jail-scoped live recursive walks with a five-second cache for complete results, not a persistent index. |
 | `internal/server/transferhandlers.go` | Upload-session + chunk PUT + download-range endpoints. |
 | `internal/server/search.go` | Search endpoint (indexed fast path, bounded recursive fallback before the first build). |
 | `internal/server/search_index.go` | Five-minute index rebuild through open rooted walks; each request filters results by its effective roots. No content sniffing; 2M-entry and 128 MiB estimated per-snapshot caps signal partial results when reached. |

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"testing"
@@ -99,6 +101,113 @@ func TestRecentHandler_DefaultLimit(t *testing.T) {
 	}
 	if len(entries) != 8 {
 		t.Fatalf("expected all 8 files under the default limit, got %d", len(entries))
+	}
+}
+
+func TestRecentHandler_CachesCompleteResultsByJailAndLimit(t *testing.T) {
+	rootA := t.TempDir()
+	rootB := t.TempDir()
+	ops := fsops.New([]string{rootA, rootB}, false)
+	var walks atomic.Int32
+	handler := recentHandlerWithWalker(ops, func(_ context.Context, _ *fsops.Ops, root string, _ int, h *recentHeap) {
+		walks.Add(1)
+		heap.Push(h, fsops.Entry{
+			Name:     filepath.Base(root),
+			Path:     filepath.Join(root, "example.txt"),
+			Modified: time.Unix(100, 0),
+		})
+	})
+	request := func(rawQuery string) []fsops.Entry {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/fs/recent?"+rawQuery, nil)
+		handler(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+		}
+		var entries []fsops.Entry
+		if err := json.Unmarshal(rr.Body.Bytes(), &entries); err != nil {
+			t.Fatalf("decode response: %v; body: %s", err, rr.Body.String())
+		}
+		return entries
+	}
+
+	queryA := "root=" + url.QueryEscape(rootA)
+	first := request(queryA + "&limit=2")
+	second := request(queryA + "&limit=2")
+	if walks.Load() != 1 {
+		t.Fatalf("same jail and limit should reuse the complete scan, got %d walks", walks.Load())
+	}
+	if len(first) != 1 || len(second) != 1 || first[0].Name != second[0].Name {
+		t.Fatalf("cached result mismatch: first=%v second=%v", names(first), names(second))
+	}
+
+	// A different limit must not reuse a result truncated for another query.
+	request(queryA + "&limit=3")
+	if walks.Load() != 2 {
+		t.Fatalf("different limit should trigger its own scan, got %d walks", walks.Load())
+	}
+
+	// A different requested root must not reuse entries from the first walk.
+	request("root=" + url.QueryEscape(rootB) + "&limit=2")
+	if walks.Load() != 3 {
+		t.Fatalf("different requested root should trigger its own scan, got %d walks", walks.Load())
+	}
+}
+
+func TestRecentResultCacheExpiresAndPreservesEmptyArrays(t *testing.T) {
+	cache := &recentResultCache{}
+	now := time.Unix(100, 0)
+	entry := fsops.Entry{Name: "original.txt", Path: "/share/original.txt"}
+	cache.store("jail", []fsops.Entry{entry}, now)
+	entry.Name = "mutated.txt"
+
+	entries, ok := cache.load("jail", now.Add(recentCacheTTL-time.Nanosecond))
+	if !ok || len(entries) != 1 || entries[0].Name != "original.txt" {
+		t.Fatalf("cache should return an isolated copy before expiry: entries=%v ok=%v", names(entries), ok)
+	}
+	if _, ok := cache.load("jail", now.Add(recentCacheTTL)); ok {
+		t.Fatal("cache entry should expire at its TTL")
+	}
+
+	cache.store("empty", []fsops.Entry{}, now)
+	empty, ok := cache.load("empty", now)
+	if !ok || empty == nil || len(empty) != 0 {
+		t.Fatalf("empty cache result must remain a JSON array: entries=%v ok=%v", empty, ok)
+	}
+}
+
+func TestRecentHandler_DoesNotCachePartialResults(t *testing.T) {
+	root := t.TempDir()
+	ops := fsops.New([]string{root}, false)
+	var walks atomic.Int32
+	handler := recentHandlerWithWalker(ops, func(_ context.Context, _ *fsops.Ops, scanRoot string, _ int, h *recentHeap) {
+		walks.Add(1)
+		heap.Push(h, fsops.Entry{
+			Name:     "example.txt",
+			Path:     filepath.Join(scanRoot, "example.txt"),
+			Modified: time.Unix(100, 0),
+		})
+	})
+	pathQuery := "root=" + url.QueryEscape(root)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	partial := httptest.NewRecorder()
+	partialReq := httptest.NewRequest(http.MethodGet, "/v1/fs/recent?"+pathQuery, nil).WithContext(ctx)
+	handler(partial, partialReq)
+	if partial.Code != http.StatusOK || partial.Header().Get(headerSearchTimeBudget) != "1" {
+		t.Fatalf("expected flagged partial 200, got %d with headers %v", partial.Code, partial.Header())
+	}
+
+	complete := httptest.NewRecorder()
+	completeReq := httptest.NewRequest(http.MethodGet, "/v1/fs/recent?"+pathQuery, nil)
+	handler(complete, completeReq)
+	if complete.Code != http.StatusOK || complete.Header().Get(headerSearchTimeBudget) != "" {
+		t.Fatalf("expected complete 200, got %d with headers %v", complete.Code, complete.Header())
+	}
+	if walks.Load() != 2 {
+		t.Fatalf("partial result must not be cached, got %d walks", walks.Load())
 	}
 }
 

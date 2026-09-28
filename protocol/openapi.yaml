@@ -1339,13 +1339,14 @@ paths:
         are never included), newest first. Unlike /search, this can't stop
         early once it has `limit` candidates — it keeps a bounded top-K
         (min-heap) of the best candidates seen so far, so the full walk
-        (bounded by the same 15s time budget) still has to run. Same
-        time-budget signaling as /search: X-Search-Time-Budget is set when
-        the budget expired before the walk finished — results are then
-        partial (the most recent files *seen*, not guaranteed to be the
-        true most-recent files in the tree). At most two recent-file scans
-        run concurrently per agent process. Additional requests receive 429
-        code=RECENT_BUSY with Retry-After: 1.
+        (bounded by the same 15s time budget) still has to run. Complete
+        results may be reused for up to five seconds for the same effective
+        roots, requested root and limit. Partial results are not cached.
+        X-Search-Time-Budget is set when a refresh exceeds the budget; results
+        are then partial (the most recent files seen, not guaranteed to be
+        the true most-recent files in the tree). At most two scans run
+        concurrently per agent process. Additional uncached requests receive
+        429 code=RECENT_BUSY with Retry-After: 1.
       parameters:
         - { in: query, name: root, schema: { type: string } }
         - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }

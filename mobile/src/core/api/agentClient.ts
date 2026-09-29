@@ -3,6 +3,8 @@ import {
   parseDrive,
   parseHealth,
   parseListing,
+  parseStatus,
+  type AgentStatus,
   parsePairResponse,
   type Drive,
   type Health,
@@ -190,8 +192,29 @@ export class AgentClient {
     );
   }
 
+  /**
+   * Everything the native streaming downloader needs. Credentials are attached
+   * only with a valid pin; the native side re-checks the pin during the TLS
+   * handshake before any header is written.
+   */
+  downloadSpec(remotePath: string): { url: string; headers: Record<string, string>; pin: string } {
+    if (this.pin === null) throw new MissingCertPin();
+    const headers: Record<string, string> = { 'X-RFE-Client-Version': this.opts.clientVersion ?? 'rn' };
+    if (this.opts.deviceToken) headers.Authorization = `Bearer ${this.opts.deviceToken}`;
+    return {
+      url: `https://${this.activeAddress}/v1/content?path=${encodeURIComponent(remotePath)}`,
+      headers,
+      pin: this.pin,
+    };
+  }
+
   async health(): Promise<Health> {
     return parseHealth((await this.call('GET', '/health')) as Record<string, unknown>);
+  }
+
+  /** Effective scope, roots and read-only policy for this device (`GET /settings`). */
+  async status(): Promise<AgentStatus> {
+    return parseStatus((await this.call('GET', '/settings')) as Record<string, unknown>);
   }
 
   async challenge(): Promise<string> {

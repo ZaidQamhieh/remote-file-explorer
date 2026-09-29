@@ -1,4 +1,5 @@
 // Adapters from the local Expo module (modules/rfe-transport) to core interfaces.
+import { getRandomBytes } from 'expo-crypto';
 import Rfe from '../../modules/rfe-transport/src/RfeTransportModule';
 import type { Transport } from './api/agentClient';
 import type { SecureStore } from './security/secureStore';
@@ -20,9 +21,7 @@ export const readLegacyPrefs = () => Rfe.legacyPrefsReadAll();
 export const probeFingerprint = (url: string, timeoutMs?: number) => Rfe.probeFingerprint(url, timeoutMs);
 export const downloadToFile = Rfe.downloadToFile.bind(Rfe);
 
-/** Cryptographically secure random bytes; refuses to fall back to Math.random. */
+/** Cryptographically secure random bytes from the OS CSPRNG (expo-crypto); never Math.random. */
 export function secureRandomBytes(n: number): Uint8Array {
-  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
-  if (!c?.getRandomValues) throw new Error('secure random source unavailable');
-  return c.getRandomValues(new Uint8Array(n));
+  return getRandomBytes(n);
 }

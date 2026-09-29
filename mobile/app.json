@@ -20,6 +20,10 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.zqamhieh.remote_file_explorer",
       "versionCode": 81
-    }
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "scheme": "rfe"
   }
 }

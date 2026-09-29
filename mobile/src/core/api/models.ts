@@ -94,3 +94,22 @@ export const parseListing = (j: Json): Listing => ({
   entries: Array.isArray(j.entries) ? (j.entries as Json[]).map(parseEntry) : [],
   nextCursor: str(j.nextCursor),
 });
+
+export type AgentStatus = {
+  agentName: string;
+  roots: string[];
+  readOnly: boolean;
+  isAdmin: boolean;
+  effectiveScope: 'global' | 'device';
+  /** True when the device's jail is outside all host roots: no filesystem access at all. */
+  accessDenied: boolean;
+};
+
+export const parseStatus = (j: Json): AgentStatus => ({
+  agentName: str(j.agentName) ?? '',
+  roots: Array.isArray(j.roots) ? (j.roots as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+  readOnly: bool(j.readOnly, false),
+  isAdmin: bool(j.isAdmin, false),
+  effectiveScope: j.effectiveScope === 'device' ? 'device' : 'global',
+  accessDenied: bool(j.accessDenied, false),
+});

@@ -102,4 +102,11 @@ describe('AgentClient responses', () => {
     expect(l.nextCursor).toBe('c');
     await expect(c.drives()).rejects.toMatchObject({ statusCode: 403, code: 'READ_ONLY' });
   });
+
+  it('reads roots and access policy from /settings', async () => {
+    const { transport, calls } = fake(() => ok({ roots: ['/srv/a', 7], accessDenied: true, effectiveScope: 'device', readOnly: true }));
+    const c = new AgentClient(host, { transport, deviceToken: 't', pinnedFingerprint: PIN });
+    expect(await c.status()).toMatchObject({ roots: ['/srv/a'], accessDenied: true, effectiveScope: 'device', readOnly: true });
+    expect(calls[0].url).toMatch(/\/v1\/settings$/);
+  });
 });

@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import type { AgentClient } from '../../core/api/agentClient';
@@ -38,7 +38,9 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
   const lastDrives = useRef(0);
   const focused = useRef(false);
   const hostRef = useRef(host);
-  hostRef.current = host;
+  useLayoutEffect(() => {
+    hostRef.current = host;
+  }, [host]);
 
   const ping = useCallback(async (forceDrives: boolean) => {
     if (inFlight.current) return;

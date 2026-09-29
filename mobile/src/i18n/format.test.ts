@@ -18,6 +18,6 @@ describe('ICU subset', () => {
   });
   it('every shipped string parses without throwing', () => {
     const params = new Proxy({}, { get: () => 3 }) as Record<string, number>;
-    for (const [k, v] of Object.entries(en)) expect(() => format(v as string, params)).not.toThrow();
+    for (const v of Object.values(en)) expect(() => format(v as string, params)).not.toThrow();
   });
 });

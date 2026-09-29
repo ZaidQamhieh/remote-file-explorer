@@ -14,7 +14,7 @@ import { t } from '../../i18n';
 import { pairingDeps } from '../../services';
 
 function Scanline({ height }: { height: number }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([

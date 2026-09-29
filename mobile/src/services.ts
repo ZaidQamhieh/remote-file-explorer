@@ -5,8 +5,12 @@ import { DeviceIdentity } from './core/security/deviceIdentity';
 import { HostStore, type KeyValueStore } from './core/storage/hostStore';
 import { SettingsRepo } from './core/settings/settings';
 import { importLegacyState, type ImportReport } from './core/storage/legacyImport';
-import { nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes } from './core/native';
+import { nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
 import type { Host } from './core/models/host';
+
+import type { PairingDeps } from './features/pairing/pairingService';
+
+import { ListingCache, type ListingBackend } from './core/storage/listingCache';
 
 // Non-secret key/value storage in SQLite. Secrets never touch it.
 const db = openDatabaseSync('rfe.db');
@@ -52,13 +56,32 @@ export function unpinnedClient(host: Host): AgentClient {
   return new AgentClient(host, { transport: nativeTransport });
 }
 
-import { nativeTransport as _transport } from './core/native';
-import { deviceIdNative } from './core/native';
-import type { PairingDeps } from './features/pairing/pairingService';
-
 export const pairingDeps: PairingDeps = {
   transport: _transport,
   identity,
   store: hostStore,
   deviceId: deviceIdNative,
 };
+
+db.execSync('CREATE TABLE IF NOT EXISTS listing_cache (host TEXT NOT NULL, path TEXT NOT NULL, fetched_at INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (host, path))');
+
+const listingBackend: ListingBackend = {
+  async get(host, path) {
+    const r = db.getFirstSync<{ json: string; fetched_at: number }>('SELECT json, fetched_at FROM listing_cache WHERE host = ? AND path = ?', host, path);
+    return r ? { json: r.json, fetchedAt: r.fetched_at } : null;
+  },
+  async put(host, path, json, fetchedAt) {
+    db.runSync('INSERT OR REPLACE INTO listing_cache (host, path, fetched_at, json) VALUES (?, ?, ?, ?)', host, path, fetchedAt, json);
+  },
+  async list(host) {
+    return db.getAllSync<{ path: string; fetched_at: number }>('SELECT path, fetched_at FROM listing_cache WHERE host = ? ORDER BY fetched_at ASC', host).map((r) => ({ path: r.path, fetchedAt: r.fetched_at }));
+  },
+  async remove(host, path) {
+    db.runSync('DELETE FROM listing_cache WHERE host = ? AND path = ?', host, path);
+  },
+  async removeHost(host) {
+    db.runSync('DELETE FROM listing_cache WHERE host = ?', host);
+  },
+};
+
+export const listingCache = new ListingCache(listingBackend);

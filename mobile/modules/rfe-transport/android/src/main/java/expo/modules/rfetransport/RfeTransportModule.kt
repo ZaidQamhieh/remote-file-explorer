@@ -58,6 +58,14 @@ class RfeTransportModule : Module() {
         .list().map { it.toJson().toString() }
     }
 
+    AsyncFunction("fetchToFile") { id: String, url: String, headers: Map<String, String>, pin: String?, destPath: String, timeoutMs: Double? ->
+      guard {
+        val r = FetchFile.get(id, url, headers, pin, File(destPath), (timeoutMs ?: 20000.0).toLong())
+        mapOf("status" to r.status, "retryAfter" to r.retryAfterSeconds, "bytes" to r.bytes.toDouble())
+      }
+    }
+    AsyncFunction("fetchCancel") { id: String -> FetchFile.cancel(id) }
+
     AsyncFunction("sendWakeOnLan") { mac: String -> Wol.send(mac) }
 
     AsyncFunction("deviceId") {

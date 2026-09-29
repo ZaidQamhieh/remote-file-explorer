@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 
 import { defaultAppDefaults, resolveView, resolveVisibility, type AppDefaults, type DeviceOverrides, type SettingsState } from '../core/settings/settings';
@@ -28,5 +29,13 @@ export const useSettings = create<Store>((set, get) => ({
   },
 }));
 
-export const useResolvedView = (hostId: string) => useSettings((s) => resolveView(s.state, hostId));
-export const useResolvedVisibility = (hostId: string) => useSettings((s) => resolveVisibility(s.state, hostId));
+// Selectors must return stable references (zustand 5 / useSyncExternalStore): select the settings
+// object and derive the resolved value with useMemo instead of building a new object in the selector.
+export function useResolvedView(hostId: string) {
+  const state = useSettings((s) => s.state);
+  return useMemo(() => resolveView(state, hostId), [state, hostId]);
+}
+export function useResolvedVisibility(hostId: string) {
+  const state = useSettings((s) => s.state);
+  return useMemo(() => resolveVisibility(state, hostId), [state, hostId]);
+}

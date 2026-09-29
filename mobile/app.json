@@ -35,7 +35,8 @@
           ]
         }
       ],
-      "./plugins/withRfeAndroid"
+      "./plugins/withRfeAndroid",
+      "expo-image"
     ],
     "scheme": "rfe"
   }

@@ -142,3 +142,59 @@ class WolTest {
     assertEquals(null, Wol.parseMac("zz:02:03:04:05:06"))
   }
 }
+
+class FetchFileTest {
+  private lateinit var server: MockWebServer
+  private lateinit var leaf: HeldCertificate
+  private lateinit var dir: java.io.File
+
+  @Before fun setUp() {
+    leaf = HeldCertificate.Builder().commonName("rfe-host").addSubjectAlternativeName("localhost").build()
+    server = MockWebServer()
+    server.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf).build().sslSocketFactory(), false)
+    server.start()
+    dir = java.nio.file.Files.createTempDirectory("rfe-fetch").toFile()
+  }
+
+  @After fun tearDown() { server.shutdown(); dir.deleteRecursively() }
+
+  private fun pin() = PinnedHttp.sha256Hex(leaf.certificate.encoded)
+  private fun url() = server.url("/v1/thumb?path=%2Fa").toString()
+
+  @Test fun publishesFileOnlyOn2xx() {
+    server.enqueue(MockResponse().setBody("jpegbytes"))
+    val dest = java.io.File(dir, "t/a.jpg")
+    val r = FetchFile.get("1", url(), emptyMap(), pin(), dest)
+    assertEquals(200, r.status)
+    assertEquals("jpegbytes", dest.readText())
+    assertTrue(!java.io.File(dest.path + ".part").exists())
+  }
+
+  @Test fun nonSuccessIsAResultAndWritesNothing() {
+    server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "2"))
+    val dest = java.io.File(dir, "b.jpg")
+    val r = FetchFile.get("2", url(), emptyMap(), pin(), dest)
+    assertEquals(429, r.status)
+    assertEquals(2, r.retryAfterSeconds)
+    assertTrue(!dest.exists())
+  }
+
+  @Test fun wrongPinFailsWithNoRequest() {
+    server.enqueue(MockResponse().setBody("x"))
+    assertThrows(Exception::class.java) { FetchFile.get("3", url(), emptyMap(), "0".repeat(64), java.io.File(dir, "c.jpg")) }
+    assertEquals(0, server.requestCount)
+  }
+
+  @Test fun cancelAbortsAnInFlightFetchAndLeavesNoFile() {
+    server.enqueue(MockResponse().setBody(okio.Buffer().write(ByteArray(500_000))).throttleBody(1000, 100, java.util.concurrent.TimeUnit.MILLISECONDS))
+    val dest = java.io.File(dir, "d.jpg")
+    var error: Throwable? = null
+    val t = Thread { try { FetchFile.get("4", url(), emptyMap(), pin(), dest) } catch (e: Throwable) { error = e } }
+    t.start()
+    Thread.sleep(400)
+    FetchFile.cancel("4")
+    t.join(5000)
+    assertNotNull(error)
+    assertTrue(!dest.exists() && !java.io.File(dest.path + ".part").exists())
+  }
+}

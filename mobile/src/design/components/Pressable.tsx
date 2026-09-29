@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Animated, Pressable as RNPressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 type Props = Omit<PressableProps, 'style' | 'children'> & {
@@ -15,13 +15,16 @@ function splitStyle(style: StyleProp<ViewStyle>) {
   const flat = (StyleSheet.flatten(style) ?? {}) as Record<string, unknown>;
   const outer: Record<string, unknown> = {};
   const inner: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(flat)) (OUTER_KEYS as readonly string[]).includes(k) ? (outer[k] = v) : (inner[k] = v);
+  for (const [k, v] of Object.entries(flat)) {
+    if ((OUTER_KEYS as readonly string[]).includes(k)) outer[k] = v;
+    else inner[k] = v;
+  }
   return { outer: outer as ViewStyle, inner: inner as ViewStyle };
 }
 
 export function Pressable({ children, style, pressedScale = 0.985, onPressIn, onPressOut, ...rest }: Props) {
   const { outer, inner } = splitStyle(style);
-  const scale = useRef(new Animated.Value(1)).current;
+  const scale = useState(() => new Animated.Value(1))[0];
   const to = (v: number) => Animated.timing(scale, { toValue: v, duration: 100, useNativeDriver: true }).start();
   return (
     <RNPressable

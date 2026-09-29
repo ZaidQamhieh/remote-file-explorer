@@ -2,14 +2,13 @@ import { Link2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { normalizeFingerprint } from '../../core/api/pin';
+import { normalizeFingerprint , CertPinMismatch } from '../../core/api/pin';
 import { Button, HintCard, InlineError } from '../../design/components';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { AddressField, CodeBoxRow, FingerprintField, fingerprintError } from './fields';
 import { humanizeError, pairWithCode } from './pairingService';
 import { pairingDeps } from '../../services';
-import { CertPinMismatch } from '../../core/api/pin';
 
 export function ManualPanel({ prefillAddress, onPaired }: { prefillAddress?: string; onPaired: (label: string) => void }) {
   const [address, setAddress] = useState(prefillAddress ?? '');

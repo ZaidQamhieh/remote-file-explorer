@@ -21,7 +21,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const c = useScheme();
   const insets = useSafeAreaInsets();
   const [msg, setMsg] = useState<Msg | null>(null);
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useState(() => new Animated.Value(0))[0];
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const show = useCallback(

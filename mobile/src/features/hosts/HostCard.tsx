@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeftRight, ChevronDown, ChevronUp, FolderOpen, Lock, Monitor, RefreshCw, Search, Settings, Trash2, TriangleAlert } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState , useEffect, useRef } from 'react';
 import { View } from 'react-native';
 
 import type { Drive } from '../../core/api/models';
@@ -18,6 +18,7 @@ import { useActiveHost } from '../../state/activeHost';
 import { useSettings } from '../../state/settings';
 import { relativeLabel } from './relative';
 import { useHostStatus } from './useHostStatus';
+
 
 const routeLabel = (r: HostRoute) =>
   r === 'lan' ? t('networkLan') : r === 'tailscale' ? t('networkTailscale') : r === 'directHttps' ? t('networkInternet') : 'Custom route';
@@ -48,8 +49,7 @@ export function HostCard({
   const lowDiskThresholdBytes = useSettings((x) => x.state.app.lowDiskThresholdBytes);
 
   // report resolved status up to the list header
-  const reported = useReportedOnline(checking, online, onOnlineChanged);
-  void reported;
+  useReportedOnline(checking, online, onOnlineChanged);
 
   const subtitle =
     !online || checking
@@ -150,8 +150,6 @@ export function HostCard({
     </>
   );
 }
-
-import { useEffect, useRef } from 'react';
 function useReportedOnline(checking: boolean, online: boolean, cb?: (o: boolean) => void) {
   const last = useRef<boolean | null>(null);
   useEffect(() => {
@@ -160,7 +158,7 @@ function useReportedOnline(checking: boolean, online: boolean, cb?: (o: boolean)
       cb?.(online);
     }
   }, [checking, online, cb]);
-  return last.current;
+
 }
 
 /** Mockup 3-dot chip surface (`.flt-orbits`). */

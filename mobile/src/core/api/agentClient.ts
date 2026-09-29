@@ -219,6 +219,14 @@ export class AgentClient {
     };
   }
 
+  /** URL + credentials for the native thumbnail fetch (`GET /thumb`, JPEG, longest side ~[size] px). */
+  thumbnailSpec(remotePath: string, size = 256): { url: string; headers: Record<string, string>; pin: string } {
+    if (this.pin === null) throw new MissingCertPin();
+    const headers: Record<string, string> = { 'X-RFE-Client-Version': this.opts.clientVersion ?? 'rn' };
+    if (this.opts.deviceToken) headers.Authorization = `Bearer ${this.opts.deviceToken}`;
+    return { url: `https://${this.activeAddress}/v1/thumb?path=${encodeURIComponent(remotePath)}&size=${size}`, headers, pin: this.pin };
+  }
+
   async health(): Promise<Health> {
     return parseHealth((await this.call('GET', '/health')) as Record<string, unknown>);
   }

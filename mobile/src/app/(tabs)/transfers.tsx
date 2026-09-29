@@ -1,4 +1,3 @@
-import { History } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { FlatList, View } from 'react-native';
 

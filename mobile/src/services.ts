@@ -3,6 +3,7 @@ import { openDatabaseSync } from 'expo-sqlite';
 import { AgentClient } from './core/api/agentClient';
 import { DeviceIdentity } from './core/security/deviceIdentity';
 import { HostStore, type KeyValueStore } from './core/storage/hostStore';
+import { SettingsRepo } from './core/settings/settings';
 import { importLegacyState, type ImportReport } from './core/storage/legacyImport';
 import { nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes } from './core/native';
 import type { Host } from './core/models/host';
@@ -24,6 +25,8 @@ const kv: KeyValueStore = {
 };
 
 export const hostStore = new HostStore(kv, nativeSecureStore);
+export const settingsRepo = new SettingsRepo(kv);
+export const keyValue: KeyValueStore = kv;
 export const identity = new DeviceIdentity(nativeSecureStore, secureRandomBytes);
 
 let imported: Promise<ImportReport> | undefined;

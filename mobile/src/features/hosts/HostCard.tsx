@@ -15,6 +15,7 @@ import { Brand, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { hostStore } from '../../services';
 import { useActiveHost } from '../../state/activeHost';
+import { useSettings } from '../../state/settings';
 import { relativeLabel } from './relative';
 import { useHostStatus } from './useHostStatus';
 
@@ -29,13 +30,11 @@ const routeLabel = (r: HostRoute) =>
 export function HostCard({
   host,
   isHero,
-  lowDiskThresholdBytes = 0,
   onOnlineChanged,
   onChanged,
 }: {
   host: Host;
   isHero?: boolean;
-  lowDiskThresholdBytes?: number;
   onOnlineChanged?: (online: boolean) => void;
   onChanged: () => void;
 }) {
@@ -46,6 +45,7 @@ export function HostCard({
   const st = useHostStatus(host, onChanged);
   const [confirming, setConfirming] = useState(false);
   const { online, checking, health } = st;
+  const lowDiskThresholdBytes = useSettings((x) => x.state.app.lowDiskThresholdBytes);
 
   // report resolved status up to the list header
   const reported = useReportedOnline(checking, online, onOnlineChanged);

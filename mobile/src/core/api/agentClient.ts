@@ -2,7 +2,15 @@ import { routeAddresses, routeForAddress, type Host, type HostRoute } from '../m
 import {
   parseDrive,
   parseHealth,
+  parseArchiveEntry,
+  parseBatchResult,
+  parseEntry,
   parseListing,
+  parseTrashEntry,
+  type ArchiveEntry,
+  type BatchResult,
+  type Entry,
+  type TrashEntry,
   parseStatus,
   type AgentStatus,
   parsePairResponse,
@@ -275,5 +283,96 @@ export class AgentClient {
   async list(path: string, o: { cursor?: string; limit?: number } = {}): Promise<Listing> {
     const d = await this.call('GET', '/fs', { query: { path, cursor: o.cursor, limit: o.limit ?? 200 } });
     return parseListing(d as Record<string, unknown>);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Filesystem — read
+  // ---------------------------------------------------------------------------
+
+  async meta(path: string): Promise<Entry> {
+    return parseEntry((await this.call('GET', '/fs/meta', { query: { path } })) as Record<string, unknown>);
+  }
+
+  async checksum(path: string, algo = 'sha256'): Promise<string> {
+    const d = (await this.call('GET', '/fs/checksum', { query: { path, algo } })) as Record<string, unknown>;
+    return d.checksum as string;
+  }
+
+  async archiveList(path: string, limit?: number): Promise<ArchiveEntry[]> {
+    const d = (await this.call('GET', '/fs/archive', { query: { path, limit } })) as Record<string, unknown>;
+    return (Array.isArray(d.entries) ? (d.entries as Record<string, unknown>[]) : []).map(parseArchiveEntry);
+  }
+
+  /** Path -> hex hash; files the agent could not hash are omitted. */
+  async batchChecksums(paths: string[], algo = 'sha256'): Promise<Record<string, string>> {
+    const d = (await this.call('POST', '/fs/checksums', { json: { paths, algo } })) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const it of Array.isArray(d.checksums) ? (d.checksums as Record<string, unknown>[]) : []) {
+      if (typeof it.hash === 'string' && it.hash.length > 0 && typeof it.path === 'string') out[it.path] = it.hash;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Filesystem — write
+  // ---------------------------------------------------------------------------
+
+  private async entry(method: string, path: string, json: unknown): Promise<Entry> {
+    return parseEntry((await this.call(method, path, { json })) as Record<string, unknown>);
+  }
+
+  createFolder(path: string) {
+    return this.entry('POST', '/fs/folder', { path });
+  }
+
+  createFile(path: string) {
+    return this.entry('POST', '/fs/file', { path });
+  }
+
+  rename(src: string, dst: string) {
+    return this.entry('PATCH', '/fs/rename', { src, dst });
+  }
+
+  chmod(path: string, mode: string) {
+    return this.entry('POST', '/fs/chmod', { path, mode });
+  }
+
+  /** Collision precedence is server-side: `duplicate` (keep both) wins over `overwrite`; otherwise a CONFLICT per item. */
+  async copy(sources: string[], destDir: string, o: { duplicate?: boolean; overwrite?: boolean } = {}): Promise<BatchResult> {
+    const d = await this.call('POST', '/fs/copy', { json: { sources, destDir, duplicate: o.duplicate ?? false, overwrite: o.overwrite ?? false } });
+    return parseBatchResult(d as Record<string, unknown>);
+  }
+
+  async move(sources: string[], destDir: string, o: { duplicate?: boolean; overwrite?: boolean } = {}): Promise<BatchResult> {
+    const d = await this.call('POST', '/fs/move', { json: { sources, destDir, duplicate: o.duplicate ?? false, overwrite: o.overwrite ?? false } });
+    return parseBatchResult(d as Record<string, unknown>);
+  }
+
+  /** Reversible (agent trash) unless `permanent`. */
+  async delete(paths: string[], o: { permanent?: boolean } = {}): Promise<BatchResult> {
+    const d = await this.call('DELETE', '/fs', { query: o.permanent ? { permanent: 'true' } : undefined, json: { paths } });
+    return parseBatchResult(d as Record<string, unknown>);
+  }
+
+  async listTrash(): Promise<TrashEntry[]> {
+    const d = (await this.call('GET', '/trash')) as Record<string, unknown>;
+    return (Array.isArray(d.items) ? (d.items as Record<string, unknown>[]) : []).map(parseTrashEntry);
+  }
+
+  async restoreTrash(ids: string[]): Promise<BatchResult> {
+    return parseBatchResult((await this.call('POST', '/trash/restore', { json: { ids } })) as Record<string, unknown>);
+  }
+
+  async emptyTrash(ids?: string[]): Promise<void> {
+    await this.call('DELETE', '/trash', { json: ids ? { ids } : undefined });
+  }
+
+  /** The agent auto-renames if `dest` exists; the returned entry has the real path. */
+  compress(sources: string[], dest: string) {
+    return this.entry('POST', '/fs/compress', { sources, dest });
+  }
+
+  extract(archive: string, destDir: string) {
+    return this.entry('POST', '/fs/extract', { archive, destDir });
   }
 }

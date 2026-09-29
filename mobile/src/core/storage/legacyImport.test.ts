@@ -49,4 +49,19 @@ describe('importLegacyState', () => {
     expect(kv.data.get('rfe_last_seen_h1')).toBe('1780000000000');
     expect(kv.data.has('rfe_last_seen_h2')).toBe(false);
   });
+
+  it('carries over settings and feature keys under the owned prefixes verbatim, without overwriting', async () => {
+    const kv = new MemoryKeyValueStore();
+    await kv.set('app.gridView', 'false');
+    await importLegacyState(
+      { ...legacy, 'app.gridView': 'true', 'app.sortField': '"size"', 'settings.deviceOverrides.v1': '"{}"', 'host.x.y': '1', 'other.key': '1', rfe_favorites_v1: '["a"]' },
+      kv,
+      new MemorySecureStore(),
+    );
+    expect(kv.data.get('app.gridView')).toBe('false');
+    expect(kv.data.get('app.sortField')).toBe('"size"');
+    expect(kv.data.get('settings.deviceOverrides.v1')).toBe('"{}"');
+    expect(kv.data.get('rfe_favorites_v1')).toBe('["a"]');
+    expect(kv.data.has('other.key')).toBe(false);
+  });
 });

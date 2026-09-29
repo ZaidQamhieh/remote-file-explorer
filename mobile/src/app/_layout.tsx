@@ -2,10 +2,14 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useEffect } from 'react';
+
 import { ToastProvider } from '../design/components';
 import { ThemeProvider, useScheme } from '../design/theme';
 import { FontFamily } from '../design/tokens';
 import { t } from '../i18n';
+import { ensureLegacyImport } from '../services';
+import { useSettings } from '../state/settings';
 
 function Shell() {
   const c = useScheme();
@@ -33,9 +37,16 @@ function Shell() {
 }
 
 export default function RootLayout() {
+  const settings = useSettings((s) => s.state.app);
+  const load = useSettings((s) => s.load);
+  useEffect(() => {
+    // The one-time Flutter import must finish before settings are read.
+    ensureLegacyImport().finally(load);
+  }, [load]);
+  const mode = settings.amoledDark ? 'amoled' : settings.themeMode;
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
+      <ThemeProvider mode={mode}>
         <ToastProvider>
           <Shell />
         </ToastProvider>

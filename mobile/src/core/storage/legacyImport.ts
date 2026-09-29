@@ -5,6 +5,9 @@ import { HOSTS_KEY, type KeyValueStore } from './hostStore';
 
 export const IMPORT_DONE_KEY = 'rn_legacy_import_v1';
 
+/** Prefixes of the Flutter app's own SharedPreferences keys (same list the encrypted backup exports). */
+export const OWNED_PREFIXES = ['rfe_', 'app.', 'host.', 'settings.'];
+
 export type ImportReport = {
   status: 'imported' | 'already-done' | 'nothing-to-import';
   hosts: number;
@@ -70,9 +73,13 @@ export async function importLegacyState(
   const existingIds = new Set(existing.map((x) => (x as { id?: string }).id));
   const merged = [...existing, ...hosts.filter((h) => !existingIds.has(h.id)).map(hostToJson)];
   await kv.set(HOSTS_KEY, JSON.stringify(merged));
-  // Non-secret per-host "last seen" timestamps (ms since epoch, stored by Flutter as an int).
+  // Non-secret state under the app's own key prefixes (settings, favorites, bookmarks, pins, sync rules, ...).
+  // Values arrive JSON-encoded from the native reader and keep their Flutter key names, so the RN
+  // settings/feature stores read them unchanged. The host list has its own merge above.
   for (const [k, v] of Object.entries(legacyPrefs)) {
-    if (k.startsWith('rfe_last_seen_') && /^[0-9]+$/.test(v) && (await kv.get(k)) === null) await kv.set(k, v);
+    if (k === HOSTS_KEY || !OWNED_PREFIXES.some((p) => k.startsWith(p))) continue;
+    if (k.startsWith('rfe_last_seen_') && !/^[0-9]+$/.test(v)) continue;
+    if ((await kv.get(k)) === null) await kv.set(k, v);
   }
   await kv.set(IMPORT_DONE_KEY, '1');
   return { status: 'imported', hosts: hosts.length, needRepair, skippedRecords: skipped };

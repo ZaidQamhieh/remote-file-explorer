@@ -113,3 +113,34 @@ export const parseStatus = (j: Json): AgentStatus => ({
   effectiveScope: j.effectiveScope === 'device' ? 'device' : 'global',
   accessDenied: bool(j.accessDenied, false),
 });
+
+export type BatchItemResult = { path: string; ok: boolean; errorCode?: string; errorMessage?: string };
+export type BatchResult = { results: BatchItemResult[]; failed: BatchItemResult[] };
+
+export const parseBatchResult = (j: Json): BatchResult => {
+  const results = (Array.isArray(j.results) ? (j.results as Json[]) : []).map((r): BatchItemResult => {
+    const err = typeof r.error === 'object' && r.error !== null ? (r.error as Json) : undefined;
+    return { path: str(r.path) ?? '', ok: r.ok === true, errorCode: err ? str(err.code) : undefined, errorMessage: err ? str(err.message) : undefined };
+  });
+  return { results, failed: results.filter((r) => !r.ok) };
+};
+
+export type TrashEntry = { id: string; name: string; originalPath: string; deletedAt?: string; size?: number; isDir: boolean };
+
+export const parseTrashEntry = (j: Json): TrashEntry => ({
+  id: str(j.id) ?? '',
+  name: str(j.name) ?? '',
+  originalPath: str(j.originalPath) ?? '',
+  deletedAt: str(j.deletedAt),
+  size: num(j.size),
+  isDir: bool(j.isDir, false),
+});
+
+export type ArchiveEntry = { path: string; size: number; modified?: string; isDir: boolean };
+
+export const parseArchiveEntry = (j: Json): ArchiveEntry => ({
+  path: str(j.path) ?? '',
+  size: num(j.size) ?? 0,
+  modified: str(j.modified),
+  isDir: bool(j.isDir, false),
+});

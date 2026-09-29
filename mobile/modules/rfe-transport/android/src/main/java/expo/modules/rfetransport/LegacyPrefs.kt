@@ -23,7 +23,8 @@ object LegacyPrefs {
       if (!rawKey.startsWith(KEY_PREFIX)) continue
       out[rawKey.removePrefix(KEY_PREFIX)] = when (value) {
         is String ->
-          if (value.startsWith(LIST_PREFIX)) JSONArray(value.removePrefix(LIST_PREFIX)).toString()
+          // Observed on shared_preferences_android: marker + "!" + JSON array.
+          if (value.startsWith(LIST_PREFIX)) JSONArray(value.removePrefix(LIST_PREFIX).removePrefix("!")).toString()
           else JSONObject.quote(value)
         is Set<*> -> JSONArray(value.toList()).toString()
         else -> value.toString() // Boolean, Long, Int, Float

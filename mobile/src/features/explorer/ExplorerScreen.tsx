@@ -171,6 +171,8 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         return router.navigate('/transfers');
       case 'trash':
         return router.push('/trash');
+      case 'recent':
+        return router.push('/recent');
       case 'dupFinder':
         return router.push({ pathname: '/dups', params: { path } });
       default:

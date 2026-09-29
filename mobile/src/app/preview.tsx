@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { Download, FileCode, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
+import { Download, FileCode, Info, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { lightScheme, Radii, Spacing } from '../design/tokens';
 import { t } from '../i18n';
 import { clientForHost } from '../services';
 import { humanizeError } from '../features/pairing/pairingService';
+import { MetaSheet } from '../features/explorer/MetaSheet';
 import { PreviewIconButton, PreviewTopBar } from '../features/preview/PreviewChrome';
 import { MAX_EDITABLE_BYTES } from '../features/preview/previewFile';
 import { previewKindOf } from '../features/preview/previewKind';
@@ -52,6 +53,7 @@ function Pager({ onClose }: { onClose: () => void }) {
   const [lineNumbers, setLineNumbers] = useState(false);
   const [rawMarkdown, setRawMarkdown] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const list = useRef<FlatList<Entry>>(null);
 
@@ -196,12 +198,15 @@ function Pager({ onClose }: { onClose: () => void }) {
         <View style={{ padding: Spacing.md }}>
           <ActionListCard>
             {[
+              <ActionListTile key="info" icon={<Info size={20} color={c.onSurfaceVariant} />} label={t('detailsButton')} onPress={() => { setMoreOpen(false); setMetaOpen(true); }} />,
               <ActionListTile key="save" icon={<Download size={20} color={c.onSurfaceVariant} />} label={t('downloadButton')} onPress={save} />,
               <ActionListTile key="del" icon={<Trash2 size={20} color={c.error} />} label={t('deleteButton')} tint={c.error} onPress={remove} />,
             ]}
           </ActionListCard>
         </View>
       </BottomSheet>
+      {/* Mutations here (rename, delete, extract...) leave the pager stale, so they return to the refreshed folder. */}
+      {metaOpen && <MetaSheet visible host={session.host} entry={current} onClose={() => setMetaOpen(false)} onChanged={() => { session.onChanged?.(); onClose(); }} />}
     </View>
   );
 }

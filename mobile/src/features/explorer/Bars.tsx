@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Bookmark, CheckSquare, Copy, Download, FilePen, MoreVertical, Pin, Scissors, Search, Square, Star, Terminal, Trash2, X, History, PieChart, Replace, FileUp, SlidersHorizontal } from 'lucide-react-native';
+import { Archive, ArrowLeft, Info, Bookmark, CheckSquare, Copy, Download, FilePen, MoreVertical, Pin, Scissors, Search, Square, Star, Terminal, Trash2, X, History, PieChart, Replace, FileUp, SlidersHorizontal } from 'lucide-react-native';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -61,8 +61,8 @@ export function BrowseAppBar({
 
 /** Contextual app bar while items are selected. */
 export function SelectionAppBar({
-  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark,
-}: { state: ExplorerState; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void }) {
+  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails,
+}: { state: ExplorerState; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
   const c = useScheme();
   const insets = useSafeAreaInsets();
   const all = state.entries.length > 0 && state.selected.size === state.entries.length;
@@ -72,7 +72,10 @@ export function SelectionAppBar({
         <AppBarIconButton label={t('clearSelectionTooltip')} onPress={onClose}><X size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
         <Text variant="screenTitle" style={{ flex: 1 }} accessibilityRole="header">{t('nSelected', { count: state.selected.size })}</Text>
         {state.selected.size === 1 && (
-          <AppBarIconButton label="Bookmark" onPress={onBookmark}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
+          <>
+            <AppBarIconButton label={t('detailsButton')} onPress={onDetails}><Info size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
+            <AppBarIconButton label="Bookmark" onPress={onBookmark}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
+          </>
         )}
         <AppBarIconButton label={t('batchRenameTooltip')} onPress={onBatchRename}><FilePen size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
         <AppBarIconButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} onPress={all ? onClearSelection : onSelectAll}>

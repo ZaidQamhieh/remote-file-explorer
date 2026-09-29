@@ -14,6 +14,10 @@ import {
   parseStatus,
   type AgentStatus,
   parsePairResponse,
+  parseSearchResult,
+  parseShareLink,
+  type SearchResult,
+  type ShareLink,
   type Drive,
   type Health,
   type Listing,
@@ -141,6 +145,15 @@ export class AgentClient {
     path: string,
     o: { query?: Record<string, string | number | undefined>; json?: unknown; text?: string } = {},
   ): Promise<unknown> {
+    return (await this.callFull(method, path, o)).body;
+  }
+
+  /** Like [call] but also returns the response headers (search reports truncation there). */
+  private async callFull(
+    method: string,
+    path: string,
+    o: { query?: Record<string, string | number | undefined>; json?: unknown; text?: string } = {},
+  ): Promise<{ body: unknown; headers: Record<string, string> }> {
     let res;
     try {
       res = await this.send(this.addrIndex, method, path, o.query, o.json, o.text);
@@ -153,7 +166,7 @@ export class AgentClient {
       }
       res = await this.fallback(method, path, o, e);
     }
-    return this.parse(res);
+    return { body: this.parse(res), headers: res.headers };
   }
 
   private async fallback(
@@ -393,5 +406,62 @@ export class AgentClient {
 
   extract(archive: string, destDir: string) {
     return this.entry('POST', '/fs/extract', { archive, destDir });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search and recents
+  // ---------------------------------------------------------------------------
+
+  /** Filters are ANDed server-side; `*` or `?` in [q] makes it a glob. Truncation state is on the result, not an error. */
+  async search(o: {
+    q: string;
+    root?: string;
+    limit?: number;
+    types?: string[];
+    ext?: string[];
+    minSize?: number;
+    maxSize?: number;
+    modifiedAfter?: Date;
+    modifiedBefore?: Date;
+  }): Promise<SearchResult> {
+    const { body, headers } = await this.callFull('GET', '/search', {
+      query: {
+        q: o.q,
+        root: o.root,
+        limit: o.limit ?? 100,
+        types: o.types?.length ? o.types.join(',') : undefined,
+        ext: o.ext?.length ? o.ext.join(',') : undefined,
+        minSize: o.minSize,
+        maxSize: o.maxSize,
+        modifiedAfter: o.modifiedAfter?.toISOString(),
+        modifiedBefore: o.modifiedBefore?.toISOString(),
+      },
+    });
+    return parseSearchResult(body, headers);
+  }
+
+  /** Most recently modified files (never folders), newest first. */
+  async recent(o: { root?: string; limit?: number } = {}): Promise<SearchResult> {
+    const { body, headers } = await this.callFull('GET', '/fs/recent', { query: { root: o.root, limit: o.limit ?? 100 } });
+    return parseSearchResult(body, headers);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Share links
+  // ---------------------------------------------------------------------------
+
+  /** One-time unauthenticated download link. 403 when the agent has sharing disabled, 413 above 500 MiB. */
+  async mintShareLink(path: string, expiresInSeconds = 900): Promise<ShareLink> {
+    return parseShareLink((await this.call('POST', '/share/mint', { json: { path, expiresInSeconds } })) as Record<string, unknown>);
+  }
+
+  /** [tokenHash] is the hash from the mint response, not the raw token. */
+  async revokeShareLink(tokenHash: string): Promise<void> {
+    await this.call('DELETE', `/share/${encodeURIComponent(tokenHash)}`);
+  }
+
+  async listShareLinks(): Promise<ShareLink[]> {
+    const d = await this.call('GET', '/share');
+    return (Array.isArray(d) ? (d as Record<string, unknown>[]) : []).map(parseShareLink);
   }
 }

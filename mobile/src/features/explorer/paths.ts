@@ -39,6 +39,13 @@ export function renameDestination(oldPath: string, newName: string): string {
   return parent === sep ? `${sep}${newName}` : `${parent}${sep}${newName}`;
 }
 
+/** Parent directory of [path], keeping its separator style; the root's parent is the root. */
+export function parentDirOf(path: string): string {
+  const sep = path.includes('\\') ? '\\' : '/';
+  const idx = path.lastIndexOf(sep);
+  return idx <= 0 ? sep : path.slice(0, idx);
+}
+
 export function joinRemotePath(dir: string, name: string): string {
   const sep = dir.includes('\\') ? '\\' : '/';
   if (dir === '' || dir === sep) return `${sep}${name}`;

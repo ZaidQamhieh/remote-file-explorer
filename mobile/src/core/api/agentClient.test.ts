@@ -196,3 +196,44 @@ describe('AgentClient filesystem operations', () => {
     expect(await client.batchChecksums(['/a', '/b'])).toEqual({ '/a': 'abc' });
   });
 });
+
+describe('AgentClient search, recent and share links', () => {
+  const withHeaders = (body: unknown, headers: Record<string, string> = {}) => {
+    const calls: { url: string; method: string }[] = [];
+    const transport: Transport = {
+      async request(a) {
+        calls.push({ url: a.url, method: a.method });
+        return { status: 200, headers, bodyText: JSON.stringify(body) };
+      },
+    };
+    return { client: new AgentClient(host, { transport, deviceToken: 't', pinnedFingerprint: PIN }), calls };
+  };
+
+  it('sends only the filters that are set and reads truncation flags from headers, case-insensitively', async () => {
+    const { client, calls } = withHeaders([{ name: 'a.jpg', path: '/a.jpg', isDir: false }], { 'X-Search-Truncated': '1' });
+    const r = await client.search({ q: 'a*', root: '/r', types: ['image', 'video'], ext: ['jpg'], minSize: 5, modifiedAfter: new Date('2026-01-02T03:04:05Z') });
+    expect(calls[0].url.split('/v1')[1]).toBe('/search?q=a*&root=%2Fr&limit=100&types=image%2Cvideo&ext=jpg&minSize=5&modifiedAfter=2026-01-02T03%3A04%3A05.000Z');
+    expect(r.entries.map((e) => e.name)).toEqual(['a.jpg']);
+    expect(r.truncated).toBe(true);
+    expect(r.timeBudgetHit).toBe(false);
+  });
+
+  it('reports the time-budget flag independently and tolerates a non-array body', async () => {
+    const { client } = withHeaders(null, { 'x-search-time-budget': '1' });
+    expect(await client.recent()).toEqual({ entries: [], truncated: false, timeBudgetHit: true });
+  });
+
+  it('recent asks for the newest files under an optional root', async () => {
+    const { client, calls } = withHeaders([]);
+    await client.recent({ root: '/x', limit: 20 });
+    expect(calls[0].url.split('/v1')[1]).toBe('/fs/recent?root=%2Fx&limit=20');
+  });
+
+  it('mints, lists and revokes share links by hash', async () => {
+    const { client, calls } = withHeaders({ token: 'tok', tokenHash: 'h/1', path: '/f', expiresAt: 99, url: 'https://x/s/tok' });
+    const link = await client.mintShareLink('/f', 60);
+    expect(link).toEqual({ token: 'tok', tokenHash: 'h/1', path: '/f', expiresAt: 99, url: 'https://x/s/tok' });
+    await client.revokeShareLink('h/1');
+    expect(calls.map((c) => `${c.method} ${c.url.split('/v1')[1]}`)).toEqual(['POST /share/mint', 'DELETE /share/h%2F1']);
+  });
+});

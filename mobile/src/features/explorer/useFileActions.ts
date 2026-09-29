@@ -9,15 +9,9 @@ import { t } from '../../i18n';
 import { humanizeError } from '../pairing/pairingService';
 import { useFileClipboard } from './clipboard';
 import { currentPath, type Explorer, type ExplorerState } from './explorerStore';
-import { basenameOf, folderLabel } from './paths';
+import { basenameOf, folderLabel, parentDirOf } from './paths';
 
 export type ConflictResolution = 'keepBoth' | 'overwrite' | 'skip' | 'cancel';
-
-const parentDirOf = (path: string) => {
-  const sep = path.includes('\\') ? '\\' : '/';
-  const idx = path.lastIndexOf(sep);
-  return idx <= 0 ? sep : path.slice(0, idx);
-};
 
 /** Ports the explorer screen's copy/cut/paste/delete/compress flows, keeping their dialogs, messages and precedence rules. */
 export function useFileActions(host: Host, ex: Explorer & { getState(): ExplorerState }) {
@@ -172,5 +166,16 @@ export function useFileActions(host: Host, ex: Explorer & { getState(): Explorer
     }
   }
 
-  return { copySelection, cutSelection, paste, confirmDelete, compressSelected, createNamed, rename, askConflict, reportBatch };
+  /** Applies [newNames] (aligned with [paths]) through the store's two-phase rename, then reports per-item failures. */
+  async function applyBatchRename(paths: string[], newNames: string[]) {
+    try {
+      const res = await ex.batchRename(paths.map((path, i) => ({ path, newName: newNames[i] })));
+      ex.clearSelection();
+      await reportBatch(res, t('renamedLabel'));
+    } catch (e) {
+      toast.error(t('renameFailed', { error: humanizeError(e) }));
+    }
+  }
+
+  return { copySelection, cutSelection, paste, confirmDelete, compressSelected, createNamed, rename, applyBatchRename, askConflict, reportBatch };
 }

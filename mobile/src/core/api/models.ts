@@ -144,3 +144,26 @@ export const parseArchiveEntry = (j: Json): ArchiveEntry => ({
   modified: str(j.modified),
   isDir: bool(j.isDir, false),
 });
+
+export type SearchResult = { entries: Entry[]; truncated: boolean; timeBudgetHit: boolean };
+
+const flagSet = (headers: Record<string, string>, name: string) =>
+  Object.entries(headers).some(([k, v]) => k.toLowerCase() === name && v.trim() === '1');
+
+/** Search and recent bodies are bare arrays; truncation state arrives in `X-Search-*` response headers (case-insensitive). */
+export const parseSearchResult = (body: unknown, headers: Record<string, string>): SearchResult => ({
+  entries: Array.isArray(body) ? (body as Json[]).map(parseEntry) : [],
+  truncated: flagSet(headers, 'x-search-truncated'),
+  timeBudgetHit: flagSet(headers, 'x-search-time-budget'),
+});
+
+/** A one-time share link. `token` and `url` exist only in the mint response; list entries carry `tokenHash` and `path`. */
+export type ShareLink = { token: string; tokenHash: string; path: string; expiresAt: number; url: string };
+
+export const parseShareLink = (j: Json): ShareLink => ({
+  token: str(j.token) ?? '',
+  tokenHash: str(j.tokenHash) ?? '',
+  path: str(j.path) ?? '',
+  expiresAt: num(j.expiresAt) ?? 0,
+  url: str(j.url) ?? '',
+});

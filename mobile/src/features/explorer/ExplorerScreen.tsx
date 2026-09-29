@@ -17,13 +17,15 @@ import { isPreviewable, previewableSiblings } from '../preview/previewKind';
 import { usePreviewSession } from '../preview/session';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { BrowseAppBar, SelectionAppBar, SelectionBar, type OverflowAction } from './Bars';
+import { BatchRenameSheet } from './BatchRenameSheet';
 import { CreateMenu } from './CreateMenu';
 import { EntryGridCell } from './EntryGridCell';
 import { EntryTile } from './EntryTile';
+import { MetaSheet } from './MetaSheet';
 import { FavoritesPinRow, FavoritesSheet, ViewOptionsSheet } from './Sheets';
 import { useFileClipboard } from './clipboard';
 import { atRoot, currentPath } from './explorerStore';
-import { folderLabel } from './paths';
+import { basenameOf, folderLabel } from './paths';
 import { useExplorer } from './useExplorer';
 import { useFileActions } from './useFileActions';
 
@@ -43,6 +45,8 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const [createOpen, setCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [metaEntry, setMetaEntry] = useState<Entry | null>(null);
   // A tag filter applies only to the folder it was picked in.
   const [tagFilter, setTagFilter] = useState<{ path: string; tag: string } | null>(null);
   const [width, setWidth] = useState(0);
@@ -82,19 +86,26 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const entries = activeTag ? display.filter((e) => taggedPaths.has(e.path)) : display;
 
   const openPreview = usePreviewSession((x) => x.open);
-  const openEntry = useCallback(
-    async (e: Entry) => {
-      const s = ex.getState();
-      if (s.selected.size > 0) return ex.toggleSelect(e.path);
-      if (e.isDir) return ex.navigate(e.path);
-      if (!isPreviewable(e)) return toast.info('No preview available for this file type');
+  const startPreview = useCallback(
+    (e: Entry) => {
       // Swipe order follows what is on screen (sorted, visibility- and tag-filtered).
       const sib = previewableSiblings(entries, e);
       const onChanged = () => void ex.refresh();
       openPreview(sib.index >= 0 ? { host, entries: sib.entries, index: sib.index, onChanged } : { host, entries: [e], index: 0, onChanged });
       router.push('/preview');
     },
-    [ex, host, router, openPreview, toast, entries],
+    [ex, host, router, openPreview, entries],
+  );
+  const openEntry = useCallback(
+    async (e: Entry) => {
+      const s = ex.getState();
+      if (s.selected.size > 0) return ex.toggleSelect(e.path);
+      if (e.isDir) return ex.navigate(e.path);
+      // Files without a previewer still have actions (download, extract, share link, details).
+      if (!isPreviewable(e)) return setMetaEntry(e);
+      startPreview(e);
+    },
+    [ex, startPreview],
   );
 
   async function toggleFavorite() {
@@ -128,6 +139,14 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     void bookmark(entry);
   }
 
+  function detailsOfSelected() {
+    const [only] = ex.getState().selected;
+    const entry = state.entries.find((e) => e.path === only);
+    if (!entry) return;
+    ex.clearSelection();
+    setMetaEntry(entry);
+  }
+
   async function downloadSelected() {
     const paths = [...ex.getState().selected];
     try {
@@ -150,6 +169,10 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         return void togglePin();
       case 'transfers':
         return router.navigate('/transfers');
+      case 'trash':
+        return router.push('/trash');
+      case 'dupFinder':
+        return router.push({ pathname: '/dups', params: { path } });
       default:
         toast.info(`${a}: available in a later phase`);
     }
@@ -160,10 +183,11 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const showHidden = hiddenCount > 0 && !activeTag;
   const favRow = atRoot(state) ? collections.favorites.filter((f) => f.hostId === host.id) : [];
   const multi = state.selected.size > 0;
+  const selectedPaths = useMemo(() => [...state.selected], [state.selected]);
   const showPaste = clip !== null && clip.paths.length > 0 && clip.hostId === host.id;
 
   const header = multi ? (
-    <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => toast.info('Batch rename: available in a later phase')} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} />
+    <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
   ) : (
     <BrowseAppBar
       state={state}
@@ -227,7 +251,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: c.outlineVariant }} />}
         renderItem={({ item }) => (
           <View style={{ opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => router.push({ pathname: '/meta', params: { hostId: host.id, path: item.path } }) : undefined} />
+            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => setMetaEntry(item) : undefined} />
           </View>
         )}
       />
@@ -261,6 +285,16 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         pasteLabel={showPaste ? t('pasteNItems', { count: clip!.paths.length }) : undefined}
       />
       <ViewOptionsSheet visible={viewOpen} onClose={() => setViewOpen(false)} gridView={view.gridView} density={view.density} sort={view.sort} showHidden={state.showHidden} hiddenCount={hiddenCount} onToggleShowHidden={ex.toggleShowHidden} />
+      <BatchRenameSheet
+        visible={renameOpen}
+        names={selectedPaths.map(basenameOf)}
+        onClose={() => setRenameOpen(false)}
+        onApply={(newNames) => {
+          setRenameOpen(false);
+          void actions.applyBatchRename(selectedPaths, newNames);
+        }}
+      />
+      {metaEntry && <MetaSheet visible host={host} entry={metaEntry} onClose={() => setMetaEntry(null)} onChanged={() => void ex.refresh()} onPreview={startPreview} />}
       <FavoritesSheet visible={favOpen} onClose={() => setFavOpen(false)} host={host} state={state} onOpen={ex.jumpTo} />
     </View>
   );

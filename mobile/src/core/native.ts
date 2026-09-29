@@ -19,6 +19,35 @@ export const nativeSecureStore: SecureStore = {
 
 export const readLegacyPrefs = () => Rfe.legacyPrefsReadAll();
 export const probeFingerprint = (url: string, timeoutMs?: number) => Rfe.probeFingerprint(url, timeoutMs);
+export type TransferState = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'DONE' | 'FAILED' | 'CANCELLED';
+export type TransferRecord = {
+  id: string;
+  hostId: string;
+  address: string;
+  remotePath: string;
+  destPath: string;
+  state: TransferState;
+  received: number;
+  total: number;
+  error: string | null;
+};
+
+const parseRecord = (s: string) => JSON.parse(s) as TransferRecord;
+
+/** Durable native downloads (foreground service, journal, Range resume). */
+export const transfers = {
+  enqueue: async (id: string, hostId: string, address: string, remotePath: string, destPath: string) =>
+    parseRecord(await Rfe.transferEnqueue(id, hostId, address, remotePath, destPath)),
+  resume: (id: string) => Rfe.transferResume(id),
+  pause: (id: string) => Rfe.transferPause(id),
+  cancel: (id: string) => Rfe.transferCancel(id),
+  list: async () => (await Rfe.transfersList()).map(parseRecord),
+  subscribe(cb: (r: TransferRecord) => void) {
+    const sub = Rfe.addListener('onTransferUpdate', (e) => cb(parseRecord(e.record)));
+    return () => sub.remove();
+  },
+};
+
 export const downloadToFile = Rfe.downloadToFile.bind(Rfe);
 
 /** Cryptographically secure random bytes from the OS CSPRNG (expo-crypto); never Math.random. */

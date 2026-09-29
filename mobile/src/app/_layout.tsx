@@ -6,6 +6,7 @@ export default function RootLayout() {
     <Stack>
       <Stack.Screen name="index" options={{ title: 'Hosts' }} />
       <Stack.Screen name="pair" options={{ title: 'Pair a host' }} />
+      <Stack.Screen name="transfers" options={{ title: 'Transfers' }} />
       <Stack.Screen name="host/[id]" options={{ title: 'Files' }} />
     </Stack>
   );

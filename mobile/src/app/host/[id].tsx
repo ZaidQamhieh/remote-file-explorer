@@ -1,11 +1,11 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, PermissionsAndroid, Platform, Pressable, Text, View } from 'react-native';
 
 import type { AgentClient } from '../../core/api/agentClient';
 import type { Entry } from '../../core/api/models';
-import { downloadToFile } from '../../core/native';
+import { transfers } from '../../core/native';
 import { clientForHost, hostStore } from '../../services';
 
 const fmt = (n?: number) => (n === undefined ? '' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
@@ -67,16 +67,18 @@ export default function Browse() {
 
   async function download(e: Entry) {
     if (!client) return;
-    setStatus(`Downloading ${e.name}…`);
+    setStatus(`Queued ${e.name}`);
     try {
-      const dir = new Directory(Paths.cache, 'downloads');
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
+      const dir = new Directory(Paths.document, 'downloads');
       dir.create({ idempotent: true, intermediates: true });
-      const dest = new File(dir, e.name);
-      const spec = client.downloadSpec(e.path);
-      const bytes = await downloadToFile(spec.url, spec.headers, spec.pin, dest.uri.replace('file://', ''), 0);
-      setStatus(`Saved ${e.name} (${fmt(bytes)}) to app cache`);
+      const dest = new File(dir, e.name).uri.replace('file://', '');
+      await transfers.enqueue(`d${Date.now().toString(36)}`, id, client.activeAddress, e.path, decodeURIComponent(dest));
+      setStatus(`Downloading ${e.name} — see Transfers`);
     } catch (err) {
-      setStatus(`Download failed: ${(err as Error).message}`);
+      setStatus(`Could not start download: ${(err as Error).message}`);
     }
   }
 

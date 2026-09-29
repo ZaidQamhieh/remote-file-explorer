@@ -136,6 +136,14 @@ object PinnedHttp {
     }
   }
 
+  /** Pinned GET call for streaming; the caller executes it and may cancel it. */
+  fun newGetCall(url: String, headers: Map<String, String>, pin: String?, timeoutMs: Long = 30000): okhttp3.Call {
+    requireHttps(url)
+    val normalized = normalizeFingerprint(pin) ?: throw PinPolicyViolation("missing or invalid certificate pin")
+    val req = Request.Builder().url(url).headers(headers.toHeaders()).get().build()
+    return client(PinTrustManager(normalized), timeoutMs).newCall(req)
+  }
+
   /**
    * Streams the response to [dest] in a temp file, appending from [offset] when
    * the server honours the Range request; renames atomically on success.

@@ -29,6 +29,33 @@ class RfeTransportModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("RfeTransport")
+    Events("onTransferUpdate")
+
+    OnCreate {
+      TransferHost.listener = { r -> sendEvent("onTransferUpdate", mapOf("record" to r.toJson().toString())) }
+    }
+    OnDestroy { TransferHost.listener = null }
+
+    AsyncFunction("transferEnqueue") { id: String, hostId: String, address: String, remotePath: String, destPath: String ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      TransferHost.ensureServiceRunning(ctx)
+      TransferHost.engine(ctx).enqueue(id, hostId, address, remotePath, destPath).toJson().toString()
+    }
+    AsyncFunction("transferResume") { id: String ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      TransferHost.ensureServiceRunning(ctx)
+      TransferHost.engine(ctx).resume(id)
+    }
+    AsyncFunction("transferPause") { id: String ->
+      TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)).pause(id)
+    }
+    AsyncFunction("transferCancel") { id: String ->
+      TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)).cancel(id)
+    }
+    AsyncFunction("transfersList") {
+      TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
+        .list().map { it.toJson().toString() }
+    }
 
     AsyncFunction("legacyPrefsReadAll") {
       LegacyPrefs.readAll(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))

@@ -59,6 +59,9 @@ export default function Hosts() {
         <Link href="/pair" style={{ padding: 12, fontSize: 16 }}>
           Pair a new host
         </Link>
+        <Link href="/transfers" style={{ padding: 12, fontSize: 16 }}>
+          Transfers
+        </Link>
       </View>
     </ScrollView>
   );

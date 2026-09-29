@@ -9,7 +9,7 @@ import { useScheme } from '../../../design/theme';
 import { FontFamily, Spacing } from '../../../design/tokens';
 import { humanizeError } from '../../pairing/pairingService';
 import { PreviewError, PreviewLoading, PreviewTooLarge } from '../PreviewChrome';
-import { MAX_IN_MEMORY_PREVIEW_BYTES, usePreviewFile } from '../previewFile';
+import { MAX_IN_MEMORY_PREVIEW_BYTES, PAGER_CHIP_CLEARANCE, usePreviewFile } from '../previewFile';
 import { NotTextError, decodeAsText } from '../textDecode';
 
 export const MONO = { fontFamily: FontFamily.mono, fontSize: 13, lineHeight: 18.2 } as const;
@@ -75,7 +75,7 @@ export function TextViewer({ host, entry, showLineNumbers, onText }: { host: Hos
     <FlatList
       data={lines}
       keyExtractor={(_, i) => String(i)}
-      contentContainerStyle={{ padding: Spacing.md }}
+      contentContainerStyle={{ padding: Spacing.md, paddingBottom: PAGER_CHIP_CLEARANCE }}
       initialNumToRender={60}
       windowSize={11}
       renderItem={({ item, index }) => (

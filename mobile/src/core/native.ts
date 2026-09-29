@@ -66,3 +66,8 @@ export const sendWakeOnLan = (mac: string) => Rfe.sendWakeOnLan(mac);
 export const fetchToFileNative = (id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number, maxBytes?: number) =>
   Rfe.fetchToFile(id, url, headers, pin, destPath, timeoutMs, maxBytes);
 export const fetchCancelNative = (id: string) => Rfe.fetchCancel(id);
+export const pdf = {
+  pageCount: (path: string) => Rfe.pdfPageCount(path),
+  renderPage: (path: string, index: number, widthPx: number, outPath: string) => Rfe.pdfRenderPage(path, index, widthPx, outPath),
+  close: () => Rfe.pdfClose(),
+};

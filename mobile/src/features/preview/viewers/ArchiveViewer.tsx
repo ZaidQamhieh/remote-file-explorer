@@ -10,6 +10,7 @@ import { useScheme } from '../../../design/theme';
 import { Brand, FontFamily, Radii, Spacing } from '../../../design/tokens';
 import { clientForHost } from '../../../services';
 import { humanizeError } from '../../pairing/pairingService';
+import { PAGER_CHIP_CLEARANCE } from '../previewFile';
 import { PreviewError, PreviewLoading } from '../PreviewChrome';
 
 /** Port of ArchivePreviewScreen: the agent lists the archive; tapping a folder filters to its prefix. */
@@ -69,7 +70,7 @@ export function ArchiveViewer({ host, entry }: { host: Host; entry: Entry }) {
         <FlatList
           data={shown}
           keyExtractor={(e) => e.path}
-          contentContainerStyle={{ paddingHorizontal: 4 }}
+          contentContainerStyle={{ paddingHorizontal: 4, paddingBottom: PAGER_CHIP_CLEARANCE }}
           renderItem={({ item: e }) => (
             <Pressable onPress={e.isDir ? () => setFilter(e.path) : undefined} disabled={!e.isDir} accessibilityLabel={e.path}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 11, paddingHorizontal: 14 }}>

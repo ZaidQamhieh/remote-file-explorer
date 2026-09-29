@@ -14,6 +14,11 @@ declare class RfeTransportModule extends NativeModule<Events> {
   /** Cancellable pinned GET to a file; a non-2xx status is a normal result (404 no thumbnail, 429 busy + Retry-After). Rejects ERR_TOO_LARGE past maxBytes. */
   fetchToFile(id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number, maxBytes?: number): Promise<{ status: number; retryAfter: number | null; bytes: number }>;
   fetchCancel(id: string): Promise<void>;
+  /** Local PDF via PdfRenderer; rejects ERR_PDF for corrupt or password-protected files. */
+  pdfPageCount(path: string): Promise<number>;
+  /** Renders a page to a PNG at [outPath], [widthPx] wide on white; resolves with the pixel size. */
+  pdfRenderPage(path: string, index: number, widthPx: number, outPath: string): Promise<{ width: number; height: number }>;
+  pdfClose(): Promise<void>;
   /** Broadcasts a WoL magic packet; false on a malformed MAC or send failure. */
   sendWakeOnLan(mac: string): Promise<boolean>;
   deviceId(): Promise<string | null>;

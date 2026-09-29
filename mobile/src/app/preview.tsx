@@ -2,6 +2,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Download, FileCode, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Entry } from '../core/api/models';
 import { ActionListCard, ActionListTile, BottomSheet, SheetHead, Text, useDialogs, useToast } from '../design/components';
@@ -42,6 +43,7 @@ function Pager({ onClose }: { onClose: () => void }) {
   const dialogs = useDialogs();
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const session = usePreviewSession((s) => s.session)!;
   const openEditor = useEditorSession((s) => s.open);
   const [entries, setEntries] = useState<Entry[]>(session.entries);
@@ -176,13 +178,14 @@ function Pager({ onClose }: { onClose: () => void }) {
           }
         }}
         renderItem={({ item, index: i }) => (
-          <View style={{ width, flex: 1 }}>
+          // Documents stop above the gesture bar; image/video stay full-bleed.
+          <View style={{ width, flex: 1, paddingBottom: ['image', 'video'].includes(previewKindOf(item)) ? 0 : insets.bottom }}>
             <PreviewPage host={session.host} entry={item} isCurrent={i === index} lineNumbers={lineNumbers} rawMarkdown={rawMarkdown} onZoomChange={setZoomed} onText={onText} />
           </View>
         )}
       />
       {entries.length > 1 && (
-        <View pointerEvents="none" style={{ position: 'absolute', bottom: Spacing.lg + 16, left: 0, right: 0, alignItems: 'center' }}>
+        <View pointerEvents="none" style={{ position: 'absolute', bottom: insets.bottom + Spacing.md, left: 0, right: 0, alignItems: 'center' }}>
           <View style={{ backgroundColor: 'rgba(0,0,0,0.54)', borderRadius: Radii.stadium, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs }}>
             <Text variant="bodySmall" color="#FFFFFF">{t('previewPageIndicator', { current: index + 1, total: entries.length })}</Text>
           </View>

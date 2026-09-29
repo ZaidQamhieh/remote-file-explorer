@@ -32,6 +32,7 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## Deliberate deviations (owner review)
 - Explorer row long-press starts selection; Bookmark moved to the selection app bar (1 item). Flutter bound row long-press to bookmark, which left multi-select unreachable by touch.
 - Preview kind ignores MIME parameters: the agent sends `text/markdown; charset=utf-8`, so Flutter always showed Markdown/CSV as plain text.
+- PDF pages scroll vertically (Flutter paged horizontally inside the horizontal file pager).
 - Pinned HTTPS reuses TLS connections per pin (Flutter's HttpClient pooled too); never across pins.
 
 ## Post-parity list

@@ -12,6 +12,7 @@ import { ArchiveViewer } from './ArchiveViewer';
 import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
 import { MarkdownViewer } from './MarkdownViewer';
+import { PdfViewer } from './PdfViewer';
 import { TextViewer } from './TextViewer';
 
 type Props = {
@@ -38,12 +39,14 @@ export const PreviewPage = memo(function PreviewPage({ host, entry, isCurrent, l
       return <CsvViewer host={host} entry={entry} />;
     case 'archive':
       return <ArchiveViewer host={host} entry={entry} />;
+    case 'pdf':
+      return <PdfViewer host={host} entry={entry} />;
     default:
       return <NotPortedYet kind={previewKindOf(entry)} />;
   }
 });
 
-/** PDF, video and audio land with their native pieces (PdfRenderer wrapper, pinned media proxy). */
+/** Video and audio land with the pinned media proxy (rfe-c1x.7). */
 function NotPortedYet({ kind }: { kind: string }) {
   const c = useScheme();
   const dark = kind === 'video';

@@ -7,6 +7,7 @@ import { Text } from '../../../design/components';
 import { useScheme } from '../../../design/theme';
 import { FontFamily, Radii, Spacing } from '../../../design/tokens';
 import { parseMarkdown, type Block, type Inline } from '../markdown';
+import { PAGER_CHIP_CLEARANCE } from '../previewFile';
 import { MONO, textStateView, usePreviewText } from './TextViewer';
 
 const HEADING_SIZE = [0, 26, 22, 19, 17, 15.5, 14.5];
@@ -29,7 +30,7 @@ export function MarkdownViewer({ host, entry, raw, onText }: { host: Host; entry
     );
   }
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md }}>
+    <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: PAGER_CHIP_CLEARANCE }}>
       {raw ? (
         <Text selectable style={MONO}>{src}</Text>
       ) : (

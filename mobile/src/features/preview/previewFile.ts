@@ -14,6 +14,8 @@ export const MAX_IN_MEMORY_PREVIEW_BYTES = 50 * 1024 * 1024;
 export const MAX_AUDIO_PREVIEW_BYTES = 100 * 1024 * 1024;
 export const MAX_EDITABLE_BYTES = 5 * 1024 * 1024;
 const MAX_CACHE_BYTES = 256 * 1024 * 1024;
+/** Bottom padding for scrolling viewers so the pager's "n of m" chip never hides the last line. */
+export const PAGER_CHIP_CLEARANCE = 56;
 
 export class TooLargeError extends Error {
   constructor(readonly size: number) {

@@ -33,6 +33,14 @@ class RfeTransportModule : Module() {
     throw CodedException("ERR_CONNECTION", e.message, e)
   }
 
+  private fun <T> pdf(block: () -> T): T = try {
+    block()
+  } catch (e: SecurityException) {
+    throw CodedException("ERR_PDF", "This PDF is password-protected.", e)
+  } catch (e: Exception) {
+    throw CodedException("ERR_PDF", e.message ?: "Could not render this PDF.", e)
+  }
+
   // Plain AsyncFunction bodies share Expo's single "AsyncFunctionQueue" thread, so one slow blocking
   // call (a ping to an offline host) would stall every other native call. Network work runs on IO.
   private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { guard(block) }
@@ -74,6 +82,15 @@ class RfeTransportModule : Module() {
       }
     }
     AsyncFunction("fetchCancel") { id: String -> FetchFile.cancel(id) }
+
+    // A corrupt or password-protected PDF surfaces as ERR_PDF instead of a crash.
+    AsyncFunction("pdfPageCount") Coroutine { path: String ->
+      withContext(Dispatchers.IO) { pdf { PdfPages.pageCount(path) } }
+    }
+    AsyncFunction("pdfRenderPage") Coroutine { path: String, index: Int, widthPx: Int, outPath: String ->
+      withContext(Dispatchers.IO) { pdf { PdfPages.render(path, index, widthPx, outPath) } }
+    }
+    AsyncFunction("pdfClose") { PdfPages.close() }
 
     AsyncFunction("sendWakeOnLan") Coroutine { mac: String -> io { Wol.send(mac) } }
 

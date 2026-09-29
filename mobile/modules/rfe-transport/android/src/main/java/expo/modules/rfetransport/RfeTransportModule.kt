@@ -1,5 +1,8 @@
 package expo.modules.rfetransport
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Base64
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
@@ -45,6 +48,23 @@ class RfeTransportModule : Module() {
   // call (a ping to an offline host) would stall every other native call. Network work runs on IO.
   private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { guard(block) }
 
+  // Bodies of pinned folders, encrypted at rest. The key is created once and kept in secure storage.
+  private val bodies by lazy {
+    val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+    OfflineBodyStore(File(ctx.filesDir, "offline_cache")) {
+      val name = "rfe.offline_body_cache.aes_gcm_hkdf.v1"
+      val existing = secure.read(name)?.let { Base64.decode(it, Base64.NO_WRAP) }
+      if (existing != null && existing.size == OfflineBodyStore.KEY_BYTES) existing
+      else OfflineBodyStore.newKey().also { secure.write(name, Base64.encodeToString(it, Base64.NO_WRAP)) }
+    }
+  }
+
+  private fun <T> bodies(block: (OfflineBodyStore) -> T): T = try {
+    block(bodies)
+  } catch (e: OfflineBodyIntegrityException) {
+    throw CodedException("ERR_INTEGRITY", e.message, e)
+  }
+
   override fun definition() = ModuleDefinition {
     Name("RfeTransport")
     Events("onTransferUpdate")
@@ -53,6 +73,19 @@ class RfeTransportModule : Module() {
       TransferHost.listener = { r -> sendEvent("onTransferUpdate", mapOf("record" to r.toJson().toString())) }
     }
     OnDestroy { TransferHost.listener = null }
+
+    // Transports of the active network (wifi, ethernet, cellular, vpn, bluetooth); empty when offline.
+    AsyncFunction("networkTransports") {
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      networkTransports(ctx)
+    }
+
+    AsyncFunction("offlineBodyPut") Coroutine { hostId: String, path: String, srcPath: String -> withContext(Dispatchers.IO) { bodies { it.put(hostId, path, File(srcPath)) } } }
+    AsyncFunction("offlineBodyRestore") Coroutine { hostId: String, path: String, destPath: String -> withContext(Dispatchers.IO) { bodies { it.restore(hostId, path, File(destPath)) } } }
+    AsyncFunction("offlineBodyHas") Coroutine { hostId: String, path: String -> withContext(Dispatchers.IO) { bodies { it.has(hostId, path) } } }
+    AsyncFunction("offlineBodyTotalBytes") Coroutine { -> withContext(Dispatchers.IO) { bodies { it.totalBytes().toDouble() } } }
+    AsyncFunction("offlineBodyRemove") Coroutine { hostId: String, path: String -> withContext(Dispatchers.IO) { bodies { it.remove(hostId, path) } } }
+    AsyncFunction("offlineBodyEvictHost") Coroutine { hostId: String -> withContext(Dispatchers.IO) { bodies { it.evictHost(hostId) } } }
 
     AsyncFunction("transferEnqueue") { id: String, hostId: String, address: String, remotePath: String, destPath: String ->
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
@@ -152,5 +185,18 @@ class RfeTransportModule : Module() {
         ).toDouble()
       }
     }
+  }
+
+  private fun networkTransports(ctx: Context): List<String> {
+    val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) } ?: return emptyList()
+    val names = listOf(
+      NetworkCapabilities.TRANSPORT_WIFI to "wifi",
+      NetworkCapabilities.TRANSPORT_ETHERNET to "ethernet",
+      NetworkCapabilities.TRANSPORT_CELLULAR to "cellular",
+      NetworkCapabilities.TRANSPORT_VPN to "vpn",
+      NetworkCapabilities.TRANSPORT_BLUETOOTH to "bluetooth",
+    )
+    return names.filter { caps.hasTransport(it.first) }.map { it.second }
   }
 }

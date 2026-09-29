@@ -58,6 +58,16 @@ describe('HostStore list handling', () => {
     expect((await store.listHosts()).map((h) => h.id)).toEqual(['h2', 'h1']);
   });
 
+  it('removeHost runs the cache cleanup for that host and survives a failing cleanup', async () => {
+    const secure = new MemorySecureStore();
+    const removed: string[] = [];
+    const store = new HostStore(new MemoryKeyValueStore(), secure, async (id) => void removed.push(id));
+    await store.removeHost('h1');
+    expect(removed).toEqual(['h1']);
+    const failing = new HostStore(new MemoryKeyValueStore(), secure, async () => Promise.reject(new Error('disk')));
+    await expect(failing.removeHost('h1')).resolves.toBeUndefined();
+  });
+
   it('removeHost clears its secrets', async () => {
     const { store, secure } = make();
     await store.commitPairing(host, { token: 't', fingerprint: PIN });

@@ -55,7 +55,7 @@ export function EntryTile({
       accessibilityState={{ selected }}
       style={{ backgroundColor: selected ? `${c.primary}24` : 'transparent', paddingHorizontal: Spacing.md, paddingVertical: compact ? Spacing.xs : Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}
     >
-      {multiSelect ? <SelBox checked={selected} onPress={onSelect} /> : !entry.isDir && onPeek ? <Pressable onLongPress={onPeek} style={{}}>{icon}</Pressable> : icon}
+      {multiSelect ? <SelBox checked={selected} onPress={onSelect} /> : !entry.isDir && onPeek ? <Pressable onPress={onPress} onLongPress={onPeek} style={{}}>{icon}</Pressable> : icon}
       <View style={{ flex: 1 }}>
         {compact ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>

@@ -34,7 +34,7 @@ export function EntryGridCell({
       accessibilityState={{ selected }}
       style={{ flex: 1, minHeight: 132, padding: Spacing.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? `${c.secondaryContainer}A6` : c.surfaceContainerLow, borderRadius: Radii.card, borderWidth: selected ? 3 : 1, borderColor: selected ? c.primary : c.outlineVariant }}
     >
-      {!multiSelect && !entry.isDir && onPeek ? <Pressable onLongPress={onPeek} style={{}}>{thumb}</Pressable> : thumb}
+      {!multiSelect && !entry.isDir && onPeek ? <Pressable onPress={onPress} onLongPress={onPeek} style={{}}>{thumb}</Pressable> : thumb}
       <Text variant="titleSmall" numberOfLines={2} style={{ textAlign: 'center', marginTop: Spacing.sm }}>{entry.name}</Text>
       {selected && badge({ top: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: c.primary }, <Check size={16} color={c.onPrimary} />)}
       {isFavorite && entry.isDir && badge({ top: 0, left: 0 }, <Star size={13} color={Brand.amber} />)}

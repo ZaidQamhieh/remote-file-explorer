@@ -35,6 +35,9 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - PDF pages scroll vertically (Flutter paged horizontally inside the horizontal file pager).
 - Pinned HTTPS reuses TLS connections per pin (Flutter's HttpClient pooled too); never across pins.
 - Details sheet (folder/file actions, permissions, checksum): opened from the folder info button, from the selection bar when one item is selected, from the preview menu, and by tapping a file that has no previewer. Flutter reached it only from the folder info button and only showed a toast for unpreviewable files, so file actions such as Extract here and Share link were unreachable.
+- Offline bodies are AES-256-GCM (Tink streaming AEAD, 64 KiB segments) with the key in secure storage; Flutter used ChaCha20-Poly1305 with its own envelope. Existing Flutter offline_cache files are not migrated (they are reconstructible). File names are hashes, so the directory no longer reveals host ids or paths.
+- The Files tab opens a host's cached listings while it is offline by remembering the roots it last allowed (Flutter showed a connection error for "Browse cache").
+- Forgetting a computer also drops its cached listings and offline bodies (the Flutter behaviour, which the first RN port skipped).
 - Cross-host search (Flutter had the screen but no way to reach it; only its widget tests used it): reachable from the host search screen's "Search every paired device instead" button, and its rows open the result's folder in Files (Flutter's rows did nothing).
 - Duplicate finder asks before moving the marked copies to Trash (Flutter trashed on one tap). The kept copy is the first in walk order; Flutter's was whatever order the checksum response had.
 

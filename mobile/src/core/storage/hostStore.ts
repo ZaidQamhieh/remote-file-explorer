@@ -31,6 +31,8 @@ export class HostStore {
   constructor(
     private readonly kv: KeyValueStore,
     private readonly secure: SecureStore,
+    /** Runs after a host is forgotten, to drop everything cached for it (listings, offline file bodies). */
+    private readonly onRemoved: (id: string) => Promise<void> = async () => {},
   ) {}
 
   async listHosts(): Promise<Host[]> {
@@ -100,6 +102,9 @@ export class HostStore {
     await this.secure.delete(SecureKeys.token(id));
     await this.secure.delete(SecureKeys.fingerprint(id));
     await this.kv.remove(lastSeenKey(id));
+    // A forgotten host must not keep serving its cached listings and files. Cleanup is best effort: the
+    // host, token and pin are already gone, so a failure here cannot resurrect access.
+    await this.onRemoved(id).catch(() => {});
   }
 
   /** Last successful /health, shown on offline hosts. */

@@ -5,7 +5,7 @@ import { DeviceIdentity } from './core/security/deviceIdentity';
 import { HostStore, type KeyValueStore } from './core/storage/hostStore';
 import { SettingsRepo } from './core/settings/settings';
 import { importLegacyState, type ImportReport } from './core/storage/legacyImport';
-import { nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
+import { offlineBodies, nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
 import type { Host } from './core/models/host';
 
 import type { PairingDeps } from './features/pairing/pairingService';
@@ -28,7 +28,10 @@ const kv: KeyValueStore = {
   },
 };
 
-export const hostStore = new HostStore(kv, nativeSecureStore);
+export const hostStore = new HostStore(kv, nativeSecureStore, async (id) => {
+  // Forgetting a host drops everything cached for it: listings and encrypted offline bodies.
+  await Promise.allSettled([listingCache.evictHost(id), offlineBodies.evictHost(id)]);
+});
 export const settingsRepo = new SettingsRepo(kv);
 export const keyValue: KeyValueStore = kv;
 export const identity = new DeviceIdentity(nativeSecureStore, secureRandomBytes);

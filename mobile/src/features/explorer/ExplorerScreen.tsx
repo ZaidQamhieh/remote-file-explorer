@@ -12,7 +12,10 @@ import { Brand, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { isPinned, useCollections } from '../../state/collections';
 import { useSettings } from '../../state/settings';
+import { offlineDeps } from '../offline/offlineDeps';
+import { MAX_OFFLINE_FILE_BYTES, precachePinnedFolder } from '../offline/offlineBodies';
 import { humanizeError } from '../pairing/pairingService';
+import { fetchPreviewFile } from '../preview/previewFile';
 import { isPreviewable, previewableSiblings } from '../preview/previewKind';
 import { usePreviewSession } from '../preview/session';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
@@ -22,6 +25,7 @@ import { CreateMenu } from './CreateMenu';
 import { EntryGridCell } from './EntryGridCell';
 import { EntryTile } from './EntryTile';
 import { MetaSheet } from './MetaSheet';
+import { PeekSheet } from './PeekSheet';
 import { FavoritesPinRow, FavoritesSheet, ViewOptionsSheet } from './Sheets';
 import { useFileClipboard } from './clipboard';
 import { atRoot, currentPath } from './explorerStore';
@@ -47,6 +51,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const [favOpen, setFavOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [metaEntry, setMetaEntry] = useState<Entry | null>(null);
+  const [peekEntry, setPeekEntry] = useState<Entry | null>(null);
   // A tag filter applies only to the folder it was picked in.
   const [tagFilter, setTagFilter] = useState<{ path: string; tag: string } | null>(null);
   const [width, setWidth] = useState(0);
@@ -115,8 +120,10 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   }
 
   async function togglePin() {
-    if (pinnedHere) await collections.unpin(host.id, path);
-    else await collections.pin(host.id, path);
+    if (pinnedHere) return void (await collections.unpin(host.id, path));
+    await collections.pin(host.id, path);
+    // Fetch the folder's files in the background so they open offline (each fetch stores its encrypted copy).
+    void precachePinnedFolder(offlineDeps, host, ex.getState().entries, (h, e) => fetchPreviewFile(h, e, MAX_OFFLINE_FILE_BYTES));
   }
 
   async function bookmark(e: Entry) {
@@ -241,7 +248,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         columnWrapperStyle={{ gap: Spacing.md }}
         renderItem={({ item }) => (
           <View style={{ flex: 1, opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} />
+            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} />
           </View>
         )}
       />
@@ -253,7 +260,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: c.outlineVariant }} />}
         renderItem={({ item }) => (
           <View style={{ opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => setMetaEntry(item) : undefined} />
+            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => setMetaEntry(item) : undefined} />
           </View>
         )}
       />
@@ -296,6 +303,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
           void actions.applyBatchRename(selectedPaths, newNames);
         }}
       />
+      {peekEntry && <PeekSheet host={host} entry={peekEntry} onClose={() => setPeekEntry(null)} />}
       {metaEntry && <MetaSheet visible host={host} entry={metaEntry} onClose={() => setMetaEntry(null)} onChanged={() => void ex.refresh()} onPreview={startPreview} />}
       <FavoritesSheet visible={favOpen} onClose={() => setFavOpen(false)} host={host} state={state} onOpen={ex.jumpTo} />
     </View>

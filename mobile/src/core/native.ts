@@ -56,6 +56,16 @@ export function secureRandomBytes(n: number): Uint8Array {
   return getRandomBytes(n);
 }
 
+/** Encrypted offline copies of files in pinned folders. */
+export const offlineBodies = {
+  put: (hostId: string, path: string, srcPath: string) => Rfe.offlineBodyPut(hostId, path, srcPath),
+  restore: (hostId: string, path: string, destPath: string) => Rfe.offlineBodyRestore(hostId, path, destPath),
+  has: (hostId: string, path: string) => Rfe.offlineBodyHas(hostId, path),
+  totalBytes: () => Rfe.offlineBodyTotalBytes(),
+  remove: (hostId: string, path: string) => Rfe.offlineBodyRemove(hostId, path),
+  evictHost: (hostId: string) => Rfe.offlineBodyEvictHost(hostId),
+};
+export const networkTransports = () => Rfe.networkTransports();
 export const deviceIdNative = async () => (await Rfe.deviceId()) ?? null;
 
 export const scanLan = async () => normalizeDiscovered(await Rfe.discoveryScan());

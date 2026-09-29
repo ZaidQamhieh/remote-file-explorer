@@ -173,6 +173,9 @@ class FetchFileTest {
 
   @After fun tearDown() { server.shutdown(); dir.deleteRecursively() }
 
+  /** No leftover `*.part` next to [dest] (partial files are named per fetch id). */
+  private fun noPartials(dest: java.io.File) = dest.parentFile?.listFiles()?.none { it.name.endsWith(".part") } ?: true
+
   private fun pin() = PinnedHttp.sha256Hex(leaf.certificate.encoded)
   private fun url() = server.url("/v1/thumb?path=%2Fa").toString()
 
@@ -182,14 +185,14 @@ class FetchFileTest {
     val r = FetchFile.get("1", url(), emptyMap(), pin(), dest)
     assertEquals(200, r.status)
     assertEquals("jpegbytes", dest.readText())
-    assertTrue(!java.io.File(dest.path + ".part").exists())
+    assertTrue(noPartials(dest))
   }
 
   @Test fun bodyPastCapAbortsAndLeavesNoFile() {
     server.enqueue(MockResponse().setBody("x".repeat(100_000)))
     val dest = java.io.File(dir, "big.bin")
     assertThrows(FetchTooLarge::class.java) { FetchFile.get("c", url(), emptyMap(), pin(), dest, maxBytes = 1000) }
-    assertTrue(!dest.exists() && !java.io.File(dest.path + ".part").exists())
+    assertTrue(!dest.exists() && noPartials(dest))
   }
 
   @Test fun nonSuccessIsAResultAndWritesNothing() {
@@ -217,6 +220,19 @@ class FetchFileTest {
     FetchFile.cancel("4")
     t.join(5000)
     assertNotNull(error)
-    assertTrue(!dest.exists() && !java.io.File(dest.path + ".part").exists())
+    assertTrue(!dest.exists() && noPartials(dest))
+  }
+
+  @Test fun twoFetchesOfOneDestinationEachPublishACompleteFile() {
+    val body = "z".repeat(200_000)
+    repeat(2) { server.enqueue(MockResponse().setBody(body).throttleBody(50_000, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) }
+    val dest = java.io.File(dir, "same.jpg")
+    val errors = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
+    val threads = listOf("a", "b").map { id -> Thread { try { FetchFile.get(id, url(), emptyMap(), pin(), dest) } catch (e: Throwable) { errors += e } } }
+    threads.forEach { it.start() }
+    threads.forEach { it.join(10000) }
+    assertTrue(errors.toString(), errors.isEmpty())
+    assertEquals(body, dest.readText())
+    assertTrue(noPartials(dest))
   }
 }

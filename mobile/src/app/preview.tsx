@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { Download, FileCode, Info, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,9 +13,12 @@ import { clientForHost } from '../services';
 import { humanizeError } from '../features/pairing/pairingService';
 import { MetaSheet } from '../features/explorer/MetaSheet';
 import { PreviewIconButton, PreviewTopBar } from '../features/preview/PreviewChrome';
-import { MAX_EDITABLE_BYTES } from '../features/preview/previewFile';
+import { networkTransports } from '../core/native';
+import { preloadNeighbours } from '../features/preview/neighbourPreload';
+import { fetchPreviewFile, MAX_EDITABLE_BYTES, MAX_IN_MEMORY_PREVIEW_BYTES } from '../features/preview/previewFile';
 import { previewKindOf } from '../features/preview/previewKind';
 import { useEditorSession, usePreviewSession } from '../features/preview/session';
+import { useSettings } from '../state/settings';
 import { utf8Length } from '../features/preview/textDecode';
 import { PreviewPage } from '../features/preview/viewers/PreviewPage';
 import { enqueueDownloads } from '../features/transfers/enqueueDownloads';
@@ -56,6 +59,12 @@ function Pager({ onClose }: { onClose: () => void }) {
   const [metaOpen, setMetaOpen] = useState(false);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const list = useRef<FlatList<Entry>>(null);
+  const allowCellular = useSettings((x) => x.state.app.preloadPreviewOnCellular);
+
+  // Warm the images either side of the current page so the next swipe is instant.
+  useEffect(() => {
+    void preloadNeighbours({ host: session.host, entries, index, allowCellular, transports: networkTransports, fetchFile: (h, e) => fetchPreviewFile(h, e, MAX_IN_MEMORY_PREVIEW_BYTES) });
+  }, [session.host, entries, index, allowCellular]);
 
   const current = entries[index];
   const kind = previewKindOf(current);

@@ -5,6 +5,8 @@ import { AgentApiError } from '../../core/api/agentClient';
 import type { Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
 import { fetchCancelNative, fetchToFileNative } from '../../core/native';
+import { offlineDeps } from '../offline/offlineDeps';
+import { keepOfflineCopy, restoreOfflineCopy } from '../offline/offlineBodies';
 import { clientForHost } from '../../services';
 import { hashKey } from '../explorer/thumbnails';
 import { previewExtension } from './previewKind';
@@ -65,20 +67,28 @@ const codeOf = (e: unknown) => (typeof e === 'object' && e !== null && 'code' in
 export async function fetchPreviewFile(host: Host, entry: Entry, maxBytes: number, onCancel?: (cancel: () => void) => void): Promise<string> {
   if (entry.size != null && entry.size > maxBytes) throw new TooLargeError(entry.size);
   const file = new File(cacheDir(), previewCacheName(host.id, entry));
-  if (file.exists) return file.uri;
+  const nativePath = decodeURIComponent(file.uri.replace('file://', ''));
+  if (file.exists) {
+    // Already fetched: make sure a pinned folder's file also has its offline copy.
+    void keepOfflineCopy(offlineDeps, host, entry, nativePath, false);
+    return file.uri;
+  }
   const client = await clientForHost(host);
   const spec = client.downloadSpec(entry.path);
   const id = `p${hashKey(entry.path)}${Date.now().toString(36)}`;
   onCancel?.(() => void fetchCancelNative(id));
   let r;
   try {
-    r = await fetchToFileNative(id, spec.url, spec.headers, spec.pin, decodeURIComponent(file.uri.replace('file://', '')), 60_000, maxBytes);
+    r = await fetchToFileNative(id, spec.url, spec.headers, spec.pin, nativePath, 60_000, maxBytes);
   } catch (e) {
     if (codeOf(e) === 'ERR_TOO_LARGE') throw new TooLargeError(entry.size ?? maxBytes + 1);
+    // Host unreachable: a pinned folder's file opens from its encrypted offline copy.
+    if (codeOf(e) === 'ERR_CONNECTION' && (await restoreOfflineCopy(offlineDeps, host, entry, nativePath))) return file.uri;
     throw e;
   }
   if (r.status < 200 || r.status >= 300) throw new AgentApiError(r.status, r.status === 403 ? 'FORBIDDEN' : 'UNKNOWN', `HTTP ${r.status}`);
   evictIfNeeded(file.uri);
+  void keepOfflineCopy(offlineDeps, host, entry, nativePath, true);
   return file.uri;
 }
 

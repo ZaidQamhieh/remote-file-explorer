@@ -12,7 +12,8 @@ class FetchTooLarge(val maxBytes: Long) : java.io.IOException("response exceeds 
 /**
  * Cancellable pinned GET-to-file for small assets (thumbnails). Unlike [PinnedHttp.downloadToFile] a
  * non-2xx status is a normal result (404 = "no thumbnail", 429 = busy + Retry-After), and a running
- * fetch can be cancelled by id when no view needs it any more. The file is only published on 2xx.
+ * fetch can be cancelled by id when no view needs it any more. The file is only published on 2xx; concurrent fetches of one
+ * destination each write their own partial and the last complete one wins.
  */
 object FetchFile {
   private val calls = ConcurrentHashMap<String, okhttp3.Call>()
@@ -20,7 +21,8 @@ object FetchFile {
   fun get(id: String, url: String, headers: Map<String, String>, pin: String?, dest: File, timeoutMs: Long = 20000, maxBytes: Long = 0): FetchResult {
     val call = PinnedHttp.newGetCall(url, headers, pin, timeoutMs)
     calls[id] = call
-    val part = File(dest.path + ".part")
+    // One partial file per fetch id, so two fetches of the same destination (viewer and neighbour preload) never interleave.
+    val part = File(dest.path + "." + id.filter { it.isLetterOrDigit() } + ".part")
     try {
       call.execute().use { resp ->
         if (!resp.isSuccessful) return FetchResult(resp.code, resp.header("Retry-After")?.toIntOrNull(), 0)

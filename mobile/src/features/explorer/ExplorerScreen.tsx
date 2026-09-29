@@ -3,9 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from 'react-native';
 
 import type { Entry } from '../../core/api/models';
-import { transfers } from '../../core/native';
 import type { Host } from '../../core/models/host';
-import { Directory, File, Paths } from 'expo-file-system';
 import { EmptyState, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
 import { Plus , Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +13,9 @@ import { t } from '../../i18n';
 import { isPinned, useCollections } from '../../state/collections';
 import { useSettings } from '../../state/settings';
 import { humanizeError } from '../pairing/pairingService';
+import { isPreviewable, previewableSiblings } from '../preview/previewKind';
+import { usePreviewSession } from '../preview/session';
+import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { BrowseAppBar, SelectionAppBar, SelectionBar, type OverflowAction } from './Bars';
 import { CreateMenu } from './CreateMenu';
 import { EntryGridCell } from './EntryGridCell';
@@ -27,9 +28,6 @@ import { useExplorer } from './useExplorer';
 import { useFileActions } from './useFileActions';
 
 const GRID_COLUMNS_MIN_WIDTH = 144;
-
-/** Local, non-secret id for a queued transfer journal entry. */
-const newTransferId = () => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** Files tab body for one host root: list/grid browsing, selection, clipboard operations, favorites, bookmarks and pinning. */
 export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; rootPath: string; initialPath?: string }) {
@@ -83,14 +81,20 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   }, [collections.bookmarks, display, host.id]);
   const entries = activeTag ? display.filter((e) => taggedPaths.has(e.path)) : display;
 
+  const openPreview = usePreviewSession((x) => x.open);
   const openEntry = useCallback(
     async (e: Entry) => {
       const s = ex.getState();
       if (s.selected.size > 0) return ex.toggleSelect(e.path);
       if (e.isDir) return ex.navigate(e.path);
-      router.push({ pathname: '/preview', params: { hostId: host.id, path: e.path, root: rootPath } });
+      if (!isPreviewable(e)) return toast.info('No preview available for this file type');
+      // Swipe order follows what is on screen (sorted, visibility- and tag-filtered).
+      const sib = previewableSiblings(entries, e);
+      const onChanged = () => void ex.refresh();
+      openPreview(sib.index >= 0 ? { host, entries: sib.entries, index: sib.index, onChanged } : { host, entries: [e], index: 0, onChanged });
+      router.push('/preview');
     },
-    [ex, host.id, rootPath, router],
+    [ex, host, router, openPreview, toast, entries],
   );
 
   async function toggleFavorite() {
@@ -127,13 +131,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   async function downloadSelected() {
     const paths = [...ex.getState().selected];
     try {
-      const dir = new Directory(Paths.document, 'downloads');
-      dir.create({ idempotent: true, intermediates: true });
-      for (const p of paths) {
-        const name = p.split(/[/\\]/).pop() ?? 'file';
-        const dest = decodeURIComponent(new File(dir, name).uri.replace('file://', ''));
-        await transfers.enqueue(newTransferId(), host.id, (await activeAddress()) ?? host.address, p, dest);
-      }
+      await enqueueDownloads(host, paths);
       ex.clearSelection();
       toast.success(t('queuedNDownloads', { count: paths.length }));
     } catch (e) {
@@ -141,7 +139,6 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     }
   }
 
-  const activeAddress = async () => (await import('../../services').then((m) => m.clientForHost(host))).activeAddress;
 
   const onOverflow = (a: OverflowAction) => {
     switch (a) {

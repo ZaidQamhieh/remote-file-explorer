@@ -17,6 +17,8 @@ class RfeTransportModule : Module() {
 
   private fun <T> guard(block: () -> T): T = try {
     block()
+  } catch (e: FetchTooLarge) {
+    throw CodedException("ERR_TOO_LARGE", e.message, e)
   } catch (e: CertPinMismatch) {
     throw CodedException("ERR_CERT_PIN_MISMATCH", e.message, e)
   } catch (e: PinPolicyViolation) {
@@ -65,9 +67,9 @@ class RfeTransportModule : Module() {
         .list().map { it.toJson().toString() }
     }
 
-    AsyncFunction("fetchToFile") Coroutine { id: String, url: String, headers: Map<String, String>, pin: String?, destPath: String, timeoutMs: Double? ->
+    AsyncFunction("fetchToFile") Coroutine { id: String, url: String, headers: Map<String, String>, pin: String?, destPath: String, timeoutMs: Double?, maxBytes: Double? ->
       io {
-        val r = FetchFile.get(id, url, headers, pin, File(destPath), (timeoutMs ?: 20000.0).toLong())
+        val r = FetchFile.get(id, url, headers, pin, File(destPath), (timeoutMs ?: 20000.0).toLong(), (maxBytes ?: 0.0).toLong())
         mapOf("status" to r.status, "retryAfter" to r.retryAfterSeconds, "bytes" to r.bytes.toDouble())
       }
     }

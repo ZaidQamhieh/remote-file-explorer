@@ -111,6 +111,28 @@ describe('AgentClient responses', () => {
   });
 });
 
+describe('AgentClient putContent', () => {
+  it('PUTs raw text with baseModified and maps STALE_WRITE to a coded error', async () => {
+    const seen: { url: string; body: string | null; ct?: string }[] = [];
+    let status = 200;
+    const transport: Transport = {
+      async request(a) {
+        seen.push({ url: a.url, body: a.bodyText, ct: a.headers['Content-Type'] });
+        return status === 200
+          ? { status, headers: {}, bodyText: JSON.stringify({ name: 'a.txt', path: '/a.txt', isDir: false, modified: 'm2' }) }
+          : { status, headers: {}, bodyText: JSON.stringify({ code: 'STALE_WRITE', message: 'changed' }) };
+      },
+    };
+    const client = new AgentClient(host, { transport, deviceToken: 't', pinnedFingerprint: PIN });
+    const e = await client.putContent('/a.txt', '{"k":1}\n', 'm1');
+    expect(e.modified).toBe('m2');
+    expect({ ...seen[0], url: seen[0].url.split('/v1')[1] }).toEqual({ url: '/content?path=%2Fa.txt&baseModified=m1', body: '{"k":1}\n', ct: 'application/octet-stream' });
+    status = 409;
+    await expect(client.putContent('/a.txt', 'x')).rejects.toMatchObject({ statusCode: 409, code: 'STALE_WRITE' });
+    expect(seen[1].url.split('/v1')[1]).toBe('/content?path=%2Fa.txt');
+  });
+});
+
 describe('AgentClient filesystem operations', () => {
   const pinned = (h: (url: string, method: string, body: unknown) => unknown) => {
     const calls: { url: string; method: string; body: unknown }[] = [];

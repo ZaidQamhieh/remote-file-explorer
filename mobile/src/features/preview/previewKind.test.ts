@@ -10,6 +10,8 @@ describe('previewKindOf', () => {
     expect(previewKindOf(e('x', 'text/markdown'))).toBe('markdown');
     expect(previewKindOf(e('x', 'text/csv'))).toBe('csv');
     expect(previewKindOf(e('x', 'text/x-python'))).toBe('text');
+    expect(previewKindOf(e('x', 'text/markdown; charset=utf-8'))).toBe('markdown');
+    expect(previewKindOf(e('x', 'Text/CSV; charset=utf-8'))).toBe('csv');
     expect(previewKindOf(e('x', 'application/vnd.api+json'))).toBe('text');
     expect(previewKindOf(e('a.MP4'))).toBe('video');
     expect(previewKindOf(e('a.flac'))).toBe('audio');

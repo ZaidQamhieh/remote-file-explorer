@@ -185,6 +185,13 @@ class FetchFileTest {
     assertTrue(!java.io.File(dest.path + ".part").exists())
   }
 
+  @Test fun bodyPastCapAbortsAndLeavesNoFile() {
+    server.enqueue(MockResponse().setBody("x".repeat(100_000)))
+    val dest = java.io.File(dir, "big.bin")
+    assertThrows(FetchTooLarge::class.java) { FetchFile.get("c", url(), emptyMap(), pin(), dest, maxBytes = 1000) }
+    assertTrue(!dest.exists() && !java.io.File(dest.path + ".part").exists())
+  }
+
   @Test fun nonSuccessIsAResultAndWritesNothing() {
     server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "2"))
     val dest = java.io.File(dir, "b.jpg")

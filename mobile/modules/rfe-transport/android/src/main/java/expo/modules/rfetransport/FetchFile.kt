@@ -6,6 +6,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class FetchResult(val status: Int, val retryAfterSeconds: Int?, val bytes: Long)
 
+/** The body grew past the caller's cap; the partial file is discarded (never trust a remote size). */
+class FetchTooLarge(val maxBytes: Long) : java.io.IOException("response exceeds $maxBytes bytes")
+
 /**
  * Cancellable pinned GET-to-file for small assets (thumbnails). Unlike [PinnedHttp.downloadToFile] a
  * non-2xx status is a normal result (404 = "no thumbnail", 429 = busy + Retry-After), and a running
@@ -14,7 +17,7 @@ data class FetchResult(val status: Int, val retryAfterSeconds: Int?, val bytes: 
 object FetchFile {
   private val calls = ConcurrentHashMap<String, okhttp3.Call>()
 
-  fun get(id: String, url: String, headers: Map<String, String>, pin: String?, dest: File, timeoutMs: Long = 20000): FetchResult {
+  fun get(id: String, url: String, headers: Map<String, String>, pin: String?, dest: File, timeoutMs: Long = 20000, maxBytes: Long = 0): FetchResult {
     val call = PinnedHttp.newGetCall(url, headers, pin, timeoutMs)
     calls[id] = call
     val part = File(dest.path + ".part")
@@ -29,8 +32,9 @@ object FetchFile {
           while (true) {
             val r = src.read(buf)
             if (r < 0) break
-            out.write(buf, 0, r)
             n += r
+            if (maxBytes > 0 && n > maxBytes) throw FetchTooLarge(maxBytes)
+            out.write(buf, 0, r)
           }
         }
         if (dest.exists()) dest.delete()

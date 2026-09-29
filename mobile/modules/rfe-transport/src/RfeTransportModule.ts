@@ -11,8 +11,8 @@ declare class RfeTransportModule extends NativeModule<Events> {
   transferPause(id: string): Promise<void>;
   transferCancel(id: string): Promise<void>;
   transfersList(): Promise<string[]>;
-  /** Cancellable pinned GET to a file; a non-2xx status is a normal result (404 no thumbnail, 429 busy + Retry-After). */
-  fetchToFile(id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number): Promise<{ status: number; retryAfter: number | null; bytes: number }>;
+  /** Cancellable pinned GET to a file; a non-2xx status is a normal result (404 no thumbnail, 429 busy + Retry-After). Rejects ERR_TOO_LARGE past maxBytes. */
+  fetchToFile(id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number, maxBytes?: number): Promise<{ status: number; retryAfter: number | null; bytes: number }>;
   fetchCancel(id: string): Promise<void>;
   /** Broadcasts a WoL magic packet; false on a malformed MAC or send failure. */
   sendWakeOnLan(mac: string): Promise<boolean>;

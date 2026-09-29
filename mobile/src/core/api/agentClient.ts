@@ -112,6 +112,7 @@ export class AgentClient {
     path: string,
     query: Record<string, string | number | undefined> | undefined,
     json: unknown,
+    text?: string,
   ) {
     if (this.pin === null && !isSafeUnpinnedPreflight(method, path)) throw new MissingCertPin();
     const qs = query
@@ -123,12 +124,13 @@ export class AgentClient {
     const url = `https://${this.addresses[addrIndex]}/v1${path}${qs ? `?${qs}` : ''}`;
     const headers: Record<string, string> = { 'X-RFE-Client-Version': this.opts.clientVersion ?? 'rn' };
     if (json !== undefined) headers['Content-Type'] = 'application/json';
+    else if (text !== undefined) headers['Content-Type'] = 'application/octet-stream';
     if (this.pin !== null && this.opts.deviceToken) headers.Authorization = `Bearer ${this.opts.deviceToken}`;
     return this.opts.transport.request({
       url,
       method,
       headers,
-      bodyText: json === undefined ? null : JSON.stringify(json),
+      bodyText: json !== undefined ? JSON.stringify(json) : (text ?? null),
       pin: this.pin,
       timeoutMs: this.opts.timeoutMs,
     });
@@ -137,11 +139,11 @@ export class AgentClient {
   private async call(
     method: string,
     path: string,
-    o: { query?: Record<string, string | number | undefined>; json?: unknown } = {},
+    o: { query?: Record<string, string | number | undefined>; json?: unknown; text?: string } = {},
   ): Promise<unknown> {
     let res;
     try {
-      res = await this.send(this.addrIndex, method, path, o.query, o.json);
+      res = await this.send(this.addrIndex, method, path, o.query, o.json, o.text);
     } catch (e) {
       const code = errCode(e);
       if (code === ERR_CERT_PIN_MISMATCH) throw new CertPinMismatch();
@@ -324,6 +326,15 @@ export class AgentClient {
   // ---------------------------------------------------------------------------
   // Filesystem — write
   // ---------------------------------------------------------------------------
+
+  /**
+   * Overwrites a file with UTF-8 [text] (agent cap 5 MiB). [baseModified] (the Entry.modified last read)
+   * makes the write optimistic: the agent answers 409 STALE_WRITE if the file changed since. Other
+   * typed failures arrive as AgentApiError codes READ_ONLY and PAYLOAD_TOO_LARGE.
+   */
+  async putContent(path: string, text: string, baseModified?: string): Promise<Entry> {
+    return parseEntry((await this.call('PUT', '/content', { query: { path, baseModified }, text })) as Record<string, unknown>);
+  }
 
   private async entry(method: string, path: string, json: unknown): Promise<Entry> {
     return parseEntry((await this.call(method, path, { json })) as Record<string, unknown>);

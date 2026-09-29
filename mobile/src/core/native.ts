@@ -63,6 +63,6 @@ export const stopLanScan = () => Rfe.discoveryStop();
 
 export const sendWakeOnLan = (mac: string) => Rfe.sendWakeOnLan(mac);
 
-export const fetchToFileNative = (id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number) =>
-  Rfe.fetchToFile(id, url, headers, pin, destPath, timeoutMs);
+export const fetchToFileNative = (id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number, maxBytes?: number) =>
+  Rfe.fetchToFile(id, url, headers, pin, destPath, timeoutMs, maxBytes);
 export const fetchCancelNative = (id: string) => Rfe.fetchCancel(id);

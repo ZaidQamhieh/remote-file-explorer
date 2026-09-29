@@ -24,7 +24,8 @@ export function previewExtension(name: string): string {
 }
 
 export function previewKindOf(e: Pick<Entry, 'name' | 'mimeType'>): PreviewKind {
-  const mime = e.mimeType?.toLowerCase();
+  // Parameters are dropped: Go's mime.TypeByExtension reports text types as `text/markdown; charset=utf-8`.
+  const mime = e.mimeType?.split(';')[0].trim().toLowerCase();
   const ext = previewExtension(e.name);
   if (mime) {
     if (mime.startsWith('image/')) return 'image';

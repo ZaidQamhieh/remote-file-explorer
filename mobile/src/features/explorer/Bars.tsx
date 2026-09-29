@@ -61,8 +61,8 @@ export function BrowseAppBar({
 
 /** Contextual app bar while items are selected. */
 export function SelectionAppBar({
-  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection,
-}: { state: ExplorerState; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void }) {
+  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark,
+}: { state: ExplorerState; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void }) {
   const c = useScheme();
   const insets = useSafeAreaInsets();
   const all = state.entries.length > 0 && state.selected.size === state.entries.length;
@@ -71,6 +71,9 @@ export function SelectionAppBar({
       <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
         <AppBarIconButton label={t('clearSelectionTooltip')} onPress={onClose}><X size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
         <Text variant="screenTitle" style={{ flex: 1 }} accessibilityRole="header">{t('nSelected', { count: state.selected.size })}</Text>
+        {state.selected.size === 1 && (
+          <AppBarIconButton label="Bookmark" onPress={onBookmark}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
+        )}
         <AppBarIconButton label={t('batchRenameTooltip')} onPress={onBatchRename}><FilePen size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
         <AppBarIconButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} onPress={all ? onClearSelection : onSelectAll}>
           {all ? <Square size={19} color={c.onSurfaceVariant} /> : <CheckSquare size={19} color={c.onSurfaceVariant} />}
@@ -82,8 +85,7 @@ export function SelectionAppBar({
   );
 }
 
-function BarAction({ label, onPress, color, children }: { label: string; onPress: () => void; color?: string; children: React.ReactNode }) {
-  void color;
+function BarAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
       {children}
@@ -94,9 +96,9 @@ function BarAction({ label, onPress, color, children }: { label: string; onPress
 /** Bottom action bar for the current selection: cut, copy, compress, download, delete. */
 export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onDelete }: { count: number; onCut: () => void; onCopy: () => void; onCompress: () => void; onDownload: () => void; onDelete: () => void }) {
   const c = useScheme();
-  const insets = useSafeAreaInsets();
+  // Sits above the tab bar, which already owns the bottom inset.
   return (
-    <View style={{ paddingBottom: insets.bottom, backgroundColor: c.surfaceContainerHigh, borderTopWidth: 1, borderColor: c.outlineVariant }}>
+    <View style={{ backgroundColor: c.surfaceContainerHigh, borderTopWidth: 1, borderColor: c.outlineVariant }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 }}>
         <Text style={{ fontSize: 12.5 }} muted>{t('nSelected', { count })}</Text>
         <View style={{ flexDirection: 'row' }}>

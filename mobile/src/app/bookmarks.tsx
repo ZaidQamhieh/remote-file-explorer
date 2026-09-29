@@ -34,7 +34,7 @@ export default function Bookmarks() {
         <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: `${c.primary}24`, alignItems: 'center', justifyContent: 'center' }}>
           <BookmarkIcon size={48} color={c.primary} />
         </View>
-        <Text muted style={{ textAlign: 'center' }}>No bookmarks yet. Long-press any file to bookmark it.</Text>
+        <Text muted style={{ textAlign: 'center' }}>No bookmarks yet. Long-press a file, then tap the bookmark icon.</Text>
       </View>
     );
   }

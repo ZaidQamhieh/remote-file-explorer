@@ -67,6 +67,20 @@ object PinnedHttp {
     override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
   }
 
+  // One client per pin, so pinned calls reuse TLS connections (and HTTP/2) like Flutter's HttpClient.
+  // OkHttp keys pooled connections by the SSL socket factory, which is per pin, so a connection
+  // verified under one pin is never reused for another.
+  private val pinned = java.util.concurrent.ConcurrentHashMap<String, OkHttpClient>()
+
+  private fun pinnedClient(pin: String, timeoutMs: Long): OkHttpClient {
+    val base = pinned.getOrPut(pin) { client(PinTrustManager(pin), 30000) }
+    return base.newBuilder()
+      .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+      .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+      .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+      .build()
+  }
+
   private fun client(tm: PinTrustManager, timeoutMs: Long): OkHttpClient {
     val ctx = SSLContext.getInstance("TLS")
     ctx.init(null, arrayOf(tm), SecureRandom())
@@ -124,15 +138,18 @@ object PinnedHttp {
         throw PinPolicyViolation("missing or invalid certificate pin")
       }
     }
-    val tm = PinTrustManager(normalized)
     val req = Request.Builder().url(url).headers(headers.toHeaders())
       .method(method, body?.toRequestBody("application/octet-stream".toMediaTypeOrNull())
         ?: if (method == "POST" || method == "PUT" || method == "PATCH") ByteArray(0).toRequestBody(null) else null)
       .build()
-    client(tm, timeoutMs).newCall(req).execute().use { r ->
+    // Unpinned preflights get a fresh client so the fingerprint seen on this handshake is reported.
+    val tm = if (normalized == null) PinTrustManager(null) else null
+    val http = if (tm != null) client(tm, timeoutMs) else pinnedClient(normalized!!, timeoutMs)
+    http.newCall(req).execute().use { r ->
       val h = HashMap<String, String>()
       for (i in 0 until r.headers.size) h[r.headers.name(i).lowercase()] = r.headers.value(i)
-      return PinnedResponse(r.code, h, r.body?.bytes() ?: ByteArray(0), tm.seen)
+      // A pinned response only exists if the handshake matched the pin.
+      return PinnedResponse(r.code, h, r.body?.bytes() ?: ByteArray(0), tm?.seen ?: normalized)
     }
   }
 
@@ -141,7 +158,7 @@ object PinnedHttp {
     requireHttps(url)
     val normalized = normalizeFingerprint(pin) ?: throw PinPolicyViolation("missing or invalid certificate pin")
     val req = Request.Builder().url(url).headers(headers.toHeaders()).get().build()
-    return client(PinTrustManager(normalized), timeoutMs).newCall(req)
+    return pinnedClient(normalized, timeoutMs).newCall(req)
   }
 
   /**
@@ -158,12 +175,11 @@ object PinnedHttp {
   ): Long {
     requireHttps(url)
     val normalized = normalizeFingerprint(pin) ?: throw PinPolicyViolation("missing or invalid certificate pin")
-    val tm = PinTrustManager(normalized)
     val h = headers.toMutableMap()
     if (offset > 0) h["Range"] = "bytes=$offset-"
     val req = Request.Builder().url(url).headers(h.toHeaders()).get().build()
     val part = File(dest.path + ".part")
-    client(tm, timeoutMs).newCall(req).execute().use { r ->
+    pinnedClient(normalized, timeoutMs).newCall(req).execute().use { r ->
       if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}")
       val resume = offset > 0 && r.code == 206
       FileOutputStream(part, resume).use { out ->

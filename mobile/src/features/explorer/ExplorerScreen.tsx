@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from 'react-native';
 
@@ -54,17 +54,20 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   }, [ex, initialPath, rootPath]);
 
   // Hardware back: clear selection, then go up a folder, then leave the tab.
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      const s = ex.getState();
-      if (s.selected.size > 0) {
-        ex.clearSelection();
-        return true;
-      }
-      return ex.popDirectory();
-    });
-    return () => sub.remove();
-  }, [ex]);
+  // Only while this screen is focused, so a pushed screen (preview, meta) gets Back first.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        const s = ex.getState();
+        if (s.selected.size > 0) {
+          ex.clearSelection();
+          return true;
+        }
+        return ex.popDirectory();
+      });
+      return () => sub.remove();
+    }, [ex]),
+  );
 
   const path = currentPath(state);
   const activeTag = tagFilter?.path === path ? tagFilter.tag : null;
@@ -113,6 +116,14 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     await collections.addBookmark({ hostId: host.id, remotePath: e.path, ...(tag ? { tag } : {}) });
   }
 
+  function bookmarkSelected() {
+    const [only] = ex.getState().selected;
+    const entry = state.entries.find((e) => e.path === only);
+    if (!entry) return;
+    ex.clearSelection();
+    void bookmark(entry);
+  }
+
   async function downloadSelected() {
     const paths = [...ex.getState().selected];
     try {
@@ -155,7 +166,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const showPaste = clip !== null && clip.paths.length > 0 && clip.hostId === host.id;
 
   const header = multi ? (
-    <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => toast.info('Batch rename: available in a later phase')} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} />
+    <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => toast.info('Batch rename: available in a later phase')} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} />
   ) : (
     <BrowseAppBar
       state={state}
@@ -207,7 +218,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         columnWrapperStyle={{ gap: Spacing.md }}
         renderItem={({ item }) => (
           <View style={{ flex: 1, opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onBookmark={() => bookmark(item)} />
+            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} />
           </View>
         )}
       />
@@ -219,7 +230,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: c.outlineVariant }} />}
         renderItem={({ item }) => (
           <View style={{ opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => router.push({ pathname: '/meta', params: { hostId: host.id, path: item.path } }) : undefined} onBookmark={() => bookmark(item)} />
+            <EntryTile entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => router.push({ pathname: '/meta', params: { hostId: host.id, path: item.path } }) : undefined} />
           </View>
         )}
       />

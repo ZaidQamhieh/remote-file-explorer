@@ -9,10 +9,10 @@ import { EntryLeading, useIconChipBg } from './EntryIcon';
 import { Thumbnail } from './Thumbnail';
 
 export function EntryGridCell({
-  entry, hostId, selected, multiSelect, isFavorite, isPinned, onPress, onLongPress, onBookmark, onPeek,
+  entry, hostId, selected, multiSelect, isFavorite, isPinned, onPress, onLongPress, onPeek,
 }: {
   entry: Entry; hostId: string; selected: boolean; multiSelect: boolean; isFavorite?: boolean; isPinned?: boolean;
-  onPress: () => void; onLongPress: () => void; onBookmark?: () => void; onPeek?: () => void;
+  onPress: () => void; onLongPress: () => void; onPeek?: () => void;
 }) {
   const c = useScheme();
   const chip = useIconChipBg(entry);
@@ -29,7 +29,7 @@ export function EntryGridCell({
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={!multiSelect && onBookmark ? onBookmark : onLongPress}
+      onLongPress={onLongPress}
       accessibilityLabel={entry.name}
       accessibilityState={{ selected }}
       style={{ flex: 1, minHeight: 132, padding: Spacing.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? `${c.secondaryContainer}A6` : c.surfaceContainerLow, borderRadius: Radii.card, borderWidth: selected ? 3 : 1, borderColor: selected ? c.primary : c.outlineVariant }}

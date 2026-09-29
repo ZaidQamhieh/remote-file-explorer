@@ -3,7 +3,10 @@ package expo.modules.rfetransport
 import android.util.Base64
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class RfeTransportModule : Module() {
@@ -27,6 +30,10 @@ class RfeTransportModule : Module() {
   } catch (e: java.io.IOException) {
     throw CodedException("ERR_CONNECTION", e.message, e)
   }
+
+  // Plain AsyncFunction bodies share Expo's single "AsyncFunctionQueue" thread, so one slow blocking
+  // call (a ping to an offline host) would stall every other native call. Network work runs on IO.
+  private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { guard(block) }
 
   override fun definition() = ModuleDefinition {
     Name("RfeTransport")
@@ -58,15 +65,15 @@ class RfeTransportModule : Module() {
         .list().map { it.toJson().toString() }
     }
 
-    AsyncFunction("fetchToFile") { id: String, url: String, headers: Map<String, String>, pin: String?, destPath: String, timeoutMs: Double? ->
-      guard {
+    AsyncFunction("fetchToFile") Coroutine { id: String, url: String, headers: Map<String, String>, pin: String?, destPath: String, timeoutMs: Double? ->
+      io {
         val r = FetchFile.get(id, url, headers, pin, File(destPath), (timeoutMs ?: 20000.0).toLong())
         mapOf("status" to r.status, "retryAfter" to r.retryAfterSeconds, "bytes" to r.bytes.toDouble())
       }
     }
     AsyncFunction("fetchCancel") { id: String -> FetchFile.cancel(id) }
 
-    AsyncFunction("sendWakeOnLan") { mac: String -> Wol.send(mac) }
+    AsyncFunction("sendWakeOnLan") Coroutine { mac: String -> io { Wol.send(mac) } }
 
     AsyncFunction("deviceId") {
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
@@ -92,13 +99,13 @@ class RfeTransportModule : Module() {
     AsyncFunction("secureDelete") { key: String -> secure.delete(key) }
     AsyncFunction("secureContains") { key: String -> secure.contains(key) }
 
-    AsyncFunction("probeFingerprint") { url: String, timeoutMs: Double? ->
-      guard { PinnedHttp.probeFingerprint(url, (timeoutMs ?: 8000.0).toLong()) }
+    AsyncFunction("probeFingerprint") Coroutine { url: String, timeoutMs: Double? ->
+      io { PinnedHttp.probeFingerprint(url, (timeoutMs ?: 8000.0).toLong()) }
     }
 
-    AsyncFunction("request") { url: String, method: String, headers: Map<String, String>,
-                               bodyText: String?, pin: String?, timeoutMs: Double? ->
-      guard {
+    AsyncFunction("request") Coroutine { url: String, method: String, headers: Map<String, String>,
+                                         bodyText: String?, pin: String?, timeoutMs: Double? ->
+      io {
         val r = PinnedHttp.request(
           url, method, headers,
           bodyText?.toByteArray(Charsets.UTF_8),
@@ -113,9 +120,9 @@ class RfeTransportModule : Module() {
       }
     }
 
-    AsyncFunction("downloadToFile") { url: String, headers: Map<String, String>, pin: String?,
-                                      destPath: String, offset: Double?, timeoutMs: Double? ->
-      guard {
+    AsyncFunction("downloadToFile") Coroutine { url: String, headers: Map<String, String>, pin: String?,
+                                                destPath: String, offset: Double?, timeoutMs: Double? ->
+      io {
         PinnedHttp.downloadToFile(
           url, headers, pin, File(destPath), (offset ?: 0.0).toLong(), (timeoutMs ?: 30000.0).toLong(),
         ).toDouble()

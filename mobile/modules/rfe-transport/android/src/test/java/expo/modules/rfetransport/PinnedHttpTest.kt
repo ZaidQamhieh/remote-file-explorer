@@ -62,6 +62,21 @@ class PinnedHttpTest {
     assertEquals("server must see no HTTP request", 0, server.requestCount)
   }
 
+  @Test fun pinnedConnectionIsReusedButNeverServesAnotherPin() {
+    server.enqueue(MockResponse().setBody("a"))
+    server.enqueue(MockResponse().setBody("b"))
+    server.enqueue(MockResponse().setBody("secret"))
+    assertEquals(200, PinnedHttp.request(url, "GET", emptyMap(), null, pin()).status)
+    assertEquals(200, PinnedHttp.request(url, "GET", emptyMap(), null, pin()).status)
+    server.takeRequest()
+    assertEquals("second call rides the pooled TLS connection", 1, server.takeRequest().sequenceNumber)
+    // A different pin to the same server must handshake afresh and fail, pooled connection or not.
+    assertThrows(Exception::class.java) {
+      PinnedHttp.request(url, "GET", mapOf("Authorization" to "Bearer t"), null, "1".repeat(64))
+    }
+    assertEquals(2, server.requestCount)
+  }
+
   @Test fun missingOrInvalidPinIsRefusedWithoutConnecting() {
     val fs = server.url("/v1/fs").toString()
     assertThrows(PinPolicyViolation::class.java) { PinnedHttp.request(fs, "GET", emptyMap(), null, null) }

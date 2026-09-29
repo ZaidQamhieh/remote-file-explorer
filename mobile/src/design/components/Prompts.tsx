@@ -45,7 +45,7 @@ export function PromptDialog({
       <View style={{ padding: 24, gap: 12 }}>
         <Text variant="titleLarge" accessibilityRole="header">{title}</Text>
         {description ? <Text muted>{description}</Text> : null}
-        <TextField label={title} placeholder={placeholder} value={value} onChangeText={setValue} autoFocus autoCapitalize="none" autoCorrect={false} mono={mono} onSubmitEditing={() => ok && onSubmit(value.trim())} />
+        <TextField label={placeholder ?? title} hideLabel placeholder={placeholder} value={value} onChangeText={setValue} autoFocus autoCapitalize="none" autoCorrect={false} mono={mono} onSubmitEditing={() => ok && onSubmit(value.trim())} />
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
           <Button kind="text" label={cancelLabel} onPress={onCancel} />
           <Button kind="filled" label={confirmLabel} disabled={!ok} onPress={() => onSubmit(value.trim())} />

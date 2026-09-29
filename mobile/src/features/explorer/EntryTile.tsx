@@ -21,10 +21,10 @@ export function entryMeta(e: Entry): string {
 }
 
 export function EntryTile({
-  entry, hostId, selected, multiSelect, density = 'comfortable', isFavorite, isPinned, onPress, onLongPress, onSelect, onShowMeta, onBookmark, onPeek,
+  entry, hostId, selected, multiSelect, density = 'comfortable', isFavorite, isPinned, onPress, onLongPress, onSelect, onShowMeta, onPeek,
 }: {
   entry: Entry; hostId: string; selected: boolean; multiSelect: boolean; density?: EntryDensity; isFavorite?: boolean; isPinned?: boolean;
-  onPress: () => void; onLongPress: () => void; onSelect: () => void; onShowMeta?: () => void; onBookmark?: () => void; onPeek?: () => void;
+  onPress: () => void; onLongPress: () => void; onSelect: () => void; onShowMeta?: () => void; onPeek?: () => void;
 }) {
   const c = useScheme();
   const compact = density === 'compact';
@@ -50,7 +50,7 @@ export function EntryTile({
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={!multiSelect && onBookmark ? onBookmark : onLongPress}
+      onLongPress={onLongPress}
       accessibilityLabel={`${entry.name}${meta ? `, ${meta}` : ''}`}
       accessibilityState={{ selected }}
       style={{ backgroundColor: selected ? `${c.primary}24` : 'transparent', paddingHorizontal: Spacing.md, paddingVertical: compact ? Spacing.xs : Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}

@@ -70,6 +70,10 @@ export async function importLegacyState(
   const existingIds = new Set(existing.map((x) => (x as { id?: string }).id));
   const merged = [...existing, ...hosts.filter((h) => !existingIds.has(h.id)).map(hostToJson)];
   await kv.set(HOSTS_KEY, JSON.stringify(merged));
+  // Non-secret per-host "last seen" timestamps (ms since epoch, stored by Flutter as an int).
+  for (const [k, v] of Object.entries(legacyPrefs)) {
+    if (k.startsWith('rfe_last_seen_') && /^[0-9]+$/.test(v) && (await kv.get(k)) === null) await kv.set(k, v);
+  }
   await kv.set(IMPORT_DONE_KEY, '1');
   return { status: 'imported', hosts: hosts.length, needRepair, skippedRecords: skipped };
 }

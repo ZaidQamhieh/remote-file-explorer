@@ -11,6 +11,12 @@ declare class RfeTransportModule extends NativeModule<Events> {
   transferPause(id: string): Promise<void>;
   transferCancel(id: string): Promise<void>;
   transfersList(): Promise<string[]>;
+  /** Broadcasts a WoL magic packet; false on a malformed MAC or send failure. */
+  sendWakeOnLan(mac: string): Promise<boolean>;
+  deviceId(): Promise<string | null>;
+  /** mDNS search for `_rfe._tcp` agents (8 s); results are untrusted hints. */
+  discoveryScan(): Promise<{ name: string; address: string; port: number }[]>;
+  discoveryStop(): Promise<void>;
   /** Flutter shared_preferences (`flutter.` stripped); each value is JSON-encoded. */
   legacyPrefsReadAll(): Promise<Record<string, string>>;
   secureRead(key: string): Promise<string | null>;

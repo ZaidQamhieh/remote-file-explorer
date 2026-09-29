@@ -33,10 +33,15 @@ export type Scheme = {
   onSecondary: string;
   secondaryContainer: string;
   onSecondaryContainer: string;
+  tertiary: string;
   tertiaryContainer: string;
   onTertiaryContainer: string;
   error: string;
   onError: string;
+  errorContainer: string;
+  onErrorContainer: string;
+  inverseSurface: string;
+  onInverseSurface: string;
   surface: string;
   onSurface: string;
   onSurfaceVariant: string;
@@ -59,10 +64,15 @@ export const lightScheme: Scheme = {
   onSecondary: '#FFFFFF',
   secondaryContainer: '#DBE2F9',
   onSecondaryContainer: '#3F4759',
+  tertiary: '#715573',
   tertiaryContainer: '#FCD7FB',
   onTertiaryContainer: '#583E5B',
   error: '#BA1A1A',
   onError: '#FFFFFF',
+  errorContainer: '#FFDAD6',
+  onErrorContainer: '#93000A',
+  inverseSurface: '#2F3036',
+  onInverseSurface: '#F0F0F7',
   surface: '#F9F9FF',
   onSurface: '#1A1B20',
   onSurfaceVariant: '#44474F',
@@ -85,10 +95,15 @@ export const darkScheme: Scheme = {
   onSecondary: '#06281E',
   secondaryContainer: Brand.online,
   onSecondaryContainer: '#06281E',
+  tertiary: Brand.online,
   tertiaryContainer: Brand.online,
   onTertiaryContainer: '#06281E',
   error: Brand.red,
   onError: '#2E0A0A',
+  errorContainer: Brand.red,
+  onErrorContainer: '#2E0A0A',
+  inverseSurface: '#F4F4F5',
+  onInverseSurface: '#09090B',
   surface: '#09090B',
   onSurface: '#F4F4F5',
   onSurfaceVariant: '#71717A',

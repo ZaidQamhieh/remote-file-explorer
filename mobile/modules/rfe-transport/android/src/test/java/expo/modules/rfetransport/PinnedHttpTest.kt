@@ -130,3 +130,15 @@ class PinnedHttpTest {
     dest.delete()
   }
 }
+
+class WolTest {
+  @Test fun parsesMacAndBuildsMagicPacket() {
+    val mac = Wol.parseMac("01:02:03:04:05:0f")!!
+    val p = Wol.packet(mac)
+    assertEquals(102, p.size)
+    assertEquals(0xFF.toByte(), p[5])
+    assertEquals(0x0f.toByte(), p[101])
+    assertEquals(null, Wol.parseMac("01:02:03"))
+    assertEquals(null, Wol.parseMac("zz:02:03:04:05:06"))
+  }
+}

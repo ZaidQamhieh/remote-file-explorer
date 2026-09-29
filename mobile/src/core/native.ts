@@ -2,6 +2,7 @@
 import { getRandomBytes } from 'expo-crypto';
 import Rfe from '../../modules/rfe-transport/src/RfeTransportModule';
 import type { Transport } from './api/agentClient';
+import { normalizeDiscovered } from './discovery';
 import type { SecureStore } from './security/secureStore';
 
 export const nativeTransport: Transport = {
@@ -54,3 +55,10 @@ export const downloadToFile = Rfe.downloadToFile.bind(Rfe);
 export function secureRandomBytes(n: number): Uint8Array {
   return getRandomBytes(n);
 }
+
+export const deviceIdNative = async () => (await Rfe.deviceId()) ?? null;
+
+export const scanLan = async () => normalizeDiscovered(await Rfe.discoveryScan());
+export const stopLanScan = () => Rfe.discoveryStop();
+
+export const sendWakeOnLan = (mac: string) => Rfe.sendWakeOnLan(mac);

@@ -34,16 +34,28 @@ export function ensureLegacyImport(): Promise<ImportReport> {
 }
 
 /** Builds a client for a paired host using only its secure-store pin and token. */
-export async function clientForHost(host: Host, probeLanFirst = false): Promise<AgentClient> {
+export async function clientForHost(host: Host, probeLanFirst = false, timeoutMs?: number): Promise<AgentClient> {
   const [pin, token] = await Promise.all([hostStore.getPin(host.id), hostStore.getToken(host.id)]);
   return new AgentClient(host, {
     transport: nativeTransport,
     deviceToken: token ?? undefined,
     pinnedFingerprint: pin,
     probeLanFirst,
+    timeoutMs,
   });
 }
 
 export function unpinnedClient(host: Host): AgentClient {
   return new AgentClient(host, { transport: nativeTransport });
 }
+
+import { nativeTransport as _transport } from './core/native';
+import { deviceIdNative } from './core/native';
+import type { PairingDeps } from './features/pairing/pairingService';
+
+export const pairingDeps: PairingDeps = {
+  transport: _transport,
+  identity,
+  store: hostStore,
+  deviceId: deviceIdNative,
+};

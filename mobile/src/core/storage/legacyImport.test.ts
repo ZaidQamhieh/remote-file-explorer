@@ -42,4 +42,11 @@ describe('importLegacyState', () => {
     await importLegacyState(legacy, kv, secure);
     expect(JSON.stringify([...kv.data.values()])).not.toContain('SECRET-TOKEN');
   });
+
+  it('carries over numeric last-seen timestamps and ignores junk', async () => {
+    const kv = new MemoryKeyValueStore();
+    await importLegacyState({ ...legacy, rfe_last_seen_h1: '1780000000000', rfe_last_seen_h2: '"x"' }, kv, new MemorySecureStore());
+    expect(kv.data.get('rfe_last_seen_h1')).toBe('1780000000000');
+    expect(kv.data.has('rfe_last_seen_h2')).toBe(false);
+  });
 });

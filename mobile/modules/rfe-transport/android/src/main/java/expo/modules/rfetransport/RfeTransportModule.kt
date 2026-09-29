@@ -7,6 +7,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 
 class RfeTransportModule : Module() {
+  private var discovery: LanDiscovery? = null
   private val secure by lazy {
     LegacySecureStore(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
   }
@@ -56,6 +57,23 @@ class RfeTransportModule : Module() {
       TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
         .list().map { it.toJson().toString() }
     }
+
+    AsyncFunction("sendWakeOnLan") { mac: String -> Wol.send(mac) }
+
+    AsyncFunction("deviceId") {
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      // Settings.Secure.ANDROID_ID: stable per device+signing key; lets a re-pair reuse the same device row.
+      android.provider.Settings.Secure.getString(ctx.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+    }
+
+    AsyncFunction("discoveryScan") { promise: expo.modules.kotlin.Promise ->
+      val ctx = appContext.reactContext ?: return@AsyncFunction promise.reject(CodedException("ERR_NO_CONTEXT", "no context", null))
+      val d = discovery ?: LanDiscovery(ctx).also { discovery = it }
+      d.scan { agents, err ->
+        if (err != null) promise.reject(CodedException(err, "Local network search failed", null)) else promise.resolve(agents)
+      }
+    }
+    AsyncFunction("discoveryStop") { discovery?.stop() }
 
     AsyncFunction("legacyPrefsReadAll") {
       LegacyPrefs.readAll(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))

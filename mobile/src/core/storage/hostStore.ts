@@ -102,6 +102,17 @@ export class HostStore {
     await this.kv.remove(lastSeenKey(id));
   }
 
+  /** Last successful /health, shown on offline hosts. */
+  async getLastSeen(id: string): Promise<Date | null> {
+    const raw = await this.kv.get(lastSeenKey(id));
+    const ms = raw === null ? NaN : Number(raw);
+    return Number.isFinite(ms) ? new Date(ms) : null;
+  }
+
+  setLastSeen(id: string, at: Date = new Date()) {
+    return this.kv.set(lastSeenKey(id), String(at.getTime()));
+  }
+
   getToken(id: string) {
     return this.secure.read(SecureKeys.token(id));
   }

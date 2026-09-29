@@ -1,0 +1,28 @@
+import { Tabs, useRouter } from 'expo-router';
+import { Activity, Database, Folder, FolderOpen, Settings } from 'lucide-react-native';
+
+import { BottomNav, type NavDestination } from '../../design/components/BottomNav';
+import { useScheme } from '../../design/theme';
+
+const DESTINATIONS: NavDestination[] = [
+  { name: 'index', label: 'Devices', Icon: Database },
+  { name: 'files', label: 'Files', Icon: Folder, SelectedIcon: FolderOpen },
+  { name: 'transfers', label: 'Transfers', Icon: Activity },
+  { name: 'settings', label: 'Settings', Icon: Settings },
+];
+
+export default function TabsLayout() {
+  const router = useRouter();
+  const c = useScheme();
+  return (
+    <Tabs
+      backBehavior="initialRoute"
+      tabBar={(p) => <BottomNav {...p} destinations={DESTINATIONS} onAdd={() => router.push('/pair')} />}
+      screenOptions={{ headerStyle: { backgroundColor: c.surface }, headerTintColor: c.onSurface, headerShadowVisible: false, sceneStyle: { backgroundColor: c.surface } }}
+    >
+      {DESTINATIONS.map((d) => (
+        <Tabs.Screen key={d.name} name={d.name} options={{ title: d.label, headerShown: false }} />
+      ))}
+    </Tabs>
+  );
+}

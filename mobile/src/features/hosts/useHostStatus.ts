@@ -1,0 +1,102 @@
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+
+import type { AgentClient } from '../../core/api/agentClient';
+import type { Drive, Health } from '../../core/api/models';
+import type { Host } from '../../core/models/host';
+import { clientForHost, hostStore } from '../../services';
+
+const STATUS_REFRESH_MS = 60_000;
+const DRIVE_REFRESH_MS = 5 * 60_000;
+const PING_TIMEOUT_MS = 8_000;
+
+export type HostStatus = {
+  checking: boolean;
+  health: Health | null;
+  online: boolean;
+  activeAddress: string | null;
+  lastSeen: Date | null;
+  drives: Drive[] | null;
+  refresh(): void;
+};
+
+/**
+ * Pings /health on mount and once a minute while the Devices tab is focused and the app is in the
+ * foreground; drive usage refreshes every five minutes (older agents without /system/drives just
+ * skip the gauges). Learns a Tailscale address / MAC the agent reports and stores it.
+ */
+export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatus {
+  const [state, setState] = useState<{ checking: boolean; health: Health | null; activeAddress: string | null; lastSeen: Date | null; drives: Drive[] | null }>({
+    checking: true,
+    health: null,
+    activeAddress: null,
+    lastSeen: null,
+    drives: null,
+  });
+  const inFlight = useRef(false);
+  const lastDrives = useRef(0);
+  const focused = useRef(false);
+  const hostRef = useRef(host);
+  hostRef.current = host;
+
+  const ping = useCallback(async (forceDrives: boolean) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setState((s) => ({ ...s, checking: true }));
+    let client: AgentClient | null = null;
+    try {
+      const h = hostRef.current;
+      client = await clientForHost(h, true, PING_TIMEOUT_MS);
+      const health = await client.health();
+      const now = new Date();
+      const learnedTs = health.tailscaleAddress && health.tailscaleAddress !== h.tailscaleAddress && health.tailscaleAddress !== h.address;
+      const learnedMac = health.macAddress && health.macAddress !== h.macAddress;
+      if (learnedTs || learnedMac) {
+        await hostStore.updateHost({ ...h, ...(learnedTs ? { tailscaleAddress: health.tailscaleAddress } : {}), ...(learnedMac ? { macAddress: health.macAddress } : {}) });
+        onHostLearned?.();
+      }
+      await hostStore.setLastSeen(h.id, now);
+      setState((s) => ({ ...s, checking: false, health, activeAddress: client!.activeAddress, lastSeen: now }));
+      if (forceDrives || Date.now() - lastDrives.current >= DRIVE_REFRESH_MS) {
+        lastDrives.current = Date.now();
+        client.drives().then(
+          (drives) => setState((s) => ({ ...s, drives })),
+          () => setState((s) => ({ ...s, drives: [] })),
+        );
+      }
+    } catch {
+      setState((s) => ({ ...s, checking: false, health: null }));
+    } finally {
+      inFlight.current = false;
+    }
+  }, [onHostLearned]);
+
+  useEffect(() => {
+    let live = true;
+    hostStore.getLastSeen(host.id).then((d) => live && setState((s) => ({ ...s, lastSeen: d })));
+    return () => {
+      live = false;
+    };
+  }, [host.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      ping(true);
+      const timer = setInterval(() => {
+        if (focused.current && AppState.currentState === 'active') ping(false);
+      }, STATUS_REFRESH_MS);
+      const sub = AppState.addEventListener('change', (st) => {
+        if (st === 'active' && focused.current) ping(true);
+      });
+      return () => {
+        focused.current = false;
+        clearInterval(timer);
+        sub.remove();
+      };
+    }, [ping]),
+  );
+
+  return { ...state, online: state.health !== null, refresh: () => ping(true) };
+}

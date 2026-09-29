@@ -7,7 +7,7 @@ import { Brand, Radii, Spacing } from '../tokens';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 
-type Kind = 'gradient' | 'filled' | 'outlined' | 'text';
+type Kind = 'gradient' | 'filled' | 'tonal' | 'outlined' | 'text';
 type Props = {
   label: string;
   onPress?: () => void;
@@ -17,19 +17,21 @@ type Props = {
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   destructive?: boolean;
+  /** Render the icon in the button's foreground color. */
+  renderIcon?: (color: string) => ReactNode;
 };
 
 /**
  * Stadium buttons with centered content (a hard UI rule). `gradient` is the
  * mockup `.btn-primary`: 135° gradient with a tinted glow (GradientButton).
  */
-export function Button({ label, onPress, kind = 'gradient', icon, busy, disabled, style, destructive }: Props) {
+export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, busy, disabled, style, destructive }: Props) {
   const c = useScheme();
   const off = disabled || busy;
-  const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : destructive ? c.error : c.primary;
+  const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : kind === 'tonal' ? c.onSecondaryContainer : destructive ? c.error : c.primary;
   const inner = (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm }}>
-      {busy ? <ActivityIndicator size="small" color={fg} /> : icon}
+      {busy ? <ActivityIndicator size="small" color={fg} /> : renderIcon ? renderIcon(fg) : icon}
       <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Inter-SemiBold', textAlign: 'center' }}>
         {label}
       </Text>
@@ -62,6 +64,7 @@ export function Button({ label, onPress, kind = 'gradient', icon, busy, disabled
             pad,
             { borderRadius: Radii.stadium },
             kind === 'filled' && { backgroundColor: c.primary },
+            kind === 'tonal' && { backgroundColor: c.secondaryContainer },
             kind === 'outlined' && { borderWidth: 1, borderColor: destructive ? c.error : c.outline },
           ]}
         >

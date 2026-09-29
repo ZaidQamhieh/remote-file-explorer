@@ -61,6 +61,8 @@ export type AgentClientOptions = {
   clientVersion?: string;
   /** Start from LAN (health probes) instead of the last good route. */
   probeLanFirst?: boolean;
+  /** Per-request timeout for the native transport (connect/read/write). */
+  timeoutMs?: number;
 };
 
 /**
@@ -120,6 +122,7 @@ export class AgentClient {
       headers,
       bodyText: json === undefined ? null : JSON.stringify(json),
       pin: this.pin,
+      timeoutMs: this.opts.timeoutMs,
     });
   }
 
@@ -220,6 +223,35 @@ export class AgentClient {
   async challenge(): Promise<string> {
     const d = (await this.call('POST', '/auth/challenge')) as Record<string, unknown>;
     return d.nonce as string;
+  }
+
+  async login(a: {
+    username: string;
+    password: string;
+    deviceLabel: string;
+    devicePublicKey: string;
+    nonce: string;
+    signature: string;
+    deviceId?: string;
+  }): Promise<PairResponse> {
+    const { deviceId, ...rest } = a;
+    const d = await this.call('POST', '/login', { json: { ...rest, ...(deviceId ? { deviceId } : {}) } });
+    return parsePairResponse(d as Record<string, unknown>);
+  }
+
+  async register(a: {
+    pairingCode: string;
+    username: string;
+    password: string;
+    deviceLabel: string;
+    devicePublicKey: string;
+    nonce: string;
+    signature: string;
+    deviceId?: string;
+  }): Promise<PairResponse> {
+    const { deviceId, ...rest } = a;
+    const d = await this.call('POST', '/register', { json: { ...rest, ...(deviceId ? { deviceId } : {}) } });
+    return parsePairResponse(d as Record<string, unknown>);
   }
 
   async pair(a: {

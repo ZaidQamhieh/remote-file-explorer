@@ -1,8 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ToastProvider } from '../design/components';
 import { ThemeProvider, useScheme } from '../design/theme';
 import { FontFamily } from '../design/tokens';
+import { t } from '../i18n';
 
 function Shell() {
   const c = useScheme();
@@ -18,10 +21,11 @@ function Shell() {
           contentStyle: { backgroundColor: c.surface },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'Hosts' }} />
-        <Stack.Screen name="pair" options={{ title: 'Pair a host' }} />
-        <Stack.Screen name="transfers" options={{ title: 'Transfers' }} />
-        <Stack.Screen name="host/[id]" options={{ title: 'Files' }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="pair/index" options={{ title: t('addComputerTitle') }} />
+        <Stack.Screen name="pair/scan" options={{ headerShown: false }} />
+        <Stack.Screen name="pair/login" options={{ title: t('loginTab') }} />
+        <Stack.Screen name="pair/register" options={{ title: t('registerTab') }} />
         <Stack.Screen name="dev/gallery" options={{ title: 'Design gallery' }} />
       </Stack>
     </>
@@ -30,8 +34,12 @@ function Shell() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <Shell />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <Shell />
+        </ToastProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

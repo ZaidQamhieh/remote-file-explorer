@@ -2,7 +2,15 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ],
+    "resolveJsonModule": true
   },
-  "exclude": ["node_modules", "android", "ios"]
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios"
+  ]
 }

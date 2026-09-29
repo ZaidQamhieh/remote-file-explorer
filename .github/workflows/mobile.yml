@@ -1,0 +1,86 @@
+name: Mobile (React Native)
+
+on:
+  push:
+    branches: [master, main]
+    paths: ['mobile/**', 'agent/**', 'protocol/**', '.github/workflows/mobile.yml']
+  pull_request:
+    branches: [master, main]
+    paths: ['mobile/**', 'agent/**', 'protocol/**', '.github/workflows/mobile.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: Types, lint, unit tests
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Release identity (package name, versionCode)
+        run: scripts/check-app-identity.sh
+      - name: tsc
+        run: npx tsc --noEmit
+      - name: eslint
+        run: npx eslint .
+      - name: jest (the live contract suite skips itself without an agent)
+        run: npx jest
+
+  contract:
+    name: Live contract test against a real agent
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: agent/go.sum
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Build the agent
+        working-directory: agent
+        run: go build -o "$RUNNER_TEMP/rfe-agent" ./cmd/agent
+      - run: npm ci
+        working-directory: mobile
+      - name: Contract and app-side security tests
+        working-directory: mobile
+        env:
+          RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
+        run: npx jest contract
+
+  native:
+    name: Native module unit tests (JVM)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - name: Generate the Android project (CNG; android/ is never committed)
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+      - name: rfe-transport unit tests
+        working-directory: mobile/android
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
+        run: ./gradlew :rfe-transport:testReleaseUnitTest --no-daemon

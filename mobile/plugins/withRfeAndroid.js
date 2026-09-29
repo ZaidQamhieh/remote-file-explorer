@@ -54,6 +54,40 @@ function withNetworkSecurityConfig(config) {
   });
 }
 
+// FileProvider for handing single files to other apps (open with / share). Only cache/share and cache/open are exposed.
+const FILE_PATHS = `<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="share" path="share/" />
+    <cache-path name="open" path="open/" />
+</paths>
+`;
+
+function withFileProvider(config) {
+  config = withDangerousMod(config, [
+    'android',
+    (cfg) => {
+      const dir = path.join(cfg.modRequest.platformProjectRoot, 'app/src/main/res/xml');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'rfe_file_paths.xml'), FILE_PATHS);
+      return cfg;
+    },
+  ]);
+  return withAndroidManifest(config, (cfg) => {
+    const app = cfg.modResults.manifest.application[0];
+    app.provider = (app.provider ?? []).filter((p) => p.$['android:authorities'] !== '${applicationId}.rfe.fileprovider');
+    app.provider.push({
+      $: {
+        'android:name': 'androidx.core.content.FileProvider',
+        'android:authorities': '${applicationId}.rfe.fileprovider',
+        'android:exported': 'false',
+        'android:grantUriPermissions': 'true',
+      },
+      'meta-data': [{ $: { 'android:name': 'android.support.FILE_PROVIDER_PATHS', 'android:resource': '@xml/rfe_file_paths' } }],
+    });
+    return cfg;
+  });
+}
+
 module.exports = function withRfeAndroid(config) {
-  return withNetworkSecurityConfig(withSigningAndDebuggable(config));
+  return withFileProvider(withNetworkSecurityConfig(withSigningAndDebuggable(config)));
 };

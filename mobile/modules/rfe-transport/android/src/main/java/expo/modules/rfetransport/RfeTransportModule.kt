@@ -87,6 +87,16 @@ class RfeTransportModule : Module() {
     AsyncFunction("offlineBodyRemove") Coroutine { hostId: String, path: String -> withContext(Dispatchers.IO) { bodies { it.remove(hostId, path) } } }
     AsyncFunction("offlineBodyEvictHost") Coroutine { hostId: String -> withContext(Dispatchers.IO) { bodies { it.evictHost(hostId) } } }
 
+    // Open or share a local file with another app (FileProvider URI, read-only, one file).
+    AsyncFunction("openFileExternal") { path: String, mime: String ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      ExternalFiles.open(ctx, File(path), mime)
+    }
+    AsyncFunction("shareFileExternal") { path: String, mime: String ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      ExternalFiles.share(ctx, File(path), mime)
+    }
+
     AsyncFunction("transferEnqueue") { id: String, hostId: String, address: String, remotePath: String, destPath: String ->
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
       TransferHost.ensureServiceRunning(ctx)

@@ -24,6 +24,9 @@ declare class RfeTransportModule extends NativeModule<Events> {
   mediaProxyStop(id: string): Promise<void>;
   /** Broadcasts a WoL magic packet; false on a malformed MAC or send failure. */
   sendWakeOnLan(mac: string): Promise<boolean>;
+  /** Opens/shares a local file (under cache/open or cache/share) with another app; false when nothing can handle it. */
+  openFileExternal(path: string, mime: string): Promise<boolean>;
+  shareFileExternal(path: string, mime: string): Promise<boolean>;
   /** Encrypted-at-rest bodies of pinned folders (AES-GCM streaming, key in secure storage). Restore rejects ERR_INTEGRITY and deletes the entry when it fails authentication. */
   offlineBodyPut(hostId: string, path: string, srcPath: string): Promise<void>;
   offlineBodyRestore(hostId: string, path: string, destPath: string): Promise<boolean>;

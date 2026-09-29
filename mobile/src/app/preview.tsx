@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { Download, FileCode, Info, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
+import { Download, ExternalLink, FileCode, Info, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { preloadNeighbours } from '../features/preview/neighbourPreload';
 import { fetchPreviewFile, MAX_EDITABLE_BYTES, MAX_IN_MEMORY_PREVIEW_BYTES } from '../features/preview/previewFile';
 import { previewKindOf } from '../features/preview/previewKind';
 import { useEditorSession, usePreviewSession } from '../features/preview/session';
+import { useExternalActions } from '../features/preview/useExternalActions';
 import { useSettings } from '../state/settings';
 import { utf8Length } from '../features/preview/textDecode';
 import { PreviewPage } from '../features/preview/viewers/PreviewPage';
@@ -59,6 +60,7 @@ function Pager({ onClose }: { onClose: () => void }) {
   const [metaOpen, setMetaOpen] = useState(false);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const list = useRef<FlatList<Entry>>(null);
+  const external = useExternalActions(session.host);
   const allowCellular = useSettings((x) => x.state.app.preloadPreviewOnCellular);
 
   // Warm the images either side of the current page so the next swipe is instant.
@@ -167,7 +169,7 @@ function Pager({ onClose }: { onClose: () => void }) {
     <View style={{ flex: 1, backgroundColor: onDark ? '#000' : c.surface }}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle={onDark || c.surface !== lightScheme.surface ? 'light-content' : 'dark-content'} />
-      <PreviewTopBar entry={current} onDark={onDark} onBack={onClose} onShare={() => toast.info('Share links arrive with the shares port (phase 5).')} onMore={() => setMoreOpen(true)} leading={leading} />
+      <PreviewTopBar entry={current} onDark={onDark} onBack={onClose} onShare={() => void external.share(current)} onMore={() => setMoreOpen(true)} leading={leading} />
       <FlatList
         ref={list}
         data={entries}
@@ -207,6 +209,7 @@ function Pager({ onClose }: { onClose: () => void }) {
         <View style={{ padding: Spacing.md }}>
           <ActionListCard>
             {[
+              <ActionListTile key="open" icon={<ExternalLink size={20} color={c.onSurfaceVariant} />} label={t('openWithButton')} onPress={() => { setMoreOpen(false); void external.openWith(current); }} />,
               <ActionListTile key="info" icon={<Info size={20} color={c.onSurfaceVariant} />} label={t('detailsButton')} onPress={() => { setMoreOpen(false); setMetaOpen(true); }} />,
               <ActionListTile key="save" icon={<Download size={20} color={c.onSurfaceVariant} />} label={t('downloadButton')} onPress={save} />,
               <ActionListTile key="del" icon={<Trash2 size={20} color={c.error} />} label={t('deleteButton')} tint={c.error} onPress={remove} />,

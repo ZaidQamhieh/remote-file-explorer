@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { Archive, Calendar, CalendarClock, Copy, Download, Eye, FilePen, Info, Link as LinkIcon, Lock, Route, Ruler, Star, Tag, Trash2, type LucideIcon } from 'lucide-react-native';
+import { Archive, Calendar, CalendarClock, Copy, Download, ExternalLink, Eye, FilePen, Info, Link as LinkIcon, Lock, Route, Ruler, Share2, Star, Tag, Trash2, type LucideIcon } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 
@@ -13,6 +13,7 @@ import { FontFamily, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { useCollections } from '../../state/collections';
 import { humanizeError } from '../pairing/pairingService';
+import { useExternalActions } from '../preview/useExternalActions';
 import { isPreviewable } from '../preview/previewKind';
 import { ShareLinkSheet } from '../share/ShareLinkSheet';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
@@ -43,6 +44,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   const [checksumBusy, setChecksumBusy] = useState(false);
   const [link, setLink] = useState<ShareLink | null>(null);
   const chip = useIconChipBg(entry);
+  const external = useExternalActions(host);
 
   // Re-seed whenever a (different) entry is shown, then refresh its metadata from the agent.
   const [seenFor, setSeenFor] = useState<Entry | null>(null);
@@ -175,6 +177,8 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   ] as (Action | null)[]).filter((a): a is Action => a !== null);
 
   const more: Action[] = ([
+    !entry.isDir ? { key: 'openwith', icon: ExternalLink, label: t('openWithButton'), onPress: () => { onClose(); void external.openWith(entry); } } : null,
+    !entry.isDir ? { key: 'share', icon: Share2, label: t('shareTooltip'), onPress: () => { onClose(); void external.share(entry); } } : null,
     !entry.isDir ? { key: 'link', icon: LinkIcon, label: t('shareLinkButton'), onPress: shareLink } : null,
     !entry.isDir && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractHereButton'), onPress: extract } : null,
     !entry.isDir ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null,

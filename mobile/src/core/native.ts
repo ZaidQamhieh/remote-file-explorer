@@ -65,6 +65,8 @@ export const offlineBodies = {
   remove: (hostId: string, path: string) => Rfe.offlineBodyRemove(hostId, path),
   evictHost: (hostId: string) => Rfe.offlineBodyEvictHost(hostId),
 };
+export const openFileExternal = (path: string, mime: string) => Rfe.openFileExternal(path, mime);
+export const shareFileExternal = (path: string, mime: string) => Rfe.shareFileExternal(path, mime);
 export const networkTransports = () => Rfe.networkTransports();
 export const deviceIdNative = async () => (await Rfe.deviceId()) ?? null;
 

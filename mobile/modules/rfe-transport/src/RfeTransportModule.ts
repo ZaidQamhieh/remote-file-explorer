@@ -19,6 +19,9 @@ declare class RfeTransportModule extends NativeModule<Events> {
   /** Renders a page to a PNG at [outPath], [widthPx] wide on white; resolves with the pixel size. */
   pdfRenderPage(path: string, index: number, widthPx: number, outPath: string): Promise<{ width: number; height: number }>;
   pdfClose(): Promise<void>;
+  /** Loopback bridge (127.0.0.1, random path, GET/HEAD + Range) so the media player can stream a pinned file. */
+  mediaProxyStart(id: string, url: string, headers: Record<string, string>, pin: string | null): Promise<string>;
+  mediaProxyStop(id: string): Promise<void>;
   /** Broadcasts a WoL magic packet; false on a malformed MAC or send failure. */
   sendWakeOnLan(mac: string): Promise<boolean>;
   deviceId(): Promise<string | null>;

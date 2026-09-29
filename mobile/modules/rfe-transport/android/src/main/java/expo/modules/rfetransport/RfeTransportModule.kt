@@ -92,6 +92,11 @@ class RfeTransportModule : Module() {
     }
     AsyncFunction("pdfClose") { PdfPages.close() }
 
+    AsyncFunction("mediaProxyStart") Coroutine { id: String, url: String, headers: Map<String, String>, pin: String? ->
+      io { MediaProxy.start(id, url, headers, pin) }
+    }
+    AsyncFunction("mediaProxyStop") { id: String -> MediaProxy.stop(id) }
+
     AsyncFunction("sendWakeOnLan") Coroutine { mac: String -> io { Wol.send(mac) } }
 
     AsyncFunction("deviceId") {

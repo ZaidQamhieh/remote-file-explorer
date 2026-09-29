@@ -1,17 +1,13 @@
-import { FileQuestion } from 'lucide-react-native';
 import { memo, useCallback } from 'react';
-import { View } from 'react-native';
 
 import type { Entry } from '../../../core/api/models';
 import type { Host } from '../../../core/models/host';
-import { Text } from '../../../design/components';
-import { useScheme } from '../../../design/theme';
-import { Spacing } from '../../../design/tokens';
 import { previewKindOf } from '../previewKind';
 import { ArchiveViewer } from './ArchiveViewer';
 import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
 import { MarkdownViewer } from './MarkdownViewer';
+import { AudioViewer, VideoViewer } from './MediaViewers';
 import { PdfViewer } from './PdfViewer';
 import { TextViewer } from './TextViewer';
 
@@ -41,21 +37,11 @@ export const PreviewPage = memo(function PreviewPage({ host, entry, isCurrent, l
       return <ArchiveViewer host={host} entry={entry} />;
     case 'pdf':
       return <PdfViewer host={host} entry={entry} />;
-    default:
-      return <NotPortedYet kind={previewKindOf(entry)} />;
+    case 'video':
+      return <VideoViewer host={host} entry={entry} isCurrent={isCurrent} />;
+    case 'audio':
+      return <AudioViewer host={host} entry={entry} isCurrent={isCurrent} />;
+    case 'none':
+      return null;
   }
 });
-
-/** Video and audio land with the pinned media proxy (rfe-c1x.7). */
-function NotPortedYet({ kind }: { kind: string }) {
-  const c = useScheme();
-  const dark = kind === 'video';
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.md }}>
-      <FileQuestion size={48} color={dark ? '#FFFFFF' : c.outline} />
-      <Text style={{ textAlign: 'center' }} color={dark ? '#FFFFFF' : undefined}>
-        {`The ${kind.toUpperCase()} viewer isn't in this build yet. Use ⋮ → Download to save the file.`}
-      </Text>
-    </View>
-  );
-}

@@ -799,5 +799,15 @@
  "storageByTypeHint": "Block area is proportional to space used, largest first, top-left.",
  "hostNoLongerPaired": "This computer is no longer paired.",
  "storageInsightsRowSubtitle": "Disk usage and storage by file type",
- "goButton": "Go"
+ "goButton": "Go",
+ "shareTitle": "Share to computer",
+ "shareNothingBody": "Nothing shareable was received. Share files, not text, to upload them.",
+ "sharePairFirstBody": "Pair a computer first, then share files to it.",
+ "shareFilesSection": "{count, plural, =1{1 file to upload} other{{count} files to upload}}",
+ "shareToComputerSection": "Send to",
+ "shareSelected": "Selected",
+ "shareChooseFolder": "Choose folder on {host}",
+ "shareChooseComputerFirst": "Choose a computer",
+ "shareChooseFolderTitle": "Upload to",
+ "shareUploadHere": "Upload here"
 }

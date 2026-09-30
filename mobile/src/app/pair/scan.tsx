@@ -1,43 +1,18 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useRouter } from 'expo-router';
 import { ArrowLeft, Flashlight } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CertPinMismatch } from '../../core/api/pin';
-import { Button, GhostBlockButton, InlineError, Pressable, Text, useToast } from '../../design/components';
+import { Button, GhostBlockButton, InlineError, Text, useToast } from '../../design/components';
 import { Spacing } from '../../design/tokens';
 import { Brackets } from '../../features/pairing/QrPanel';
+import { DarkIconButton, Scanline } from '../../features/pairing/ScannerChrome';
 import { humanizeError, pairWithCode, parsePairingQr } from '../../features/pairing/pairingService';
 import { t } from '../../i18n';
 import { pairingDeps } from '../../services';
-
-function Scanline({ height }: { height: number }) {
-  const v = useState(() => new Animated.Value(0))[0];
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(v, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [v]);
-  const travel = height / 2 - 8;
-  return (
-    <Animated.View
-      style={{ position: 'absolute', left: 8, right: 8, top: height / 2, height: 2, backgroundColor: '#4C8DFF', shadowColor: '#4C8DFF', shadowOpacity: 0.6, shadowRadius: 8, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-travel, travel] }) }] }}
-    />
-  );
-}
-
-const DarkIconButton = ({ children, onPress, label }: { children: React.ReactNode; onPress: () => void; label: string }) => (
-  <Pressable onPress={onPress} accessibilityLabel={label}>
-    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>{children}</View>
-  </Pressable>
-);
 
 export default function Scan() {
   const router = useRouter();

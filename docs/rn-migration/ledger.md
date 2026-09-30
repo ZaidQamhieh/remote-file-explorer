@@ -83,3 +83,11 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 
 ## Offline pin sync
 - Once per launch, the first time a host's Files tab loads successfully, its pinned folders are re-listed (updating the offline listing cache) and files that are not yet stored offline are downloaded. Flutter only fetched a folder's files when it was pinned and never refreshed afterwards. Bodies already stored are left as they are; they refresh when the file is next opened online. An offline start does not count, so it retries on the next visit.
+
+## Hand-off and share intake
+- Hand-off QR: a file's More sheet has "Scan to receive". The QR carries the host's certificate fingerprint and the file path (no token, no address). The other phone's Receive screen scans it, finds the paired computer whose pin matches, and downloads through the normal engine. A phone that has not paired that computer is told so rather than pairing it. Flutter had no phone-to-phone hand-off.
+- Share intake: sharing files from another app to Remote File Explorer opens a screen to pick a paired computer (skipped with one), then a folder with the same picker as Move/Copy, and uploads with the usual name-clash prompt. Text and links are ignored with a toast. Android only (`expo-share-intent`, iOS disabled). Flutter's share intake did not exist.
+
+## Not ported yet
+- Sync rules and photo backup need a media permission and MediaStore upload paths that scoped storage makes non-trivial; encrypted backup depends on them. Left for a later slice.
+- `expo-share-intent` throws on a share whose content URI returns no rows (an unreadable or revoked grant) and takes the app down; normal senders grant access, so this is left as is. Verified on the emulator with a MediaStore image: cold start, folder pick, upload, and the keep-both prompt. The camera scan in Receive was not exercised (no camera on the emulator); the QR sheet and the permission screen render.

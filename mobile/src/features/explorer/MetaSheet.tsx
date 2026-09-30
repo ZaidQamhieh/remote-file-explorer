@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { Archive, Calendar, CalendarClock, Copy, Download, ExternalLink, Eye, FilePen, Info, Link as LinkIcon, Lock, Route, Ruler, Share2, Star, Tag, Trash2, type LucideIcon } from 'lucide-react-native';
+import { Archive, Calendar, CalendarClock, Copy, Download, ExternalLink, Eye, FilePen, Info, Link as LinkIcon, Lock, QrCode, Route, Ruler, Share2, Star, Tag, Trash2, type LucideIcon } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 
@@ -15,13 +15,14 @@ import { useCollections } from '../../state/collections';
 import { humanizeError } from '../pairing/pairingService';
 import { useExternalActions } from '../preview/useExternalActions';
 import { isPreviewable } from '../preview/previewKind';
+import { HandoffQrSheet } from '../handoff/HandoffQrSheet';
 import { ShareLinkSheet } from '../share/ShareLinkSheet';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { ChmodDialog } from './ChmodDialog';
 import { EntryLeading, useIconChipBg } from './EntryIcon';
 import { isExtractableArchive } from './metaLogic';
 import { folderLabel, parentDirOf, renameDestination } from './paths';
-import { clientForHost } from '../../services';
+import { clientForHost, hostStore } from '../../services';
 
 type Action = { key: string; icon: LucideIcon; label: string; onPress: () => void; tint?: string };
 
@@ -43,6 +44,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   const [checksum, setChecksum] = useState<string | null>(null);
   const [checksumBusy, setChecksumBusy] = useState(false);
   const [link, setLink] = useState<ShareLink | null>(null);
+  const [qr, setQr] = useState<{ certFingerprint: string; path: string; name: string } | null>(null);
   const chip = useIconChipBg(entry);
   const external = useExternalActions(host);
 
@@ -158,6 +160,13 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
     if (minted) setLink(minted);
   }
 
+  /** The QR names the host by its secure-store pin, never the record's mirrored copy. */
+  async function sendViaQr() {
+    const pin = await hostStore.getPin(host.id).catch(() => null);
+    if (!pin) return void toast.error(t('qrHandoffNoFingerprint'));
+    setQr({ certFingerprint: pin, path: entry.path, name: entry.name });
+  }
+
   async function computeChecksum() {
     setChecksumBusy(true);
     const sum = await run((cl) => cl.checksum(entry.path), (e) => `Checksum failed: ${e}`);
@@ -180,6 +189,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
     !entry.isDir ? { key: 'openwith', icon: ExternalLink, label: t('openWithButton'), onPress: () => { onClose(); void external.openWith(entry); } } : null,
     !entry.isDir ? { key: 'share', icon: Share2, label: t('shareTooltip'), onPress: () => { onClose(); void external.share(entry); } } : null,
     !entry.isDir ? { key: 'link', icon: LinkIcon, label: t('shareLinkButton'), onPress: shareLink } : null,
+    !entry.isDir ? { key: 'qr', icon: QrCode, label: t('qrHandoffSheetTitle'), onPress: () => void sendViaQr() } : null,
     !entry.isDir && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractHereButton'), onPress: extract } : null,
     !entry.isDir ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null,
     !entry.isDir ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
@@ -190,7 +200,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
 
   return (
     <>
-      <BottomSheet visible={visible && link === null} onClose={onClose}>
+      <BottomSheet visible={visible && link === null && qr === null} onClose={onClose}>
         {view === 'actions' ? (
           <ScrollView>
             <SheetHero badge={<EntryLeading entry={entry} size={30} />} badgeColor={chip} title={entry.name} subtitle={subtitle} onClose={onClose} />
@@ -232,6 +242,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
           }}
         />
       )}
+      {qr && <HandoffQrSheet visible payload={qr} onClose={() => { setQr(null); onClose(); }} />}
       {link && client && <ShareLinkSheet visible client={client} link={link} fileName={entry.name} onClose={() => { setLink(null); onClose(); }} />}
     </>
   );

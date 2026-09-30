@@ -1,6 +1,4 @@
-import { SkipForward, CopyPlus, RefreshCw, X } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { createElement } from 'react';
 
 import type { Entry , BatchResult } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
@@ -11,32 +9,17 @@ import { humanizeError } from '../pairing/pairingService';
 import { enqueueUploads } from '../transfers/enqueueUploads';
 import { cleanUploadName, planUploads, type Resolution } from '../transfers/uploadPlan';
 import { useFileClipboard } from './clipboard';
+import { useConflictPrompt } from './useConflictPrompt';
 import { currentPath, type Explorer, type ExplorerState } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
-
-export type ConflictResolution = 'keepBoth' | 'overwrite' | 'skip' | 'cancel';
 
 /** Ports the explorer screen's copy/cut/paste/delete/compress flows, keeping their dialogs, messages and precedence rules. */
 export function useFileActions(host: Host, ex: Explorer & { getState(): ExplorerState }) {
   const dialogs = useDialogs();
   const toast = useToast();
   const c = useScheme();
+  const askConflict = useConflictPrompt();
   const clip = useFileClipboard();
-
-  async function askConflict(colliding: number, total: number, dest: string): Promise<ConflictResolution> {
-    const r = await dialogs.choose<ConflictResolution>({
-      title: t('nameConflictTitle'),
-      subtitle: t('nameConflictBody', { collidingCount: colliding, totalCount: total, dest: folderLabel(dest) }),
-      tint: '#F3A73F',
-      options: [
-        { value: 'skip', label: t('skipTheseButton'), icon: createElement(SkipForward, { size: 20, color: c.onSurfaceVariant }) },
-        { value: 'keepBoth', label: t('keepBothButton'), icon: createElement(CopyPlus, { size: 20, color: c.onSurfaceVariant }) },
-        { value: 'overwrite', label: t('overwriteButton'), tint: c.error, icon: createElement(RefreshCw, { size: 20, color: c.error }) },
-        { value: 'cancel', label: t('cancelButton'), icon: createElement(X, { size: 20, color: c.onSurfaceVariant }) },
-      ],
-    });
-    return r ?? 'cancel';
-  }
 
   async function reportBatch(res: BatchResult, verb: string) {
     if (res.failed.length === 0) {

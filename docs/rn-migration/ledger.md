@@ -94,3 +94,7 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 
 ## Parallel chunk uploads
 - An upload sends up to three chunks at once (Flutter sent one at a time per file). The agent already allows concurrent chunk requests per session; completion waits for all of them. Progress and resume are unchanged: the agent's bitmap decides what is left, so a failed run may leave later chunks already stored. JVM-tested against the fake agent (concurrency asserted); not yet timed on the emulator or a phone.
+
+## Support and About
+- About & Support has What's new (a short 2.0 list, not Flutter's per-release history from v1.18), Privacy policy (the same facts as Flutter, plus that diagnostics carry no passwords, tokens or file names) and Export diagnostics, which copies a plain-text summary to the clipboard as Flutter did. The RN summary adds app lock and drops the Dart version.
+- Not ported: the in-app updater and installer (GitHub release check, background pre-download, install prompt) and the open-source licenses page. The updater needs a decision on where RN releases are published and signed, plus the install-packages permission; until then updates come from the same release channel by hand. Host setup guidance is the existing pairing, login and register hints, which were ported with their Flutter wording.

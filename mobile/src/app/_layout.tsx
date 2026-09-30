@@ -59,6 +59,8 @@ function Shell() {
         <Stack.Screen name="settings/storage" options={{ title: t('storageSecurityTitle') }} />
         <Stack.Screen name="settings/transfers" options={{ title: t('transfersSettingsTitle') }} />
         <Stack.Screen name="settings/about" options={{ title: t('aboutSupportTitle') }} />
+        <Stack.Screen name="settings/whatsnew" options={{ title: t('whatsNewTitle') }} />
+        <Stack.Screen name="settings/privacy" options={{ title: t('privacyTitle') }} />
         <Stack.Screen name="dev/gallery" options={{ title: 'Design gallery' }} />
       </Stack>
     </>

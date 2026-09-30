@@ -809,5 +809,16 @@
  "shareChooseFolder": "Choose folder on {host}",
  "shareChooseComputerFirst": "Choose a computer",
  "shareChooseFolderTitle": "Upload to",
- "shareUploadHere": "Upload here"
+ "shareUploadHere": "Upload here",
+ "whatsNewTitle": "What's new",
+ "privacyTitle": "Privacy policy",
+ "privacyBody1": "Remote File Explorer has no cloud server, no cloud database and no user account. It connects directly from your phone to your own paired computers over your LAN or your Tailscale network.",
+ "privacyBody2": "The app collects no analytics and no telemetry: no crash reporter, no usage tracking, and no third-party SDK that phones anything home. Files you browse or transfer never pass through a server run by the developer or anyone else.",
+ "privacyBody3": "Diagnostics export is the one place data leaves the app, and only when you tap it: it copies a plain-text summary (app version, settings, computer names and addresses) to your clipboard for you to share yourself. It contains no passwords, tokens or file names.",
+ "whatsNew1": "Rebuilt on React Native with the same pairing, pinned certificates and paired computers as before.",
+ "whatsNew2": "Downloads and uploads keep running in the background, resume after a restart, and finished downloads land in Downloads/Remote File Explorer.",
+ "whatsNew3": "Uploads send several chunks at once; transfers show speed and time left.",
+ "whatsNew4": "Pinned folders refresh once per launch so they stay usable offline. Storage insights show a usage ring and a map by file type.",
+ "whatsNew5": "Send a file to another phone with a QR code, and share files from other apps straight to a computer.",
+ "whatsNew6": "App lock with biometrics or your screen lock, accent colors from a Material 3 palette, and a command palette in the explorer."
 }

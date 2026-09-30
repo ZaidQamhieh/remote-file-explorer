@@ -1,15 +1,5 @@
-import { BANDWIDTH_PRESETS, bandwidthOptions, nextAppCapabilities, nextFileGrants, patchDevice, shortFingerprint } from './hostSettingsLogic';
+import { BANDWIDTH_PRESETS, bandwidthOptions, nextAppCapabilities, nextFileGrants, patchDevice } from './hostSettingsLogic';
 import type { Device } from '../../core/api/models';
-
-describe('shortFingerprint', () => {
-  it('shows the first three bytes', () => {
-    expect(shortFingerprint('7f3a9cdeadbeef')).toBe('7f:3a:9c…');
-    expect(shortFingerprint('7f3a')).toBe('7f:3a…');
-    expect(shortFingerprint('')).toBeNull();
-    expect(shortFingerprint(undefined)).toBeNull();
-    expect(shortFingerprint('7')).toBeNull();
-  });
-});
 
 describe('nextAppCapabilities', () => {
   it('turning the catalog off also turns launching off', () => {

@@ -3,14 +3,6 @@ import { FILE_CAPABILITIES } from '../../core/api/models';
 import { formatSize } from '../../core/format';
 import { t } from '../../i18n';
 
-/** `7f:3a:9c…` from a full hex fingerprint: the first three bytes, colon separated. */
-export function shortFingerprint(fp: string | undefined | null): string | null {
-  if (!fp) return null;
-  const bytes: string[] = [];
-  for (let i = 0; i + 2 <= fp.length && i < 6; i += 2) bytes.push(fp.slice(i, i + 2));
-  return bytes.length === 0 ? null : `${bytes.join(':')}…`;
-}
-
 /** Upload/download limit choices in bytes per second; 0 is unlimited. */
 export const BANDWIDTH_PRESETS = [0, 1, 5, 10, 50].map((mb) => mb * 1024 * 1024);
 

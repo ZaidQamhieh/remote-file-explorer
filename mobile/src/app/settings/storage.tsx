@@ -10,7 +10,6 @@ import { useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { lockEnableBlocker } from '../../features/security/lockLogic';
-import { shortFingerprint } from '../../features/settings/hostSettingsLogic';
 import { InfoRow, NavRow, RowBadge, SettingsPage, SettingsSection, ToggleRow } from '../../features/settings/parts';
 import { hostStore, listingCache } from '../../services';
 import { useLock } from '../../state/lock';
@@ -95,7 +94,7 @@ export default function StorageSecuritySettings() {
               <RowBadge icon={Fingerprint} tint={c.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14 }}>{x.host.label || x.host.address}</Text>
-                <Text muted style={{ fontSize: 11.5 }}>{shortFingerprint(x.pin) ?? t('probeMissingPinHint')}</Text>
+                <Text muted style={{ fontSize: 11.5 }}>{x.pin ? x.host.address : t('probeMissingPinHint')}</Text>
               </View>
               <Pressable onPress={() => void forget(x)} accessibilityLabel={`${t('forgetButton')} ${x.host.label || x.host.address}`} style={{ padding: Spacing.sm }}>
                 <Trash2 size={18} color={c.error} />

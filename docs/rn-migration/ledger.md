@@ -150,7 +150,9 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Bug found and fixed: a refused download (403 CAPABILITY_DENIED) said "Could not reach the computer". The engine now fails with the agent's code and the app explains the missing permission.
 - New devices are browse-only by design, and the app does not know its own permissions (the Download and Delete buttons show anyway). `rfe-agent allow <id> browse,download,upload,modify,delete,share|all|none` sets them from the PC.
 - Setting the photo backup folder needs the web companion (or a config row plus agent restart, as done here).
-- Not tried yet: search, share links, thumbnails on large folders, the Devices settings screens, Sync Rules and backup restore on the phone.
+- Also verified on the phone: search; Sync Rules (first sync and an incremental one with a new and a changed file); host settings screen; encrypted config export (file produced, passphrase rules enforced).
+- Found and fixed: the host settings header, the Trusted certificates list and the connection diagnostics still showed a fingerprint prefix. They now show the address or a plain "pinned" state; the fingerprint appears nowhere in the app.
+- Not tried yet: share links, config import, thumbnails on large folders, the desktop notification button.
 
 ## Still needs a physical phone (recorded, not verified)
 - Camera QR scan (pairing and hand-off) and LAN discovery (mDNS): the emulator has no virtual scene set up and its NAT drops multicast.

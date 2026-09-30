@@ -91,7 +91,6 @@ function Checks({ result: r, pin }: { result: ProbeResult; pin: string | null })
         icon={mismatch ? X : reachable ? Check : Shield}
         tint={mismatch ? bad : reachable ? Brand.online : grey}
         title={t('diagTlsPinned')}
-        subtitle={pin ? (pin.length > 12 ? `${pin.slice(0, 12)}…` : pin) : undefined}
         badge={mismatch ? t('diagMismatchBadge') : reachable ? t('diagPinnedBadge') : r.failure === 'missingPin' ? t('diagPinRequiredBadge') : t('diagUnknownBadge')}
       />
       <Row icon={r.auth === 'accepted' ? Check : r.auth === 'denied' ? X : Shield} tint={authTint} title={t('diagAuthentication')} badge={authBadge} />

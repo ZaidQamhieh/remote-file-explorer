@@ -15,7 +15,7 @@ import { useActiveHost } from '../../state/activeHost';
 import { useResolvedVisibility, useSettings } from '../../state/settings';
 import { ConnectionDiagnosticsSheet } from '../hosts/ConnectionDiagnosticsSheet';
 import { humanizeError } from '../pairing/pairingService';
-import { bandwidthLabel, bandwidthOptions, FILE_CAPABILITY_LABEL, nextAppCapabilities, nextFileGrants, patchDevice, shortFingerprint } from './hostSettingsLogic';
+import { bandwidthLabel, bandwidthOptions, FILE_CAPABILITY_LABEL, nextAppCapabilities, nextFileGrants, patchDevice } from './hostSettingsLogic';
 import { InfoRow, NavRow, RowBadge, SettingsSection, SmallSwitchRow, ToggleRow, ValueRow } from './parts';
 import { VisibilityEditor } from './VisibilityEditor';
 import { withVisibilityOverride } from './visibilityEdit';
@@ -207,7 +207,6 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
   }
 
   const routeName = (address: string) => ROUTE_NAME[routeForAddress(host, address)]();
-  const fp = shortFingerprint(host.certFingerprint);
   const capable = drives.filter((d) => (d.totalBytes ?? 0) > 0);
 
   return (
@@ -227,8 +226,6 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
       <Stack.Screen options={{ title: host.label || host.address }} />
       <Text variant="bodySmall" muted style={{ paddingHorizontal: Spacing.xs }}>
         {host.address}
-        {fp ? ' · fingerprint ' : ''}
-        {fp ? <Text variant="bodySmall" muted style={{ fontFamily: FontFamily.mono }}>{fp}</Text> : null}
       </Text>
       {owner && <Text variant="bodySmall" muted style={{ paddingHorizontal: Spacing.xs }}>{t('securityWarning')}</Text>}
 

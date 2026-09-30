@@ -79,7 +79,7 @@
  "retestButton": "Re-test",
  "runAgainButton": "Run again",
  "diagHostReachable": "Host reachable",
- "diagTlsPinned": "TLS fingerprint pinned",
+ "diagTlsPinned": "Computer identity pinned",
  "diagAuthentication": "Authenticated access",
  "diagLatency": "Latency",
  "diagPath": "Path",

@@ -124,7 +124,7 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 
 ## Updater
 - Release channel: the same GitHub repo and `releases/latest/download/latest.json` the Flutter app reads, with the APK host allow-list; size and SHA-256 are checked before the installer opens. About & Support > Updates checks on demand; the Devices tab shows a banner. The APK is fetched in the background on Wi-Fi only. The installer needs the "Install unknown apps" permission, which the app sends the person to.
-- Found while testing: the repo's Latest release is currently the agent (`agent-v1.42.7`), which has no `latest.json`, so the manifest URL returns 404 and neither app can find an update until an app release is Latest. The RN About screen now says "Update check failed" instead of "Up to date" in that case (the manual check used to swallow the error).
+- Found while testing: the repo's Latest release is currently the agent (`agent-v1.42.7`), which has no `latest.json`, so the manifest URL returns 404 and neither app can find an update until an app release is Latest. The RN About screen now shows an "Update failed: HTTP 404" message instead of "Up to date" in that case (the manual check used to swallow the error).
 - Not verified: download, verification and the installer prompt (no newer app release exists to serve, and the host allow-list blocks a local one).
 
 ## Licenses

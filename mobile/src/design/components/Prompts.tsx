@@ -28,9 +28,9 @@ function Center({ visible, onClose, children }: { visible: boolean; onClose: () 
 
 /** Single text input dialog (name/tag/path prompts). Confirm stays disabled while empty unless `allowEmpty`. */
 export function PromptDialog({
-  visible, title, description, placeholder, initialValue = '', confirmLabel, cancelLabel = t('cancelButton'), allowEmpty, mono, onSubmit, onCancel,
+  visible, title, description, placeholder, initialValue = '', confirmLabel, cancelLabel = t('cancelButton'), allowEmpty, mono, helper, validate, keyboardType, onSubmit, onCancel,
 }: {
-  visible: boolean; title: string; description?: string; placeholder?: string; initialValue?: string; confirmLabel: string; cancelLabel?: string; allowEmpty?: boolean; mono?: boolean; onSubmit: (value: string) => void; onCancel: () => void;
+  visible: boolean; title: string; description?: string; placeholder?: string; initialValue?: string; confirmLabel: string; cancelLabel?: string; allowEmpty?: boolean; mono?: boolean; helper?: string; validate?: (value: string) => string | null; keyboardType?: 'default' | 'url' | 'number-pad'; onSubmit: (value: string) => void; onCancel: () => void;
 }) {
   const [value, setValue] = useState(initialValue);
   // Reset the field each time the dialog opens (state adjusted during render, not in an effect).
@@ -39,13 +39,14 @@ export function PromptDialog({
     setWasVisible(visible);
     if (visible) setValue(initialValue);
   }
-  const ok = allowEmpty || value.trim().length > 0;
+  const problem = validate && value.trim() !== '' ? validate(value.trim()) : null;
+  const ok = (allowEmpty || value.trim().length > 0) && problem === null;
   return (
     <Center visible={visible} onClose={onCancel}>
       <View style={{ padding: 24, gap: 12 }}>
         <Text variant="titleLarge" accessibilityRole="header">{title}</Text>
         {description ? <Text muted>{description}</Text> : null}
-        <TextField label={placeholder ?? title} hideLabel placeholder={placeholder} value={value} onChangeText={setValue} autoFocus autoCapitalize="none" autoCorrect={false} mono={mono} onSubmitEditing={() => ok && onSubmit(value.trim())} />
+        <TextField label={placeholder ?? title} hideLabel placeholder={placeholder} value={value} onChangeText={setValue} autoFocus autoCapitalize="none" autoCorrect={false} mono={mono} helper={helper} error={problem} keyboardType={keyboardType} onSubmitEditing={() => ok && onSubmit(value.trim())} />
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
           <Button kind="text" label={cancelLabel} onPress={onCancel} />
           <Button kind="filled" label={confirmLabel} disabled={!ok} onPress={() => onSubmit(value.trim())} />

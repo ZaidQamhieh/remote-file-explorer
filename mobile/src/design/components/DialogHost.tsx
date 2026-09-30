@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import { ConfirmDialog } from './Dialog';
 import { ChoiceDialog, PromptDialog, ReportDialog, type ChoiceOption } from './Prompts';
 
-type Prompt = { title: string; description?: string; placeholder?: string; initialValue?: string; confirmLabel: string; allowEmpty?: boolean; mono?: boolean };
+type Prompt = { title: string; description?: string; placeholder?: string; initialValue?: string; confirmLabel: string; allowEmpty?: boolean; mono?: boolean; helper?: string; validate?: (value: string) => string | null; keyboardType?: 'default' | 'url' | 'number-pad' };
 type Choose<T extends string> = { title: string; subtitle?: string; options: ChoiceOption<T>[]; icon?: ReactNode; tint?: string };
 type Confirm = { title: string; description: string; confirmLabel: string; cancelLabel: string; destructive?: boolean };
 type Report = { title: string; items: { primary: string; secondary?: string }[] };

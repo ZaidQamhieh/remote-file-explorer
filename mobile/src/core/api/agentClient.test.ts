@@ -1,4 +1,5 @@
 import { AgentClient, ERR_CERT_PIN_MISMATCH, ERR_CONNECTION, type Transport } from './agentClient';
+import { canManageHost, hasAppCapabilities, hasFileCapabilities, parseAuditEntry, parseStatus } from './models';
 import { CertPinMismatch, MissingCertPin } from './pin';
 import type { Host } from '../models/host';
 
@@ -235,5 +236,65 @@ describe('AgentClient search, recent and share links', () => {
     expect(link).toEqual({ token: 'tok', tokenHash: 'h/1', path: '/f', expiresAt: 99, url: 'https://x/s/tok' });
     await client.revokeShareLink('h/1');
     expect(calls.map((c) => `${c.method} ${c.url.split('/v1')[1]}`)).toEqual(['POST /share/mint', 'DELETE /share/h%2F1']);
+  });
+});
+
+describe('AgentClient settings, devices, bandwidth and audit', () => {
+  const rec = (body: unknown) => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    const transport: Transport = {
+      async request(a) {
+        calls.push({ url: a.url, method: a.method, body: a.bodyText ? JSON.parse(a.bodyText) : null });
+        return { status: 200, headers: {}, bodyText: JSON.stringify(body) };
+      },
+    };
+    return { client: new AgentClient(host, { transport, deviceToken: 't', pinnedFingerprint: PIN }), calls };
+  };
+  const shape = (calls: { url: string; method: string; body: unknown }[]) => calls.map((c) => `${c.method} ${c.url.split('/v1')[1]} ${JSON.stringify(c.body)}`);
+
+  it('uses the verbs, paths and bodies of the Flutter client', async () => {
+    const { client, calls } = rec({ entries: [] });
+    await client.updateSettings({ readOnly: true });
+    await client.listDevices();
+    await client.deleteDevice('d/1');
+    await client.deleteDevice('d1', false);
+    await client.updateDeviceAppCapabilities('d1', { viewApps: true, launchApps: false });
+    await client.updateDeviceFileCapabilities('d1', { browse: true, download: true, upload: false, modify: false, delete: false, share: true });
+    await client.getBandwidth();
+    await client.setBandwidth({ maxDownloadBytesPerSec: 5 });
+    await client.audit({ limit: 10, before: 7 });
+    expect(shape(calls)).toEqual([
+      'PATCH /settings {"readOnly":true}',
+      'GET /devices null',
+      'DELETE /devices/d%2F1?purge=true null',
+      'DELETE /devices/d1 null',
+      'PATCH /devices/d1 {"viewApps":true,"launchApps":false}',
+      'PATCH /devices/d1 {"browse":true,"download":true,"upload":false,"modify":false,"delete":false,"share":true}',
+      'GET /settings/bandwidth null',
+      'PUT /settings/bandwidth {"maxDownloadBytesPerSec":5}',
+      'GET /audit?limit=10&before=7 null',
+    ]);
+  });
+
+  it('parses devices with and without capability flags, and audit entries', async () => {
+    const { client } = rec([
+      { id: 'a', label: 'Phone', created: 10, lastSeen: 20, current: true, viaLogin: true, lastAddress: '1.2.3.4', browse: true, download: false, upload: false, modify: false, delete: false, share: false, viewApps: true, launchApps: false },
+      { id: 'b', label: 'Old', created: 1, lastSeen: 2, revoked: true },
+    ]);
+    const [a, b] = await client.listDevices();
+    expect(a).toMatchObject({ id: 'a', created: 10_000, lastSeen: 20_000, current: true, viaLogin: true, browse: true, download: false });
+    expect(hasFileCapabilities(a)).toBe(true);
+    expect(hasAppCapabilities(a)).toBe(true);
+    expect(hasFileCapabilities(b)).toBe(false);
+    expect(hasAppCapabilities(b)).toBe(false);
+    expect(b.revoked).toBe(true);
+    expect(parseAuditEntry({ id: 3, at: '2026-01-02T03:04:05Z', action: 'login', actor: 'owner' })).toMatchObject({ id: 3, action: 'login', actor: 'owner', target: '' });
+    expect(parseAuditEntry({ at: 'nope' }).at.getTime()).toBe(0);
+  });
+
+  it('treats an agent that omits isAdmin as one the owner may manage', () => {
+    expect(canManageHost(parseStatus({}))).toBe(true);
+    expect(canManageHost(parseStatus({ isAdmin: false }))).toBe(false);
+    expect(canManageHost(parseStatus({ isAdmin: true }))).toBe(true);
   });
 });

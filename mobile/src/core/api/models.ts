@@ -99,7 +99,15 @@ export type AgentStatus = {
   agentName: string;
   roots: string[];
   readOnly: boolean;
+  /** Whether owner-created one-time share links are enabled on the host. */
+  allowSharing: boolean;
   isAdmin: boolean;
+  /** False when an older agent omitted `isAdmin`; the UI then shows the owner controls and lets the agent enforce. */
+  isAdminKnown: boolean;
+  /** Photo backup destination configured on the host (empty when none). */
+  photoBackupRoot: string;
+  photoBackupConfigured: boolean;
+  photoBackupAvailable?: boolean;
   effectiveScope: 'global' | 'device';
   /** True when the device's jail is outside all host roots: no filesystem access at all. */
   accessDenied: boolean;
@@ -109,7 +117,12 @@ export const parseStatus = (j: Json): AgentStatus => ({
   agentName: str(j.agentName) ?? '',
   roots: Array.isArray(j.roots) ? (j.roots as unknown[]).filter((x): x is string => typeof x === 'string') : [],
   readOnly: bool(j.readOnly, false),
+  allowSharing: bool(j.allowSharing, false),
   isAdmin: bool(j.isAdmin, false),
+  isAdminKnown: 'isAdmin' in j,
+  photoBackupRoot: str(j.photoBackupRoot) ?? '',
+  photoBackupConfigured: typeof j.photoBackupConfigured === 'boolean' ? j.photoBackupConfigured : (str(j.photoBackupRoot) ?? '').length > 0,
+  photoBackupAvailable: typeof j.photoBackupAvailable === 'boolean' ? j.photoBackupAvailable : undefined,
   effectiveScope: j.effectiveScope === 'device' ? 'device' : 'global',
   accessDenied: bool(j.accessDenied, false),
 });
@@ -167,3 +180,67 @@ export const parseShareLink = (j: Json): ShareLink => ({
   expiresAt: num(j.expiresAt) ?? 0,
   url: str(j.url) ?? '',
 });
+
+/** Owners manage the host; devices paired by code manage only themselves. Older agents omit `isAdmin`, so unknown counts as owner. */
+export const canManageHost = (s: Pick<AgentStatus, 'isAdmin' | 'isAdminKnown'>) => s.isAdmin || !s.isAdminKnown;
+
+export type FileCapability = 'browse' | 'download' | 'upload' | 'modify' | 'delete' | 'share';
+export const FILE_CAPABILITIES: FileCapability[] = ['browse', 'download', 'upload', 'modify', 'delete', 'share'];
+
+/** A device paired with a host. Capability flags are absent on agents that predate them. */
+export type Device = {
+  id: string;
+  label: string;
+  /** Unix seconds -> ms. */
+  created: number;
+  lastSeen: number;
+  revoked: boolean;
+  current: boolean;
+  viaLogin: boolean;
+  lastAddress: string;
+  lastVersion: string;
+  jailRoot: string;
+  viewApps?: boolean;
+  launchApps?: boolean;
+  browse?: boolean;
+  download?: boolean;
+  upload?: boolean;
+  modify?: boolean;
+  delete?: boolean;
+  share?: boolean;
+};
+
+const optBool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
+
+export const parseDevice = (j: Json): Device => ({
+  id: str(j.id) ?? '',
+  label: str(j.label) ?? '',
+  created: (num(j.created) ?? 0) * 1000,
+  lastSeen: (num(j.lastSeen) ?? 0) * 1000,
+  revoked: bool(j.revoked, false),
+  current: bool(j.current, false),
+  viaLogin: bool(j.viaLogin, false),
+  lastAddress: str(j.lastAddress) ?? '',
+  lastVersion: str(j.lastVersion) ?? '',
+  jailRoot: str(j.jailRoot) ?? '',
+  viewApps: optBool(j.viewApps),
+  launchApps: optBool(j.launchApps),
+  browse: optBool(j.browse),
+  download: optBool(j.download),
+  upload: optBool(j.upload),
+  modify: optBool(j.modify),
+  delete: optBool(j.delete),
+  share: optBool(j.share),
+});
+
+export const hasAppCapabilities = (d: Device) => d.viewApps !== undefined && d.launchApps !== undefined;
+export const hasFileCapabilities = (d: Device) => FILE_CAPABILITIES.every((c) => d[c] !== undefined);
+
+export type BandwidthSettings = { maxUploadBytesPerSec: number; maxDownloadBytesPerSec: number };
+export const parseBandwidth = (j: Json): BandwidthSettings => ({ maxUploadBytesPerSec: num(j.maxUploadBytesPerSec) ?? 0, maxDownloadBytesPerSec: num(j.maxDownloadBytesPerSec) ?? 0 });
+
+export type AuditEntry = { id: number; at: Date; action: string; actor: string; target: string; detail: string };
+export const parseAuditEntry = (j: Json): AuditEntry => {
+  const at = new Date(str(j.at) ?? '');
+  return { id: num(j.id) ?? 0, at: Number.isNaN(at.getTime()) ? new Date(0) : at, action: str(j.action) ?? '', actor: str(j.actor) ?? '', target: str(j.target) ?? '', detail: str(j.detail) ?? '' };
+};

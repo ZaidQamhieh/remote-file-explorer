@@ -201,8 +201,47 @@ live('agent contract (read/write)', () => {
     expect(recent.entries.filter((e) => e.isDir).map((e) => e.name)).toEqual([]);
   });
 
-  it('answers share minting with a coded error while sharing is off', async () => {
-    expect(await codeOf(c.mintShareLink(path.join(a.root, 'docs', 'a.txt')))).toBe('403:FORBIDDEN');
+  it('answers share minting with a coded error while sharing is off, then mints, lists and revokes once the owner turns it on', async () => {
+    const file = path.join(a.root, 'docs', 'a.txt');
+    expect(await codeOf(c.mintShareLink(file))).toBe('403:FORBIDDEN');
+    expect((await c.updateSettings({ allowSharing: true })).allowSharing).toBe(true);
+    const link = await c.mintShareLink(file, 120);
+    expect(link.url).toContain(link.token);
+    expect(link.tokenHash).not.toBe('');
+    expect((await c.listShareLinks()).map((l) => l.tokenHash)).toContain(link.tokenHash);
+    await c.revokeShareLink(link.tokenHash);
+    expect((await c.listShareLinks()).map((l) => l.tokenHash)).not.toContain(link.tokenHash);
+  });
+
+  it('lets the owner change host settings, and reads them back', async () => {
+    const s = await c.status();
+    expect(s.isAdmin).toBe(true);
+    expect(s.isAdminKnown).toBe(true);
+    expect((await c.updateSettings({ agentName: 'renamed-host' })).agentName).toBe('renamed-host');
+    expect((await c.status()).agentName).toBe('renamed-host');
+  });
+
+  it('round-trips bandwidth limits', async () => {
+    expect(await c.getBandwidth()).toEqual({ maxUploadBytesPerSec: 0, maxDownloadBytesPerSec: 0 });
+    expect(await c.setBandwidth({ maxUploadBytesPerSec: 1024 * 1024 })).toEqual({ maxUploadBytesPerSec: 1024 * 1024, maxDownloadBytesPerSec: 0 });
+    expect((await c.getBandwidth()).maxUploadBytesPerSec).toBe(1024 * 1024);
+    await c.setBandwidth({ maxUploadBytesPerSec: 0 });
+  });
+
+  it('lists this device and records the login in the audit trail', async () => {
+    const devices = await c.listDevices();
+    const me = devices.find((d) => d.current);
+    expect(me).toBeDefined();
+    expect(me!.viaLogin).toBe(true);
+    expect(me!.revoked).toBe(false);
+    const audit = await c.audit({ limit: 20 });
+    expect(audit.map((e) => e.action)).toEqual(expect.arrayContaining(['login']));
+  });
+
+  it('a device removes itself and its token stops working at once', async () => {
+    const me = (await c.listDevices()).find((d) => d.current)!;
+    await c.deleteDevice(me.id);
+    expect(await codeOf(c.list(a.root))).toMatch(/^401:/);
   });
 });
 

@@ -14,8 +14,15 @@ import {
   parseStatus,
   type AgentStatus,
   parsePairResponse,
+  parseAuditEntry,
+  parseBandwidth,
+  parseDevice,
   parseSearchResult,
   parseShareLink,
+  type AuditEntry,
+  type BandwidthSettings,
+  type Device,
+  type FileCapability,
   type SearchResult,
   type ShareLink,
   type Drive,
@@ -49,6 +56,8 @@ export class AgentApiError extends Error {
     readonly statusCode: number,
     readonly code: string,
     message: string,
+    /** The transport failure behind a CONNECTION error, so diagnostics can tell DNS from a timeout. */
+    readonly cause?: unknown,
   ) {
     super(message);
     this.name = 'AgentApiError';
@@ -197,7 +206,7 @@ export class AgentClient {
   private toApiError(e: unknown): Error {
     if (e instanceof AgentApiError || e instanceof CertPinMismatch || e instanceof MissingCertPin) return e;
     if (errCode(e) === ERR_CONNECTION) {
-      return new AgentApiError(0, 'CONNECTION', 'Connection lost — check your network and try again.');
+      return new AgentApiError(0, 'CONNECTION', 'Connection lost — check your network and try again.', e);
     }
     return new AgentApiError(0, 'UNKNOWN', e instanceof Error ? e.message : String(e));
   }
@@ -249,6 +258,49 @@ export class AgentClient {
   /** Effective scope, roots and read-only policy for this device (`GET /settings`). */
   async status(): Promise<AgentStatus> {
     return parseStatus((await this.call('GET', '/settings')) as Record<string, unknown>);
+  }
+
+  /** Owner-only changes to the host (`PATCH /settings`); returns the settings as saved. */
+  async updateSettings(patch: { readOnly?: boolean; agentName?: string; allowSharing?: boolean }): Promise<AgentStatus> {
+    return parseStatus((await this.call('PATCH', '/settings', { json: patch })) as Record<string, unknown>);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Devices, bandwidth, audit
+  // ---------------------------------------------------------------------------
+
+  async listDevices(): Promise<Device[]> {
+    const d = await this.call('GET', '/devices');
+    return (Array.isArray(d) ? (d as Record<string, unknown>[]) : []).map(parseDevice);
+  }
+
+  /** Removes a device row; a device may only remove itself. `purge` deletes the row and kills its token at once. */
+  async deleteDevice(id: string, purge = true): Promise<void> {
+    await this.call('DELETE', `/devices/${encodeURIComponent(id)}`, { query: purge ? { purge: 'true' } : undefined });
+  }
+
+  /** Both flags are always sent: turning catalog access off must turn launch access off in the same operation. */
+  async updateDeviceAppCapabilities(id: string, o: { viewApps: boolean; launchApps: boolean }): Promise<void> {
+    await this.call('PATCH', `/devices/${encodeURIComponent(id)}`, { json: { viewApps: o.viewApps, launchApps: o.launchApps } });
+  }
+
+  /** The full set of file grants in one PATCH, so the switches never drift from the host. */
+  async updateDeviceFileCapabilities(id: string, grants: Record<FileCapability, boolean>): Promise<void> {
+    await this.call('PATCH', `/devices/${encodeURIComponent(id)}`, { json: grants });
+  }
+
+  async getBandwidth(): Promise<BandwidthSettings> {
+    return parseBandwidth((await this.call('GET', '/settings/bandwidth')) as Record<string, unknown>);
+  }
+
+  async setBandwidth(o: { maxUploadBytesPerSec?: number; maxDownloadBytesPerSec?: number }): Promise<BandwidthSettings> {
+    return parseBandwidth((await this.call('PUT', '/settings/bandwidth', { json: o })) as Record<string, unknown>);
+  }
+
+  /** Account and device events, newest first. Owner-only; `before` pages backwards from an entry id. */
+  async audit(o: { limit?: number; before?: number } = {}): Promise<AuditEntry[]> {
+    const d = (await this.call('GET', '/audit', { query: { limit: o.limit ?? 100, before: o.before } })) as Record<string, unknown>;
+    return (Array.isArray(d.entries) ? (d.entries as Record<string, unknown>[]) : []).map(parseAuditEntry);
   }
 
   async challenge(): Promise<string> {

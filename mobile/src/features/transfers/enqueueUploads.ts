@@ -23,7 +23,7 @@ export async function enqueueUploads(host: Host, destDir: string, items: UploadI
     const dir = new Directory(Paths.document, 'uploads', id);
     dir.create({ idempotent: true, intermediates: true });
     const staged = new File(dir, item.targetName);
-    new File(item.source.uri).move(staged);
+    await new File(item.source.uri).move(staged);
     await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), joinRemotePath(destDir, item.targetName), item.overwrite, true);
     queued++;
   }

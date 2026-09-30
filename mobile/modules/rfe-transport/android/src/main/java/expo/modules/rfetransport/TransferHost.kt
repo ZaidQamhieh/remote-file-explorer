@@ -1,8 +1,6 @@
 package expo.modules.rfetransport
 
 import android.content.Context
-import android.content.Intent
-import androidx.core.content.ContextCompat
 import java.io.File
 
 /**
@@ -32,7 +30,6 @@ object TransferHost {
   private fun engine(): TransferEngine? = engine
 
   fun ensureServiceRunning(context: Context) {
-    val app = context.applicationContext
-    ContextCompat.startForegroundService(app, Intent(app, TransferService::class.java))
+    TransferService.start(context.applicationContext)
   }
 }

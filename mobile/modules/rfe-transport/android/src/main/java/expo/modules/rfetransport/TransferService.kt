@@ -10,6 +10,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Foreground service that keeps the process alive while the [TransferEngine]
@@ -24,12 +26,33 @@ class TransferService : Service() {
 
     @Volatile private var live: TransferService? = null
 
+    // startForegroundService() calls whose onStartCommand has not run yet. stopSelf() discards such queued starts, and
+    // the system then kills the app for a service that never reached startForeground(), so no stop while any is pending.
+    private val pendingStarts = AtomicInteger(0)
+    private val lock = Any()
+
+    fun start(context: Context) {
+      synchronized(lock) {
+        pendingStarts.incrementAndGet()
+        try {
+          ContextCompat.startForegroundService(context, Intent(context, TransferService::class.java))
+        } catch (t: Throwable) {
+          pendingStarts.decrementAndGet()
+          throw t
+        }
+      }
+    }
+
     fun onEngineChange(context: Context, engine: TransferEngine?) {
       val e = engine ?: return
       val svc = live ?: return
       if (e.activeCount() == 0) {
-        svc.stopForeground(STOP_FOREGROUND_REMOVE)
-        svc.stopSelf()
+        synchronized(lock) {
+          if (pendingStarts.get() == 0 && e.activeCount() == 0) {
+            svc.stopForeground(STOP_FOREGROUND_REMOVE)
+            svc.stopSelf()
+          }
+        }
       } else {
         val running = e.list().filter { it.state == TransferState.RUNNING }
         val received = running.sumOf { it.received }
@@ -52,10 +75,13 @@ class TransferService : Service() {
     } else {
       startForeground(NOTIFICATION_ID, n)
     }
-    // Nothing active (e.g. restarted after process death): do not linger.
-    if (TransferHost.engine(this).activeCount() == 0) {
-      stopForeground(STOP_FOREGROUND_REMOVE)
-      stopSelf()
+    synchronized(lock) {
+      pendingStarts.updateAndGet { if (it > 0) it - 1 else 0 }
+      // Nothing active (e.g. restarted after process death): do not linger.
+      if (pendingStarts.get() == 0 && TransferHost.engine(this).activeCount() == 0) {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+      }
     }
     return START_NOT_STICKY
   }

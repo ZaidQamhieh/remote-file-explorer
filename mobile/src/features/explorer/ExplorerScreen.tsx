@@ -28,8 +28,9 @@ import { MetaSheet } from './MetaSheet';
 import { PeekSheet } from './PeekSheet';
 import { FavoritesPinRow, FavoritesSheet, ViewOptionsSheet } from './Sheets';
 import { useFileClipboard } from './clipboard';
+import { transfers } from '../../core/native';
 import { atRoot, currentPath } from './explorerStore';
-import { basenameOf, folderLabel } from './paths';
+import { basenameOf, folderLabel, parentDirOf } from './paths';
 import { useExplorer } from './useExplorer';
 import { useFileActions } from './useFileActions';
 
@@ -59,6 +60,15 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   useEffect(() => {
     if (initialPath && initialPath !== rootPath) ex.jumpTo(initialPath);
   }, [ex, initialPath, rootPath]);
+
+  // A finished upload into the folder on screen shows up without a manual refresh.
+  useEffect(
+    () =>
+      transfers.subscribe((r) => {
+        if (r.direction === 'UPLOAD' && r.state === 'DONE' && r.hostId === host.id && parentDirOf(r.remotePath) === currentPath(ex.getState())) void ex.refresh();
+      }),
+    [ex, host.id],
+  );
 
   // Hardware back: clear selection, then go up a folder, then leave the tab.
   // Only while this screen is focused, so a pushed screen (preview, meta) gets Back first.
@@ -290,6 +300,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         onClose={() => setCreateOpen(false)}
         onNewFolder={() => void actions.createNamed(true)}
         onNewFile={() => void actions.createNamed(false)}
+        onUpload={() => void actions.upload()}
         onPaste={showPaste ? () => void actions.paste() : undefined}
         pasteLabel={showPaste ? t('pasteNItems', { count: clip!.paths.length }) : undefined}
       />

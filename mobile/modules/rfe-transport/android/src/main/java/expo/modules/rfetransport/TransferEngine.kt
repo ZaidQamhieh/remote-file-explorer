@@ -20,17 +20,34 @@ data class TransferRecord(
   val received: Long,
   val total: Long,
   val error: String?,
+  /** DOWNLOAD (default, also for journals written before uploads existed) or UPLOAD. */
+  val direction: String = "DOWNLOAD",
+  /** Upload only: the agent's session id, kept so a restart resumes the same session. */
+  val sessionId: String? = null,
+  /** Upload only: whole-file SHA-256 of the source at [total] bytes. */
+  val sha256: String? = null,
+  val overwrite: Boolean = false,
+  /** Upload only: delete the local source once the upload is done or cancelled (app-private copies). */
+  val deleteSource: Boolean = false,
 ) {
+  val isUpload get() = direction == "UPLOAD"
+
   fun toJson(): JSONObject = JSONObject()
     .put("id", id).put("hostId", hostId).put("address", address).put("remotePath", remotePath)
     .put("destPath", destPath).put("state", state.name).put("received", received).put("total", total)
-    .put("error", error ?: JSONObject.NULL)
+    .put("error", error ?: JSONObject.NULL).put("direction", direction)
+    .put("sessionId", sessionId ?: JSONObject.NULL).put("sha256", sha256 ?: JSONObject.NULL)
+    .put("overwrite", overwrite).put("deleteSource", deleteSource)
 
   companion object {
     fun fromJson(j: JSONObject) = TransferRecord(
       j.getString("id"), j.getString("hostId"), j.getString("address"), j.getString("remotePath"),
       j.getString("destPath"), TransferState.valueOf(j.getString("state")), j.getLong("received"),
       j.getLong("total"), if (j.isNull("error")) null else j.getString("error"),
+      j.optString("direction", "DOWNLOAD"),
+      if (j.isNull("sessionId")) null else j.optString("sessionId"),
+      if (j.isNull("sha256")) null else j.optString("sha256"),
+      j.optBoolean("overwrite", false), j.optBoolean("deleteSource", false),
     )
   }
 }
@@ -59,6 +76,7 @@ class TransferEngine(
   private val maxConcurrent: Int = 2,
   private val onChange: (TransferRecord) -> Unit = {},
   private val timeoutMs: Long = 30000,
+  private val uploadChunkSize: Int = 4 * 1024 * 1024,
 ) {
   private val pool = Executors.newFixedThreadPool(maxConcurrent)
   private val records = ConcurrentHashMap<String, TransferRecord>()
@@ -90,6 +108,19 @@ class TransferEngine(
     return r
   }
 
+  /**
+   * Queues a resumable chunked upload of [localPath] to [remotePath] on the host. For uploads [destPath] holds the
+   * local source file and [remotePath] the target path on the host.
+   */
+  fun enqueueUpload(id: String, hostId: String, address: String, localPath: String, remotePath: String, overwrite: Boolean, deleteSource: Boolean): TransferRecord {
+    require(id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "invalid transfer id" }
+    val r = TransferRecord(id, hostId, address, remotePath, localPath, TransferState.QUEUED, 0, -1, null, "UPLOAD", null, null, overwrite, deleteSource)
+    records[id] = r
+    persist(r)
+    submit(id)
+    return r
+  }
+
   fun resume(id: String) {
     val r = records[id] ?: return
     if (r.state == TransferState.PAUSED || r.state == TransferState.FAILED) {
@@ -102,7 +133,18 @@ class TransferEngine(
 
   fun cancel(id: String) {
     stop(id, TransferState.CANCELLED)
-    records[id]?.let { File(it.destPath + ".part").delete() }
+    records[id]?.let { if (it.isUpload) discardSource(it) else File(it.destPath + ".part").delete() }
+  }
+
+  /** Forgets a finished, failed or cancelled transfer (journal entry and any leftover partial); running ones are left alone. */
+  fun remove(id: String) {
+    val r = records[id] ?: return
+    if (r.state == TransferState.RUNNING || r.state == TransferState.QUEUED) return
+    records.remove(id)
+    attempts.remove(id)
+    futures.remove(id)
+    File(dir, "$id.json").delete()
+    if (r.isUpload) discardSource(r) else if (r.state != TransferState.DONE) File(r.destPath + ".part").delete()
   }
 
   fun shutdown() {
@@ -124,7 +166,42 @@ class TransferEngine(
     futures[id] = pool.submit { run(id, attempt) }
   }
 
+  private fun discardSource(r: TransferRecord) {
+    if (!r.deleteSource) return
+    val f = File(r.destPath)
+    f.delete()
+    // Each staged upload lives in its own folder named after the transfer; drop it with the file.
+    f.parentFile?.takeIf { it.name == r.id }?.delete()
+  }
+
+  private fun runUpload(id: String, attempt: Attempt) {
+    var r = records[id] ?: return
+    if (attempt.stop != null) return
+    r = update(r.copy(state = TransferState.RUNNING, error = null))
+    try {
+      val uploader = Uploader(
+        creds, timeoutMs,
+        stopped = { Thread.currentThread().isInterrupted || attempt.stop != null },
+        track = { calls[id] = it },
+        save = { next -> r = update(next) },
+        chunkSize = uploadChunkSize,
+      )
+      r = uploader.run(r)
+      update(r.copy(state = TransferState.DONE, received = r.total, error = null))
+      discardSource(r)
+    } catch (e: Exception) {
+      if (attempts[id] !== attempt) return
+      val reason = attempt.stop ?: if (e is InterruptedException || Thread.currentThread().isInterrupted) TransferState.PAUSED else null
+      val cur = records[id] ?: return
+      if (reason != null) update(cur.copy(state = reason))
+      else update(cur.copy(state = TransferState.FAILED, error = describe(e)))
+    } finally {
+      if (attempts[id] === attempt) calls.remove(id)
+    }
+  }
+
   private fun run(id: String, attempt: Attempt) {
+    if (records[id]?.isUpload == true) return runUpload(id, attempt)
     var r = records[id] ?: return
     if (attempt.stop != null) return
     r = update(r.copy(state = TransferState.RUNNING, error = null))
@@ -195,6 +272,7 @@ class TransferEngine(
     is PinPolicyViolation -> "ERR_PIN_POLICY"
     is javax.net.ssl.SSLException ->
       if (generateSequence<Throwable>(e) { it.cause }.any { it is CertPinMismatch }) "ERR_CERT_PIN_MISMATCH" else "ERR_TLS"
+    is UploadRejected -> e.message ?: "ERR_UPLOAD"
     is IOException -> "ERR_CONNECTION: ${e.message}"
     else -> e.message ?: e.javaClass.simpleName
   }

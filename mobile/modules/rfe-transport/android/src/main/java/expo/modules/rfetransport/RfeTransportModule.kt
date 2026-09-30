@@ -102,6 +102,11 @@ class RfeTransportModule : Module() {
       TransferHost.ensureServiceRunning(ctx)
       TransferHost.engine(ctx).enqueue(id, hostId, address, remotePath, destPath).toJson().toString()
     }
+    AsyncFunction("transferEnqueueUpload") { id: String, hostId: String, address: String, localPath: String, remotePath: String, overwrite: Boolean, deleteSource: Boolean ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      TransferHost.ensureServiceRunning(ctx)
+      TransferHost.engine(ctx).enqueueUpload(id, hostId, address, localPath, remotePath, overwrite, deleteSource).toJson().toString()
+    }
     AsyncFunction("transferResume") { id: String ->
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
       TransferHost.ensureServiceRunning(ctx)
@@ -112,6 +117,9 @@ class RfeTransportModule : Module() {
     }
     AsyncFunction("transferCancel") { id: String ->
       TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)).cancel(id)
+    }
+    AsyncFunction("transferRemove") { id: String ->
+      TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)).remove(id)
     }
     AsyncFunction("transfersList") {
       TransferHost.engine(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))

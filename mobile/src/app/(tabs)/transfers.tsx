@@ -1,53 +1,126 @@
-import { useEffect, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { ArrowDown, ArrowUp, Pause, Play, RotateCw, Trash2, X, type LucideIcon } from 'lucide-react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, View } from 'react-native';
 
 import { formatSize } from '../../core/format';
 import { transfers, type TransferRecord } from '../../core/native';
-import { AppBar, Button, EmptyState, GroupedCard, Text } from '../../design/components';
-import { Spacing } from '../../design/tokens';
+import { AppBar, EmptyState, GroupedCard, Pressable, SectionLabel, Text } from '../../design/components';
+import { useScheme } from '../../design/theme';
+import { Brand, FontFamily, Spacing } from '../../design/tokens';
+import { groupTransfers, isActive, isUpload, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
 
-/** Interim Transfers tab over the native engine (phase-5 port adds stats grid, grouping, journal history). */
+/** Every transfer the native engine knows: running and paused first, then failures, then finished ones. */
 export default function Transfers() {
   const [items, setItems] = useState<TransferRecord[] | null>(null);
   useEffect(() => {
     let live = true;
-    transfers.list().then((l) => live && setItems(l));
-    const off = transfers.subscribe((r) => setItems((cur) => [...(cur ?? []).filter((x) => x.id !== r.id), r].sort((a, b) => a.id.localeCompare(b.id))));
+    void transfers.list().then((l) => live && setItems(l));
+    const off = transfers.subscribe((r) => setItems((cur) => [...(cur ?? []).filter((x) => x.id !== r.id), r]));
     return () => {
       live = false;
       off();
     };
   }, []);
-  const active = (items ?? []).filter((r) => r.state === 'RUNNING' || r.state === 'PAUSED').length;
+  const groups = useMemo(() => groupTransfers(items ?? []), [items]);
+  const running = groups.active.filter(isActive).length;
+
+  const forget = async (rs: TransferRecord[]) => {
+    await Promise.all(rs.map((r) => transfers.remove(r.id)));
+    const gone = new Set(rs.map((r) => r.id));
+    setItems((cur) => (cur ?? []).filter((x) => !gone.has(x.id)));
+  };
+
   return (
     <View style={{ flex: 1 }}>
-      <AppBar title="Transfers" subtitle={active > 0 ? `${active} active` : undefined} tall />
+      <AppBar title="Transfers" subtitle={running > 0 ? `${running} active` : undefined} tall />
       {items === null ? null : items.length === 0 ? (
         <EmptyState message="No transfers yet" />
       ) : (
-        <FlatList
-          contentContainerStyle={{ padding: Spacing.md, gap: Spacing.sm }}
-          data={items}
-          keyExtractor={(r) => r.id}
-          renderItem={({ item: r }) => (
-            <GroupedCard>
-              <View style={{ gap: 6 }}>
-                <Text variant="titleMedium" numberOfLines={1}>{r.remotePath.split('/').pop()}</Text>
-                <Text variant="bodySmall" muted>
-                  {r.state}
-                  {r.total > 0 ? ` · ${formatSize(r.received)} / ${formatSize(r.total)}` : r.received > 0 ? ` · ${formatSize(r.received)}` : ''}
-                </Text>
-                {r.error ? <Text variant="bodySmall" color="#F1596B">{r.error}</Text> : null}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {r.state === 'RUNNING' && <Button kind="outlined" label="Pause" onPress={() => transfers.pause(r.id)} />}
-                  {(r.state === 'PAUSED' || r.state === 'FAILED') && <Button kind="outlined" label="Resume" onPress={() => transfers.resume(r.id)} />}
-                  {r.state !== 'DONE' && r.state !== 'CANCELLED' && <Button kind="text" label="Cancel" destructive onPress={() => transfers.cancel(r.id)} />}
-                </View>
-              </View>
-            </GroupedCard>
-          )}
-        />
+        <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>
+          <Group title="Active" rows={groups.active} onForget={forget} />
+          <Group title="Failed" rows={groups.failed} onForget={forget} />
+          <Group
+            title="Finished"
+            rows={groups.finished}
+            onForget={forget}
+            trailing={groups.finished.length > 0 ? <TextAction label="Clear" onPress={() => void forget(groups.finished)} /> : undefined}
+          />
+        </ScrollView>
       )}
     </View>
+  );
+}
+
+function Group({ title, rows, trailing, onForget }: { title: string; rows: TransferRecord[]; trailing?: React.ReactNode; onForget: (rs: TransferRecord[]) => Promise<void> }) {
+  if (rows.length === 0) return null;
+  return (
+    <View>
+      <SectionLabel title={`${title} · ${rows.length}`} trailing={trailing} />
+      <View style={{ gap: Spacing.sm }}>
+        {rows.map((r) => (
+          <Row key={r.id} r={r} onForget={() => onForget([r])} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function TextAction({ label, onPress }: { label: string; onPress: () => void }) {
+  const c = useScheme();
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={label} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+      <Text style={{ fontFamily: FontFamily.semibold, fontSize: 13 }} color={c.primary}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
+  const c = useScheme();
+  const up = isUpload(r);
+  const progress = transferProgress(r);
+  const failed = r.state === 'FAILED';
+  const tint = failed ? c.error : r.state === 'DONE' ? Brand.online : up ? Brand.accent : c.primary;
+  const status =
+    r.state === 'DONE' ? `${up ? 'Uploaded' : 'Downloaded'} · ${formatSize(r.total > 0 ? r.total : r.received)}`
+    : r.state === 'CANCELLED' ? 'Cancelled'
+    : r.state === 'PAUSED' ? `Paused${r.total > 0 ? ` · ${formatSize(r.received)} of ${formatSize(r.total)}` : ''}`
+    : r.state === 'QUEUED' ? 'Waiting'
+    : r.total > 0 ? `${formatSize(r.received)} of ${formatSize(r.total)}` : r.received > 0 ? formatSize(r.received) : up ? 'Preparing' : 'Starting';
+
+  return (
+    <GroupedCard>
+      <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md2 }}>
+          <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${tint}26`, alignItems: 'center', justifyContent: 'center' }}>
+            {up ? <ArrowUp size={18} color={tint} /> : <ArrowDown size={18} color={tint} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: FontFamily.semibold }} numberOfLines={1}>{transferName(r)}</Text>
+            <Text muted style={{ fontSize: 12 }} numberOfLines={1}>{failed ? transferErrorMessage(r.error) : status}</Text>
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            {r.state === 'RUNNING' || r.state === 'QUEUED' ? <IconAction Icon={Pause} label="Pause" onPress={() => void transfers.pause(r.id)} /> : null}
+            {r.state === 'PAUSED' ? <IconAction Icon={Play} label="Resume" onPress={() => void transfers.resume(r.id)} /> : null}
+            {failed ? <IconAction Icon={RotateCw} label="Retry" onPress={() => void transfers.resume(r.id)} /> : null}
+            {r.state === 'RUNNING' || r.state === 'QUEUED' || r.state === 'PAUSED' ? <IconAction Icon={X} label="Cancel" onPress={() => void transfers.cancel(r.id)} /> : null}
+            {failed || r.state === 'DONE' || r.state === 'CANCELLED' ? <IconAction Icon={Trash2} label="Remove" onPress={onForget} /> : null}
+          </View>
+        </View>
+        {progress !== null && r.state !== 'DONE' && r.state !== 'CANCELLED' ? (
+          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 4, borderRadius: 2, backgroundColor: c.outlineVariant, overflow: 'hidden' }}>
+            <View style={{ width: `${progress * 100}%`, height: 4, backgroundColor: tint }} />
+          </View>
+        ) : null}
+      </View>
+    </GroupedCard>
+  );
+}
+
+function IconAction({ Icon, label, onPress }: { Icon: LucideIcon; label: string; onPress: () => void }) {
+  const c = useScheme();
+  return (
+    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon size={18} color={c.onSurfaceVariant} />
+    </Pressable>
   );
 }

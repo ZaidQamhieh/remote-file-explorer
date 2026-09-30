@@ -7,9 +7,13 @@ type Events = { onTransferUpdate: (e: { record: string }) => void };
 declare class RfeTransportModule extends NativeModule<Events> {
   /** Durable native downloads; each returns/emits JSON-encoded TransferRecord. */
   transferEnqueue(id: string, hostId: string, address: string, remotePath: string, destPath: string): Promise<string>;
+  /** Durable chunked upload: [localPath] to [remotePath] on the host. `deleteSource` removes the local file when done or cancelled. */
+  transferEnqueueUpload(id: string, hostId: string, address: string, localPath: string, remotePath: string, overwrite: boolean, deleteSource: boolean): Promise<string>;
   transferResume(id: string): Promise<void>;
   transferPause(id: string): Promise<void>;
   transferCancel(id: string): Promise<void>;
+  /** Forgets a finished, failed or cancelled transfer; running ones are ignored. */
+  transferRemove(id: string): Promise<void>;
   transfersList(): Promise<string[]>;
   /** Cancellable pinned GET to a file; a non-2xx status is a normal result (404 no thumbnail, 429 busy + Retry-After). Rejects ERR_TOO_LARGE past maxBytes. */
   fetchToFile(id: string, url: string, headers: Record<string, string>, pin: string | null, destPath: string, timeoutMs?: number, maxBytes?: number): Promise<{ status: number; retryAfter: number | null; bytes: number }>;

@@ -49,3 +49,10 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## Onboarding pager
 - The welcome and ready pages use a static gradient circle, not the animated two-blob hero (no Rive asset exists for that slot either way).
 - The pager is skipped for any install that already has a paired computer, so upgraders from the Flutter app never see it. The flag is stored as `onboarding_complete` in the kv table.
+
+## Upload engine
+- Uploads run in the same native journaled engine as downloads (one foreground service, one journal). The record carries `direction`, the agent `sessionId` and the whole-file SHA-256, so a killed app resumes the same agent session and sends only the chunks the agent's bitmap lacks.
+- Chunks are sent one at a time at a fixed 4 MiB (the Flutter app's default). Parallel chunk sends are not ported yet.
+- Picked files are moved from the picker's cache into `files/uploads/<id>/` and deleted with their journal entry outcome (done or cancelled), so a cleared cache cannot break a resume. A failed upload keeps its copy so Retry works.
+- "Keep both" numbers the new copy against the names already listed in the folder plus the other picks. A concurrent writer on the host can still cause a CONFLICT, which surfaces as a failed transfer with a plain-language reason.
+- The Transfers tab groups Active, Failed and Finished with a progress bar per row and Clear for finished ones. Speed and ETA, and per-host grouping, are not ported yet.

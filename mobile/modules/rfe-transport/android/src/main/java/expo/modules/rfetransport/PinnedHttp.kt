@@ -161,6 +161,16 @@ object PinnedHttp {
     return pinnedClient(normalized, timeoutMs).newCall(req)
   }
 
+  /** Pinned call with an optional request body, for streaming or cancellable requests; refuses without a pin. */
+  fun newCall(method: String, url: String, headers: Map<String, String>, body: okhttp3.RequestBody?, pin: String?, timeoutMs: Long = 30000): okhttp3.Call {
+    requireHttps(url)
+    val normalized = normalizeFingerprint(pin) ?: throw PinPolicyViolation("missing or invalid certificate pin")
+    val needsBody = method == "POST" || method == "PUT" || method == "PATCH"
+    val req = Request.Builder().url(url).headers(headers.toHeaders())
+      .method(method, body ?: if (needsBody) ByteArray(0).toRequestBody(null) else null).build()
+    return pinnedClient(normalized, timeoutMs).newCall(req)
+  }
+
   /**
    * Streams the response to [dest] in a temp file, appending from [offset] when
    * the server honours the Range request; renames atomically on success.

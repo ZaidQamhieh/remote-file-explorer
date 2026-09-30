@@ -31,6 +31,12 @@ export type TransferRecord = {
   received: number;
   total: number;
   error: string | null;
+  /** Absent in journals written before uploads existed, which are downloads. */
+  direction?: 'DOWNLOAD' | 'UPLOAD';
+  /** Uploads: `remotePath` is the target on the host and `destPath` the local source file. */
+  sessionId?: string | null;
+  sha256?: string | null;
+  overwrite?: boolean;
 };
 
 const parseRecord = (s: string) => JSON.parse(s) as TransferRecord;
@@ -39,9 +45,12 @@ const parseRecord = (s: string) => JSON.parse(s) as TransferRecord;
 export const transfers = {
   enqueue: async (id: string, hostId: string, address: string, remotePath: string, destPath: string) =>
     parseRecord(await Rfe.transferEnqueue(id, hostId, address, remotePath, destPath)),
+  enqueueUpload: async (id: string, hostId: string, address: string, localPath: string, remotePath: string, overwrite: boolean, deleteSource: boolean) =>
+    parseRecord(await Rfe.transferEnqueueUpload(id, hostId, address, localPath, remotePath, overwrite, deleteSource)),
   resume: (id: string) => Rfe.transferResume(id),
   pause: (id: string) => Rfe.transferPause(id),
   cancel: (id: string) => Rfe.transferCancel(id),
+  remove: (id: string) => Rfe.transferRemove(id),
   list: async () => (await Rfe.transfersList()).map(parseRecord),
   subscribe(cb: (r: TransferRecord) => void) {
     const sub = Rfe.addListener('onTransferUpdate', (e) => cb(parseRecord(e.record)));

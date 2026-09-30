@@ -261,6 +261,8 @@
  "operationFailed": "{operation} failed: {error}",
  "alreadyExistsSkipped": "{name} already exists — skipped",
  "uploadingFile": "Uploading {name}…",
+"uploadAllExist": "Everything you picked already exists in {folder}",
+"uploadingNFiles": "{count, plural, =1{Uploading 1 file…} other{Uploading {count} files…}}",
  "nHidden": "{count} hidden",
  "hideLabel": "Hide",
  "showLabel": "Show",

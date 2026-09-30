@@ -1,4 +1,5 @@
 import { SkipForward, CopyPlus, RefreshCw, X } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { createElement } from 'react';
 
 import type { Entry , BatchResult } from '../../core/api/models';
@@ -7,6 +8,8 @@ import { useDialogs, useToast } from '../../design/components';
 import { useScheme } from '../../design/theme';
 import { t } from '../../i18n';
 import { humanizeError } from '../pairing/pairingService';
+import { enqueueUploads } from '../transfers/enqueueUploads';
+import { cleanUploadName, planUploads, type Resolution } from '../transfers/uploadPlan';
 import { useFileClipboard } from './clipboard';
 import { currentPath, type Explorer, type ExplorerState } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
@@ -103,6 +106,38 @@ export function useFileActions(host: Host, ex: Explorer & { getState(): Explorer
     }
   }
 
+  /** Picks files on the phone and queues them for upload into the current folder, asking first about name clashes. */
+  async function upload() {
+    const dest = currentPath(ex.getState());
+    let picked: DocumentPicker.DocumentPickerResult;
+    try {
+      picked = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+    } catch (e) {
+      toast.error(t('operationFailed', { operation: t('uploadFileTooltip'), error: humanizeError(e) }));
+      return;
+    }
+    if (picked.canceled || picked.assets.length === 0) return;
+    const files = picked.assets.map((a) => ({ name: a.name, uri: a.uri, size: a.size }));
+    let resolution: Resolution = 'skip';
+    try {
+      const colliding = await ex.collidingBasenames(dest, files.map((f) => cleanUploadName(f.name)));
+      if (colliding.size > 0) {
+        const res = await askConflict(colliding.size, files.length, dest);
+        if (res === 'cancel') return;
+        resolution = res;
+      }
+      const items = planUploads(files, colliding, resolution);
+      if (items.length === 0) {
+        toast.info(t('uploadAllExist', { folder: folderLabel(dest) }));
+        return;
+      }
+      const queued = await enqueueUploads(host, dest, items);
+      toast.success(items.length === 1 ? t('uploadingFile', { name: items[0].targetName }) : t('uploadingNFiles', { count: queued }));
+    } catch (e) {
+      toast.error(t('operationFailed', { operation: t('uploadFileTooltip'), error: humanizeError(e) }), () => void upload());
+    }
+  }
+
   /** Delete: three-way dialog (cancel / delete forever / move to trash). */
   async function confirmDelete() {
     const count = ex.getState().selected.size;
@@ -177,5 +212,5 @@ export function useFileActions(host: Host, ex: Explorer & { getState(): Explorer
     }
   }
 
-  return { copySelection, cutSelection, paste, confirmDelete, compressSelected, createNamed, rename, applyBatchRename, askConflict, reportBatch };
+  return { copySelection, cutSelection, paste, confirmDelete, compressSelected, createNamed, rename, applyBatchRename, upload, askConflict, reportBatch };
 }

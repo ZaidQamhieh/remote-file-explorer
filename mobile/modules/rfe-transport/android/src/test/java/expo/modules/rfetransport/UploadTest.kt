@@ -76,7 +76,14 @@ class UploadTest {
           val now = inFlight.incrementAndGet()
           maxInFlight.accumulateAndGet(now, ::maxOf)
           try { if (putDelayMs > 0) Thread.sleep(putDelayMs) } finally { inFlight.decrementAndGet() }
-          if (n == failChunk) return err(403, "FORBIDDEN")
+          if (n == failChunk) {
+            // Refuse only once the sibling chunks (sent in parallel) have landed, so the test does not race the client
+            // cancelling them mid-flight: a cancelled chunk the agent already stored may legitimately be sent again.
+            val others = (size + chunkSize - 1) / chunkSize - 1
+            val deadline = System.currentTimeMillis() + 2000
+            while (received.size < others && System.currentTimeMillis() < deadline) Thread.sleep(5)
+            return err(403, "FORBIDDEN")
+          }
           val body = request.body.readByteArray()
           val claimed = request.getHeader("X-Chunk-Sha256")
           val data = if (n == corruptOnce && putCount[n] == 1) body.copyOf().also { if (it.isNotEmpty()) it[0] = (it[0] + 1).toByte() } else body

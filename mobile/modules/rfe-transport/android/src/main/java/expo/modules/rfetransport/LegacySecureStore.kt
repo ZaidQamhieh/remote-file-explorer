@@ -38,5 +38,8 @@ class LegacySecureStore(context: Context) {
 
   fun delete(key: String) = storage.delete(storage.addPrefixToKey(key))
 
+  /** Every entry, keys without the plugin's prefix. */
+  fun readAll(): Map<String, String> = storage.readAll()
+
   fun contains(key: String): Boolean = storage.containsKey(storage.addPrefixToKey(key))
 }

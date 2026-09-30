@@ -80,6 +80,7 @@ const FILE_PATHS = `<?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="share" path="share/" />
     <cache-path name="open" path="open/" />
+    <cache-path name="updates" path="updates/" />
 </paths>
 `;
 
@@ -95,6 +96,11 @@ function withFileProvider(config) {
   ]);
   return withAndroidManifest(config, (cfg) => {
     const app = cfg.modResults.manifest.application[0];
+    // The in-app updater hands a downloaded APK to the system installer.
+    const perms = cfg.modResults.manifest['uses-permission'] ?? (cfg.modResults.manifest['uses-permission'] = []);
+    if (!perms.some((p) => p.$['android:name'] === 'android.permission.REQUEST_INSTALL_PACKAGES')) {
+      perms.push({ $: { 'android:name': 'android.permission.REQUEST_INSTALL_PACKAGES' } });
+    }
     app.provider = (app.provider ?? []).filter((p) => p.$['android:authorities'] !== '${applicationId}.rfe.fileprovider');
     app.provider.push({
       $: {

@@ -3,6 +3,9 @@ package expo.modules.rfetransport
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
 
@@ -30,4 +33,18 @@ object ExternalFiles {
     val chooser = Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return try { ctx.startActivity(chooser); true } catch (_: ActivityNotFoundException) { false }
   }
+
+  private const val APK_MIME = "application/vnd.android.package-archive"
+
+  /** True when this app may hand an APK to the installer (the "install unknown apps" switch for this app). */
+  fun canInstall(ctx: Context): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls()
+
+  /** Opens this app's "install unknown apps" settings page. */
+  fun openInstallSettings(ctx: Context): Boolean {
+    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    return try { ctx.startActivity(intent); true } catch (_: ActivityNotFoundException) { false }
+  }
+
+  /** Hands a downloaded APK (under cache/updates) to the system installer; the system asks the user to confirm. */
+  fun installApk(ctx: Context, file: File): Boolean = open(ctx, file, APK_MIME)
 }

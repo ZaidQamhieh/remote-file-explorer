@@ -36,6 +36,14 @@ class RfeTransportModule : Module() {
     throw CodedException("ERR_CONNECTION", e.message, e)
   }
 
+  private val publicHttp = PublicHttp()
+
+  private fun <T> backup(block: () -> T): T = try {
+    block()
+  } catch (e: BackupCryptoException) {
+    throw CodedException("ERR_BACKUP", e.message, e)
+  }
+
   private fun <T> pdf(block: () -> T): T = try {
     block()
   } catch (e: SecurityException) {
@@ -179,6 +187,39 @@ class RfeTransportModule : Module() {
     AsyncFunction("secureWrite") { key: String, value: String -> secure.write(key, value) }
     AsyncFunction("secureDelete") { key: String -> secure.delete(key) }
     AsyncFunction("secureContains") { key: String -> secure.contains(key) }
+    AsyncFunction("secureReadAll") Coroutine { -> withContext(Dispatchers.IO) { secure.readAll() } }
+
+    // Encrypted settings backup (format shared with the Flutter app); PBKDF2 at 200k rounds is too slow for the JS thread.
+    AsyncFunction("backupEncrypt") Coroutine { payload: String, passphrase: String -> withContext(Dispatchers.Default) { backup { BackupCrypto.encrypt(payload, passphrase) } } }
+    AsyncFunction("backupDecrypt") Coroutine { envelope: String, passphrase: String -> withContext(Dispatchers.Default) { backup { BackupCrypto.decrypt(envelope, passphrase) } } }
+
+    // App updates: this build's versionCode, a plain-HTTPS resumable download, the SHA-256 of a file, and the installer hand-off.
+    AsyncFunction("appBuild") {
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0)).toDouble()
+    }
+    AsyncFunction("publicDownload") Coroutine { id: String, url: String, destPath: String, offset: Double ->
+      withContext(Dispatchers.IO) {
+        try {
+          publicHttp.download(id, url, File(destPath), offset.toLong()).toDouble()
+        } catch (e: RangeNotHonoured) {
+          throw CodedException("ERR_RANGE", e.message, e)
+        } catch (e: java.io.IOException) {
+          throw CodedException("ERR_CONNECTION", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("publicDownloadCancel") { id: String -> publicHttp.cancel(id) }
+    AsyncFunction("sha256File") Coroutine { path: String -> withContext(Dispatchers.IO) { sha256Hex(File(path)) } }
+    AsyncFunction("canInstallPackages") {
+      ExternalFiles.canInstall(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
+    }
+    AsyncFunction("openInstallSettings") {
+      ExternalFiles.openInstallSettings(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
+    }
+    AsyncFunction("installApk") { path: String ->
+      ExternalFiles.installApk(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null), File(path))
+    }
 
     AsyncFunction("probeFingerprint") Coroutine { url: String, timeoutMs: Double? ->
       io { PinnedHttp.probeFingerprint(url, (timeoutMs ?: 8000.0).toLong()) }

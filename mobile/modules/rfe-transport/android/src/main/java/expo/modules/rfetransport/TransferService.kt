@@ -36,6 +36,10 @@ class TransferService : Service() {
         pendingStarts.incrementAndGet()
         try {
           ContextCompat.startForegroundService(context, Intent(context, TransferService::class.java))
+        } catch (t: IllegalStateException) {
+          // Android 12+ refuses a foreground service started from the background (a scheduled photo backup). The
+          // engine still runs while the process lives, and its journal resumes anything cut short, so this is not fatal.
+          pendingStarts.decrementAndGet()
         } catch (t: Throwable) {
           pendingStarts.decrementAndGet()
           throw t

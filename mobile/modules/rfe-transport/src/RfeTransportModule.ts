@@ -52,6 +52,22 @@ declare class RfeTransportModule extends NativeModule<Events> {
   secureWrite(key: string, value: string): Promise<void>;
   secureDelete(key: string): Promise<void>;
   secureContains(key: string): Promise<boolean>;
+  /** Every secure-storage entry (keys without the plugin prefix). */
+  secureReadAll(): Promise<Record<string, string>>;
+  /** Encrypted settings backup, format shared with the Flutter app. Rejects ERR_BACKUP with a user-readable message. */
+  backupEncrypt(payloadJson: string, passphrase: string): Promise<string>;
+  backupDecrypt(envelopeJson: string, passphrase: string): Promise<string>;
+  /** This build's versionCode. */
+  appBuild(): Promise<number>;
+  /** Plain-HTTPS download with Range resume from [offset] (the partial file's size). Rejects ERR_RANGE when the server ignored the resume (the partial file is deleted). Resolves with the file size. */
+  publicDownload(id: string, url: string, destPath: string, offset: number): Promise<number>;
+  publicDownloadCancel(id: string): Promise<void>;
+  sha256File(path: string): Promise<string>;
+  /** Whether "install unknown apps" is allowed for this app. */
+  canInstallPackages(): Promise<boolean>;
+  openInstallSettings(): Promise<boolean>;
+  /** Hands an APK under cache/updates to the system installer. */
+  installApk(path: string): Promise<boolean>;
   probeFingerprint(url: string, timeoutMs?: number): Promise<string>;
   request(
     url: string,

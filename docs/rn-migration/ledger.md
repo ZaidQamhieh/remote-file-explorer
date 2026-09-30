@@ -178,3 +178,6 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Device `a19a1c99` is this A53; `e13a4291` is the earlier pairing. Neither is removed.
 - Approve on the real desktop notification: verified on the A53 (request a3534abf, code 8261 2207, started by the owner on the phone, approved 4 s later; audit_log id 7 "approved at the computer"; no `pair accept` was run by the agent for it). The phone re-paired into the existing device row a19a1c99 (same client id), so no extra device exists. Audit text is identical for CLI and click, so this rests on no CLI accept having been run. Still unverified: the real-camera QR scan.
 - Real-camera QR scan: verified on the A53 (camera permission prompt, live viewfinder, pairing QR from `rfe-agent pair` shown on the desktop terminal). audit_log id 8 "pair ... from 192.168.1.107" (code path, no "approved at the computer"); the phone re-paired into device a19a1c99 and stayed "zaid-pc Online". LAN discovery (mDNS) on a real phone is still unverified.
+
+## Scope decision: iOS dropped
+- Owner dropped iOS on 2026-10-01 (no Apple developer license). rfe-oz9 closed. The migration is Android only.

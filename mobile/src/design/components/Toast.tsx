@@ -63,7 +63,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </Text>
             {msg.retry && (
               <Pressable onPress={() => { const r = msg.retry; setMsg(null); r?.(); }} accessibilityLabel="Retry">
-                <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Inter-SemiBold' }}>Retry</Text>
+                <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Lato_700Bold' }}>Retry</Text>
               </Pressable>
             )}
           </View>

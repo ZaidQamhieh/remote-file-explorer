@@ -38,7 +38,7 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
         {pages.map((p) => (
           <View key={p.title} style={{ width, paddingHorizontal: Spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
             {p.hero === 'link' ? <DeviceLinkHero /> : <BlobHero icon={p.icon} />}
-            <Text style={{ fontSize: 28, lineHeight: 34, fontFamily: 'Inter-SemiBold', letterSpacing: -0.5, textAlign: 'center', marginTop: Spacing.xl }}>{p.title}</Text>
+            <Text style={{ fontSize: 28, lineHeight: 34, fontFamily: 'Lato_700Bold', letterSpacing: -0.5, textAlign: 'center', marginTop: Spacing.xl }}>{p.title}</Text>
             <Text muted variant="bodyLarge" style={{ textAlign: 'center', marginTop: Spacing.md }}>{p.body}</Text>
           </View>
         ))}

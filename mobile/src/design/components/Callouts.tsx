@@ -40,7 +40,7 @@ export function GhostBlockButton({ label, icon, onPress }: { label: string; icon
   return (
     <Pressable onPress={onPress} pressedScale={0.97} accessibilityLabel={label}>
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: c.surfaceContainerHigh, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm }}>
-        <Text style={{ fontSize: 13.5, fontFamily: 'Inter-SemiBold', textAlign: 'center' }}>{label}</Text>
+        <Text style={{ fontSize: 13.5, fontFamily: 'Lato_700Bold', textAlign: 'center' }}>{label}</Text>
         {icon}
       </View>
     </Pressable>

@@ -2,10 +2,10 @@ import { ACCENT_PRESETS, accentLabel, schemeFromSeed } from './accent';
 import { Brand, lightScheme } from './tokens';
 
 describe('accent schemes', () => {
-  it('reproduces the shipped Flutter light scheme from the default seed', () => {
+  it('keeps the hand-picked Lumen white scheme distinct from any derived one', () => {
     const derived = schemeFromSeed(0xff000000 | parseInt(Brand.seed.slice(1), 16), false);
-    // The shipped scheme was dumped from ColorScheme.fromSeed with the violet secondary override.
-    expect(derived).toEqual(lightScheme);
+    expect(lightScheme.surface).toBe('#FFFFFF');
+    expect(derived.surface).not.toBe(lightScheme.surface);
   });
 
   it('gives a dark scheme with dark surfaces and a distinct primary per accent', () => {

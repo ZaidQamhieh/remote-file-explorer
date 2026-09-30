@@ -19,7 +19,7 @@ export const Brand = {
 export const Spacing = { xs: 4, sm: 8, md2: 12, md: 16, md3: 20, lg: 24, xl: 32 } as const;
 
 /** Mockup radius scale 8/14/20/28 plus stadium. */
-export const Radii = { chip: 8, sm: 14, card: 20, lg: 28, sheet: 28, stadium: 999 } as const;
+export const Radii = { chip: 12, sm: 16, card: 18, lg: 28, sheet: 28, stadium: 999 } as const;
 
 export const Motion = { short: 150, medium: 250, long: 350 } as const;
 
@@ -54,77 +54,79 @@ export type Scheme = {
   surfaceContainerHighest: string;
 };
 
+/** Lumen white theme (design/mobile-redesign/lumen-variants.html, `.theme.white`). */
 export const lightScheme: Scheme = {
   dark: false,
-  primary: '#445E91',
+  primary: '#315FC4',
   onPrimary: '#FFFFFF',
-  primaryContainer: '#D8E2FF',
-  onPrimaryContainer: '#2C4678',
-  secondary: '#9B87F5',
+  primaryContainer: '#DCE5F6',
+  onPrimaryContainer: '#1F3F86',
+  secondary: '#247E88',
   onSecondary: '#FFFFFF',
-  secondaryContainer: '#DBE2F9',
-  onSecondaryContainer: '#3F4759',
-  tertiary: '#715573',
-  tertiaryContainer: '#FCD7FB',
-  onTertiaryContainer: '#583E5B',
+  secondaryContainer: '#DDEDEF',
+  onSecondaryContainer: '#174F56',
+  tertiary: '#267342',
+  tertiaryContainer: '#DCEBE1',
+  onTertiaryContainer: '#1A5030',
   error: '#BA1A1A',
   onError: '#FFFFFF',
   errorContainer: '#FFDAD6',
   onErrorContainer: '#93000A',
-  inverseSurface: '#2F3036',
-  onInverseSurface: '#F0F0F7',
-  surface: '#F9F9FF',
-  onSurface: '#1A1B20',
-  onSurfaceVariant: '#44474F',
-  outline: '#75777F',
-  outlineVariant: '#C5C6D0',
+  inverseSurface: '#1D2934',
+  onInverseSurface: '#F3F6F8',
+  surface: '#FFFFFF',
+  onSurface: '#1D2934',
+  onSurfaceVariant: '#55646F',
+  outline: '#86939D',
+  outlineVariant: '#DDE3E8',
   surfaceContainerLowest: '#FFFFFF',
-  surfaceContainerLow: '#F3F3FA',
-  surfaceContainer: '#EEEDF4',
-  surfaceContainerHigh: '#E8E7EF',
-  surfaceContainerHighest: '#E2E2E9',
+  surfaceContainerLow: '#F8FAFB',
+  surfaceContainer: '#F3F6F8',
+  surfaceContainerHigh: '#E9EEF2',
+  surfaceContainerHighest: '#E1E7EC',
 };
 
+/** Lumen dark theme (`.theme`): graphite bg #171c22, cards #202831, raised #29333e. */
 export const darkScheme: Scheme = {
   dark: true,
-  primary: Brand.seed,
-  onPrimary: '#0B1220',
-  primaryContainer: Brand.seed,
-  onPrimaryContainer: '#0B1220',
-  secondary: Brand.online,
-  onSecondary: '#06281E',
-  secondaryContainer: Brand.online,
-  onSecondaryContainer: '#06281E',
-  tertiary: Brand.online,
-  tertiaryContainer: Brand.online,
-  onTertiaryContainer: '#06281E',
+  primary: '#9BBCFF',
+  onPrimary: '#142231',
+  primaryContainer: '#2B3A56',
+  onPrimaryContainer: '#DCE7FF',
+  secondary: '#78C3CD',
+  onSecondary: '#0E2A2E',
+  secondaryContainer: '#27424A',
+  onSecondaryContainer: '#DDF1F3',
+  tertiary: '#94C69D',
+  tertiaryContainer: '#2B3E3A',
+  onTertiaryContainer: '#CFE8D4',
   error: Brand.red,
   onError: '#2E0A0A',
-  errorContainer: Brand.red,
-  onErrorContainer: '#2E0A0A',
-  inverseSurface: '#F4F4F5',
-  onInverseSurface: '#09090B',
-  surface: '#09090B',
-  onSurface: '#F4F4F5',
-  onSurfaceVariant: '#A1A1AA',
-  outline: '#52525B',
-  outlineVariant: '#27272A',
-  surfaceContainerLowest: '#000000',
-  surfaceContainerLow: '#0F0F11',
-  surfaceContainer: '#18181B',
-  surfaceContainerHigh: '#212125',
-  surfaceContainerHighest: '#27272A',
+  errorContainer: '#4A2228',
+  onErrorContainer: '#FFD9DD',
+  inverseSurface: '#EEF3F7',
+  onInverseSurface: '#171C22',
+  surface: '#171C22',
+  onSurface: '#EEF3F7',
+  onSurfaceVariant: '#A5B1BC',
+  outline: '#768491',
+  outlineVariant: '#2C3742',
+  surfaceContainerLowest: '#12161B',
+  surfaceContainerLow: '#1B2128',
+  surfaceContainer: '#202831',
+  surfaceContainerHigh: '#29333E',
+  surfaceContainerHighest: '#313C48',
 };
 
-/** AMOLED variant of the dark scheme (Flutter AppTheme.toAmoled). */
+/** AMOLED variant of the Lumen dark theme: true-black background, cards lifted just enough to read. */
 export const amoledScheme: Scheme = {
   ...darkScheme,
   surface: '#000000',
   surfaceContainerLowest: '#000000',
-  surfaceContainerLow: '#000000',
-  surfaceContainer: '#000000',
-  surfaceContainerHigh: '#18181B',
-  surfaceContainerHighest: '#27272A',
+  surfaceContainerLow: '#0A0D10',
+  surfaceContainer: '#12171C',
+  surfaceContainerHigh: '#1B222A',
+  surfaceContainerHighest: '#252D36',
 };
 
 /**
@@ -137,9 +139,11 @@ export const lightRoles: Roles = { folder: '#7D530B', doc: '#A3432A', photo: '#2
 export const darkRoles: Roles = { folder: '#E4BD73', doc: '#E59B85', photo: '#9AC6A1', route: '#78C3CD', transfer: '#9BBCFF', safe: '#94C69D', warn: '#E8A16D' };
 
 export const FontFamily = {
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semibold: 'Inter-SemiBold',
+  regular: 'Lato_400Regular',
+  medium: 'Lato_400Regular',
+  semibold: 'Lato_700Bold',
+  bold: 'Lato_700Bold',
+  black: 'Lato_900Black',
   mono: 'JetBrainsMono-Regular',
   monoMedium: 'JetBrainsMono-Medium',
 } as const;

@@ -38,7 +38,7 @@ export function SheetHead({ title, subtitle }: { title: string; subtitle?: strin
         <View style={{ width: 36, height: 4, borderRadius: Radii.stadium, backgroundColor: '#8884' }} />
       </View>
       <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold' }} accessibilityRole="header">{title}</Text>
+        <Text style={{ fontSize: 16, fontFamily: 'Lato_700Bold' }} accessibilityRole="header">{title}</Text>
         {subtitle ? <Text muted style={{ fontSize: 12, marginTop: 2 }}>{subtitle}</Text> : null}
       </View>
     </View>
@@ -59,7 +59,7 @@ export function SheetHero({ badge, title, subtitle, tint, badgeColor, onClose, s
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md }}>
         <View style={{ width: 56, height: 56, borderRadius: Radii.card, backgroundColor: badgeColor ?? withAlpha(hero, 0.16), alignItems: 'center', justifyContent: 'center' }}>{badge}</View>
         <View style={{ flex: 1 }}>
-          <Text variant="titleLarge" numberOfLines={1} accessibilityRole="header" style={{ fontFamily: 'Inter-SemiBold' }}>{title}</Text>
+          <Text variant="titleLarge" numberOfLines={1} accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold' }}>{title}</Text>
           {subtitle ? <Text variant="bodySmall" muted style={{ marginTop: Spacing.xs }}>{subtitle}</Text> : null}
         </View>
         {onClose && (

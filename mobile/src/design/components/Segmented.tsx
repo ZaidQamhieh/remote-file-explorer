@@ -26,7 +26,7 @@ export function Segmented({ options, selectedIndex, onChange }: { options: strin
                 on && { backgroundColor: c.surfaceContainerHighest, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
               ]}
             >
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', textAlign: 'center' }} color={on ? c.onSurface : c.onSurfaceVariant}>
+              <Text style={{ fontSize: 12, fontFamily: 'Lato_700Bold', textAlign: 'center' }} color={on ? c.onSurface : c.onSurfaceVariant}>
                 {label}
               </Text>
             </View>

@@ -39,7 +39,7 @@ export function ViewOptionsSheet({ visible, onClose, gridView, density, sort, sh
               accessibilityState={{ selected: sort.field === f }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: i === SORT_FIELDS.length - 1 ? 0 : 1, borderColor: c.outlineVariant }}>
-                <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Inter-Medium' }}>{sortLabel(f)}</Text>
+                <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Lato_400Regular' }}>{sortLabel(f)}</Text>
                 {sort.field === f && (sort.ascending ? <ArrowUp size={17} color={c.primary} /> : <ArrowDown size={17} color={c.primary} />)}
               </View>
             </Pressable>
@@ -61,7 +61,7 @@ function ToggleRow({ title, subtitle, value, onPress, divider }: { title: string
   const row = (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: divider ? 1 : 0, borderColor: c.outlineVariant }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter-Medium' }}>{title}</Text>
+        <Text style={{ fontSize: 14, fontFamily: 'Lato_400Regular' }}>{title}</Text>
         {subtitle ? <Text muted style={{ fontSize: 11.5, marginTop: 1 }}>{subtitle}</Text> : null}
       </View>
       <MockupSwitch value={value} />
@@ -90,7 +90,7 @@ export function FavoritesSheet({ visible, onClose, host, state, onOpen }: { visi
                   <Folder size={18} color={c.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: 'Inter-Medium' }}>{f.label}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: 'Lato_400Regular' }}>{f.label}</Text>
                   <Text numberOfLines={1} muted style={{ fontSize: 11.5 }}>{f.path}</Text>
                 </View>
                 <Pressable onPress={() => remove(f.hostId, f.path)} pressedScale={0.92} accessibilityLabel={t('removeFavoriteTooltip')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
@@ -104,7 +104,7 @@ export function FavoritesSheet({ visible, onClose, host, state, onOpen }: { visi
       <View style={{ padding: Spacing.md }}>
         <Pressable onPress={() => toggle({ hostId: host.id, path, label: folderLabel(path) })} accessibilityLabel={t('addCurrentFolderLabel', { name: folderLabel(path) })} pressedScale={0.97}>
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: c.surfaceContainerHigh, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm }}>
-            <Text style={{ fontSize: 13.5, fontFamily: 'Inter-SemiBold' }}>{t('addCurrentFolderLabel', { name: folderLabel(path) })}</Text>
+            <Text style={{ fontSize: 13.5, fontFamily: 'Lato_700Bold' }}>{t('addCurrentFolderLabel', { name: folderLabel(path) })}</Text>
             <Plus size={16} color={c.onSurface} />
           </View>
         </Pressable>

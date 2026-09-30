@@ -299,7 +299,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md }}>
               {state.showHidden ? <EyeOff size={18} color={c.onSurfaceVariant} /> : <Eye size={18} color={c.onSurfaceVariant} />}
               <Text variant="bodySmall" muted>{`${t('nHidden', { count: hiddenCount })} · `}</Text>
-              <Text variant="bodySmall" color={c.primary} style={{ fontFamily: 'Inter-SemiBold' }}>{state.showHidden ? t('hideLabel') : t('showLabel')}</Text>
+              <Text variant="bodySmall" color={c.primary} style={{ fontFamily: 'Lato_700Bold' }}>{state.showHidden ? t('hideLabel') : t('showLabel')}</Text>
             </View>
           </Pressable>
         )}

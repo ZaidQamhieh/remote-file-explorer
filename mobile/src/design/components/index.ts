@@ -19,3 +19,4 @@ export { ChoiceDialog, PromptDialog, ReportDialog, type ChoiceOption } from './P
 export { DialogHost, useDialogs } from './DialogHost';
 export { MockupSwitch } from './Switch';
 export { NotYet } from './NotYet';
+export { IconTile, PageHead, StatePill, TopBar } from './LumenBits';

@@ -1,12 +1,12 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { LumenSize, LumenType } from '../lumen';
 import { useScheme } from '../theme';
-import { Brand, Radii, Spacing } from '../tokens';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 
+/** `gradient` is kept for old call sites and renders as `filled` (Lumen buttons are flat fills without outlines). */
 type Kind = 'gradient' | 'filled' | 'tonal' | 'neutral' | 'outlined' | 'text';
 type Props = {
   label: string;
@@ -16,64 +16,51 @@ type Props = {
   busy?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
-  /** `lg` is the 52 dp primary-action height. */
-  size?: 'md' | 'lg';
   destructive?: boolean;
   /** Render the icon in the button's foreground color. */
   renderIcon?: (color: string) => ReactNode;
+  /** `lg` is the footer action (mockup `.action-footer .action`: 36 px high, 9 px radius, 9 px text). */
+  size?: 'md' | 'lg';
 };
 
 /**
- * Stadium buttons with centered content (a hard UI rule). `gradient` is the
- * mockup `.btn-primary`: 135° gradient with a tinted glow (GradientButton).
+ * Lumen `.action`: a flat, filled rectangle with centred icon and label. `filled` uses the host colour with dark-on-light
+ * text; `tonal`, `neutral` and `outlined` use the raised surface (`.action.secondary`); `text` is a bare label.
  */
-export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, busy, disabled, style, destructive, size = 'md' }: Props) {
+export function Button({ label, onPress, kind = 'filled', icon, renderIcon, busy, disabled, style, destructive, size = 'md' }: Props) {
   const c = useScheme();
   const off = disabled || busy;
-  const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : kind === 'tonal' ? c.onSecondaryContainer : kind === 'neutral' ? c.onSurface : destructive ? c.error : c.primary;
-  const inner = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm }}>
-      {busy ? <ActivityIndicator size="small" color={fg} /> : renderIcon ? renderIcon(fg) : icon}
-      <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Inter-SemiBold', textAlign: 'center' }}>
-        {label}
-      </Text>
-    </View>
-  );
-  const pad = { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm + 2, minHeight: size === 'lg' ? 52 : 44, justifyContent: 'center' } as const;
+  const k: Kind = kind === 'gradient' ? 'filled' : kind;
+  const raised = k === 'tonal' || k === 'neutral' || k === 'outlined';
+  const fg = k === 'filled' ? c.onPrimary : raised ? (destructive ? c.error : c.onSurface) : destructive ? c.error : c.primary;
+  const lg = size === 'lg';
+  const radius = lg ? LumenSize.footerButtonRadius : LumenSize.buttonRadius;
+  const bg = k === 'filled' ? c.primary : raised ? c.surfaceContainerHigh : 'transparent';
   return (
     <Pressable
       onPress={off ? undefined : onPress}
       disabled={off}
       accessibilityState={{ disabled: !!off, busy: !!busy }}
       accessibilityLabel={label}
-      style={[{ opacity: off ? 0.5 : 1, borderRadius: Radii.stadium }, style]}
+      style={[{ opacity: off ? 0.5 : 1, borderRadius: radius }, style]}
     >
-      {kind === 'gradient' ? (
-        <LinearGradient
-          colors={[...Brand.primaryGradient]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            pad,
-            { borderRadius: Radii.stadium, shadowColor: Brand.seed, shadowOpacity: off ? 0 : 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: off ? 0 : 4 },
-          ]}
-        >
-          {inner}
-        </LinearGradient>
-      ) : (
-        <View
-          style={[
-            pad,
-            { borderRadius: Radii.stadium },
-            kind === 'filled' && { backgroundColor: c.primary },
-            kind === 'tonal' && { backgroundColor: c.secondaryContainer },
-            kind === 'neutral' && { backgroundColor: c.surfaceContainerHigh },
-            kind === 'outlined' && { borderWidth: 1, borderColor: destructive ? c.error : c.outline },
-          ]}
-        >
-          {inner}
-        </View>
-      )}
+      <View
+        style={{
+          minHeight: lg ? LumenSize.footerActionHeight * 2 : LumenSize.actionHeight * 2,
+          paddingHorizontal: lg ? 18 : 18,
+          borderRadius: radius,
+          backgroundColor: bg,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: lg ? 10 : 8,
+        }}
+      >
+        {busy ? <ActivityIndicator size="small" color={fg} /> : renderIcon ? renderIcon(fg) : icon}
+        <Text color={fg} numberOfLines={1} style={[lg ? LumenType.action : LumenType.pill, { textAlign: 'center' }]}>
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }

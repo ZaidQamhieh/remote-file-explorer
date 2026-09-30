@@ -74,7 +74,7 @@ export default function Devices() {
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: 112, height: 112, borderRadius: 56, backgroundColor: c.primaryContainer, alignItems: 'center', justifyContent: 'center' }}>
             <Monitor size={48} color={c.onPrimaryContainer} />
           </View>
-          <Text variant="headlineSmall" style={{ textAlign: 'center', fontFamily: 'Inter-SemiBold' }}>{t('emptyStatePairTitle')}</Text>
+          <Text variant="headlineSmall" style={{ textAlign: 'center', fontFamily: 'Lato_700Bold' }}>{t('emptyStatePairTitle')}</Text>
           <Text muted style={{ textAlign: 'center' }}>{t('emptyStatePairBody')}</Text>
           <Button kind="filled" label={t('scanQrCodeButton')} renderIcon={(k) => <QrCode size={18} color={k} />} onPress={() => router.push('/pair')} />
         </View>
@@ -122,7 +122,7 @@ function GhostAdd({ onPress, label }: { onPress: () => void; label: string }) {
     <Pressable onPress={onPress} accessibilityLabel={label}>
       <View style={{ height: 52, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: 18, backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.sm }}>
         <Plus size={18} color={c.onSurface} />
-        <Text style={{ fontSize: 14, fontFamily: 'Inter-SemiBold' }}>{label}</Text>
+        <Text style={{ fontSize: 14, fontFamily: 'Lato_700Bold' }}>{label}</Text>
       </View>
     </Pressable>
   );

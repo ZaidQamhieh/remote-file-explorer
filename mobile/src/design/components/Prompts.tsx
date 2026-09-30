@@ -87,7 +87,7 @@ export function ReportDialog({ visible, title, items, onClose }: { visible: bool
       <ScrollView style={{ maxHeight: 320 }}>
         {items.map((it, i) => (
           <View key={i} style={{ paddingHorizontal: Spacing.lg, paddingVertical: 6 }}>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter-Medium' }}>{it.primary}</Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Lato_400Regular' }}>{it.primary}</Text>
             {it.secondary ? <Text muted style={{ fontSize: 11.5 }}>{it.secondary}</Text> : null}
           </View>
         ))}

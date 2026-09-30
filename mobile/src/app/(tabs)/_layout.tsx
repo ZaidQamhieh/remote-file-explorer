@@ -1,5 +1,5 @@
 import { Redirect, Tabs } from 'expo-router';
-import { Activity, Database, Folder, FolderOpen, Settings } from 'lucide-react-native';
+import { Activity, Folder, FolderOpen, LayoutGrid, Monitor } from 'lucide-react-native';
 
 import { BottomNav, type NavDestination } from '../../design/components/BottomNav';
 import { useEffect, useState } from 'react';
@@ -9,10 +9,10 @@ import { isOnboarded } from '../../features/onboarding/onboardingState';
 import { ensureLegacyImport, hostStore, keyValue } from '../../services';
 
 const DESTINATIONS: NavDestination[] = [
-  { name: 'index', label: 'Devices', Icon: Database },
+  { name: 'index', label: 'Home', Icon: Monitor },
   { name: 'files', label: 'Files', Icon: Folder, SelectedIcon: FolderOpen },
-  { name: 'transfers', label: 'Transfers', Icon: Activity },
-  { name: 'settings', label: 'Settings', Icon: Settings },
+  { name: 'apps', label: 'Apps', Icon: LayoutGrid },
+  { name: 'transfers', label: 'Activity', Icon: Activity },
 ];
 
 export default function TabsLayout() {
@@ -36,6 +36,8 @@ export default function TabsLayout() {
       {DESTINATIONS.map((d) => (
         <Tabs.Screen key={d.name} name={d.name} options={{ title: d.label, headerShown: false }} />
       ))}
+      {/* Settings is reached from the Home overflow menu; it is not a dock destination in Lumen. */}
+      <Tabs.Screen name="settings" options={{ title: 'Settings', headerShown: false, href: null }} />
     </Tabs>
   );
 }

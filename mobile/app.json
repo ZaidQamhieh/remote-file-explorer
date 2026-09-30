@@ -36,6 +36,7 @@
         }
       ],
       "./plugins/withRfeAndroid",
+      "expo-local-authentication",
       "expo-image",
       [
         "expo-video",

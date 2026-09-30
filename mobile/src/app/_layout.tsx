@@ -8,6 +8,7 @@ import { DialogHost, ToastProvider } from '../design/components';
 import { ThemeProvider, useScheme } from '../design/theme';
 import { FontFamily } from '../design/tokens';
 import { t } from '../i18n';
+import { LockGate } from '../features/security/LockGate';
 import { ensureLegacyImport } from '../services';
 import { useCollections } from '../state/collections';
 import { useSettings } from '../state/settings';
@@ -32,6 +33,11 @@ function Shell() {
         <Stack.Screen name="pair/scan" options={{ headerShown: false }} />
         <Stack.Screen name="pair/login" options={{ title: t('loginTab') }} />
         <Stack.Screen name="pair/register" options={{ title: t('registerTab') }} />
+        <Stack.Screen name="settings/appearance" options={{ title: t('appearanceSection') }} />
+        <Stack.Screen name="settings/visibility" options={{ title: t('fileVisibilityTitle') }} />
+        <Stack.Screen name="settings/storage" options={{ title: t('storageSecurityTitle') }} />
+        <Stack.Screen name="settings/transfers" options={{ title: t('transfersSettingsTitle') }} />
+        <Stack.Screen name="settings/about" options={{ title: t('aboutSupportTitle') }} />
         <Stack.Screen name="dev/gallery" options={{ title: 'Design gallery' }} />
       </Stack>
     </>
@@ -52,10 +58,12 @@ export default function RootLayout() {
   const mode = settings.amoledDark ? 'amoled' : settings.themeMode;
   return (
     <SafeAreaProvider>
-      <ThemeProvider mode={mode}>
+      <ThemeProvider mode={mode} seed={settings.seedColor}>
         <ToastProvider>
           <DialogHost>
-            <Shell />
+            <LockGate>
+              <Shell />
+            </LockGate>
           </DialogHost>
         </ToastProvider>
       </ThemeProvider>

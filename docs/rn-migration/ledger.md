@@ -60,3 +60,13 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## Public Downloads
 - Finished downloads are copied into the shared `Download/Remote File Explorer` folder through MediaStore (Android 10 and newer, no storage permission) and the app-private copy is dropped. The Flutter app kept downloads in its app-specific external folder, invisible to other apps. On Android 9 and older, or if publishing fails, the file stays in app storage and the row says so.
 - A finished download opens from its Transfers row. Removing a row never deletes the published file.
+
+## App settings
+- The Settings tab is a hub with Preferences (Appearance, File visibility, Transfers), Data (Storage & Security) and Support (About) sub-screens. Flutter mixed these with per-computer settings on one long screen; per-computer settings stay under each host.
+- Accent color uses the same eight presets and the Material 3 tonal-spot derivation as `ColorScheme.fromSeed` (`@material/material-color-utilities`); the default keeps the hand-picked brand scheme. The app's violet stays the secondary role, as in Flutter.
+- "Use wallpaper colors" is not offered: React Native has no Material You source. The stored `app.dynamicColor` value is kept so a round trip does not lose it.
+- App lock uses `expo-local-authentication` (biometric with device PIN/pattern fallback). It locks on cold start and after 2 s in the background, and fails open when no screen lock is enrolled (a lock nobody can satisfy would brick the app). Turning it on requires a screen lock and one successful prompt first.
+- Trusted certificates lists each paired computer's pinned fingerprint with Forget (the same un-pairing as host settings, including its cached data). Flutter showed the same list without a way to forget from there.
+- Cache shows the cached folder-listing count and Clear also empties the image cache. The "Downloaded files" line is gone: downloads now live in the shared Downloads folder and are not app cache.
+- Not ported because nothing in the RN app consumes them yet: notification toggles, low-disk alerts, weekly digest, watched folders, compress-on-cellular, update tile and diagnostics export. The stored values are read and written unchanged. Open-source licenses page is omitted (no RN equivalent of `showLicensePage`).
+- Transfers settings only shows the fixed 4 MiB chunk size and links to the Transfers tab.

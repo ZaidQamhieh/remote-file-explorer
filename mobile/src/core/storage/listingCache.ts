@@ -91,6 +91,13 @@ export class ListingCache {
     }
   }
 
+  /** Cached listings across [hostIds], for the storage screen. */
+  async count(hostIds: readonly string[]): Promise<number> {
+    let n = 0;
+    for (const id of hostIds) n += (await this.backend.list(id)).length;
+    return n;
+  }
+
   async evictHost(hostId: string) {
     await this.backend.removeHost(hostId);
     for (const k of [...this.pinned]) if (k.startsWith(`${hostId}:`)) this.pinned.delete(k);

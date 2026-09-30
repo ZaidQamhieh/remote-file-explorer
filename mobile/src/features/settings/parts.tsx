@@ -1,6 +1,6 @@
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Fragment, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { GroupedCard, MockupSwitch, Pressable, SectionLabel, Text } from '../../design/components';
 import { useScheme } from '../../design/theme';
@@ -107,4 +107,9 @@ export function SmallSwitchRow({ label, subtitle, value, onChange, disabled }: {
       </View>
     </Pressable>
   );
+}
+
+/** Scroll body shared by the app-settings screens. */
+export function SettingsPage({ children }: { children: ReactNode }) {
+  return <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>{children}</ScrollView>;
 }

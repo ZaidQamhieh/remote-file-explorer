@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from 'react-native';
 
-import type { Entry } from '../../core/api/models';
+import { can, type Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
 import { EmptyState, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
 import { Plus, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
@@ -37,6 +37,7 @@ import { atRoot, currentPath } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
 import { useExplorer } from './useExplorer';
 import { useFileActions } from './useFileActions';
+import { useFileCapabilities } from './useFileCapabilities';
 
 const GRID_COLUMNS_MIN_WIDTH = 144;
 
@@ -52,6 +53,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const clip = useFileClipboard((s) => s.clip);
   const density = useSettings((s) => s.state.overrides[host.id]?.density ?? s.state.app.density);
   const [createOpen, setCreateOpen] = useState(false);
+  const caps = useFileCapabilities(host);
   const [viewOpen, setViewOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -339,9 +341,9 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
       {state.offline && <OfflineBanner text={t('offlineBannerText')} />}
       <View style={{ flex: 1 }}>{body}</View>
       {multi ? (
-        <SelectionBar count={state.selected.size} onCut={actions.cutSelection} onCopy={actions.copySelection} onCompress={actions.compressSelected} onDownload={downloadSelected} onDelete={actions.confirmDelete} />
+        <SelectionBar count={state.selected.size} onCut={actions.cutSelection} onCopy={actions.copySelection} onCompress={actions.compressSelected} onDownload={downloadSelected} onDelete={actions.confirmDelete} caps={caps} />
       ) : (
-        <View style={{ position: 'absolute', right: 16, bottom: 16 }}>
+        (can(caps, 'modify') || can(caps, 'upload') || showPaste) && <View style={{ position: 'absolute', right: 16, bottom: 16 }}>
           <Pressable onPress={() => setCreateOpen(true)} pressedScale={0.92} accessibilityLabel="Create">
             <LinearGradient colors={[Brand.accent, Brand.accentDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', shadowColor: Brand.accent, shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 8 }}>
               <Plus size={22} color="#fff" />
@@ -354,9 +356,10 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         onClose={() => setCreateOpen(false)}
         onNewFolder={() => void actions.createNamed(true)}
         onNewFile={() => void actions.createNamed(false)}
-        onUpload={() => void actions.upload()}
+        onUpload={can(caps, 'upload') ? () => void actions.upload() : undefined}
         onPaste={showPaste ? () => void actions.paste() : undefined}
         pasteLabel={showPaste ? t('pasteNItems', { count: clip!.paths.length }) : undefined}
+        canModify={can(caps, 'modify')}
       />
       <ViewOptionsSheet visible={viewOpen} onClose={() => setViewOpen(false)} gridView={view.gridView} density={view.density} sort={view.sort} showHidden={state.showHidden} hiddenCount={hiddenCount} onToggleShowHidden={ex.toggleShowHidden} />
       <CommandPalette visible={paletteOpen} actions={paletteActions} onClose={() => setPaletteOpen(false)} />

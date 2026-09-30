@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -36,6 +37,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdReadonly(args)
 	case "allow":
 		return cmdAllow(args)
+	case "backup-dir":
+		return cmdBackupDir(args)
 	case "status":
 		return cmdStatus(args)
 	case "audit":
@@ -75,6 +78,8 @@ Usage:
   rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
   rfe-agent allow <id> <list>    set what a device may do: any of browse,download,upload,
                                   modify,delete,share, or all / none (replaces its grants)
+  rfe-agent backup-dir [<path>|none]  show or set the folder phone photo backups go to
+                                  (must be inside an allowed folder; restart the agent to apply)
   rfe-agent readonly <id> <on|off>  allow browse/download but block all writes
   rfe-agent status               show name, addresses, fingerprint, devices
   rfe-agent audit [-n 50]        show the account/device/share audit trail
@@ -633,5 +638,66 @@ func cmdAllow(args []string) error {
 		return err
 	}
 	fmt.Printf("Set %q (%s) permissions to %s\n", deviceLabel(db, id), shortID(id), fs.Arg(1))
+	return nil
+}
+
+// backupDirInRoots reports whether dir is one of the allowed roots or inside one (no roots means unrestricted).
+func backupDirInRoots(dir string, roots []string) bool {
+	if len(roots) == 0 {
+		return true
+	}
+	for _, r := range roots {
+		rel, err := filepath.Rel(filepath.Clean(r), dir)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// cmdBackupDir shows or sets the destination folder for phone photo backup.
+func cmdBackupDir(args []string) error {
+	fs := flag.NewFlagSet("backup-dir", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if fs.NArg() == 0 {
+		cur, _ := db.GetConfig("photoBackupRoot")
+		fmt.Println("photo backup folder:", orNone(cur))
+		return nil
+	}
+	arg := strings.TrimSpace(fs.Arg(0))
+	if arg == "none" || arg == "" {
+		if err := db.SetConfig("photoBackupRoot", ""); err != nil {
+			return err
+		}
+		fmt.Println("Photo backup folder cleared. Restart the agent to apply.")
+		return nil
+	}
+	dir, err := filepath.Abs(arg)
+	if err != nil {
+		return err
+	}
+	rootsCSV, _ := db.GetConfig("roots")
+	var roots []string
+	for _, r := range strings.Split(rootsCSV, "\n") {
+		if r = strings.TrimSpace(r); r != "" {
+			roots = append(roots, r)
+		}
+	}
+	if !backupDirInRoots(dir, roots) {
+		return fmt.Errorf("%s is outside the folders this agent shares (%s); phones could not write there", dir, strings.Join(roots, ", "))
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := db.SetConfig("photoBackupRoot", dir); err != nil {
+		return err
+	}
+	fmt.Println("Photo backup folder set to", dir, "— restart the agent to apply.")
 	return nil
 }

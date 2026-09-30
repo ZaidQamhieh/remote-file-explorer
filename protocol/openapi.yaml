@@ -1991,6 +1991,19 @@ components:
             web companion Settings page only. Returned to admins and to paired
             clients only when photoBackupAvailable is true. Empty means no
             destination was disclosed.
+        fileCapabilities:
+          type: object
+          description: >
+            What the calling device may do with files, so a client can hide
+            actions the agent would refuse with CAPABILITY_DENIED. Login
+            (owner) devices report everything true. Absent on older agents.
+          properties:
+            browse: { type: boolean }
+            download: { type: boolean }
+            upload: { type: boolean }
+            modify: { type: boolean }
+            delete: { type: boolean }
+            share: { type: boolean }
     ShareLink:
       type: object
       properties:

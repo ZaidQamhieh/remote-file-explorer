@@ -360,3 +360,21 @@ func TestParseAllow(t *testing.T) {
 		t.Fatal("unknown permission accepted")
 	}
 }
+
+func TestBackupDirInRoots(t *testing.T) {
+	roots := []string{"/home/u/RFE Files"}
+	for dir, want := range map[string]bool{
+		"/home/u/RFE Files":           true,
+		"/home/u/RFE Files/Phone":     true,
+		"/home/u/RFE Files2":          false,
+		"/home/u":                     false,
+		"/home/u/RFE Files/../Secret": false,
+	} {
+		if got := backupDirInRoots(filepath.Clean(dir), roots); got != want {
+			t.Errorf("%s: got %v want %v", dir, got, want)
+		}
+	}
+	if !backupDirInRoots("/anywhere", nil) {
+		t.Fatal("no roots means unrestricted")
+	}
+}

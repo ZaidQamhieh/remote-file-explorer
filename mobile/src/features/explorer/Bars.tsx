@@ -8,6 +8,7 @@ import { AppBarIconButton, Menu, Pressable, Text } from '../../design/components
 import { useScheme } from '../../design/theme';
 import { Brand, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
+import { can, type FileCapability } from '../../core/api/models';
 import { BreadcrumbBar } from './Breadcrumb';
 import { folderLabel } from './paths';
 
@@ -97,7 +98,7 @@ function BarAction({ label, onPress, children }: { label: string; onPress: () =>
 }
 
 /** Bottom action bar for the current selection: cut, copy, compress, download, delete. */
-export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onDelete }: { count: number; onCut: () => void; onCopy: () => void; onCompress: () => void; onDownload: () => void; onDelete: () => void }) {
+export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onDelete, caps }: { count: number; onCut: () => void; onCopy: () => void; onCompress: () => void; onDownload: () => void; onDelete: () => void; caps?: Record<FileCapability, boolean> }) {
   const c = useScheme();
   // Sits above the tab bar, which already owns the bottom inset.
   return (
@@ -105,11 +106,11 @@ export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onD
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 }}>
         <Text style={{ fontSize: 12.5 }} muted>{t('nSelected', { count })}</Text>
         <View style={{ flexDirection: 'row' }}>
-          <BarAction label={t('cutButton')} onPress={onCut}><Scissors size={22} color={c.onSurfaceVariant} /></BarAction>
-          <BarAction label={t('copyButton')} onPress={onCopy}><Copy size={22} color={c.onSurfaceVariant} /></BarAction>
-          <BarAction label={t('compressButton')} onPress={onCompress}><Archive size={22} color={c.onSurfaceVariant} /></BarAction>
-          <BarAction label={t('downloadButton')} onPress={onDownload}><Download size={22} color={c.onSurfaceVariant} /></BarAction>
-          <BarAction label={t('deleteButton')} onPress={onDelete}><Trash2 size={22} color={c.error} /></BarAction>
+          {can(caps, 'modify') && can(caps, 'delete') && <BarAction label={t('cutButton')} onPress={onCut}><Scissors size={22} color={c.onSurfaceVariant} /></BarAction>}
+          {can(caps, 'modify') && <BarAction label={t('copyButton')} onPress={onCopy}><Copy size={22} color={c.onSurfaceVariant} /></BarAction>}
+          {can(caps, 'modify') && <BarAction label={t('compressButton')} onPress={onCompress}><Archive size={22} color={c.onSurfaceVariant} /></BarAction>}
+          {can(caps, 'download') && <BarAction label={t('downloadButton')} onPress={onDownload}><Download size={22} color={c.onSurfaceVariant} /></BarAction>}
+          {can(caps, 'delete') && <BarAction label={t('deleteButton')} onPress={onDelete}><Trash2 size={22} color={c.error} /></BarAction>}
         </View>
       </View>
     </View>

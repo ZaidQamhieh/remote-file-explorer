@@ -108,10 +108,21 @@ export type AgentStatus = {
   photoBackupRoot: string;
   photoBackupConfigured: boolean;
   photoBackupAvailable?: boolean;
+  /** What this device may do with files; absent on older agents (then nothing is hidden and the agent enforces). */
+  fileCapabilities?: Record<FileCapability, boolean>;
   effectiveScope: 'global' | 'device';
   /** True when the device's jail is outside all host roots: no filesystem access at all. */
   accessDenied: boolean;
 };
+
+function parseFileCapabilities(v: unknown): Record<FileCapability, boolean> | undefined {
+  if (typeof v !== 'object' || v === null) return undefined;
+  const o = v as Record<string, unknown>;
+  return Object.fromEntries(FILE_CAPABILITIES.map((c) => [c, o[c] === true])) as Record<FileCapability, boolean>;
+}
+
+/** Whether an action is offered: unknown capabilities (older agent, not loaded yet) never hide anything. */
+export const can = (caps: Record<FileCapability, boolean> | undefined, c: FileCapability): boolean => caps === undefined || caps[c];
 
 export const parseStatus = (j: Json): AgentStatus => ({
   agentName: str(j.agentName) ?? '',
@@ -123,6 +134,7 @@ export const parseStatus = (j: Json): AgentStatus => ({
   photoBackupRoot: str(j.photoBackupRoot) ?? '',
   photoBackupConfigured: typeof j.photoBackupConfigured === 'boolean' ? j.photoBackupConfigured : (str(j.photoBackupRoot) ?? '').length > 0,
   photoBackupAvailable: typeof j.photoBackupAvailable === 'boolean' ? j.photoBackupAvailable : undefined,
+  fileCapabilities: parseFileCapabilities(j.fileCapabilities),
   effectiveScope: j.effectiveScope === 'device' ? 'device' : 'global',
   accessDenied: bool(j.accessDenied, false),
 });

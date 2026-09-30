@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Entry } from '../core/api/models';
+import { can, type Entry } from '../core/api/models';
 import { ActionListCard, ActionListTile, BottomSheet, SheetHead, Text, useDialogs, useToast } from '../design/components';
 import { useScheme } from '../design/theme';
 import { lightScheme, Radii, Spacing } from '../design/tokens';
@@ -19,6 +19,7 @@ import { fetchPreviewFile, MAX_EDITABLE_BYTES, MAX_IN_MEMORY_PREVIEW_BYTES } fro
 import { previewKindOf } from '../features/preview/previewKind';
 import { useEditorSession, usePreviewSession } from '../features/preview/session';
 import { useExternalActions } from '../features/preview/useExternalActions';
+import { useFileCapabilities } from '../features/explorer/useFileCapabilities';
 import { useSettings } from '../state/settings';
 import { utf8Length } from '../features/preview/textDecode';
 import { PreviewPage } from '../features/preview/viewers/PreviewPage';
@@ -72,7 +73,8 @@ function Pager({ onClose }: { onClose: () => void }) {
   const kind = previewKindOf(current);
   const onDark = kind === 'image' || kind === 'video';
   const loadedText = texts[current.path] as string | undefined;
-  const canEdit = (kind === 'text' || kind === 'markdown') && loadedText !== undefined && (current.size ?? utf8Length(loadedText)) <= MAX_EDITABLE_BYTES;
+  const caps = useFileCapabilities(session.host);
+  const canEdit = can(caps, 'modify') && (kind === 'text' || kind === 'markdown') && loadedText !== undefined && (current.size ?? utf8Length(loadedText)) <= MAX_EDITABLE_BYTES;
 
   const onText = useCallback((path: string, text: string | null) => {
     setTexts((m) => {
@@ -209,11 +211,11 @@ function Pager({ onClose }: { onClose: () => void }) {
         <View style={{ padding: Spacing.md }}>
           <ActionListCard>
             {[
-              <ActionListTile key="open" icon={<ExternalLink size={20} color={c.onSurfaceVariant} />} label={t('openWithButton')} onPress={() => { setMoreOpen(false); void external.openWith(current); }} />,
+              can(caps, 'download') ? <ActionListTile key="open" icon={<ExternalLink size={20} color={c.onSurfaceVariant} />} label={t('openWithButton')} onPress={() => { setMoreOpen(false); void external.openWith(current); }} /> : null,
               <ActionListTile key="info" icon={<Info size={20} color={c.onSurfaceVariant} />} label={t('detailsButton')} onPress={() => { setMoreOpen(false); setMetaOpen(true); }} />,
-              <ActionListTile key="save" icon={<Download size={20} color={c.onSurfaceVariant} />} label={t('downloadButton')} onPress={save} />,
-              <ActionListTile key="del" icon={<Trash2 size={20} color={c.error} />} label={t('deleteButton')} tint={c.error} onPress={remove} />,
-            ]}
+              can(caps, 'download') ? <ActionListTile key="save" icon={<Download size={20} color={c.onSurfaceVariant} />} label={t('downloadButton')} onPress={save} /> : null,
+              can(caps, 'delete') ? <ActionListTile key="del" icon={<Trash2 size={20} color={c.error} />} label={t('deleteButton')} tint={c.error} onPress={remove} /> : null,
+            ].filter((x) => x !== null)}
           </ActionListCard>
         </View>
       </BottomSheet>

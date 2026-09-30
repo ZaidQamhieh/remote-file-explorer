@@ -64,6 +64,16 @@ func getSettingsHandler(st *settings.Store) http.HandlerFunc {
 // admin devices. For ordinary paired devices it reports the effective policy
 // applied to this request, so unrelated host-wide paths and unavailable photo
 // backup destinations are not disclosed.
+// fileCapabilitiesJSON is what the calling device may do with files, so a client can hide actions the agent would
+// refuse. Login (owner) devices retain full file access, as in requireDeviceFileCapabilities.
+func fileCapabilitiesJSON(device *store.Device) map[string]bool {
+	out := map[string]bool{}
+	for _, c := range []fileCapability{capBrowse, capDownload, capUpload, capModify, capDelete, capShare} {
+		out[string(c)] = device != nil && (device.ViaLogin || deviceHasCapability(device, c))
+	}
+	return out
+}
+
 func settingsJSON(st *settings.Store, r *http.Request) map[string]any {
 	device := deviceFromContext(r)
 	admin := isAdminDevice(device)
@@ -101,6 +111,7 @@ func settingsJSON(st *settings.Store, r *http.Request) map[string]any {
 			"photoBackupConfigured": backupRoot != "",
 			"photoBackupAvailable":  backupAvailable,
 			"photoBackupRoot":       backupRoot,
+			"fileCapabilities":      fileCapabilitiesJSON(device),
 		}
 	}
 
@@ -125,6 +136,7 @@ func settingsJSON(st *settings.Store, r *http.Request) map[string]any {
 		"allowSharing":          st.IsAllowSharing(),
 		"photoBackupConfigured": backupRoot != "",
 		"photoBackupAvailable":  backupAvailable,
+		"fileCapabilities":      fileCapabilitiesJSON(device),
 	}
 	if backupAvailable {
 		response["photoBackupRoot"] = backupRoot

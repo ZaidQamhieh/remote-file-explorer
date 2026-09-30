@@ -573,3 +573,23 @@ func TestBandwidthHandler_GetAndPut(t *testing.T) {
 		t.Fatalf("expected download unchanged at 5000000, got %d", st.MaxDownloadBytesPerSec())
 	}
 }
+
+func TestFileCapabilitiesJSON(t *testing.T) {
+	got := fileCapabilitiesJSON(&store.Device{CanBrowse: true, CanUpload: true})
+	want := map[string]bool{"browse": true, "download": false, "upload": true, "modify": false, "delete": false, "share": false}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("%s: got %v want %v (%v)", k, got[k], v, got)
+		}
+	}
+	for k, v := range fileCapabilitiesJSON(&store.Device{ViaLogin: true}) {
+		if !v {
+			t.Fatalf("owner device must report %s true", k)
+		}
+	}
+	for _, v := range fileCapabilitiesJSON(nil) {
+		if v {
+			t.Fatal("no device means nothing allowed")
+		}
+	}
+}

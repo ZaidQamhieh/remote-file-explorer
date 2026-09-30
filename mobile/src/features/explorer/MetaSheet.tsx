@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import type { AgentClient } from '../../core/api/agentClient';
-import type { Entry, ShareLink } from '../../core/api/models';
+import { can, type Entry, type FileCapability, type ShareLink } from '../../core/api/models';
 import { formatDate, formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import { BottomSheet, Pressable, SheetGrabber, SheetHero, Text, useDialogs, useToast } from '../../design/components';
@@ -21,6 +21,7 @@ import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { ChmodDialog } from './ChmodDialog';
 import { EntryLeading, useIconChipBg } from './EntryIcon';
 import { isExtractableArchive } from './metaLogic';
+import { useFileCapabilities } from './useFileCapabilities';
 import { folderLabel, parentDirOf, renameDestination } from './paths';
 import { clientForHost, hostStore } from '../../services';
 
@@ -40,6 +41,8 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   const [entry, setEntry] = useState(initial);
   const [view, setView] = useState<'actions' | 'details'>('actions');
   const [client, setClient] = useState<AgentClient | null>(null);
+  const caps = useFileCapabilities(host);
+  const allowed = (c: FileCapability) => can(caps, c);
   const [chmodOpen, setChmodOpen] = useState(false);
   const [checksum, setChecksum] = useState<string | null>(null);
   const [checksumBusy, setChecksumBusy] = useState(false);
@@ -180,19 +183,21 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
       : previewable && onPreview
         ? { key: 'preview', icon: Eye, label: t('previewButton'), onPress: () => { onClose(); onPreview(entry); } }
         : null,
-    entry.isDir ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : { key: 'download', icon: Download, label: t('downloadButton'), onPress: download },
-    entry.isDir ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
-    { key: 'delete', icon: Trash2, label: t('deleteButton'), onPress: remove, tint: c.error },
+    entry.isDir
+      ? allowed('modify') ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null
+      : allowed('download') ? { key: 'download', icon: Download, label: t('downloadButton'), onPress: download } : null,
+    entry.isDir && allowed('modify') ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
+    allowed('delete') ? { key: 'delete', icon: Trash2, label: t('deleteButton'), onPress: remove, tint: c.error } : null,
   ] as (Action | null)[]).filter((a): a is Action => a !== null);
 
   const more: Action[] = ([
-    !entry.isDir ? { key: 'openwith', icon: ExternalLink, label: t('openWithButton'), onPress: () => { onClose(); void external.openWith(entry); } } : null,
-    !entry.isDir ? { key: 'share', icon: Share2, label: t('shareTooltip'), onPress: () => { onClose(); void external.share(entry); } } : null,
-    !entry.isDir ? { key: 'link', icon: LinkIcon, label: t('shareLinkButton'), onPress: shareLink } : null,
-    !entry.isDir ? { key: 'qr', icon: QrCode, label: t('qrHandoffSheetTitle'), onPress: () => void sendViaQr() } : null,
-    !entry.isDir && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractHereButton'), onPress: extract } : null,
-    !entry.isDir ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null,
-    !entry.isDir ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
+    !entry.isDir && allowed('download') ? { key: 'openwith', icon: ExternalLink, label: t('openWithButton'), onPress: () => { onClose(); void external.openWith(entry); } } : null,
+    !entry.isDir && allowed('download') ? { key: 'share', icon: Share2, label: t('shareTooltip'), onPress: () => { onClose(); void external.share(entry); } } : null,
+    !entry.isDir && allowed('share') ? { key: 'link', icon: LinkIcon, label: t('shareLinkButton'), onPress: shareLink } : null,
+    !entry.isDir && allowed('download') ? { key: 'qr', icon: QrCode, label: t('qrHandoffSheetTitle'), onPress: () => void sendViaQr() } : null,
+    !entry.isDir && allowed('modify') && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractHereButton'), onPress: extract } : null,
+    !entry.isDir && allowed('modify') ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null,
+    !entry.isDir && allowed('modify') ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
     { key: 'details', icon: Info, label: t('detailsButton'), onPress: () => setView('details') },
   ] as (Action | null)[]).filter((a): a is Action => a !== null);
 

@@ -9,6 +9,7 @@ import { DialogHost, ToastProvider, useToast } from '../design/components';
 import { ThemeProvider, useScheme } from '../design/theme';
 import { FontFamily } from '../design/tokens';
 import { t } from '../i18n';
+import { watchPhotoBackup } from '../features/photoBackup/photoBackupService';
 import { LockGate } from '../features/security/LockGate';
 import { ensureLegacyImport } from '../services';
 import { useCollections } from '../state/collections';
@@ -59,6 +60,7 @@ function Shell() {
         <Stack.Screen name="settings/storage" options={{ title: t('storageSecurityTitle') }} />
         <Stack.Screen name="settings/transfers" options={{ title: t('transfersSettingsTitle') }} />
         <Stack.Screen name="settings/about" options={{ title: t('aboutSupportTitle') }} />
+        <Stack.Screen name="settings/photo-backup" options={{ title: t('photoBackupTitle') }} />
         <Stack.Screen name="settings/whatsnew" options={{ title: t('whatsNewTitle') }} />
         <Stack.Screen name="settings/privacy" options={{ title: t('privacyTitle') }} />
         <Stack.Screen name="dev/gallery" options={{ title: 'Design gallery' }} />
@@ -78,6 +80,7 @@ export default function RootLayout() {
       void loadCollections();
     });
   }, [load, loadCollections]);
+  useEffect(() => watchPhotoBackup(), []);
   const mode = settings.amoledDark ? 'amoled' : settings.themeMode;
   return (
     <ShareIntentProvider>

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeftRight, EyeOff, HardDrive, Info, Palette } from 'lucide-react-native';
+import { ArrowLeftRight, EyeOff, HardDrive, Images, Info, Palette } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { AppBar } from '../../design/components';
@@ -21,6 +21,7 @@ export default function Settings() {
           <NavRow icon={ArrowLeftRight} tint={c.primary} title={t('transfersSettingsTitle')} subtitle={t('transfersSettingsSubtitle')} onPress={() => router.push('/settings/transfers')} />
         </SettingsSection>
         <SettingsSection title={t('dataSection')}>
+          <NavRow icon={Images} tint={c.primary} title={t('photoBackupTitle')} subtitle={t('copyPhonePhotos')} onPress={() => router.push('/settings/photo-backup')} />
           <NavRow icon={HardDrive} tint={c.primary} title={t('storageSecurityTitle')} subtitle={t('storageSecuritySubtitle')} onPress={() => router.push('/settings/storage')} />
         </SettingsSection>
         <SettingsSection title={t('supportSection')}>

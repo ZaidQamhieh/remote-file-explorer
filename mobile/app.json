@@ -39,6 +39,12 @@
       "expo-local-authentication",
       "expo-image",
       [
+        "expo-media-library",
+        {
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
         "expo-video",
         {
           "supportsBackgroundPlayback": false,

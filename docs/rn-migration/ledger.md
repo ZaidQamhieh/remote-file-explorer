@@ -70,3 +70,8 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Cache shows the cached folder-listing count and Clear also empties the image cache. The "Downloaded files" line is gone: downloads now live in the shared Downloads folder and are not app cache.
 - Not ported because nothing in the RN app consumes them yet: notification toggles, low-disk alerts, weekly digest, watched folders, compress-on-cellular, update tile and diagnostics export. The stored values are read and written unchanged. Open-source licenses page is omitted (no RN equivalent of `showLicensePage`).
 - Transfers settings only shows the fixed 4 MiB chunk size and links to the Transfers tab.
+
+## Storage insights
+- Host settings gets a Storage Insights row (Flutter had it too, reached from the same screen). The ring, per-drive list and free-space row use the same aggregation as Flutter; the agent reports drives that sit at or under the device's allowed folders, so a jailed device with roots on a non-mount folder sees an empty state, as in Flutter.
+- The by-type map scans the host recursively from `/` (Flutter's start point), one page of 200 at a time, and stops when the screen closes. The route also accepts a `path` parameter to scan a single folder; nothing in the UI passes one yet.
+- Sizes use the shared formatter (binary units), so a 10.2 MB file set shows as 9.7 MB, as in the Flutter map.

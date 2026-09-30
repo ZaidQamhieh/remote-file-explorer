@@ -791,5 +791,12 @@
  "transferHistoryOpen": "Transfer history",
  "transferHistoryOpenSubtitle": "Active, finished and failed transfers",
  "appVersionLabel": "Version",
- "appNameLabel": "Remote File Explorer"
+ "appNameLabel": "Remote File Explorer",
+ "storageByTypeScanning": "Scanning…",
+ "storageByTypeFiles": "{count} files",
+ "storageByTypeSummary": "{count} files · {size}",
+ "storageByTypeEmpty": "No files found",
+ "storageByTypeHint": "Block area is proportional to space used, largest first, top-left.",
+ "hostNoLongerPaired": "This computer is no longer paired.",
+ "storageInsightsRowSubtitle": "Disk usage and storage by file type"
 }

@@ -266,6 +266,7 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
             <ValueRow icon={ArrowDown} tint={Brand.amber} title={t('bandwidthDownloadLimit')} value={bandwidthLabel(bandwidth.maxDownloadBytesPerSec)} onPress={() => void pickBandwidth('maxDownloadBytesPerSec', t('bandwidthDownloadLimit'))} />
           </>
         ) : null}
+        <NavRow icon={HardDrive} tint={Brand.seed} title={t('storageInsightsTitle')} subtitle={t('storageInsightsRowSubtitle')} onPress={() => router.push({ pathname: '/host/[id]/storage', params: { id: host.id } })} />
         <NavRow icon={Activity} tint={Brand.online} title={t('connectionDiagnosticsTitle')} onPress={() => setDiagOpen(true)} />
         {owner ? <NavRow icon={ScrollText} tint={Brand.amber} title={t('activityLogTitle')} onPress={() => router.push({ pathname: '/host/[id]/audit', params: { id: host.id } })} /> : null}
       </SettingsSection>

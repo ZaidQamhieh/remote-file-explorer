@@ -15,6 +15,7 @@ import {
   type AgentStatus,
   parsePairResponse,
   parseAuditEntry,
+  parseHostAppCatalog,
   parseBandwidth,
   parseDevice,
   parseSearchResult,
@@ -23,6 +24,7 @@ import {
   type BandwidthSettings,
   type Device,
   type FileCapability,
+  type HostAppCatalog,
   type SearchResult,
   type ShareLink,
   type Drive,
@@ -301,6 +303,17 @@ export class AgentClient {
   async audit(o: { limit?: number; before?: number } = {}): Promise<AuditEntry[]> {
     const d = (await this.call('GET', '/audit', { query: { limit: o.limit ?? 100, before: o.before } })) as Record<string, unknown>;
     return (Array.isArray(d.entries) ? (d.entries as Record<string, unknown>[]) : []).map(parseAuditEntry);
+  }
+
+  /** The launchable apps the host exposes to this device. 403 when app access is off for the device. */
+  async listApps(): Promise<HostAppCatalog> {
+    return parseHostAppCatalog((await this.call('GET', '/apps')) as Record<string, unknown>);
+  }
+
+  /** Starts one catalog app by its opaque id; the agent re-checks the id against its current catalog. */
+  async launchApp(id: string): Promise<void> {
+    const d = (await this.call('POST', `/apps/${encodeURIComponent(id)}/launch`)) as Record<string, unknown>;
+    if (d.status !== 'started') throw new Error('Unexpected app launch response.');
   }
 
   async challenge(): Promise<string> {

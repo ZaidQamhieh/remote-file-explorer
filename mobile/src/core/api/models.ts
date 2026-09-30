@@ -244,3 +244,20 @@ export const parseAuditEntry = (j: Json): AuditEntry => {
   const at = new Date(str(j.at) ?? '');
   return { id: num(j.id) ?? 0, at: Number.isNaN(at.getTime()) ? new Date(0) : at, action: str(j.action) ?? '', actor: str(j.actor) ?? '', target: str(j.target) ?? '', detail: str(j.detail) ?? '' };
 };
+
+/** One launchable entry of a host's app catalog. `id` is opaque and server-issued: never a path or command line. */
+export type HostApp = { id: string; name: string; launchable: boolean; description?: string; icon?: string };
+export type HostAppCatalog = { platform: string; apps: HostApp[]; launchAllowed: boolean };
+
+export const parseHostAppCatalog = (j: Json): HostAppCatalog => {
+  if (!Array.isArray(j.apps)) throw new Error('Invalid host app catalog response.');
+  const apps = (j.apps as Json[]).map((a): HostApp => {
+    const id = str(a.id);
+    const name = str(a.name);
+    if (!id || !name || name.trim() === '') throw new Error('Invalid host app catalog entry.');
+    // Older agents listed only apps they could launch.
+    return { id, name, launchable: bool(a.launchable, true), description: str(a.description), icon: str(a.icon) };
+  });
+  // A missing flag from an older agent means launching is off, the safe reading.
+  return { platform: str(j.platform) ?? '', apps, launchAllowed: bool(j.launchAllowed, false) };
+};

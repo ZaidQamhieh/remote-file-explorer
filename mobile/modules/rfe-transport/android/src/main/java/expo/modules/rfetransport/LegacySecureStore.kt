@@ -29,17 +29,21 @@ class LegacySecureStore(context: Context) {
     failure?.let { throw it }
   }
 
-  fun read(key: String): String? {
+  // The plugin's classes share one Cipher and are not thread-safe: parallel upload chunks each read the token, and
+  // concurrent reads failed with "Cipher not initialized". Every access takes this lock.
+  private val lock = Any()
+
+  fun read(key: String): String? = synchronized(lock) {
     val k = storage.addPrefixToKey(key)
-    return if (storage.containsKey(k)) storage.read(k) else null
+    if (storage.containsKey(k)) storage.read(k) else null
   }
 
-  fun write(key: String, value: String) = storage.write(storage.addPrefixToKey(key), value)
+  fun write(key: String, value: String) = synchronized(lock) { storage.write(storage.addPrefixToKey(key), value) }
 
-  fun delete(key: String) = storage.delete(storage.addPrefixToKey(key))
+  fun delete(key: String) = synchronized(lock) { storage.delete(storage.addPrefixToKey(key)) }
 
   /** Every entry, keys without the plugin's prefix. */
-  fun readAll(): Map<String, String> = storage.readAll()
+  fun readAll(): Map<String, String> = synchronized(lock) { storage.readAll() }
 
-  fun contains(key: String): Boolean = storage.containsKey(storage.addPrefixToKey(key))
+  fun contains(key: String): Boolean = synchronized(lock) { storage.containsKey(storage.addPrefixToKey(key)) }
 }

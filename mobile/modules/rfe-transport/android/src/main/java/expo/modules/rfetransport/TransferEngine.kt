@@ -81,6 +81,7 @@ class TransferEngine(
   private val onChange: (TransferRecord) -> Unit = {},
   private val timeoutMs: Long = 30000,
   private val uploadChunkSize: Int = 4 * 1024 * 1024,
+  private val busyDelayMs: Long = 5_000,
   /** Copies a finished download somewhere shared and returns its URI; on success the private copy is dropped. */
   private val publisher: ((File) -> String?)? = null,
 ) {
@@ -201,6 +202,7 @@ class TransferEngine(
         track = { calls[id] = it },
         save = { next -> r = update(next) },
         chunkSize = uploadChunkSize,
+        busyDelayMs = busyDelayMs,
       )
       r = uploader.run(r)
       update(r.copy(state = TransferState.DONE, received = r.total, error = null))

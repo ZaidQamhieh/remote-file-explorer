@@ -52,6 +52,8 @@ class UploadTest {
     var completed = false
     var lastOverwrite = false
     @Volatile var putDelayMs = 0L
+    /** Chunk requests still to be refused as if an earlier, dead connection held the session. */
+    val busyPuts = java.util.concurrent.atomic.AtomicInteger(0)
     val inFlight = java.util.concurrent.atomic.AtomicInteger(0)
     val maxInFlight = java.util.concurrent.atomic.AtomicInteger(0)
 
@@ -71,6 +73,7 @@ class UploadTest {
         }
         request.method == "GET" && path == "/v1/transfers/s1" -> if (!sessionOpen) err(404, "NOT_FOUND") else json(200, session())
         request.method == "PUT" && path.startsWith("/v1/transfers/s1/chunks/") -> {
+          if (busyPuts.getAndUpdate { maxOf(it - 1, 0) } > 0) return err(409, "TRANSFER_ACTIVE")
           val n = path.substringAfterLast('/').toInt()
           putCount.merge(n, 1, Int::plus)
           val now = inFlight.incrementAndGet()
@@ -119,7 +122,7 @@ class UploadTest {
     server.start()
     pin = PinnedHttp.sha256Hex(leaf.certificate.encoded)
     dir = Files.createTempDirectory("rfe-upload").toFile()
-    engine = TransferEngine(File(dir, "journal"), creds, timeoutMs = 5000, uploadChunkSize = chunk)
+    engine = TransferEngine(File(dir, "journal"), creds, timeoutMs = 5000, uploadChunkSize = chunk, busyDelayMs = 20)
   }
 
   @After fun tearDown() {
@@ -151,6 +154,19 @@ class UploadTest {
     assertEquals(payload.size.toLong(), r.total)
     assertEquals(hex(payload), r.sha256)
     assertEquals("UPLOAD", r.direction)
+  }
+
+  @Test fun waitsOutASessionThatStillHoldsAnEarlierConnection() {
+    agent.busyPuts.set(3)
+    engine.enqueueUpload("u1", "h", address, source().path, "/dest/a.bin", overwrite = false, deleteSource = false)
+    await("u1", TransferState.DONE)
+    assertArrayEquals(payload, agent.assembled())
+  }
+
+  @Test fun failsWhenTheSessionStaysBusy() {
+    agent.busyPuts.set(1000)
+    engine.enqueueUpload("u1", "h", address, source().path, "/dest/a.bin", overwrite = false, deleteSource = false)
+    assertNotNull(await("u1", TransferState.FAILED).error)
   }
 
   @Test fun sendsSeveralChunksAtOnce() {

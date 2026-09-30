@@ -34,6 +34,9 @@ class Uploader(
   private val chunkSize: Int = 4 * 1024 * 1024,
   private val chunkRetries: Int = 3,
   private val parallel: Int = 3,
+  /** How often, and how long apart, a request is repeated while the agent still holds the session for an earlier, dead connection. */
+  private val busyRetries: Int = 8,
+  private val busyDelayMs: Long = 5_000,
 ) {
   private val live = ConcurrentHashMap.newKeySet<Call>()
 
@@ -130,7 +133,26 @@ class Uploader(
     fun code(): String = runCatching { JSONObject(body).optString("code") }.getOrDefault("")
   }
 
+  /**
+   * A dropped connection can leave the agent still waiting on the old request, and it answers 409 TRANSFER_ACTIVE to
+   * anything else on that session until the old one times out. That passes on its own, so wait and ask again.
+   */
   private fun send(r: TransferRecord, method: String, path: String, json: JSONObject? = null, raw: ByteArray? = null, extra: Map<String, String> = emptyMap()): Reply {
+    var busy = 0
+    while (true) {
+      val reply = sendOnce(r, method, path, json, raw, extra)
+      if (reply.status != 409 || reply.code() != "TRANSFER_ACTIVE" || busy >= busyRetries) return reply
+      busy++
+      var waited = 0L
+      while (waited < busyDelayMs) {
+        if (stopped()) throw InterruptedException()
+        Thread.sleep(minOf(200L, busyDelayMs - waited))
+        waited += 200L
+      }
+    }
+  }
+
+  private fun sendOnce(r: TransferRecord, method: String, path: String, json: JSONObject?, raw: ByteArray?, extra: Map<String, String>): Reply {
     val headers = mutableMapOf("X-RFE-Client-Version" to "rn")
     creds.token(r.hostId)?.let { headers["Authorization"] = "Bearer $it" }
     headers.putAll(extra)

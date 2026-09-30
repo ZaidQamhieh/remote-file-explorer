@@ -6,7 +6,7 @@ import type { AgentStatus, Drive, Health } from '../../core/api/models';
 import { formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import { AppBar, EmptyState, OfflineBanner, ErrorRetry, GroupedCard, ListingSkeleton, Loading, Pressable, SectionLabel, Text } from '../../design/components';
-import { useScheme } from '../../design/theme';
+import { roleTint, useRoles, useScheme } from '../../design/theme';
 import { Radii, Spacing } from '../../design/tokens';
 import { AgentApiError } from '../../core/api/agentClient';
 import { clientForHost, keyValue } from '../../services';
@@ -92,6 +92,7 @@ function Denied() {
 
 function Roots({ roots, unavailablePath, onSelect }: { roots: string[]; unavailablePath?: string; onSelect: (r: string) => void }) {
   const c = useScheme();
+  const roles = useRoles();
   const sorted = [...roots].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   return (
     <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md }}>
@@ -102,7 +103,9 @@ function Roots({ roots, unavailablePath, onSelect }: { roots: string[]; unavaila
           {sorted.map((r, i) => (
             <Pressable key={r} onPress={() => onSelect(r)} accessibilityLabel={folderLabel(r)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: c.outlineVariant }}>
-                <Folder size={22} color={c.onSurfaceVariant} />
+                <View style={{ width: 40, height: 40, borderRadius: Radii.sm, backgroundColor: roleTint(roles.folder, c), alignItems: 'center', justifyContent: 'center' }}>
+                  <Folder size={22} color={roles.folder} />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyLarge" numberOfLines={1}>{folderLabel(r)}</Text>
                   <Text variant="bodySmall" muted numberOfLines={1}>{r}</Text>
@@ -118,6 +121,7 @@ function Roots({ roots, unavailablePath, onSelect }: { roots: string[]; unavaila
 
 function DrivesList({ drives, onSelect }: { drives: Drive[]; onSelect: (p: string) => void }) {
   const c = useScheme();
+  const roles = useRoles();
   return (
     <ScrollView contentContainerStyle={{ padding: Spacing.md }}>
       <GroupedCard padded={false}>
@@ -127,8 +131,8 @@ function DrivesList({ drives, onSelect }: { drives: Drive[]; onSelect: (p: strin
           return (
             <Pressable key={d.path} onPress={() => onSelect(d.path)} accessibilityLabel={label}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: c.outlineVariant }}>
-                <View style={{ width: 40, height: 40, borderRadius: Radii.sm, backgroundColor: c.surfaceContainerHighest, alignItems: 'center', justifyContent: 'center' }}>
-                  <HardDrive size={20} color={c.onSurfaceVariant} />
+                <View style={{ width: 40, height: 40, borderRadius: Radii.sm, backgroundColor: roleTint(roles.folder, c), alignItems: 'center', justifyContent: 'center' }}>
+                  <HardDrive size={20} color={roles.folder} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyLarge" numberOfLines={1}>{label}</Text>

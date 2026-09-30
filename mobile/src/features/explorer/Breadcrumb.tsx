@@ -5,8 +5,9 @@ import { ScrollView, View } from 'react-native';
 
 import { Menu, Pressable, Text, useToast } from '../../design/components';
 import { useScheme } from '../../design/theme';
-import { Brand, Radii, Spacing } from '../../design/tokens';
+import { Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
+import { crumbLabel } from './paths';
 
 export const MAX_VISIBLE_CRUMBS = 4;
 
@@ -18,7 +19,7 @@ export function collapsedCrumbIndices(stackLength: number, maxVisible = MAX_VISI
   return Array.from({ length: firstVisibleTail - 1 }, (_, i) => i + 1);
 }
 
-export const crumbLabel = (stack: string[], index: number) => (index === 0 ? '/' : (stack[index].split(/[/\\]/).pop() ?? ''));
+export { crumbLabel };
 
 export function useCopyPath() {
   const toast = useToast();
@@ -46,8 +47,8 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
             key="collapsed"
             accessibilityLabel={t('showHiddenFoldersTooltip')}
             trigger={
-              <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.stadium, borderWidth: 1, borderColor: c.outlineVariant }}>
-                <Text style={{ fontSize: 12 }} muted>…</Text>
+              <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, borderWidth: 1, borderColor: c.outlineVariant }}>
+                <Text style={{ fontSize: 13 }} muted>…</Text>
               </View>
             }
             items={[
@@ -74,9 +75,9 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
     items.push(<Sep key={`s${i}`} show={i > 0} />);
     const current = i === last;
     items.push(
-      <Pressable key={`c${i}`} onPress={() => onNavigateTo(i)} onLongPress={() => copyPath(pathStack[i])} accessibilityLabel={crumbLabel(pathStack, i)}>
-        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.stadium, backgroundColor: current ? Brand.seed : 'transparent', borderWidth: current ? 0 : 1, borderColor: c.outlineVariant }}>
-          <Text style={{ fontSize: 12 }} color={current ? '#FFFFFF' : c.onSurfaceVariant} numberOfLines={1}>
+      <Pressable key={`c${i}`} onPress={() => onNavigateTo(i)} onLongPress={() => copyPath(pathStack[i])} accessibilityLabel={crumbLabel(pathStack, i)} hitSlop={6}>
+        <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, backgroundColor: current ? c.primary : 'transparent', borderWidth: current ? 0 : 1, borderColor: c.outlineVariant }}>
+          <Text style={{ fontSize: 13 }} color={current ? c.onPrimary : c.onSurfaceVariant} numberOfLines={1}>
             {crumbLabel(pathStack, i)}
           </Text>
         </View>

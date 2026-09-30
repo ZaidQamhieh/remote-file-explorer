@@ -32,6 +32,12 @@ export function folderLabel(path: string): string {
   return name === '' ? path : name;
 }
 
+/** Breadcrumb label: the root crumb shows the root folder's name (never a lone "/"), the rest their last segment. */
+export const crumbLabel = (stack: string[], index: number): string => {
+  if (index === 0) return stack[0] ? folderLabel(stack[0]) : '/';
+  return stack[index].split(/[/\\]/).pop() ?? '';
+};
+
 export function renameDestination(oldPath: string, newName: string): string {
   const sep = oldPath.includes('\\') ? '\\' : '/';
   const idx = oldPath.lastIndexOf(sep);

@@ -2,7 +2,8 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { schemeFromSeed } from './accent';
-import { amoledScheme, darkScheme, lightScheme, type Scheme } from './tokens';
+import { mix } from './color';
+import { amoledScheme, darkScheme, darkRoles, lightRoles, lightScheme, type Roles, type Scheme } from './tokens';
 
 export type ThemeMode = 'system' | 'light' | 'dark' | 'amoled';
 
@@ -36,3 +37,9 @@ export function ThemeProvider({ mode = 'system', seed = null, children }: { mode
 }
 
 export const useScheme = (): Scheme => useContext(ThemeContext).scheme;
+
+/** Category colours for the active scheme. */
+export const useRoles = (): Roles => (useScheme().dark ? darkRoles : lightRoles);
+
+/** Tinted chip behind a role glyph: the role over the surface at 14% (light) or 17% (dark). */
+export const roleTint = (role: string, scheme: Scheme): string => mix(role, scheme.surface, scheme.dark ? 0.17 : 0.14);

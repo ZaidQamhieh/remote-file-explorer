@@ -50,3 +50,28 @@ export function iconKindFor(e: Pick<Entry, 'isDir' | 'mimeType'>): IconKind {
       return { icon: 'file', color: null, bg: null };
   }
 }
+
+/** Colour role of an entry (design/tokens `Roles`); `null` means neutral, unknown types are never coloured. */
+export type EntryRole = 'folder' | 'doc' | 'photo' | 'route' | 'warn';
+
+export function roleOf(e: Pick<Entry, 'isDir' | 'mimeType'> & { name?: string }): EntryRole | null {
+  switch (categoryOf(e)) {
+    case 'folder':
+      return 'folder';
+    case 'image':
+    case 'video':
+      return 'photo';
+    case 'audio':
+      return 'route';
+    case 'document':
+      return 'doc';
+    case 'archive':
+      return 'warn';
+  }
+  const ext = (e.name ?? '').split('.').pop()?.toLowerCase() ?? '';
+  if (imageExtensions.has(ext) || videoExtensions.has(ext)) return 'photo';
+  if (audioExtensions.has(ext)) return 'route';
+  if (docExtensions.has(ext)) return 'doc';
+  if (archiveExtensions.has(ext)) return 'warn';
+  return null;
+}

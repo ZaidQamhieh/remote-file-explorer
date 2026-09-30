@@ -106,7 +106,7 @@ export const darkScheme: Scheme = {
   onInverseSurface: '#09090B',
   surface: '#09090B',
   onSurface: '#F4F4F5',
-  onSurfaceVariant: '#71717A',
+  onSurfaceVariant: '#A1A1AA',
   outline: '#52525B',
   outlineVariant: '#27272A',
   surfaceContainerLowest: '#000000',
@@ -127,6 +127,15 @@ export const amoledScheme: Scheme = {
   surfaceContainerHighest: '#27272A',
 };
 
+/**
+ * Category colours for icons, tints and small status text (never body text). Every role clears 4.5:1 on its own
+ * tint (`mix(role, surface, 0.14|0.17)`) and on the plain surface; roles.test.ts asserts it for light, dark and AMOLED.
+ */
+export type Roles = { folder: string; doc: string; photo: string; route: string; transfer: string; safe: string; warn: string };
+
+export const lightRoles: Roles = { folder: '#7D530B', doc: '#A3432A', photo: '#2F6B3F', route: '#0E6A77', transfer: '#2A57B8', safe: '#2F6B3F', warn: '#9A4A16' };
+export const darkRoles: Roles = { folder: '#E4BD73', doc: '#E59B85', photo: '#9AC6A1', route: '#78C3CD', transfer: '#9BBCFF', safe: '#94C69D', warn: '#E8A16D' };
+
 export const FontFamily = {
   regular: 'Inter-Regular',
   medium: 'Inter-Medium',
@@ -146,11 +155,11 @@ export const TypeScale = {
   bodySmall: { fontSize: 12, lineHeight: 16, letterSpacing: 0.4, fontFamily: FontFamily.regular },
   labelLarge: { fontSize: 14, lineHeight: 20, letterSpacing: 0.1, fontFamily: FontFamily.medium },
   labelMedium: { fontSize: 12, lineHeight: 16, letterSpacing: 0.5, fontFamily: FontFamily.medium },
-  /** Mockup `.section-label`: 10.5/700 uppercase, .09em tracking. */
-  sectionLabel: { fontSize: 10.5, lineHeight: 14, letterSpacing: 0.945, fontFamily: FontFamily.semibold },
+  /** Mockup `.section-label`, raised to the 12 sp floor: 12/600 uppercase, .06em tracking. */
+  sectionLabel: { fontSize: 12, lineHeight: 16, letterSpacing: 0.72, fontFamily: FontFamily.semibold },
   /** ScreenHeader title: 19/700, -0.19 tracking. */
   screenTitle: { fontSize: 19, lineHeight: 24, letterSpacing: -0.19, fontFamily: FontFamily.semibold },
-  screenSubtitle: { fontSize: 11.5, lineHeight: 15, fontFamily: FontFamily.regular },
+  screenSubtitle: { fontSize: 12.5, lineHeight: 16, fontFamily: FontFamily.regular },
 } as const;
 
 export type TypeRole = keyof typeof TypeScale;

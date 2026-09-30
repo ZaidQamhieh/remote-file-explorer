@@ -1,7 +1,7 @@
 import type { Entry } from '../../core/api/models';
 import { categoryOf, iconKindFor } from '../../core/entryCategory';
 import { defaultVisibility, extensionOf, isEntryHidden, isEntryHiddenInPicker } from '../../core/visibility';
-import { basenameOf, buildPathStack, buildPathStackWithinRoot, dedupedName, folderLabel, joinRemotePath, renameDestination } from './paths';
+import { basenameOf, buildPathStack, buildPathStackWithinRoot, crumbLabel, dedupedName, folderLabel, joinRemotePath, renameDestination } from './paths';
 import { sortEntries } from './sort';
 
 const e = (name: string, o: Partial<Entry> = {}): Entry => ({ name, path: `/${name}`, isDir: false, isSymlink: false, ...o });
@@ -72,5 +72,18 @@ describe('categories', () => {
     expect(categoryOf({ isDir: false, mimeType: 'application/zip' })).toBe('archive');
     expect(categoryOf({ isDir: false, mimeType: 'application/octet-stream' })).toBe('other');
     expect(iconKindFor({ isDir: false, mimeType: 'application/pdf' }).color).toBe('#F1596B');
+  });
+});
+
+describe('crumbLabel', () => {
+  it('names the root crumb after the root folder', () => {
+    expect(crumbLabel(['/home/zaid/RFE Files'], 0)).toBe('RFE Files');
+    expect(crumbLabel(['/home/zaid/RFE Files', '/home/zaid/RFE Files/Docs'], 1)).toBe('Docs');
+    expect(crumbLabel(['C:\\Users\\x'], 0)).toBe('x');
+  });
+
+  it('never returns an empty root label', () => {
+    expect(crumbLabel(['C:\\'], 0)).toBe('Root');
+    expect(crumbLabel([''], 0)).toBe('/');
   });
 });

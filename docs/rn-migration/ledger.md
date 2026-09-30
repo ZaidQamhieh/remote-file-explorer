@@ -75,3 +75,8 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Host settings gets a Storage Insights row (Flutter had it too, reached from the same screen). The ring, per-drive list and free-space row use the same aggregation as Flutter; the agent reports drives that sit at or under the device's allowed folders, so a jailed device with roots on a non-mount folder sees an empty state, as in Flutter.
 - The by-type map scans the host recursively from `/` (Flutter's start point), one page of 200 at a time, and stops when the screen closes. The route also accepts a `path` parameter to scan a single folder; nothing in the UI passes one yet.
 - Sizes use the shared formatter (binary units), so a 10.2 MB file set shows as 9.7 MB, as in the Flutter map.
+
+## Explorer command palette and transfer pace
+- Command palette (overflow menu) filters the same eleven actions as Flutter; Navigate to Path asks for a path and jumps there. Storage by type in the overflow menu now opens the map for the current folder (Flutter did too).
+- Active transfers show the smoothed speed and time left, worked out in JS from the engine's progress events (an average that ignores samples closer than 0.5 s). Flutter showed the same two numbers; there is no native rate.
+- Each download is staged in its own folder (`downloads/<transfer id>/<name>`). Flutter and the first RN port used `downloads/<name>`, so two downloads of one file at once shared a partial file and corrupted each other ("size mismatch"). The folder is removed once the file is published, cancelled or forgotten.

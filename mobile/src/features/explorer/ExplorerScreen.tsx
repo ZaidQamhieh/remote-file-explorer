@@ -5,7 +5,7 @@ import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from '
 import type { Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
 import { EmptyState, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
-import { Plus , Eye, EyeOff } from 'lucide-react-native';
+import { Plus, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useScheme } from '../../design/theme';
 import { Brand, Spacing } from '../../design/tokens';
@@ -21,6 +21,7 @@ import { usePreviewSession } from '../preview/session';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { BrowseAppBar, SelectionAppBar, SelectionBar, type OverflowAction } from './Bars';
 import { BatchRenameSheet } from './BatchRenameSheet';
+import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { CreateMenu } from './CreateMenu';
 import { EntryGridCell } from './EntryGridCell';
 import { EntryTile } from './EntryTile';
@@ -28,6 +29,7 @@ import { MetaSheet } from './MetaSheet';
 import { PeekSheet } from './PeekSheet';
 import { FavoritesPinRow, FavoritesSheet, ViewOptionsSheet } from './Sheets';
 import { useFileClipboard } from './clipboard';
+import { normalizeTypedPath } from './paletteLogic';
 import { transfers } from '../../core/native';
 import { atRoot, currentPath } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
@@ -51,6 +53,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const [viewOpen, setViewOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [metaEntry, setMetaEntry] = useState<Entry | null>(null);
   const [peekEntry, setPeekEntry] = useState<Entry | null>(null);
   // A tag filter applies only to the folder it was picked in.
@@ -192,10 +195,33 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         return router.push('/recent');
       case 'dupFinder':
         return router.push({ pathname: '/dups', params: { path } });
+      case 'storageByType':
+        return router.push({ pathname: '/host/[id]/types', params: { id: host.id, path } });
+      case 'commandPalette':
+        return setPaletteOpen(true);
       default:
         toast.info(`${a}: available in a later phase`);
     }
   };
+
+  const goToPath = async () => {
+    const typed = await dialogs.prompt({ title: t('goToPathTitle'), placeholder: '/path/to/folder', confirmLabel: t('goButton'), mono: true });
+    const target = typed === null ? null : normalizeTypedPath(typed);
+    if (target) ex.jumpTo(target);
+  };
+  const paletteActions: PaletteAction[] = [
+    { id: 'search', label: 'Search', icon: Search, run: () => router.push({ pathname: '/host/[id]/search', params: { id: host.id, path } }) },
+    { id: 'refresh', label: 'Refresh', icon: RefreshCw, run: () => ex.refresh() },
+    { id: 'grid', label: 'Toggle Grid/List', icon: LayoutGrid, run: () => void useSettings.getState().setApp('gridView', !view.gridView) },
+    { id: 'view', label: t('viewOptionsTitle'), icon: SlidersHorizontal, run: () => setViewOpen(true) },
+    { id: 'favorites', label: t('favoritesTitle'), icon: Bookmark, run: () => setFavOpen(true) },
+    { id: 'transfers', label: t('transfersMenuItem'), icon: FileUp, run: () => router.navigate('/transfers') },
+    { id: 'trash', label: t('trashTitle'), icon: Trash2, run: () => router.push('/trash') },
+    { id: 'recent', label: t('recentTitle'), icon: History, run: () => router.push('/recent') },
+    { id: 'types', label: t('storageByTypeTitle'), icon: PieChart, run: () => router.push({ pathname: '/host/[id]/types', params: { id: host.id, path } }) },
+    { id: 'dups', label: 'Find Duplicates', icon: Replace, run: () => router.push({ pathname: '/dups', params: { path } }) },
+    { id: 'goto', label: 'Navigate to Path', icon: Route, run: () => void goToPath() },
+  ];
 
   const columns = Math.max(2, Math.floor((width - Spacing.md) / (GRID_COLUMNS_MIN_WIDTH + Spacing.md)));
   const showMore = state.nextCursor !== null && !activeTag;
@@ -305,6 +331,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         pasteLabel={showPaste ? t('pasteNItems', { count: clip!.paths.length }) : undefined}
       />
       <ViewOptionsSheet visible={viewOpen} onClose={() => setViewOpen(false)} gridView={view.gridView} density={view.density} sort={view.sort} showHidden={state.showHidden} hiddenCount={hiddenCount} onToggleShowHidden={ex.toggleShowHidden} />
+      <CommandPalette visible={paletteOpen} actions={paletteActions} onClose={() => setPaletteOpen(false)} />
       <BatchRenameSheet
         visible={renameOpen}
         names={selectedPaths.map(basenameOf)}

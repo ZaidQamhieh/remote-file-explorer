@@ -8,15 +8,29 @@ import { AppBar, EmptyState, GroupedCard, Pressable, SectionLabel, Text, useToas
 import { useScheme } from '../../design/theme';
 import { Brand, FontFamily, Spacing } from '../../design/tokens';
 import { externalMime } from '../../features/preview/externalFiles';
+import { etaSeconds, formatEta, formatSpeed, SpeedTracker } from '../../features/transfers/speedTracker';
 import { groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
 
 /** Every transfer the native engine knows: running and paused first, then failures, then finished ones. */
 export default function Transfers() {
   const [items, setItems] = useState<TransferRecord[] | null>(null);
+  const [speeds, setSpeeds] = useState<Record<string, number>>({});
   useEffect(() => {
     let live = true;
+    const tracker = new SpeedTracker();
     void transfers.list().then((l) => live && setItems(l));
-    const off = transfers.subscribe((r) => setItems((cur) => [...(cur ?? []).filter((x) => x.id !== r.id), r]));
+    const off = transfers.subscribe((r) => {
+      const speed = tracker.sample(r.id, r.received, r.state === 'RUNNING');
+      setSpeeds((cur) => {
+        if (speed === null) {
+          if (!(r.id in cur)) return cur;
+          const { [r.id]: _gone, ...rest } = cur;
+          return rest;
+        }
+        return { ...cur, [r.id]: speed };
+      });
+      setItems((cur) => [...(cur ?? []).filter((x) => x.id !== r.id), r]);
+    });
     return () => {
       live = false;
       off();
@@ -38,7 +52,7 @@ export default function Transfers() {
         <EmptyState message="No transfers yet" />
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>
-          <Group title="Active" rows={groups.active} onForget={forget} />
+          <Group title="Active" rows={groups.active} speeds={speeds} onForget={forget} />
           <Group title="Failed" rows={groups.failed} onForget={forget} />
           <Group
             title="Finished"
@@ -52,14 +66,14 @@ export default function Transfers() {
   );
 }
 
-function Group({ title, rows, trailing, onForget }: { title: string; rows: TransferRecord[]; trailing?: React.ReactNode; onForget: (rs: TransferRecord[]) => Promise<void> }) {
+function Group({ title, rows, trailing, speeds, onForget }: { title: string; rows: TransferRecord[]; trailing?: React.ReactNode; speeds?: Record<string, number>; onForget: (rs: TransferRecord[]) => Promise<void> }) {
   if (rows.length === 0) return null;
   return (
     <View>
       <SectionLabel title={`${title} · ${rows.length}`} trailing={trailing} />
       <View style={{ gap: Spacing.sm }}>
         {rows.map((r) => (
-          <Row key={r.id} r={r} onForget={() => onForget([r])} />
+          <Row key={r.id} r={r} speed={speeds?.[r.id]} onForget={() => onForget([r])} />
         ))}
       </View>
     </View>
@@ -75,7 +89,7 @@ function TextAction({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
+function Row({ r, speed, onForget }: { r: TransferRecord; speed?: number; onForget: () => void }) {
   const c = useScheme();
   const toast = useToast();
   const openable = r.state === 'DONE' && !!r.publicUri;
@@ -92,7 +106,7 @@ function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
     : r.state === 'CANCELLED' ? 'Cancelled'
     : r.state === 'PAUSED' ? `Paused${r.total > 0 ? ` · ${formatSize(r.received)} of ${formatSize(r.total)}` : ''}`
     : r.state === 'QUEUED' ? 'Waiting'
-    : r.total > 0 ? `${formatSize(r.received)} of ${formatSize(r.total)}` : r.received > 0 ? formatSize(r.received) : up ? 'Preparing' : 'Starting';
+    : r.total > 0 ? `${formatSize(r.received)} of ${formatSize(r.total)}${runningPace(r, speed)}` : r.received > 0 ? formatSize(r.received) : up ? 'Preparing' : 'Starting';
 
   return (
     <GroupedCard>
@@ -121,6 +135,13 @@ function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
       </View>
     </GroupedCard>
   );
+}
+
+/** ' · 3.2 MB/s · 12 s left' once a speed estimate exists. */
+function runningPace(r: TransferRecord, speed?: number): string {
+  if (speed === undefined) return '';
+  const eta = etaSeconds(r.total, r.received, speed);
+  return ` · ${formatSpeed(speed)}${eta === null ? '' : ` · ${formatEta(eta)} left`}`;
 }
 
 function IconAction({ Icon, label, onPress }: { Icon: LucideIcon; label: string; onPress: () => void }) {

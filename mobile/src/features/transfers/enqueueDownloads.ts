@@ -17,7 +17,11 @@ export async function enqueueDownloads(host: Host, paths: string[]): Promise<voi
   const address = (await clientForHost(host)).activeAddress ?? host.address;
   for (const p of paths) {
     const name = p.split(/[/\\]/).pop() || 'file';
-    const dest = decodeURIComponent(new File(dir, name).uri.replace('file://', ''));
-    await transfers.enqueue(newTransferId(), host.id, address, p, dest);
+    // A folder per transfer keeps the file's own name while two downloads of one file never share a partial file.
+    const id = newTransferId();
+    const own = new Directory(dir, id);
+    own.create({ idempotent: true, intermediates: true });
+    const dest = decodeURIComponent(new File(own, name).uri.replace('file://', ''));
+    await transfers.enqueue(id, host.id, address, p, dest);
   }
 }

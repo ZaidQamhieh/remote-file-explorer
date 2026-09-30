@@ -183,6 +183,21 @@ class TransferEngineTest {
     }
   }
 
+  @Test fun removesThePerTransferStagingFolderOncePublished() {
+    val pub = TransferEngine(File(dir, "journal-pub3"), creds, timeoutMs = 5000, publisher = { "content://media/external/downloads/7" })
+    try {
+      server.enqueue(full())
+      val folder = File(dir, "p3").also { it.mkdirs() }
+      pub.enqueue("p3", "h", address, "/a.bin", File(folder, "a.bin").path)
+      val end = System.currentTimeMillis() + 10_000
+      while (pub.list().none { it.id == "p3" && it.state == TransferState.DONE } && System.currentTimeMillis() < end) Thread.sleep(20)
+      assertEquals(TransferState.DONE, pub.list().first { it.id == "p3" }.state)
+      assertFalse(folder.exists())
+    } finally {
+      pub.shutdown()
+    }
+  }
+
   @Test fun keepsTheFileInAppStorageWhenPublishingFails() {
     val pub = TransferEngine(File(dir, "journal-pub2"), creds, timeoutMs = 5000, publisher = { null })
     try {

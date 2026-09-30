@@ -139,7 +139,7 @@ class TransferEngine(
 
   fun cancel(id: String) {
     stop(id, TransferState.CANCELLED)
-    records[id]?.let { if (it.isUpload) discardSource(it) else File(it.destPath + ".part").delete() }
+    records[id]?.let { if (it.isUpload) discardSource(it) else dropPartial(it) }
   }
 
   /** Forgets a finished, failed or cancelled transfer (journal entry and any leftover partial); running ones are left alone. */
@@ -150,7 +150,17 @@ class TransferEngine(
     attempts.remove(id)
     futures.remove(id)
     File(dir, "$id.json").delete()
-    if (r.isUpload) discardSource(r) else if (r.state != TransferState.DONE) File(r.destPath + ".part").delete()
+    if (r.isUpload) discardSource(r) else if (r.state != TransferState.DONE) dropPartial(r)
+  }
+
+  private fun dropPartial(r: TransferRecord) {
+    File(r.destPath + ".part").delete()
+    dropStagingDir(File(r.destPath), r.id)
+  }
+
+  /** Each download stages in its own folder named after the transfer, so two downloads of one file never share a `.part`. */
+  private fun dropStagingDir(dest: File, id: String) {
+    dest.parentFile?.takeIf { it.name == id }?.delete()
   }
 
   fun shutdown() {
@@ -258,7 +268,7 @@ class TransferEngine(
         val size = dest.length()
         // Publishing is best effort: if it fails the download simply stays in app storage.
         val published = publisher?.let { p -> runCatching { p(dest) }.getOrNull() }
-        if (published != null) dest.delete()
+        if (published != null) { dest.delete(); dropStagingDir(dest, id) }
         update(r.copy(state = TransferState.DONE, received = size, total = size, error = null, publicUri = published))
       }
     } catch (e: RestartFromZero) {

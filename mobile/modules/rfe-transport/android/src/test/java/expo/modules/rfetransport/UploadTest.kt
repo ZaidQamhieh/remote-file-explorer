@@ -51,6 +51,9 @@ class UploadTest {
     var corruptOnce = -1
     var completed = false
     var lastOverwrite = false
+    @Volatile var putDelayMs = 0L
+    val inFlight = java.util.concurrent.atomic.AtomicInteger(0)
+    val maxInFlight = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun json(status: Int, body: String) = MockResponse().setResponseCode(status).setBody(body)
     private fun err(status: Int, code: String) = json(status, """{"code":"$code","message":"x"}""")
@@ -70,6 +73,9 @@ class UploadTest {
         request.method == "PUT" && path.startsWith("/v1/transfers/s1/chunks/") -> {
           val n = path.substringAfterLast('/').toInt()
           putCount.merge(n, 1, Int::plus)
+          val now = inFlight.incrementAndGet()
+          maxInFlight.accumulateAndGet(now, ::maxOf)
+          try { if (putDelayMs > 0) Thread.sleep(putDelayMs) } finally { inFlight.decrementAndGet() }
           if (n == failChunk) return err(403, "FORBIDDEN")
           val body = request.body.readByteArray()
           val claimed = request.getHeader("X-Chunk-Sha256")
@@ -140,13 +146,22 @@ class UploadTest {
     assertEquals("UPLOAD", r.direction)
   }
 
+  @Test fun sendsSeveralChunksAtOnce() {
+    agent.putDelayMs = 150
+    engine.enqueueUpload("u9", "h", address, source().path, "/dest/a.bin", overwrite = false, deleteSource = false)
+    await("u9", TransferState.DONE)
+    assertArrayEquals(payload, agent.assembled())
+    assertTrue("expected concurrent chunk PUTs, saw ${agent.maxInFlight.get()}", agent.maxInFlight.get() >= 2)
+  }
+
   @Test fun resumesFromTheAgentsBitmapWithoutResendingChunks() {
     agent.failChunk = 1
     engine.enqueueUpload("u2", "h", address, source().path, "/dest/a.bin", overwrite = false, deleteSource = false)
     val failed = await("u2", TransferState.FAILED)
     assertEquals("FORBIDDEN", failed.error)
     assertEquals("s1", failed.sessionId)
-    assertEquals(chunk.toLong(), failed.received)
+    // Chunks go out a few at a time, so the last one may already have landed when chunk 1 is refused.
+    assertTrue(failed.received == chunk.toLong() || failed.received == (payload.size - 2 * chunk + chunk).toLong())
     agent.failChunk = -1
     engine.resume("u2")
     await("u2", TransferState.DONE)

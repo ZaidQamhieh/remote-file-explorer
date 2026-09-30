@@ -9,6 +9,10 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** The agent refused the upload with a definite answer; [message] is its API error code (CONFLICT, HASH_MISMATCH...). */
 class UploadRejected(val status: Int, code: String) : IOException(code.ifEmpty { "HTTP $status" })
@@ -29,7 +33,10 @@ class Uploader(
   private val save: (TransferRecord) -> Unit,
   private val chunkSize: Int = 4 * 1024 * 1024,
   private val chunkRetries: Int = 3,
+  private val parallel: Int = 3,
 ) {
+  private val live = ConcurrentHashMap.newKeySet<Call>()
+
   private class Session(val id: String, val chunkSize: Int, val totalChunks: Int, val received: Set<Int>, val open: Boolean)
 
   fun run(start: TransferRecord): TransferRecord {
@@ -48,22 +55,53 @@ class Uploader(
       r = r.copy(sessionId = session.id)
       save(r)
     }
-    var sent = session.received.sumOf { chunkLen(it, size, session.chunkSize, session.totalChunks) }
+    val open = session
+    val base = r
+    var sent = open.received.sumOf { chunkLen(it, size, open.chunkSize, open.totalChunks) }
     r = r.copy(received = sent)
     save(r)
-    RandomAccessFile(src, "r").use { f ->
-      for (n in 0 until session.totalChunks) {
-        if (n in session.received) continue
-        if (stopped()) throw InterruptedException()
-        val len = chunkLen(n, size, session.chunkSize, session.totalChunks).toInt()
-        val buf = ByteArray(len)
-        f.seek(n.toLong() * session.chunkSize)
-        f.readFully(buf)
-        putChunk(r, session.id, n, buf)
-        sent += len
-        r = r.copy(received = sent)
-        save(r)
+    val pending = (0 until open.totalChunks).filter { it !in open.received }
+    val next = AtomicInteger(0)
+    val failure = AtomicReference<Throwable?>(null)
+    val workers = minOf(parallel, pending.size)
+    val pool = Executors.newFixedThreadPool(maxOf(workers, 1))
+    try {
+      // Chunks are independent on the agent (each holds an activity lease), so a few in flight hide round-trip latency.
+      val jobs = (0 until workers).map {
+        pool.submit {
+          RandomAccessFile(src, "r").use { f ->
+            try {
+              while (failure.get() == null) {
+                if (stopped()) throw InterruptedException()
+                val i = next.getAndIncrement()
+                if (i >= pending.size) break
+                val n = pending[i]
+                val len = chunkLen(n, size, open.chunkSize, open.totalChunks).toInt()
+                val buf = ByteArray(len)
+                f.seek(n.toLong() * open.chunkSize)
+                f.readFully(buf)
+                putChunk(base, open.id, n, buf)
+                synchronized(this) {
+                  sent += len
+                  r = r.copy(received = sent)
+                  save(r)
+                }
+              }
+            } catch (e: Throwable) {
+              if (failure.compareAndSet(null, e)) live.forEach { it.cancel() }
+            }
+          }
+        }
       }
+      try {
+        jobs.forEach { it.get() }
+      } catch (e: InterruptedException) {
+        failure.compareAndSet(null, e)
+      }
+      failure.get()?.let { throw it }
+    } finally {
+      live.forEach { it.cancel() }
+      pool.shutdownNow()
     }
     if (stopped()) throw InterruptedException()
     complete(r, session.id)
@@ -103,7 +141,12 @@ class Uploader(
     }
     val call = PinnedHttp.newCall(method, "https://${r.address}/v1$path", headers, body, creds.pin(r.hostId), timeoutMs)
     track(call)
-    call.execute().use { resp -> return Reply(resp.code, resp.body?.string() ?: "") }
+    live.add(call)
+    try {
+      call.execute().use { resp -> return Reply(resp.code, resp.body?.string() ?: "") }
+    } finally {
+      live.remove(call)
+    }
   }
 
   private fun rejected(reply: Reply): Nothing = throw UploadRejected(reply.status, reply.code())

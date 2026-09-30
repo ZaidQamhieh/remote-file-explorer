@@ -91,3 +91,6 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## Not ported yet
 - Sync rules and photo backup need a media permission and MediaStore upload paths that scoped storage makes non-trivial; encrypted backup depends on them. Left for a later slice.
 - `expo-share-intent` throws on a share whose content URI returns no rows (an unreadable or revoked grant) and takes the app down; normal senders grant access, so this is left as is. Verified on the emulator with a MediaStore image: cold start, folder pick, upload, and the keep-both prompt. The camera scan in Receive was not exercised (no camera on the emulator); the QR sheet and the permission screen render.
+
+## Parallel chunk uploads
+- An upload sends up to three chunks at once (Flutter sent one at a time per file). The agent already allows concurrent chunk requests per session; completion waits for all of them. Progress and resume are unchanged: the agent's bitmap decides what is left, so a failed run may leave later chunks already stored. JVM-tested against the fake agent (concurrency asserted); not yet timed on the emulator or a phone.

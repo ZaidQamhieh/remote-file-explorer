@@ -34,6 +34,7 @@ type appRecord struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
+	Category    string `json:"category,omitempty"`
 	Launchable  bool   `json:"launchable"`
 	launchRef   string
 }

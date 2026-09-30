@@ -1,6 +1,6 @@
 import { AgentApiError } from '../../core/api/agentClient';
 import { parseHostAppCatalog } from '../../core/api/models';
-import { filterApps, launchFailure, platformKey, safeIcon } from './appsLogic';
+import { appIconKey, appMeta, filterApps, launchFailure, platformKey, safeIcon } from './appsLogic';
 
 const apps = [
   { id: 'a', name: 'Firefox', launchable: true, description: 'Web browser' },
@@ -37,5 +37,24 @@ describe('apps logic', () => {
     expect(c).toEqual({ platform: 'linux', launchAllowed: false, apps: [{ id: 'x', name: 'Gimp', launchable: true, description: undefined, icon: undefined }] });
     expect(() => parseHostAppCatalog({ apps: [{ id: '', name: 'x' }] })).toThrow();
     expect(() => parseHostAppCatalog({})).toThrow();
+  });
+});
+
+describe('appIconKey and appMeta', () => {
+  it('keeps a drawn icon hint and falls back to the category', () => {
+    expect(appIconKey({ icon: 'terminal', category: 'Development' })).toBe('terminal');
+    expect(appIconKey({ icon: 'firefox', category: 'Internet' })).toBe('browser');
+    expect(appIconKey({ category: 'Development' })).toBe('code');
+    expect(appIconKey({})).toBe('monitor');
+    expect(appIconKey({ category: 'Nonsense' })).toBe('monitor');
+  });
+
+  it('writes Category · ready only when the app can be started now', () => {
+    expect(appMeta({ launchable: true, category: 'Development' }, true)).toBe('Development · ready');
+    expect(appMeta({ launchable: true, category: 'Development' }, false)).toBe('Development');
+    expect(appMeta({ launchable: false, category: 'System' }, true)).toBe('System · Launch not supported');
+    expect(appMeta({ launchable: false }, true)).toBe('Launch not supported');
+    expect(appMeta({ launchable: true }, false)).toBeUndefined();
+    expect(appMeta({ launchable: true, category: 'Media', description: 'Plays things' }, true)).toBe('Plays things');
   });
 });

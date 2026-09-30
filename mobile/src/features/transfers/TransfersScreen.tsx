@@ -13,7 +13,7 @@ import { t } from '../../i18n';
 import { hostStore } from '../../services';
 import { externalMime } from '../preview/externalFiles';
 import { etaSeconds, formatEta, formatSpeed, SpeedTracker } from './speedTracker';
-import { groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferKind, transferName, transferPillLabel, transferProgress, transferSummary, transferTone, type TransferKind } from './transferLogic';
+import { finishedWhen, groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferKind, transferName, transferPillLabel, transferProgress, transferSummary, transferTone, type TransferKind } from './transferLogic';
 
 const GLYPHS: Record<TransferKind['glyph'], LucideIcon> = { image: ImageIcon, video: Video, audio: Music, archive: FileArchive, doc: FileText, file: FileIcon };
 
@@ -162,7 +162,7 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
   const detail = failed
     ? transferErrorMessage(r.error)
     : done
-      ? `${lead}${savedWhere(r)}${place}`
+      ? `${lead}${savedWhere(r)}${place}${finishedWhen(r) ? ` · ${finishedWhen(r)}` : ''}`
       : r.state === 'CANCELLED'
         ? `${lead}Cancelled`
         : paused

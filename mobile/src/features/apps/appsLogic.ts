@@ -55,3 +55,33 @@ export function launchFailure(error: unknown): { key: StringKey; refresh: boolea
       return { key: 'hostAppLaunchFailed', refresh: false };
   }
 }
+
+/** The tile icon: the agent's icon hint when it is one we draw, else one chosen from the app's category, else the generic monitor. */
+export function appIconKey(app: Pick<HostApp, 'icon' | 'category'>): IconKey {
+  const hinted = safeIcon(app.icon);
+  if (hinted !== 'monitor') return hinted;
+  switch (app.category) {
+    case 'Development':
+      return 'code';
+    case 'Internet':
+      return 'browser';
+    case 'Office':
+      return 'office';
+    case 'Media':
+    case 'Graphics':
+    case 'Games':
+      return 'media';
+    case 'System':
+    case 'Utilities':
+      return 'system';
+    default:
+      return 'monitor';
+  }
+}
+
+/** Second line of an app row: its description, else "Category · ready" (ready means it can be started now). */
+export function appMeta(app: Pick<HostApp, 'description' | 'category' | 'launchable'>, launchAllowed: boolean): string | undefined {
+  if (app.description) return app.description;
+  if (!app.launchable) return app.category ? `${app.category} · Launch not supported` : 'Launch not supported';
+  return [app.category, launchAllowed ? 'ready' : undefined].filter(Boolean).join(' · ') || undefined;
+}

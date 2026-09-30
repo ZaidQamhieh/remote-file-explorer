@@ -40,7 +40,7 @@ export function WorkspaceRow({
   const status = st.checking
     ? t('checkingStatus')
     : st.online
-      ? `${route.kind === 'active' ? routeLabel(route.route) : t('onlineStatus')} · connected now`
+      ? `${host.note ? `${host.note} · ` : ''}${route.kind === 'active' ? routeLabel(route.route) : t('onlineStatus')} · connected now`
       : st.lastSeen
         ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) })
         : t('offlineStatus');

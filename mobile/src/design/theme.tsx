@@ -17,6 +17,12 @@ const AMOLED_SURFACES = {
   surfaceContainer: amoledScheme.surfaceContainer,
 } as const;
 
+/** True black only applies to a dark theme: with the light theme chosen (or the system in light) the AMOLED switch does nothing. */
+export function effectiveMode(mode: ThemeMode, amoled: boolean, systemDark: boolean): ThemeMode {
+  if (!amoled || mode === 'light') return mode;
+  return mode === 'dark' || mode === 'amoled' || systemDark ? 'amoled' : mode;
+}
+
 /** [seed] is an ARGB accent; null keeps the hand-picked default schemes. */
 export function resolveScheme(mode: ThemeMode, systemDark: boolean, seed: number | null = null): Scheme {
   if (seed !== null) {
@@ -30,9 +36,12 @@ export function resolveScheme(mode: ThemeMode, systemDark: boolean, seed: number
   return systemDark ? darkScheme : lightScheme;
 }
 
-export function ThemeProvider({ mode = 'system', seed = null, children }: { mode?: ThemeMode; seed?: number | null; children: ReactNode }) {
+export function ThemeProvider({ mode = 'system', amoled = false, seed = null, children }: { mode?: ThemeMode; amoled?: boolean; seed?: number | null; children: ReactNode }) {
   const systemDark = useColorScheme() === 'dark';
-  const value = useMemo(() => ({ scheme: resolveScheme(mode, systemDark, seed), mode }), [mode, systemDark, seed]);
+  const value = useMemo(() => {
+    const effective = effectiveMode(mode, amoled, systemDark);
+    return { scheme: resolveScheme(effective, systemDark, seed), mode: effective };
+  }, [mode, amoled, systemDark, seed]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

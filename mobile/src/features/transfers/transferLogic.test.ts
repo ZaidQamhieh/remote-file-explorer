@@ -1,5 +1,5 @@
 import type { TransferRecord } from '../../core/native';
-import { transferKind, transferPillLabel, transferSummary, transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
+import { finishedWhen, transferKind, transferPillLabel, transferSummary, transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
 
 const rec = (o: Partial<TransferRecord> = {}): TransferRecord => ({ id: 'x', hostId: 'h', address: 'a', remotePath: '/docs/a.txt', destPath: '/tmp/a.txt', state: 'RUNNING', received: 0, total: -1, error: null, ...o });
 
@@ -96,5 +96,15 @@ describe('transfer presentation', () => {
     expect(transferPillLabel(rec())).toBe('Active');
     expect(transferPillLabel(rec({ state: 'PAUSED' }))).toBe('Paused');
     expect(transferPillLabel(rec({ state: 'DONE' }))).toBe('Done');
+  });
+});
+
+describe('finishedWhen', () => {
+  const now = new Date('2026-10-01T12:00:00Z');
+  it('is a relative phrase for a stamped transfer and empty for an old journal', () => {
+    expect(finishedWhen(rec({ updatedAt: now.getTime() - 3 * 60_000 }), now)).not.toBe('');
+    expect(finishedWhen(rec({ updatedAt: now.getTime() - 3 * 60_000 }), now)).toContain('3');
+    expect(finishedWhen(rec({ updatedAt: 0 }), now)).toBe('');
+    expect(finishedWhen(rec(), now)).toBe('');
   });
 });

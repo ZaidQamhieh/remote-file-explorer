@@ -96,6 +96,30 @@ func (o *Ops) Roots() []string {
 
 // --------- Entry type ---------
 
+const (
+	maxCountedDirs = 60   // directories per page that get a childCount
+	maxChildCount  = 1000 // a directory with more items reports this value
+)
+
+// countChildren counts the items directly inside dir through the jailed path, reading at most
+// maxChildCount+1 names. It returns nil when the directory cannot be read.
+func countChildren(dir *securePath) *int {
+	f, err := dir.open()
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(maxChildCount + 1)
+	if err != nil && err != io.EOF {
+		return nil
+	}
+	n := len(names)
+	if n > maxChildCount {
+		n = maxChildCount
+	}
+	return &n
+}
+
 // Entry is the JSON representation of a filesystem item.
 type Entry struct {
 	Name          string    `json:"name"`
@@ -108,6 +132,10 @@ type Entry struct {
 	Created       time.Time `json:"created"`
 	IsSymlink     bool      `json:"isSymlink"`
 	SymlinkTarget string    `json:"symlinkTarget,omitempty"`
+	// ChildCount is the number of items directly inside a directory, capped at
+	// maxChildCount (a capped count means "at least"). Only ListDir fills it, and
+	// only for the first maxCountedDirs directories of a page; nil otherwise.
+	ChildCount *int `json:"childCount,omitempty"`
 }
 
 // Listing is a paginated directory listing.
@@ -183,8 +211,15 @@ func (o *Ops) ListDir(path, cursor string, limit int) (*Listing, error) {
 		end = limit
 	}
 	entries := make([]Entry, 0, end)
+	counted := 0
 	for _, info := range filtered[:end] {
-		entries = append(entries, entryFromSecureInfo(info, resolved.child(info.Name()), true))
+		child := resolved.child(info.Name())
+		e := entryFromSecureInfo(info, child, true)
+		if e.IsDir && !e.IsSymlink && counted < maxCountedDirs {
+			counted++
+			e.ChildCount = countChildren(child)
+		}
+		entries = append(entries, e)
 	}
 	if end < len(filtered) {
 		c := entries[end-1].Name

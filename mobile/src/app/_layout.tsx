@@ -90,11 +90,10 @@ export default function RootLayout() {
   useEffect(() => {
     void ensureBackgroundTask();
   }, []);
-  const mode = settings.amoledDark ? 'amoled' : settings.themeMode;
   return (
     <ShareIntentProvider>
     <SafeAreaProvider>
-      <ThemeProvider mode={mode} seed={settings.seedColor}>
+      <ThemeProvider mode={settings.themeMode} amoled={settings.amoledDark} seed={settings.seedColor}>
         <ToastProvider>
           <DialogHost>
             <LockGate>

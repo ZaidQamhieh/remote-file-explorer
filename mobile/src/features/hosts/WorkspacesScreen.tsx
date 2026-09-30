@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Monitor, Network, Pencil, Plug, Plus, QrCode, SlidersHorizontal, Trash2, Zap } from 'lucide-react-native';
+import { Monitor, Network, Pencil, StickyNote, Plug, Plus, QrCode, SlidersHorizontal, Trash2, Zap } from 'lucide-react-native';
 import { useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,6 +50,23 @@ export function WorkspacesScreen() {
     if (active?.host.id === host.id) useActiveHost.getState().setActive({ ...active, host: updated });
     await reload();
   };
+  const editNote = async (host: Host) => {
+    const note = await dialogs.prompt({
+      title: 'Workspace note',
+      description: 'A short label shown under the name, for example "Home office". Kept on this phone only.',
+      initialValue: host.note ?? '',
+      placeholder: 'Note',
+      confirmLabel: t('saveButton'),
+      allowEmpty: true,
+    });
+    if (note === null || note === (host.note ?? '')) return;
+    const { note: _old, ...rest } = host;
+    const updated: Host = note === '' ? rest : { ...rest, note };
+    await hostStore.updateHost(updated);
+    const active = useActiveHost.getState().active;
+    if (active?.host.id === host.id) useActiveHost.getState().setActive({ ...active, host: updated });
+    await reload();
+  };
   const forget = async (host: Host) => {
     const ok = await dialogs.confirm({ title: t('forgetComputerTitle'), description: t('forgetComputerConfirm', { hostLabel: host.label }), confirmLabel: t('forgetButton'), cancelLabel: t('cancelButton'), destructive: true });
     if (!ok) return;
@@ -69,6 +86,7 @@ export function WorkspacesScreen() {
     { key: 'connection', label: 'Connection', icon: Plug, onPress: () => hostRoute(host, '/host/[id]/connect') },
     ...(host.macAddress ? [{ key: 'wol', label: 'Wake on LAN', icon: Zap, onPress: () => void wake(host) }] : []),
     { key: 'rename', label: t('renameButton'), icon: Pencil, onPress: () => void rename(host) },
+    { key: 'note', label: host.note ? 'Edit note' : 'Add note', icon: StickyNote, onPress: () => void editNote(host) },
     { key: 'forget', label: t('forgetComputerMenuItem'), icon: Trash2, destructive: true, onPress: () => void forget(host) },
   ];
 

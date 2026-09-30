@@ -96,7 +96,7 @@ function HomeHost({ host, onChanged }: { host: Host; onChanged: () => void }) {
   const readOnly = online && health?.readOnly === true;
   const lowDisk = online && lowDiskThresholdBytes > 0 && (st.drives ?? []).some((d) => d.freeBytes != null && d.freeBytes < lowDiskThresholdBytes);
   const version = health?.version?.trim() ? `v${health.version.trim()}` : '';
-  const status = checking ? t('checkingStatus') : online ? [version, 'Connected securely'].filter(Boolean).join(' · ') : st.lastSeen ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) }) : t('offlineStatus');
+  const status = checking ? t('checkingStatus') : online ? [host.note, version, 'Connected securely'].filter(Boolean).join(' · ') : st.lastSeen ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) }) : t('offlineStatus');
 
   const wake = async () => {
     if (!host.macAddress) return;

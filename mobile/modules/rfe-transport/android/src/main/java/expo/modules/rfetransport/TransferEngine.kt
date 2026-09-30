@@ -31,6 +31,8 @@ data class TransferRecord(
   val deleteSource: Boolean = false,
   /** Downloads only: content URI of the copy published to the shared Downloads folder, when there is one. */
   val publicUri: String? = null,
+  /** Epoch millis of the last journal write; for a finished transfer, when it finished. 0 in journals written before this field. */
+  val updatedAt: Long = 0,
 ) {
   val isUpload get() = direction == "UPLOAD"
 
@@ -40,7 +42,7 @@ data class TransferRecord(
     .put("error", error ?: JSONObject.NULL).put("direction", direction)
     .put("sessionId", sessionId ?: JSONObject.NULL).put("sha256", sha256 ?: JSONObject.NULL)
     .put("overwrite", overwrite).put("deleteSource", deleteSource)
-    .put("publicUri", publicUri ?: JSONObject.NULL)
+    .put("publicUri", publicUri ?: JSONObject.NULL).put("updatedAt", updatedAt)
 
   companion object {
     fun fromJson(j: JSONObject) = TransferRecord(
@@ -52,6 +54,7 @@ data class TransferRecord(
       if (j.isNull("sha256")) null else j.optString("sha256"),
       j.optBoolean("overwrite", false), j.optBoolean("deleteSource", false),
       if (j.isNull("publicUri")) null else j.optString("publicUri"),
+      j.optLong("updatedAt", 0),
     )
   }
 }
@@ -305,7 +308,8 @@ class TransferEngine(
     else -> e.message ?: e.javaClass.simpleName
   }
 
-  private fun update(r: TransferRecord): TransferRecord {
+  private fun update(next: TransferRecord): TransferRecord {
+    val r = next.copy(updatedAt = System.currentTimeMillis())
     records[r.id] = r
     persist(r)
     onChange(r)

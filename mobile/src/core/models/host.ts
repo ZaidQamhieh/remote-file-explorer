@@ -18,6 +18,8 @@ export type Host = {
   /** Owner-configured public HTTPS authority; scheme is always added by the app. */
   internetAddress?: string;
   macAddress?: string;
+  /** Owner-written label shown under the name (e.g. "Home office"); kept on this phone only. */
+  note?: string;
 };
 
 const OPTIONAL_FIELDS = [
@@ -26,6 +28,7 @@ const OPTIONAL_FIELDS = [
   'tailscaleAddress',
   'internetAddress',
   'macAddress',
+  'note',
 ] as const;
 
 /** Parses one stored record; returns null for corrupt entries so one bad record never hides the list. */

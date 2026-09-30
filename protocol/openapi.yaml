@@ -1948,6 +1948,9 @@ components:
         icon:
           type: string
           description: Optional safe icon theme name; local icon paths are omitted.
+        category:
+          type: string
+          description: Optional short category label (Development, Internet, Office, Media, Graphics, Games, System, Utilities) from the desktop entry; omitted when unknown.
     AgentSettings:
       type: object
       properties:
@@ -2231,6 +2234,9 @@ components:
         created: { type: string, format: date-time }
         isSymlink: { type: boolean }
         symlinkTarget: { type: string, description: "Absolute path the symlink points to (only present when isSymlink is true)" }
+        childCount:
+          type: integer
+          description: Items directly inside a directory, capped at 1000 (1000 means "at least 1000"). Present only in listings, for at most 60 directories per page, and omitted when the directory cannot be read.
 
     Listing:
       type: object

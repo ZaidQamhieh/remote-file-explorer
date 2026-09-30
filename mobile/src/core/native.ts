@@ -39,6 +39,8 @@ export type TransferRecord = {
   overwrite?: boolean;
   /** Downloads: MediaStore URI of the copy in the shared Downloads folder, when it was published. */
   publicUri?: string | null;
+  /** Epoch millis of the last journal write; for a finished transfer, when it finished. Absent or 0 in older journals. */
+  updatedAt?: number;
 };
 
 const parseRecord = (s: string) => JSON.parse(s) as TransferRecord;

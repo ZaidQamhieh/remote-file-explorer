@@ -72,6 +72,8 @@ export type Entry = {
   created?: string;
   isSymlink: boolean;
   symlinkTarget?: string;
+  /** Items directly inside a folder, capped at 1000 by the agent; only present in listings. */
+  childCount?: number;
 };
 
 export const parseEntry = (j: Json): Entry => ({
@@ -85,6 +87,7 @@ export const parseEntry = (j: Json): Entry => ({
   created: str(j.created),
   isSymlink: bool(j.isSymlink, false),
   symlinkTarget: str(j.symlinkTarget),
+  childCount: num(j.childCount),
 });
 
 export type Listing = { path: string; entries: Entry[]; nextCursor?: string };
@@ -258,7 +261,7 @@ export const parseAuditEntry = (j: Json): AuditEntry => {
 };
 
 /** One launchable entry of a host's app catalog. `id` is opaque and server-issued: never a path or command line. */
-export type HostApp = { id: string; name: string; launchable: boolean; description?: string; icon?: string };
+export type HostApp = { id: string; name: string; launchable: boolean; description?: string; icon?: string; category?: string };
 export type HostAppCatalog = { platform: string; apps: HostApp[]; launchAllowed: boolean };
 
 export const parseHostAppCatalog = (j: Json): HostAppCatalog => {
@@ -268,7 +271,7 @@ export const parseHostAppCatalog = (j: Json): HostAppCatalog => {
     const name = str(a.name);
     if (!id || !name || name.trim() === '') throw new Error('Invalid host app catalog entry.');
     // Older agents listed only apps they could launch.
-    return { id, name, launchable: bool(a.launchable, true), description: str(a.description), icon: str(a.icon) };
+    return { id, name, launchable: bool(a.launchable, true), description: str(a.description), icon: str(a.icon), category: str(a.category) };
   });
   // A missing flag from an older agent means launching is off, the safe reading.
   return { platform: str(j.platform) ?? '', apps, launchAllowed: bool(j.launchAllowed, false) };

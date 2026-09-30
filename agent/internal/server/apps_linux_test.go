@@ -249,3 +249,20 @@ func TestLaunchAppHandlerRejectsDiscoveredNonLaunchableEntry(t *testing.T) {
 		t.Fatalf("non-launchable audit = (%+v, %v)", entries, err)
 	}
 }
+
+func TestDesktopCategory(t *testing.T) {
+	cases := map[string]string{
+		"Development;IDE;":                "Development",
+		"Utility;TextEditor;Development;": "Development",
+		"Network;WebBrowser;":             "Internet",
+		"AudioVideo;Player;":              "Media",
+		"System;TerminalEmulator;":        "System",
+		"X-Custom;":                       "",
+		"":                                "",
+	}
+	for in, want := range cases {
+		if got := desktopCategory(in); got != want {
+			t.Errorf("desktopCategory(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

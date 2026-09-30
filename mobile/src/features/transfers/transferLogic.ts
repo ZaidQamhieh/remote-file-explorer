@@ -1,6 +1,7 @@
 import { archiveExtensions, audioExtensions, docExtensions, imageExtensions, videoExtensions, type EntryRole } from '../../core/entryCategory';
 import type { TransferRecord } from '../../core/native';
 import { basenameOf } from '../explorer/paths';
+import { relativeLabel } from '../hosts/relative';
 
 export const isUpload = (r: TransferRecord) => r.direction === 'UPLOAD';
 
@@ -18,6 +19,11 @@ export function transferProgress(r: TransferRecord): number | null {
 export function savedWhere(r: TransferRecord): string {
   if (isUpload(r)) return 'Uploaded';
   return r.publicUri ? 'Saved to Downloads' : 'Saved in app storage';
+}
+
+/** When a finished transfer completed, as a relative phrase ("3 minutes ago"); empty for journals that predate the timestamp. */
+export function finishedWhen(r: TransferRecord, now: Date = new Date()): string {
+  return r.updatedAt && r.updatedAt > 0 ? relativeLabel(new Date(r.updatedAt), now) : '';
 }
 
 export const isActive = (r: TransferRecord) => r.state === 'RUNNING' || r.state === 'QUEUED';

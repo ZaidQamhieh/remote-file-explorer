@@ -2,7 +2,7 @@ import { Check, ChevronRight, Pin as PinIcon, Star } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import type { Entry } from '../../core/api/models';
-import { formatDate, formatSize } from '../../core/format';
+import { entryMeta } from './entryMeta';
 import { mix } from '../../design/color';
 import { LumenSize, LumenType } from '../../design/lumen';
 import { Pressable, Text } from '../../design/components';
@@ -12,18 +12,6 @@ import { EntryLeading, useIconChipBg } from './EntryIcon';
 import type { RowShape } from './rowShape';
 import { Thumbnail } from './Thumbnail';
 import type { EntryDensity } from './sort';
-
-/** Second line of a row: size and date for files, "Folder" and its modified date for folders (only what the listing returns). */
-export function entryMeta(e: Entry): string {
-  const parts: string[] = [];
-  if (e.isDir) parts.push('Folder');
-  else {
-    const size = formatSize(e.size);
-    if (size) parts.push(size);
-  }
-  if (e.modified) parts.push(formatDate(new Date(e.modified)));
-  return parts.join('  ·  ');
-}
 
 const TILE = 38;
 

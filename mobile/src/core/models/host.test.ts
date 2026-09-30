@@ -40,3 +40,12 @@ describe('persisted host json', () => {
     expect(hostFromJson('nope')).toBeNull();
   });
 });
+
+describe('host note', () => {
+  it('round-trips through the stored JSON and is optional', () => {
+    const h = { id: 'h', label: 'l', address: '10.0.0.2:8765', note: 'Home office' };
+    expect(hostFromJson(hostToJson(h))).toEqual(h);
+    expect(hostFromJson({ id: 'h', label: 'l', address: 'a' })).toEqual({ id: 'h', label: 'l', address: 'a' });
+    expect(hostToJson({ id: 'h', label: 'l', address: 'a' })).not.toHaveProperty('note');
+  });
+});

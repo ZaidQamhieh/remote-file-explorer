@@ -1302,3 +1302,39 @@ func TestFilterDrivesByRoots(t *testing.T) {
 		t.Fatalf("expected /home/alice and its nested usb mount, got %+v", got)
 	}
 }
+
+// TestListDir_ChildCount verifies directories carry a child count and files do not.
+func TestListDir_ChildCount(t *testing.T) {
+	ops, root := setupJail(t)
+	if err := os.Mkdir(filepath.Join(root, "full"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"1", "2", "3"} {
+		if err := os.WriteFile(filepath.Join(root, "full", n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(root, "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	listing, err := ops.ListDir(root, "", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]*int{}
+	for _, e := range listing.Entries {
+		got[e.Name] = e.ChildCount
+	}
+	if got["full"] == nil || *got["full"] != 3 {
+		t.Fatalf("full: want 3, got %v", got["full"])
+	}
+	if got["empty"] == nil || *got["empty"] != 0 {
+		t.Fatalf("empty: want 0, got %v", got["empty"])
+	}
+	if got["f.txt"] != nil {
+		t.Fatalf("file must have no childCount, got %d", *got["f.txt"])
+	}
+}

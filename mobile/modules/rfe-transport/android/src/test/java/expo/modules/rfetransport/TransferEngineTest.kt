@@ -14,6 +14,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONObject
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -169,6 +170,23 @@ class TransferEngineTest {
   @Test fun rejectsUnsafeTransferIds() {
     org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
       engine.enqueue("../evil", "h", address, "/x", dest("x"))
+    }
+  }
+
+  @Test fun stampsTheTimeAFinishedDownloadCompleted() {
+    val start = System.currentTimeMillis()
+    val eng = TransferEngine(File(dir, "journal-time"), creds, timeoutMs = 5000)
+    try {
+      server.enqueue(full())
+      eng.enqueue("t1", "h", address, "/a.bin", dest("t1.bin"))
+      val end = System.currentTimeMillis() + 10_000
+      while (eng.list().none { it.id == "t1" && it.state == TransferState.DONE } && System.currentTimeMillis() < end) Thread.sleep(20)
+      val r = eng.list().first { it.id == "t1" }
+      assertTrue("updatedAt ${r.updatedAt} should be at or after the start $start", r.updatedAt >= start)
+      assertEquals(r.updatedAt, TransferRecord.fromJson(r.toJson()).updatedAt)
+      assertEquals(0L, TransferRecord.fromJson(JSONObject(r.toJson().toString()).apply { remove("updatedAt") }).updatedAt)
+    } finally {
+      eng.shutdown()
     }
   }
 

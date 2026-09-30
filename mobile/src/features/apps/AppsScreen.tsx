@@ -13,7 +13,7 @@ import { t } from '../../i18n';
 import { clientForHost } from '../../services';
 import { useHostById } from '../hosts/useHostById';
 import { humanizeError } from '../pairing/pairingService';
-import { filterApps, launchFailure, platformKey, safeIcon, type IconKey } from './appsLogic';
+import { appIconKey, appMeta, filterApps, launchFailure, platformKey, type IconKey } from './appsLogic';
 
 const ICONS: Record<IconKey, LucideIcon> = { browser: Globe, code: Code, office: FileText, media: Play, terminal: Terminal, system: Settings, monitor: Monitor };
 
@@ -200,11 +200,11 @@ export function AppsScreen({ hostId, chrome = true }: { hostId: string; chrome?:
 function AppCard({ app, launching, launchAllowed, onRun }: { app: HostApp; launching: boolean; launchAllowed: boolean; onRun: () => void }) {
   const c = useScheme();
   const roles = useRoles();
-  const key = safeIcon(app.icon);
+  const key = appIconKey(app);
   const Icon = ICONS[key];
   const tone = appTone(key, roles, c.onSurfaceVariant);
   const canRun = launchAllowed && app.launchable;
-  const meta = app.description || (!app.launchable ? 'Launch not supported' : undefined);
+  const meta = appMeta(app, launchAllowed);
   return (
     <GroupedCard padded={false} style={{ padding: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

@@ -78,6 +78,7 @@ func listHostApps() (string, []appRecord, error) {
 				ID:         desktopAppID(desktopID),
 				Name:       name,
 				Icon:       icon,
+				Category:   desktopCategory(fields["Categories"]),
 				Launchable: launchable,
 			}
 			if launchable {
@@ -301,4 +302,35 @@ func intersects(a, b []string) bool {
 		}
 	}
 	return false
+}
+
+// desktopCategories maps freedesktop main categories to the short labels the phone shows, in priority order
+// (an app listing both Development and Utility is shown as Development).
+var desktopCategories = []struct{ key, label string }{
+	{"Development", "Development"},
+	{"WebBrowser", "Internet"},
+	{"Network", "Internet"},
+	{"Office", "Office"},
+	{"AudioVideo", "Media"},
+	{"Audio", "Media"},
+	{"Video", "Media"},
+	{"Graphics", "Graphics"},
+	{"Game", "Games"},
+	{"System", "System"},
+	{"Settings", "System"},
+	{"Utility", "Utilities"},
+}
+
+// desktopCategory returns the label for the first matching main category of a Categories= value, or "".
+func desktopCategory(categories string) string {
+	have := map[string]bool{}
+	for _, c := range strings.Split(categories, ";") {
+		have[strings.TrimSpace(c)] = true
+	}
+	for _, c := range desktopCategories {
+		if have[c.key] {
+			return c.label
+		}
+	}
+	return ""
 }

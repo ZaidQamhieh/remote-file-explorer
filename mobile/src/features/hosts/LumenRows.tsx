@@ -145,7 +145,7 @@ export function PermissionRow({ icon: Icon, tone, title, subtitle, right, last, 
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: last ? 0 : 1, borderBottomColor: mix(c.onSurfaceVariant, c.surfaceContainer, 0.16) }}>
       <Icon size={26} color={tone} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={LumenType.rowTitle} numberOfLines={1}>
+        <Text style={LumenType.rowTitle} numberOfLines={2}>
           {title}
         </Text>
         {subtitle ? (

@@ -38,7 +38,9 @@ export function BottomNav({ state, navigation, destinations }: BottomTabBarProps
               }}
               style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2 }}
             >
-              <View style={{ width: PILL_W, height: PILL_H, borderRadius: PILL_H / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? mix(c.primary, c.surfaceContainerLow, 0.16) : 'transparent' }}>
+              <View style={{ width: PILL_W, height: PILL_H, alignItems: 'center', justifyContent: 'center' }}>
+                {/* Always mounted, only opacity changes: on Android a radius is lost when a view's background is swapped or mounted after the first layout. */}
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: PILL_H / 2, backgroundColor: mix(c.primary, c.surfaceContainerLow, 0.16), opacity: selected ? 1 : 0 }} />
                 <Icon size={22} color={tint} />
               </View>
               <Text style={{ fontSize: 12, lineHeight: 16, fontFamily: selected ? 'Inter-SemiBold' : 'Inter-Regular', letterSpacing: 0.3 }} color={tint} numberOfLines={1}>

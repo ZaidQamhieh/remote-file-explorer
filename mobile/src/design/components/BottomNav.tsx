@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Pressable as RNPressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { mix } from '../color';
 import { useScheme } from '../theme';
 import { Text } from './Text';
 
@@ -37,7 +38,7 @@ export function BottomNav({ state, navigation, destinations }: BottomTabBarProps
               }}
               style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2 }}
             >
-              <View style={{ width: PILL_W, height: PILL_H, borderRadius: PILL_H / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? `${c.primary}29` : 'transparent' }}>
+              <View style={{ width: PILL_W, height: PILL_H, borderRadius: PILL_H / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? mix(c.primary, c.surfaceContainerLow, 0.16) : 'transparent' }}>
                 <Icon size={22} color={tint} />
               </View>
               <Text style={{ fontSize: 12, lineHeight: 16, fontFamily: selected ? 'Inter-SemiBold' : 'Inter-Regular', letterSpacing: 0.3 }} color={tint} numberOfLines={1}>

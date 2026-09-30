@@ -25,10 +25,14 @@ describe('footerActions', () => {
     expect(footerActions({ caps: caps(), showPaste: false })).toEqual([]);
   });
 
-  it('clipboard makes Paste primary and keeps the other actions reachable', () => {
+  it('clipboard makes Paste primary when the device may modify', () => {
     expect(keys(footerActions({ caps: caps('upload', 'modify'), showPaste: true }))).toEqual(['paste*', 'new']);
-    expect(keys(footerActions({ caps: caps('upload'), showPaste: true }))).toEqual(['paste*', 'upload']);
-    expect(keys(footerActions({ caps: caps(), showPaste: true }))).toEqual(['paste*']);
+    expect(keys(footerActions({ caps: caps('modify'), showPaste: true }))).toEqual(['paste*', 'new']);
+  });
+
+  it('never offers Paste without modify (the agent would refuse it)', () => {
+    expect(keys(footerActions({ caps: caps('upload'), showPaste: true }))).toEqual(['upload*']);
+    expect(footerActions({ caps: caps(), showPaste: true })).toEqual([]);
   });
 
   it('list padding clears the footer by 8 dp', () => {

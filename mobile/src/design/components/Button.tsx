@@ -7,7 +7,7 @@ import { Brand, Radii, Spacing } from '../tokens';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 
-type Kind = 'gradient' | 'filled' | 'tonal' | 'outlined' | 'text';
+type Kind = 'gradient' | 'filled' | 'tonal' | 'neutral' | 'outlined' | 'text';
 type Props = {
   label: string;
   onPress?: () => void;
@@ -30,7 +30,7 @@ type Props = {
 export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, busy, disabled, style, destructive, size = 'md' }: Props) {
   const c = useScheme();
   const off = disabled || busy;
-  const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : kind === 'tonal' ? c.onSecondaryContainer : destructive ? c.error : c.primary;
+  const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : kind === 'tonal' ? c.onSecondaryContainer : kind === 'neutral' ? c.onSurface : destructive ? c.error : c.primary;
   const inner = (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm }}>
       {busy ? <ActivityIndicator size="small" color={fg} /> : renderIcon ? renderIcon(fg) : icon}
@@ -67,6 +67,7 @@ export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, bu
             { borderRadius: Radii.stadium },
             kind === 'filled' && { backgroundColor: c.primary },
             kind === 'tonal' && { backgroundColor: c.secondaryContainer },
+            kind === 'neutral' && { backgroundColor: c.surfaceContainerHigh },
             kind === 'outlined' && { borderWidth: 1, borderColor: destructive ? c.error : c.outline },
           ]}
         >

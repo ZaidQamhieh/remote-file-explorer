@@ -4,17 +4,17 @@ export type FooterAction = { key: 'paste' | 'upload' | 'new'; primary: boolean }
 
 /**
  * Buttons of the Files footer, in order, gated by the same predicates as the create menu. Primary is Paste while the
- * clipboard holds items from this host, else Upload; "New" (opens the create menu) needs modify. When Paste is primary
- * and the device may upload but not modify, Upload stays reachable as the secondary button.
+ * clipboard holds items from this host and the device may modify, else Upload; "New" (opens the create menu) needs
+ * modify. Paste needs modify, so without it Upload stays primary.
  */
 export function footerActions({ caps, showPaste }: { caps: Record<FileCapability, boolean> | undefined; showPaste: boolean }): FooterAction[] {
   const upload = can(caps, 'upload');
   const modify = can(caps, 'modify');
   const out: FooterAction[] = [];
-  if (showPaste) out.push({ key: 'paste', primary: true });
+  const paste = showPaste && modify; // pasting copies or moves on the host, which needs modify
+  if (paste) out.push({ key: 'paste', primary: true });
   else if (upload) out.push({ key: 'upload', primary: true });
   if (modify) out.push({ key: 'new', primary: out.length === 0 });
-  else if (showPaste && upload) out.push({ key: 'upload', primary: false });
   return out;
 }
 

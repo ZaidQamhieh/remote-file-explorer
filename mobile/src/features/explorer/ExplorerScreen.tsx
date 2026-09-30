@@ -259,7 +259,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const favRow = atRoot(state) ? collections.favorites.filter((f) => f.hostId === host.id) : [];
   const multi = state.selected.size > 0;
   const selectedPaths = useMemo(() => [...state.selected], [state.selected]);
-  const showPaste = clip !== null && clip.paths.length > 0 && clip.hostId === host.id;
+  const showPaste = clip !== null && clip.paths.length > 0 && clip.hostId === host.id && can(caps, 'modify');
   const footerButtons: FooterButton[] = footerActions({ caps, showPaste }).map((a) => ({
     key: a.key,
     primary: a.primary,
@@ -270,7 +270,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const listBottom = !multi && footerButtons.length > 0 ? FOOTER_LIST_PADDING : 0;
 
   const header = multi ? (
-    <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
+    <SelectionAppBar state={state} canModify={can(caps, 'modify')} onClose={ex.clearSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
   ) : (
     <BrowseAppBar
       state={state}

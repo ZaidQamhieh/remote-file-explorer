@@ -57,7 +57,7 @@ export function HostCard({
   const subtitle =
     !online || checking
       ? ''
-      : [health?.version?.trim() ? `v${health.version.trim()}` : '', routeLabel(routeForAddress(host, st.activeAddress ?? host.address))].filter(Boolean).join(' · ');
+      : [health?.version?.trim() ? `v${health.version.trim()}` : ''].filter(Boolean).join(' · ');
   const statusLabel = checking ? t('checkingStatus') : online ? t('onlineStatus') : st.lastSeen ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) }) : t('offlineStatus');
   const statusColor = checking ? c.outline : online ? Brand.online : c.onSurfaceVariant;
   const readOnly = online && health?.readOnly === true;
@@ -81,7 +81,7 @@ export function HostCard({
 
   return (
     <>
-      <View style={{ opacity: online ? 1 : 0.55 }}>
+      <View>
         <Pressable
           onPress={onTap}
           onLongPress={() => setConfirming(true)}

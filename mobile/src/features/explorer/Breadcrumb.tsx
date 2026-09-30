@@ -1,6 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { ChevronRight } from 'lucide-react-native';
+import { useRef } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Menu, Pressable, Text, useToast } from '../../design/components';
@@ -36,6 +37,7 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
   const copyPath = useCopyPath();
   const collapsed = collapsedCrumbIndices(pathStack.length);
   const last = pathStack.length - 1;
+  const scroller = useRef<ScrollView>(null);
 
   const items: React.ReactNode[] = [];
   for (let i = 0; i < pathStack.length; i++) {
@@ -85,7 +87,7 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
     );
   }
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: Spacing.xs, alignItems: 'center' }}>
+    <ScrollView ref={scroller} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: Spacing.xs, alignItems: 'center' }}>
       {items}
     </ScrollView>
   );

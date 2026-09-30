@@ -121,7 +121,7 @@ function Row({ r, speed, onForget }: { r: TransferRecord; speed?: number; onForg
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: FontFamily.semibold }} numberOfLines={1}>{transferName(r)}</Text>
-            <Text muted style={{ fontSize: 12 }} numberOfLines={1}>{failed ? transferErrorMessage(r.error) : status}</Text>
+            <Text muted style={{ fontSize: 12 }} numberOfLines={failed ? 2 : 1}>{failed ? transferErrorMessage(r.error) : status}</Text>
           </View>
           <View style={{ flexDirection: 'row' }}>
             {r.state === 'RUNNING' || r.state === 'QUEUED' ? <IconAction Icon={Pause} label="Pause" onPress={() => void transfers.pause(r.id)} /> : null}

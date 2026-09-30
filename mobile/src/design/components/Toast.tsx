@@ -56,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           accessibilityLiveRegion="polite"
           style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 12, opacity }}
         >
-          <View style={{ backgroundColor: bg, borderRadius: Radii.card - 4, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View pointerEvents={msg.retry ? 'auto' : 'none'} style={{ backgroundColor: bg, borderRadius: Radii.card - 4, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Icon size={20} color={fg} />
             <Text style={{ flex: 1 }} color={fg}>
               {msg.text}

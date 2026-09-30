@@ -62,8 +62,8 @@ export function BrowseAppBar({
 
 /** Contextual app bar while items are selected. */
 export function SelectionAppBar({
-  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails,
-}: { state: ExplorerState; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
+  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails, canModify = true,
+}: { state: ExplorerState; canModify?: boolean; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
   const c = useScheme();
   const insets = useSafeAreaInsets();
   const all = state.entries.length > 0 && state.selected.size === state.entries.length;
@@ -71,14 +71,14 @@ export function SelectionAppBar({
     <View style={{ paddingTop: insets.top, backgroundColor: c.surface }}>
       <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
         <AppBarIconButton label={t('clearSelectionTooltip')} onPress={onClose}><X size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-        <Text variant="screenTitle" style={{ flex: 1 }} accessibilityRole="header">{t('nSelected', { count: state.selected.size })}</Text>
+        <Text variant="screenTitle" numberOfLines={1} style={{ flex: 1 }} accessibilityRole="header">{t('nSelected', { count: state.selected.size })}</Text>
         {state.selected.size === 1 && (
           <>
             <AppBarIconButton label={t('detailsButton')} onPress={onDetails}><Info size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
             <AppBarIconButton label="Bookmark" onPress={onBookmark}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
           </>
         )}
-        <AppBarIconButton label={t('batchRenameTooltip')} onPress={onBatchRename}><FilePen size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
+        {canModify && <AppBarIconButton label={t('batchRenameTooltip')} onPress={onBatchRename}><FilePen size={19} color={c.onSurfaceVariant} /></AppBarIconButton>}
         <AppBarIconButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} onPress={all ? onClearSelection : onSelectAll}>
           {all ? <Square size={19} color={c.onSurfaceVariant} /> : <CheckSquare size={19} color={c.onSurfaceVariant} />}
         </AppBarIconButton>
@@ -100,6 +100,8 @@ function BarAction({ label, onPress, children }: { label: string; onPress: () =>
 /** Bottom action bar for the current selection: cut, copy, compress, download, delete. */
 export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onDelete, caps }: { count: number; onCut: () => void; onCopy: () => void; onCompress: () => void; onDownload: () => void; onDelete: () => void; caps?: Record<FileCapability, boolean> }) {
   const c = useScheme();
+  // Nothing the device may do with a selection: no empty strip.
+  if (!can(caps, 'modify') && !can(caps, 'download') && !can(caps, 'delete')) return null;
   // Sits above the tab bar, which already owns the bottom inset.
   return (
     <View style={{ backgroundColor: c.surfaceContainerHigh, borderTopWidth: 1, borderColor: c.outlineVariant }}>

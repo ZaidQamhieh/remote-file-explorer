@@ -15,7 +15,7 @@ export function ActionFooter({ buttons }: { buttons: FooterButton[] }) {
   return (
     <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: c.surface }}>
       {buttons.map((b) => (
-        <Button key={b.key} size="lg" kind={b.primary ? 'filled' : 'tonal'} label={b.label} onPress={b.onPress} renderIcon={b.renderIcon} style={{ flex: lone ? 1 : b.primary ? 3 : 2 }} />
+        <Button key={b.key} size="lg" kind={b.primary ? 'filled' : 'neutral'} label={b.label} onPress={b.onPress} renderIcon={b.renderIcon} style={{ flex: lone ? 1 : b.primary ? 3 : 2 }} />
       ))}
     </View>
   );

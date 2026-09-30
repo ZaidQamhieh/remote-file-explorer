@@ -16,7 +16,8 @@ echo "package $pkg, versionCode $code: ok"
 
 if [ "${1:-}" = "--apk" ]; then
   apk="${2:?usage: check-app-identity.sh --apk <file.apk>}"
-  : "${EXPECTED_SIGNING_SHA256:?set EXPECTED_SIGNING_SHA256 to the release key SHA-256 (hex, no colons)}"
+  # The production key that signed the Flutter releases (public certificate digest, not a secret).
+  : "${EXPECTED_SIGNING_SHA256:=40b844896859aac22c43c65c5a50787374c7e6c89c29892262b373aad2e878e9}"
   apksigner=$(ls "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner | sort -V | tail -1)
   actual=$("$apksigner" verify --print-certs "$apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | tr -d ':' | tr 'A-F' 'a-f')
   [ "$actual" = "$(echo "$EXPECTED_SIGNING_SHA256" | tr -d ':' | tr 'A-F' 'a-f')" ] || { echo "signing certificate $actual does not match the expected release key"; exit 1; }

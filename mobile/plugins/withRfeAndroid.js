@@ -1,6 +1,9 @@
 // Reproducible native config for the RFE Android build (CNG; android/ is never hand-edited).
 //  - RFE_DEBUG_KEYSTORE=<path>: sign debug/rehearsal builds with an existing keystore, so an
 //    RN build can be installed over the Flutter debug build (same package + signature).
+//  - RFE_RELEASE_KEYSTORE=<path> with RFE_RELEASE_STOREPASS_FILE=<path to a file holding the password> (and optionally
+//    RFE_RELEASE_KEY_ALIAS, default "upload"): sign the release variant with the production key. The password is read
+//    by Gradle at build time; it is never written into the generated project.
 //  - RFE_TEST_BUILD=1: make the release variant debuggable for `adb run-as` verification.
 //    Never set for real releases.
 //  - Network security config identical to the Flutter app's: cleartext is refused app-wide except
@@ -26,6 +29,24 @@ function withSigningAndDebuggable(config) {
     const ks = process.env.RFE_DEBUG_KEYSTORE;
     if (ks) {
       g = g.replace(/storeFile file\('debug\.keystore'\)/, `storeFile file(${JSON.stringify(ks)})`);
+    }
+    const relKs = process.env.RFE_RELEASE_KEYSTORE;
+    const relPass = process.env.RFE_RELEASE_STOREPASS_FILE;
+    if (relKs && relPass) {
+      const alias = process.env.RFE_RELEASE_KEY_ALIAS || 'upload';
+      const block = `        release {
+            storeFile file(${JSON.stringify(relKs)})
+            storePassword new File(${JSON.stringify(relPass)}).text.trim()
+            keyAlias ${JSON.stringify(alias)}
+            keyPassword new File(${JSON.stringify(relPass)}).text.trim()
+        }
+`;
+      if (!/signingConfigs \{/.test(g)) throw new Error('withRfeAndroid: no signingConfigs block to extend');
+      g = g.replace(/(signingConfigs \{\n)/, `$1${block}`);
+      // The release build type ships with the debug config in the Expo template; point it at the production key.
+      g = g.replace(/(buildTypes \{[\s\S]*?release \{[\s\S]*?)signingConfig signingConfigs\.debug/, '$1signingConfig signingConfigs.release');
+    } else if (relKs || relPass) {
+      throw new Error('withRfeAndroid: set both RFE_RELEASE_KEYSTORE and RFE_RELEASE_STOREPASS_FILE');
     }
     if (process.env.RFE_TEST_BUILD === '1' && !g.includes('debuggable true')) {
       g = g.replace(/(\n\s*release \{\n)/, '$1            debuggable true\n');

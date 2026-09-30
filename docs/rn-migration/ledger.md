@@ -163,7 +163,11 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - The web companion (`agent/internal/webui`) is out of scope for this migration: the owner is taking it in a new direction. No work is planned on it here, and the code is left untouched. Consequences: pair requests are answered with the desktop notification or `rfe-agent pair accept|reject`; the photo backup folder and device permissions are set with the CLI (`rfe-agent allow`) or the agent's config until the new direction lands.
 
 ## Still needs a physical phone (recorded, not verified)
-- Camera QR scan (pairing and hand-off) and LAN discovery (mDNS): the emulator has no virtual scene set up and its NAT drops multicast.
+- Camera QR scan on a real camera and LAN discovery (mDNS): the emulator's NAT drops multicast. QR decoding itself is verified on the emulator's virtual-scene camera (see below).
 - Secure-storage migration on a production Flutter install (needs the owner's signed Flutter build and its data; the reader is the same plugin code, JVM- and emulator-tested on fresh data only).
 - Scroll, thumbnail-memory and throughput comparison against Flutter, and per-OEM device walkthroughs: emulator numbers are not comparable to a phone, and no Flutter build was installed for a side by side.
 - Real Wi-Fi to cellular handover and OEM background-kill behavior.
+
+## QR scan and Approve click (emulator / stub)
+- QR scan: emulator `rfe_test` with `hw.camera.back = virtualscene`, the pairing QR (address 10.0.2.2, scratch agent) as the scene's wall poster, camera moved with the emulator gRPC `setPhysicalModel` (POSITION/ROTATION). The scanner decoded it and the app paired ("Paired with qr-scratch", host online). Real-camera scan on the phone is the owner's to do.
+- Approve click: `contract/fake_notification_server.py` stands in for the notification service on a private D-Bus and answers the agent's Approve action, so the agent's click handling and pairing completion are tested (`RFE_NOTIFY_STUB=1`). A real click on the Plasma notification is still unverified.

@@ -362,4 +362,15 @@ live('agent contract (approve-on-computer pairing)', () => {
     await expect(paired).rejects.toBeInstanceOf(PairRejected);
     expect(await store.listHosts()).toEqual([]);
   });
+
+  // Needs a notification service that presses Approve: run the suite under `dbus-run-session` with
+  // contract/fake_notification_server.py started on that private bus, and RFE_NOTIFY_STUB=1.
+  const stubbed = process.env.RFE_NOTIFY_STUB === '1' ? it : it.skip;
+  stubbed('pressing Approve in the desktop notification completes pairing', async () => {
+    const { store, deps: d } = deps();
+    const h = await requestPairing(d, a.address);
+    const host = await awaitPairing(d, h, { intervalMs: 100 });
+    expect(await store.getToken(host.id)).toBeTruthy();
+    expect(cli('requests').stdout).not.toContain(h.matchCode);
+  }, 20_000);
 });

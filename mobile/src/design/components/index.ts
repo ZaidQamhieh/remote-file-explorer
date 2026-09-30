@@ -1,3 +1,5 @@
+export { ActionFooter, type FooterButton } from './ActionFooter';
+export { ActionTile } from './ActionTile';
 export { Button } from './Button';
 export { GroupedCard, SectionLabel } from './Card';
 export { Pressable } from './Pressable';

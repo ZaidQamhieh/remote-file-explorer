@@ -91,7 +91,7 @@ export function SelectionAppBar({
 
 function BarAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
   return (
-    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} hitSlop={4} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
       {children}
     </Pressable>
   );

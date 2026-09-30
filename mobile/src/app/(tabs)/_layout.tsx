@@ -1,4 +1,4 @@
-import { Redirect, Tabs, useRouter } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Activity, Database, Folder, FolderOpen, Settings } from 'lucide-react-native';
 
 import { BottomNav, type NavDestination } from '../../design/components/BottomNav';
@@ -16,7 +16,6 @@ const DESTINATIONS: NavDestination[] = [
 ];
 
 export default function TabsLayout() {
-  const router = useRouter();
   const c = useScheme();
   // null while the first-run flag is read; a fresh install is sent to the pager before it sees any tab.
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
@@ -31,7 +30,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       backBehavior="initialRoute"
-      tabBar={(p) => <BottomNav {...p} destinations={DESTINATIONS} onAdd={() => router.push('/pair')} />}
+      tabBar={(p) => <BottomNav {...p} destinations={DESTINATIONS} />}
       screenOptions={{ headerStyle: { backgroundColor: c.surface }, headerTintColor: c.onSurface, headerShadowVisible: false, sceneStyle: { backgroundColor: c.surface } }}
     >
       {DESTINATIONS.map((d) => (

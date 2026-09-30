@@ -4,11 +4,10 @@ import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from '
 
 import { can, type Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
-import { EmptyState, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
-import { Plus, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ActionFooter, EmptyState, type FooterButton, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
+import { ClipboardPaste, Plus, Upload, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
 import { useScheme } from '../../design/theme';
-import { Brand, Spacing } from '../../design/tokens';
+import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { isPinned, useCollections } from '../../state/collections';
 import { useSettings } from '../../state/settings';
@@ -24,6 +23,7 @@ import { BrowseAppBar, SelectionAppBar, SelectionBar, type OverflowAction } from
 import { BatchRenameSheet } from './BatchRenameSheet';
 import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { CreateMenu } from './CreateMenu';
+import { FOOTER_LIST_PADDING, footerActions } from './footerLogic';
 import { EntryGridCell } from './EntryGridCell';
 import { EntryTile } from './EntryTile';
 import { MetaSheet } from './MetaSheet';
@@ -260,6 +260,14 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const multi = state.selected.size > 0;
   const selectedPaths = useMemo(() => [...state.selected], [state.selected]);
   const showPaste = clip !== null && clip.paths.length > 0 && clip.hostId === host.id;
+  const footerButtons: FooterButton[] = footerActions({ caps, showPaste }).map((a) => ({
+    key: a.key,
+    primary: a.primary,
+    label: a.key === 'paste' ? t('pasteNItems', { count: clip?.paths.length ?? 0 }) : a.key === 'upload' ? t('uploadFileTooltip') : t('newButton'),
+    onPress: a.key === 'paste' ? () => void actions.paste() : a.key === 'upload' ? () => void actions.upload() : () => setCreateOpen(true),
+    renderIcon: (k: string) => (a.key === 'paste' ? <ClipboardPaste size={18} color={k} /> : a.key === 'upload' ? <Upload size={18} color={k} /> : <Plus size={18} color={k} />),
+  }));
+  const listBottom = !multi && footerButtons.length > 0 ? FOOTER_LIST_PADDING : 0;
 
   const header = multi ? (
     <SelectionAppBar state={state} onClose={ex.clearSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
@@ -310,7 +318,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         key={`grid${columns}`}
         {...common}
         numColumns={columns}
-        contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md }}
+        contentContainerStyle={{ padding: Spacing.md, paddingBottom: Spacing.md + listBottom, gap: Spacing.md }}
         columnWrapperStyle={{ gap: Spacing.md }}
         renderItem={({ item }) => (
           <View style={{ flex: 1, opacity: hidden.has(item.path) ? 0.55 : 1 }}>
@@ -322,7 +330,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
       <FlatList
         key="list"
         {...common}
-        contentContainerStyle={{ paddingHorizontal: Spacing.md }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: listBottom }}
         ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: c.outlineVariant }} />}
         renderItem={({ item }) => (
           <View style={{ opacity: hidden.has(item.path) ? 0.55 : 1 }}>
@@ -332,6 +340,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
       />
     );
   }
+
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -343,13 +352,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
       {multi ? (
         <SelectionBar count={state.selected.size} onCut={actions.cutSelection} onCopy={actions.copySelection} onCompress={actions.compressSelected} onDownload={downloadSelected} onDelete={actions.confirmDelete} caps={caps} />
       ) : (
-        (can(caps, 'modify') || can(caps, 'upload') || showPaste) && <View style={{ position: 'absolute', right: 16, bottom: 16 }}>
-          <Pressable onPress={() => setCreateOpen(true)} pressedScale={0.92} accessibilityLabel="Create">
-            <LinearGradient colors={[Brand.accent, Brand.accentDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', shadowColor: Brand.accent, shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 8 }}>
-              <Plus size={22} color="#fff" />
-            </LinearGradient>
-          </Pressable>
-        </View>
+        <ActionFooter buttons={footerButtons} />
       )}
       <CreateMenu
         visible={createOpen}

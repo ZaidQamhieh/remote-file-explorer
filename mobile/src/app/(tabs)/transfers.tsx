@@ -1,18 +1,20 @@
 import { ArrowDown, ArrowUp, Pause, Play, RotateCw, Trash2, X, type LucideIcon } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { formatSize } from '../../core/format';
 import { openPublicUri, transfers, type TransferRecord } from '../../core/native';
 import { AppBar, EmptyState, GroupedCard, Pressable, SectionLabel, Text, useToast } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Spacing } from '../../design/tokens';
+import { useRoles, useScheme } from '../../design/theme';
+import { FontFamily, Spacing } from '../../design/tokens';
 import { externalMime } from '../../features/preview/externalFiles';
 import { etaSeconds, formatEta, formatSpeed, SpeedTracker } from '../../features/transfers/speedTracker';
-import { groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
+import { transferTone, groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
 
 /** Every transfer the native engine knows: running and paused first, then failures, then finished ones. */
 export default function Transfers() {
+  const router = useRouter();
   const [items, setItems] = useState<TransferRecord[] | null>(null);
   const [speeds, setSpeeds] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function Transfers() {
     <View style={{ flex: 1 }}>
       <AppBar title="Transfers" subtitle={running > 0 ? `${running} active` : undefined} tall />
       {items === null ? null : items.length === 0 ? (
-        <EmptyState message="No transfers yet" />
+        <EmptyState message="No transfers yet" action={{ label: 'Open Files', onPress: () => router.navigate('/files') }} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>
           <Group title="Active" rows={groups.active} speeds={speeds} onForget={forget} />
@@ -91,6 +93,7 @@ function TextAction({ label, onPress }: { label: string; onPress: () => void }) 
 
 function Row({ r, speed, onForget }: { r: TransferRecord; speed?: number; onForget: () => void }) {
   const c = useScheme();
+  const roles = useRoles();
   const toast = useToast();
   const openable = r.state === 'DONE' && !!r.publicUri;
   const open = async () => {
@@ -100,7 +103,8 @@ function Row({ r, speed, onForget }: { r: TransferRecord; speed?: number; onForg
   const up = isUpload(r);
   const progress = transferProgress(r);
   const failed = r.state === 'FAILED';
-  const tint = failed ? c.error : r.state === 'DONE' ? Brand.online : up ? Brand.accent : c.primary;
+  const tone = transferTone(r.state);
+  const tint = tone === 'error' ? c.error : tone === 'muted' ? c.onSurfaceVariant : roles[tone];
   const status =
     r.state === 'DONE' ? `${savedWhere(r)} · ${formatSize(r.total > 0 ? r.total : r.received)}`
     : r.state === 'CANCELLED' ? 'Cancelled'
@@ -147,7 +151,7 @@ function runningPace(r: TransferRecord, speed?: number): string {
 function IconAction({ Icon, label, onPress }: { Icon: LucideIcon; label: string; onPress: () => void }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} hitSlop={4} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
       <Icon size={18} color={c.onSurfaceVariant} />
     </Pressable>
   );

@@ -9,13 +9,14 @@ import { sendWakeOnLan } from '../../core/native';
 import type { Host, HostRoute } from '../../core/models/host';
 import { routeForAddress } from '../../core/models/host';
 import { usedFraction } from '../../core/storage/usage';
-import { Button, ConfirmDialog, Menu, Pressable, Text, useToast } from '../../design/components';
-import { useScheme } from '../../design/theme';
+import { ActionTile, Button, ConfirmDialog, Menu, Pressable, Text, useToast } from '../../design/components';
+import { useRoles, useScheme } from '../../design/theme';
 import { Brand, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { hostStore } from '../../services';
 import { useActiveHost } from '../../state/activeHost';
 import { useSettings } from '../../state/settings';
+import { hostCardActions } from './hostCardLogic';
 import { relativeLabel } from './relative';
 import { useHostStatus } from './useHostStatus';
 
@@ -40,12 +41,14 @@ export function HostCard({
   onChanged: () => void;
 }) {
   const c = useScheme();
+  const roles = useRoles();
   const router = useRouter();
   const toast = useToast();
   const setActive = useActiveHost((s) => s.setActive);
   const st = useHostStatus(host, onChanged);
   const [confirming, setConfirming] = useState(false);
   const { online, checking, health } = st;
+  const actions = hostCardActions({ online, checking });
   const lowDiskThresholdBytes = useSettings((x) => x.state.app.lowDiskThresholdBytes);
 
   // report resolved status up to the list header
@@ -124,12 +127,12 @@ export function HostCard({
             />
           </View>
           {online && st.drives ? <DriveGauges drives={st.drives} /> : !online && !checking ? <Text variant="bodySmall" muted style={{ marginTop: Spacing.sm }}>Browse cached files while this computer is offline.</Text> : null}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.md }}>
-            <Button kind="filled" disabled={checking} onPress={openExplorer} label={online ? t('openButton') : 'Browse cache'} renderIcon={(k) => <FolderOpen size={18} color={k} />} />
-            <Button kind="tonal" disabled={!online || checking} onPress={() => router.push({ pathname: '/host/[id]/search', params: { id: host.id } })} label={t('searchButton')} renderIcon={(k) => <Search size={18} color={k} />} />
-            <Button kind="tonal" onPress={openTransfers} label={t('transfersMenuItem')} renderIcon={(k) => <ArrowLeftRight size={18} color={k} />} />
-            <Button kind="tonal" onPress={() => router.push({ pathname: '/host/[id]/settings', params: { id: host.id } })} label={t('settingsMenuItem')} renderIcon={(k) => <Settings size={18} color={k} />} />
-            <Button kind="tonal" disabled={!online || checking} onPress={() => router.push({ pathname: '/host/[id]/apps', params: { id: host.id } })} label={t('hostAppsButton')} renderIcon={(k) => <Monitor size={18} color={k} />} />
+          {online && !checking ? <RouteStrip label={routeLabel(routeForAddress(host, st.activeAddress ?? host.address))} color={roles.route} /> : null}
+          <Button size="lg" kind="filled" disabled={!actions.open} onPress={openExplorer} label={online ? t('openButton') : 'Browse cache'} renderIcon={(k) => <FolderOpen size={18} color={k} />} style={{ marginTop: Spacing.md }} />
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm }}>
+            <ActionTile disabled={!actions.search} onPress={() => router.push({ pathname: '/host/[id]/search', params: { id: host.id } })} label={t('searchButton')} renderIcon={() => <Search size={22} color={roles.route} />} />
+            <ActionTile disabled={!actions.transfers} onPress={openTransfers} label={t('transfersMenuItem')} renderIcon={() => <ArrowLeftRight size={22} color={roles.transfer} />} />
+            <ActionTile disabled={!actions.apps} onPress={() => router.push({ pathname: '/host/[id]/apps', params: { id: host.id } })} label={t('hostAppsButton')} renderIcon={() => <Monitor size={22} color={c.primary} />} />
           </View>
         </Pressable>
       </View>
@@ -159,6 +162,18 @@ function useReportedOnline(checking: boolean, online: boolean, cb?: (o: boolean)
     }
   }, [checking, online, cb]);
 
+}
+
+/** Phone ——— route: the live route this card is using. No new data, just the existing route label. */
+function RouteStrip({ label, color }: { label: string; color: string }) {
+  const c = useScheme();
+  return (
+    <View style={{ height: 40, marginTop: Spacing.md, borderRadius: Radii.chip, backgroundColor: c.surfaceContainerHigh, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, gap: Spacing.sm }} accessible accessibilityLabel={`${label} active`}>
+      <Text variant="labelMedium" muted>Phone</Text>
+      <View style={{ flex: 1, height: 2, borderRadius: 1, backgroundColor: color }} />
+      <Text variant="labelMedium" color={color}>{`${label} · active`}</Text>
+    </View>
+  );
 }
 
 /** Mockup 3-dot chip surface (`.flt-orbits`). */

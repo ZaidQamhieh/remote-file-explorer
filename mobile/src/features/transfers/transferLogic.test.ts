@@ -1,5 +1,5 @@
 import type { TransferRecord } from '../../core/native';
-import { groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
+import { transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
 
 const rec = (o: Partial<TransferRecord> = {}): TransferRecord => ({ id: 'x', hostId: 'h', address: 'a', remotePath: '/docs/a.txt', destPath: '/tmp/a.txt', state: 'RUNNING', received: 0, total: -1, error: null, ...o });
 
@@ -59,5 +59,18 @@ describe('saved location', () => {
     expect(savedWhere(rec({ direction: 'UPLOAD' }))).toBe('Uploaded');
     expect(savedWhere(rec({ publicUri: 'content://media/external/downloads/1' }))).toBe('Saved to Downloads');
     expect(savedWhere(rec())).toBe('Saved in app storage');
+  });
+});
+
+describe('transferTone', () => {
+  it.each([
+    ['RUNNING', 'transfer'],
+    ['QUEUED', 'transfer'],
+    ['DONE', 'safe'],
+    ['PAUSED', 'warn'],
+    ['FAILED', 'error'],
+    ['CANCELLED', 'muted'],
+  ] as const)('%s -> %s', (state, tone) => {
+    expect(transferTone(state)).toBe(tone);
   });
 });

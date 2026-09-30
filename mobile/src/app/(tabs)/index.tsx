@@ -115,13 +115,14 @@ export default function Devices() {
   );
 }
 
+/** Tonal, borderless 'Add computer' action. */
 function GhostAdd({ onPress, label }: { onPress: () => void; label: string }) {
   const c = useScheme();
   return (
     <Pressable onPress={onPress} accessibilityLabel={label}>
-      <View style={{ minHeight: 48, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: c.surfaceContainerHigh, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm }}>
-        <Plus size={16} color={c.onSurface} />
-        <Text style={{ fontSize: 13.5, fontFamily: 'Inter-SemiBold' }}>{label}</Text>
+      <View style={{ height: 52, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: 18, backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.sm }}>
+        <Plus size={18} color={c.onSurface} />
+        <Text style={{ fontSize: 14, fontFamily: 'Inter-SemiBold' }}>{label}</Text>
       </View>
     </Pressable>
   );

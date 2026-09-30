@@ -6,7 +6,7 @@ import { Spacing } from '../tokens';
 import { Button } from './Button';
 import { Text } from './Text';
 
-export function EmptyState({ kind = 'emptyFolder', message }: { kind?: 'emptyFolder' | 'noMatches'; message?: string }) {
+export function EmptyState({ kind = 'emptyFolder', message, action }: { kind?: 'emptyFolder' | 'noMatches'; message?: string; action?: { label: string; onPress: () => void } }) {
   const c = useScheme();
   const Icon = kind === 'noMatches' ? FilterX : FolderOpen;
   return (
@@ -15,6 +15,7 @@ export function EmptyState({ kind = 'emptyFolder', message }: { kind?: 'emptyFol
       <Text variant="titleMedium" style={{ textAlign: 'center' }}>
         {message ?? (kind === 'noMatches' ? 'No matches' : 'This folder is empty')}
       </Text>
+      {action ? <Button size="lg" kind="filled" label={action.label} onPress={action.onPress} /> : null}
     </View>
   );
 }

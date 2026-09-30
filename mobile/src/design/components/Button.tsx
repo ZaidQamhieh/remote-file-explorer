@@ -16,6 +16,8 @@ type Props = {
   busy?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** `lg` is the 52 dp primary-action height. */
+  size?: 'md' | 'lg';
   destructive?: boolean;
   /** Render the icon in the button's foreground color. */
   renderIcon?: (color: string) => ReactNode;
@@ -25,7 +27,7 @@ type Props = {
  * Stadium buttons with centered content (a hard UI rule). `gradient` is the
  * mockup `.btn-primary`: 135° gradient with a tinted glow (GradientButton).
  */
-export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, busy, disabled, style, destructive }: Props) {
+export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, busy, disabled, style, destructive, size = 'md' }: Props) {
   const c = useScheme();
   const off = disabled || busy;
   const fg = kind === 'gradient' ? '#FFFFFF' : kind === 'filled' ? c.onPrimary : kind === 'tonal' ? c.onSecondaryContainer : destructive ? c.error : c.primary;
@@ -37,7 +39,7 @@ export function Button({ label, onPress, kind = 'gradient', icon, renderIcon, bu
       </Text>
     </View>
   );
-  const pad = { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm + 2, minHeight: 44, justifyContent: 'center' } as const;
+  const pad = { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm + 2, minHeight: size === 'lg' ? 52 : 44, justifyContent: 'center' } as const;
   return (
     <Pressable
       onPress={off ? undefined : onPress}

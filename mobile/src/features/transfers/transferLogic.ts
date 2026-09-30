@@ -72,3 +72,22 @@ export function groupTransfers(all: TransferRecord[]): TransferGroups {
     finished: sorted.filter(isFinished),
   };
 }
+
+export type TransferTone = 'transfer' | 'safe' | 'warn' | 'error' | 'muted';
+
+/** Colour role of a transfer row by state (design `Roles`; errors use the scheme's error colour). */
+export function transferTone(state: TransferRecord['state']): TransferTone {
+  switch (state) {
+    case 'RUNNING':
+    case 'QUEUED':
+      return 'transfer';
+    case 'DONE':
+      return 'safe';
+    case 'PAUSED':
+      return 'warn';
+    case 'FAILED':
+      return 'error';
+    default:
+      return 'muted';
+  }
+}

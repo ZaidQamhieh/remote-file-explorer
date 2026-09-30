@@ -1,12 +1,13 @@
 {
   "name": "mobile",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "dependencies": {
     "@material/material-color-utilities": "^0.4.0",
     "@noble/curves": "^2.4.0",
     "expo": "~57.0.26",
     "expo-audio": "~57.0.5",
+    "expo-background-task": "~57.0.21",
     "expo-battery": "~57.0.3",
     "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",
@@ -26,6 +27,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.21",
     "expo-video": "~57.0.5",
     "lucide-react-native": "^1.48.0",
     "react": "19.2.3",

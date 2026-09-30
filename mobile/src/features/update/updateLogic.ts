@@ -1,0 +1,39 @@
+/** The release manifest (`latest.json`) published next to each GitHub release. */
+export type AppRelease = { versionName: string; versionCode: number; size: number; url: string | null; sha256: string | null };
+
+/** Same repository and stable "latest release" redirect the Flutter app reads, so both apps follow one release channel. */
+export const GITHUB_REPO = 'ZaidQamhieh/remote-file-explorer';
+export const LATEST_MANIFEST_URL = `https://github.com/${GITHUB_REPO}/releases/latest/download/latest.json`;
+
+/** Hosts an APK may be fetched from: GitHub, and the storage host its release downloads redirect to. */
+const APK_HOSTS = ['github.com', 'githubusercontent.com'];
+
+export function isTrustedApkUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  return u.protocol === 'https:' && APK_HOSTS.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+}
+
+/** Parses a manifest; null when it is not a usable release (no version code, or no APK address on GitHub). */
+export function parseRelease(raw: unknown): AppRelease | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const j = raw as Record<string, unknown>;
+  const code = typeof j.versionCode === 'number' ? Math.trunc(j.versionCode) : NaN;
+  if (!Number.isFinite(code) || code <= 0) return null;
+  const url = typeof j.url === 'string' && isTrustedApkUrl(j.url) ? j.url : null;
+  if (url === null) return null;
+  const sha = typeof j.sha256 === 'string' && /^[0-9a-fA-F]{64}$/.test(j.sha256) ? j.sha256.toLowerCase() : null;
+  return { versionName: typeof j.versionName === 'string' ? j.versionName : '', versionCode: code, size: typeof j.size === 'number' && j.size > 0 ? Math.trunc(j.size) : 0, url, sha256: sha };
+}
+
+export const isUpdateAvailable = (installedBuild: number, release: AppRelease | null): release is AppRelease => release !== null && release.versionCode > installedBuild;
+
+/** The banner shows a release only until the user dismisses that build; a newer build shows again. */
+export const shouldSurfaceUpdate = (release: AppRelease | null, dismissedCode: number) => release !== null && release.versionCode > dismissedCode;
+
+/** Percent (0-100) of a download; unknown totals report 0. */
+export const percent = (received: number, total: number) => (total > 0 ? Math.min(100, Math.floor((received * 100) / total)) : 0);

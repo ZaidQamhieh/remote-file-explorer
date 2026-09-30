@@ -42,7 +42,9 @@ export function parsePairingQr(raw: string): { ok: true; qr: PairingQr } | { ok:
 export function humanizeError(e: unknown): string {
   if (e instanceof CertPinMismatch || e instanceof MissingCertPin) return e.message;
   if (e instanceof AgentApiError) return e.message;
-  return e instanceof Error ? e.message : String(e);
+  const message = e instanceof Error ? e.message : String(e);
+  // A native module rejection wraps the real reason: "Call to function 'X.y' has been rejected.\n→ Caused by: <reason>".
+  return message.replace(/^Call to function '[^']*' has been rejected\.\s*→ Caused by:\s*/, '');
 }
 
 async function proof(client: AgentClient, identity: DeviceIdentity) {

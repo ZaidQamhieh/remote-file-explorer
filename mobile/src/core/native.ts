@@ -79,6 +79,16 @@ export const offlineBodies = {
 export const openPublicUri = (uri: string, mime: string) => Rfe.openPublicUri(uri, mime);
 export const openFileExternal = (path: string, mime: string) => Rfe.openFileExternal(path, mime);
 export const shareFileExternal = (path: string, mime: string) => Rfe.shareFileExternal(path, mime);
+export const backupEncrypt = (payloadJson: string, passphrase: string) => Rfe.backupEncrypt(payloadJson, passphrase);
+export const backupDecrypt = (envelopeJson: string, passphrase: string) => Rfe.backupDecrypt(envelopeJson, passphrase);
+export const secureReadAll = () => Rfe.secureReadAll();
+export const appBuild = () => Rfe.appBuild();
+export const publicDownload = (id: string, url: string, destPath: string, offset: number) => Rfe.publicDownload(id, url, destPath, offset);
+export const publicDownloadCancel = (id: string) => Rfe.publicDownloadCancel(id);
+export const sha256File = (path: string) => Rfe.sha256File(path);
+export const canInstallPackages = () => Rfe.canInstallPackages();
+export const openInstallSettings = () => Rfe.openInstallSettings();
+export const installApk = (path: string) => Rfe.installApk(path);
 export const networkTransports = () => Rfe.networkTransports();
 export const deviceIdNative = async () => (await Rfe.deviceId()) ?? null;
 

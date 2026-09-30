@@ -1,4 +1,4 @@
-import { Battery, Clock, Image as ImageIcon, Images, Monitor, RotateCcw, Smartphone, Wifi } from 'lucide-react-native';
+import { Battery, CalendarClock, Clock, Image as ImageIcon, Images, Monitor, RotateCcw, Smartphone, Wifi } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 
@@ -13,7 +13,7 @@ import { listAlbums, photoBackupStore, requestPhotoAccess, runPhotoBackup, type 
 import { useHosts } from '../../features/hosts/useHosts';
 import { InfoRow, NavRow, SettingsPage, SettingsSection, ToggleRow, ValueRow } from '../../features/settings/parts';
 
-const none: PhotoBackupPrefs = { enabled: false, hostId: null, deviceName: null, wifiOnly: true, chargingOnly: false, albumIds: [] };
+const none: PhotoBackupPrefs = { enabled: false, hostId: null, deviceName: null, wifiOnly: true, chargingOnly: false, albumIds: [], scheduled: false };
 
 /** A backup run's result as the one line a person can act on. */
 function describe(r: BackupResult): { ok: boolean; text: string } {
@@ -138,6 +138,7 @@ export default function PhotoBackup() {
         <ValueRow icon={ImageIcon} title={t('albumsToBackUp')} value={prefs.albumIds.length === 0 ? t('allPhotos') : t('albumsSelected', { count: prefs.albumIds.length })} onPress={() => void openAlbums()} />
         <ToggleRow icon={Wifi} title={t('onlyOnWifi')} value={prefs.wifiOnly} onChange={(v) => update({ wifiOnly: v })} />
         <ToggleRow icon={Battery} title={t('onlyWhileCharging')} value={prefs.chargingOnly} onChange={(v) => update({ chargingOnly: v })} />
+        <ToggleRow icon={CalendarClock} title={t('backUpAutomatically')} subtitle={t('backUpAutomaticallyHint')} value={prefs.scheduled} disabled={off} onChange={(v) => update({ scheduled: v })} />
       </SettingsSection>
       <SettingsSection title={t('backUpNow')}>
         <InfoRow icon={Clock} title={t('photosBackedUp', { count: backedUp })} />

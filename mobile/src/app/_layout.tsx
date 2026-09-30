@@ -9,6 +9,7 @@ import { DialogHost, ToastProvider, useToast } from '../design/components';
 import { ThemeProvider, useScheme } from '../design/theme';
 import { FontFamily } from '../design/tokens';
 import { t } from '../i18n';
+import { ensureBackgroundTask } from '../features/background/backgroundTask';
 import { watchPhotoBackup } from '../features/photoBackup/photoBackupService';
 import { LockGate } from '../features/security/LockGate';
 import { ensureLegacyImport } from '../services';
@@ -60,9 +61,12 @@ function Shell() {
         <Stack.Screen name="settings/storage" options={{ title: t('storageSecurityTitle') }} />
         <Stack.Screen name="settings/transfers" options={{ title: t('transfersSettingsTitle') }} />
         <Stack.Screen name="settings/about" options={{ title: t('aboutSupportTitle') }} />
-        <Stack.Screen name="settings/photo-backup" options={{ title: t('photoBackupTitle') }} />
+        <Stack.Screen name="settings/sync" options={{ title: t('syncRulesTitle') }} />
+      <Stack.Screen name="settings/backup" options={{ title: t('backupScreenTitle') }} />
+      <Stack.Screen name="settings/photo-backup" options={{ title: t('photoBackupTitle') }} />
         <Stack.Screen name="settings/whatsnew" options={{ title: t('whatsNewTitle') }} />
-        <Stack.Screen name="settings/privacy" options={{ title: t('privacyTitle') }} />
+        <Stack.Screen name="settings/licenses" options={{ title: t('openSourceLicenses') }} />
+      <Stack.Screen name="settings/privacy" options={{ title: t('privacyTitle') }} />
         <Stack.Screen name="dev/gallery" options={{ title: 'Design gallery' }} />
       </Stack>
     </>
@@ -81,6 +85,9 @@ export default function RootLayout() {
     });
   }, [load, loadCollections]);
   useEffect(() => watchPhotoBackup(), []);
+  useEffect(() => {
+    void ensureBackgroundTask();
+  }, []);
   const mode = settings.amoledDark ? 'amoled' : settings.themeMode;
   return (
     <ShareIntentProvider>

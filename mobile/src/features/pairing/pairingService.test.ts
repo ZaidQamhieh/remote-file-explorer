@@ -3,7 +3,7 @@ import { CertPinMismatch } from '../../core/api/pin';
 import { DeviceIdentity } from '../../core/security/deviceIdentity';
 import { MemorySecureStore } from '../../core/security/secureStore';
 import { HostStore, MemoryKeyValueStore } from '../../core/storage/hostStore';
-import { loginWithAccount, pairWithCode, parsePairingQr, registerAccount, type PairingDeps } from './pairingService';
+import { humanizeError, loginWithAccount, pairWithCode, parsePairingQr, registerAccount, type PairingDeps } from './pairingService';
 
 const PIN = 'ab'.repeat(32);
 const rnd = (n: number) => Uint8Array.from({ length: n }, (_, i) => (i * 5 + 1) & 255);
@@ -89,4 +89,12 @@ describe('parsePairingQr', () => {
     [JSON.stringify({ address: 'a' }), 'qrMissingFields'],
     [JSON.stringify({ address: 'a', certFingerprint: 'zz', pairingCode: 'c' }), 'qrInvalidFingerprint'],
   ])('rejects %s', (raw, error) => expect(parsePairingQr(raw)).toEqual({ ok: false, error }));
+});
+
+describe('humanizeError', () => {
+  it('unwraps a native module rejection to its reason', () => {
+    const e = new Error("Call to function 'RfeTransport.backupDecrypt' has been rejected.\n→ Caused by: Incorrect passphrase");
+    expect(humanizeError(e)).toBe('Incorrect passphrase');
+  });
+  it('leaves other messages alone', () => expect(humanizeError(new Error('boom'))).toBe('boom'));
 });

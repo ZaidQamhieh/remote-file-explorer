@@ -24,6 +24,11 @@ export async function requestPhotoAccess(): Promise<boolean> {
   return p.granted;
 }
 
+/** The current photo permission without asking; a scheduled run has no screen to ask on. */
+async function hasPhotoAccess(): Promise<boolean> {
+  return (await MediaLibrary.getPermissionsAsync(false, ['photo'])).granted;
+}
+
 /** Device albums that hold at least one photo. */
 export async function listAlbums(): Promise<AlbumInfo[]> {
   const out: AlbumInfo[] = [];
@@ -48,7 +53,7 @@ const toPath = (uri: string) => decodeURIComponent(uri.replace('file://', ''));
  * Each photo is copied into app storage and queued as a durable native upload named `pb-<asset id>`; the asset is
  * recorded as done only when that upload finishes (see [watchPhotoBackup]), so a failed upload is retried next run.
  */
-export async function runPhotoBackup(): Promise<BackupResult> {
+export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise<BackupResult> {
   const prefs = await photoBackupStore.load();
   if (!prefs.enabled) return { kind: 'disabled' };
   if (!prefs.hostId) return { kind: 'notConfigured' };
@@ -60,7 +65,7 @@ export async function runPhotoBackup(): Promise<BackupResult> {
     const s = await Battery.getBatteryStateAsync();
     if (s !== Battery.BatteryState.CHARGING && s !== Battery.BatteryState.FULL) return { kind: 'skipped', reason: 'charging' };
   }
-  if (!(await requestPhotoAccess())) return { kind: 'permissionDenied' };
+  if (!((o.interactive ?? true) ? await requestPhotoAccess() : await hasPhotoAccess())) return { kind: 'permissionDenied' };
 
   const host = (await hostStore.listHosts()).find((h) => h.id === prefs.hostId);
   if (!host) return { kind: 'notConfigured' };

@@ -5,7 +5,9 @@ import { DeviceIdentity } from './core/security/deviceIdentity';
 import { HostStore, type KeyValueStore } from './core/storage/hostStore';
 import { SettingsRepo } from './core/settings/settings';
 import { importLegacyState, type ImportReport } from './core/storage/legacyImport';
-import { offlineBodies, nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
+import type { BackupStorage } from './features/backup/backupService';
+import { isBackedUpPrefKey } from './features/backup/backupPayload';
+import { secureReadAll, offlineBodies, nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
 import type { Host } from './core/models/host';
 
 import type { PairingDeps } from './features/pairing/pairingService';
@@ -32,6 +34,18 @@ export const hostStore = new HostStore(kv, nativeSecureStore, async (id) => {
   // Forgetting a host drops everything cached for it: listings and encrypted offline bodies.
   await Promise.allSettled([listingCache.evictHost(id), offlineBodies.evictHost(id)]);
 });
+/** Everything the encrypted backup reads and replaces: the app's own preference rows and its secure-storage entries. */
+export const backupStorage: BackupStorage = {
+  allRows: () => Object.fromEntries(db.getAllSync<{ k: string; v: string }>('SELECT k, v FROM kv').map((r) => [r.k, r.v])),
+  replaceOwned(rows) {
+    db.withTransactionSync(() => {
+      for (const { k } of db.getAllSync<{ k: string }>('SELECT k FROM kv')) if (isBackedUpPrefKey(k)) db.runSync('DELETE FROM kv WHERE k = ?', k);
+      for (const [k, v] of Object.entries(rows)) db.runSync('INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)', k, v);
+    });
+  },
+  secureAll: () => secureReadAll(),
+  secure: nativeSecureStore,
+};
 export const settingsRepo = new SettingsRepo(kv);
 export const keyValue: KeyValueStore = kv;
 export const identity = new DeviceIdentity(nativeSecureStore, secureRandomBytes);

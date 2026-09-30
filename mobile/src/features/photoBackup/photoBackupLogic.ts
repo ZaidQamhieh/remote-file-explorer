@@ -83,6 +83,8 @@ export type PhotoBackupPrefs = {
   wifiOnly: boolean;
   chargingOnly: boolean;
   albumIds: string[];
+  /** Run in the background about every six hours (new in the RN app; the Flutter app only backed up on request). */
+  scheduled: boolean;
 };
 
 // Same keys and JSON encoding the Flutter app wrote, so the one-time import carries the settings and the record over.
@@ -93,6 +95,7 @@ const K = {
   wifiOnly: 'rfe_photo_backup_wifi_only',
   chargingOnly: 'rfe_photo_backup_charging_only',
   albums: 'rfe_photo_backup_albums',
+  scheduled: 'rfe_photo_backup_scheduled',
   done: 'rfe_photo_backup_done',
 } as const;
 
@@ -120,6 +123,7 @@ export class PhotoBackupStore {
       wifiOnly: asBool(await get(K.wifiOnly), true),
       chargingOnly: asBool(await get(K.chargingOnly), false),
       albumIds: asStrings(await get(K.albums)),
+      scheduled: asBool(await get(K.scheduled), false),
     };
   }
 
@@ -129,6 +133,7 @@ export class PhotoBackupStore {
     await set(K.wifiOnly, p.wifiOnly);
     await set(K.chargingOnly, p.chargingOnly);
     await set(K.albums, p.albumIds);
+    await set(K.scheduled, p.scheduled);
     if (p.hostId) await set(K.host, p.hostId);
     else await this.kv.remove(K.host);
     if (p.deviceName) await set(K.deviceName, p.deviceName);

@@ -46,14 +46,17 @@ test('transfer ids round-trip an asset id and reject foreign ids', () => {
 test('prefs and the done record round-trip and read the Flutter encoding', async () => {
   const kv = new MemoryKeyValueStore();
   const store = new PhotoBackupStore(kv);
-  expect(await store.load()).toEqual({ enabled: false, hostId: null, deviceName: null, wifiOnly: true, chargingOnly: false, albumIds: [] });
+  expect(await store.load()).toEqual({ enabled: false, hostId: null, deviceName: null, wifiOnly: true, chargingOnly: false, albumIds: [], scheduled: false });
   await kv.set('rfe_photo_backup_enabled', 'true');
   await kv.set('rfe_photo_backup_host', '"h1"');
   await kv.set('rfe_photo_backup_done', '["1","2"]');
   const p = await store.load();
   expect(p).toMatchObject({ enabled: true, hostId: 'h1' });
   await store.save({ ...p, deviceName: 'Phone', albumIds: ['9'] });
-  expect(await store.load()).toMatchObject({ deviceName: 'Phone', albumIds: ['9'] });
+  expect(await store.load()).toMatchObject({ deviceName: 'Phone', albumIds: ['9'], scheduled: false });
+  await store.save({ ...p, scheduled: true });
+  expect((await store.load()).scheduled).toBe(true);
+  expect(await kv.get('rfe_photo_backup_scheduled')).toBe('true');
   await store.markDone(['2', '3']);
   expect([...(await store.doneIds())].sort()).toEqual(['1', '2', '3']);
   await store.clearDone();

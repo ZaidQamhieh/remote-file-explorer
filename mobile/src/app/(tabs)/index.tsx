@@ -1,3 +1,4 @@
+import { UpdateBanner } from '../../features/update/UpdateBanner';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus, QrCode, Search, Monitor, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -43,6 +44,7 @@ export default function Devices() {
   const shown = (hosts ?? []).filter((h) => !q || h.label.toLowerCase().includes(q) || h.address.toLowerCase().includes(q));
 
   const header = (
+    <>
     <AppBar
       title="Devices"
       subtitle={hosts && hosts.length > 0 ? `${hosts.length} paired · ${onlineCount} online now` : undefined}
@@ -57,6 +59,8 @@ export default function Devices() {
         </>
       }
     />
+    <UpdateBanner />
+    </>
   );
 
   if (error) return (<View style={{ flex: 1 }}>{header}<ErrorRetry message={t('errorLabel', { error })} onRetry={load} /></View>);

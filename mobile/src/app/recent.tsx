@@ -6,13 +6,14 @@ import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-nativ
 import type { Entry, SearchResult } from '../core/api/models';
 import { formatRelative } from '../core/format';
 import { ErrorRetry, Pressable, SectionLabel, Text } from '../design/components';
+import { LumenType } from '../design/lumen';
 import { useScheme } from '../design/theme';
-import { FontFamily, Radii, Spacing } from '../design/tokens';
+import { Spacing } from '../design/tokens';
 import { EntryLeading, useIconChipBg } from '../features/explorer/EntryIcon';
 import { revealInExplorer } from '../features/explorer/reveal';
 import { humanizeError } from '../features/pairing/pairingService';
 import { groupRecent } from '../features/recent/recentBuckets';
-import { TruncationBanner } from '../features/search/SearchParts';
+import { ResultCardRow, TruncationBanner } from '../features/search/SearchParts';
 import { t } from '../i18n';
 import { clientForHost } from '../services';
 import { useActiveHost } from '../state/activeHost';
@@ -62,8 +63,8 @@ export default function Recent() {
     body = (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: Spacing.lg }}>
         <History size={64} color={c.outline} />
-        <Text variant="titleMedium">{t('recentIsEmpty')}</Text>
-        <Text variant="bodySmall" muted>{t('recentEmptySubtitle')}</Text>
+        <Text style={LumenType.title}>{t('recentIsEmpty')}</Text>
+        <Text style={LumenType.meta} muted>{t('recentEmptySubtitle')}</Text>
       </View>
     );
   } else {
@@ -71,14 +72,16 @@ export default function Recent() {
     body = (
       <View style={{ flex: 1 }}>
         {result.timeBudgetHit && <TruncationBanner message={t('recentTimedOut')} />}
-        <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} />} contentContainerStyle={{ paddingVertical: Spacing.md }}>
+        <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} />} contentContainerStyle={{ paddingVertical: 10 }}>
           {groups.map((g) => (
-            <View key={g.label}>
-              <View style={{ paddingHorizontal: Spacing.md }}>
+            <View key={g.label} style={{ marginBottom: 14 }}>
+              <View style={{ paddingHorizontal: 22 }}>
                 <SectionLabel title={g.label} />
               </View>
               {g.entries.map((entry, i) => (
-                <RecentRow key={entry.path} entry={entry} hostLabel={active.host.label} divider={i > 0} onPress={() => revealInExplorer(router, active.host, entry.path, active.rootPath)} />
+                <ResultCardRow key={entry.path} index={i} count={g.entries.length}>
+                  <RecentRow entry={entry} hostLabel={active.host.label} onPress={() => revealInExplorer(router, active.host, entry.path, active.rootPath)} />
+                </ResultCardRow>
               ))}
             </View>
           ))}
@@ -95,19 +98,18 @@ export default function Recent() {
   );
 }
 
-function RecentRow({ entry, hostLabel, divider, onPress }: { entry: Entry; hostLabel: string; divider: boolean; onPress: () => void }) {
-  const c = useScheme();
+function RecentRow({ entry, hostLabel, onPress }: { entry: Entry; hostLabel: string; onPress: () => void }) {
   const chip = useIconChipBg(entry);
   const sub = entry.modified ? `${hostLabel}  ·  modified ${formatRelative(new Date(entry.modified))}` : hostLabel;
   return (
     <Pressable onPress={onPress} accessibilityLabel={entry.name}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: divider ? 1 : 0, borderColor: c.outlineVariant, marginLeft: divider ? Spacing.md : 0 }}>
-        <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: chip, alignItems: 'center', justifyContent: 'center' }}>
-          <EntryLeading entry={entry} size={18} />
+      <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}>
+        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: chip, alignItems: 'center', justifyContent: 'center' }}>
+          <EntryLeading entry={entry} size={22} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{entry.name}</Text>
-          <Text numberOfLines={1} muted style={{ fontSize: 11.5 }}>{sub}</Text>
+          <Text numberOfLines={1} style={LumenType.name}>{entry.name}</Text>
+          <Text numberOfLines={1} muted style={LumenType.meta}>{sub}</Text>
         </View>
       </View>
     </Pressable>

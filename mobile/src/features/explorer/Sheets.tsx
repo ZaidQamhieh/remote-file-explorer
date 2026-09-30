@@ -2,9 +2,11 @@ import { ArrowDown, ArrowUp, Folder, Plus, Star } from 'lucide-react-native';
 import { ScrollView, View } from 'react-native';
 
 import type { Host } from '../../core/models/host';
-import { BottomSheet, GroupedCard, MockupSwitch, Pressable, Segmented, SectionLabel, SheetHead, Text } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { Brand, Radii, Spacing } from '../../design/tokens';
+import { BottomSheet, Button, GroupedCard, MockupSwitch, Pressable, Segmented, SectionLabel, SheetHead, Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenSize, LumenType } from '../../design/lumen';
+import { useRoles, useScheme } from '../../design/theme';
+import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { useSettings } from '../../state/settings';
 import { useCollections } from '../../state/collections';
@@ -23,14 +25,14 @@ export function ViewOptionsSheet({ visible, onClose, gridView, density, sort, sh
     <BottomSheet visible={visible} onClose={onClose}>
       <SheetHead title={t('viewOptionsTitle')} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg, gap: Spacing.sm }}>
-        <Text variant="labelLarge">{t('layoutLabel')}</Text>
+        <Text style={LumenType.name}>{t('layoutLabel')}</Text>
         <Segmented options={[t('listLabel'), t('gridLabel')]} selectedIndex={gridView ? 1 : 0} onChange={(i) => setApp('gridView', i === 1)} />
         <View style={{ height: Spacing.sm }} />
-        <Text variant="labelLarge">{t('densityLabel')}</Text>
+        <Text style={LumenType.name}>{t('densityLabel')}</Text>
         <Segmented options={[t('comfortableLabel'), t('compactLabel')]} selectedIndex={density === 'compact' ? 1 : 0} onChange={(i) => setApp('density', i === 1 ? 'compact' : 'comfortable')} />
         <View style={{ height: Spacing.sm }} />
         <SectionLabel title={t('sortByLabel')} />
-        <View>
+        <GroupedCard padded={false} style={{ backgroundColor: c.surfaceContainerHigh }}>
           {SORT_FIELDS.map((f, i) => (
             <Pressable
               key={f}
@@ -38,16 +40,16 @@ export function ViewOptionsSheet({ visible, onClose, gridView, density, sort, sh
               accessibilityLabel={sortLabel(f)}
               accessibilityState={{ selected: sort.field === f }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: i === SORT_FIELDS.length - 1 ? 0 : 1, borderColor: c.outlineVariant }}>
-                <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Lato_400Regular' }}>{sortLabel(f)}</Text>
-                {sort.field === f && (sort.ascending ? <ArrowUp size={17} color={c.primary} /> : <ArrowDown size={17} color={c.primary} />)}
+              <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 14 }}>
+                <Text style={[LumenType.name, { flex: 1 }]} color={sort.field === f ? c.primary : c.onSurface}>{sortLabel(f)}</Text>
+                {sort.field === f && (sort.ascending ? <ArrowUp size={18} color={c.primary} /> : <ArrowDown size={18} color={c.primary} />)}
               </View>
             </Pressable>
           ))}
-        </View>
+        </GroupedCard>
         <View style={{ height: Spacing.sm }} />
         <SectionLabel title={t('optionsLabel')} />
-        <GroupedCard padded={false}>
+        <GroupedCard padded={false} style={{ backgroundColor: c.surfaceContainerHigh }}>
           <ToggleRow title={t('foldersFirstLabel')} value divider />
           <ToggleRow title={t('showHiddenItems')} subtitle={hiddenCount > 0 ? t('nHiddenByVisibility', { count: hiddenCount }) : undefined} value={showHidden} onPress={onToggleShowHidden} />
         </GroupedCard>
@@ -57,12 +59,11 @@ export function ViewOptionsSheet({ visible, onClose, gridView, density, sort, sh
 }
 
 function ToggleRow({ title, subtitle, value, onPress, divider }: { title: string; subtitle?: string; value: boolean; onPress?: () => void; divider?: boolean }) {
-  const c = useScheme();
   const row = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: divider ? 1 : 0, borderColor: c.outlineVariant }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 8, paddingHorizontal: 14, marginBottom: divider ? 2 : 0 }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontFamily: 'Lato_400Regular' }}>{title}</Text>
-        {subtitle ? <Text muted style={{ fontSize: 11.5, marginTop: 1 }}>{subtitle}</Text> : null}
+        <Text style={LumenType.name}>{title}</Text>
+        {subtitle ? <Text muted style={[LumenType.meta, { marginTop: 1 }]}>{subtitle}</Text> : null}
       </View>
       <MockupSwitch value={value} />
     </View>
@@ -72,6 +73,7 @@ function ToggleRow({ title, subtitle, value, onPress, divider }: { title: string
 
 export function FavoritesSheet({ visible, onClose, host, state, onOpen }: { visible: boolean; onClose: () => void; host: Host; state: ExplorerState; onOpen: (path: string) => void }) {
   const c = useScheme();
+  const roles = useRoles();
   const favs = useCollections((s) => s.favorites).filter((f) => f.hostId === host.id);
   const toggle = useCollections((s) => s.toggleFavorite);
   const remove = useCollections((s) => s.removeFavorite);
@@ -80,55 +82,56 @@ export function FavoritesSheet({ visible, onClose, host, state, onOpen }: { visi
     <BottomSheet visible={visible} onClose={onClose}>
       <SheetHead title={t('favoritesTitle')} subtitle={t('favoritesSubtitle')} />
       {favs.length === 0 ? (
-        <Text muted style={{ fontSize: 13, textAlign: 'center', paddingHorizontal: 20, paddingBottom: 24 }}>{t('noFavoritesYet')}</Text>
+        <Text muted style={[LumenType.meta, { textAlign: 'center', paddingHorizontal: 20, paddingBottom: 24 }]}>{t('noFavoritesYet')}</Text>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: Spacing.xs }}>
           {favs.map((f) => (
             <Pressable key={f.path} onPress={() => { onClose(); onOpen(f.path); }} accessibilityLabel={f.label}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm }}>
-                <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: `${c.primary}24`, alignItems: 'center', justifyContent: 'center' }}>
-                  <Folder size={18} color={c.primary} />
+                <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: mix(roles.folder, c.surfaceContainerHigh, 0.17), alignItems: 'center', justifyContent: 'center' }}>
+                  <Folder size={22} color={roles.folder} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: 'Lato_400Regular' }}>{f.label}</Text>
-                  <Text numberOfLines={1} muted style={{ fontSize: 11.5 }}>{f.path}</Text>
+                  <Text numberOfLines={1} style={LumenType.name}>{f.label}</Text>
+                  <Text numberOfLines={1} muted style={LumenType.meta}>{f.path}</Text>
                 </View>
-                <Pressable onPress={() => remove(f.hostId, f.path)} pressedScale={0.92} accessibilityLabel={t('removeFavoriteTooltip')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-                  <Star size={16} color={Brand.amber} />
+                <Pressable onPress={() => remove(f.hostId, f.path)} pressedScale={0.92} accessibilityLabel={t('removeFavoriteTooltip')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                  <Star size={18} color={roles.folder} fill={roles.folder} />
                 </Pressable>
               </View>
             </Pressable>
           ))}
         </ScrollView>
       )}
-      <View style={{ padding: Spacing.md }}>
-        <Pressable onPress={() => toggle({ hostId: host.id, path, label: folderLabel(path) })} accessibilityLabel={t('addCurrentFolderLabel', { name: folderLabel(path) })} pressedScale={0.97}>
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: c.surfaceContainerHigh, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm }}>
-            <Text style={{ fontSize: 13.5, fontFamily: 'Lato_700Bold' }}>{t('addCurrentFolderLabel', { name: folderLabel(path) })}</Text>
-            <Plus size={16} color={c.onSurface} />
-          </View>
-        </Pressable>
+      <View style={{ padding: 18 }}>
+        <Button size="lg" kind="neutral" label={t('addCurrentFolderLabel', { name: folderLabel(path) })} onPress={() => void toggle({ hostId: host.id, path, label: folderLabel(path) })} renderIcon={(k) => <Plus size={20} color={k} />} />
       </View>
     </BottomSheet>
   );
 }
 
-/** Horizontal chips of favorites, shown at the root of a host (FavoritesPinRow). */
+/**
+ * The Collections card shown at the root of a host (`.collection`): the favourite folders as tinted tiles (`.preview-item`,
+ * folder colour at 15% over the raised surface) above a "Favourites" title. Tap opens the folder, long-press removes it.
+ */
 export function FavoritesPinRow({ favorites, onOpen, onRemove }: { favorites: { label: string; path: string; hostId: string }[]; onOpen: (path: string) => void; onRemove: (f: { hostId: string; path: string; label: string }) => void }) {
   const c = useScheme();
+  const roles = useRoles();
   if (favorites.length === 0) return null;
   return (
-    <View style={{ height: 56 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm }}>
+    <View style={{ marginTop: 10, padding: LumenSize.cardPadding, borderRadius: LumenSize.cardRadius, backgroundColor: c.surfaceContainer }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
         {favorites.map((f) => (
-          <Pressable key={f.path} onPress={() => onOpen(f.path)} onLongPress={() => onRemove(f)} accessibilityLabel={f.label}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: c.secondaryContainer, borderRadius: Radii.card }}>
-              <Folder size={18} color={c.onSecondaryContainer} />
-              <Text variant="labelLarge" color={c.onSecondaryContainer} numberOfLines={1} style={{ maxWidth: 120 }}>{f.label}</Text>
+          <Pressable key={f.path} onPress={() => onOpen(f.path)} onLongPress={() => onRemove(f)} accessibilityLabel={f.label} accessibilityHint="Long-press to remove from favourites">
+            <View style={{ width: 104, height: 68, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 6, backgroundColor: mix(roles.folder, c.surfaceContainerHigh, 0.15) }}>
+              <Folder size={22} color={roles.folder} />
+              <Text style={LumenType.pill} color={roles.folder} numberOfLines={1}>{f.label}</Text>
             </View>
           </Pressable>
         ))}
       </ScrollView>
+      <Text style={[LumenType.title, { marginTop: 10 }]}>{t('favoritesTitle')}</Text>
+      <Text style={[LumenType.meta, { marginTop: 2 }]} muted>{`${favorites.length} ${favorites.length === 1 ? 'folder' : 'folders'}`}</Text>
     </View>
   );
 }

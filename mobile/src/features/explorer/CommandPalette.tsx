@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { FlatList, Modal, Pressable as RNPressable, TextInput, View } from 'react-native';
 
 import { Pressable, Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { FontFamily, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
@@ -22,8 +23,8 @@ export function CommandPalette({ visible, actions, onClose }: { visible: boolean
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
       <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 24, paddingVertical: 80 }} onPress={close} accessibilityLabel={t('cancelButton')}>
-        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.card, borderWidth: 1, borderColor: c.outlineVariant, overflow: 'hidden', maxHeight: '100%' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, margin: 12, paddingHorizontal: 12, borderRadius: Radii.chip, borderWidth: 1, borderColor: c.outlineVariant, backgroundColor: c.surfaceContainerHighest }}>
+        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderRadius: Radii.lg, overflow: 'hidden', maxHeight: '100%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, margin: 12, paddingHorizontal: 14, minHeight: 48, borderRadius: Radii.sm, backgroundColor: c.surfaceContainerHigh }}>
             <Search size={18} color={c.onSurfaceVariant} />
             <TextInput
               autoFocus
@@ -32,7 +33,7 @@ export function CommandPalette({ visible, actions, onClose }: { visible: boolean
               placeholder={t('commandPaletteHint')}
               placeholderTextColor={c.onSurfaceVariant}
               accessibilityLabel={t('commandPaletteTitle')}
-              style={{ flex: 1, color: c.onSurface, fontFamily: FontFamily.regular, fontSize: 15, paddingVertical: 10 }}
+              style={{ flex: 1, color: c.onSurface, fontFamily: FontFamily.regular, fontSize: 16, paddingVertical: 10 }}
             />
           </View>
           <FlatList
@@ -47,9 +48,9 @@ export function CommandPalette({ visible, actions, onClose }: { visible: boolean
                   item.run();
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: 16, paddingVertical: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, minHeight: 52, paddingHorizontal: 18, paddingVertical: 8 }}>
                   <item.icon size={20} color={c.onSurfaceVariant} />
-                  <Text>{item.label}</Text>
+                  <Text style={LumenType.name}>{item.label}</Text>
                 </View>
               </Pressable>
             )}

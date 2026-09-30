@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Text, useDialogs, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { transfers } from '../../core/native';
@@ -151,8 +152,8 @@ export default function PhotoBackup() {
         />
       </SettingsSection>
       <View style={{ gap: Spacing.sm }}>
-        {off && <Text muted style={{ textAlign: 'center' }}>{t('enableBackupFirst')}</Text>}
-        <Button label={t('backUpNow')} disabled={off} busy={busy} onPress={() => void backUpNow()} />
+        {off && <Text muted style={[LumenType.meta, { textAlign: 'center' }]}>{t('enableBackupFirst')}</Text>}
+        <Button size="lg" label={t('backUpNow')} disabled={off} busy={busy} onPress={() => void backUpNow()} />
       </View>
       <AlbumPickerSheet visible={picking} albums={albums ?? []} selected={new Set(prefs.albumIds)} onToggle={toggleAlbum} onClear={() => update({ albumIds: [] })} onClose={() => setPicking(false)} />
     </SettingsPage>

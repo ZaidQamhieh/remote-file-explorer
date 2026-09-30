@@ -46,7 +46,7 @@ export function Button({ label, onPress, kind = 'filled', icon, renderIcon, busy
     >
       <View
         style={{
-          minHeight: lg ? LumenSize.footerActionHeight * 2 : LumenSize.actionHeight * 2,
+          minHeight: lg ? LumenSize.footerActionHeight : LumenSize.actionHeight,
           paddingHorizontal: lg ? 18 : 18,
           borderRadius: radius,
           backgroundColor: bg,

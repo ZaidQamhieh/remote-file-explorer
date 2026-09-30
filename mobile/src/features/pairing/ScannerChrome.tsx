@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, View } from 'react-native';
 
 import { Pressable } from '../../design/components';
+import { useScheme } from '../../design/theme';
 
-export function Scanline({ height }: { height: number }) {
+/** The moving scan line; [color] defaults to the classic blue for the screens that still draw their own chrome. */
+export function Scanline({ height, color = '#4C8DFF' }: { height: number; color?: string }) {
   const v = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     const loop = Animated.loop(
@@ -18,7 +20,7 @@ export function Scanline({ height }: { height: number }) {
   const travel = height / 2 - 8;
   return (
     <Animated.View
-      style={{ position: 'absolute', left: 8, right: 8, top: height / 2, height: 2, backgroundColor: '#4C8DFF', shadowColor: '#4C8DFF', shadowOpacity: 0.6, shadowRadius: 8, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-travel, travel] }) }] }}
+      style={{ position: 'absolute', left: 8, right: 8, top: height / 2, height: 2, backgroundColor: color, shadowColor: color, shadowOpacity: 0.6, shadowRadius: 8, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-travel, travel] }) }] }}
     />
   );
 }
@@ -29,3 +31,13 @@ export const DarkIconButton = ({ children, onPress, label }: { children: React.R
   </Pressable>
 );
 
+
+/** Flat Lumen icon button for the scanner's top bar: a 48 dp target around a raised 40 dp tile. */
+export function ScanIconButton({ children, onPress, label, active }: { children: React.ReactNode; onPress: () => void; label: string; active?: boolean }) {
+  const c = useScheme();
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={{ selected: !!active }} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: active ? c.primaryContainer : c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+    </Pressable>
+  );
+}

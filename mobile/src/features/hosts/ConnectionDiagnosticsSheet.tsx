@@ -1,16 +1,15 @@
 import { Check, Gauge, RefreshCw, Route, Shield, X, type LucideIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 
-import { normalizeFingerprint } from '../../core/api/pin';
 import type { Host, HostRoute } from '../../core/models/host';
-import { nativeTransport } from '../../core/native';
-import { BottomSheet, GhostBlockButton, SheetHead, Text } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { BottomSheet, Button, SheetHead, Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenSize, LumenType } from '../../design/lumen';
+import { useRoles, useScheme } from '../../design/theme';
+import { FontFamily } from '../../design/tokens';
 import { t } from '../../i18n';
-import { hostStore } from '../../services';
-import { probeAll, type ProbeResult } from './diagnostics';
+import type { ProbeResult } from './diagnostics';
+import { useRouteProbe, type RouteProbe } from './useRouteProbe';
 
 const ROUTE_NAME: Record<HostRoute, () => string> = {
   lan: () => t('routeLanName'),
@@ -22,99 +21,106 @@ const ROUTE_NAME: Record<HostRoute, () => string> = {
 /**
  * Checks each route to a host separately: reachability, pinned TLS, whether this device is let in, latency and the path
  * used, with a hint for the first thing that failed. Nothing is sent to a host whose certificate does not match the pin.
+ * Pass [probe] to show a result the caller already has (the Connect screen does); without it the sheet probes on open.
  */
-export function ConnectionDiagnosticsSheet({ host, onClose }: { host: Host; onClose: () => void }) {
-  const [outcome, setOutcome] = useState<{ results: ProbeResult[]; pin: string | null } | null>(null);
-
-  const run = useCallback(async () => {
-    const [token, fingerprint] = await Promise.all([hostStore.getToken(host.id), hostStore.getPin(host.id)]);
-    return { results: await probeAll({ transport: nativeTransport, deviceToken: token, fingerprint }, host), pin: normalizeFingerprint(fingerprint) };
-  }, [host]);
-  useEffect(() => {
-    let live = true;
-    void run().then((r) => live && setOutcome(r));
-    return () => {
-      live = false;
-    };
-  }, [run]);
-  const again = () => {
-    setOutcome(null);
-    void run().then(setOutcome);
-  };
-  const results = outcome?.results ?? null;
-  const pin = outcome?.pin ?? null;
+export function ConnectionDiagnosticsSheet({ host, onClose, probe }: { host: Host; onClose: () => void; probe?: RouteProbe }) {
+  const own = useRouteProbe(host, probe === undefined);
+  const p = probe ?? own;
+  const results = p.results;
 
   return (
     <BottomSheet visible onClose={onClose}>
       <SheetHead title={t('connectionDiagnosticsTitle')} subtitle={`${host.label} · ${host.address}`} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 14 }}>
         {results === null ? (
-          <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}><ActivityIndicator /></View>
+          <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+            <ActivityIndicator />
+          </View>
         ) : (
-          results.map((r, i) => (
-            <View key={r.address} style={{ marginTop: i > 0 ? Spacing.md : 0 }}>
-              {results.length > 1 && <Text style={{ fontSize: 10.5, fontFamily: FontFamily.semibold, letterSpacing: 0.9, paddingHorizontal: 8, paddingBottom: Spacing.xs, textTransform: 'uppercase' }} muted>{ROUTE_NAME[r.route]()}</Text>}
-              <Checks result={r} pin={pin} />
+          results.map((r) => (
+            <View key={r.address}>
+              {results.length > 1 && (
+                <Text muted style={[LumenType.sectionLabel, { paddingHorizontal: 4, paddingBottom: 8 }]}>
+                  {ROUTE_NAME[r.route]()}
+                </Text>
+              )}
+              <Checks result={r} />
             </View>
           ))
         )}
-        <View style={{ paddingHorizontal: 4, paddingTop: 16 }}>
-          <GhostBlockButton label={t('runAgainButton')} icon={<RefreshCw size={16} />} onPress={results === null ? () => {} : again} />
-        </View>
+        <Button kind="neutral" label={t('runAgainButton')} busy={results === null} onPress={p.rerun} renderIcon={(k) => <RefreshCw size={20} color={k} />} />
       </ScrollView>
     </BottomSheet>
   );
 }
 
-function Checks({ result: r, pin }: { result: ProbeResult; pin: string | null }) {
+function Checks({ result: r }: { result: ProbeResult }) {
   const c = useScheme();
-  const grey = c.outline;
+  const roles = useRoles();
+  const grey = c.onSurfaceVariant;
+  const good = roles.safe;
+  const bad = c.error;
   const reachable = r.health !== undefined;
   const mismatch = r.failure === 'pinMismatch';
-  const bad = Brand.red;
   const failureBadge = { none: t('diagOkBadge'), missingPin: t('diagPinRequiredBadge'), pinMismatch: t('diagMismatchBadge'), dns: t('probeDnsFailedBadge'), unreachable: t('probeNoResponseBadge'), other: t('probeError') }[r.failure];
   const authBadge = { accepted: t('diagAuthAcceptedBadge'), denied: t('diagAuthDeniedBadge'), notChecked: t('diagAuthUnknownBadge') }[r.auth];
-  const authTint = r.auth === 'accepted' ? Brand.online : r.auth === 'denied' ? bad : grey;
-  const hint =
-    r.failure === 'pinMismatch' ? t('probePinMismatchHint')
-    : r.failure === 'missingPin' ? t('probeMissingPinHint')
-    : r.failure === 'dns' ? t('probeDnsHint')
-    : r.failure === 'unreachable' ? t('probeReachabilityHint')
-    : r.failure === 'other' ? t('probeGenericHint')
-    : r.auth === 'denied' ? t('probeAuthRejectedHint')
-    : null;
+  const authTint = r.auth === 'accepted' ? good : r.auth === 'denied' ? bad : grey;
+  const hint = probeHint(r);
   const pathBadge = { lan: t('diagLanDirect'), tailscale: t('networkTailscale'), directHttps: t('routeInternetName'), custom: t('routeCustomName') }[r.route];
   return (
-    <View>
-      <Row icon={reachable ? Check : X} tint={reachable ? Brand.online : mismatch ? bad : grey} title={t('diagHostReachable')} subtitle={r.address} badge={failureBadge} />
+    <View style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: LumenSize.cardRadius, paddingHorizontal: 12, paddingVertical: 4 }}>
+      <Row icon={reachable ? Check : X} tint={reachable ? good : mismatch ? bad : grey} title={t('diagHostReachable')} subtitle={r.address} badge={failureBadge} />
       <Row
         icon={mismatch ? X : reachable ? Check : Shield}
-        tint={mismatch ? bad : reachable ? Brand.online : grey}
+        tint={mismatch ? bad : reachable ? good : grey}
         title={t('diagTlsPinned')}
         badge={mismatch ? t('diagMismatchBadge') : reachable ? t('diagPinnedBadge') : r.failure === 'missingPin' ? t('diagPinRequiredBadge') : t('diagUnknownBadge')}
       />
       <Row icon={r.auth === 'accepted' ? Check : r.auth === 'denied' ? X : Shield} tint={authTint} title={t('diagAuthentication')} badge={authBadge} />
-      <Row icon={Gauge} tint={reachable ? Brand.online : grey} title={t('diagLatency')} badge={reachable ? t('probeLatencyMs', { ms: r.latencyMs ?? 0 }) : '—'} mono />
-      <Row icon={Route} tint={Brand.seed} title={t('diagPath')} badge={pathBadge} badgeTint={reachable ? Brand.seed : grey} last />
-      {hint ? <Text muted style={{ fontSize: 12, paddingHorizontal: 4, paddingTop: 8 }}>{hint}</Text> : null}
+      <Row icon={Gauge} tint={reachable ? good : grey} title={t('diagLatency')} badge={reachable ? t('probeLatencyMs', { ms: r.latencyMs ?? 0 }) : '-'} mono />
+      <Row icon={Route} tint={c.primary} title={t('diagPath')} badge={pathBadge} badgeTint={reachable ? c.primary : grey} />
+      {hint ? (
+        <Text style={[LumenType.meta, { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 10 }]} color={c.onSurfaceVariant}>
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-function Row({ icon: Icon, tint, title, subtitle, badge, badgeTint, mono, last }: { icon: LucideIcon; tint: string; title: string; subtitle?: string; badge: string; badgeTint?: string; mono?: boolean; last?: boolean }) {
+/** The hint for the first thing that failed on a route, or null when it is healthy. */
+function probeHint(r: ProbeResult): string | null {
+  if (r.failure === 'pinMismatch') return t('probePinMismatchHint');
+  if (r.failure === 'missingPin') return t('probeMissingPinHint');
+  if (r.failure === 'dns') return t('probeDnsHint');
+  if (r.failure === 'unreachable') return t('probeReachabilityHint');
+  if (r.failure === 'other') return t('probeGenericHint');
+  if (r.auth === 'denied') return t('probeAuthRejectedHint');
+  return null;
+}
+
+function Row({ icon: Icon, tint, title, subtitle, badge, badgeTint, mono }: { icon: LucideIcon; tint: string; title: string; subtitle?: string; badge: string; badgeTint?: string; mono?: boolean }) {
   const c = useScheme();
   const bt = badgeTint ?? tint;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md2, paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: last ? 0 : 1, borderColor: c.outlineVariant }}>
-      <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: `${tint}24`, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={16} color={tint} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 }}>
+      <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: mix(tint, c.surfaceContainerHigh, 0.18), alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={20} color={tint} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{title}</Text>
-        {subtitle ? <Text muted numberOfLines={1} style={{ fontSize: 11.5, fontFamily: FontFamily.mono }}>{subtitle}</Text> : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={LumenType.rowTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text numberOfLines={1} style={{ fontSize: 14, lineHeight: 19, fontFamily: FontFamily.mono }} color={c.onSurfaceVariant}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
-      <View style={{ flexShrink: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radii.stadium, backgroundColor: `${bt}24` }}>
-        <Text numberOfLines={1} style={{ fontSize: 10.5, fontFamily: mono ? FontFamily.monoMedium : FontFamily.semibold }} color={bt}>{badge}</Text>
+      <View style={{ flexShrink: 1, maxWidth: '42%', paddingHorizontal: 12, paddingVertical: 6, borderRadius: LumenSize.pillRadius, backgroundColor: mix(bt, c.surfaceContainerHigh, 0.16) }}>
+        <Text numberOfLines={1} style={[LumenType.pill, mono && { fontFamily: FontFamily.monoMedium }]} color={bt}>
+          {badge}
+        </Text>
       </View>
     </View>
   );

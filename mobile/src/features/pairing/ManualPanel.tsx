@@ -1,27 +1,20 @@
-import { Send } from 'lucide-react-native';
-import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, HintCard } from '../../design/components';
-import { Spacing } from '../../design/tokens';
+import { Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
+import { useScheme } from '../../design/theme';
 import { t } from '../../i18n';
 import { AddressField } from './fields';
 
-/** Enter a computer's address; it then asks the owner to approve on that computer (nothing else to type). */
-export function ManualPanel({ prefillAddress, onRequest }: { prefillAddress?: string; onRequest: (address: string) => void }) {
-  const [address, setAddress] = useState(prefillAddress ?? '');
-  const [touched, setTouched] = useState(false);
-
-  function submit() {
-    setTouched(true);
-    if (address.trim()) onRequest(address.trim());
-  }
-
+/** Enter a computer's address; it then asks the owner to approve on that computer (nothing else to type). The footer submits. */
+export function ManualPanel({ address, onChange, showRequired }: { address: string; onChange: (v: string) => void; showRequired: boolean }) {
+  const c = useScheme();
   return (
-    <View style={{ gap: Spacing.md }}>
-      <AddressField value={address} onChange={setAddress} error={touched && !address.trim() ? t('requiredLabel') : null} />
-      <HintCard text={t('pairingHint')} />
-      <Button label={t('requestPairingButton')} onPress={submit} icon={<Send size={18} color="#fff" />} />
+    <View style={{ gap: 10 }}>
+      <AddressField value={address} onChange={onChange} error={showRequired && !address.trim() ? t('requiredLabel') : null} />
+      <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} color={c.onSurfaceVariant}>
+        {t('pairingHint')}
+      </Text>
     </View>
   );
 }

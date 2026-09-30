@@ -18,7 +18,7 @@ export function Menu({ trigger, items, accessibilityLabel }: { trigger: ReactNod
       </RNPressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', padding: 32 }} onPress={() => setOpen(false)}>
-          <View accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.chip, paddingVertical: 8, borderWidth: 1, borderColor: c.outlineVariant }}>
+          <View accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderRadius: Radii.lg, paddingVertical: 8 }}>
             {items.map((it) => (
               <RNPressable
                 key={it.label}

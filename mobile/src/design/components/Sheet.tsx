@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable as RNPressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LumenType } from '../lumen';
 import { useScheme } from '../theme';
 import { Radii, Spacing } from '../tokens';
 import { withAlpha } from './Callouts';
@@ -17,7 +18,7 @@ export function BottomSheet({ visible, onClose, children, maxHeight = '85%' }: {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={onClose} accessibilityLabel="Close">
-        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderTopLeftRadius: Radii.sheet, borderTopRightRadius: Radii.sheet, maxHeight, paddingBottom: insets.bottom, overflow: 'hidden' }}>
+        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderTopLeftRadius: Radii.sheet, borderTopRightRadius: Radii.sheet, maxHeight, paddingBottom: insets.bottom, overflow: 'hidden' }}>
           {children}
         </RNPressable>
       </RNPressable>
@@ -38,8 +39,8 @@ export function SheetHead({ title, subtitle }: { title: string; subtitle?: strin
         <View style={{ width: 36, height: 4, borderRadius: Radii.stadium, backgroundColor: '#8884' }} />
       </View>
       <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 16, fontFamily: 'Lato_700Bold' }} accessibilityRole="header">{title}</Text>
-        {subtitle ? <Text muted style={{ fontSize: 12, marginTop: 2 }}>{subtitle}</Text> : null}
+        <Text style={LumenType.title} accessibilityRole="header">{title}</Text>
+        {subtitle ? <Text muted style={[LumenType.meta, { marginTop: 2 }]}>{subtitle}</Text> : null}
       </View>
     </View>
   );
@@ -50,7 +51,7 @@ export function SheetHero({ badge, title, subtitle, tint, badgeColor, onClose, s
   const c = useScheme();
   const hero = tint ?? c.primary;
   return (
-    <LinearGradient colors={[withAlpha(hero, 0.28), withAlpha(hero, 0)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.sm }}>
+    <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.sm }}>
       {showGrabber && (
         <View style={{ marginBottom: Spacing.md }}>
           <SheetGrabber />
@@ -59,16 +60,16 @@ export function SheetHero({ badge, title, subtitle, tint, badgeColor, onClose, s
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md }}>
         <View style={{ width: 56, height: 56, borderRadius: Radii.card, backgroundColor: badgeColor ?? withAlpha(hero, 0.16), alignItems: 'center', justifyContent: 'center' }}>{badge}</View>
         <View style={{ flex: 1 }}>
-          <Text variant="titleLarge" numberOfLines={1} accessibilityRole="header" style={{ fontFamily: 'Lato_700Bold' }}>{title}</Text>
-          {subtitle ? <Text variant="bodySmall" muted style={{ marginTop: Spacing.xs }}>{subtitle}</Text> : null}
+          <Text numberOfLines={1} accessibilityRole="header" style={LumenType.title}>{title}</Text>
+          {subtitle ? <Text muted style={[LumenType.meta, { marginTop: Spacing.xs }]}>{subtitle}</Text> : null}
         </View>
         {onClose && (
-          <Pressable onPress={onClose} accessibilityLabel="Close" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={onClose} accessibilityLabel="Close" style={{ width: 48, height: 48, marginTop: -4, marginRight: -8, alignItems: 'center', justifyContent: 'center' }}>
             <X size={20} color={c.onSurface} />
           </Pressable>
         )}
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -94,9 +95,9 @@ export function QuickActionRow({ children }: { children: ReactNode }) {
 export function ActionListTile({ icon, label, onPress, tint, trailing }: { icon: ReactNode; label: string; onPress: () => void; tint?: string; trailing?: ReactNode }) {
   return (
     <Pressable onPress={onPress} accessibilityLabel={label}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, minHeight: 48 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, minHeight: 56 }}>
         {icon}
-        <Text variant="bodyLarge" color={tint} style={{ flex: 1 }}>{label}</Text>
+        <Text color={tint} style={[LumenType.name, { flex: 1 }]} numberOfLines={2}>{label}</Text>
         {trailing}
       </View>
     </Pressable>

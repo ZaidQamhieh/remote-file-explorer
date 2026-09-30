@@ -4,16 +4,16 @@ import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import type { AgentClient } from '../../../core/api/agentClient';
 import { formatSize } from '../../../core/format';
+import { mix } from '../../../design/color';
 import { EmptyState, ErrorRetry, GroupedCard, Loading, Pressable, Text } from '../../../design/components';
-import { useScheme } from '../../../design/theme';
-import { FontFamily, Radii, Spacing } from '../../../design/tokens';
+import { LumenSize, LumenType } from '../../../design/lumen';
+import { useRoles, useScheme } from '../../../design/theme';
+import { FontFamily, Spacing } from '../../../design/tokens';
 import { t } from '../../../i18n';
 import { humanizeError } from '../../../features/pairing/pairingService';
 import { useHostById } from '../../../features/hosts/useHostById';
-import { aggregateByExtension, bucketBySize, categoryFor, CATEGORY_COLOR, extensionOf, sortedBySize, type TypeAggregation } from '../../../features/storage/storageLogic';
+import { aggregateByExtension, bucketBySize, categoryFor, extensionOf, sortedBySize, type TypeAggregation } from '../../../features/storage/storageLogic';
 import { clientForHost } from '../../../services';
-
-const GRADIENTS = ['#3F6FD9', '#8470E0', '#D98A1F', '#3D4356'];
 
 /** Walks every listing page of [path] recursively, reporting the running file count. */
 async function scan(client: AgentClient, path: string, out: { ext: string; size: number }[], onProgress: (n: number) => void, cancelled: () => boolean): Promise<void> {
@@ -35,6 +35,9 @@ export default function TypeMap() {
   const { id, path: startPath } = useLocalSearchParams<{ id: string; path?: string }>();
   const host = useHostById(id);
   const c = useScheme();
+  const roles = useRoles();
+  const blockTones = [c.primary, roles.photo, roles.warn, roles.route];
+  const categoryTone: Record<ReturnType<typeof categoryFor>, string> = { image: roles.photo, video: roles.photo, audio: roles.route, document: roles.doc, archive: roles.warn, code: roles.transfer, other: c.onSurfaceVariant };
   const [result, setResult] = useState<TypeAggregation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(0);
@@ -78,24 +81,24 @@ export default function TypeMap() {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm }}>
         {title}
-        <ActivityIndicator />
-        <Text variant="titleMedium">{t('storageByTypeScanning')}</Text>
-        <Text muted>{t('storageByTypeFiles', { count: scanned })}</Text>
+        <ActivityIndicator color={c.primary} />
+        <Text style={LumenType.title}>{t('storageByTypeScanning')}</Text>
+        <Text style={LumenType.meta} muted>{t('storageByTypeFiles', { count: scanned })}</Text>
       </View>
     );
   }
   if (result.totalFiles === 0) return <View style={{ flex: 1 }}>{title}<EmptyState message={t('storageByTypeEmpty')} /></View>;
 
   const block = (i: number, style: object) => (
-    <View key={buckets[i].label} style={[{ backgroundColor: GRADIENTS[i % GRADIENTS.length], borderRadius: Radii.sm, padding: Spacing.sm, justifyContent: 'flex-end' }, style]}>
-      <Text style={{ color: '#fff', fontFamily: FontFamily.semibold, fontSize: 12 }}>{buckets[i].label}</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.75)', fontFamily: FontFamily.mono, fontSize: 10.5 }}>{formatSize(buckets[i].bytes)}</Text>
+    <View key={buckets[i].label} style={[{ backgroundColor: mix(blockTones[i % blockTones.length], c.surfaceContainer, 0.22), borderRadius: LumenSize.cardRadius, padding: 12, justifyContent: 'flex-end' }, style]}>
+      <Text style={LumenType.name} color={blockTones[i % blockTones.length]}>{buckets[i].label}</Text>
+      <Text style={[LumenType.meta, { fontFamily: FontFamily.mono }]} color={blockTones[i % blockTones.length]}>{formatSize(buckets[i].bytes)}</Text>
     </View>
   );
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, gap: 16, paddingBottom: 32 }}>
       {title}
-      <Text variant="titleMedium">{t('storageByTypeSummary', { count: result.totalFiles, size: formatSize(result.totalSize) })}</Text>
+      <Text style={LumenType.title}>{t('storageByTypeSummary', { count: result.totalFiles, size: formatSize(result.totalSize) })}</Text>
       {buckets.length === 1 ? (
         block(0, { height: 160 })
       ) : (
@@ -104,16 +107,16 @@ export default function TypeMap() {
           <View style={{ flex: 10, gap: Spacing.xs }}>{buckets.slice(1).map((_, i) => block(i + 1, { flex: 1 }))}</View>
         </View>
       )}
-      <Text muted variant="bodySmall" style={{ textAlign: 'center' }}>{t('storageByTypeHint')}</Text>
-      <GroupedCard>
+      <Text muted style={[LumenType.meta, { textAlign: 'center' }]}>{t('storageByTypeHint')}</Text>
+      <GroupedCard padded={false} style={{ padding: 8 }}>
         {rows.map((r) => (
           <Pressable key={r.ext} onPress={() => setSelected(selected === r.ext ? null : r.ext)} accessibilityLabel={r.ext}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm, backgroundColor: selected === r.ext ? c.primaryContainer : 'transparent', borderRadius: Radii.sm, paddingHorizontal: Spacing.xs }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: CATEGORY_COLOR[categoryFor(r.ext)] }} />
-              <Text style={{ flex: 1 }} numberOfLines={1}>{r.ext}</Text>
-              <Text muted>{formatSize(r.bytes)}</Text>
-              <Text muted variant="bodySmall" style={{ width: 44, textAlign: 'right' }}>{r.count}</Text>
-              <Text muted variant="bodySmall" style={{ width: 52, textAlign: 'right' }}>{result.totalSize > 0 ? ((r.bytes / result.totalSize) * 100).toFixed(1) : '0.0'}%</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 10, minHeight: 48, backgroundColor: selected === r.ext ? mix(c.primary, c.surfaceContainer, 0.14) : 'transparent', borderRadius: LumenSize.tileRadius, paddingHorizontal: 8 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: categoryTone[categoryFor(r.ext)] }} />
+              <Text style={[LumenType.name, { flex: 1 }]} numberOfLines={1}>{r.ext}</Text>
+              <Text muted style={LumenType.meta}>{formatSize(r.bytes)}</Text>
+              <Text muted style={[LumenType.meta, { width: 48, textAlign: 'right' }]}>{r.count}</Text>
+              <Text muted style={[LumenType.meta, { width: 60, textAlign: 'right' }]}>{result.totalSize > 0 ? ((r.bytes / result.totalSize) * 100).toFixed(1) : '0.0'}%</Text>
             </View>
           </Pressable>
         ))}

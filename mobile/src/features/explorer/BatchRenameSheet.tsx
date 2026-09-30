@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { BottomSheet, Button, Segmented, SheetHero, Text, TextField } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
@@ -40,13 +41,13 @@ export function BatchRenameSheet({ visible, names, onClose, onApply }: { visible
               <TextField label={t('replaceWithLabel')} value={replace} onChangeText={setReplace} autoCapitalize="none" autoCorrect={false} />
             </>
           )}
-          <View style={{ backgroundColor: c.surfaceContainerHighest, borderRadius: Radii.card, padding: Spacing.sm, gap: 2 }} accessibilityLabel="Preview">
+          <View style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.card, padding: Spacing.md, gap: 2 }} accessibilityLabel="Preview">
             {names.slice(0, shown).map((n, i) => (
-              <Text key={i} variant="bodySmall" numberOfLines={1}>{`${n}  →  ${preview[i]}`}</Text>
+              <Text key={i} style={LumenType.meta} numberOfLines={1}>{`${n}  →  ${preview[i]}`}</Text>
             ))}
-            {names.length > shown && <Text variant="bodySmall" muted>{t('andNMore', { count: names.length - shown })}</Text>}
+            {names.length > shown && <Text style={LumenType.meta} muted>{t('andNMore', { count: names.length - shown })}</Text>}
           </View>
-          <Button label={t('renameNItems', { count: names.length })} onPress={() => onApply(preview)} />
+          <Button size="lg" label={t('renameNItems', { count: names.length })} onPress={() => onApply(preview)} />
         </View>
       </ScrollView>
     </BottomSheet>

@@ -1,17 +1,76 @@
 import { Monitor } from 'lucide-react-native';
-import { useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { TextInput, View, type TextInputProps } from 'react-native';
 
-import { Text, TextField } from '../../design/components';
+import { Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenSize, LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { FontFamily, Radii } from '../../design/tokens';
+import { FontFamily } from '../../design/tokens';
 import { t } from '../../i18n';
 import { CODE_LENGTH, sanitizeCode } from './codeInput';
+
+type FieldProps = TextInputProps & { label: string; error?: string | null; helper?: string; leading?: ReactNode; trailing?: ReactNode; mono?: boolean };
+
+/**
+ * Lumen field: a flat raised tile with no outline. The label sits above in the caption style; focus only lifts the fill
+ * towards the host colour, and an error turns the message (not a border) red.
+ */
+export function LumenField({ label, error, helper, leading, trailing, mono, style, onFocus, onBlur, ...rest }: FieldProps) {
+  const c = useScheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={LumenType.meta} color={c.onSurfaceVariant}>
+        {label}
+      </Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          minHeight: 56,
+          paddingHorizontal: 16,
+          borderRadius: LumenSize.tileRadius,
+          backgroundColor: focused ? mix(c.primary, c.surfaceContainerHigh, 0.12) : c.surfaceContainerHigh,
+        }}
+      >
+        {leading}
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={c.onSurfaceVariant}
+          selectionColor={c.primary}
+          {...rest}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          style={[{ flex: 1, color: c.onSurface, paddingVertical: 12, fontSize: 18, fontFamily: mono ? FontFamily.mono : FontFamily.regular }, style]}
+        />
+        {trailing}
+      </View>
+      {helper && !error ? (
+        <Text style={LumenType.meta} color={c.onSurfaceVariant}>
+          {helper}
+        </Text>
+      ) : null}
+      {error ? (
+        <Text style={LumenType.meta} color={c.error} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 export function AddressField({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: string | null }) {
   const c = useScheme();
   return (
-    <TextField
+    <LumenField
       label={t('agentAddressLabel')}
       placeholder={t('agentAddressHint')}
       value={value}
@@ -20,14 +79,15 @@ export function AddressField({ value, onChange, error }: { value: string; onChan
       autoCorrect={false}
       keyboardType="url"
       error={error}
-      leading={<Monitor size={18} color={c.onSurfaceVariant} />}
+      leading={<Monitor size={22} color={c.onSurfaceVariant} />}
     />
   );
 }
 
 /**
  * 8 display boxes over ONE real text input (the standard OTP pattern): fast typing, paste and IME
- * composition are handled by the native input rather than 8 racing controlled fields.
+ * composition are handled by the native input rather than 8 racing controlled fields. Boxes are flat; the box under the
+ * cursor is tinted with the host colour instead of outlined.
  */
 export function CodeBoxRow({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const c = useScheme();
@@ -36,23 +96,22 @@ export function CodeBoxRow({ value, onChange }: { value: string; onChange: (v: s
   const chars = value.padEnd(CODE_LENGTH, ' ').slice(0, CODE_LENGTH).split('');
   const cursor = Math.min(value.length, CODE_LENGTH - 1);
   return (
-    <View style={{ height: 48 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 7 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <View style={{ height: 56 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {chars.map((ch, i) => (
           <View
             key={i}
             style={{
-              width: 34,
-              height: 48,
+              flex: 1,
+              maxWidth: 40,
+              height: 56,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: c.surfaceContainerHighest,
-              borderRadius: Radii.chip,
-              borderWidth: focused && i === cursor ? 2 : 1,
-              borderColor: focused && i === cursor ? c.primary : c.outlineVariant,
+              backgroundColor: focused && i === cursor ? mix(c.primary, c.surfaceContainerHigh, 0.3) : c.surfaceContainerHigh,
+              borderRadius: LumenSize.tileRadius,
             }}
           >
-            <Text style={{ fontFamily: FontFamily.monoMedium, fontSize: 18 }}>{ch.trim()}</Text>
+            <Text style={{ fontFamily: FontFamily.monoMedium, fontSize: 20 }}>{ch.trim()}</Text>
           </View>
         ))}
       </View>

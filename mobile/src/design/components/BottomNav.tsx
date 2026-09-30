@@ -24,11 +24,11 @@ export function BottomNav({ state, navigation, destinations }: BottomTabBarProps
     <View style={{ backgroundColor: c.surface, paddingBottom: insets.bottom + LumenSize.dockInsetBottom, paddingHorizontal: LumenSize.dockInsetX, paddingTop: 4 }}>
       <View
         style={{
-          height: LumenSize.dockHeight * 2 - 8,
+          height: LumenSize.dockHeight,
           padding: 6,
           flexDirection: 'row',
           alignItems: 'center',
-          borderRadius: LumenSize.dockRadius * 2,
+          borderRadius: LumenSize.dockRadius,
           backgroundColor: c.surfaceContainer,
           elevation: 6,
           shadowColor: '#000',
@@ -54,7 +54,7 @@ export function BottomNav({ state, navigation, destinations }: BottomTabBarProps
               }}
               style={{ flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center' }}
             >
-              <View style={{ position: 'absolute', top: 0, left: 2, right: 2, bottom: 0, borderRadius: LumenSize.dockItemRadius * 2, backgroundColor: pill, opacity: selected ? 1 : 0 }} />
+              <View style={{ position: 'absolute', top: 0, left: 2, right: 2, bottom: 0, borderRadius: LumenSize.dockItemRadius, backgroundColor: pill, opacity: selected ? 1 : 0 }} />
               <View style={{ alignItems: 'center', gap: 4 }}>
                 <Icon size={26} color={tint} />
                 <Text style={[LumenType.dock, selected && { fontFamily: 'Lato_700Bold' }]} color={tint} numberOfLines={1}>

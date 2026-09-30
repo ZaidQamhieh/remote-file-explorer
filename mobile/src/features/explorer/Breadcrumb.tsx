@@ -5,6 +5,8 @@ import { useRef } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Menu, Pressable, Text, useToast } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
@@ -49,8 +51,8 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
             key="collapsed"
             accessibilityLabel={t('showHiddenFoldersTooltip')}
             trigger={
-              <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, borderWidth: 1, borderColor: c.outlineVariant }}>
-                <Text style={{ fontSize: 13 }} muted>…</Text>
+              <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, backgroundColor: c.surfaceContainerHigh }}>
+                <Text style={LumenType.pill} muted>…</Text>
               </View>
             }
             items={[
@@ -78,8 +80,8 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
     const current = i === last;
     items.push(
       <Pressable key={`c${i}`} onPress={() => onNavigateTo(i)} onLongPress={() => copyPath(pathStack[i])} accessibilityLabel={crumbLabel(pathStack, i)} hitSlop={6}>
-        <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, backgroundColor: current ? c.primary : 'transparent', borderWidth: current ? 0 : 1, borderColor: c.outlineVariant }}>
-          <Text style={{ fontSize: 13 }} color={current ? c.onPrimary : c.onSurfaceVariant} numberOfLines={1}>
+        <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radii.stadium, backgroundColor: current ? mix(c.primary, c.surfaceContainer, 0.2) : c.surfaceContainerHigh }}>
+          <Text style={LumenType.pill} color={current ? c.primary : c.onSurfaceVariant} numberOfLines={1}>
             {crumbLabel(pathStack, i)}
           </Text>
         </View>
@@ -87,7 +89,7 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
     );
   }
   return (
-    <ScrollView ref={scroller} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: Spacing.xs, alignItems: 'center' }}>
+    <ScrollView ref={scroller} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: Spacing.xs, paddingRight: 18, alignItems: 'center' }}>
       {items}
     </ScrollView>
   );
@@ -95,5 +97,5 @@ export function BreadcrumbBar({ pathStack, onNavigateTo, onJumpTo }: { pathStack
 
 function Sep({ show }: { show: boolean }) {
   const c = useScheme();
-  return show ? <ChevronRight size={18} color={c.outline} style={{ marginHorizontal: Spacing.xs }} /> : null;
+  return show ? <ChevronRight size={16} color={c.outline} style={{ marginHorizontal: Spacing.xs }} /> : null;
 }

@@ -31,21 +31,44 @@ export function StatePill({ label, tone = 'safe', icon: Icon }: { label: string;
  * `.sys` + `.appbar`: a muted context line on the left ("Studio PC · Files"), a state pill or the overflow dots on the
  * right. The system status bar is the real one, so only the appbar row is drawn here.
  */
-export function TopBar({ context, right, onMore }: { context: string; right?: ReactNode; onMore?: () => void }) {
+export function TopBar({ context, right, onMore, sub, actions }: { context: string; right?: ReactNode; onMore?: () => void; sub?: string; actions?: ReactNode }) {
   const c = useScheme();
   const insets = useSafeAreaInsets();
+  const more = onMore ? (
+    <Pressable onPress={onMore} accessibilityLabel="More" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <EllipsisVertical size={22} color={c.onSurfaceVariant} />
+    </Pressable>
+  ) : null;
+  if (sub) {
+    // Mockup `.appbar` with a second `.workspace-row`: context + actions on top, label + state pill below.
+    return (
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 18, paddingBottom: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
+          <Text style={[LumenType.appbar, { flexShrink: 1 }]} color={c.onSurfaceVariant} numberOfLines={1}>
+            {context}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {actions}
+            {more}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
+          <Text style={LumenType.appbar} color={c.onSurfaceVariant} numberOfLines={1}>
+            {sub}
+          </Text>
+          {right}
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 18, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 64 + insets.top }}>
-      <Text style={LumenType.appbar} color={c.onSurfaceVariant} numberOfLines={1}>
+      <Text style={[LumenType.appbar, { flexShrink: 1 }]} color={c.onSurfaceVariant} numberOfLines={1}>
         {context}
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {right}
-        {onMore ? (
-          <Pressable onPress={onMore} accessibilityLabel="More" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <EllipsisVertical size={22} color={c.onSurfaceVariant} />
-          </Pressable>
-        ) : null}
+        {more}
       </View>
     </View>
   );

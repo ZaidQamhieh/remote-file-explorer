@@ -29,12 +29,12 @@ export function ConfirmDialog({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }} onPress={onCancel} accessibilityLabel={cancelLabel}>
-        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.card + 4, padding: 24, gap: 12, borderWidth: 1, borderColor: c.outlineVariant }}>
+        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderRadius: Radii.lg, padding: 24, gap: 12 }}>
           <Text variant="titleLarge" accessibilityRole="header">{title}</Text>
           <Text muted style={{ lineHeight: 20 }}>{description}</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Button kind="text" label={cancelLabel} onPress={onCancel} />
-            <Button kind={destructive ? 'outlined' : 'filled'} destructive={destructive} label={confirmLabel} onPress={onConfirm} />
+            <Button kind={destructive ? 'neutral' : 'filled'} destructive={destructive} label={confirmLabel} onPress={onConfirm} />
           </View>
         </RNPressable>
       </RNPressable>

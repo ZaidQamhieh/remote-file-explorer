@@ -5,9 +5,10 @@ import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native'
 
 import type { TrashEntry } from '../core/api/models';
 import { formatRelative, formatSize } from '../core/format';
-import { AppBarIconButton, EmptyState, ErrorRetry, GhostBlockButton, Pressable, Text, useDialogs, useToast } from '../design/components';
+import { AppBarIconButton, Button, EmptyState, ErrorRetry, Pressable, Text, useDialogs, useToast } from '../design/components';
+import { LumenSize, LumenType } from '../design/lumen';
 import { useScheme } from '../design/theme';
-import { FontFamily, Radii, Spacing } from '../design/tokens';
+import { ResultCardRow } from '../features/search/SearchParts';
 import { explorerFor } from '../features/explorer/useExplorer';
 import { humanizeError } from '../features/pairing/pairingService';
 import { t } from '../i18n';
@@ -105,20 +106,23 @@ export default function Trash() {
         data={items}
         keyExtractor={(i) => i.id}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        contentContainerStyle={{ paddingVertical: Spacing.md }}
+        contentContainerStyle={{ paddingVertical: 10 }}
         ListHeaderComponent={
-          <View style={{ marginHorizontal: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', gap: Spacing.sm, padding: 14, borderRadius: Radii.card, borderWidth: 1, borderColor: c.outlineVariant, backgroundColor: c.surfaceContainerHigh }}>
-            <Info size={16} color={c.onSurfaceVariant} style={{ marginTop: 2 }} />
-            <Text variant="bodySmall" muted style={{ flex: 1 }}>{"Items stay here until you delete them yourself — RFE doesn't auto-purge trash."}</Text>
+          <View style={{ marginHorizontal: 18, marginBottom: 10, flexDirection: 'row', gap: 10, padding: 14, borderRadius: LumenSize.cardRadius, backgroundColor: c.surfaceContainer }}>
+            <Info size={18} color={c.onSurfaceVariant} style={{ marginTop: 2 }} />
+            <Text style={[LumenType.meta, { flex: 1 }]} muted>{"Items stay here until you delete them yourself — RFE doesn't auto-purge trash."}</Text>
           </View>
         }
-        ItemSeparatorComponent={() => <View style={{ height: 1, marginLeft: Spacing.md, backgroundColor: c.outlineVariant }} />}
         ListFooterComponent={
-          <View style={{ padding: Spacing.md }}>
-            <GhostBlockButton label={t('emptyTrashTooltip')} onPress={emptyAll} />
+          <View style={{ padding: 18 }}>
+            <Button size="lg" kind="neutral" destructive label={t('emptyTrashTooltip')} onPress={emptyAll} />
           </View>
         }
-        renderItem={({ item }) => <TrashRow item={item} onRestore={() => restore(item)} onDelete={() => deleteForever(item)} />}
+        renderItem={({ item, index }) => (
+          <ResultCardRow index={index} count={items?.length ?? 0}>
+            <TrashRow item={item} onRestore={() => restore(item)} onDelete={() => deleteForever(item)} />
+          </ResultCardRow>
+        )}
       />
     );
   }
@@ -141,19 +145,19 @@ function TrashRow({ item, onRestore, onDelete }: { item: TrashEntry; onRestore: 
   const Icon = item.isDir ? Folder : FileIcon;
   const subtitle = [item.originalPath, item.deletedAt ? t('deletedRelative', { relative: formatRelative(new Date(item.deletedAt)) }) : null, !item.isDir && item.size != null ? formatSize(item.size) : null].filter(Boolean).join(' · ');
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, opacity: 0.85 }}>
-      <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: c.surfaceContainerHighest, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={18} color={c.onSurfaceVariant} />
+    <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, marginRight: -8 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={22} color={c.onSurfaceVariant} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{item.name}</Text>
-        <Text numberOfLines={2} muted style={{ fontSize: 11.5 }}>{subtitle}</Text>
+        <Text numberOfLines={1} style={LumenType.name}>{item.name}</Text>
+        <Text numberOfLines={2} muted style={LumenType.meta}>{subtitle}</Text>
       </View>
-      <Pressable onPress={onRestore} pressedScale={0.92} accessibilityLabel={`${t('restoreButton')} ${item.name}`} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <ArchiveRestore size={18} color={c.onSurfaceVariant} />
+      <Pressable onPress={onRestore} pressedScale={0.92} accessibilityLabel={`${t('restoreButton')} ${item.name}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+        <ArchiveRestore size={20} color={c.onSurfaceVariant} />
       </Pressable>
-      <Pressable onPress={onDelete} pressedScale={0.92} accessibilityLabel={`${t('deleteForeverButton')} ${item.name}`} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <Trash2 size={18} color={c.error} />
+      <Pressable onPress={onDelete} pressedScale={0.92} accessibilityLabel={`${t('deleteForeverButton')} ${item.name}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+        <Trash2 size={20} color={c.error} />
       </Pressable>
     </View>
   );

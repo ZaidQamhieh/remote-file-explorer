@@ -6,8 +6,8 @@ import { View } from 'react-native';
 import { authenticate, deviceAuthState } from '../../core/security/deviceAuth';
 import type { Host } from '../../core/models/host';
 import { Pressable, Text, useDialogs, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { lockEnableBlocker } from '../../features/security/lockLogic';
 import { InfoRow, NavRow, RowBadge, SettingsPage, SettingsSection, ToggleRow } from '../../features/settings/parts';
@@ -93,11 +93,11 @@ export default function StorageSecuritySettings() {
             <View key={x.host.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }}>
               <RowBadge icon={Fingerprint} tint={c.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14 }}>{x.host.label || x.host.address}</Text>
-                <Text muted style={{ fontSize: 11.5 }}>{x.pin ? x.host.address : t('probeMissingPinHint')}</Text>
+                <Text style={LumenType.name}>{x.host.label || x.host.address}</Text>
+                <Text muted style={LumenType.meta}>{x.pin ? x.host.address : t('probeMissingPinHint')}</Text>
               </View>
-              <Pressable onPress={() => void forget(x)} accessibilityLabel={`${t('forgetButton')} ${x.host.label || x.host.address}`} style={{ padding: Spacing.sm }}>
-                <Trash2 size={18} color={c.error} />
+              <Pressable onPress={() => void forget(x)} accessibilityLabel={`${t('forgetButton')} ${x.host.label || x.host.address}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={20} color={c.error} />
               </Pressable>
             </View>
           ))

@@ -3,7 +3,8 @@ import { Server } from 'lucide-react-native';
 import { useCallback } from 'react';
 import { View } from 'react-native';
 
-import { AppBar, Button, Text } from '../../design/components';
+import { Button, GroupedCard, PageHead, Text, TopBar } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { ExplorerScreen } from '../../features/explorer/ExplorerScreen';
 import { HostRootView } from '../../features/explorer/HostRootView';
@@ -28,11 +29,14 @@ export default function Files() {
   if (!active) {
     return (
       <View style={{ flex: 1 }}>
-        <AppBar title="Files" />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <Server size={56} color={c.outline} />
-          <Text>Select a server to browse its files</Text>
-          <Button kind="filled" label="Go to Devices" renderIcon={(k) => <Server size={18} color={k} />} onPress={() => router.navigate('/')} />
+        <TopBar context="Files" />
+        <PageHead title="Files" subtitle="Select a server to browse its files" />
+        <View style={{ paddingHorizontal: 18 }}>
+          <GroupedCard style={{ alignItems: 'center', gap: 14, paddingVertical: 24 }}>
+            <Server size={40} color={c.onSurfaceVariant} />
+            <Text style={[LumenType.meta, { textAlign: 'center' }]} muted>Pick a computer on the Home tab, then a shared folder, to start browsing.</Text>
+            <Button size="lg" kind="filled" label="Go to Home" renderIcon={(k) => <Server size={20} color={k} />} onPress={() => router.navigate('/')} />
+          </GroupedCard>
         </View>
       </View>
     );

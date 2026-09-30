@@ -6,9 +6,11 @@ import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-nativ
 import { canManageHost, hasAppCapabilities, hasFileCapabilities, type AgentStatus, type BandwidthSettings, type Device, type Drive, type FileCapability, FILE_CAPABILITIES } from '../../core/api/models';
 import { formatRelative, formatSize } from '../../core/format';
 import { isValidInternetAddress, routeForAddress, type Host, type HostRoute } from '../../core/models/host';
-import { ErrorRetry, GhostBlockButton, Pressable, Text, useDialogs, useToast } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { mix } from '../../design/color';
+import { Button, ErrorRetry, Pressable, SectionLabel, Text, useDialogs, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
+import { useRoles, useScheme } from '../../design/theme';
+import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { clientForHost, hostStore } from '../../services';
 import { useActiveHost } from '../../state/activeHost';
@@ -25,6 +27,7 @@ type Loaded = { status: AgentStatus; devices: Device[]; drives: Drive[]; bandwid
 /** Per-host settings: agent name and access, connection routes, bandwidth limits, allowed folders, paired devices and their grants. */
 export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
   const c = useScheme();
+  const roles = useRoles();
   const router = useRouter();
   const toast = useToast();
   const dialogs = useDialogs();
@@ -76,7 +79,7 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <Stack.Screen options={{ title: host.label || host.address }} />
-        <ActivityIndicator />
+        <ActivityIndicator color={c.primary} />
       </View>
     );
   }
@@ -211,7 +214,7 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: Spacing.md, paddingBottom: Spacing.xl * 2, gap: Spacing.md }}
+      contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 48, gap: 16 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -224,10 +227,10 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
       }
     >
       <Stack.Screen options={{ title: host.label || host.address }} />
-      <Text variant="bodySmall" muted style={{ paddingHorizontal: Spacing.xs }}>
+      <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} muted>
         {host.address}
       </Text>
-      {owner && <Text variant="bodySmall" muted style={{ paddingHorizontal: Spacing.xs }}>{t('securityWarning')}</Text>}
+      {owner && <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} muted>{t('securityWarning')}</Text>}
 
       <SettingsSection title={t('agentSection')}>
         {owner ? <ValueRow icon={Server} tint={c.primary} title={t('agentNameLabel')} value={s.agentName} onPress={editName} /> : <InfoRow icon={Server} tint={c.primary} title={t('agentNameLabel')} subtitle={s.agentName} />}
@@ -253,33 +256,33 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
         {host.tailscaleAddress && host.tailscaleAddress !== host.address ? <InfoRow icon={Network} tint={c.primary} title={t('routeTailscaleName')} subtitle={host.tailscaleAddress} /> : null}
         <InfoRow icon={Globe} tint={c.primary} title={t('routeInternetName')} subtitle={host.internetAddress ?? t('routeNotConfigured')} />
         <NavRow icon={Settings2} tint={c.primary} title={t('editInternetRouteTitle')} subtitle={t('editInternetRouteSubtitle')} onPress={editInternetAddress} />
-        <Text variant="bodySmall" muted style={{ paddingTop: Spacing.xs }}>{t('routePriorityAndSecurityHint')}</Text>
+        <Text style={[LumenType.meta, { paddingVertical: 10 }]} muted>{t('routePriorityAndSecurityHint')}</Text>
       </SettingsSection>
 
       <SettingsSection title={t('limitsSection')}>
         {owner ? (
           <>
-            <ValueRow icon={ArrowUp} tint={Brand.amber} title={t('bandwidthUploadLimit')} value={bandwidthLabel(bandwidth.maxUploadBytesPerSec)} onPress={() => void pickBandwidth('maxUploadBytesPerSec', t('bandwidthUploadLimit'))} />
-            <ValueRow icon={ArrowDown} tint={Brand.amber} title={t('bandwidthDownloadLimit')} value={bandwidthLabel(bandwidth.maxDownloadBytesPerSec)} onPress={() => void pickBandwidth('maxDownloadBytesPerSec', t('bandwidthDownloadLimit'))} />
+            <ValueRow icon={ArrowUp} tint={roles.warn} title={t('bandwidthUploadLimit')} value={bandwidthLabel(bandwidth.maxUploadBytesPerSec)} onPress={() => void pickBandwidth('maxUploadBytesPerSec', t('bandwidthUploadLimit'))} />
+            <ValueRow icon={ArrowDown} tint={roles.warn} title={t('bandwidthDownloadLimit')} value={bandwidthLabel(bandwidth.maxDownloadBytesPerSec)} onPress={() => void pickBandwidth('maxDownloadBytesPerSec', t('bandwidthDownloadLimit'))} />
           </>
         ) : null}
-        <NavRow icon={HardDrive} tint={Brand.seed} title={t('storageInsightsTitle')} subtitle={t('storageInsightsRowSubtitle')} onPress={() => router.push({ pathname: '/host/[id]/storage', params: { id: host.id } })} />
-        <NavRow icon={Activity} tint={Brand.online} title={t('connectionDiagnosticsTitle')} onPress={() => setDiagOpen(true)} />
-        {owner ? <NavRow icon={ScrollText} tint={Brand.amber} title={t('activityLogTitle')} onPress={() => router.push({ pathname: '/host/[id]/audit', params: { id: host.id } })} /> : null}
+        <NavRow icon={HardDrive} tint={c.primary} title={t('storageInsightsTitle')} subtitle={t('storageInsightsRowSubtitle')} onPress={() => router.push({ pathname: '/host/[id]/storage', params: { id: host.id } })} />
+        <NavRow icon={Activity} tint={roles.safe} title={t('connectionDiagnosticsTitle')} onPress={() => setDiagOpen(true)} />
+        {owner ? <NavRow icon={ScrollText} tint={roles.warn} title={t('activityLogTitle')} onPress={() => router.push({ pathname: '/host/[id]/audit', params: { id: host.id } })} /> : null}
       </SettingsSection>
 
       <SettingsSection title={t('allowedFoldersSection')}>
         {s.accessDenied ? (
-          <View style={{ flexDirection: 'row', gap: Spacing.xs, paddingVertical: Spacing.sm }}>
-            <Lock size={18} color={c.error} />
-            <Text style={{ flex: 1 }} color={c.error}>This device has no folder access. Ask the PC owner to review its folder restriction.</Text>
+          <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 12 }}>
+            <Lock size={20} color={c.error} />
+            <Text style={[LumenType.name, { flex: 1 }]} color={c.error}>This device has no folder access. Ask the PC owner to review its folder restriction.</Text>
           </View>
         ) : s.roots.length === 0 ? (
-          <Text muted style={{ paddingVertical: Spacing.sm }}>{t('allFoldersAllowed')}</Text>
+          <Text style={[LumenType.meta, { paddingVertical: 14 }]} muted>{t('allFoldersAllowed')}</Text>
         ) : (
           s.roots.map((r) => <InfoRow key={r} icon={Folder} tint={c.primary} title={r} />)
         )}
-        <Text variant="bodySmall" muted style={{ paddingTop: Spacing.xs }}>{t('managedOnPc')}</Text>
+        <Text style={[LumenType.meta, { paddingVertical: 10 }]} muted>{t('managedOnPc')}</Text>
       </SettingsSection>
 
       <DeviceVisibilitySection hostId={host.id} />
@@ -297,14 +300,10 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
         ))}
       </SettingsSection>
 
-      <View style={{ gap: Spacing.sm }}>
-        <Text style={{ fontSize: 10.5, fontFamily: FontFamily.semibold, letterSpacing: 0.9, textTransform: 'uppercase', paddingHorizontal: Spacing.xs }}>{t('dangerZoneSection')}</Text>
-        <Pressable onPress={me ? disconnectThisDevice : undefined} disabled={!me} accessibilityLabel={t('revokeAccessButton')}>
-          <View style={{ paddingHorizontal: 18, paddingVertical: 11, minHeight: 44, justifyContent: 'center', borderRadius: Radii.sm, backgroundColor: c.errorContainer }}>
-            <Text style={{ textAlign: 'center', fontSize: 13.5, fontFamily: FontFamily.semibold }} color={c.error}>{t('revokeAccessButton')}</Text>
-          </View>
-        </Pressable>
-        <GhostBlockButton label={t('forgetThisDeviceButton')} onPress={forgetThisDevice} />
+      <View style={{ gap: 10 }}>
+        <SectionLabel title={t('dangerZoneSection')} />
+        <Button size="lg" kind="neutral" destructive label={t('revokeAccessButton')} disabled={!me} onPress={() => void disconnectThisDevice()} />
+        <Button size="lg" kind="neutral" label={t('forgetThisDeviceButton')} onPress={() => void forgetThisDevice()} />
       </View>
 
       {diagOpen && <ConnectionDiagnosticsSheet host={host} onClose={() => setDiagOpen(false)} />}
@@ -329,7 +328,7 @@ function DeviceVisibilitySection({ hostId }: { hostId: string }) {
   const overridden = own?.visibility !== undefined;
   return (
     <SettingsSection title={t('fileVisibilityDeviceSection')}>
-      <Text variant="bodySmall" muted>{t('followsAppDefaultVisibility')}</Text>
+      <Text style={[LumenType.meta, { paddingVertical: 12 }]} muted>{t('followsAppDefaultVisibility')}</Text>
       <ToggleRow
         icon={Copy}
         tint={c.primary}
@@ -338,7 +337,7 @@ function DeviceVisibilitySection({ hostId }: { hostId: string }) {
         value={overridden}
         onChange={(on) => void setOverrides({ ...overrides, [hostId]: withVisibilityOverride(own, effective, on) })}
       />
-      {overridden ? <View style={{ paddingTop: Spacing.sm }}><VisibilityEditor prefs={effective} onChange={(next) => void setOverrides({ ...overrides, [hostId]: { ...own, visibility: next } })} /></View> : null}
+      {overridden ? <View style={{ paddingTop: 8, paddingBottom: 12 }}><VisibilityEditor prefs={effective} onChange={(next) => void setOverrides({ ...overrides, [hostId]: { ...own, visibility: next } })} /></View> : null}
     </SettingsSection>
   );
 }
@@ -348,27 +347,28 @@ function DeviceRow({ device: d, isAdmin, busy, onDisconnect, onApps, onGrants }:
   const status = d.current
     ? t('thisDevice')
     : [d.revoked ? t('revokedStatus') : t('activeStatus'), d.lastAddress, d.lastVersion ? `v${d.lastVersion}` : '', formatRelative(new Date(d.lastSeen))].filter(Boolean).join(' · ');
-  const statusColor = d.current ? Brand.online : d.revoked ? c.error : Brand.online;
+  const roles = useRoles();
+  const statusColor = d.revoked ? c.error : roles.safe;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 11 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12 }}>
       <RowBadge icon={d.revoked ? Unplug : Smartphone} tint={d.revoked ? c.error : c.primary} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{d.label}</Text>
-        <Text style={{ fontSize: 11.5 }} color={statusColor}>{status}</Text>
-        {d.jailRoot ? <Text style={{ fontSize: 12 }} color={c.tertiary}>{t('limitedTo', { path: d.jailRoot })}</Text> : null}
-        {!d.current ? <Text muted style={{ fontSize: 12 }}>{t('managedOnPc')}</Text> : null}
+        <Text style={LumenType.rowTitle}>{d.label}</Text>
+        <Text style={LumenType.meta} color={statusColor}>{status}</Text>
+        {d.jailRoot ? <Text style={LumenType.meta} color={c.tertiary}>{t('limitedTo', { path: d.jailRoot })}</Text> : null}
+        {!d.current ? <Text muted style={LumenType.meta}>{t('managedOnPc')}</Text> : null}
         {isAdmin && hasAppCapabilities(d) ? (
-          <View style={{ paddingTop: Spacing.sm }}>
-            <Text muted style={{ fontSize: 12, fontFamily: FontFamily.semibold }}>{t('appAccessTitle')}</Text>
-            <Text muted style={{ fontSize: 11 }}>{t('appAccessDefaultOffHint')}</Text>
+          <View style={{ paddingTop: 10 }}>
+            <Text style={LumenType.name}>{t('appAccessTitle')}</Text>
+            <Text muted style={LumenType.meta}>{t('appAccessDefaultOffHint')}</Text>
             <SmallSwitchRow label={t('viewAppsLabel')} subtitle={t('viewAppsDescription')} value={d.viewApps ?? false} disabled={busy} onChange={(v) => onApps({ viewApps: v })} />
             <SmallSwitchRow label={t('launchAppsLabel')} subtitle={t('launchAppsDescription')} value={(d.viewApps ?? false) && (d.launchApps ?? false)} disabled={busy || !(d.viewApps ?? false)} onChange={(v) => onApps({ launchApps: v })} />
           </View>
         ) : null}
         {isAdmin && hasFileCapabilities(d) && !d.viaLogin ? (
-          <View style={{ paddingTop: Spacing.sm }}>
-            <Text style={{ fontSize: 12, fontFamily: FontFamily.semibold }}>File access</Text>
-            <Text style={{ fontSize: 11 }} muted>New paired devices can browse only. Upload also allows overwriting existing files. Read-only mode, allowed folders, and global sharing still apply.</Text>
+          <View style={{ paddingTop: 10 }}>
+            <Text style={LumenType.name}>File access</Text>
+            <Text style={LumenType.meta} muted>New paired devices can browse only. Upload also allows overwriting existing files. Read-only mode, allowed folders, and global sharing still apply.</Text>
             {FILE_CAPABILITIES.map((cap) => (
               <SmallSwitchRow key={cap} label={FILE_CAPABILITY_LABEL[cap]} value={d[cap] ?? false} disabled={busy} onChange={(v) => onGrants({ [cap]: v })} />
             ))}
@@ -376,8 +376,8 @@ function DeviceRow({ device: d, isAdmin, busy, onDisconnect, onApps, onGrants }:
         ) : null}
       </View>
       {d.current ? (
-        <Pressable onPress={onDisconnect} accessibilityLabel={t('disconnectButton')} style={{ paddingHorizontal: Spacing.sm, minHeight: 44, justifyContent: 'center' }}>
-          <Text style={{ fontSize: 13, fontFamily: FontFamily.semibold }} color={c.error}>{t('disconnectButton')}</Text>
+        <Pressable onPress={onDisconnect} accessibilityLabel={t('disconnectButton')} style={{ paddingHorizontal: 10, minHeight: 48, justifyContent: 'center' }}>
+          <Text style={LumenType.pill} color={c.error}>{t('disconnectButton')}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -391,18 +391,18 @@ function DriveRow({ drive }: { drive: Drive }) {
   const name = drive.label ? drive.label : drive.path;
   const p = { used: formatSize(total - free), total: formatSize(total), free: formatSize(free) };
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }}>
       <RowBadge icon={drive.isOS ? MemoryStick : HardDrive} tint={c.primary} />
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-          <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium, flexShrink: 1 }}>{name}</Text>
+          <Text numberOfLines={1} style={[LumenType.rowTitle, { flexShrink: 1 }]}>{name}</Text>
           {drive.isOS ? (
-            <View style={{ paddingHorizontal: Spacing.xs, paddingVertical: 1, borderRadius: 4, backgroundColor: c.primaryContainer }}>
-              <Text style={{ fontSize: 11, fontFamily: FontFamily.semibold }} color={c.onPrimaryContainer}>{t('osLabel')}</Text>
+            <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: mix(c.primary, c.surfaceContainer, 0.15) }}>
+              <Text style={LumenType.pill} color={c.primary}>{t('osLabel')}</Text>
             </View>
           ) : null}
         </View>
-        <Text muted style={{ fontSize: 11.5 }}>{drive.isOS ? t('driveCapacityLineOs', p) : t('driveCapacityLine', p)}</Text>
+        <Text muted style={LumenType.meta}>{drive.isOS ? t('driveCapacityLineOs', p) : t('driveCapacityLine', p)}</Text>
       </View>
     </View>
   );

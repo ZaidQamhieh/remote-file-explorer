@@ -5,17 +5,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Entry } from '../../core/api/models';
 import { formatSize } from '../../core/format';
-import { Pressable, Text } from '../../design/components';
+import { Button, Pressable, Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { FontFamily, Radii, Spacing } from '../../design/tokens';
+import { Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 
-/** The mockup `.iconbtn` (34x34, 19px glyph), colour-adjustable for dark media canvases. */
+/** The mockup `.iconbtn`: a 40 dp round glyph button in a 48 dp touch target, colour-adjustable for dark media canvases. */
 export function PreviewIconButton({ label, onPress, selected, children }: { label: string; onPress: () => void; selected?: boolean; children: ReactNode }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={selected === undefined ? undefined : { selected }} pressedScale={0.9}>
-      <View style={{ width: 34, height: 34, borderRadius: Radii.stadium, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? `${c.primary}24` : 'transparent' }}>{children}</View>
+    <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={selected === undefined ? undefined : { selected }} pressedScale={0.9} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 40, height: 40, borderRadius: Radii.stadium, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? mix(c.primary, c.surface, 0.2) : 'transparent' }}>{children}</View>
     </Pressable>
   );
 }
@@ -31,13 +33,13 @@ export function PreviewTopBar({ entry, onDark, onBack, onShare, onMore, leading 
   const dim = onDark ? 'rgba(255,255,255,0.7)' : c.onSurfaceVariant;
   const size = formatSize(entry.size);
   return (
-    <View style={{ paddingTop: insets.top + 6, paddingBottom: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: onDark ? 'rgba(0,0,0,0.45)' : c.surface }}>
+    <View style={{ paddingTop: insets.top + 4, paddingBottom: 4, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: onDark ? 'rgba(0,0,0,0.45)' : c.surface }}>
       <PreviewIconButton label="Back" onPress={onBack}>
         <ArrowLeft size={19} color={fg} />
       </PreviewIconButton>
       <View style={{ flex: 1, marginLeft: 4 }}>
-        <Text numberOfLines={1} style={{ fontSize: 15.5, fontFamily: FontFamily.semibold, color: fg }}>{entry.name}</Text>
-        {size ? <Text numberOfLines={1} style={{ fontSize: 11.5, color: dim }}>{size}</Text> : null}
+        <Text numberOfLines={1} style={[LumenType.rowTitle, { color: fg }]}>{entry.name}</Text>
+        {size ? <Text numberOfLines={1} style={[LumenType.meta, { color: dim }]}>{size}</Text> : null}
       </View>
       {leading}
       <PreviewIconButton label="Share" onPress={onShare}>
@@ -66,12 +68,7 @@ export function PreviewError({ message, onRetry, onDark }: { message: string; on
       <CircleAlert size={48} color={c.error} />
       <Text style={{ textAlign: 'center' }} color={onDark ? '#FFFFFF' : undefined}>{message}</Text>
       {onRetry ? (
-        <Pressable onPress={onRetry} pressedScale={0.97} accessibilityLabel={t('retryButton')}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, borderRadius: Radii.sm, borderWidth: 1, borderColor: c.outlineVariant, backgroundColor: c.surfaceContainerHigh }}>
-            <Text style={{ fontSize: 13.5, fontFamily: FontFamily.semibold }}>{t('retryButton')}</Text>
-            <RefreshCw size={16} color={c.onSurface} />
-          </View>
-        </Pressable>
+        <Button kind="neutral" label={t('retryButton')} onPress={onRetry} renderIcon={(k) => <RefreshCw size={18} color={k} />} />
       ) : null}
     </View>
   );

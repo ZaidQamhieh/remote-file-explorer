@@ -1,3 +1,4 @@
+import { archiveExtensions, audioExtensions, docExtensions, imageExtensions, videoExtensions, type EntryRole } from '../../core/entryCategory';
 import type { TransferRecord } from '../../core/native';
 import { basenameOf } from '../explorer/paths';
 
@@ -89,5 +90,48 @@ export function transferTone(state: TransferRecord['state']): TransferTone {
       return 'error';
     default:
       return 'muted';
+  }
+}
+
+export type TransferKind = { glyph: 'image' | 'video' | 'audio' | 'archive' | 'doc' | 'file'; role: EntryRole | null };
+
+/** Glyph and colour role of the file a transfer moves, from its extension (the record carries no MIME type). */
+export function transferKind(name: string): TransferKind {
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  if (imageExtensions.has(ext)) return { glyph: 'image', role: 'photo' };
+  if (videoExtensions.has(ext)) return { glyph: 'video', role: 'photo' };
+  if (audioExtensions.has(ext)) return { glyph: 'audio', role: 'route' };
+  if (archiveExtensions.has(ext)) return { glyph: 'archive', role: 'warn' };
+  if (docExtensions.has(ext)) return { glyph: 'doc', role: 'doc' };
+  return { glyph: 'file', role: null };
+}
+
+/** The page subtitle: real counts only ("1 in progress · 2 complete · 1 failed"). */
+export function transferSummary(g: TransferGroups): string {
+  const parts: string[] = [];
+  if (g.active.length > 0) parts.push(`${g.active.length} in progress`);
+  if (g.finished.length > 0) parts.push(`${g.finished.length} complete`);
+  if (g.failed.length > 0) parts.push(`${g.failed.length} failed`);
+  return parts.length > 0 ? parts.join(' · ') : 'Nothing transferring';
+}
+
+/** Short state label for the row's pill: the percentage while it moves, else the state in words. */
+export function transferPillLabel(r: TransferRecord): string {
+  switch (r.state) {
+    case 'DONE':
+      return 'Done';
+    case 'PAUSED':
+      return 'Paused';
+    case 'FAILED':
+      return 'Failed';
+    case 'CANCELLED':
+      return 'Cancelled';
+    case 'QUEUED':
+      return 'Waiting';
+    default: {
+      const p = transferProgress(r);
+      return p === null ? 'Active' : `${Math.floor(p * 100)}%`;
+    }
   }
 }

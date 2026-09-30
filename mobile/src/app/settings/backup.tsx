@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Text, useDialogs, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { exportEnvelope, importEnvelope, shareBackupFile } from '../../features/backup/backupService';
@@ -66,7 +67,7 @@ export default function Backup() {
         <NavRow icon={Download} title={t('importConfig')} subtitle={t('importConfigSubtitle')} onPress={() => !busy && void chooseImportFile()} />
       </SettingsSection>
       <View style={{ paddingHorizontal: Spacing.xs }}>
-        <Text muted>{t('backupEncryptionWarning')}</Text>
+        <Text style={LumenType.meta} muted>{t('backupEncryptionWarning')}</Text>
       </View>
       <PassphraseDialog visible={ask !== null} title={ask?.mode === 'import' ? t('importConfigTitle') : t('exportConfig')} confirm={ask?.mode !== 'import'} onSubmit={(p) => void run(ask, p)} onCancel={() => setAsk(null)} />
     </SettingsPage>

@@ -35,7 +35,7 @@ export function UsageRing({ segments, percent, usedLabel }: { segments: { color:
         })}
       </Svg>
       <Text style={{ fontFamily: FontFamily.monoMedium, fontSize: 20 }}>{percent}%</Text>
-      <Text muted style={{ fontSize: 10.5 }}>{usedLabel}</Text>
+      <Text muted style={{ fontSize: 12 }}>{usedLabel}</Text>
     </View>
   );
 }

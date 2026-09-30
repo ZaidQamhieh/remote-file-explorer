@@ -1,16 +1,19 @@
-import { Monitor, Radar, X } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { Monitor } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
 
 import type { DiscoveredAgent } from '../../core/discovery';
 import { scanLan, stopLanScan } from '../../core/native';
-import { Button, GroupedCard, HintCard, Pressable, Text } from '../../design/components';
+import { Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
+import { MethodRow, MetaPill } from '../hosts/LumenRows';
 
-export function LanPanel({ onSelect }: { onSelect: (authority: string) => void }) {
-  const c = useScheme();
+export type LanScan = { agents: DiscoveredAgent[]; scanning: boolean; searched: boolean; failed: boolean; supported: boolean; toggle: () => Promise<void> };
+
+/** Local-network discovery state: one search at a time, stopped when the screen goes away. The footer button drives [toggle]. */
+export function useLanScan(): LanScan {
   const [agents, setAgents] = useState<DiscoveredAgent[]>([]);
   const [scanning, setScanning] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -26,10 +29,8 @@ export function LanPanel({ onSelect }: { onSelect: (authority: string) => void }
     };
   }, []);
 
-  if (Platform.OS !== 'android') return <Text style={{ textAlign: 'center', padding: Spacing.lg }}>{t('lanDiscoveryUnavailable')}</Text>;
-
-  async function scan() {
-    if (scanning) {
+  const toggle = useCallback(async () => {
+    if (scanningRef.current) {
       await stopLanScan().catch(() => {});
       return;
     }
@@ -47,38 +48,56 @@ export function LanPanel({ onSelect }: { onSelect: (authority: string) => void }
       scanningRef.current = false;
       if (live.current) setScanning(false);
     }
-  }
+  }, []);
 
+  return { agents, scanning, searched, failed, supported: Platform.OS === 'android', toggle };
+}
+
+/** The "Find on local network" body: the intro, search progress and one row per computer found. */
+export function LanPanel({ scan, onSelect }: { scan: LanScan; onSelect: (authority: string) => void }) {
+  const c = useScheme();
+  const { agents, scanning, searched, failed, supported } = scan;
+  if (!supported) {
+    return (
+      <Text style={[LumenType.meta, { padding: 8 }]} color={c.onSurfaceVariant}>
+        {t('lanDiscoveryUnavailable')}
+      </Text>
+    );
+  }
   return (
-    <View style={{ gap: Spacing.md }}>
-      <Text muted style={{ lineHeight: 20 }}>{t('lanDiscoveryIntro')}</Text>
-      <Button label={scanning ? t('stopLocalSearch') : t('scanLocalNetwork')} kind="filled" onPress={scan} icon={scanning ? <X size={18} color={c.onPrimary} /> : <Radar size={18} color={c.onPrimary} />} />
+    <View style={{ gap: 10 }}>
+      <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} color={c.onSurfaceVariant}>
+        {t('lanDiscoveryIntro')}
+      </Text>
       {scanning && (
-        <View style={{ alignItems: 'center', gap: 8 }}>
-          <ActivityIndicator />
-          <Text variant="bodySmall">{t('searchingLocalNetwork')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 }}>
+          <ActivityIndicator color={c.primary} />
+          <Text style={LumenType.meta} color={c.onSurfaceVariant}>
+            {t('searchingLocalNetwork')}
+          </Text>
         </View>
       )}
       {failed ? (
-        <Text color={c.error}>{t('lanDiscoveryFailed')}</Text>
+        <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} color={c.error}>
+          {t('lanDiscoveryFailed')}
+        </Text>
       ) : !scanning && searched && agents.length === 0 ? (
-        <Text muted style={{ textAlign: 'center' }}>{t('noLocalAgentsFound')}</Text>
+        <Text style={[LumenType.meta, { paddingHorizontal: 4 }]} color={c.onSurfaceVariant}>
+          {t('noLocalAgentsFound')}
+        </Text>
       ) : null}
       {agents.map((a) => (
-        <GroupedCard key={a.authority}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Monitor size={22} color={c.primary} />
-            <View style={{ flex: 1 }}>
-              <Text variant="titleMedium">{a.name}</Text>
-              <Text muted>{a.authority}</Text>
-            </View>
-            <Pressable onPress={() => onSelect(a.authority)} accessibilityLabel={t('useAddress')}>
-              <Text variant="labelLarge" color={c.primary} style={{ padding: 8 }}>{t('useAddress')}</Text>
-            </Pressable>
-          </View>
-        </GroupedCard>
+        <MethodRow
+          key={a.authority}
+          icon={Monitor}
+          tone={c.primary}
+          title={a.name}
+          subtitle={a.authority}
+          onPress={() => onSelect(a.authority)}
+          accessibilityLabel={`${t('useAddress')} ${a.name}`}
+          right={<MetaPill label={t('useAddress')} color={c.primary} />}
+        />
       ))}
-      <HintCard kind="warning" text={t('discoveryTrustWarning')} />
     </View>
   );
 }

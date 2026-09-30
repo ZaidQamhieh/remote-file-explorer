@@ -6,9 +6,10 @@ import { ScrollView, View } from 'react-native';
 import type { Drive } from '../../../core/api/models';
 import { formatSize } from '../../../core/format';
 import { aggregateUsage } from '../../../core/storage/usage';
-import { EmptyState, ErrorRetry, Loading, Pressable, Text } from '../../../design/components';
-import { useScheme } from '../../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../../design/tokens';
+import { Button, EmptyState, ErrorRetry, GroupedCard, Loading, Text } from '../../../design/components';
+import { LumenType } from '../../../design/lumen';
+import { useRoles, useScheme } from '../../../design/theme';
+import { FontFamily } from '../../../design/tokens';
 import { t } from '../../../i18n';
 import { humanizeError } from '../../../features/pairing/pairingService';
 import { useHostById } from '../../../features/hosts/useHostById';
@@ -16,13 +17,13 @@ import { ringSegments } from '../../../features/storage/storageLogic';
 import { UsageRing } from '../../../features/storage/UsageRing';
 import { clientForHost } from '../../../services';
 
-const PALETTE = [Brand.seed, Brand.accent, Brand.amber];
-
 /** Aggregate disk usage for one computer: a ring over its drives, a per-drive list, and the way into the by-type map. */
 export default function StorageInsights() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const host = useHostById(id);
   const c = useScheme();
+  const roles = useRoles();
+  const palette = [c.primary, roles.route, roles.warn];
   const router = useRouter();
   const [drives, setDrives] = useState<Drive[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,30 +62,25 @@ export default function StorageInsights() {
   if (!usage) return <View style={{ flex: 1 }}>{title}<EmptyState message={t('emptyFolderMessage')} /></View>;
 
   const segments = ringSegments(drives);
-  const colors = segments.map((s, i) => (s.key === 'free' ? c.surfaceContainerHighest : PALETTE[i % PALETTE.length]));
+  const colors = segments.map((s, i) => (s.key === 'free' ? c.surfaceContainerHighest : palette[i % palette.length]));
   const used = usage.totalBytes - usage.freeBytes;
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, gap: 16, paddingBottom: 32 }}>
       {title}
-      <Text muted style={{ textAlign: 'center' }}>{t('hostStorageSubtitle', { hostLabel: label, used: formatSize(used), total: formatSize(usage.totalBytes) })}</Text>
-      <View style={{ alignItems: 'center', paddingVertical: Spacing.md }}>
+      <Text style={[LumenType.meta, { textAlign: 'center' }]} muted>{t('hostStorageSubtitle', { hostLabel: label, used: formatSize(used), total: formatSize(usage.totalBytes) })}</Text>
+      <View style={{ alignItems: 'center', paddingVertical: 12 }}>
         <UsageRing segments={segments.map((s, i) => ({ color: colors[i], fraction: s.fraction }))} percent={Math.round(usage.usedFraction * 100)} usedLabel={formatSize(used)} />
       </View>
-      <View>
+      <GroupedCard padded={false} style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
         {segments.map((s, i) => (
-          <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: i < segments.length - 1 ? 1 : 0, borderBottomColor: c.outlineVariant }}>
-            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: colors[i] }} />
-            <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontFamily: FontFamily.medium }}>{s.drive ? s.drive.label || s.drive.path : t('freeSpaceLabel')}</Text>
-            <Text muted style={{ fontFamily: FontFamily.mono, fontSize: 11.5 }}>{formatSize(s.drive ? s.drive.totalBytes! - Math.min(s.drive.freeBytes!, s.drive.totalBytes!) : usage.freeBytes)}</Text>
+          <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, minHeight: 52 }}>
+            <View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: colors[i] }} />
+            <Text numberOfLines={1} style={[LumenType.name, { flex: 1 }]}>{s.drive ? s.drive.label || s.drive.path : t('freeSpaceLabel')}</Text>
+            <Text muted style={[LumenType.meta, { fontFamily: FontFamily.mono }]}>{formatSize(s.drive ? s.drive.totalBytes! - Math.min(s.drive.freeBytes!, s.drive.totalBytes!) : usage.freeBytes)}</Text>
           </View>
         ))}
-      </View>
-      <Pressable onPress={() => router.push({ pathname: '/host/[id]/types', params: { id: host.id } })} accessibilityRole="button" accessibilityLabel={t('openStorageTypeMapButton')}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: c.surfaceContainerHigh, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm }}>
-          <Text style={{ fontSize: 13.5, fontFamily: FontFamily.semibold }}>{t('openStorageTypeMapButton')}</Text>
-          <ArrowRight size={16} color={c.onSurface} />
-        </View>
-      </Pressable>
+      </GroupedCard>
+      <Button size="lg" kind="neutral" label={t('openStorageTypeMapButton')} renderIcon={(fg) => <ArrowRight size={18} color={fg} />} onPress={() => router.push({ pathname: '/host/[id]/types', params: { id: host.id } })} />
     </ScrollView>
   );
 }

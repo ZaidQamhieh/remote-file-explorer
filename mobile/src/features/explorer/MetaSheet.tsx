@@ -8,8 +8,9 @@ import { can, type Entry, type FileCapability, type ShareLink } from '../../core
 import { formatDate, formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import { BottomSheet, Pressable, SheetGrabber, SheetHero, Text, useDialogs, useToast } from '../../design/components';
+import { LumenSize, LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { FontFamily, Radii, Spacing } from '../../design/tokens';
+import { FontFamily, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { useCollections } from '../../state/collections';
 import { humanizeError } from '../pairing/pairingService';
@@ -226,8 +227,8 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
           <ScrollView>
             <View style={{ paddingTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: Spacing.md }}>
               <SheetGrabber />
-              <Text variant="titleLarge">{t('detailsButton')}</Text>
-              <View style={{ backgroundColor: c.surface, borderRadius: Radii.card, borderWidth: 1, borderColor: c.outlineVariant, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs }}>
+              <Text style={LumenType.title} accessibilityRole="header">{t('detailsButton')}</Text>
+              <View style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: LumenSize.cardRadius, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs }}>
                 <DetailRows entry={entry} checksum={checksum} checksumBusy={checksumBusy} onComputeChecksum={computeChecksum} onEditPermissions={() => setChmodOpen(true)} />
               </View>
             </View>
@@ -258,9 +259,9 @@ function QuickAction({ action }: { action: Action }) {
   const Icon = action.icon;
   return (
     <Pressable onPress={action.onPress} accessibilityLabel={action.label} style={{ flex: 1 }}>
-      <View style={{ marginHorizontal: 3, paddingVertical: Spacing.md2, paddingHorizontal: Spacing.xs, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.sm, alignItems: 'center', gap: Spacing.xs }}>
-        <Icon size={20} color={action.tint ?? c.primary} />
-        <Text numberOfLines={1} color={action.tint} style={{ textAlign: 'center', fontSize: 11.5 }}>{action.label}</Text>
+      <View style={{ marginHorizontal: 4, minHeight: 72, paddingVertical: 8, paddingHorizontal: 4, backgroundColor: c.surfaceContainerHigh, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <Icon size={22} color={action.tint ?? c.primary} />
+        <Text numberOfLines={1} color={action.tint} style={[LumenType.pill, { textAlign: 'center', fontSize: 13 }]}>{action.label}</Text>
       </View>
     </Pressable>
   );
@@ -271,11 +272,11 @@ function MoreRow({ action, divider }: { action: Action; divider: boolean }) {
   const Icon = action.icon;
   return (
     <Pressable onPress={action.onPress} accessibilityLabel={action.label}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: divider ? 1 : 0, borderColor: c.outlineVariant }}>
-        <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: c.surfaceContainerHighest, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={18} color={c.onSurfaceVariant} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, minHeight: 56, paddingVertical: 4, marginTop: divider ? 2 : 0 }}>
+        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={20} color={c.onSurfaceVariant} />
         </View>
-        <Text variant="bodyLarge">{action.label}</Text>
+        <Text style={LumenType.name}>{action.label}</Text>
       </View>
     </Pressable>
   );
@@ -302,7 +303,7 @@ function DetailRows({ entry, checksum, checksumBusy, onComputeChecksum, onEditPe
         <Text selectable style={{ fontFamily: FontFamily.mono, fontSize: 12 }} onLongPress={() => void Clipboard.setStringAsync(checksum).then(() => toast.info(t('copiedPath', { path: checksum })))}>{checksum}</Text>
       ) : (
         <Pressable onPress={checksumBusy ? undefined : onComputeChecksum} accessibilityLabel="Compute checksum">
-          <Text color={c.primary} style={{ textDecorationLine: 'underline' }}>{checksumBusy ? '…' : 'Compute'}</Text>
+          <Text color={c.primary} style={[LumenType.name, { textDecorationLine: 'underline' }]}>{checksumBusy ? '…' : 'Compute'}</Text>
         </Pressable>
       ),
     );
@@ -310,7 +311,7 @@ function DetailRows({ entry, checksum, checksumBusy, onComputeChecksum, onEditPe
   return (
     <>
       {rows.map((r, i) => (
-        <View key={i} style={{ borderTopWidth: i ? 1 : 0, borderColor: c.outlineVariant }}>{r}</View>
+        <View key={i} style={{ marginTop: i ? 2 : 0 }}>{r}</View>
       ))}
     </>
   );
@@ -321,8 +322,8 @@ function DetailRow({ icon: Icon, label, value, onPress }: { icon: LucideIcon; la
   const body = (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, paddingVertical: Spacing.sm }}>
       <Icon size={18} color={c.onSurfaceVariant} />
-      <Text variant="labelLarge" muted style={{ width: 100 }}>{label}</Text>
-      <View style={{ flex: 1 }}>{typeof value === 'string' ? <Text>{value}</Text> : value}</View>
+      <Text style={[LumenType.meta, { width: 100 }]} muted>{label}</Text>
+      <View style={{ flex: 1 }}>{typeof value === 'string' ? <Text style={LumenType.name}>{value}</Text> : value}</View>
     </View>
   );
   return onPress ? <Pressable onPress={onPress} accessibilityLabel={label}>{body}</Pressable> : body;

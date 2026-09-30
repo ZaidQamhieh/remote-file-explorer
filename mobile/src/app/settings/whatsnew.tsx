@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import { Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { t } from '../../i18n';
 import { SettingsPage, SettingsSection } from '../../features/settings/parts';
 
@@ -11,8 +12,8 @@ export default function WhatsNew() {
     <SettingsPage>
       <SettingsSection title="2.0">
         {ITEMS.map((k) => (
-          <View key={k} style={{ paddingVertical: 10 }}>
-            <Text style={{ fontSize: 14 }}>{t(k)}</Text>
+          <View key={k} style={{ paddingVertical: 12 }}>
+            <Text style={LumenType.name}>{t(k)}</Text>
           </View>
         ))}
       </SettingsSection>

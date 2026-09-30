@@ -41,7 +41,7 @@ export function ChmodDialog({ visible, entry, client, onClose, onApplied }: { vi
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }} onPress={onClose} accessibilityLabel={t('cancelButton')}>
-        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: c.outlineVariant }}>
+        <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderRadius: Radii.lg, overflow: 'hidden' }}>
           <SheetHero showGrabber={false} badge={<Lock size={24} color={c.primary} />} title={t('metaPermissions')} />
           <View style={{ paddingHorizontal: Spacing.lg, gap: 4 }}>
             <Text variant="headlineSmall" style={{ fontFamily: FontFamily.mono }} accessibilityLabel={`Permissions ${bitsToSymbolic(bits)}`}>{bitsToSymbolic(bits)}</Text>
@@ -62,7 +62,7 @@ export function ChmodDialog({ visible, entry, client, onClose, onApplied }: { vi
                         accessibilityState={{ checked: bits[i], disabled: applying }}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 72, minHeight: 44 }}
                       >
-                        <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: bits[i] ? c.primary : c.outline, backgroundColor: bits[i] ? c.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: bits[i] ? c.primary : c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>
                           {bits[i] && <Check size={14} color={c.onPrimary} />}
                         </View>
                         <Text>{col}</Text>

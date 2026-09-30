@@ -1,13 +1,14 @@
-import { Folder, HardDrive, ShieldX } from 'lucide-react-native';
+import { CloudOff, HardDrive, ShieldCheck, ShieldX } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import type { AgentStatus, Drive, Health } from '../../core/api/models';
 import { formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
-import { AppBar, EmptyState, OfflineBanner, ErrorRetry, GroupedCard, ListingSkeleton, Loading, Pressable, SectionLabel, Text } from '../../design/components';
-import { roleTint, useRoles, useScheme } from '../../design/theme';
-import { Radii, Spacing } from '../../design/tokens';
+import { EmptyState, OfflineBanner, ErrorRetry, ListingSkeleton, Loading, PageHead, Pressable, StatePill, Text, TopBar } from '../../design/components';
+import { LumenSize, LumenType } from '../../design/lumen';
+import { useRoles, useScheme } from '../../design/theme';
+import { Spacing } from '../../design/tokens';
 import { AgentApiError } from '../../core/api/agentClient';
 import { clientForHost, keyValue } from '../../services';
 import { humanizeError } from '../pairing/pairingService';
@@ -55,7 +56,7 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
   }, [host, health, initialPath, onSelectRoot]);
   useEffect(() => load(), [load]);
 
-  if (error) return <Shell host={host}><ErrorRetry
+  if (error) return <Shell host={host} title="Files"><ErrorRetry
           message={t('errorLabel', { error })}
           onRetry={() => {
             setError(null);
@@ -63,18 +64,19 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
             load();
           }}
         /></Shell>;
-  if (!res) return <Shell host={host}><Loading /></Shell>;
-  if (res.kind === 'denied') return <Shell host={host}><Denied /></Shell>;
+  if (!res) return <Shell host={host} title="Files"><Loading /></Shell>;
+  if (res.kind === 'denied') return <Shell host={host} title="Files"><Denied /></Shell>;
   const banner = offline ? <OfflineBanner text={t('offlineBannerText')} /> : null;
-  if (res.kind === 'drives') return <Shell host={host}>{banner}{drives === null ? <ListingSkeleton /> : drives.length === 0 ? <EmptyState /> : <DrivesList drives={drives} onSelect={(p) => onSelectRoot(p)} />}</Shell>;
-  if (res.kind === 'roots') return <Shell host={host} subtitle="Shared folders">{banner}<Roots roots={res.roots} unavailablePath={res.unavailablePath} onSelect={(r) => onSelectRoot(r)} /></Shell>;
+  if (res.kind === 'drives') return <Shell host={host} title="Drives" subtitle={drives ? `${drives.length} ${drives.length === 1 ? 'drive' : 'drives'}` : undefined} offline={offline}>{banner}{drives === null ? <ListingSkeleton /> : drives.length === 0 ? <EmptyState /> : <DrivesList drives={drives} onSelect={(p) => onSelectRoot(p)} />}</Shell>;
+  if (res.kind === 'roots') return <Shell host={host} title="Shared folders" subtitle={`${res.roots.length} ${res.roots.length === 1 ? 'folder' : 'folders'}`} offline={offline}>{banner}<Roots roots={res.roots} unavailablePath={res.unavailablePath} onSelect={(r) => onSelectRoot(r)} /></Shell>;
   return null;
 }
 
-function Shell({ host, subtitle, children }: { host: Host; subtitle?: string; children: React.ReactNode }) {
+function Shell({ host, title, subtitle, offline, children }: { host: Host; title: string; subtitle?: string; offline?: boolean; children: React.ReactNode }) {
   return (
     <View style={{ flex: 1 }}>
-      <AppBar title={host.label} subtitle={subtitle} tall />
+      <TopBar context={`${host.label} · Files`} sub="Workspace" right={offline ? <StatePill label="Offline" tone="warn" icon={CloudOff} /> : <StatePill label="Connected" tone="safe" icon={ShieldCheck} />} />
+      <PageHead title={title} subtitle={subtitle} />
       <View style={{ flex: 1 }}>{children}</View>
     </View>
   );
@@ -90,31 +92,32 @@ function Denied() {
   );
 }
 
-function Roots({ roots, unavailablePath, onSelect }: { roots: string[]; unavailablePath?: string; onSelect: (r: string) => void }) {
+/** A root or drive as a Lumen `.collection` card: name in the folder colour, the real path or capacity under it. */
+function CollectionCard({ icon, name, meta, onPress }: { icon?: React.ReactNode; name: string; meta: string; onPress: () => void }) {
   const c = useScheme();
   const roles = useRoles();
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={name}>
+      <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, padding: LumenSize.cardPadding, borderRadius: LumenSize.cardRadius, backgroundColor: c.surfaceContainer }}>
+        {icon}
+        <View style={{ flex: 1 }}>
+          <Text style={LumenType.title} color={roles.folder} numberOfLines={1}>{name}</Text>
+          <Text style={[LumenType.meta, { marginTop: 2 }]} muted numberOfLines={2}>{meta}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function Roots({ roots, unavailablePath, onSelect }: { roots: string[]; unavailablePath?: string; onSelect: (r: string) => void }) {
+  const c = useScheme();
   const sorted = [...roots].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md }}>
-      {unavailablePath ? <Text color={c.error}>This saved location is no longer available to this device. Choose a shared folder below.</Text> : null}
-      <View>
-        <SectionLabel title="Available folders" />
-        <GroupedCard padded={false}>
-          {sorted.map((r, i) => (
-            <Pressable key={r} onPress={() => onSelect(r)} accessibilityLabel={folderLabel(r)}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: c.outlineVariant }}>
-                <View style={{ width: 40, height: 40, borderRadius: Radii.sm, backgroundColor: roleTint(roles.folder, c), alignItems: 'center', justifyContent: 'center' }}>
-                  <Folder size={22} color={roles.folder} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyLarge" numberOfLines={1}>{folderLabel(r)}</Text>
-                  <Text variant="bodySmall" muted numberOfLines={1}>{r}</Text>
-                </View>
-              </View>
-            </Pressable>
-          ))}
-        </GroupedCard>
-      </View>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 18, gap: 10 }}>
+      {unavailablePath ? <Text style={LumenType.meta} color={c.error}>This saved location is no longer available to this device. Choose a shared folder below.</Text> : null}
+      {sorted.map((r) => (
+        <CollectionCard key={r} name={folderLabel(r)} meta={r} onPress={() => onSelect(r)} />
+      ))}
     </ScrollView>
   );
 }
@@ -123,26 +126,24 @@ function DrivesList({ drives, onSelect }: { drives: Drive[]; onSelect: (p: strin
   const c = useScheme();
   const roles = useRoles();
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.md }}>
-      <GroupedCard padded={false}>
-        {drives.map((d, i) => {
-          const label = d.label ? d.label : folderLabel(d.path);
-          const cap = d.totalBytes != null && d.freeBytes != null;
-          return (
-            <Pressable key={d.path} onPress={() => onSelect(d.path)} accessibilityLabel={label}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: Spacing.md, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: c.outlineVariant }}>
-                <View style={{ width: 40, height: 40, borderRadius: Radii.sm, backgroundColor: roleTint(roles.folder, c), alignItems: 'center', justifyContent: 'center' }}>
-                  <HardDrive size={20} color={roles.folder} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyLarge" numberOfLines={1}>{label}</Text>
-                  <Text variant="bodySmall" muted numberOfLines={1}>{cap ? `${formatSize(d.freeBytes)} free of ${formatSize(d.totalBytes)}  ·  ${d.path}` : d.path}</Text>
-                </View>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 18, gap: 10 }}>
+      {drives.map((d) => {
+        const label = d.label ? d.label : folderLabel(d.path);
+        const cap = d.totalBytes != null && d.freeBytes != null;
+        return (
+          <CollectionCard
+            key={d.path}
+            icon={
+              <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>
+                <HardDrive size={22} color={roles.folder} />
               </View>
-            </Pressable>
-          );
-        })}
-      </GroupedCard>
+            }
+            name={label}
+            meta={cap ? `${formatSize(d.freeBytes)} free of ${formatSize(d.totalBytes)}  ·  ${d.path}` : d.path}
+            onPress={() => onSelect(d.path)}
+          />
+        );
+      })}
     </ScrollView>
   );
 }

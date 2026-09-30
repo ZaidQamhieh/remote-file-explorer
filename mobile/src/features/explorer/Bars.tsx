@@ -1,120 +1,161 @@
-import { Archive, ArrowLeft, Info, Bookmark, CheckSquare, Copy, Download, FilePen, MoreVertical, Pin, Scissors, Search, Square, Star, Terminal, Trash2, X, History, PieChart, Replace, FileUp, SlidersHorizontal } from 'lucide-react-native';
-import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Archive, ArrowLeft, Bookmark, CheckSquare, Copy, Download, FilePen, FilePlus, FileUp, History, Info, Pin, PieChart, Replace, Scissors, Search, ShieldCheck, SlidersHorizontal, CloudOff, Square, Star, Terminal, Trash2, X, type LucideIcon } from 'lucide-react-native';
+import { useState } from 'react';
+import { ScrollView, View } from 'react-native';
 
+import { can, type FileCapability } from '../../core/api/models';
+import type { Host } from '../../core/models/host';
+import { ActionListCard, ActionListTile, ActionTile, BottomSheet, PageHead, Pressable, SheetHead, SheetScroll, StatePill, Text, TopBar } from '../../design/components';
+import { LumenType } from '../../design/lumen';
+import { useScheme } from '../../design/theme';
+import { t } from '../../i18n';
+import { BreadcrumbBar } from './Breadcrumb';
 import type { ExplorerState } from './explorerStore';
 import { atRoot, currentPath } from './explorerStore';
-import { AppBarIconButton, Menu, Pressable, Text } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { Brand, Spacing } from '../../design/tokens';
-import { t } from '../../i18n';
-import { can, type FileCapability } from '../../core/api/models';
-import { BreadcrumbBar } from './Breadcrumb';
 import { folderLabel } from './paths';
 
-export type OverflowAction = 'commandPalette' | 'viewOptions' | 'favorites' | 'transfers' | 'trash' | 'recent' | 'storageByType' | 'dupFinder' | 'pinOffline';
+export type OverflowAction = 'newItem' | 'toggleFavorite' | 'bookmarks' | 'commandPalette' | 'viewOptions' | 'favorites' | 'transfers' | 'trash' | 'recent' | 'storageByType' | 'dupFinder' | 'pinOffline';
 
-/** Browse app bar: back, folder title, breadcrumb row, search / bookmarks / favorite star and the overflow menu. */
-export function BrowseAppBar({
-  state, isFav, isCurrentFolderPinned, onBack, onNavigateTo, onJumpTo, onSearch, onToggleFavorite, onOpenBookmarks, onOverflow,
-}: {
-  state: ExplorerState; isFav: boolean; isCurrentFolderPinned: boolean; onBack: () => void; onNavigateTo: (i: number) => void; onJumpTo: (p: string) => void;
-  onSearch: () => void; onToggleFavorite: () => void; onOpenBookmarks: () => void; onOverflow: (a: OverflowAction) => void;
-}) {
-  const c = useScheme();
-  const insets = useSafeAreaInsets();
-  const item = (label: string, icon: React.ReactNode, action: OverflowAction) => ({ label, icon, onPress: () => onOverflow(action) });
-  const ic = (I: typeof Search) => <I size={16} color={c.onSurface} />;
-  return (
-    <View style={{ paddingTop: insets.top, backgroundColor: c.surface }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', paddingLeft: atRoot(state) ? 16 : 4, paddingRight: 4 }}>
-        {!atRoot(state) && (
-          <AppBarIconButton label="Back" onPress={onBack}>
-            <ArrowLeft size={22} color={c.onSurface} />
-          </AppBarIconButton>
-        )}
-        <Text variant="screenTitle" numberOfLines={1} style={{ flex: 1 }} accessibilityRole="header">{folderLabel(currentPath(state))}</Text>
-        <AppBarIconButton label={t('searchTooltip')} onPress={onSearch}><Search size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-        <AppBarIconButton label="Bookmarks" onPress={onOpenBookmarks}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-        <AppBarIconButton label={isFav ? t('removeFavoriteTooltip') : t('favoriteFolderTooltip')} onPress={onToggleFavorite}><Star size={19} color={isFav ? Brand.amber : c.onSurfaceVariant} /></AppBarIconButton>
-        <Menu
-          accessibilityLabel={t('moreTooltip')}
-          trigger={<MoreVertical size={20} color={c.onSurfaceVariant} />}
-          items={[
-            item('Command Palette', ic(Terminal), 'commandPalette'),
-            item(t('viewOptionsTitle'), ic(SlidersHorizontal), 'viewOptions'),
-            item(t('favoritesTitle'), ic(Bookmark), 'favorites'),
-            item(t('transfersMenuItem'), ic(FileUp), 'transfers'),
-            item(t('trashTitle'), ic(Trash2), 'trash'),
-            item(t('recentTitle'), ic(History), 'recent'),
-            item(t('storageByTypeTitle'), ic(PieChart), 'storageByType'),
-            item('Find Duplicates', ic(Replace), 'dupFinder'),
-            item(isCurrentFolderPinned ? 'Unpin offline' : 'Pin offline', ic(Pin), 'pinOffline'),
-          ]}
-        />
-      </View>
-      <View style={{ paddingLeft: Spacing.md, paddingBottom: Spacing.xs, height: 44 }}>
-        <BreadcrumbBar pathStack={state.pathStack} onNavigateTo={onNavigateTo} onJumpTo={onJumpTo} />
-      </View>
-    </View>
-  );
-}
+const itemsLabel = (n: number, more: boolean) => `${n}${more ? '+' : ''} ${n === 1 && !more ? 'item' : 'items'}`;
 
-/** Contextual app bar while items are selected. */
-export function SelectionAppBar({
-  state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails, canModify = true,
-}: { state: ExplorerState; canModify?: boolean; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
-  const c = useScheme();
-  const insets = useSafeAreaInsets();
-  const all = state.entries.length > 0 && state.selected.size === state.entries.length;
+function IconButton({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
   return (
-    <View style={{ paddingTop: insets.top, backgroundColor: c.surface }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-        <AppBarIconButton label={t('clearSelectionTooltip')} onPress={onClose}><X size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-        <Text variant="screenTitle" numberOfLines={1} style={{ flex: 1 }} accessibilityRole="header">{t('nSelected', { count: state.selected.size })}</Text>
-        {state.selected.size === 1 && (
-          <>
-            <AppBarIconButton label={t('detailsButton')} onPress={onDetails}><Info size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-            <AppBarIconButton label="Bookmark" onPress={onBookmark}><Bookmark size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-          </>
-        )}
-        {canModify && <AppBarIconButton label={t('batchRenameTooltip')} onPress={onBatchRename}><FilePen size={19} color={c.onSurfaceVariant} /></AppBarIconButton>}
-        <AppBarIconButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} onPress={all ? onClearSelection : onSelectAll}>
-          {all ? <Square size={19} color={c.onSurfaceVariant} /> : <CheckSquare size={19} color={c.onSurfaceVariant} />}
-        </AppBarIconButton>
-        <AppBarIconButton label={t('invertSelectionTooltip')} onPress={onInvertSelection}><Replace size={19} color={c.onSurfaceVariant} /></AppBarIconButton>
-      </View>
-      <View style={{ height: 44 }} />
-    </View>
-  );
-}
-
-function BarAction({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
-  return (
-    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} hitSlop={4} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable onPress={onPress} pressedScale={0.92} accessibilityLabel={label} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
       {children}
     </Pressable>
   );
 }
 
-/** Bottom action bar for the current selection: cut, copy, compress, download, delete. */
+/**
+ * Browse header: `TopBar` ("Studio PC · Files", search, connection pill, overflow), the folder as `PageHead` with the
+ * number of loaded items, and the path as a row of pills with a back arrow.
+ */
+export function BrowseHeader({
+  host, state, offline, isFav, isCurrentFolderPinned, canCreate, onBack, onNavigateTo, onJumpTo, onSearch, onOverflow,
+}: {
+  host: Host; state: ExplorerState; offline: boolean; isFav: boolean; isCurrentFolderPinned: boolean; canCreate: boolean; onBack: () => void; onNavigateTo: (i: number) => void; onJumpTo: (p: string) => void;
+  onSearch: () => void; onOverflow: (a: OverflowAction) => void;
+}) {
+  const c = useScheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const root = atRoot(state);
+  const subtitle = state.loading && state.entries.length === 0 ? undefined : itemsLabel(state.entries.length, state.nextCursor !== null);
+  const pick = (a: OverflowAction) => () => onOverflow(a);
+  const items: { key: OverflowAction; label: string; icon: LucideIcon; onPress: () => void }[] = [
+    ...(canCreate ? [{ key: 'newItem' as const, label: t('newButton'), icon: FilePlus, onPress: pick('newItem') }] : []),
+    { key: 'toggleFavorite', label: isFav ? t('removeFavoriteTooltip') : t('favoriteFolderTooltip'), icon: Star, onPress: pick('toggleFavorite') },
+    { key: 'bookmarks', label: 'Bookmarks', icon: Bookmark, onPress: pick('bookmarks') },
+    { key: 'commandPalette', label: 'Command Palette', icon: Terminal, onPress: pick('commandPalette') },
+    { key: 'viewOptions', label: t('viewOptionsTitle'), icon: SlidersHorizontal, onPress: pick('viewOptions') },
+    { key: 'favorites', label: t('favoritesTitle'), icon: Star, onPress: pick('favorites') },
+    { key: 'transfers', label: t('transfersMenuItem'), icon: FileUp, onPress: pick('transfers') },
+    { key: 'trash', label: t('trashTitle'), icon: Trash2, onPress: pick('trash') },
+    { key: 'recent', label: t('recentTitle'), icon: History, onPress: pick('recent') },
+    { key: 'storageByType', label: t('storageByTypeTitle'), icon: PieChart, onPress: pick('storageByType') },
+    { key: 'dupFinder', label: 'Find Duplicates', icon: Replace, onPress: pick('dupFinder') },
+    { key: 'pinOffline', label: isCurrentFolderPinned ? 'Unpin offline' : 'Pin offline', icon: Pin, onPress: pick('pinOffline') },
+  ];
+  return (
+    <View>
+      <TopBar
+        context={`${host.label} · Files`}
+        sub="Workspace"
+        onMore={() => setMenuOpen(true)}
+        actions={
+          <IconButton label={t('searchTooltip')} onPress={onSearch}>
+            <Search size={22} color={c.onSurfaceVariant} />
+          </IconButton>
+        }
+        right={offline ? <StatePill label="Offline" tone="warn" icon={CloudOff} /> : <StatePill label="Connected" tone="safe" icon={ShieldCheck} />}
+      />
+      <PageHead title={folderLabel(currentPath(state))} subtitle={subtitle} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingLeft: root ? 18 : 6, marginBottom: 6 }}>
+        {!root && (
+          <IconButton label="Back" onPress={onBack}>
+            <ArrowLeft size={22} color={c.onSurface} />
+          </IconButton>
+        )}
+        <View style={{ flex: 1, height: 48 }}>
+          <BreadcrumbBar pathStack={state.pathStack} onNavigateTo={onNavigateTo} onJumpTo={onJumpTo} />
+        </View>
+      </View>
+      <BottomSheet visible={menuOpen} onClose={() => setMenuOpen(false)}>
+        <SheetHead title={t('moreTooltip')} />
+        <SheetScroll>
+          <View style={{ paddingHorizontal: 18, paddingBottom: 18 }}>
+            <ActionListCard>
+              {items.map((it) => (
+                <ActionListTile
+                  key={it.key}
+                  label={it.label}
+                  icon={<it.icon size={20} color={c.onSurfaceVariant} />}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    it.onPress();
+                  }}
+                />
+              ))}
+            </ActionListCard>
+          </View>
+        </SheetScroll>
+      </BottomSheet>
+    </View>
+  );
+}
+
+function ChipButton({ label, icon: Icon, onPress }: { label: string; icon: LucideIcon; onPress: () => void }) {
+  const c = useScheme();
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={label} hitSlop={4}>
+      <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, borderRadius: 14, backgroundColor: c.surfaceContainerHigh }}>
+        <Icon size={18} color={c.onSurface} />
+        <Text style={LumenType.pill} numberOfLines={1}>{label}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+/** Selection mode header: same `TopBar` and `PageHead` as browsing ("3 selected"), a close button, and a row of selection tools. */
+export function SelectionHeader({
+  host, state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails, canModify = true,
+}: { host: Host; state: ExplorerState; canModify?: boolean; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
+  const c = useScheme();
+  const all = state.entries.length > 0 && state.selected.size === state.entries.length;
+  return (
+    <View>
+      <TopBar
+        context={`${host.label} · Files`}
+        right={
+          <IconButton label={t('clearSelectionTooltip')} onPress={onClose}>
+            <X size={22} color={c.onSurfaceVariant} />
+          </IconButton>
+        }
+      />
+      <PageHead title={t('nSelected', { count: state.selected.size })} subtitle={folderLabel(currentPath(state))} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 6 }} contentContainerStyle={{ paddingHorizontal: 18, gap: 10, alignItems: 'center' }}>
+        <ChipButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} icon={all ? Square : CheckSquare} onPress={all ? onClearSelection : onSelectAll} />
+        <ChipButton label={t('invertSelectionTooltip')} icon={Replace} onPress={onInvertSelection} />
+        {canModify && state.selected.size > 0 && <ChipButton label={t('batchRenameTooltip')} icon={FilePen} onPress={onBatchRename} />}
+        {state.selected.size === 1 && <ChipButton label={t('detailsButton')} icon={Info} onPress={onDetails} />}
+        {state.selected.size === 1 && <ChipButton label="Bookmark" icon={Bookmark} onPress={onBookmark} />}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Bottom action row for the current selection: cut, copy, compress, download, delete as flat tiles, each gated by the device's permissions. */
 export function SelectionBar({ count, onCut, onCopy, onCompress, onDownload, onDelete, caps }: { count: number; onCut: () => void; onCopy: () => void; onCompress: () => void; onDownload: () => void; onDelete: () => void; caps?: Record<FileCapability, boolean> }) {
   const c = useScheme();
   // Nothing the device may do with a selection: no empty strip.
   if (!can(caps, 'modify') && !can(caps, 'download') && !can(caps, 'delete')) return null;
+  const off = count === 0;
   // Sits above the tab bar, which already owns the bottom inset.
   return (
-    <View style={{ backgroundColor: c.surfaceContainerHigh, borderTopWidth: 1, borderColor: c.outlineVariant }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 }}>
-        <Text style={{ fontSize: 12.5 }} muted>{t('nSelected', { count })}</Text>
-        <View style={{ flexDirection: 'row' }}>
-          {can(caps, 'modify') && can(caps, 'delete') && <BarAction label={t('cutButton')} onPress={onCut}><Scissors size={22} color={c.onSurfaceVariant} /></BarAction>}
-          {can(caps, 'modify') && <BarAction label={t('copyButton')} onPress={onCopy}><Copy size={22} color={c.onSurfaceVariant} /></BarAction>}
-          {can(caps, 'modify') && <BarAction label={t('compressButton')} onPress={onCompress}><Archive size={22} color={c.onSurfaceVariant} /></BarAction>}
-          {can(caps, 'download') && <BarAction label={t('downloadButton')} onPress={onDownload}><Download size={22} color={c.onSurfaceVariant} /></BarAction>}
-          {can(caps, 'delete') && <BarAction label={t('deleteButton')} onPress={onDelete}><Trash2 size={22} color={c.error} /></BarAction>}
-        </View>
-      </View>
+    <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14, backgroundColor: c.surface }}>
+      {can(caps, 'modify') && can(caps, 'delete') && <ActionTile compact label={t('cutButton')} disabled={off} onPress={onCut} renderIcon={(k) => <Scissors size={22} color={k} />} />}
+      {can(caps, 'modify') && <ActionTile compact label={t('copyButton')} disabled={off} onPress={onCopy} renderIcon={(k) => <Copy size={22} color={k} />} />}
+      {can(caps, 'modify') && <ActionTile compact label={t('compressButton')} disabled={off} onPress={onCompress} renderIcon={(k) => <Archive size={22} color={k} />} />}
+      {can(caps, 'download') && <ActionTile compact label={t('downloadButton')} disabled={off} onPress={onDownload} renderIcon={(k) => <Download size={22} color={k} />} />}
+      {can(caps, 'delete') && <ActionTile compact label={t('deleteButton')} disabled={off} onPress={onDelete} renderIcon={() => <Trash2 size={22} color={c.error} />} />}
     </View>
   );
 }

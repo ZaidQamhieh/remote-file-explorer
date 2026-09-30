@@ -2,9 +2,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 
-import { Button, GroupedCard, HintCard, InlineError, Text, useToast } from '../../design/components';
+import { GroupedCard, InlineError, PageHead, Text, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { FontFamily, Spacing } from '../../design/tokens';
+import { FontFamily } from '../../design/tokens';
+import { LumenFooter, StackTopBar } from '../../features/hosts/LumenRows';
 import { awaitPairing, humanizeError, PairExpired, PairRejected, requestPairing, type PairRequestHandle } from '../../features/pairing/pairingService';
 import { t } from '../../i18n';
 import { pairingDeps } from '../../services';
@@ -39,43 +41,54 @@ export default function PairRequest() {
     return () => ctl.abort();
   }, [address, attempt, router, toast]);
 
+  const retry = () => {
+    setPhase({ kind: 'connecting' });
+    setAttempt((a) => a + 1);
+  };
+
   return (
-    <ScrollView contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.lg }}>
-      <Stack.Screen options={{ title: t('pairRequestTitle') }} />
-      <Text muted>{address}</Text>
-      {phase.kind === 'connecting' && (
-        <View style={{ alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl }}>
-          <ActivityIndicator />
-          <Text muted>{t('pairRequestConnecting')}</Text>
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false, title: t('pairRequestTitle') }} />
+      <StackTopBar context="RFE · Pair" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24, gap: 14 }}>
+        <View style={{ marginHorizontal: -18 }}>
+          <PageHead title={t('pairRequestTitle')} subtitle={address} />
         </View>
-      )}
-      {phase.kind === 'waiting' && (
-        <>
-          <GroupedCard>
-            <View style={{ alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.md }}>
-              <Text variant="labelMedium" muted>{t('pairRequestMatchCode')}</Text>
-              <Text style={{ fontFamily: FontFamily.monoMedium, fontSize: 36, lineHeight: 44, letterSpacing: 2, color: c.primary }} accessibilityLabel={phase.handle.matchCode.replace(/\D/g, ' ').trim()}>
-                {phase.handle.matchCode}
-              </Text>
-            </View>
-          </GroupedCard>
-          <View style={{ alignItems: 'center', gap: Spacing.sm }}>
-            <ActivityIndicator />
-            <Text variant="titleMedium">{t('pairRequestApprove')}</Text>
+        {phase.kind === 'connecting' && (
+          <View style={{ alignItems: 'center', gap: 12, paddingVertical: 32 }}>
+            <ActivityIndicator color={c.primary} />
+            <Text style={LumenType.meta} color={c.onSurfaceVariant}>{t('pairRequestConnecting')}</Text>
           </View>
-          <HintCard text={t('pairRequestApproveBody', { name: address })} />
-        </>
-      )}
-      {phase.kind === 'failed' && (
-        <>
-          <InlineError message={phase.message} />
-          <Button label={t('pairRequestRetry')} onPress={() => {
-            setPhase({ kind: 'connecting' });
-            setAttempt((a) => a + 1);
-          }} />
-        </>
-      )}
-      <Button kind="text" label={t('pairRequestCancel')} onPress={() => router.back()} />
-    </ScrollView>
+        )}
+        {phase.kind === 'waiting' && (
+          <>
+            <GroupedCard>
+              <View style={{ alignItems: 'center', gap: 8, paddingVertical: 14 }}>
+                <Text style={LumenType.meta} color={c.onSurfaceVariant}>{t('pairRequestMatchCode')}</Text>
+                <Text style={{ fontFamily: FontFamily.monoMedium, fontSize: 40, lineHeight: 48, letterSpacing: 2, color: c.primary }} accessibilityLabel={phase.handle.matchCode.replace(/\D/g, ' ').trim()}>
+                  {phase.handle.matchCode}
+                </Text>
+              </View>
+            </GroupedCard>
+            <View style={{ alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={c.primary} />
+              <Text style={LumenType.title}>{t('pairRequestApprove')}</Text>
+            </View>
+            <Text style={[LumenType.meta, { textAlign: 'center' }]} color={c.onSurfaceVariant}>{t('pairRequestApproveBody', { name: address })}</Text>
+          </>
+        )}
+        {phase.kind === 'failed' && <InlineError message={phase.message} />}
+      </ScrollView>
+      <LumenFooter
+        buttons={
+          phase.kind === 'failed'
+            ? [
+                { key: 'retry', label: t('pairRequestRetry'), primary: true, onPress: retry },
+                { key: 'cancel', label: t('pairRequestCancel'), primary: false, onPress: () => router.back() },
+              ]
+            : [{ key: 'cancel', label: t('pairRequestCancel'), primary: false, onPress: () => router.back() }]
+        }
+      />
+    </View>
   );
 }

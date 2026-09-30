@@ -2,7 +2,8 @@ import { File as FileIcon, FileArchive, FileText, Folder, Image as ImageIcon, Mu
 
 import type { Entry } from '../../core/api/models';
 import { iconKindFor, roleOf } from '../../core/entryCategory';
-import { roleTint, useRoles, useScheme } from '../../design/theme';
+import { mix } from '../../design/color';
+import { useRoles, useScheme } from '../../design/theme';
 
 const ICONS: Record<ReturnType<typeof iconKindFor>['icon'], LucideIcon> = { folder: Folder, image: ImageIcon, video: Video, music: Music, fileArchive: FileArchive, fileText: FileText, file: FileIcon };
 
@@ -15,10 +16,10 @@ export function EntryLeading({ entry, size = 24 }: { entry: Pick<Entry, 'isDir' 
   return <Icon size={size} color={role ? roles[role] : c.onSurfaceVariant} />;
 }
 
-/** Tonal chip behind the glyph: the entry's role colour over the surface, neutral for unknown types. */
+/** Tonal chip behind the glyph (`.filemark`): the entry's role colour at 17% over the raised surface, neutral for unknown types. */
 export function useIconChipBg(entry: Pick<Entry, 'isDir' | 'mimeType'> & { name?: string }): string {
   const c = useScheme();
   const roles = useRoles();
   const role = roleOf(entry);
-  return role ? roleTint(roles[role], c) : c.surfaceContainerHighest;
+  return role ? mix(roles[role], c.surfaceContainerHigh, 0.17) : c.surfaceContainerHigh;
 }

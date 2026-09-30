@@ -2,23 +2,23 @@ import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Fragment, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { GroupedCard, MockupSwitch, Pressable, SectionLabel, Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { GroupedCard, IconTile, MockupSwitch, Pressable, SectionLabel, Text } from '../../design/components';
+import { LumenSize, LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { FontFamily, Radii, Spacing } from '../../design/tokens';
 
-/** A labelled group: the section header, then one card whose rows are split by hairlines. */
+/** A labelled group: the section label, then one flat card whose rows are split by faint dividers (`.permission-row`). */
 export function SettingsSection({ title, children, trailing }: { title: string; children: ReactNode; trailing?: ReactNode }) {
   const c = useScheme();
   const rows = (Array.isArray(children) ? children.flat(Infinity) : [children]).filter(Boolean) as ReactNode[];
+  const divider = mix(c.onSurfaceVariant, c.surfaceContainer, 0.16);
   return (
     <View>
-      <View style={{ paddingHorizontal: Spacing.xs }}>
-        <SectionLabel title={title} trailing={trailing} />
-      </View>
-      <GroupedCard>
+      <SectionLabel title={title} trailing={trailing} />
+      <GroupedCard padded={false} style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
         {rows.map((row, i) => (
           <Fragment key={i}>
-            {i > 0 && <View style={{ height: 1, backgroundColor: c.outlineVariant }} />}
+            {i > 0 && <View style={{ height: 1, backgroundColor: divider }} />}
             {row}
           </Fragment>
         ))}
@@ -27,13 +27,9 @@ export function SettingsSection({ title, children, trailing }: { title: string; 
   );
 }
 
-/** The 38dp tinted square that leads a settings row. */
-export function RowBadge({ icon: Icon, tint }: { icon: LucideIcon; tint: string }) {
-  return (
-    <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: `${tint}26`, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon size={18} color={tint} />
-    </View>
-  );
+/** The leading icon tile of a settings row (`.app-icon` scale: 38 dp, tone at 18% over the raised surface). */
+export function RowBadge({ icon, tint }: { icon: LucideIcon; tint: string }) {
+  return <IconTile icon={icon} color={tint} size={38} radius={LumenSize.tileRadius} />;
 }
 
 type RowBase = { icon: LucideIcon; title: string; subtitle?: string; tint?: string };
@@ -41,11 +37,11 @@ type RowBase = { icon: LucideIcon; title: string; subtitle?: string; tint?: stri
 function RowBody({ icon, title, subtitle, tint, trailing }: RowBase & { trailing?: ReactNode }) {
   const c = useScheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }}>
-      <RowBadge icon={icon} tint={tint ?? c.onSurfaceVariant} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 64 }}>
+      <RowBadge icon={icon} tint={tint ?? c.primary} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{title}</Text>
-        {subtitle ? <Text muted style={{ fontSize: 11.5, marginTop: 1 }}>{subtitle}</Text> : null}
+        <Text style={LumenType.rowTitle}>{title}</Text>
+        {subtitle ? <Text style={[LumenType.meta, { marginTop: 2 }]} color={c.onSurfaceVariant}>{subtitle}</Text> : null}
       </View>
       {trailing}
     </View>
@@ -61,8 +57,8 @@ export function InfoRow(p: RowBase) {
 export function NavRow({ onPress, ...p }: RowBase & { onPress: () => void }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} accessibilityLabel={p.title}>
-      <RowBody {...p} trailing={<ChevronRight size={16} color={c.onSurfaceVariant} />} />
+    <Pressable onPress={onPress} accessibilityLabel={p.title} pressedScale={0.99}>
+      <RowBody {...p} trailing={<ChevronRight size={20} color={c.onSurfaceVariant} />} />
     </Pressable>
   );
 }
@@ -71,13 +67,13 @@ export function NavRow({ onPress, ...p }: RowBase & { onPress: () => void }) {
 export function ValueRow({ onPress, value, ...p }: RowBase & { onPress: () => void; value: string }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} accessibilityLabel={`${p.title}, ${value}`}>
+    <Pressable onPress={onPress} accessibilityLabel={`${p.title}, ${value}`} pressedScale={0.99}>
       <RowBody
         {...p}
         trailing={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text muted style={{ fontSize: 13.5 }} numberOfLines={1}>{value}</Text>
-            <ChevronRight size={16} color={c.onSurfaceVariant} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '45%' }}>
+            <Text style={LumenType.meta} color={c.onSurfaceVariant} numberOfLines={1}>{value}</Text>
+            <ChevronRight size={20} color={c.onSurfaceVariant} />
           </View>
         }
       />
@@ -88,7 +84,7 @@ export function ValueRow({ onPress, value, ...p }: RowBase & { onPress: () => vo
 /** A row with a switch; the whole row toggles. */
 export function ToggleRow({ value, onChange, disabled, ...p }: RowBase & { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={disabled ? undefined : () => onChange(!value)} disabled={disabled} accessibilityRole="switch" accessibilityLabel={p.title} accessibilityState={{ checked: value, disabled: !!disabled }} style={{ opacity: disabled ? 0.5 : 1 }}>
+    <Pressable onPress={disabled ? undefined : () => onChange(!value)} disabled={disabled} accessibilityRole="switch" accessibilityLabel={p.title} accessibilityState={{ checked: value, disabled: !!disabled }} style={{ opacity: disabled ? 0.5 : 1 }} pressedScale={0.99}>
       <RowBody {...p} trailing={<MockupSwitch value={value} />} />
     </Pressable>
   );
@@ -96,12 +92,13 @@ export function ToggleRow({ value, onChange, disabled, ...p }: RowBase & { value
 
 /** A plain labelled switch used inside a row (device grants). */
 export function SmallSwitchRow({ label, subtitle, value, onChange, disabled }: { label: string; subtitle?: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  const c = useScheme();
   return (
-    <Pressable onPress={disabled ? undefined : () => onChange(!value)} disabled={disabled} accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: value, disabled: !!disabled }} style={{ opacity: disabled ? 0.5 : 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}>
+    <Pressable onPress={disabled ? undefined : () => onChange(!value)} disabled={disabled} accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: value, disabled: !!disabled }} style={{ opacity: disabled ? 0.5 : 1 }} pressedScale={0.99}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, minHeight: 48 }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13.5 }}>{label}</Text>
-          {subtitle ? <Text muted style={{ fontSize: 11.5 }}>{subtitle}</Text> : null}
+          <Text style={LumenType.name}>{label}</Text>
+          {subtitle ? <Text style={LumenType.meta} color={c.onSurfaceVariant}>{subtitle}</Text> : null}
         </View>
         <MockupSwitch value={value} />
       </View>
@@ -111,5 +108,5 @@ export function SmallSwitchRow({ label, subtitle, value, onChange, disabled }: {
 
 /** Scroll body shared by the app-settings screens. */
 export function SettingsPage({ children }: { children: ReactNode }) {
-  return <ScrollView contentContainerStyle={{ padding: Spacing.md, gap: Spacing.md, paddingBottom: Spacing.xl }}>{children}</ScrollView>;
+  return <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, gap: 16, paddingBottom: 32 }}>{children}</ScrollView>;
 }

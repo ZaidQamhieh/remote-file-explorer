@@ -6,24 +6,27 @@ import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native'
 import { AgentApiError } from '../../../core/api/agentClient';
 import type { AuditEntry } from '../../../core/api/models';
 import { formatRelative } from '../../../core/format';
-import { ErrorRetry, Text } from '../../../design/components';
-import { useScheme } from '../../../design/theme';
-import { Brand, FontFamily, Spacing } from '../../../design/tokens';
+import { mix } from '../../../design/color';
+import { ErrorRetry, GroupedCard, Text } from '../../../design/components';
+import { LumenSize, LumenType } from '../../../design/lumen';
+import { useRoles, useScheme } from '../../../design/theme';
+import type { Roles, Scheme } from '../../../design/tokens';
 import { auditLabel } from '../../../features/settings/hostSettingsLogic';
 import { humanizeError } from '../../../features/pairing/pairingService';
 import { t } from '../../../i18n';
 import { clientForHost, hostStore } from '../../../services';
 
-const VISUALS: Record<string, { icon: LucideIcon; tint: (c: ReturnType<typeof useScheme>) => string }> = {
-  pair: { icon: Smartphone, tint: () => Brand.online },
-  register: { icon: UserPlus, tint: () => Brand.online },
+type Tone = (c: Scheme, r: Roles) => string;
+const VISUALS: Record<string, { icon: LucideIcon; tint: Tone }> = {
+  pair: { icon: Smartphone, tint: (_c, r) => r.safe },
+  register: { icon: UserPlus, tint: (_c, r) => r.safe },
   login: { icon: LogIn, tint: (c) => c.primary },
   login_failed: { icon: ShieldAlert, tint: (c) => c.error },
   device_revoked: { icon: Ban, tint: (c) => c.error },
   device_removed: { icon: Trash2, tint: (c) => c.error },
-  device_updated: { icon: Settings2, tint: () => Brand.amber },
-  share_created: { icon: LinkIcon, tint: () => Brand.accent },
-  share_revoked: { icon: Link2Off, tint: () => Brand.amber },
+  device_updated: { icon: Settings2, tint: (_c, r) => r.warn },
+  share_created: { icon: LinkIcon, tint: (_c, r) => r.route },
+  share_revoked: { icon: Link2Off, tint: (_c, r) => r.warn },
   agent_restart: { icon: RefreshCw, tint: (c) => c.primary },
 };
 
@@ -61,13 +64,13 @@ export default function Audit() {
   const notice = (message: string) => (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
       <ScrollText size={56} color={c.onSurfaceVariant} />
-      <Text muted style={{ textAlign: 'center' }}>{message}</Text>
+      <Text style={[LumenType.name, { textAlign: 'center' }]} muted>{message}</Text>
     </View>
   );
 
   let body: React.ReactNode;
   if (error) body = error.adminOnly ? notice(t('activityLogAdminOnly')) : <ErrorRetry message={error.message} onRetry={() => void fetchEntries().then(apply)} />;
-  else if (entries === null) body = <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /></View>;
+  else if (entries === null) body = <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.primary} /></View>;
   else if (entries.length === 0) body = notice(t('activityLogEmpty'));
   else {
     body = (
@@ -84,7 +87,7 @@ export default function Audit() {
             }}
           />
         }
-        contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xl }}
+        contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 32, gap: 10 }}
         renderItem={({ item }) => <Row entry={item} />}
       />
     );
@@ -99,20 +102,23 @@ export default function Audit() {
 
 function Row({ entry }: { entry: AuditEntry }) {
   const c = useScheme();
+  const roles = useRoles();
   const v = VISUALS[entry.action];
   const Icon = v?.icon ?? CircleDot;
-  const tint = v ? v.tint(c) : c.onSurfaceVariant;
+  const tint = v ? v.tint(c, roles) : c.onSurfaceVariant;
   const sub = [entry.actor, entry.target, entry.detail].filter(Boolean).join(' · ');
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, paddingVertical: Spacing.xs }}>
-      <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: `${tint}1F`, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon size={18} color={tint} />
+    <GroupedCard padded={false} style={{ padding: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ width: 38, height: 38, borderRadius: LumenSize.tileRadius, backgroundColor: mix(tint, c.surfaceContainerHigh, 0.18), alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={20} color={tint} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={LumenType.rowTitle}>{auditLabel(entry.action)}</Text>
+          {sub ? <Text muted style={[LumenType.meta, { marginTop: 2 }]}>{sub}</Text> : null}
+        </View>
+        <Text muted style={LumenType.meta}>{formatRelative(entry.at)}</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: FontFamily.semibold }}>{auditLabel(entry.action)}</Text>
-        {sub ? <Text muted style={{ fontSize: 12 }}>{sub}</Text> : null}
-      </View>
-      <Text muted style={{ fontSize: 12 }}>{formatRelative(entry.at)}</Text>
-    </View>
+    </GroupedCard>
   );
 }

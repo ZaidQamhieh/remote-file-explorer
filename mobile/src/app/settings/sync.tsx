@@ -6,6 +6,8 @@ import { formatDate } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import type { SyncRule } from '../../core/storage/syncRules';
 import { Button, Text, useDialogs, useToast } from '../../design/components';
+import { LumenType } from '../../design/lumen';
+import { useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { humanizeError } from '../../features/pairing/pairingService';
@@ -20,6 +22,7 @@ export default function Sync() {
   const [rules, setRules] = useState<SyncRule[] | null>(null);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [running, setRunning] = useState<{ id: string; text: string } | null>(null);
+  const c = useScheme();
   const cancel = useRef(false);
 
   const reload = useCallback(async () => {
@@ -85,9 +88,9 @@ export default function Sync() {
     <SettingsPage>
       {rules.length === 0 ? (
         <View style={{ padding: Spacing.lg, alignItems: 'center', gap: Spacing.sm }}>
-          <FolderSync size={40} color="#888" />
-          <Text muted style={{ textAlign: 'center' }}>{t('syncNoRules')}</Text>
-          <Text muted style={{ textAlign: 'center', fontSize: 12 }}>{t('syncRulesSubtitle')}</Text>
+          <FolderSync size={40} color={c.onSurfaceVariant} />
+          <Text style={[LumenType.name, { textAlign: 'center' }]}>{t('syncNoRules')}</Text>
+          <Text muted style={[LumenType.meta, { textAlign: 'center' }]}>{t('syncRulesSubtitle')}</Text>
         </View>
       ) : null}
       {rules.map((rule) => {
@@ -101,7 +104,7 @@ export default function Sync() {
           </SettingsSection>
         );
       })}
-      <Button label={t('syncAddRule')} onPress={() => void addRule()} />
+      <Button size="lg" label={t('syncAddRule')} onPress={() => void addRule()} />
     </SettingsPage>
   );
 }

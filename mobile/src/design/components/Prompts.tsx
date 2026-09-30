@@ -17,7 +17,7 @@ function Center({ visible, onClose, children }: { visible: boolean; onClose: () 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <RNPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }} onPress={onClose} accessibilityLabel="Dismiss">
-          <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: c.outlineVariant, maxHeight: '90%' }}>
+          <RNPressable accessibilityViewIsModal style={{ backgroundColor: c.surfaceContainer, borderRadius: Radii.lg, overflow: 'hidden', maxHeight: '90%' }}>
             {children}
           </RNPressable>
         </RNPressable>

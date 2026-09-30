@@ -2,13 +2,14 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Bookmark, BookmarkPlus, History, Search, SearchX, SlidersHorizontal, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, ScrollView, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 
 import type { Host } from '../../core/models/host';
-import { ErrorRetry, GhostBlockButton, Pressable, Text, useDialogs } from '../../design/components';
+import { Button, ErrorRetry, Pressable, Text, TopBar, useDialogs } from '../../design/components';
+import { LumenType } from '../../design/lumen';
+import { mix } from '../../design/color';
 import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { FontFamily, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { clientForHost } from '../../services';
 import { useCollections } from '../../state/collections';
@@ -17,7 +18,7 @@ import { useActiveHost } from '../../state/activeHost';
 import { revealInExplorer } from '../explorer/reveal';
 import { humanizeError } from '../pairing/pairingService';
 import { SearchFilterSheet } from './SearchFilterSheet';
-import { CategoryChips, GlobIndicator, ScopePill, SearchResultTile, TruncationBanner } from './SearchParts';
+import { CategoryChips, GlobIndicator, ResultCardRow, ScopePill, SearchField, SearchResultTile, TruncationBanner } from './SearchParts';
 import { createSearchController } from './searchController';
 import { activeFilterCount, defaultFilters, filterSearchResults, isGlobQuery, type SearchCategory, type SearchFilters } from './searchLogic';
 
@@ -27,7 +28,6 @@ const DEBOUNCE_MS = 450;
 export function HostSearchScreen({ host, currentPath, onlyEverywhere }: { host: Host; currentPath: string; onlyEverywhere?: boolean }) {
   const c = useScheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const dialogs = useDialogs();
   const vis = useResolvedVisibility(host.id);
   const recordSearch = useCollections((s) => s.recordSearch);
@@ -95,22 +95,38 @@ export function HostSearchScreen({ host, currentPath, onlyEverywhere }: { host: 
       <FlatList
         data={results}
         keyExtractor={(e) => e.path}
-        contentContainerStyle={{ padding: Spacing.md }}
-        ItemSeparatorComponent={() => <View style={{ height: 1, marginHorizontal: Spacing.md, backgroundColor: c.outlineVariant }} />}
-        renderItem={({ item }) => <SearchResultTile entry={item} query={state.query} highlight={!glob} onPress={() => revealInExplorer(router, host, item.path, rootPath)} />}
+        contentContainerStyle={{ paddingTop: 10, paddingBottom: 18 }}
+        renderItem={({ item, index }) => (
+          <ResultCardRow index={index} count={results.length}>
+            <SearchResultTile entry={item} query={state.query} highlight={!glob} onPress={() => revealInExplorer(router, host, item.path, rootPath)} />
+          </ResultCardRow>
+        )}
       />
     );
   }
 
   const count = activeFilterCount(filters);
   return (
-    <View style={{ flex: 1, backgroundColor: c.surface, paddingTop: insets.top }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
-        <Pressable onPress={() => router.back()} accessibilityLabel="Back" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-          <ArrowLeft size={20} color={c.onSurfaceVariant} />
+    <View style={{ flex: 1, backgroundColor: c.surface }}>
+      <TopBar
+        context={`${host.label} · Search`}
+        right={
+          <Pressable onPress={() => setFilterOpen(true)} accessibilityLabel={t('searchFiltersTooltip')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <SlidersHorizontal size={22} color={c.onSurfaceVariant} />
+            {count > 0 && (
+              <View style={{ position: 'absolute', top: 6, right: 6, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: Radii.stadium, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 12, lineHeight: 14, fontFamily: FontFamily.bold }} color={c.onPrimary}>{String(count)}</Text>
+              </View>
+            )}
+          </Pressable>
+        }
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 6, paddingRight: 18, paddingBottom: 8 }}>
+        <Pressable onPress={() => router.back()} accessibilityLabel="Back" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+          <ArrowLeft size={22} color={c.onSurface} />
         </Pressable>
-        <View style={{ flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: c.surface, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.stadium }}>
-          <Search size={16} color={c.onSurfaceVariant} />
+        <SearchField style={{ flex: 1 }}>
+          <Search size={18} color={c.onSurfaceVariant} />
           <TextInput
             accessibilityLabel={t('searchHint')}
             autoFocus
@@ -122,33 +138,26 @@ export function HostSearchScreen({ host, currentPath, onlyEverywhere }: { host: 
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
-            style={{ flex: 1, padding: 0, fontSize: 13.5, fontFamily: FontFamily.regular, color: c.onSurface }}
+            style={{ flex: 1, padding: 0, fontSize: 16, fontFamily: FontFamily.regular, color: c.onSurface }}
           />
           {text !== '' && (
             <>
-              <Pressable onPress={saveCurrent} accessibilityLabel={t('saveSearch')}>
-                <BookmarkPlus size={16} color={c.onSurfaceVariant} />
+              <Pressable onPress={saveCurrent} hitSlop={12} accessibilityLabel={t('saveSearch')}>
+                <BookmarkPlus size={18} color={c.onSurfaceVariant} />
               </Pressable>
               <Pressable
                 onPress={() => {
                   onChange('');
                   run('');
                 }}
+                hitSlop={12}
                 accessibilityLabel="Clear"
               >
-                <X size={16} color={c.onSurfaceVariant} />
+                <X size={18} color={c.onSurfaceVariant} />
               </Pressable>
             </>
           )}
-        </View>
-        <Pressable onPress={() => setFilterOpen(true)} accessibilityLabel={t('searchFiltersTooltip')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-          <SlidersHorizontal size={19} color={c.onSurfaceVariant} />
-          {count > 0 && (
-            <View style={{ position: 'absolute', top: 4, right: 4, minWidth: 14, paddingHorizontal: 4, borderRadius: Radii.stadium, backgroundColor: Brand.seed, alignItems: 'center' }}>
-              <Text style={{ fontSize: 9, lineHeight: 12 }} color="#fff">{String(count)}</Text>
-            </View>
-          )}
-        </Pressable>
+        </SearchField>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <ScopePill fromHere={filters.fromHere} currentPath={currentPath} onPress={() => setFilterOpen(true)} />
@@ -158,7 +167,6 @@ export function HostSearchScreen({ host, currentPath, onlyEverywhere }: { host: 
       </View>
       {glob && state.query !== '' && <GlobIndicator />}
       {banner && <TruncationBanner message={banner} />}
-      <View style={{ height: 1, backgroundColor: c.outlineVariant }} />
       <View style={{ flex: 1 }}>{body}</View>
       <SearchFilterSheet visible={filterOpen} filters={filters} currentPath={currentPath} onApply={apply} onClose={() => setFilterOpen(false)} />
     </View>
@@ -170,7 +178,7 @@ function Centered({ message }: { message: string }) {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md }}>
       <SearchX size={56} color={c.outline} />
-      <Text style={{ textAlign: 'center' }}>{message}</Text>
+      <Text style={[LumenType.name, { textAlign: 'center' }]}>{message}</Text>
     </View>
   );
 }
@@ -181,7 +189,7 @@ function ResultSkeleton() {
     <View accessibilityRole="progressbar" accessibilityLabel="Searching">
       {Array.from({ length: 8 }, (_, i) => (
         <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm }}>
-          <View style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: c.surfaceContainerHighest }} />
+          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: c.surfaceContainerHigh }} />
           <View style={{ gap: Spacing.xs }}>
             <View style={{ height: 12, width: i % 2 ? 130 : 180, borderRadius: 6, backgroundColor: c.surfaceContainerHighest }} />
             <View style={{ height: 10, width: 90, borderRadius: 6, backgroundColor: c.surfaceContainerHighest }} />
@@ -201,8 +209,8 @@ function RecentAndSaved({ onPick, onAllHosts }: { onPick: (q: string) => void; o
   const removeRecent = useCollections((s) => s.removeRecentSearch);
   const clearRecent = useCollections((s) => s.clearRecentSearches);
   const allHosts = (
-    <View style={{ padding: Spacing.md }}>
-      <GhostBlockButton label={t('searchEveryHostButton')} onPress={onAllHosts} />
+    <View style={{ padding: 18 }}>
+      <Button size="lg" kind="neutral" label={t('searchEveryHostButton')} onPress={onAllHosts} />
     </View>
   );
   if (saved.length === 0 && recent.length === 0) {
@@ -214,8 +222,8 @@ function RecentAndSaved({ onPick, onAllHosts }: { onPick: (q: string) => void; o
     );
   }
   const label = (text: string, trailing?: React.ReactNode) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing.md, paddingRight: Spacing.sm, paddingTop: Spacing.md, paddingBottom: Spacing.xs }}>
-      <Text style={{ flex: 1, fontSize: 10.5, fontFamily: FontFamily.semibold, letterSpacing: 0.9, textTransform: 'uppercase' }}>{text}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 22, paddingRight: 10, paddingTop: 14, paddingBottom: 4 }}>
+      <Text style={[LumenType.sectionLabel, { flex: 1 }]} muted>{text}</Text>
       {trailing}
     </View>
   );
@@ -223,17 +231,17 @@ function RecentAndSaved({ onPick, onAllHosts }: { onPick: (q: string) => void; o
     <ScrollView keyboardShouldPersistTaps="handled">
       {saved.length > 0 && label(t('savedSearches'))}
       {saved.map((s) => (
-        <Row key={s.name} icon={<Bookmark size={19} color={Brand.seed} />} tint={Brand.seed} title={s.name} subtitle={s.query} onPress={() => onPick(s.query)} onRemove={() => void removeSaved(s.name)} />
+        <Row key={s.name} icon={<Bookmark size={22} color={c.primary} />} tint={c.primary} title={s.name} subtitle={s.query} onPress={() => onPick(s.query)} onRemove={() => void removeSaved(s.name)} />
       ))}
       {recent.length > 0 &&
         label(
           t('recentSearches'),
           <Pressable onPress={() => void clearRecent()} accessibilityLabel={t('clearAllButton')}>
-            <Text style={{ fontSize: 12.5, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }} color={c.primary}>{t('clearAllButton')}</Text>
+            <Text style={[LumenType.pill, { paddingHorizontal: 8, paddingVertical: 12 }]} color={c.primary}>{t('clearAllButton')}</Text>
           </Pressable>,
         )}
       {recent.map((q) => (
-        <Row key={q} icon={<History size={19} color={c.onSurfaceVariant} />} title={q} onPress={() => onPick(q)} onRemove={() => void removeRecent(q)} />
+        <Row key={q} icon={<History size={22} color={c.onSurfaceVariant} />} title={q} onPress={() => onPick(q)} onRemove={() => void removeRecent(q)} />
       ))}
       {allHosts}
     </ScrollView>
@@ -243,17 +251,21 @@ function RecentAndSaved({ onPick, onAllHosts }: { onPick: (q: string) => void; o
 function Row({ icon, tint, title, subtitle, onPress, onRemove }: { icon: React.ReactNode; tint?: string; title: string; subtitle?: string; onPress: () => void; onRemove: () => void }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} accessibilityLabel={title}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 11, paddingHorizontal: Spacing.md }}>
-        <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: tint ? `${tint}24` : c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
-        <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{title}</Text>
-          {subtitle ? <Text numberOfLines={1} muted style={{ fontSize: 11.5 }}>{subtitle}</Text> : null}
-        </View>
-        <Pressable onPress={onRemove} accessibilityLabel={`Remove ${title}`} style={{ padding: Spacing.xs }}>
-          <X size={18} color={c.onSurfaceVariant} />
+    <View style={{ marginHorizontal: 18, marginTop: 10 }}>
+      <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14, paddingRight: 4, borderRadius: Radii.card, backgroundColor: c.surfaceContainer }}>
+        <Pressable onPress={onPress} accessibilityLabel={title} style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: tint ? mix(tint, c.surfaceContainerHigh, 0.17) : c.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={LumenType.name}>{title}</Text>
+              {subtitle ? <Text numberOfLines={1} muted style={LumenType.meta}>{subtitle}</Text> : null}
+            </View>
+          </View>
+        </Pressable>
+        <Pressable onPress={onRemove} accessibilityLabel={`Remove ${title}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+          <X size={20} color={c.onSurfaceVariant} />
         </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }

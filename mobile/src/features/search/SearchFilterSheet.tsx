@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { BottomSheet, Button, MockupSwitch, Pressable, SheetHead, Text } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { DATE_PRESETS, defaultFilters, SIZE_PRESETS, type SearchFilters, type SearchMode } from './searchLogic';
 
@@ -28,7 +30,7 @@ export function SearchFilterSheet({ visible, filters, currentPath, onApply, onCl
     <BottomSheet visible={visible} onClose={onClose}>
       <SheetHead title={t('searchFiltersTooltip')} />
       <ScrollView>
-        <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: Spacing.md }}>
+        <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: Spacing.md }}>
           <Group label={t('searchModeLabel')}>
             {MODES.map((m) => (
               <Chip key={m.key} label={t(m.label)} selected={draft.mode === m.key} onPress={() => set({ mode: m.key })} />
@@ -50,8 +52,8 @@ export function SearchFilterSheet({ visible, filters, currentPath, onApply, onCl
             <ToggleRow title={t('includeHiddenItems')} subtitle={t('includeHiddenSubtitle')} value={draft.includeHidden} onToggle={() => set({ includeHidden: !draft.includeHidden })} />
           </View>
           <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm }}>
-            <Button kind="tonal" label={t('resetButton')} style={{ flex: 1 }} onPress={() => setDraft(defaultFilters())} />
-            <Button label={t('applyButton')} style={{ flex: 2 }} onPress={() => onApply(draft)} />
+            <Button size="lg" kind="neutral" label={t('resetButton')} style={{ flex: 2 }} onPress={() => setDraft(defaultFilters())} />
+            <Button size="lg" label={t('applyButton')} style={{ flex: 3 }} onPress={() => onApply(draft)} />
           </View>
         </View>
       </ScrollView>
@@ -60,14 +62,14 @@ export function SearchFilterSheet({ visible, filters, currentPath, onApply, onCl
 }
 
 function Label({ text }: { text: string }) {
-  return <Text style={{ fontSize: 10.5, fontFamily: FontFamily.semibold, letterSpacing: 0.9, textTransform: 'uppercase' }}>{text}</Text>;
+  return <Text style={LumenType.sectionLabel} muted>{text}</Text>;
 }
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: Spacing.xs }}>
       <Label text={label} />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }}>{children}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{children}</View>
     </View>
   );
 }
@@ -75,9 +77,9 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   const c = useScheme();
   return (
-    <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={{ selected }}>
-      <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.stadium, backgroundColor: selected ? Brand.seed : 'transparent', borderWidth: selected ? 0 : 1, borderColor: c.outlineVariant }}>
-        <Text style={{ fontSize: 12 }} color={selected ? '#fff' : c.onSurfaceVariant}>{label}</Text>
+    <Pressable onPress={onPress} hitSlop={4} accessibilityLabel={label} accessibilityState={{ selected }}>
+      <View style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: 16, borderRadius: Radii.stadium, backgroundColor: selected ? mix(c.primary, c.surfaceContainer, 0.2) : c.surfaceContainerHigh }}>
+        <Text style={LumenType.pill} color={selected ? c.primary : c.onSurfaceVariant}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -86,10 +88,10 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 function ToggleRow({ title, subtitle, value, onToggle }: { title: string; subtitle?: string; value: boolean; onToggle: () => void }) {
   return (
     <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityRole="switch" accessibilityState={{ checked: value }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+      <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
         <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{title}</Text>
-          {subtitle ? <Text muted style={{ fontSize: 11.5 }}>{subtitle}</Text> : null}
+          <Text numberOfLines={2} style={LumenType.name}>{title}</Text>
+          {subtitle ? <Text muted style={LumenType.meta}>{subtitle}</Text> : null}
         </View>
         <MockupSwitch value={value} />
       </View>

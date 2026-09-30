@@ -11,7 +11,7 @@ export function GroupedCard({ children, padded = true, style }: { children: Reac
   return (
     <View
       style={[
-        { backgroundColor: c.surfaceContainer, borderRadius: LumenSize.cardRadius, padding: padded ? LumenSize.cardPadding * 2 : 0, overflow: 'hidden' },
+        { backgroundColor: c.surfaceContainer, borderRadius: LumenSize.cardRadius, padding: padded ? LumenSize.cardPadding : 0, overflow: 'hidden' },
         style,
       ]}
     >

@@ -2,12 +2,13 @@ import { Eye, EyeOff, Lock, LogIn, UserPlus, UserRound } from 'lucide-react-nati
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, InlineError, Pressable, Text, TextField } from '../../design/components';
+import { Button, InlineError, Pressable, Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { pairingDeps } from '../../services';
-import { AddressField, CodeBoxRow } from './fields';
+import { AddressField, CodeBoxRow, LumenField } from './fields';
 import { humanizeError, loginWithAccount, probeTarget, registerAccount } from './pairingService';
 
 /** Login (existing account) and Register (new account + one-time pairing code) share one form. */
@@ -50,26 +51,26 @@ export function AccountForm({ mode, prefillAddress, onPaired }: { mode: 'login' 
   }
 
   const eye = (
-    <Pressable onPress={() => setObscure((o) => !o)} accessibilityLabel={obscure ? 'Show password' : 'Hide password'}>
-      {obscure ? <Eye size={18} color={c.onSurfaceVariant} /> : <EyeOff size={18} color={c.onSurfaceVariant} />}
+    <Pressable onPress={() => setObscure((o) => !o)} accessibilityLabel={obscure ? 'Show password' : 'Hide password'} style={{ width: 48, height: 48, marginRight: -12, alignItems: 'center', justifyContent: 'center' }}>
+      {obscure ? <Eye size={22} color={c.onSurfaceVariant} /> : <EyeOff size={22} color={c.onSurfaceVariant} />}
     </Pressable>
   );
   return (
-    <View style={{ gap: Spacing.md }}>
+    <View style={{ gap: Spacing.lg }}>
       <AddressField value={address} onChange={setAddress} error={req(address)} />
       {reg && (
-        <View style={{ gap: 6 }}>
-          <Text variant="labelMedium" muted>{t('pairingCodeLabel')}</Text>
+        <View style={{ gap: 8 }}>
+          <Text style={LumenType.meta} color={c.onSurfaceVariant}>{t('pairingCodeLabel')}</Text>
           <CodeBoxRow value={code} onChange={setCode} />
-          {touched && !code.trim() ? <Text variant="bodySmall" color={c.error}>{t('requiredLabel')}</Text> : null}
+          {touched && !code.trim() ? <Text style={LumenType.meta} color={c.error}>{t('requiredLabel')}</Text> : null}
         </View>
       )}
-      <TextField label={t('usernameLabel')} value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} error={req(username)} leading={<UserRound size={18} color={c.onSurfaceVariant} />} />
-      <TextField label={t('passwordLabel')} value={password} onChangeText={setPassword} secureTextEntry={obscure} autoCapitalize="none" autoCorrect={false} error={pwError} leading={<Lock size={18} color={c.onSurfaceVariant} />} trailing={eye} />
-      {reg && <TextField label={t('confirmPasswordLabel')} value={confirm} onChangeText={setConfirm} secureTextEntry={obscure} autoCapitalize="none" autoCorrect={false} error={confirmError} leading={<Lock size={18} color={c.onSurfaceVariant} />} />}
-      <Text variant="bodySmall" muted>{reg ? t('registerHint') : t('loginHint')}</Text>
+      <LumenField label={t('usernameLabel')} value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} error={req(username)} leading={<UserRound size={22} color={c.onSurfaceVariant} />} />
+      <LumenField label={t('passwordLabel')} value={password} onChangeText={setPassword} secureTextEntry={obscure} autoCapitalize="none" autoCorrect={false} error={pwError} leading={<Lock size={22} color={c.onSurfaceVariant} />} trailing={eye} />
+      {reg && <LumenField label={t('confirmPasswordLabel')} value={confirm} onChangeText={setConfirm} secureTextEntry={obscure} autoCapitalize="none" autoCorrect={false} error={confirmError} leading={<Lock size={22} color={c.onSurfaceVariant} />} />}
+      <Text style={LumenType.meta} color={c.onSurfaceVariant}>{reg ? t('registerHint') : t('loginHint')}</Text>
       {error && <InlineError message={error} />}
-      <Button label={reg ? t('registerButton') : t('loginButton')} busy={busy} onPress={submit} icon={reg ? <UserPlus size={18} color="#fff" /> : <LogIn size={18} color="#fff" />} />
+      <Button size="lg" label={reg ? t('registerButton') : t('loginButton')} busy={busy} onPress={submit} renderIcon={(k) => (reg ? <UserPlus size={22} color={k} /> : <LogIn size={22} color={k} />)} />
     </View>
   );
 }

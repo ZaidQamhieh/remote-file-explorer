@@ -2,9 +2,10 @@ import { EyeOff, Plus, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
-import { Pressable, Text } from '../../design/components';
+import { GroupedCard, Pressable, SectionLabel, Text } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { FontFamily, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { visibilityPresets, type VisibilityPrefs } from '../../core/visibility';
 import { ToggleRow } from './parts';
@@ -27,12 +28,14 @@ export function VisibilityEditor({ prefs, onChange }: { prefs: VisibilityPrefs; 
   };
 
   return (
-    <View style={{ gap: Spacing.md }}>
-      <ToggleRow icon={EyeOff} tint={c.primary} title={t('hideDotfiles')} subtitle={t('hideDotfilesSubtitle')} value={prefs.hideDotfiles} onChange={(v) => onChange(setHideDotfiles(prefs, v))} />
+    <View style={{ gap: 16 }}>
+      <GroupedCard padded={false} style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
+        <ToggleRow icon={EyeOff} tint={c.primary} title={t('hideDotfiles')} subtitle={t('hideDotfilesSubtitle')} value={prefs.hideDotfiles} onChange={(v) => onChange(setHideDotfiles(prefs, v))} />
+      </GroupedCard>
       {visibilityPresets.map((preset) => (
-        <View key={preset.label} style={{ gap: Spacing.xs }}>
-          <Text variant="titleSmall">{preset.label}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }}>
+        <View key={preset.label}>
+          <SectionLabel title={preset.label} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {[...preset.extensions].sort().map((ext) => {
               const on = prefs.hiddenExtensions.has(ext);
               return <Chip key={ext} label={`.${ext}`} selected={on} onPress={() => onChange(on ? removeExtension(prefs, ext) : addExtension(prefs, ext))} />;
@@ -44,19 +47,19 @@ export function VisibilityEditor({ prefs, onChange }: { prefs: VisibilityPrefs; 
           </View>
         </View>
       ))}
-      <View style={{ gap: Spacing.xs }}>
-        <Text variant="labelLarge">{t('customLabel')}</Text>
+      <View>
+        <SectionLabel title={t('customLabel')} />
         {custom.length === 0 ? (
-          <Text muted>{t('noCustomExtensions')}</Text>
+          <Text style={[LumenType.meta, { marginBottom: 8, paddingHorizontal: 4 }]} muted>{t('noCustomExtensions')}</Text>
         ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
             {custom.map((ext) => (
-              <Chip key={ext} label={`.${ext}`} selected onPress={() => onChange(removeExtension(prefs, ext))} trailing={<X size={12} color="#fff" />} />
+              <Chip key={ext} label={`.${ext}`} selected onPress={() => onChange(removeExtension(prefs, ext))} trailing={<X size={14} color={c.onPrimary} />} />
             ))}
           </View>
         )}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.chip, paddingLeft: 12, backgroundColor: c.surfaceContainerHighest }}>
-          <Text muted>.</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, borderRadius: Radii.chip, paddingLeft: 14, minHeight: 48, backgroundColor: c.surfaceContainer }}>
+          <Text muted style={LumenType.name}>.</Text>
           <TextInput
             accessibilityLabel={t('addExtensionHint')}
             value={draft}
@@ -67,9 +70,9 @@ export function VisibilityEditor({ prefs, onChange }: { prefs: VisibilityPrefs; 
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="done"
-            style={{ flex: 1, paddingVertical: 10, color: c.onSurface, fontFamily: FontFamily.regular, fontSize: 14 }}
+            style={{ flex: 1, paddingVertical: 10, color: c.onSurface, fontFamily: FontFamily.regular, fontSize: 16 }}
           />
-          <Pressable onPress={submit} pressedScale={0.92} accessibilityLabel={t('addExtensionTooltip')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={submit} pressedScale={0.92} accessibilityLabel={t('addExtensionTooltip')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
             <Plus size={18} color={c.onSurface} />
           </Pressable>
         </View>
@@ -82,8 +85,8 @@ function Chip({ label, selected, onPress, trailing }: { label: string; selected:
   const c = useScheme();
   return (
     <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={{ selected }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.stadium, backgroundColor: selected ? Brand.seed : 'transparent', borderWidth: selected ? 0 : 1, borderColor: c.outlineVariant }}>
-        <Text style={{ fontSize: 12 }} color={selected ? '#fff' : c.onSurfaceVariant}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, minHeight: 40, borderRadius: Radii.stadium, backgroundColor: selected ? c.primary : c.surfaceContainer }}>
+        <Text style={LumenType.pill} color={selected ? c.onPrimary : c.onSurfaceVariant}>{label}</Text>
         {selected ? trailing : null}
       </View>
     </Pressable>

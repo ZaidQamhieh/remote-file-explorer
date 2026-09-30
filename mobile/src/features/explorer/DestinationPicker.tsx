@@ -4,9 +4,11 @@ import { ActivityIndicator, FlatList, View } from 'react-native';
 import { useStore } from 'zustand';
 
 import type { Host } from '../../core/models/host';
-import { BottomSheet, Button, EmptyState, ErrorRetry, GhostBlockButton, ListingSkeleton, Pressable, SheetHead, Text, useDialogs, useToast } from '../../design/components';
-import { useScheme } from '../../design/theme';
-import { FontFamily, Radii, Spacing } from '../../design/tokens';
+import { BottomSheet, Button, EmptyState, ErrorRetry, ListingSkeleton, Pressable, SheetHead, Text, useDialogs, useToast } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenType } from '../../design/lumen';
+import { useRoles, useScheme } from '../../design/theme';
+import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { clientForHost } from '../../services';
 import { useResolvedVisibility } from '../../state/settings';
@@ -20,6 +22,7 @@ import { createDestinationPicker, pickerPath } from './destinationPicker';
  */
 export function DestinationPicker({ visible, host, originPath, title, confirmLabel, onPick, onClose }: { visible: boolean; host: Host; originPath: string; title: string; confirmLabel: string; onPick: (dir: string) => void; onClose: () => void }) {
   const c = useScheme();
+  const roles = useRoles();
   const toast = useToast();
   const dialogs = useDialogs();
   const vis = useResolvedVisibility(host.id);
@@ -59,12 +62,12 @@ export function DestinationPicker({ visible, host, originPath, title, confirmLab
         ListFooterComponent={state.loadingMore ? <ActivityIndicator style={{ padding: Spacing.lg }} /> : null}
         renderItem={({ item }) => (
           <Pressable onPress={() => picker.navigate(item.path)} accessibilityLabel={item.name}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: 11, borderBottomWidth: 1, borderColor: c.outlineVariant }}>
-              <View style={{ width: 38, height: 38, borderRadius: Radii.sm, backgroundColor: `${c.primary}24`, alignItems: 'center', justifyContent: 'center' }}>
-                <Folder size={18} color={c.primary} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, minHeight: 56, paddingHorizontal: 18, paddingVertical: 6 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: mix(roles.folder, c.surfaceContainerHigh, 0.17), alignItems: 'center', justifyContent: 'center' }}>
+                <Folder size={22} color={roles.folder} />
               </View>
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontFamily: FontFamily.medium }}>{item.name}</Text>
-              <ChevronRight size={16} color={c.onSurfaceVariant} />
+              <Text numberOfLines={1} style={[LumenType.name, { flex: 1 }]}>{item.name}</Text>
+              <ChevronRight size={18} color={c.onSurfaceVariant} />
             </View>
           </Pressable>
         )}
@@ -76,14 +79,13 @@ export function DestinationPicker({ visible, host, originPath, title, confirmLab
     <BottomSheet visible={visible} onClose={onClose} maxHeight="90%">
       <View style={{ height: 560, maxHeight: '100%' }}>
         <SheetHead title={title} subtitle={originPath} />
-        <View style={{ paddingHorizontal: Spacing.md, height: 44 }}>
+        <View style={{ paddingHorizontal: 18, height: 48 }}>
           <BreadcrumbBar pathStack={state.pathStack} onNavigateTo={picker.navigateTo} />
         </View>
-        <View style={{ height: 1, backgroundColor: c.outlineVariant }} />
         <View style={{ flex: 1 }}>{body}</View>
-        <View style={{ padding: Spacing.md, gap: Spacing.sm }}>
-          <GhostBlockButton label={t('newFolderButton')} icon={<FolderPlus size={16} color={c.onSurface} />} onPress={newFolder} />
-          <Button label={confirmLabel} disabled={here === originPath} onPress={() => onPick(here)} />
+        <View style={{ padding: 18, gap: 10 }}>
+          <Button size="lg" kind="neutral" label={t('newFolderButton')} renderIcon={(k) => <FolderPlus size={20} color={k} />} onPress={newFolder} />
+          <Button size="lg" label={confirmLabel} disabled={here === originPath} onPress={() => onPick(here)} />
         </View>
       </View>
     </BottomSheet>

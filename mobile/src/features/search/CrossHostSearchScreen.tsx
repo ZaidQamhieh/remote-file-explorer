@@ -2,19 +2,20 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Monitor, Search } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 
 import { formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
-import { EmptyState, Pressable, Text } from '../../design/components';
+import { EmptyState, Pressable, Text, TopBar } from '../../design/components';
+import { mix } from '../../design/color';
+import { LumenSize, LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
-import { Brand, FontFamily, Radii, Spacing } from '../../design/tokens';
+import { FontFamily, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { clientForHost } from '../../services';
 import { revealInExplorer } from '../explorer/reveal';
 import { createCrossHostSearch, groupByHost, MIN_CROSS_QUERY } from './crossHostSearch';
-import { ResultIconTile } from './SearchParts';
+import { ResultCardRow, ResultIconTile, SearchField } from './SearchParts';
 
 const DEBOUNCE_MS = 400;
 
@@ -22,7 +23,6 @@ const DEBOUNCE_MS = 400;
 export function CrossHostSearchScreen({ hosts }: { hosts: Host[] }) {
   const c = useScheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const search = useMemo(() => createCrossHostSearch({ hosts, getClient: (h) => clientForHost(h) }), [hosts]);
   const state = useStore(search);
   const [text, setText] = useState('');
@@ -63,31 +63,33 @@ export function CrossHostSearchScreen({ hosts }: { hosts: Host[] }) {
     body = (
       <ScrollView contentContainerStyle={{ paddingTop: 10, paddingBottom: 24 }}>
         <View style={{ paddingHorizontal: 18, flexDirection: 'row' }}>
-          <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.stadium, backgroundColor: `${Brand.seed}24` }}>
-            <Text style={{ fontSize: 10.5, fontFamily: FontFamily.semibold }} color={Brand.seed}>{t('crossHostSearchingCount', { count: groups.length })}</Text>
+          <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.stadium, backgroundColor: mix(c.primary, c.surfaceContainer, 0.2) }}>
+            <Text style={LumenType.pill} color={c.primary}>{t('crossHostSearchingCount', { count: groups.length })}</Text>
           </View>
         </View>
         {groups.map((g) => (
           <View key={g.host.id}>
-            <Text style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 4, fontSize: 10.5, fontFamily: FontFamily.semibold, letterSpacing: 0.9, textTransform: 'uppercase' }}>{g.host.label}</Text>
-            {g.entries.map((entry) => (
-              <Pressable key={entry.path} onPress={() => revealInExplorer(router, g.host, entry.path)} accessibilityLabel={`${entry.name} on ${g.host.label}`}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 11, paddingHorizontal: 18 }}>
-                  <ResultIconTile entry={entry} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: FontFamily.medium }}>{entry.name}</Text>
-                    <Text numberOfLines={1} muted style={{ fontSize: 11.5, fontFamily: FontFamily.mono }}>{entry.path}</Text>
+            <Text style={[LumenType.sectionLabel, { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 8 }]} muted>{g.host.label}</Text>
+            {g.entries.map((entry, i) => (
+              <ResultCardRow key={entry.path} index={i} count={g.entries.length}>
+                <Pressable onPress={() => revealInExplorer(router, g.host, entry.path)} accessibilityLabel={`${entry.name} on ${g.host.label}`}>
+                  <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}>
+                    <ResultIconTile entry={entry} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text numberOfLines={1} style={LumenType.name}>{entry.name}</Text>
+                      <Text numberOfLines={1} muted style={[LumenType.meta, { fontFamily: FontFamily.mono, fontSize: 13, lineHeight: 18 }]}>{entry.path}</Text>
+                    </View>
+                    {entry.size != null && <Text muted style={LumenType.meta}>{formatSize(entry.size)}</Text>}
                   </View>
-                  {entry.size != null && <Text muted style={{ fontSize: 11.5 }}>{formatSize(entry.size)}</Text>}
-                </View>
-              </Pressable>
+                </Pressable>
+              </ResultCardRow>
             ))}
           </View>
         ))}
         {failedHosts.map((h) => (
-          <View key={h.id} style={{ marginHorizontal: 18, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: Radii.lg, borderWidth: 1, borderColor: c.outlineVariant, backgroundColor: c.surface, opacity: 0.6 }}>
-            <Monitor size={15} color={c.onSurfaceVariant} />
-            <Text style={{ flex: 1, fontSize: 11.5 }} muted>{t('crossHostOffline', { host: h.label })}</Text>
+          <View key={h.id} style={{ marginHorizontal: 18, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: LumenSize.cardRadius, backgroundColor: c.surfaceContainer, opacity: 0.7 }}>
+            <Monitor size={18} color={c.onSurfaceVariant} />
+            <Text style={[LumenType.meta, { flex: 1 }]} muted>{t('crossHostOffline', { host: h.label })}</Text>
           </View>
         ))}
       </ScrollView>
@@ -95,16 +97,14 @@ export function CrossHostSearchScreen({ hosts }: { hosts: Host[] }) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.surface, paddingTop: insets.top }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 14 }}>
-        <Pressable onPress={() => router.back()} accessibilityLabel="Back" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-          <ArrowLeft size={20} color={c.onSurfaceVariant} />
+    <View style={{ flex: 1, backgroundColor: c.surface }}>
+      <TopBar context={t('crossHostSearchTitle')} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 6, paddingRight: 18, paddingBottom: 8 }}>
+        <Pressable onPress={() => router.back()} accessibilityLabel="Back" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+          <ArrowLeft size={22} color={c.onSurface} />
         </Pressable>
-        <Text style={{ fontSize: 19, fontFamily: FontFamily.semibold }} accessibilityRole="header">{t('crossHostSearchTitle')}</Text>
-      </View>
-      <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
-        <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.stadium }}>
-          <Search size={16} color={c.onSurfaceVariant} />
+        <SearchField style={{ flex: 1 }}>
+          <Search size={18} color={c.onSurfaceVariant} />
           <TextInput
             accessibilityLabel={t('crossHostSearchHint')}
             autoFocus
@@ -115,9 +115,9 @@ export function CrossHostSearchScreen({ hosts }: { hosts: Host[] }) {
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
-            style={{ flex: 1, padding: 0, fontSize: 13.5, fontFamily: FontFamily.regular, color: c.onSurface }}
+            style={{ flex: 1, padding: 0, fontSize: 16, fontFamily: FontFamily.regular, color: c.onSurface }}
           />
-        </View>
+        </SearchField>
       </View>
       <View style={{ flex: 1 }}>{body}</View>
     </View>

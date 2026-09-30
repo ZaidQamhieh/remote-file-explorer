@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { ACCENT_PRESETS, schemeFromSeed } from '../../design/accent';
 import { Pressable, Segmented, Text, useDialogs } from '../../design/components';
+import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { lightScheme, Radii, Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
@@ -38,15 +39,15 @@ export default function AppearanceSettings() {
         </View>
         <ToggleRow icon={Smartphone} tint={c.primary} title={t('amoledBlackTitle')} subtitle={t('amoledBlackSubtitle')} value={app.amoledDark} onChange={(v) => void setApp('amoledDark', v)} />
         <View style={{ paddingVertical: Spacing.md2, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 14 }}>{t('accentColorLabel')}</Text>
+          <Text style={LumenType.name}>{t('accentColorLabel')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md2 }}>
             {ACCENT_PRESETS.map((p) => {
               const swatch = p.color === null ? lightScheme.primary : schemeFromSeed(p.color, false).primary;
               const on = p.color === app.seedColor;
               return (
                 <Pressable key={p.label} onPress={() => void setApp('seedColor', p.color)} accessibilityRole="radio" accessibilityLabel={p.label} accessibilityState={{ selected: on }}>
-                  <View style={{ width: 40, height: 40, borderRadius: Radii.stadium, backgroundColor: swatch, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 3 : 0, borderColor: c.onSurface }}>
-                    {on ? <Check size={18} color="#fff" /> : null}
+                  <View style={{ width: 48, height: 48, borderRadius: Radii.stadium, backgroundColor: swatch, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 3 : 0, borderColor: c.onSurface }}>
+                    {on ? <Check size={18} color={lightScheme.onPrimary} /> : null}
                   </View>
                 </Pressable>
               );
@@ -56,11 +57,11 @@ export default function AppearanceSettings() {
       </SettingsSection>
       <SettingsSection title={t('displaySection')}>
         <View style={{ paddingVertical: Spacing.md2, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 14 }}>{t('layoutLabel')}</Text>
+          <Text style={LumenType.name}>{t('layoutLabel')}</Text>
           <Segmented options={[t('listLayout'), t('gridLayout')]} selectedIndex={app.gridView ? 1 : 0} onChange={(i) => void setApp('gridView', i === 1)} />
         </View>
         <View style={{ paddingVertical: Spacing.md2, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 14 }}>{t('densityLabel')}</Text>
+          <Text style={LumenType.name}>{t('densityLabel')}</Text>
           <Segmented options={[t('comfortableDensity'), t('compactDensity')]} selectedIndex={DENSITY_ORDER.indexOf(app.density)} onChange={(i) => void setApp('density', DENSITY_ORDER[i])} />
         </View>
         <ValueRow icon={Gauge} tint={c.primary} title={t('defaultSortLabel')} value={SORT_LABEL[app.sort.field]()} onPress={() => void pickSort()} />

@@ -1,5 +1,5 @@
 import type { TransferRecord } from '../../core/native';
-import { transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
+import { transferKind, transferPillLabel, transferSummary, transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
 
 const rec = (o: Partial<TransferRecord> = {}): TransferRecord => ({ id: 'x', hostId: 'h', address: 'a', remotePath: '/docs/a.txt', destPath: '/tmp/a.txt', state: 'RUNNING', received: 0, total: -1, error: null, ...o });
 
@@ -72,5 +72,29 @@ describe('transferTone', () => {
     ['CANCELLED', 'muted'],
   ] as const)('%s -> %s', (state, tone) => {
     expect(transferTone(state)).toBe(tone);
+  });
+});
+
+describe('transfer presentation', () => {
+  it('picks a glyph and role from the extension', () => {
+    expect(transferKind('Mountain.JPG')).toEqual({ glyph: 'image', role: 'photo' });
+    expect(transferKind('a.zip')).toEqual({ glyph: 'archive', role: 'warn' });
+    expect(transferKind('plan.pdf')).toEqual({ glyph: 'doc', role: 'doc' });
+    expect(transferKind('noext')).toEqual({ glyph: 'file', role: null });
+    expect(transferKind('.hidden')).toEqual({ glyph: 'file', role: null });
+  });
+
+  it('summarises only what exists', () => {
+    expect(transferSummary({ active: [], failed: [], finished: [] })).toBe('Nothing transferring');
+    const r = rec();
+    expect(transferSummary({ active: [r], failed: [], finished: [r, r] })).toBe('1 in progress · 2 complete');
+    expect(transferSummary({ active: [], failed: [r], finished: [] })).toBe('1 failed');
+  });
+
+  it('labels the pill', () => {
+    expect(transferPillLabel(rec({ received: 72, total: 100 }))).toBe('72%');
+    expect(transferPillLabel(rec())).toBe('Active');
+    expect(transferPillLabel(rec({ state: 'PAUSED' }))).toBe('Paused');
+    expect(transferPillLabel(rec({ state: 'DONE' }))).toBe('Done');
   });
 });

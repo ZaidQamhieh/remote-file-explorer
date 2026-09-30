@@ -363,6 +363,26 @@ export class AgentClient {
     return parsePairResponse(d as Record<string, unknown>);
   }
 
+  /** Asks the computer's owner to approve this device (no code); poll with [pairRequestStatus]. */
+  async requestPair(a: {
+    deviceLabel: string;
+    devicePublicKey: string;
+    nonce: string;
+    signature: string;
+    clientNonce: string;
+    deviceId?: string;
+  }): Promise<{ requestId: string; expiresInSeconds: number }> {
+    const { deviceId, ...rest } = a;
+    const d = (await this.call('POST', '/pair/request', { json: { ...rest, ...(deviceId ? { deviceId } : {}) } })) as Record<string, unknown>;
+    return { requestId: String(d.requestId ?? ''), expiresInSeconds: Number(d.expiresInSeconds ?? 120) };
+  }
+
+  async pairRequestStatus(id: string, clientNonce: string): Promise<{ status: 'pending' | 'rejected' } | { status: 'approved'; response: PairResponse }> {
+    const d = (await this.call('GET', `/pair/request/${encodeURIComponent(id)}`, { query: { nonce: clientNonce } })) as Record<string, unknown>;
+    if (d.status === 'approved') return { status: 'approved', response: parsePairResponse(d) };
+    return { status: d.status === 'rejected' ? 'rejected' : 'pending' };
+  }
+
   async drives(): Promise<Drive[]> {
     const d = (await this.call('GET', '/system/drives')) as Record<string, unknown>[];
     return d.map(parseDrive);

@@ -1,49 +1,27 @@
-import { Link2 } from 'lucide-react-native';
+import { Send } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { normalizeFingerprint , CertPinMismatch } from '../../core/api/pin';
-import { Button, HintCard, InlineError } from '../../design/components';
+import { Button, HintCard } from '../../design/components';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
-import { AddressField, CodeBoxRow, FingerprintField, fingerprintError } from './fields';
-import { humanizeError, pairWithCode } from './pairingService';
-import { pairingDeps } from '../../services';
+import { AddressField } from './fields';
 
-export function ManualPanel({ prefillAddress, onPaired }: { prefillAddress?: string; onPaired: (label: string) => void }) {
+/** Enter a computer's address; it then asks the owner to approve on that computer (nothing else to type). */
+export function ManualPanel({ prefillAddress, onRequest }: { prefillAddress?: string; onRequest: (address: string) => void }) {
   const [address, setAddress] = useState(prefillAddress ?? '');
-  const [fingerprint, setFingerprint] = useState('');
-  const [code, setCode] = useState('');
   const [touched, setTouched] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
+  function submit() {
     setTouched(true);
-    if (!address.trim() || fingerprintError(fingerprint) || code.trim().length < 8) {
-      if (code.trim().length < 8) setError(t('requiredLabel'));
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const host = await pairWithCode(pairingDeps, { address, fingerprint: normalizeFingerprint(fingerprint)! }, code);
-      onPaired(host.label);
-    } catch (e) {
-      setError(e instanceof CertPinMismatch ? t('fingerprintMismatch', { error: humanizeError(e) }) : t('pairingFailed', { error: humanizeError(e) }));
-    } finally {
-      setBusy(false);
-    }
+    if (address.trim()) onRequest(address.trim());
   }
 
   return (
     <View style={{ gap: Spacing.md }}>
       <AddressField value={address} onChange={setAddress} error={touched && !address.trim() ? t('requiredLabel') : null} />
-      <FingerprintField value={fingerprint} onChange={setFingerprint} error={touched ? fingerprintError(fingerprint) : null} />
-      <CodeBoxRow value={code} onChange={setCode} />
       <HintCard text={t('pairingHint')} />
-      {error && <InlineError message={error} />}
-      <Button label={t('pairButton')} busy={busy} onPress={submit} icon={<Link2 size={18} color="#fff" />} />
+      <Button label={t('requestPairingButton')} onPress={submit} icon={<Send size={18} color="#fff" />} />
     </View>
   );
 }

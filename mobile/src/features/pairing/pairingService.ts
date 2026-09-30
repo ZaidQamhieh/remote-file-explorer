@@ -4,6 +4,7 @@ import { CertPinMismatch, MissingCertPin, normalizeFingerprint } from '../../cor
 import type { Host } from '../../core/models/host';
 import type { DeviceIdentity } from '../../core/security/deviceIdentity';
 import type { HostStore } from '../../core/storage/hostStore';
+import { matchCode } from './matchCode';
 
 export type PairingDeps = {
   transport: Transport;
@@ -12,6 +13,9 @@ export type PairingDeps = {
   /** Android ID; lets a re-pair of the same phone reuse its device row. */
   deviceId: () => Promise<string | null>;
   deviceLabel?: string;
+  /** TLS handshake only: the leaf SHA-256 the host at `https://<address>` presents. Never sends a request. */
+  probe: (url: string) => Promise<string>;
+  randomBytes: (n: number) => Uint8Array;
 };
 
 export type PairingTarget = { address: string; fingerprint: string };
@@ -127,4 +131,85 @@ export async function registerAccount(
     deviceId: (await deps.deviceId()) ?? undefined,
   });
   return commit(deps, target, resp);
+}
+
+/** The owner rejected the request on the computer. */
+export class PairRejected extends Error {
+  constructor() {
+    super('The computer declined this pairing request.');
+    this.name = 'PairRejected';
+  }
+}
+
+/** Nobody answered on the computer in time. */
+export class PairExpired extends Error {
+  constructor() {
+    super('The pairing request timed out. Ask again and approve it on the computer.');
+    this.name = 'PairExpired';
+  }
+}
+
+export type PairRequestHandle = { target: PairingTarget; requestId: string; clientNonce: string; matchCode: string; expiresInSeconds: number };
+
+/**
+ * Learns the certificate the host at [address] presents (first contact, trust on first use) so the user never has to
+ * see or type a fingerprint; every later request is pinned to it.
+ */
+export async function probeTarget(deps: PairingDeps, address: string): Promise<PairingTarget> {
+  const authority = address.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const fp = normalizeFingerprint(await deps.probe(`https://${authority}`));
+  if (fp === null) throw new MissingCertPin();
+  return { address: authority, fingerprint: fp };
+}
+
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+
+/**
+ * Asks the computer at [address] to approve this phone; nothing is typed. The certificate the host presents is
+ * pinned on first contact (the user never sees or enters it); the match code the computer shows is derived from that
+ * pin, so a machine relaying the connection produces a code that differs from the one on the computer's screen.
+ */
+export async function requestPairing(deps: PairingDeps, address: string): Promise<PairRequestHandle> {
+  const target = await probeTarget(deps, address);
+  const fp = target.fingerprint;
+  const client = pinnedClient(deps, target);
+  const p = await proof(client, deps.identity);
+  const clientNonce = hex(deps.randomBytes(16));
+  const r = await client.requestPair({
+    deviceLabel: deps.deviceLabel ?? 'Mobile App',
+    clientNonce,
+    ...p,
+    deviceId: (await deps.deviceId()) ?? undefined,
+  });
+  if (!r.requestId) throw new AgentApiError(0, 'BAD_RESPONSE', 'The host returned an incomplete pairing response.');
+  return { target, requestId: r.requestId, clientNonce, matchCode: matchCode(fp, clientNonce, r.requestId), expiresInSeconds: r.expiresInSeconds };
+}
+
+/** Polls until the owner answers; resolves with the paired host. Aborting stops polling (the request lapses on the computer). */
+export async function awaitPairing(
+  deps: PairingDeps,
+  h: PairRequestHandle,
+  o: { signal?: AbortSignal; intervalMs?: number; sleep?: (ms: number) => Promise<void>; now?: () => number } = {},
+): Promise<Host> {
+  const client = pinnedClient(deps, h.target);
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const now = o.now ?? Date.now;
+  const deadline = now() + (h.expiresInSeconds + 5) * 1000;
+  let transient = 0;
+  while (!o.signal?.aborted) {
+    if (now() > deadline) throw new PairExpired();
+    try {
+      const s = await client.pairRequestStatus(h.requestId, h.clientNonce);
+      transient = 0;
+      if (s.status === 'approved') return commit(deps, h.target, s.response);
+      if (s.status === 'rejected') throw new PairRejected();
+    } catch (e) {
+      if (e instanceof PairRejected || e instanceof CertPinMismatch || e instanceof MissingCertPin) throw e;
+      if (e instanceof AgentApiError && e.code === 'NOT_FOUND') throw new PairExpired();
+      // A dropped connection or a busy agent is retried; a few in a row is a real failure.
+      if (++transient >= 5) throw e;
+    }
+    await sleep(o.intervalMs ?? 2000);
+  }
+  throw new DOMException('aborted', 'AbortError');
 }

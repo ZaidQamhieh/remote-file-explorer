@@ -377,6 +377,138 @@ paths:
             pairing code is short and brute-forceable). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
+  /pair/request:
+    post:
+      summary: Ask to be paired; the owner approves at the computer (unauthenticated)
+      description: >
+        Pairing without a code. The caller proves possession of its device key
+        (nonce from /auth/challenge, as for /pair) and sends a random
+        `clientNonce`. The agent shows the owner a prompt (desktop notification,
+        `rfe-agent pair accept`, or an admin session) with the device label and a
+        match code. The caller then polls GET /pair/request/{id}. Both sides
+        derive the match code as HMAC-SHA256(key = certificate SHA-256 bytes,
+        msg = "rfe-pair-sas\n" + clientNonce bytes + requestId), first 8 bytes
+        as big-endian uint64 mod 10^8, formatted "1234 5678". It is keyed by the
+        certificate each side saw, so a machine relaying the connection yields a
+        different code. The certificate fingerprint itself is never shown or
+        typed. Requests expire after 2 minutes; at most 3 wait at once.
+        Approved devices start browse-only, like code-paired devices.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [devicePublicKey, nonce, signature, clientNonce]
+              properties:
+                deviceLabel: { type: string, description: Shown to the owner; control characters removed, 40 characters max. }
+                deviceId: { type: string }
+                devicePublicKey: { type: string }
+                nonce: { type: string }
+                signature: { type: string }
+                clientNonce: { type: string, description: 16 random bytes, hex (32 characters). Also authorises polling. }
+      responses:
+        "200":
+          description: Request created and shown to the owner
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId: { type: string }
+                  expiresInSeconds: { type: integer }
+        "400":
+          description: Malformed body, bad clientNonce, or missing device proof. code=BAD_REQUEST or DEVICE_KEY_REQUIRED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: Nonce missing/expired/reused (INVALID_NONCE) or bad signature (INVALID_SIGNATURE).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: Rate limited (6/min per address, code=RATE_LIMITED) or 3 requests already waiting (code=PAIR_BUSY).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /pair/request/{id}:
+    get:
+      summary: Poll the owner's answer to a pairing request (unauthenticated)
+      description: >
+        `nonce` must equal the request's clientNonce. `approved` returns the
+        device token exactly once; a second poll is 404.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: nonce, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [pending, approved, rejected] }
+                  deviceToken: { type: string, description: Present when approved (omitted for browser sessions, which get the cookie). }
+                  deviceId: { type: string }
+                  agentName: { type: string }
+                  certFingerprint: { type: string }
+                  address: { type: string }
+                  tailscaleAddress: { type: string }
+        "404":
+          description: Unknown, expired, wrong nonce, or the token was already collected. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: Rate limited. code=RATE_LIMITED.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /pair/requests:
+    get:
+      summary: List pairing requests waiting for the owner — admin-only
+      security: [{ deviceToken: [] }]
+      responses:
+        "200":
+          description: Waiting requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
+                        matchCode: { type: string }
+                        remoteIp: { type: string }
+                        expiresAt: { type: string, format: date-time }
+        "403":
+          description: Not an admin session. code=FORBIDDEN.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /pair/requests/{id}/approve:
+    post:
+      summary: Approve a waiting pairing request — admin-only
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Approved }
+        "403": { description: "Not an admin session. code=FORBIDDEN.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: "Unknown, expired or already answered. code=NOT_FOUND.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  /pair/requests/{id}/reject:
+    post:
+      summary: Reject a waiting pairing request — admin-only
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Rejected }
+        "403": { description: "Not an admin session. code=FORBIDDEN.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: "Unknown, expired or already answered. code=NOT_FOUND.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
   /register:
     post:
       summary: >

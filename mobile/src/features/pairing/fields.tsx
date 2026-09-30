@@ -1,8 +1,7 @@
-import { Fingerprint, Monitor } from 'lucide-react-native';
+import { Monitor } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 
-import { normalizeFingerprint } from '../../core/api/pin';
 import { Text, TextField } from '../../design/components';
 import { useScheme } from '../../design/theme';
 import { FontFamily, Radii } from '../../design/tokens';
@@ -25,26 +24,6 @@ export function AddressField({ value, onChange, error }: { value: string; onChan
     />
   );
 }
-
-export function FingerprintField({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: string | null }) {
-  const c = useScheme();
-  return (
-    <TextField
-      label={t('fingerprintLabel')}
-      placeholder={t('fingerprintHint')}
-      helper={t('fingerprintVerificationHelp')}
-      value={value}
-      onChangeText={onChange}
-      autoCapitalize="characters"
-      autoCorrect={false}
-      mono
-      error={error}
-      leading={<Fingerprint size={18} color={c.onSurfaceVariant} />}
-    />
-  );
-}
-
-export const fingerprintError = (v: string) => (normalizeFingerprint(v) === null ? t('fingerprintInvalid') : null);
 
 /**
  * 8 display boxes over ONE real text input (the standard OTP pattern): fast typing, paste and IME

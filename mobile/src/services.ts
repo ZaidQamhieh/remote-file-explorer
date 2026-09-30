@@ -7,7 +7,7 @@ import { SettingsRepo } from './core/settings/settings';
 import { importLegacyState, type ImportReport } from './core/storage/legacyImport';
 import type { BackupStorage } from './features/backup/backupService';
 import { isBackedUpPrefKey } from './features/backup/backupPayload';
-import { secureReadAll, offlineBodies, nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes , nativeTransport as _transport , deviceIdNative } from './core/native';
+import { secureReadAll, offlineBodies, nativeSecureStore, nativeTransport, readLegacyPrefs, secureRandomBytes, probeFingerprint, nativeTransport as _transport , deviceIdNative } from './core/native';
 import type { Host } from './core/models/host';
 
 import type { PairingDeps } from './features/pairing/pairingService';
@@ -78,6 +78,8 @@ export const pairingDeps: PairingDeps = {
   identity,
   store: hostStore,
   deviceId: deviceIdNative,
+  probe: probeFingerprint,
+  randomBytes: secureRandomBytes,
 };
 
 db.execSync('CREATE TABLE IF NOT EXISTS listing_cache (host TEXT NOT NULL, path TEXT NOT NULL, fetched_at INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (host, path))');

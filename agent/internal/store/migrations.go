@@ -25,6 +25,7 @@ var migrations = []func(*sql.Tx) error{
 	migrateLoginDeviceBindings,
 	migrateDeviceFilePermissions,
 	migrateTransferHistoryRetention,
+	migratePairRequests,
 }
 
 // migrateTransferHistoryRetention adds an explicit completion timestamp so
@@ -53,6 +54,26 @@ CREATE INDEX IF NOT EXISTS idx_transfers_terminal_at ON transfers(status, termin
 		return err
 	}
 	return nil
+}
+
+// migratePairRequests adds requests to pair that the owner approves at the PC
+// instead of typing a code (a phone asks, the PC decides). Rows are short lived.
+func migratePairRequests(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE IF NOT EXISTS pair_requests (
+    id           TEXT PRIMARY KEY,
+    label        TEXT NOT NULL,
+    client_id    TEXT NOT NULL DEFAULT '',
+    public_key   TEXT NOT NULL DEFAULT '',
+    client_nonce TEXT NOT NULL,
+    remote_ip    TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created      INTEGER NOT NULL,
+    expires      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pair_requests_status ON pair_requests(status, expires);
+`)
+	return err
 }
 
 // migrate brings the schema up to len(migrations).

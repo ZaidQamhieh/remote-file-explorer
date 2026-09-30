@@ -346,6 +346,7 @@ func runServe(args []string) {
 		TrashDir:         dirs.trashDir,
 		StartTime:        startTime,
 		DataDir:          flags.dataDir,
+		OnPairRequest:    pairPromptHandler(db),
 	}, db, pm, tm)
 	if err != nil {
 		log.Fatalf("server: %v", err)

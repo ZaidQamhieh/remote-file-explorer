@@ -36,6 +36,8 @@ type Config struct {
 	TrashDir         string    // trash store root (XDG Trash on Linux; managed dir elsewhere)
 	StartTime        time.Time // agent process start time (for uptime reporting)
 	DataDir          string    // data directory path (for disk-space reporting)
+	// OnPairRequest, when set, is told about each new approve-on-PC pairing request (desktop notification).
+	OnPairRequest func(PairPrompt)
 }
 
 // New builds the v1 router and wires all routes.
@@ -142,6 +144,8 @@ func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Ma
 	r.Post("/auth/challenge", challengeHandler(nonces))
 	r.Post("/auth/logout", logoutHandler)
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
+	r.Post("/pair/request", createPairRequestHandler(cfg, db, nonces))
+	r.Get("/pair/request/{id}", pollPairRequestHandler(cfg, db))
 	r.Post("/register", registerHandler(cfg, db, pm, nonces))
 	r.Post("/login", loginHandler(cfg, db, nonces))
 	r.Get("/share/{token}", serveShareHandler(db, ops))
@@ -169,6 +173,9 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 	})
 	r.Post("/wol", wolRelayHandler())
 	r.Post("/pairing/generate", generatePairingHandler(pm, cfg.Settings))
+	r.Get("/pair/requests", listPairRequestsHandler(cfg, db))
+	r.Post("/pair/requests/{id}/approve", decidePairRequestHandler(db, true))
+	r.Post("/pair/requests/{id}/reject", decidePairRequestHandler(db, false))
 }
 
 // registerShareRoutes wires the authenticated R1 share-link management

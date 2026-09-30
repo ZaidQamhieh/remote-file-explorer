@@ -65,6 +65,8 @@ func printAdminUsage(w *os.File) {
 Usage:
   rfe-agent [serve] [flags]      run the host daemon (default)
   rfe-agent pair [-ttl 1h]       mint a pairing code + QR for a new phone
+  rfe-agent pair requests        list phones waiting for approval (match codes)
+  rfe-agent pair accept|reject [id]   answer a waiting phone
   rfe-agent devices              list paired devices
   rfe-agent revoke <id>          block a device (accepts a unique id prefix)
   rfe-agent remove <id>          permanently delete a device
@@ -112,6 +114,16 @@ func openAdminStore(dataDir string) (*store.DB, error) {
 
 // cmdPair mints a single-use pairing code and prints it with a scannable QR.
 func cmdPair(args []string) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "requests":
+			return cmdPairRequests(args[1:])
+		case "accept":
+			return cmdPairDecide(args[1:], true)
+		case "reject":
+			return cmdPairDecide(args[1:], false)
+		}
+	}
 	fs := flag.NewFlagSet("pair", flag.ExitOnError)
 	data := fs.String("data", "", "agent data dir")
 	addr := fs.String("addr", ":8765", "listen address the phone will dial (for the QR)")
@@ -149,6 +161,72 @@ func cmdPair(args []string) error {
 		fmt.Println(qr.ToSmallString(false))
 	}
 	fmt.Println("Scan in the app: Add computer → Scan QR.")
+	return nil
+}
+
+// cmdPairRequests lists phones waiting for approval, with their match codes.
+func cmdPairRequests(args []string) error {
+	fs := flag.NewFlagSet("pair requests", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+	dir := adminDataDir(*data)
+	cert, err := security.LoadOrCreateCert(dir)
+	if err != nil {
+		return fmt.Errorf("cert: %w", err)
+	}
+	db, err := openAdminStore(dir)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	list, err := db.ListPendingPairRequests()
+	if err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		fmt.Println("No pairing requests waiting.")
+		return nil
+	}
+	for _, r := range list {
+		sas, _ := pairing.SAS(security.Fingerprint(cert), r.ClientNonce, r.ID)
+		fmt.Printf("%s  %-24s  from %-15s  match code %s\n", r.ID[:8], r.Label, r.RemoteIP, sas)
+	}
+	fmt.Println("Approve with `rfe-agent pair accept <id>` only if the code matches the one on the phone.")
+	return nil
+}
+
+// cmdPairDecide approves or rejects a waiting request by (a prefix of) its id.
+// With no id it answers the only waiting request.
+func cmdPairDecide(args []string, approve bool) error {
+	fs := flag.NewFlagSet("pair accept", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	list, err := db.ListPendingPairRequests()
+	if err != nil {
+		return err
+	}
+	var match []string
+	for _, r := range list {
+		if fs.NArg() == 0 || strings.HasPrefix(r.ID, fs.Arg(0)) {
+			match = append(match, r.ID)
+		}
+	}
+	if len(match) != 1 {
+		return fmt.Errorf("%d waiting requests match; give the id from `rfe-agent pair requests`", len(match))
+	}
+	if err := db.DecidePairRequest(match[0], approve); err != nil {
+		return err
+	}
+	if approve {
+		fmt.Println("Approved. The phone finishes pairing within a couple of seconds.")
+	} else {
+		fmt.Println("Rejected.")
+	}
 	return nil
 }
 

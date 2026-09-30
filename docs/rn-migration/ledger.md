@@ -138,6 +138,13 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Reboot: the periodic job is back after boot. Transfers found running become Paused, as before.
 - Device matrix (emulator only): 720x1280 at 280 dpi, font scale 1.6, dark mode, and a 1600x2560 tablet at 320 dpi all render without overflow or crashes. At 1.6x the bottom-tab labels nearly touch and long status lines truncate; the tablet gets the phone layout stretched, with no two-pane layout.
 
+## Pairing without codes or fingerprints (owner request)
+- Add computer > Find on LAN / Enter address: pick a computer and it asks the owner to approve at the PC. The PC shows a desktop notification with Approve/Reject (`notify-send` actions on Linux) or the owner runs `rfe-agent pair requests|accept|reject`; nothing is typed on the phone, and the certificate fingerprint is never shown, typed or scanned in the app (it is learned on first contact and pinned).
+- Both sides show an 8-digit match code, HMAC-SHA256 keyed by the pinned certificate, so a machine relaying the connection shows a different code than the PC does. The TS and Go implementations share a test vector, and the live contract test checks the phone's code equals the one `rfe-agent pair requests` prints.
+- Agent: `POST /v1/pair/request`, `GET /v1/pair/request/{id}?nonce=` (token handed out once), admin list/approve/reject; requests expire after 2 minutes, 3 wait at most, 6 asks per minute per address (in `protocol/openapi.yaml`). Approved devices start browse-only, like code-paired ones.
+- Verified on the owner's phone with the real agent: request, matching codes (8863 5563 on both), approve from the PC, device listed, computer opens and lists its shared folder. Not verified: clicking the desktop notification button (approved through the CLI, which takes the same path); the web companion does not list requests yet.
+- Login and Register no longer ask for a fingerprint (learned on first contact instead). Register still sends a one-time code, so on a hostile network that code could be handed to a relay; QR scan (code and fingerprint inside the QR) is unchanged and not re-tested here.
+
 ## Still needs a physical phone (recorded, not verified)
 - Camera QR scan (pairing and hand-off) and LAN discovery (mDNS): the emulator has no virtual scene set up and its NAT drops multicast.
 - Secure-storage migration on a production Flutter install (needs the owner's signed Flutter build and its data; the reader is the same plugin code, JVM- and emulator-tested on fresh data only).

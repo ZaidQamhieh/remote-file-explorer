@@ -54,6 +54,7 @@ function Shell() {
         <Stack.Screen name="pair/scan" options={{ headerShown: false }} />
         <Stack.Screen name="receive" options={{ headerShown: false }} />
         <Stack.Screen name="share" options={{ title: t('shareTitle') }} />
+        <Stack.Screen name="pair/request" options={{ title: t('pairRequestTitle') }} />
         <Stack.Screen name="pair/login" options={{ title: t('loginTab') }} />
         <Stack.Screen name="pair/register" options={{ title: t('registerTab') }} />
         <Stack.Screen name="settings/appearance" options={{ title: t('appearanceSection') }} />

@@ -1,0 +1,242 @@
+// Package server — approve-on-PC pairing.
+//
+// A phone that can reach the agent but holds no code asks to be paired; the
+// owner approves or rejects at the PC (desktop notification, `rfe-agent pair
+// accept`, or an admin session). The phone polls until the decision. The two
+// sides show a short match code (pairing.SAS) so the owner can tell the
+// request came from the phone in front of them.
+package server
+
+import (
+	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
+)
+
+// pairRequestTTL is how long the owner has to answer.
+const pairRequestTTL = 2 * time.Minute
+
+const (
+	pairRequestRateAttempts = 6
+	pairRequestRateWindow   = time.Minute
+	// Polling is cheap and legitimate (every ~2s for up to the TTL).
+	pairPollRateAttempts = 120
+)
+
+// PairPrompt is what the owner is asked to approve.
+type PairPrompt struct {
+	ID    string
+	Label string
+	SAS   string
+	IP    string
+	TTL   time.Duration
+}
+
+type pairRequestBody struct {
+	DeviceLabel     string `json:"deviceLabel"`
+	DeviceID        string `json:"deviceId"`
+	DevicePublicKey string `json:"devicePublicKey"`
+	Nonce           string `json:"nonce"`
+	Signature       string `json:"signature"`
+	// ClientNonce is 16 random bytes (hex) the phone picks; it seeds the match
+	// code and is the secret that authorises polling for the result.
+	ClientNonce string `json:"clientNonce"`
+}
+
+func validClientNonce(s string) bool {
+	b, err := hex.DecodeString(s)
+	return err == nil && len(b) == 16
+}
+
+// createPairRequestHandler implements POST /v1/pair/request.
+func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc {
+	limiter := newKeyedLimiter(pairRequestRateAttempts, pairRequestRateWindow)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow(clientIP(r)) {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many pairing attempts, try again later")
+			return
+		}
+		var req pairRequestBody
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+			return
+		}
+		if !validClientNonce(req.ClientNonce) {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "clientNonce must be 16 random bytes, hex encoded")
+			return
+		}
+		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+			return
+		}
+		label := sanitizeLabel(req.DeviceLabel)
+		id, err := randomToken(16)
+		if err != nil {
+			writeInternal(w, "pair request", err)
+			return
+		}
+		sas, err := pairing.SAS(cfg.CertFingerprint, req.ClientNonce, id)
+		if err != nil {
+			writeInternal(w, "pair request", err)
+			return
+		}
+		now := time.Now()
+		err = db.CreatePairRequest(store.PairRequest{
+			ID: id, Label: label, ClientID: req.DeviceID, PublicKey: req.DevicePublicKey,
+			ClientNonce: req.ClientNonce, RemoteIP: clientIP(r),
+			Created: now.Unix(), Expires: now.Add(pairRequestTTL).Unix(),
+		})
+		if errors.Is(err, store.ErrTooManyPairRequests) {
+			writeError(w, http.StatusTooManyRequests, "PAIR_BUSY", "other pairing requests are waiting for approval on the computer")
+			return
+		}
+		if err != nil {
+			writeInternal(w, "pair request", err)
+			return
+		}
+		if cfg.OnPairRequest != nil {
+			cfg.OnPairRequest(PairPrompt{ID: id, Label: label, SAS: sas, IP: clientIP(r), TTL: pairRequestTTL})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"requestId":        id,
+			"expiresInSeconds": int(pairRequestTTL.Seconds()),
+		})
+	}
+}
+
+// sanitizeLabel bounds and cleans the device name shown in the prompt, which an
+// unauthenticated peer controls.
+func sanitizeLabel(s string) string {
+	out := make([]rune, 0, 40)
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		out = append(out, r)
+		if len(out) == 40 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return "unnamed-device"
+	}
+	return string(out)
+}
+
+// pollPairRequestHandler implements GET /v1/pair/request/{id}?nonce=<clientNonce>.
+func pollPairRequestHandler(cfg Config, db *store.DB) http.HandlerFunc {
+	limiter := newKeyedLimiter(pairPollRateAttempts, pairRequestRateWindow)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow(clientIP(r)) {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests, try again later")
+			return
+		}
+		id := chi.URLParam(r, "id")
+		pr, ok, err := db.GetPairRequest(id)
+		if err != nil {
+			writeInternal(w, "pair poll", err)
+			return
+		}
+		// One error for unknown id and wrong nonce so ids cannot be probed.
+		if !ok || subtle.ConstantTimeCompare([]byte(pr.ClientNonce), []byte(r.URL.Query().Get("nonce"))) != 1 {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
+			return
+		}
+		switch pr.Status {
+		case store.PairPending:
+			writeJSON(w, http.StatusOK, map[string]any{"status": "pending"})
+		case store.PairRejected:
+			writeJSON(w, http.StatusOK, map[string]any{"status": "rejected"})
+		case store.PairApproved:
+			claimed, ok, err := db.ClaimApprovedPairRequest(id)
+			if err != nil {
+				writeInternal(w, "pair poll", err)
+				return
+			}
+			if !ok {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
+				return
+			}
+			token, err := randomToken(32)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
+				return
+			}
+			deviceID, err := db.UpsertDevice(claimed.ClientID, claimed.Label, token, claimed.PublicKey, false)
+			if err != nil {
+				writeInternal(w, "pair poll", err)
+				return
+			}
+			auditAs(db, claimed.Label, store.AuditPair, deviceID, "approved at the computer, from "+claimed.RemoteIP)
+			resp := pairResponse{
+				DeviceToken:      token,
+				DeviceID:         deviceID,
+				AgentName:        cfg.Name,
+				CertFingerprint:  cfg.CertFingerprint,
+				Address:          cfg.Address,
+				TailscaleAddress: cfg.TailscaleAddress,
+			}
+			if isWebSessionRequest(r) {
+				setWebSessionCookie(w, token)
+				resp.DeviceToken = ""
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"status": "approved", "deviceToken": resp.DeviceToken, "deviceId": resp.DeviceID,
+				"agentName": resp.AgentName, "certFingerprint": resp.CertFingerprint,
+				"address": resp.Address, "tailscaleAddress": resp.TailscaleAddress,
+			})
+		default:
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
+		}
+	}
+}
+
+// listPairRequestsHandler implements GET /v1/pair/requests (admin).
+func listPairRequestsHandler(cfg Config, db *store.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "answering pairing requests requires an admin (login) session or the PC")
+			return
+		}
+		list, err := db.ListPendingPairRequests()
+		if err != nil {
+			writeInternal(w, "list pair requests", err)
+			return
+		}
+		out := make([]map[string]any, 0, len(list))
+		for _, pr := range list {
+			sas, _ := pairing.SAS(cfg.CertFingerprint, pr.ClientNonce, pr.ID)
+			out = append(out, map[string]any{
+				"id": pr.ID, "label": pr.Label, "matchCode": sas, "remoteIp": pr.RemoteIP,
+				"expiresAt": time.Unix(pr.Expires, 0).UTC().Format(time.RFC3339),
+			})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"requests": out})
+	}
+}
+
+// decidePairRequestHandler implements POST /v1/pair/requests/{id}/{approve|reject} (admin).
+func decidePairRequestHandler(db *store.DB, approve bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminDevice(deviceFromContext(r)) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "answering pairing requests requires an admin (login) session or the PC")
+			return
+		}
+		err := db.DecidePairRequest(chi.URLParam(r, "id"), approve)
+		if errors.Is(err, store.ErrPairRequestGone) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found, expired or already answered")
+			return
+		}
+		if err != nil {
+			writeInternal(w, "decide pair request", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

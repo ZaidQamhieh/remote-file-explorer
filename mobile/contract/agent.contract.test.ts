@@ -18,7 +18,7 @@ import { CertPinMismatch } from '../src/core/api/pin';
 import { DeviceIdentity } from '../src/core/security/deviceIdentity';
 import { MemorySecureStore } from '../src/core/security/secureStore';
 import { HostStore, MemoryKeyValueStore } from '../src/core/storage/hostStore';
-import { loginWithAccount } from '../src/features/pairing/pairingService';
+import { awaitPairing, loginWithAccount, PairRejected, requestPairing } from '../src/features/pairing/pairingService';
 import { nodeTransport } from './nodeTransport';
 
 const BIN = process.env.RFE_AGENT_BIN;
@@ -71,7 +71,7 @@ async function startAgent(o: { readOnly?: boolean; seed?: (root: string) => void
 async function pairedClient(a: Running): Promise<AgentClient> {
   const store = new HostStore(new MemoryKeyValueStore(), new MemorySecureStore());
   const identity = new DeviceIdentity(new MemorySecureStore(), (n) => new Uint8Array(randomBytes(n)));
-  const host = await loginWithAccount({ transport: nodeTransport(), identity, store, deviceId: async () => null }, { address: a.address, fingerprint: a.pin }, { username: 'owner', password: PASSWORD });
+  const host = await loginWithAccount({ transport: nodeTransport(), identity, store, deviceId: async () => null, probe: async () => a.pin, randomBytes: (n) => new Uint8Array(randomBytes(n)) }, { address: a.address, fingerprint: a.pin }, { username: 'owner', password: PASSWORD });
   return new AgentClient(host, { transport: nodeTransport(), deviceToken: (await store.getToken(host.id)) ?? undefined, pinnedFingerprint: await store.getPin(host.id) });
 }
 
@@ -324,5 +324,42 @@ live('agent contract (read-only host)', () => {
     expect(mv.failed.length).toBe(1);
     expect(fs.readFileSync(file, 'utf8')).toBe('x');
     expect(fs.readdirSync(a.root)).toEqual(['r.txt']);
+  });
+});
+
+live('agent contract (approve-on-computer pairing)', () => {
+  let a: Running;
+  beforeAll(async () => {
+    a = await startAgent();
+  }, 60_000);
+  afterAll(() => stop(a));
+
+  const deps = () => {
+    const secure = new MemorySecureStore();
+    const store = new HostStore(new MemoryKeyValueStore(), secure);
+    return { store, deps: { transport: nodeTransport(), identity: new DeviceIdentity(secure, (n: number) => new Uint8Array(randomBytes(n))), store, deviceId: async () => null, probe: async () => a.pin, randomBytes: (n: number) => new Uint8Array(randomBytes(n)) } };
+  };
+  const cli = (verb: string, ...rest: string[]) => spawnSync(BIN!, ['pair', verb, '-data', a.dataDir, ...rest], { encoding: 'utf8' });
+
+  it('approving on the computer completes pairing, and the match code equals the one the computer lists', async () => {
+    const { store, deps: d } = deps();
+    const h = await requestPairing(d, a.address);
+    const listed = cli('requests').stdout;
+    expect(listed).toContain(h.matchCode);
+    const paired = awaitPairing(d, h, { intervalMs: 100 });
+    expect(cli('accept', h.requestId.slice(0, 8)).status).toBe(0);
+    const host = await paired;
+    const client = new AgentClient(host, { transport: nodeTransport(), deviceToken: (await store.getToken(host.id)) ?? undefined, pinnedFingerprint: await store.getPin(host.id) });
+    expect((await client.health()).status).toBeDefined();
+    expect(await client.drives()).toBeDefined();
+  });
+
+  it('rejecting on the computer ends the request without a device', async () => {
+    const { store, deps: d } = deps();
+    const h = await requestPairing(d, a.address);
+    const paired = awaitPairing(d, h, { intervalMs: 100 });
+    expect(cli('reject', h.requestId.slice(0, 8)).status).toBe(0);
+    await expect(paired).rejects.toBeInstanceOf(PairRejected);
+    expect(await store.listHosts()).toEqual([]);
   });
 });

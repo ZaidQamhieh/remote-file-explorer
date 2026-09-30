@@ -212,6 +212,9 @@ ELSE terminal_at END`, cutoff-1, cutoff-1, cutoff, cutoff+1); err != nil {
 	}
 }
 
+// retentionMigrationBase is the schema version just before migrateTransferHistoryRetention.
+var retentionMigrationBase = len(migrations) - 2
+
 func TestTransferHistoryMigrationBackfillsOnce(t *testing.T) {
 	db := openCoverageDB(t)
 	if err := db.CreateTransfer(coverageTransfer("old-completed", "phone", 4)); err != nil {
@@ -223,7 +226,7 @@ func TestTransferHistoryMigrationBackfillsOnce(t *testing.T) {
 	if _, err := db.db.Exec(`UPDATE transfers SET terminal_at=0 WHERE id='old-completed'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, len(migrations)-1)); err != nil {
+	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, retentionMigrationBase)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.migrate(); err != nil {
@@ -236,7 +239,7 @@ func TestTransferHistoryMigrationBackfillsOnce(t *testing.T) {
 	if _, err := db.db.Exec(`UPDATE transfers SET terminal_at=1234 WHERE id='old-completed'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, len(migrations)-1)); err != nil {
+	if _, err := db.db.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, retentionMigrationBase)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.migrate(); err != nil {

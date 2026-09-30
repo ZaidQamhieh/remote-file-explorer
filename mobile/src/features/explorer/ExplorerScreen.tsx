@@ -14,6 +14,7 @@ import { isPinned, useCollections } from '../../state/collections';
 import { useSettings } from '../../state/settings';
 import { offlineDeps } from '../offline/offlineDeps';
 import { MAX_OFFLINE_FILE_BYTES, precachePinnedFolder } from '../offline/offlineBodies';
+import { markPinSynced, pinSyncPending, refreshPinnedFolders } from '../offline/pinSync';
 import { humanizeError } from '../pairing/pairingService';
 import { fetchPreviewFile } from '../preview/previewFile';
 import { isPreviewable, previewableSiblings } from '../preview/previewKind';
@@ -31,6 +32,7 @@ import { FavoritesPinRow, FavoritesSheet, ViewOptionsSheet } from './Sheets';
 import { useFileClipboard } from './clipboard';
 import { normalizeTypedPath } from './paletteLogic';
 import { transfers } from '../../core/native';
+import { clientForHost, listingCache } from '../../services';
 import { atRoot, currentPath } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
 import { useExplorer } from './useExplorer';
@@ -63,6 +65,32 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   useEffect(() => {
     if (initialPath && initialPath !== rootPath) ex.jumpTo(initialPath);
   }, [ex, initialPath, rootPath]);
+
+  // Once per launch, while the host is reachable, bring its pinned folders up to date in the background.
+  const online = !state.loading && !state.error;
+  useEffect(() => {
+    if (!online || !pinSyncPending(host.id)) return;
+    const paths = useCollections.getState().pins.filter((p) => p.hostId === host.id).map((p) => p.remotePath);
+    if (paths.length === 0) return markPinSynced(host.id);
+    void (async () => {
+      const client = await clientForHost(host);
+      const result = await refreshPinnedFolders(paths, {
+        listAll: async (path) => {
+          const all: Entry[] = [];
+          let cursor: string | undefined;
+          do {
+            const page = await client.list(path, { cursor });
+            all.push(...page.entries);
+            cursor = page.nextCursor;
+          } while (cursor);
+          return all;
+        },
+        storeListing: (path, entries) => listingCache.put(host.id, path, entries),
+        precache: (entries) => precachePinnedFolder(offlineDeps, host, entries, (h, e) => fetchPreviewFile(h, e, MAX_OFFLINE_FILE_BYTES)),
+      });
+      if (result.folders > 0) markPinSynced(host.id);
+    })().catch(() => {});
+  }, [online, host]);
 
   // A finished upload into the folder on screen shows up without a manual refresh.
   useEffect(

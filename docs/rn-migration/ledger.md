@@ -80,3 +80,6 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Command palette (overflow menu) filters the same eleven actions as Flutter; Navigate to Path asks for a path and jumps there. Storage by type in the overflow menu now opens the map for the current folder (Flutter did too).
 - Active transfers show the smoothed speed and time left, worked out in JS from the engine's progress events (an average that ignores samples closer than 0.5 s). Flutter showed the same two numbers; there is no native rate.
 - Each download is staged in its own folder (`downloads/<transfer id>/<name>`). Flutter and the first RN port used `downloads/<name>`, so two downloads of one file at once shared a partial file and corrupted each other ("size mismatch"). The folder is removed once the file is published, cancelled or forgotten.
+
+## Offline pin sync
+- Once per launch, the first time a host's Files tab loads successfully, its pinned folders are re-listed (updating the offline listing cache) and files that are not yet stored offline are downloaded. Flutter only fetched a folder's files when it was pinned and never refreshed afterwards. Bodies already stored are left as they are; they refresh when the file is next opened online. An offline start does not count, so it retries on the next visit.

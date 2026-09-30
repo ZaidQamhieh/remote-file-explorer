@@ -145,6 +145,13 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Verified on the owner's phone with the real agent: request, matching codes (8863 5563 on both), approve from the PC, device listed, computer opens and lists its shared folder. Not verified: clicking the desktop notification button (approved through the CLI, which takes the same path); the web companion does not list requests yet.
 - Login and Register no longer ask for a fingerprint (learned on first contact instead). Register still sends a one-time code, so on a hostile network that code could be handed to a relay; QR scan (code and fingerprint inside the QR) is unchanged and not re-tested here.
 
+## Owner's phone walkthrough (USB, real agent)
+- Verified on the phone: browse; download (28.6 MB, saved to Downloads, SHA-256 equal to the source); text view and edit; image view; upload through the system picker (landed on the PC); Move to Trash; photo backup of one album (one photo landed in `Phone Backup/<phone>/2026/2026-09/`). Permission denials show the agent's reason: "device lacks modify permission", "Delete failed: device lacks delete permission".
+- Bug found and fixed: a refused download (403 CAPABILITY_DENIED) said "Could not reach the computer". The engine now fails with the agent's code and the app explains the missing permission.
+- New devices are browse-only by design, and the app does not know its own permissions (the Download and Delete buttons show anyway). `rfe-agent allow <id> browse,download,upload,modify,delete,share|all|none` sets them from the PC.
+- Setting the photo backup folder needs the web companion (or a config row plus agent restart, as done here).
+- Not tried yet: search, share links, thumbnails on large folders, the Devices settings screens, Sync Rules and backup restore on the phone.
+
 ## Still needs a physical phone (recorded, not verified)
 - Camera QR scan (pairing and hand-off) and LAN discovery (mDNS): the emulator has no virtual scene set up and its NAT drops multicast.
 - Secure-storage migration on a production Flutter install (needs the owner's signed Flutter build and its data; the reader is the same plugin code, JVM- and emulator-tested on fresh data only).

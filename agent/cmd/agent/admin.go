@@ -34,6 +34,8 @@ func runAdmin(cmd string, args []string) error {
 		return cmdJail(args)
 	case "readonly":
 		return cmdReadonly(args)
+	case "allow":
+		return cmdAllow(args)
 	case "status":
 		return cmdStatus(args)
 	case "audit":
@@ -71,6 +73,8 @@ Usage:
   rfe-agent revoke <id>          block a device (accepts a unique id prefix)
   rfe-agent remove <id>          permanently delete a device
   rfe-agent jail <id> <path>     confine a device to <path> (empty "" clears it)
+  rfe-agent allow <id> <list>    set what a device may do: any of browse,download,upload,
+                                  modify,delete,share, or all / none (replaces its grants)
   rfe-agent readonly <id> <on|off>  allow browse/download but block all writes
   rfe-agent status               show name, addresses, fingerprint, devices
   rfe-agent audit [-n 50]        show the account/device/share audit trail
@@ -578,4 +582,56 @@ func humanizeSince(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
+}
+
+// parseAllow turns "download,upload" (or "all" / "none") into the six file grants.
+func parseAllow(list string) (grants [6]bool, err error) {
+	names := []string{"browse", "download", "upload", "modify", "delete", "share"}
+	switch strings.ToLower(strings.TrimSpace(list)) {
+	case "all":
+		return [6]bool{true, true, true, true, true, true}, nil
+	case "none", "":
+		return grants, nil
+	}
+	for _, part := range strings.Split(list, ",") {
+		part = strings.ToLower(strings.TrimSpace(part))
+		found := false
+		for i, n := range names {
+			if n == part {
+				grants[i], found = true, true
+			}
+		}
+		if !found {
+			return grants, fmt.Errorf("unknown permission %q (use %s, all or none)", part, strings.Join(names, ", "))
+		}
+	}
+	return grants, nil
+}
+
+// cmdAllow replaces a device's file permissions.
+func cmdAllow(args []string) error {
+	fs := flag.NewFlagSet("allow", flag.ExitOnError)
+	data := fs.String("data", "", "agent data dir")
+	_ = fs.Parse(args)
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage: rfe-agent allow <device-id> <browse,download,upload,modify,delete,share|all|none>")
+	}
+	g, err := parseAllow(fs.Arg(1))
+	if err != nil {
+		return err
+	}
+	db, err := openAdminStore(adminDataDir(*data))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	id, err := db.ResolveDeviceID(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	if err := db.SetDeviceFilePermissions(id, g[0], g[1], g[2], g[3], g[4], g[5]); err != nil {
+		return err
+	}
+	fmt.Printf("Set %q (%s) permissions to %s\n", deviceLabel(db, id), shortID(id), fs.Arg(1))
+	return nil
 }

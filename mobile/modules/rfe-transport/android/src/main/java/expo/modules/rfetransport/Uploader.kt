@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-/** The agent refused the upload with a definite answer; [message] is its API error code (CONFLICT, HASH_MISMATCH...). */
+/** The agent refused an upload or download with a definite answer; [message] is its API error code (CONFLICT, HASH_MISMATCH...). */
 class UploadRejected(val status: Int, code: String) : IOException(code.ifEmpty { "HTTP $status" })
 
 /**

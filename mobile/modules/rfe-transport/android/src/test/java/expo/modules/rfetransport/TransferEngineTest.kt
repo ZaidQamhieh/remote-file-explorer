@@ -75,6 +75,14 @@ class TransferEngineTest {
     assertEquals(null, req.getHeader("Range"))
   }
 
+  @Test fun refusedDownloadFailsWithTheAgentCodeNotAConnectionError() {
+    server.enqueue(MockResponse().setResponseCode(403).setBody("{\"code\":\"CAPABILITY_DENIED\",\"message\":\"device lacks download permission\"}"))
+    engine.enqueue("t0", "h", address, "/a.bin", dest("a.bin"))
+    val r = await("t0", TransferState.FAILED)
+    assertEquals("CAPABILITY_DENIED", r.error)
+    assertFalse(File(dest("a.bin")).exists())
+  }
+
   @Test fun interruptedTransferResumesWithRangeFromPartialLength() {
     server.enqueue(full().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
     engine.enqueue("t2", "h", address, "/b.bin", dest("b.bin"))

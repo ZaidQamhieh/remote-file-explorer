@@ -240,7 +240,13 @@ class TransferEngine(
           part.delete()
           throw RestartFromZero()
         }
-        if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+        if (!resp.isSuccessful) {
+          // A definite refusal (no permission, file gone) carries the agent's error code; anything else is a transient failure.
+          val definite = resp.code in 400..499 && resp.code != 408 && resp.code != 429
+          if (!definite) throw IOException("HTTP ${resp.code}")
+          val code = runCatching { org.json.JSONObject(resp.body?.string() ?: "").optString("code") }.getOrDefault("")
+          throw UploadRejected(resp.code, code)
+        }
         val resumed = offset > 0 && resp.code == 206
         if (!resumed) offset = 0
         val len = resp.body!!.contentLength()

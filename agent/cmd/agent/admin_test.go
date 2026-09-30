@@ -344,3 +344,19 @@ func TestAdminRevokeRemoveAndStatusCommands(t *testing.T) {
 		t.Fatal("status accepted missing data directory")
 	}
 }
+
+func TestParseAllow(t *testing.T) {
+	g, err := parseAllow("Download, upload")
+	if err != nil || g != [6]bool{false, true, true, false, false, false} {
+		t.Fatalf("got %v %v", g, err)
+	}
+	if g, _ := parseAllow("all"); g != [6]bool{true, true, true, true, true, true} {
+		t.Fatalf("all: %v", g)
+	}
+	if g, _ := parseAllow("none"); g != [6]bool{} {
+		t.Fatalf("none: %v", g)
+	}
+	if _, err := parseAllow("download,fly"); err == nil {
+		t.Fatal("unknown permission accepted")
+	}
+}

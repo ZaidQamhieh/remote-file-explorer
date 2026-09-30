@@ -32,6 +32,8 @@ export function transferErrorMessage(error: string | null): string {
     case 'FORBIDDEN':
     case 'READ_ONLY':
       return 'This device is not allowed to upload here.';
+    case 'CAPABILITY_DENIED':
+      return 'This device has not been given permission for this. Allow it on the computer, in the device’s access settings.';
     case 'HASH_MISMATCH':
     case 'CHUNK_HASH_MISMATCH':
       return 'The file changed or was damaged in transit. Try again.';
@@ -42,7 +44,7 @@ export function transferErrorMessage(error: string | null): string {
     case 'TRANSFER_ACTIVE':
       return 'The computer is still finishing the previous attempt. Try again in a moment.';
     case 'NOT_FOUND':
-      return 'The computer no longer has this upload. Try again.';
+      return 'The computer no longer has this file or upload. Try again.';
     case 'ERR_CERT_PIN_MISMATCH':
       return 'The computer’s identity changed. Check it in Devices.';
     case 'ERR_CONNECTION':

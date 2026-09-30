@@ -171,3 +171,8 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## QR scan and Approve click (emulator / stub)
 - QR scan: emulator `rfe_test` with `hw.camera.back = virtualscene`, the pairing QR (address 10.0.2.2, scratch agent) as the scene's wall poster, camera moved with the emulator gRPC `setPhysicalModel` (POSITION/ROTATION). The scanner decoded it and the app paired ("Paired with qr-scratch", host online). Real-camera scan on the phone is the owner's to do.
 - Approve click: `contract/fake_notification_server.py` stands in for the notification service on a private D-Bus and answers the agent's Approve action, so the agent's click handling and pairing completion are tested (`RFE_NOTIFY_STUB=1`). A real click on the Plasma notification is still unverified.
+
+## Second phone: Galaxy A53 (SM-A536E, Android 15, 1080x2400, serial R5CTB12ZLQH)
+- Had an old Flutter 1.12.0 (versionCode 20) signed with a different key; `adb install -r` of the RN release (versionCode 81, production signer) failed with INSTALL_FAILED_UPDATE_INCOMPATIBLE. Uninstalled it (owner-approved, secondary phone) and installed RN: onboarding, Add computer > Enter address, pairing, Devices shows "zaid-pc Online v1.3.0 LAN", Files lists "RFE Files". This is not the iib.7 upgrade test (wrong key, no production data).
+- Approve: the first request (code 2197 1184) expired after about 2.5 min with nobody clicking ("Nobody approved in time"). The retry (code 0414 2043, matching the phone) was accepted with `rfe-agent pair accept`, not a click. A real click on the Plasma notification and a real-camera QR scan are still unverified.
+- Device `a19a1c99` is this A53; `e13a4291` is the earlier pairing. Neither is removed.

@@ -1,8 +1,12 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Redirect, Tabs, useRouter } from 'expo-router';
 import { Activity, Database, Folder, FolderOpen, Settings } from 'lucide-react-native';
 
 import { BottomNav, type NavDestination } from '../../design/components/BottomNav';
+import { useEffect, useState } from 'react';
+
 import { useScheme } from '../../design/theme';
+import { isOnboarded } from '../../features/onboarding/onboardingState';
+import { ensureLegacyImport, hostStore, keyValue } from '../../services';
 
 const DESTINATIONS: NavDestination[] = [
   { name: 'index', label: 'Devices', Icon: Database },
@@ -14,6 +18,16 @@ const DESTINATIONS: NavDestination[] = [
 export default function TabsLayout() {
   const router = useRouter();
   const c = useScheme();
+  // null while the first-run flag is read; a fresh install is sent to the pager before it sees any tab.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  useEffect(() => {
+    ensureLegacyImport()
+      .then(() => isOnboarded(keyValue, async () => (await hostStore.listHosts()).length))
+      .catch(() => true)
+      .then(setOnboarded);
+  }, []);
+  if (onboarded === null) return null;
+  if (!onboarded) return <Redirect href="/onboarding" />;
   return (
     <Tabs
       backBehavior="initialRoute"

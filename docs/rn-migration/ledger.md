@@ -45,3 +45,7 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 
 ## Post-parity list
 (none yet)
+
+## Onboarding pager
+- The welcome and ready pages use a static gradient circle, not the animated two-blob hero (no Rive asset exists for that slot either way).
+- The pager is skipped for any install that already has a paired computer, so upgraders from the Flutter app never see it. The flag is stored as `onboarding_complete` in the kv table.

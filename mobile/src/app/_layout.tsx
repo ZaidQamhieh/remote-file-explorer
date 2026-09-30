@@ -27,6 +27,7 @@ function Shell() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="pair/index" options={{ title: t('addComputerTitle') }} />
         <Stack.Screen name="pair/scan" options={{ headerShown: false }} />
         <Stack.Screen name="pair/login" options={{ title: t('loginTab') }} />

@@ -27,6 +27,13 @@ describe('buildPermissions', () => {
     expect(m).toMatchObject({ browse: null, viewApps: null, launchApps: null });
   });
 
+  it('uses the apps endpoint answer when the device record has no app grants, and ignores it when it has', () => {
+    expect(map(buildPermissions(status(), device(), { view: true, launch: false }))).toMatchObject({ viewApps: true, launchApps: false });
+    expect(map(buildPermissions(status(), device(), { view: false, launch: false }))).toMatchObject({ viewApps: false, launchApps: false });
+    expect(map(buildPermissions(status(), device(), null))).toMatchObject({ viewApps: null, launchApps: null });
+    expect(map(buildPermissions(status(), device({ viewApps: false, launchApps: false }), { view: true, launch: true }))).toMatchObject({ viewApps: false, launchApps: false });
+  });
+
   it('never shows launching as allowed without the app list', () => {
     expect(map(buildPermissions(status(), device({ viewApps: false, launchApps: true }))).launchApps).toBe(false);
   });

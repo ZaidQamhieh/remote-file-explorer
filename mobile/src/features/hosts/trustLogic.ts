@@ -4,6 +4,9 @@ export type PermissionKey = FileCapability | 'viewApps' | 'launchApps';
 export const PERMISSION_KEYS: PermissionKey[] = [...FILE_CAPABILITIES, 'viewApps', 'launchApps'];
 
 /** `allowed` is null when the host did not say (an older agent). `note` explains a grant the host overrides or cannot honour. */
+/** The apps endpoint's own answer for this phone (`null` when it could not be asked). */
+export type AppsProbe = { view: boolean; launch: boolean } | null;
+
 export type PermissionRow = { key: PermissionKey; allowed: boolean | null; note?: string };
 
 export const PERMISSION_COPY: Record<PermissionKey, { title: string; subtitle: string }> = {
@@ -24,7 +27,7 @@ const WRITES: FileCapability[] = ['upload', 'modify', 'delete'];
  * when it gave one, else the device record (a password-account device is an owner and bypasses file grants). The host's
  * read-only mode, the share-links switch and a folder lock-out then override a grant, with the reason as a note.
  */
-export function buildPermissions(status: Pick<AgentStatus, 'fileCapabilities' | 'readOnly' | 'allowSharing' | 'accessDenied'>, device: Device | undefined): PermissionRow[] {
+export function buildPermissions(status: Pick<AgentStatus, 'fileCapabilities' | 'readOnly' | 'allowSharing' | 'accessDenied'>, device: Device | undefined, probe: AppsProbe = null): PermissionRow[] {
   const grants: Partial<Record<FileCapability, boolean>> | undefined =
     status.fileCapabilities ?? (device?.viaLogin ? Object.fromEntries(FILE_CAPABILITIES.map((c) => [c, true])) : device && hasFileCapabilities(device) ? Object.fromEntries(FILE_CAPABILITIES.map((c) => [c, device[c] === true])) : undefined);
   const rows: PermissionRow[] = FILE_CAPABILITIES.map((key): PermissionRow => {
@@ -35,9 +38,9 @@ export function buildPermissions(status: Pick<AgentStatus, 'fileCapabilities' | 
     return { key, allowed: granted };
   });
   const apps = device && hasAppCapabilities(device);
-  const view = apps ? device.viewApps === true : null;
+  const view = apps ? device.viewApps === true : probe ? probe.view : null;
   rows.push({ key: 'viewApps', allowed: view });
-  rows.push({ key: 'launchApps', allowed: apps ? view === true && device.launchApps === true : null });
+  rows.push({ key: 'launchApps', allowed: apps ? view === true && device.launchApps === true : probe ? probe.launch : null });
   return rows;
 }
 

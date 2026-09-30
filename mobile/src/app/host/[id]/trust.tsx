@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { canManageHost, type AgentStatus, type AuditEntry, type Device } from '../../../core/api/models';
+import { canManageHost, hasAppCapabilities, type AgentStatus, type AuditEntry, type Device } from '../../../core/api/models';
+import { AgentApiError } from '../../../core/api/agentClient';
 import { CertPinMismatch, normalizeFingerprint } from '../../../core/api/pin';
 import { formatDate, formatRelative } from '../../../core/format';
 import type { Host } from '../../../core/models/host';
@@ -13,13 +14,13 @@ import { LumenSize, LumenType } from '../../../design/lumen';
 import { useRoles, useScheme } from '../../../design/theme';
 import { MethodRow, MetaPill, PermissionRow, StackTopBar } from '../../../features/hosts/LumenRows';
 import { useHostById } from '../../../features/hosts/useHostById';
-import { buildPermissions, identityState, PERMISSION_COPY, type IdentityState, type PermissionKey } from '../../../features/hosts/trustLogic';
+import { buildPermissions, type AppsProbe, identityState, PERMISSION_COPY, type IdentityState, type PermissionKey } from '../../../features/hosts/trustLogic';
 import { humanizeError } from '../../../features/pairing/pairingService';
 import { auditLabel } from '../../../features/settings/hostSettingsLogic';
 import { t } from '../../../i18n';
 import { clientForHost, hostStore } from '../../../services';
 
-type Loaded = { status: AgentStatus; me: Device | undefined; audit: AuditEntry[] | null };
+type Loaded = { status: AgentStatus; me: Device | undefined; audit: AuditEntry[] | null; apps: AppsProbe };
 type Snapshot = { pinned: boolean | null; outcome: 'loading' | 'ok' | 'pinMismatch' | 'failed'; loaded: Loaded | null; error: string | null };
 
 const AUDIT_SHOWN = 4;
@@ -43,6 +44,17 @@ export default function TrustRoute() {
   return <Trust host={host} />;
 }
 
+/** What the apps endpoint itself says this phone may do: a catalog means it may view, `launchAllowed` says whether it may launch, a 403 means neither. */
+async function probeApps(client: { listApps: () => Promise<{ launchAllowed: boolean }> }): Promise<AppsProbe> {
+  try {
+    const catalog = await client.listApps();
+    return { view: true, launch: catalog.launchAllowed === true };
+  } catch (e) {
+    if (e instanceof AgentApiError && e.statusCode === 403) return { view: false, launch: false };
+    return null;
+  }
+}
+
 function Trust({ host }: { host: Host }) {
   const c = useScheme();
   const roles = useRoles();
@@ -60,7 +72,10 @@ function Trust({ host }: { host: Host }) {
       const status = await client.status();
       const devices = await client.listDevices().catch(() => [] as Device[]);
       const audit = canManageHost(status) ? await client.audit({ limit: AUDIT_SHOWN }).catch(() => null) : null;
-      return { pinned, outcome: 'ok', loaded: { status, me: devices.find((d) => d.current), audit }, error: null };
+      const me = devices.find((d) => d.current);
+      // Only the owner can read this phone's device record; otherwise ask the apps endpoint what it allows.
+      const apps = me && hasAppCapabilities(me) ? null : await probeApps(client);
+      return { pinned, outcome: 'ok', loaded: { status, me, audit, apps }, error: null };
     } catch (e) {
       return { pinned, outcome: e instanceof CertPinMismatch ? 'pinMismatch' : 'failed', loaded: null, error: humanizeError(e) };
     }
@@ -178,7 +193,7 @@ function Trust({ host }: { host: Host }) {
         {loaded ? (
           <>
             <GroupedCard padded={false} style={{ paddingHorizontal: 14, paddingVertical: 2 }}>
-              {buildPermissions(loaded.status, loaded.me).map((p, i, all) => {
+              {buildPermissions(loaded.status, loaded.me, loaded.apps).map((p, i, all) => {
                 const copy = PERMISSION_COPY[p.key];
                 const v = icons[p.key];
                 return (

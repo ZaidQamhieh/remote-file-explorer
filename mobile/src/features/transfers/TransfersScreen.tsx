@@ -60,8 +60,8 @@ export function TransfersScreen() {
       out.push({ kind: 'head', key: `h-${key}`, title, clear });
       for (const r of rows) out.push({ kind: 'row', key: r.id, r });
     };
-    add('active', 'Active', groups.active);
-    add('done', 'Completed', groups.finished, groups.finished);
+    add('active', 'In progress', groups.active);
+    add('done', 'Recent', groups.finished, groups.finished);
     add('failed', 'Failed', groups.failed);
     return out;
   }, [groups]);

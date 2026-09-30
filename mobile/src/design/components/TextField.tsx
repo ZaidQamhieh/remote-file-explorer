@@ -22,11 +22,11 @@ export function TextField({ label, hideLabel, mono, error, helper, leading, trai
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: c.surfaceContainerHighest,
+          backgroundColor: c.surfaceContainerHigh,
           borderRadius: Radii.chip,
-          borderWidth: focused ? 2 : 1,
-          borderColor: error ? c.error : focused ? c.primary : c.outlineVariant,
-          paddingHorizontal: focused ? 11 : 12,
+          borderWidth: focused || error ? 2 : 0,
+          borderColor: error ? c.error : c.primary,
+          paddingHorizontal: focused || error ? 12 : 14,
           gap: 10,
         }}
       >

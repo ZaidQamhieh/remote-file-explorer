@@ -8,7 +8,7 @@ import { FontFamily, Radii } from '../tokens';
 export function SearchBar({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean }) {
   const c = useScheme();
   return (
-    <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: c.surface, borderWidth: 1, borderColor: c.outlineVariant, borderRadius: Radii.stadium }}>
+    <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: c.surfaceContainerHigh, borderRadius: Radii.stadium }}>
       <Search size={16} color={c.onSurfaceVariant} />
       <TextInput
         accessibilityLabel={placeholder}

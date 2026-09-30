@@ -1,6 +1,6 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 
-import type { AuthOutcome } from '../../features/security/lockLogic';
+export type AuthOutcome = 'success' | 'failed' | 'unavailable';
 
 /** Hardware present and the enrolled security level (0 none, 1 PIN/pattern, higher biometric). */
 export async function deviceAuthState(): Promise<{ hasHardware: boolean; level: number }> {

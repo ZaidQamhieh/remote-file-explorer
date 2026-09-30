@@ -1,3 +1,5 @@
+import type { AuthOutcome } from '../../core/security/deviceAuth';
+
 /** After leaving the app for less than this, coming back does not ask again (the system auth sheet itself backgrounds the app). */
 export const RELOCK_GRACE_MS = 2000;
 
@@ -8,7 +10,6 @@ export function shouldRelockOnResume(enabled: boolean, backgroundedAt: number | 
   return now - backgroundedAt >= graceMs;
 }
 
-export type AuthOutcome = 'success' | 'failed' | 'unavailable';
 
 /**
  * Device auth outcome to lock action. `unavailable` (no screen lock enrolled, or no hardware) opens the app: a lock

@@ -1,9 +1,9 @@
 import type { Entry } from '../../core/api/models';
 
-export type SortField = 'name' | 'size' | 'date' | 'type';
-export type SortOrder = { field: SortField; ascending: boolean };
-export const defaultSort = (): SortOrder => ({ field: 'name', ascending: true });
-export type EntryDensity = 'comfortable' | 'compact';
+import { defaultSort, type EntryDensity, type SortField, type SortOrder } from '../../core/models/sort';
+
+// The sort model lives in core so persisted settings can name it without depending on a feature.
+export { defaultSort, type EntryDensity, type SortField, type SortOrder };
 
 const ms = (s?: string) => (s ? Date.parse(s) || 0 : 0);
 

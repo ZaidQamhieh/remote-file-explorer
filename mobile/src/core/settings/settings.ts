@@ -1,6 +1,6 @@
 import type { KeyValueStore } from '../storage/hostStore';
 import { defaultVisibility, type VisibilityPrefs } from '../visibility';
-import { defaultSort, type EntryDensity, type SortField, type SortOrder } from '../../features/explorer/sort';
+import { defaultSort, type EntryDensity, type SortField, type SortOrder } from '../models/sort';
 
 // Port of core/settings/{app_settings,settings_controller}.dart. Key names and value encodings are
 // identical to the Flutter app (values are JSON text in the kv store) so an in-place upgrade keeps

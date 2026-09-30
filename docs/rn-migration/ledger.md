@@ -154,6 +154,9 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Found and fixed: the host settings header, the Trusted certificates list and the connection diagnostics still showed a fingerprint prefix. They now show the address or a plain "pinned" state; the fingerprint appears nowhere in the app.
 - Not tried yet: share links, config import, thumbnails on large folders, the desktop notification button.
 
+## Scope decision
+- The web companion (`agent/internal/webui`) is out of scope for this migration: the owner is taking it in a new direction. No work is planned on it here, and the code is left untouched. Consequences: pair requests are answered with the desktop notification or `rfe-agent pair accept|reject`; the photo backup folder and device permissions are set with the CLI (`rfe-agent allow`) or the agent's config until the new direction lands.
+
 ## Still needs a physical phone (recorded, not verified)
 - Camera QR scan (pairing and hand-off) and LAN discovery (mDNS): the emulator has no virtual scene set up and its NAT drops multicast.
 - Secure-storage migration on a production Flutter install (needs the owner's signed Flutter build and its data; the reader is the same plugin code, JVM- and emulator-tested on fresh data only).

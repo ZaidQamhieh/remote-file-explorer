@@ -20,6 +20,7 @@ function describe(r: BackupResult): { ok: boolean; text: string } {
   switch (r.kind) {
     case 'enqueued': return { ok: true, text: t('backingUpPhotos', { count: r.count }) };
     case 'upToDate': return { ok: true, text: t('alreadyUpToDate') };
+    case 'incomplete': return { ok: false, text: t('backupIncomplete', { count: r.count }) };
     case 'disabled': return { ok: false, text: t('enableBackupFirst') };
     case 'notConfigured': return { ok: false, text: t('pickPcFirst') };
     case 'permissionDenied': return { ok: false, text: t('photoAccessDenied') };

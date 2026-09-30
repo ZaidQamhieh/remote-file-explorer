@@ -504,6 +504,7 @@
  "scanningStatus": "Scanning…",
  "backingUpPhotos": "Backing up {count} photo(s)",
  "alreadyUpToDate": "Already up to date",
+ "backupIncomplete": "{count} photo(s) could not be prepared. Is the phone's storage full? They will be tried again next time.",
  "pickPcFirst": "Pick a PC first",
  "serverDestNotConfigured": "This PC hasn't set a photo backup destination yet — set one in its web companion Settings",
  "photoAccessDenied": "Photo access denied — grant it in system settings",

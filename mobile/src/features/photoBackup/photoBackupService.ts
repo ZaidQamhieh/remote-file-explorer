@@ -12,6 +12,7 @@ export const photoBackupStore = new PhotoBackupStore(keyValue);
 export type BackupResult =
   | { kind: 'enqueued'; count: number }
   | { kind: 'upToDate' }
+  | { kind: 'incomplete'; count: number }
   | { kind: 'disabled' | 'notConfigured' | 'permissionDenied' | 'serverNotConfigured' }
   | { kind: 'skipped'; reason: 'wifi' | 'charging' | 'unreachable' | 'policy'; host?: string };
 
@@ -104,6 +105,7 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
   const address = client.activeAddress ?? host.address;
   const existing = new Map((await transfers.list()).map((r) => [r.id, r]));
   let count = 0;
+  let failed = 0;
   for (const asset of pending) {
     try {
       const id = backupTransferId(asset.id);
@@ -112,7 +114,15 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
         await photoBackupStore.markDone([assetKey(asset.id)]);
         continue;
       }
-      if (prior && prior.state !== 'FAILED' && prior.state !== 'CANCELLED') continue;
+      if (prior && prior.state !== 'FAILED' && prior.state !== 'PAUSED' && prior.state !== 'CANCELLED') continue;
+      // A failed or paused upload (the app was closed mid-way) keeps its session on the computer and its staged copy
+      // here, so it picks up where it stopped. Starting a new session instead would leave the old one open, and the
+      // computer allows only four per device.
+      if ((prior?.state === 'FAILED' || prior?.state === 'PAUSED') && prior.address === address && new File(`file://${prior.destPath}`).exists) {
+        await transfers.resume(id);
+        count++;
+        continue;
+      }
       if (prior) await transfers.remove(id);
       const src = new File(await asset.getUri());
       if (!(await isFileStable(() => src.size))) continue;
@@ -126,10 +136,12 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
       await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), backupRemotePath(root, created, name, segment), false, true);
       count++;
     } catch {
-      // An asset that cannot be read (removed meanwhile, limited access) is skipped and retried next run.
+      // An asset that cannot be read or copied (removed meanwhile, limited access, storage full) is skipped and retried next run.
+      failed++;
     }
   }
-  return count === 0 ? { kind: 'upToDate' } : { kind: 'enqueued', count };
+  if (count > 0) return { kind: 'enqueued', count };
+  return failed > 0 ? { kind: 'incomplete', count: failed } : { kind: 'upToDate' };
 }
 
 /** Records finished photo uploads in the backed-up set; runs for the life of the app. Returns the unsubscribe. */

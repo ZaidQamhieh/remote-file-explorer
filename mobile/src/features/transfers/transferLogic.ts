@@ -39,6 +39,8 @@ export function transferErrorMessage(error: string | null): string {
       return 'The file is too large for this computer to accept.';
     case 'RESOURCE_LIMIT':
       return 'The computer has too many uploads open. Wait for one to finish.';
+    case 'TRANSFER_ACTIVE':
+      return 'The computer is still finishing the previous attempt. Try again in a moment.';
     case 'NOT_FOUND':
       return 'The computer no longer has this upload. Try again.';
     case 'ERR_CERT_PIN_MISMATCH':

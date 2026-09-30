@@ -163,4 +163,37 @@ class TransferEngineTest {
       engine.enqueue("../evil", "h", address, "/x", dest("x"))
     }
   }
+
+  @Test fun publishesFinishedDownloadsAndDropsThePrivateCopy() {
+    val published = mutableListOf<ByteArray>()
+    val pub = TransferEngine(File(dir, "journal-pub"), creds, timeoutMs = 5000, publisher = { f -> published.add(f.readBytes()); "content://media/external/downloads/42" })
+    try {
+      server.enqueue(full())
+      pub.enqueue("p1", "h", address, "/a.bin", dest("p1.bin"))
+      val end = System.currentTimeMillis() + 10_000
+      while (pub.list().none { it.id == "p1" && it.state == TransferState.DONE } && System.currentTimeMillis() < end) Thread.sleep(20)
+      val r = pub.list().first { it.id == "p1" }
+      assertEquals(TransferState.DONE, r.state)
+      assertEquals("content://media/external/downloads/42", r.publicUri)
+      assertEquals(payload.size.toLong(), r.received)
+      assertArrayEquals(payload, published.single())
+      assertFalse(File(dest("p1.bin")).exists())
+    } finally {
+      pub.shutdown()
+    }
+  }
+
+  @Test fun keepsTheFileInAppStorageWhenPublishingFails() {
+    val pub = TransferEngine(File(dir, "journal-pub2"), creds, timeoutMs = 5000, publisher = { null })
+    try {
+      server.enqueue(full())
+      pub.enqueue("p2", "h", address, "/a.bin", dest("p2.bin"))
+      val end = System.currentTimeMillis() + 10_000
+      while (pub.list().none { it.id == "p2" && it.state == TransferState.DONE } && System.currentTimeMillis() < end) Thread.sleep(20)
+      assertEquals(null, pub.list().first { it.id == "p2" }.publicUri)
+      assertArrayEquals(payload, File(dest("p2.bin")).readBytes())
+    } finally {
+      pub.shutdown()
+    }
+  }
 }

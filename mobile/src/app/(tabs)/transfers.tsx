@@ -3,11 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { formatSize } from '../../core/format';
-import { transfers, type TransferRecord } from '../../core/native';
-import { AppBar, EmptyState, GroupedCard, Pressable, SectionLabel, Text } from '../../design/components';
+import { openPublicUri, transfers, type TransferRecord } from '../../core/native';
+import { AppBar, EmptyState, GroupedCard, Pressable, SectionLabel, Text, useToast } from '../../design/components';
 import { useScheme } from '../../design/theme';
 import { Brand, FontFamily, Spacing } from '../../design/tokens';
-import { groupTransfers, isActive, isUpload, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
+import { externalMime } from '../../features/preview/externalFiles';
+import { groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferName, transferProgress } from '../../features/transfers/transferLogic';
 
 /** Every transfer the native engine knows: running and paused first, then failures, then finished ones. */
 export default function Transfers() {
@@ -76,12 +77,18 @@ function TextAction({ label, onPress }: { label: string; onPress: () => void }) 
 
 function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
   const c = useScheme();
+  const toast = useToast();
+  const openable = r.state === 'DONE' && !!r.publicUri;
+  const open = async () => {
+    const name = transferName(r);
+    if (!r.publicUri || !(await openPublicUri(r.publicUri, externalMime({ name })))) toast.info('No app can open this file');
+  };
   const up = isUpload(r);
   const progress = transferProgress(r);
   const failed = r.state === 'FAILED';
   const tint = failed ? c.error : r.state === 'DONE' ? Brand.online : up ? Brand.accent : c.primary;
   const status =
-    r.state === 'DONE' ? `${up ? 'Uploaded' : 'Downloaded'} · ${formatSize(r.total > 0 ? r.total : r.received)}`
+    r.state === 'DONE' ? `${savedWhere(r)} · ${formatSize(r.total > 0 ? r.total : r.received)}`
     : r.state === 'CANCELLED' ? 'Cancelled'
     : r.state === 'PAUSED' ? `Paused${r.total > 0 ? ` · ${formatSize(r.received)} of ${formatSize(r.total)}` : ''}`
     : r.state === 'QUEUED' ? 'Waiting'
@@ -90,7 +97,7 @@ function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
   return (
     <GroupedCard>
       <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md2 }}>
+        <Pressable disabled={!openable} onPress={() => void open()} accessibilityLabel={openable ? `Open ${transferName(r)}` : undefined} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md2 }}>
           <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${tint}26`, alignItems: 'center', justifyContent: 'center' }}>
             {up ? <ArrowUp size={18} color={tint} /> : <ArrowDown size={18} color={tint} />}
           </View>
@@ -105,7 +112,7 @@ function Row({ r, onForget }: { r: TransferRecord; onForget: () => void }) {
             {r.state === 'RUNNING' || r.state === 'QUEUED' || r.state === 'PAUSED' ? <IconAction Icon={X} label="Cancel" onPress={() => void transfers.cancel(r.id)} /> : null}
             {failed || r.state === 'DONE' || r.state === 'CANCELLED' ? <IconAction Icon={Trash2} label="Remove" onPress={onForget} /> : null}
           </View>
-        </View>
+        </Pressable>
         {progress !== null && r.state !== 'DONE' && r.state !== 'CANCELLED' ? (
           <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 4, borderRadius: 2, backgroundColor: c.outlineVariant, overflow: 'hidden' }}>
             <View style={{ width: `${progress * 100}%`, height: 4, backgroundColor: tint }} />

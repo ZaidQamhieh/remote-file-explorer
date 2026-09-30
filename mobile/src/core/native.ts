@@ -37,6 +37,8 @@ export type TransferRecord = {
   sessionId?: string | null;
   sha256?: string | null;
   overwrite?: boolean;
+  /** Downloads: MediaStore URI of the copy in the shared Downloads folder, when it was published. */
+  publicUri?: string | null;
 };
 
 const parseRecord = (s: string) => JSON.parse(s) as TransferRecord;
@@ -74,6 +76,7 @@ export const offlineBodies = {
   remove: (hostId: string, path: string) => Rfe.offlineBodyRemove(hostId, path),
   evictHost: (hostId: string) => Rfe.offlineBodyEvictHost(hostId),
 };
+export const openPublicUri = (uri: string, mime: string) => Rfe.openPublicUri(uri, mime);
 export const openFileExternal = (path: string, mime: string) => Rfe.openFileExternal(path, mime);
 export const shareFileExternal = (path: string, mime: string) => Rfe.shareFileExternal(path, mime);
 export const networkTransports = () => Rfe.networkTransports();

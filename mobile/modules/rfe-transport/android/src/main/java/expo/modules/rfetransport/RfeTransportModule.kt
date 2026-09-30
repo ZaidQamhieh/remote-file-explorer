@@ -92,6 +92,10 @@ class RfeTransportModule : Module() {
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
       ExternalFiles.open(ctx, File(path), mime)
     }
+    AsyncFunction("openPublicUri") { uri: String, mime: String ->
+      val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+      PublicDownloads.open(ctx, uri, mime)
+    }
     AsyncFunction("shareFileExternal") { path: String, mime: String ->
       val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
       ExternalFiles.share(ctx, File(path), mime)

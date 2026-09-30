@@ -1,5 +1,5 @@
 import type { TransferRecord } from '../../core/native';
-import { groupTransfers, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
+import { groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
 
 const rec = (o: Partial<TransferRecord> = {}): TransferRecord => ({ id: 'x', hostId: 'h', address: 'a', remotePath: '/docs/a.txt', destPath: '/tmp/a.txt', state: 'RUNNING', received: 0, total: -1, error: null, ...o });
 
@@ -51,5 +51,13 @@ describe('transfer grouping', () => {
     expect(g.active.map((r) => r.id)).toEqual(['u0000000d', 'u0000000c']);
     expect(g.failed.map((r) => r.id)).toEqual(['d0000000b']);
     expect(g.finished.map((r) => r.id)).toEqual(['d0000000e', 'd0000000a']);
+  });
+});
+
+describe('saved location', () => {
+  it('says where a finished transfer went', () => {
+    expect(savedWhere(rec({ direction: 'UPLOAD' }))).toBe('Uploaded');
+    expect(savedWhere(rec({ publicUri: 'content://media/external/downloads/1' }))).toBe('Saved to Downloads');
+    expect(savedWhere(rec())).toBe('Saved in app storage');
   });
 });

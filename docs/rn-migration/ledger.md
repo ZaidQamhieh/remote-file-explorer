@@ -56,3 +56,7 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 - Picked files are moved from the picker's cache into `files/uploads/<id>/` and deleted with their journal entry outcome (done or cancelled), so a cleared cache cannot break a resume. A failed upload keeps its copy so Retry works.
 - "Keep both" numbers the new copy against the names already listed in the folder plus the other picks. A concurrent writer on the host can still cause a CONFLICT, which surfaces as a failed transfer with a plain-language reason.
 - The Transfers tab groups Active, Failed and Finished with a progress bar per row and Clear for finished ones. Speed and ETA, and per-host grouping, are not ported yet.
+
+## Public Downloads
+- Finished downloads are copied into the shared `Download/Remote File Explorer` folder through MediaStore (Android 10 and newer, no storage permission) and the app-private copy is dropped. The Flutter app kept downloads in its app-specific external folder, invisible to other apps. On Android 9 and older, or if publishing fails, the file stays in app storage and the row says so.
+- A finished download opens from its Transfers row. Removing a row never deletes the published file.

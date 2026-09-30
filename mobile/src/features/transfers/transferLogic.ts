@@ -13,6 +13,12 @@ export function transferProgress(r: TransferRecord): number | null {
   return Math.min(1, Math.max(0, r.received / r.total));
 }
 
+/** Where a finished transfer lives, for the row's status line. */
+export function savedWhere(r: TransferRecord): string {
+  if (isUpload(r)) return 'Uploaded';
+  return r.publicUri ? 'Saved to Downloads' : 'Saved in app storage';
+}
+
 export const isActive = (r: TransferRecord) => r.state === 'RUNNING' || r.state === 'QUEUED';
 export const isFinished = (r: TransferRecord) => r.state === 'DONE' || r.state === 'CANCELLED';
 

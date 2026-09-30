@@ -31,6 +31,8 @@ declare class RfeTransportModule extends NativeModule<Events> {
   /** Opens/shares a local file (under cache/open or cache/share) with another app; false when nothing can handle it. */
   openFileExternal(path: string, mime: string): Promise<boolean>;
   shareFileExternal(path: string, mime: string): Promise<boolean>;
+  /** Opens a finished download published to the shared Downloads folder (a MediaStore content URI). */
+  openPublicUri(uri: string, mime: string): Promise<boolean>;
   /** Encrypted-at-rest bodies of pinned folders (AES-GCM streaming, key in secure storage). Restore rejects ERR_INTEGRITY and deletes the entry when it fails authentication. */
   offlineBodyPut(hostId: string, path: string, srcPath: string): Promise<void>;
   offlineBodyRestore(hostId: string, path: string, destPath: string): Promise<boolean>;

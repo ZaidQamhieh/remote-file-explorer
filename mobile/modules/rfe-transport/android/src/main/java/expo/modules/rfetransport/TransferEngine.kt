@@ -29,6 +29,8 @@ data class TransferRecord(
   val overwrite: Boolean = false,
   /** Upload only: delete the local source once the upload is done or cancelled (app-private copies). */
   val deleteSource: Boolean = false,
+  /** Downloads only: content URI of the copy published to the shared Downloads folder, when there is one. */
+  val publicUri: String? = null,
 ) {
   val isUpload get() = direction == "UPLOAD"
 
@@ -38,6 +40,7 @@ data class TransferRecord(
     .put("error", error ?: JSONObject.NULL).put("direction", direction)
     .put("sessionId", sessionId ?: JSONObject.NULL).put("sha256", sha256 ?: JSONObject.NULL)
     .put("overwrite", overwrite).put("deleteSource", deleteSource)
+    .put("publicUri", publicUri ?: JSONObject.NULL)
 
   companion object {
     fun fromJson(j: JSONObject) = TransferRecord(
@@ -48,6 +51,7 @@ data class TransferRecord(
       if (j.isNull("sessionId")) null else j.optString("sessionId"),
       if (j.isNull("sha256")) null else j.optString("sha256"),
       j.optBoolean("overwrite", false), j.optBoolean("deleteSource", false),
+      if (j.isNull("publicUri")) null else j.optString("publicUri"),
     )
   }
 }
@@ -77,6 +81,8 @@ class TransferEngine(
   private val onChange: (TransferRecord) -> Unit = {},
   private val timeoutMs: Long = 30000,
   private val uploadChunkSize: Int = 4 * 1024 * 1024,
+  /** Copies a finished download somewhere shared and returns its URI; on success the private copy is dropped. */
+  private val publisher: ((File) -> String?)? = null,
 ) {
   private val pool = Executors.newFixedThreadPool(maxConcurrent)
   private val records = ConcurrentHashMap<String, TransferRecord>()
@@ -249,7 +255,11 @@ class TransferEngine(
         if (total >= 0 && part.length() != total) throw IOException("size mismatch: got ${part.length()} expected $total")
         if (dest.exists()) dest.delete()
         if (!part.renameTo(dest)) throw IOException("could not finalize download")
-        update(r.copy(state = TransferState.DONE, received = dest.length(), total = dest.length(), error = null))
+        val size = dest.length()
+        // Publishing is best effort: if it fails the download simply stays in app storage.
+        val published = publisher?.let { p -> runCatching { p(dest) }.getOrNull() }
+        if (published != null) dest.delete()
+        update(r.copy(state = TransferState.DONE, received = size, total = size, error = null, publicUri = published))
       }
     } catch (e: RestartFromZero) {
       if (attempts[id] === attempt) submit(id)

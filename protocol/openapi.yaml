@@ -402,12 +402,12 @@ paths:
               type: object
               required: [devicePublicKey, nonce, signature, clientNonce]
               properties:
-                deviceLabel: { type: string, description: Shown to the owner; control characters removed, 40 characters max. }
+                deviceLabel: { type: string, description: "Shown to the owner; control characters removed, 40 characters max." }
                 deviceId: { type: string }
                 devicePublicKey: { type: string }
                 nonce: { type: string }
                 signature: { type: string }
-                clientNonce: { type: string, description: 16 random bytes, hex (32 characters). Also authorises polling. }
+                clientNonce: { type: string, description: "16 random bytes, hex (32 characters). Also authorises polling." }
       responses:
         "200":
           description: Request created and shown to the owner
@@ -448,7 +448,7 @@ paths:
                 required: [status]
                 properties:
                   status: { type: string, enum: [pending, approved, rejected] }
-                  deviceToken: { type: string, description: Present when approved (omitted for browser sessions, which get the cookie). }
+                  deviceToken: { type: string, description: "Present when approved (omitted for browser sessions, which get the cookie)." }
                   deviceId: { type: string }
                   agentName: { type: string }
                   certFingerprint: { type: string }

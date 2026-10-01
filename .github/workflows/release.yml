@@ -17,8 +17,14 @@ on:
     tags: ['v*']
     branches: ['rn/**']
 
+# Read-only by default; only the publish job may write releases.
 permissions:
-  contents: write
+  contents: read
+
+# A newer push to an rn/** branch supersedes its dry run; a tag run publishes and is never cancelled.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   # The published artifact must come from a commit that passed the same checks CI runs (PR-70).
@@ -100,7 +106,22 @@ jobs:
           RFE_ABIS: ${{ github.ref_type == 'tag' && 'arm64-v8a,armeabi-v7a,x86_64' || 'arm64-v8a' }}
         run: |
           scripts/build-release-apk.sh
-          sccache --show-stats || true
+          {
+            echo "### Release build (${RFE_ABIS})"
+            echo '```'
+            sccache --show-stats || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The Gradle reports name the failing task and the lint/R8 findings; they are small and only kept on failure.
+      - name: Keep build reports on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-reports
+          path: mobile/android/app/build/reports
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Stage artifact + manifest
         id: stage
@@ -148,6 +169,8 @@ jobs:
     needs: [verify, verify-mobile, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}

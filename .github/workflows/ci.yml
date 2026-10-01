@@ -1,18 +1,31 @@
 name: CI
 
+# Pushes to rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
+# them here too would do every check twice. Changes that cannot affect the agent or the Flutter app skip it.
 on:
   push:
-    branches: [master, main, 'rn/**']
+    branches: [master, main]
+    paths-ignore: ['mobile/**', 'docs/**', '**.md']
   pull_request:
     branches: [master, main]
+    paths-ignore: ['mobile/**', 'docs/**', '**.md']
   # Callable so release.yml can require these exact gates before publishing,
   # instead of a second copy that drifts out of sync with this one (PR-70).
   workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run obsolete; tag runs (releases) are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   agent-cross-build:
     name: Agent build (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +61,7 @@ jobs:
   agent:
     name: Agent (Go)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: agent
@@ -82,6 +96,7 @@ jobs:
   web:
     name: Web companion
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: agent/internal/webui/web
@@ -111,6 +126,7 @@ jobs:
   contract:
     name: OpenAPI contract
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Redocly lint (fail on errors)
@@ -119,6 +135,7 @@ jobs:
   app:
     name: App (Flutter)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: app

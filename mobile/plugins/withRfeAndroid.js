@@ -6,6 +6,7 @@
 //    by Gradle at build time; it is never written into the generated project.
 //  - RFE_TEST_BUILD=1: make the release variant debuggable for `adb run-as` verification.
 //    Never set for real releases.
+//  - allowBackup=false, as in the Flutter app: neither cloud backup nor adb backup may carry device keys or tokens.
 //  - Network security config identical to the Flutter app's: cleartext is refused app-wide except
 //    to 127.0.0.1, which the media loopback proxy needs (agent traffic stays pinned HTTPS).
 const fs = require('fs');
@@ -71,6 +72,8 @@ function withNetworkSecurityConfig(config) {
     app.$['android:networkSecurityConfig'] = '@xml/network_security_config';
     // The config above is the single source of truth for cleartext.
     delete app.$['android:usesCleartextTraffic'];
+    // The device key, tokens and pins live here; the Flutter app opted out of backup and so does this one.
+    app.$['android:allowBackup'] = 'false';
     return cfg;
   });
 }

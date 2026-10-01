@@ -72,8 +72,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 			return
 		}
 		var req pairRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+		if !decodeJSONBody(w, r, &req) {
 			return
 		}
 		// Validate device-identity proof BEFORE consuming the one-time

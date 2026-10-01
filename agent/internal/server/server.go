@@ -50,6 +50,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 	if err != nil {
 		return nil, err
 	}
+	useThumbSidecar(thumbRenderer)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)

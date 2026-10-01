@@ -76,6 +76,7 @@ type Renderer struct {
 	inFlight   map[string]*renderCall
 	cacheMu    sync.Mutex // cache writes and pruning
 	cacheBytes int64
+	remote     Remote // optional out-of-process renderer tried before the built-in decoder
 }
 
 // renderCall holds the result of one cache miss while concurrent callers for
@@ -286,7 +287,7 @@ func (rn *Renderer) waitForCall(ctx context.Context, cachePath string, call *ren
 }
 
 func (rn *Renderer) renderCall(cachePath string, source *os.File, maxSize int, call *renderCall) {
-	data, renderErr := renderOpened(call.ctx, source, maxSize)
+	data, renderErr := rn.renderOpened(call.ctx, source, maxSize)
 	if renderErr == nil && call.ctx.Err() == nil {
 		if err := rn.writeCache(cachePath, data); err != nil {
 			// Cache write failures shouldn't prevent serving the thumbnail.
@@ -317,6 +318,22 @@ func render(ctx context.Context, srcPath string, maxSize int) ([]byte, error) {
 	cf, err := os.Open(srcPath)
 	if err != nil {
 		return nil, err
+	}
+	return renderOpened(ctx, cf, maxSize)
+}
+
+// renderOpened tries the remote renderer first (when one is set) and otherwise decodes in-process.
+func (rn *Renderer) renderOpened(ctx context.Context, cf *os.File, maxSize int) ([]byte, error) {
+	if rn.remote != nil {
+		if info, err := cf.Stat(); err == nil && info.Mode().IsRegular() {
+			if maxSize <= 0 {
+				maxSize = 256
+			}
+			if data, final, err := rn.renderWithRemote(ctx, cf, info.Size(), maxSize); final {
+				cf.Close()
+				return data, err
+			}
+		}
 	}
 	return renderOpened(ctx, cf, maxSize)
 }

@@ -73,6 +73,15 @@ func (s *Supervisor) Call(ctx context.Context, op string, req, resp any) error {
 	return c.Call(ctx, op, req, resp)
 }
 
+// CallBody runs op with a binary body on the live sidecar and returns the response body.
+func (s *Supervisor) CallBody(ctx context.Context, op string, req any, body []byte, resp any) ([]byte, error) {
+	c, err := s.Client()
+	if err != nil {
+		return nil, err
+	}
+	return c.CallBody(ctx, op, req, body, resp)
+}
+
 func (s *Supervisor) setClient(c *Client) {
 	s.mu.Lock()
 	s.client = c

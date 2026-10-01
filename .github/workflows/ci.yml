@@ -137,7 +137,7 @@ jobs:
         working-directory: agent
         env:
           RFE_SIDECAR_DIR: ${{ github.workspace }}/agent-rs/target/release
-        run: go test -race -count=1 -v -run 'Sidecar' ./internal/server ./internal/sidecar
+        run: go test -race -count=1 -v -run 'Sidecar|Renderer' ./internal/server ./internal/sidecar ./internal/thumbs
 
   web:
     name: Web companion

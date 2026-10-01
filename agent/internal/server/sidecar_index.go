@@ -15,6 +15,7 @@ import (
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/sidecar"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 )
 
 // indexBackend is what searchHandler needs from a search index: the in-process SearchIndex or the rfe-indexd
@@ -382,4 +383,21 @@ func recentWalker(idx indexBackend) func(context.Context, *fsops.Ops, string, in
 		return sidecarRecentWalker(si.sup)
 	}
 	return walkForRecentWithOps
+}
+
+// useThumbSidecar lets the thumbnail renderer try the sandboxed rfe-thumbd first when it is enabled and installed;
+// the renderer decodes in-process whenever the sidecar cannot or is not running.
+func useThumbSidecar(r *thumbs.Renderer) {
+	if !sidecarEnabled("thumbd") {
+		return
+	}
+	cfg, ok := sidecarConfig("rfe-thumbd")
+	if !ok {
+		log.Printf("thumbnails: RFE_SIDECARS enables thumbd but rfe-thumbd was not found; using the built-in renderer")
+		return
+	}
+	log.Printf("thumbnails: using sidecar %s", cfg.Path)
+	sup := sidecar.NewSupervisor(cfg, nil)
+	sup.Run()
+	r.UseRemote(thumbs.SidecarRemote{Sup: sup})
 }

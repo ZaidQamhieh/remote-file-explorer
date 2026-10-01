@@ -101,3 +101,24 @@ the timestamps from these fields.
 2. Treat any error, malformed JSON, protocol violation or timeout as "sidecar unavailable" and use its own
    implementation.
 3. Never pass user input to a sidecar unvalidated (globs, category names and limits are validated in Go first).
+
+## rfe-thumbd operations
+
+The agent opens the file inside its own jail and sends the bytes; the sidecar never sees a path.
+
+- `thumb.render` `{maxSize}` with a body frame holding the source file (at most 64 MiB) answers
+  `{width, height, srcWidth, srcHeight, format}` with a body frame holding the JPEG. The longest side is at most
+  `maxSize` and the image is never upscaled (Go `imaging.Fit`), the EXIF orientation is applied first, the filter is
+  Lanczos and the JPEG quality is 80 with 4:2:0 chroma. Transparency is flattened onto black, as the Go renderer does.
+- Formats: JPEG (decoded at a DCT-reduced size when the target is much smaller), PNG, GIF (first frame), WebP.
+  `NOT_SUPPORTED` means the sidecar cannot decode it (any other format, a corrupt file): the agent tries its own
+  decoder, which still handles TIFF and BMP. `TOO_LARGE` means over 40 megapixels: the agent answers "no thumbnail".
+- Four renders run at once; more than 256 MiB of queued sources is answered `BUSY`. A render that runs over 30
+  seconds ends the process; the supervisor restarts it.
+
+**Sandbox.** All worker threads exist before the sandbox closes. On Linux the process then sets
+`RLIMIT_AS` (6 GiB), no core dumps, no file writes, `no_new_privs`, and a seccomp allowlist (read, write, memory,
+futex, time, signals, exit, and `clone` for threads only); every other call fails with `ENOSYS`, so it can open
+nothing, connect nowhere and start no process. On Windows it joins a job object (6 GiB, no child processes, kill on
+close). Elsewhere it relies on handling only stdin and stdout. `rfe-thumbd --sandbox-selftest` proves the refusals.
+

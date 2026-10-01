@@ -1,8 +1,10 @@
 package sidecar
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -180,4 +182,11 @@ func waitUntil(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("condition not reached")
+}
+
+func TestReadFrameDoesNotTrustDeclaredLength(t *testing.T) {
+	hdr := []byte{0x09, 0xa0, 0x00, 0x00, 1, 2, 3} // declares ~160 MiB, delivers 3 bytes
+	if _, err := readFrame(bytes.NewReader(hdr)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("err = %v, want unexpected EOF", err)
+	}
 }

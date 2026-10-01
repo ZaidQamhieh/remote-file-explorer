@@ -105,8 +105,16 @@ pub fn read_frame<R: Read>(r: &mut R) -> io::Result<Option<Frame>> {
     }
     let mut kind = [0u8; 1];
     r.read_exact(&mut kind)?;
-    let mut payload = vec![0u8; len - 1];
-    r.read_exact(&mut payload)?;
+    // Grow with the bytes that actually arrive instead of trusting the declared length for the allocation.
+    let want = len - 1;
+    let mut payload = Vec::with_capacity(want.min(1 << 20));
+    r.take(want as u64).read_to_end(&mut payload)?;
+    if payload.len() != want {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "frame truncated",
+        ));
+    }
     Ok(Some(Frame {
         kind: kind[0],
         payload,
@@ -155,6 +163,15 @@ mod tests {
         write_frame(&mut buf, KIND_JSON, b"hello world").unwrap();
         buf.truncate(buf.len() - 3);
         assert!(read_frame(&mut Cursor::new(buf)).is_err());
+    }
+
+    #[test]
+    fn declared_length_alone_does_not_allocate_or_succeed() {
+        let mut buf = (MAX_FRAME_BYTES as u32).to_be_bytes().to_vec();
+        buf.push(KIND_BIN);
+        buf.extend_from_slice(&[7; 16]);
+        let err = read_frame(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]

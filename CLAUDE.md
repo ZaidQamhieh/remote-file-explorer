@@ -42,6 +42,19 @@ Unrestricted filesystem access must be explicitly selected with an empty `-roots
 settings; existing saved root policies are preserved.
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`
 
+### Rust sidecars (in `agent-rs/`, toolchain pinned in `rust-toolchain.toml`)
+```sh
+cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo build --release -p rfe-indexd -p rfe-thumbd     # binaries in target/release
+# Go vs Rust differential tests (Go is the oracle; they skip without built sidecars):
+RFE_SIDECAR_DIR=$PWD/target/release go test -run 'Sidecar|Renderer' ./internal/server ./internal/sidecar ./internal/thumbs   # from agent/
+tools/package-agent.sh linux amd64 <version> agent-rs/target/release out.tar.gz       # agent + sidecars + manifest
+```
+Sidecars are on by default only for a verified package (`rfe-sidecars.txt` beside them); `RFE_SIDECARS=off` disables,
+`indexd|thumbd|all` enables a dev build. `rfe-agent status` shows their state. Details: vault note
+`sidecar-release-and-install`.
+
 ### App (React Native / Expo 57, in `mobile/`)
 ```sh
 npm ci
@@ -101,7 +114,8 @@ mobile/src/features/  hosts, explorer, transfers, preview, pairing, search, sett
 mobile/modules/rfe-transport/   Kotlin Expo module (pinned TLS, uploads, MediaStore, installer)
 agent/cmd/agent/   main daemon + admin.go (CLI subcommands)
 agent/internal/    server (incl. search), fsops, transfer, thumbs, pairing, store,
-                   security, settings, updates, mdns, netinfo
+                   security, settings, updates, mdns, netinfo, sidecar
+agent-rs/          Rust sidecars rfe-indexd, rfe-thumbd (+ rfe-proto); protocol in protocol/sidecar.md
 agent/internal/webui/   web companion; edit the Vite + React + TypeScript SPA in web/src/
                         (`web/package.json`; build with `cd agent/internal/webui/web && npm run build`)
                         to generate ../dist/, which Go embeds into the agent binary; do not edit dist/ directly
@@ -156,7 +170,8 @@ Bypass once if needed: `LEFTHOOK=0 git commit …`.
 - `graphify query "..."` (graph at `graphify-out/`) answers code-structure questions only; the
   graph is code-only, so grep/Read normally for anything else. Never `/graphify --update` on this
   repo (restores the unpruned hairball) — use `tools/rebuild-graph.sh`.
-- Agent redeploy only when `agent/` or `protocol/openapi.yaml` changes. Restart:
+- Agent redeploy only when `agent/`, `agent-rs/` or `protocol/openapi.yaml` changes; deploy the agent, both
+  sidecars and `rfe-sidecars.txt` together (see the Rust sidecars commands above). Restart:
   `systemctl --user restart rfe-agent.service` (needs `export XDG_RUNTIME_DIR=/run/user/$(id -u)`).
 - After copying new binary: re-run `sudo setcap cap_net_bind_service=+ep`. Note
   `/proc/<pid>/exe` md5 check is Permission-denied on setcap'd binaries — verify via

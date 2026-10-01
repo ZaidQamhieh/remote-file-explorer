@@ -122,3 +122,19 @@ futex, time, signals, exit, and `clone` for threads only); every other call fail
 nothing, connect nowhere and start no process. On Windows it joins a job object (6 GiB, no child processes, kill on
 close). Elsewhere it relies on handling only stdin and stdout. `rfe-thumbd --sandbox-selftest` proves the refusals.
 
+
+## Packaging and verification
+
+A release archive holds `rfe-agent`, `rfe-indexd`, `rfe-thumbd` (`.exe` on Windows) and `rfe-sidecars.txt`:
+
+```
+rfe-sidecars 1
+version 1.4.0
+sha256 <hex> rfe-indexd
+sha256 <hex> rfe-thumbd
+```
+
+The agent looks in `$RFE_SIDECAR_DIR`, then beside its own executable. When the manifest is present, a sidecar that
+is not listed or whose sha256 differs is refused, and the started process must announce the manifest `version` in
+its `hello` (sidecars embed `RFE_RELEASE_VERSION` at build time). Without a manifest the sidecar is "unverified" and
+only starts when `RFE_SIDECARS` names it. Install and update the whole set together.

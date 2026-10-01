@@ -27,7 +27,9 @@ Repo root: `~/Storage/Projects/remote-file-explorer`
 - TLS self-signed cert, fingerprint pinned by the phone on first pair.
 - Bearer-token device auth; devices keyed on a stable `client_id` (Android ID).
 - Runs as a **systemd --user service** named `rfe-agent`.
-  - Binary: `~/.local/bin/rfe-agent`
+  - Binary: `~/.local/bin/rfe-agent`, with `rfe-indexd`, `rfe-thumbd` and `rfe-sidecars.txt` beside it. Replace all
+    four together from one `agent-v*` archive (or `tools/package-agent.sh`); the agent refuses a sidecar that does
+    not match the manifest. `rfe-agent status` shows `sidecars:` state.
   - Data dir: `~/.rfe-agent` (DB at `~/.rfe-agent/agent.db`, certs, `updates/`, `transfers/`, `thumbs/`)
   - Needs `export XDG_RUNTIME_DIR="/run/user/$(id -u)"` for `systemctl --user`.
 - Build/run: `export PATH="$HOME/.local/go/bin:$PATH"`, work from `agent/`.

@@ -7,6 +7,8 @@ Two components plus a shared contract:
 - **`mobile/`** — React Native (Expo) Android app. All UI + client orchestration.
 - **`agent/`** — Go host service on each Windows/macOS/Linux computer. Owns filesystem access, the
   transfer engine, search, thumbnails, settings, and the device/token store.
+- **`agent-rs/`** — Rust sidecars the Go agent starts as child processes: `rfe-indexd` (search index, recents,
+  live updates) and `rfe-thumbd` (sandboxed thumbnails). Go stays the shell and falls back to its own code.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow (source of truth).
 
 The app talks to the agent over **HTTPS (HTTP/2) + TLS**. On a local network it can connect by
@@ -185,6 +187,22 @@ Port notes and gaps: `docs/rn-migration/ledger.md`. The old Flutter source is in
 | `internal/netinfo/netinfo.go` | LAN + Tailscale address detection. |
 | `internal/mdns/mdns.go` | Agent-side mDNS/DNS-SD advertisement (`_rfe._tcp`) consumed by Android's explicit local-network discovery scan. |
 | `internal/webui/` (`webui.go`, `web/`, `dist/`) | Browser-based web companion (control/status/settings/file-browsing), embedded static bundle served at `/`. The Vite + React + TypeScript source lives in `web/`; run `npm run build` there to generate `dist/`, which Go embeds into the agent binary. Edit `web/src/` and rebuild; treat `dist/` as generated output. |
+
+### Rust sidecars — `agent-rs/`
+
+Protocol (frames, ops, sandbox): `protocol/sidecar.md`. Go authorizes everything; a sidecar only does heavy work
+and every path it returns is re-checked against the jail.
+
+| Path | Responsibility |
+|------|----------------|
+| `agent-rs/crates/rfe-proto` | Frame codec, hello, error codes, `release_version` (build-time `RFE_RELEASE_VERSION`). |
+| `agent-rs/crates/rfe-indexd` | Rooted parallel walk, chunked index, ordered query scan, recents, notify watcher + debounced applier. |
+| `agent-rs/crates/rfe-thumbd` | JPEG/PNG/GIF/WebP decode with limits, EXIF orientation, resize, JPEG encode; seccomp (Linux) / job object (Windows). |
+| `agent/internal/sidecar/` | Go client (multiplexed calls, cancel) and supervisor (backoff, breaker, ping). |
+| `agent/internal/server/sidecar_index.go` | Index backend over rfe-indexd, recents walker, thumbnail hookup. |
+| `agent/internal/server/sidecar_locate.go` | Finds sidecars, verifies `rfe-sidecars.txt` (sha256 + version), `RFE_SIDECARS` switch, status report. |
+| `agent/internal/thumbs/remote.go` | `Remote` interface and sidecar renderer with Go fallback. |
+| `tools/package-agent.sh` | Builds the agent and archives it with the sidecars and manifest (used by `agent-release.yml`). |
 
 ## Test → source map (used by `scripts/test-affected.sh`)
 

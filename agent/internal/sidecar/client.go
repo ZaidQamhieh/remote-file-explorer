@@ -101,11 +101,17 @@ func readFrame(r io.Reader) (frame, error) {
 	if n == 0 || n > maxFrameBytes {
 		return frame{}, fmt.Errorf("bad frame length %d", n)
 	}
-	buf := make([]byte, n)
-	if _, err := io.ReadFull(r, buf); err != nil {
+	// The sidecar is the less trusted side: grow with the bytes that arrive rather than allocating the declared
+	// length up front.
+	var buf bytes.Buffer
+	buf.Grow(int(min(n, 1<<20)))
+	if got, err := io.Copy(&buf, io.LimitReader(r, int64(n))); err != nil {
 		return frame{}, err
+	} else if got != int64(n) {
+		return frame{}, io.ErrUnexpectedEOF
 	}
-	return frame{kind: buf[0], payload: buf[1:]}, nil
+	b := buf.Bytes()
+	return frame{kind: b[0], payload: b[1:]}, nil
 }
 
 func writeFrame(w io.Writer, kind byte, payload []byte) error {

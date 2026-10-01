@@ -8,9 +8,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -22,46 +20,6 @@ import (
 // sidecar behind sidecarIndex.
 type indexBackend interface {
 	query(filters *searchFilters, roots []string, limit int) (results []fsops.Entry, truncated bool, ok bool)
-}
-
-// sidecarEnabled reports whether the RFE_SIDECARS list (comma separated names, or "all"/"1") turns on name.
-func sidecarEnabled(name string) bool {
-	for _, v := range strings.Split(os.Getenv("RFE_SIDECARS"), ",") {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case name, "all", "1", "true":
-			return true
-		}
-	}
-	return false
-}
-
-// sidecarPath finds a sidecar executable: $RFE_SIDECAR_DIR, else next to the agent executable.
-func sidecarPath(name string) (string, bool) {
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	dirs := []string{os.Getenv("RFE_SIDECAR_DIR")}
-	if exe, err := os.Executable(); err == nil {
-		dirs = append(dirs, filepath.Dir(exe))
-	}
-	for _, d := range dirs {
-		if d == "" {
-			continue
-		}
-		p := filepath.Join(d, name)
-		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
-			return p, true
-		}
-	}
-	return "", false
-}
-
-func sidecarConfig(name string) (sidecar.Config, bool) {
-	p, ok := sidecarPath(name)
-	if !ok {
-		return sidecar.Config{}, false
-	}
-	return sidecar.Config{Name: name, Path: p, Logf: log.Printf}, true
 }
 
 // newIndexBackend picks the search index: rfe-indexd when enabled and installed, else the in-process index.

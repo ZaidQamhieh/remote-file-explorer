@@ -71,7 +71,11 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
     let out: Out<W> = Arc::new(Mutex::new(output));
     send(
         &out,
-        &serde_json::to_value(Hello::new(NAME, env!("CARGO_PKG_VERSION"))).unwrap(),
+        &serde_json::to_value(Hello::new(
+            NAME,
+            rfe_proto::release_version(env!("CARGO_PKG_VERSION")),
+        ))
+        .unwrap(),
     );
     let state = Arc::new(State {
         index: RwLock::new(None),

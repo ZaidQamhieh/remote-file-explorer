@@ -23,8 +23,8 @@ import (
 // (build one with `cargo build --release -p rfe-indexd` in agent-rs, or set RFE_SIDECAR_DIR).
 func indexdBinary(t *testing.T) string {
 	t.Helper()
-	if p, ok := sidecarPath("rfe-indexd"); ok {
-		return p
+	if loc, ok, _ := locateSidecar("rfe-indexd"); ok {
+		return loc.path
 	}
 	name := "rfe-indexd"
 	if runtime.GOOS == "windows" {

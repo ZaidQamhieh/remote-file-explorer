@@ -153,7 +153,11 @@ pub fn serve<R: Read, W: Write + Send + 'static>(
     }
     send(
         &out,
-        &serde_json::to_value(Hello::new(NAME, env!("CARGO_PKG_VERSION"))).unwrap(),
+        &serde_json::to_value(Hello::new(
+            NAME,
+            rfe_proto::release_version(env!("CARGO_PKG_VERSION")),
+        ))
+        .unwrap(),
         None,
     );
 

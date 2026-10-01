@@ -14,10 +14,80 @@ jobs:
     name: CI gates
     uses: ./.github/workflows/ci.yml
 
-  build:
-    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+  # The Rust sidecars are built once per target, then packaged beside the Go agent. Linux and Windows are
+  # cross-compiled with zig (Linux against glibc 2.28 so the same file runs on old and new distros); macOS builds
+  # on a macOS runner because it needs the Apple SDK.
+  sidecars:
+    name: Sidecars ${{ matrix.goos }}-${{ matrix.goarch }}
     needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: linux, goarch: amd64, runner: ubuntu-24.04, rust: x86_64-unknown-linux-gnu, zig: 'x86_64-unknown-linux-gnu.2.28', ext: ''}
+          - {goos: linux, goarch: arm64, runner: ubuntu-24.04, rust: aarch64-unknown-linux-gnu, zig: 'aarch64-unknown-linux-gnu.2.28', ext: ''}
+          - {goos: windows, goarch: amd64, runner: ubuntu-24.04, rust: x86_64-pc-windows-gnu, zig: x86_64-pc-windows-gnu, ext: .exe}
+          - {goos: windows, goarch: arm64, runner: ubuntu-24.04, rust: aarch64-pc-windows-gnullvm, zig: aarch64-pc-windows-gnullvm, ext: .exe}
+          - {goos: darwin, goarch: amd64, runner: macos-14, rust: x86_64-apple-darwin, zig: '', ext: ''}
+          - {goos: darwin, goarch: arm64, runner: macos-14, rust: aarch64-apple-darwin, zig: '', ext: ''}
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent-rs/target
+          key: rust-rel-${{ matrix.rust }}-${{ hashFiles('agent-rs/Cargo.lock', 'agent-rs/rust-toolchain.toml') }}
+          restore-keys: rust-rel-${{ matrix.rust }}-
+
+      - name: Add Rust target
+        working-directory: agent-rs
+        run: rustup target add ${{ matrix.rust }}
+
+      - name: Install zig and cargo-zigbuild
+        if: matrix.zig != ''
+        working-directory: agent-rs
+        run: |
+          pip install --user 'ziglang==0.16.0' 'cargo-zigbuild==0.23.4'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build sidecars
+        working-directory: agent-rs
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^agent-v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Expected an agent-vX.Y.Z tag; received '$RELEASE_TAG'"
+            exit 1
+          fi
+          export RFE_RELEASE_VERSION="${RELEASE_TAG#agent-v}"
+          if [[ -n "${{ matrix.zig }}" ]]; then
+            cargo zigbuild --release --locked -p rfe-indexd -p rfe-thumbd --target "${{ matrix.zig }}"
+          else
+            cargo build --release --locked -p rfe-indexd -p rfe-thumbd --target "${{ matrix.rust }}"
+          fi
+          mkdir -p "$RUNNER_TEMP/sidecars"
+          for n in rfe-indexd rfe-thumbd; do
+            cp "target/${{ matrix.rust }}/release/$n${{ matrix.ext }}" "$RUNNER_TEMP/sidecars/"
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sidecars-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/sidecars
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Package ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: sidecars
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -48,34 +118,24 @@ jobs:
           go-version: '1.26.6'
           cache-dependency-path: agent/go.sum
 
-      - name: Build and archive host agent
-        id: package
-        working-directory: agent
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: sidecars-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/sidecars
+
+      # Builds the agent, copies the sidecars beside it and writes rfe-sidecars.txt (sha256 + version), so the
+      # agent only runs sidecars that belong to this exact release.
+      - name: Build and archive host agent with its sidecars
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
           RELEASE_TAG: ${{ github.ref_name }}
-          ARCHIVE_EXTENSION: ${{ matrix.extension }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^agent-v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::Expected an agent-vX.Y.Z tag; received '$RELEASE_TAG'"
             exit 1
           fi
-          version="${RELEASE_TAG#agent-v}"
-          package="${RELEASE_TAG}-${GOOS}-${GOARCH}.${ARCHIVE_EXTENSION}"
-          stage="$RUNNER_TEMP/rfe-agent-stage"
-          mkdir -p "$stage"
-          binary=rfe-agent
-          if [[ "$GOOS" == windows ]]; then binary=rfe-agent.exe; fi
-          go build -trimpath -ldflags "-s -w -X main.version=${version}" -o "$stage/$binary" ./cmd/agent
-          if [[ "$ARCHIVE_EXTENSION" == zip ]]; then
-            (cd "$stage" && zip -q "$GITHUB_WORKSPACE/agent/$package" "$binary")
-          else
-            tar -C "$stage" -czf "$GITHUB_WORKSPACE/agent/$package" "$binary"
-          fi
-          echo "path=agent/$package" >> "$GITHUB_OUTPUT"
+          tools/package-agent.sh "${{ matrix.goos }}" "${{ matrix.goarch }}" "${RELEASE_TAG#agent-v}" \
+            "$RUNNER_TEMP/sidecars" "agent/${RELEASE_TAG}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.extension }}"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -97,6 +157,7 @@ jobs:
 
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
+          pattern: agent-*
           path: dist
           merge-multiple: true
 

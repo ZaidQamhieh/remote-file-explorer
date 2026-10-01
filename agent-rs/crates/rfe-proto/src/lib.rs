@@ -9,6 +9,15 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
 /// Protocol version both sides must agree on in the handshake.
+/// The version a sidecar announces: the release it was built for (`RFE_RELEASE_VERSION`, set by the release
+/// workflow so every binary in an archive reports the same version), else the crate version.
+pub const fn release_version(crate_version: &'static str) -> &'static str {
+    match option_env!("RFE_RELEASE_VERSION") {
+        Some(v) => v,
+        None => crate_version,
+    }
+}
+
 pub const PROTO_VERSION: u32 = 1;
 
 pub const KIND_JSON: u8 = 0;

@@ -545,6 +545,13 @@ func cmdStatus(args []string) error {
 		return fmt.Errorf("read local service status: %w", err)
 	}
 	fmt.Printf("service:     %s\n", service)
+	for i, line := range server.SidecarReport() {
+		label := "sidecars:"
+		if i > 0 {
+			label = ""
+		}
+		fmt.Printf("%-12s %s\n", label, line)
+	}
 	return nil
 }
 

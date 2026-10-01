@@ -38,12 +38,17 @@ func PublishSidecarStats(ctx context.Context, dataDir string) {
 	}
 	t := time.NewTicker(sidecarStatsEvery)
 	defer t.Stop()
+	// The first write lands before the sidecars have finished starting; a second one shortly after keeps `status`
+	// from showing a healthy agent as "down" for half a minute.
+	early := time.After(3 * time.Second)
 	write()
 	for {
 		select {
 		case <-ctx.Done():
 			write()
 			return
+		case <-early:
+			write()
 		case <-t.C:
 			write()
 		}

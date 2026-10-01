@@ -366,3 +366,44 @@ func TestSearchSurvivesSidecarKilledMidFlight(t *testing.T) {
 		t.Fatalf("after the restart got %v, want %v", got, want)
 	}
 }
+
+func TestSidecarIndexSeesChangesWithoutARebuild(t *testing.T) {
+	bin := indexdBinary(t)
+	root := diffFixture(t)
+	ops := fsops.New([]string{root}, false)
+	si := newSidecarIndex(ops, sidecar.Config{Name: "rfe-indexd", Path: bin, Logf: t.Logf})
+	t.Cleanup(si.sup.Stop)
+	has := func(name string) bool {
+		got, _, ok := si.query(diffQuery(t, "q="+name), []string{root}, 10)
+		return ok && len(got) > 0
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for !has("photo") {
+		if time.Now().After(deadline) {
+			t.Fatal("index never ready")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	c := mustClient(t, si)
+	if _, ok := watching(c); !ok {
+		t.Skip("file system watches are unavailable here")
+	}
+	if err := os.WriteFile(filepath.Join(root, "a", "zz-live-added.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for !has("zz-live-added") {
+		if time.Now().After(deadline) {
+			t.Fatal("a file created after the build never showed up")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err := os.Remove(filepath.Join(root, "a", "zz-live-added.txt")); err != nil {
+		t.Fatal(err)
+	}
+	for has("zz-live-added") {
+		if time.Now().After(deadline) {
+			t.Fatal("a deleted file never went away")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

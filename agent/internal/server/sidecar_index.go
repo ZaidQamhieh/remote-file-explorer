@@ -109,6 +109,46 @@ type buildResp struct {
 	Truncated bool `json:"truncated"`
 }
 
+// indexLiveReconcileInterval is how often a sidecar that watches the file system still re-walks everything. The
+// walk is the authority that catches whatever an event missed; with live updates it is a safety net, not the
+// way changes arrive.
+const indexLiveReconcileInterval = 30 * time.Minute
+
+type liveStats struct {
+	Watching bool   `json:"watching"`
+	Watches  int    `json:"watches"`
+	Error    string `json:"error"`
+}
+
+type statsResp struct {
+	Ready bool      `json:"ready"`
+	Live  liveStats `json:"live"`
+}
+
+// watching reports whether the sidecar has a watch on every directory, retrying briefly because the watches go in
+// right after the build answers.
+func watching(c *sidecar.Client) (liveStats, bool) {
+	var last liveStats
+	for i := 0; i < 40; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		var st statsResp
+		err := c.Call(ctx, "index.stats", struct{}{}, &st)
+		cancel()
+		if err != nil {
+			return last, false
+		}
+		last = st.Live
+		if st.Live.Watching {
+			return last, true
+		}
+		if st.Live.Error != "" {
+			return last, false
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return last, false
+}
+
 func (s *sidecarIndex) loop() {
 	for {
 		wait := time.Minute
@@ -118,8 +158,16 @@ func (s *sidecarIndex) loop() {
 			if err := s.build(c); err != nil {
 				log.Printf("search index (sidecar): build failed: %v", err)
 				wait = 30 * time.Second
-			} else if backoff := time.Since(started) * maxIndexDutyCycle; backoff > wait {
-				wait = backoff
+			} else {
+				if live, ok := watching(c); ok {
+					wait = indexLiveReconcileInterval
+					log.Printf("search index (sidecar): live updates on (%d watches), full re-walk every %v", live.Watches, wait)
+				} else if live.Error != "" {
+					log.Printf("search index (sidecar): live updates off (%s), full re-walk every %v", live.Error, wait)
+				}
+				if backoff := time.Since(started) * maxIndexDutyCycle; backoff > wait {
+					wait = backoff
+				}
 			}
 		}
 		select {

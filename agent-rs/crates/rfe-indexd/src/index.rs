@@ -6,8 +6,9 @@
 use crate::entry::{join_path, link_info, stat_of, WireEntry};
 use crate::filter::{Compiled, RootScopes};
 use crate::walk::{self, At, Sub, Visitor};
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const NO_CHILD: u32 = u32::MAX;
@@ -31,7 +32,7 @@ struct Rec {
     ctime_ns: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Chunk {
     id: u32,
     dir_path: String,
@@ -48,6 +49,10 @@ impl Chunk {
             &self.names[r.name_off as usize..r.name_off as usize + r.name_len as usize],
         )
         .unwrap_or("")
+    }
+
+    fn name_bytes(&self, r: &Rec) -> &[u8] {
+        &self.names[r.name_off as usize..r.name_off as usize + r.name_len as usize]
     }
 
     fn bytes(&self) -> usize {
@@ -73,7 +78,7 @@ pub struct Stats {
     pub bytes: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
     pub max_entries: usize,
     pub max_bytes: usize,
@@ -109,19 +114,22 @@ impl Gate<'_> {
 pub struct Index {
     /// The visible entries as runs, in depth-first order.
     segs: Vec<Seg>,
-    chunks: Vec<Chunk>,
+    chunks: Vec<Arc<Chunk>>,
     /// Chunk id -> position in `chunks` (`NO_CHILD` for a directory that could not be listed).
     id_to_pos: Vec<u32>,
     /// (root path, root chunk position)
     roots: Vec<(String, u32)>,
     /// Entries visible to queries, in depth-first order across `roots`; anything past this was over budget.
     visible: usize,
+    /// First chunk id not yet used; updates allocate new ids from here.
+    next_id: u32,
+    limits: Limits,
     pub stats: Stats,
 }
 
 struct Builder<'a> {
     next_id: AtomicU32,
-    chunks: Mutex<Vec<Chunk>>,
+    chunks: Mutex<Vec<Arc<Chunk>>>,
     entries: AtomicUsize,
     bytes: AtomicUsize,
     hard_entries: usize,
@@ -130,93 +138,114 @@ struct Builder<'a> {
     cancel: &'a AtomicBool,
 }
 
-impl Visitor for Builder<'_> {
-    fn visit(&self, at: &At, id: u32) -> Vec<Sub> {
-        let (dir, dir_path) = (at.dir, at.path);
-        let mut chunk = Chunk {
-            id,
-            dir_path: dir_path.to_string(),
-            names: Vec::new(),
-            recs: Vec::new(),
-            links: Vec::new(),
-        };
-        let mut subs: Vec<Sub> = Vec::new();
-        let Ok(rd) = dir.entries() else {
-            return Vec::new();
-        };
-        // Collected first so the records can be sorted by name, which is the order fs.WalkDir yields.
-        struct Raw {
-            name: String,
-            os: std::ffi::OsString,
-            meta: cap_std::fs::Metadata,
-            walk_into: bool,
+/// Lists one directory into a chunk. `reuse` maps a subdirectory name to the chunk id it already has (an update
+/// keeps the subtree it knows); every other subdirectory gets a fresh id from `next_id` and is returned for the
+/// caller to walk. `None` when the directory cannot be read.
+fn list_dir(
+    at: &At,
+    id: u32,
+    reuse: &dyn Fn(&[u8]) -> Option<u32>,
+    next_id: &mut dyn FnMut() -> u32,
+) -> Option<(Chunk, Vec<Sub>)> {
+    let (dir, dir_path) = (at.dir, at.path);
+    let mut chunk = Chunk {
+        id,
+        dir_path: dir_path.to_string(),
+        names: Vec::new(),
+        recs: Vec::new(),
+        links: Vec::new(),
+    };
+    let mut subs: Vec<Sub> = Vec::new();
+    let Ok(rd) = dir.entries() else {
+        return None;
+    };
+    // Collected first so the records can be sorted by name, which is the order fs.WalkDir yields.
+    struct Raw {
+        name: String,
+        os: std::ffi::OsString,
+        meta: cap_std::fs::Metadata,
+        walk_into: bool,
+    }
+    let mut raws: Vec<Raw> = Vec::new();
+    for ent in rd {
+        let Ok(ent) = ent else { continue };
+        let os = ent.file_name();
+        let Some(name) = os.to_str() else { continue };
+        if name.len() > u16::MAX as usize {
+            continue;
         }
-        let mut raws: Vec<Raw> = Vec::new();
-        for ent in rd {
-            let Ok(ent) = ent else { continue };
-            let os = ent.file_name();
-            let Some(name) = os.to_str() else { continue };
-            if name.len() > u16::MAX as usize {
-                continue;
-            }
-            let Ok(ft) = ent.file_type() else { continue };
-            let Ok(meta) = ent.metadata() else { continue };
-            let walk_into = ft.is_dir();
-            if walk_into && walk::should_skip_dir(name, &join_path(dir_path, name)) {
-                continue;
-            }
-            raws.push(Raw {
-                name: name.to_string(),
-                os,
-                meta,
-                walk_into,
-            });
+        let Ok(ft) = ent.file_type() else { continue };
+        let Ok(meta) = ent.metadata() else { continue };
+        let walk_into = ft.is_dir();
+        if walk_into && walk::should_skip_dir(name, &join_path(dir_path, name)) {
+            continue;
         }
-        raws.sort_unstable_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
-        for raw in raws {
-            let st = stat_of(&raw.meta);
-            let is_symlink = raw.meta.file_type().is_symlink();
-            let mut flags = if raw.name.is_ascii() { FLAG_ASCII } else { 0 };
-            let mut is_dir = raw.meta.is_dir();
-            let mut link_target = String::new();
-            if is_symlink {
-                flags |= FLAG_SYMLINK;
-                (is_dir, link_target) = link_info(at.root, dir, at.rel, &raw.os);
-            }
-            if is_dir {
-                flags |= FLAG_DIR;
-            }
-            let rec_idx = chunk.recs.len();
-            if !link_target.is_empty() {
-                chunk.links.push((rec_idx as u32, link_target));
-            }
-            let mut child = NO_CHILD;
-            if raw.walk_into {
-                child = self.next_id.fetch_add(1, Ordering::Relaxed);
+        raws.push(Raw {
+            name: name.to_string(),
+            os,
+            meta,
+            walk_into,
+        });
+    }
+    raws.sort_unstable_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
+    for raw in raws {
+        let st = stat_of(&raw.meta);
+        let is_symlink = raw.meta.file_type().is_symlink();
+        let mut flags = if raw.name.is_ascii() { FLAG_ASCII } else { 0 };
+        let mut is_dir = raw.meta.is_dir();
+        let mut link_target = String::new();
+        if is_symlink {
+            flags |= FLAG_SYMLINK;
+            (is_dir, link_target) = link_info(at.root, dir, at.rel, &raw.os);
+        }
+        if is_dir {
+            flags |= FLAG_DIR;
+        }
+        let rec_idx = chunk.recs.len();
+        if !link_target.is_empty() {
+            chunk.links.push((rec_idx as u32, link_target));
+        }
+        let mut child = NO_CHILD;
+        if raw.walk_into {
+            if let Some(known) = reuse(raw.name.as_bytes()) {
+                child = known;
+            } else {
+                child = next_id();
                 subs.push(Sub {
                     name: raw.os,
                     path: join_path(dir_path, &raw.name),
                     id: child,
                 });
             }
-            let name_off = chunk.names.len() as u32;
-            chunk.names.extend_from_slice(raw.name.as_bytes());
-            chunk.recs.push(Rec {
-                name_off,
-                name_len: raw.name.len() as u16,
-                flags,
-                child,
-                mode: st.mode,
-                size: st.size,
-                mtime_ns: st.mtime_ns,
-                ctime_ns: st.ctime_ns,
-            });
         }
-        chunk.names.shrink_to_fit();
-        chunk.recs.shrink_to_fit();
+        let name_off = chunk.names.len() as u32;
+        chunk.names.extend_from_slice(raw.name.as_bytes());
+        chunk.recs.push(Rec {
+            name_off,
+            name_len: raw.name.len() as u16,
+            flags,
+            child,
+            mode: st.mode,
+            size: st.size,
+            mtime_ns: st.mtime_ns,
+            ctime_ns: st.ctime_ns,
+        });
+    }
+    chunk.names.shrink_to_fit();
+    chunk.recs.shrink_to_fit();
+    Some((chunk, subs))
+}
+
+impl Visitor for Builder<'_> {
+    fn visit(&self, at: &At, id: u32) -> Vec<Sub> {
+        let Some((chunk, subs)) = list_dir(at, id, &|_| None, &mut || {
+            self.next_id.fetch_add(1, Ordering::Relaxed)
+        }) else {
+            return Vec::new();
+        };
         let n = chunk.recs.len();
         let b = chunk.bytes();
-        self.chunks.lock().unwrap().push(chunk);
+        self.chunks.lock().unwrap().push(Arc::new(chunk));
         let total_n = self.entries.fetch_add(n, Ordering::Relaxed) + n;
         let total_b = self.bytes.fetch_add(b, Ordering::Relaxed) + b;
         if total_n >= self.hard_entries || total_b >= self.hard_bytes {
@@ -269,6 +298,8 @@ impl Index {
             id_to_pos,
             roots,
             visible: usize::MAX,
+            next_id: max_id as u32,
+            limits,
             stats: Stats::default(),
         };
         let (visible, bytes, truncated) = idx.apply_budget(limits, b.over.load(Ordering::Relaxed));
@@ -300,7 +331,7 @@ impl Index {
             true
         });
         // Report real memory use, not the budget estimate.
-        let real: usize = self.chunks.iter().map(Chunk::bytes).sum();
+        let real: usize = self.chunks.iter().map(|c| c.bytes()).sum();
         (entries, real, truncated)
     }
 
@@ -474,5 +505,313 @@ impl Index {
             }
         }
         (out, self.stats.truncated || hit_limit)
+    }
+}
+
+/// The result of folding filesystem changes into an index.
+pub struct Applied {
+    pub index: Index,
+    /// Directories that did not exist in the old snapshot (they need a watch).
+    pub new_dirs: Vec<String>,
+}
+
+impl Index {
+    /// Every directory the index lists, as absolute paths.
+    pub fn dirs(&self) -> impl Iterator<Item = &str> {
+        self.chunks.iter().map(|c| c.dir_path.as_str())
+    }
+
+    /// The chunk position of directory `path` and the index of the root that holds it, found by following names
+    /// down from the root chunk (records are sorted by name, so each step is a binary search).
+    fn locate(&self, path: &str, replaced: &HashMap<u32, Arc<Chunk>>) -> Option<(usize, u32)> {
+        let sep = std::path::MAIN_SEPARATOR;
+        for (ri, (root, root_pos)) in self.roots.iter().enumerate() {
+            let prefix = format!("{}{sep}", root.strip_suffix(sep).unwrap_or(root));
+            let rel = if path == root {
+                ""
+            } else if let Some(r) = path.strip_prefix(prefix.as_str()) {
+                r
+            } else {
+                continue;
+            };
+            let mut pos = *root_pos;
+            if pos == NO_CHILD {
+                return None;
+            }
+            if !rel.is_empty() {
+                for comp in rel.split(sep) {
+                    let chunk = replaced.get(&pos).unwrap_or(&self.chunks[pos as usize]);
+                    let at = chunk
+                        .recs
+                        .binary_search_by(|r| chunk.name_bytes(r).cmp(comp.as_bytes()))
+                        .ok()?;
+                    let child = chunk.recs[at].child;
+                    if child == NO_CHILD {
+                        return None;
+                    }
+                    pos = *self.id_to_pos.get(child as usize)?;
+                    if pos == NO_CHILD {
+                        return None;
+                    }
+                }
+            }
+            return Some((ri, pos));
+        }
+        None
+    }
+
+    /// Adds `id` and every chunk below it to `out`.
+    fn collect_subtree(
+        &self,
+        id: u32,
+        replaced: &HashMap<u32, Arc<Chunk>>,
+        out: &mut HashSet<u32>,
+    ) {
+        let mut stack = vec![id];
+        while let Some(id) = stack.pop() {
+            let Some(&pos) = self.id_to_pos.get(id as usize) else {
+                continue; // a chunk created by this update
+            };
+            if pos == NO_CHILD || !out.insert(id) {
+                continue;
+            }
+            let chunk = replaced.get(&pos).unwrap_or(&self.chunks[pos as usize]);
+            stack.extend(
+                chunk
+                    .recs
+                    .iter()
+                    .map(|r| r.child)
+                    .filter(|c| *c != NO_CHILD),
+            );
+        }
+    }
+
+    /// Re-lists the directories in `dirty` (absolute paths) and returns the index that results; chunks nothing
+    /// touched are shared with `self`. `None` means the change cannot be folded in (the index was cut by its
+    /// budget, a root went away, or the result outgrew the budget) and the caller should rebuild from scratch.
+    pub fn apply(&self, dirty: &[String], cancel: &AtomicBool) -> Option<Applied> {
+        use crate::walk::{rel_join, Sub};
+        let started = Instant::now();
+        if self.stats.truncated {
+            return None;
+        }
+        let sep = std::path::MAIN_SEPARATOR;
+        let mut work: Vec<String> = dirty.to_vec();
+        work.sort_by_key(|p| (p.matches(sep).count(), p.clone()));
+        work.dedup();
+        let mut replaced: HashMap<u32, Arc<Chunk>> = HashMap::new();
+        let mut removed: HashSet<u32> = HashSet::new();
+        let mut added: Vec<Arc<Chunk>> = Vec::new();
+        let mut next_id = self.next_id;
+        let mut fresh: Vec<String> = Vec::new();
+        let mut root_dirs: HashMap<usize, Arc<cap_std::fs::Dir>> = HashMap::new();
+
+        let mut w = 0;
+        while w < work.len() {
+            if cancel.load(Ordering::Relaxed) {
+                return None;
+            }
+            let path = work[w].clone();
+            w += 1;
+            // A directory inside a subtree this batch just walked is already current.
+            if fresh
+                .iter()
+                .any(|f| path == *f || path.starts_with(&format!("{f}{sep}")))
+            {
+                continue;
+            }
+            let Some((ri, pos)) = self.locate(&path, &replaced) else {
+                continue;
+            };
+            let root_dir = match root_dirs.get(&ri) {
+                Some(d) => Arc::clone(d),
+                None => {
+                    let d = cap_std::fs::Dir::open_ambient_dir(
+                        &self.roots[ri].0,
+                        cap_std::ambient_authority(),
+                    )
+                    .ok()?;
+                    let d = Arc::new(d);
+                    root_dirs.insert(ri, Arc::clone(&d));
+                    d
+                }
+            };
+            let root_path = &self.roots[ri].0;
+            let rel = path
+                .strip_prefix(root_path.strip_suffix(sep).unwrap_or(root_path))
+                .unwrap_or("")
+                .trim_start_matches(sep)
+                .replace(sep, "/");
+            let dir = if rel.is_empty() {
+                root_dir.try_clone().ok()
+            } else {
+                root_dir.open_dir(&rel).ok()
+            };
+            let Some(dir) = dir else {
+                // Gone or unreadable: the directory above it is what changed.
+                if rel.is_empty() {
+                    return None;
+                }
+                if let Some(parent) = std::path::Path::new(&path)
+                    .parent()
+                    .and_then(|p| p.to_str())
+                {
+                    work.push(parent.to_string());
+                }
+                continue;
+            };
+            let old = replaced
+                .get(&pos)
+                .cloned()
+                .unwrap_or_else(|| Arc::clone(&self.chunks[pos as usize]));
+            let old_children: HashMap<Vec<u8>, u32> = old
+                .recs
+                .iter()
+                .filter(|r| r.child != NO_CHILD)
+                .map(|r| (old.name_bytes(r).to_vec(), r.child))
+                .collect();
+            let at = At {
+                root: &root_dir,
+                dir: &dir,
+                path: &path,
+                rel: &rel,
+            };
+            let listed = list_dir(
+                &at,
+                old.id,
+                &|name| old_children.get(name).copied(),
+                &mut || {
+                    next_id += 1;
+                    next_id - 1
+                },
+            );
+            let Some((chunk, subs)) = listed else {
+                self.collect_subtree(old.id, &replaced, &mut removed);
+                continue;
+            };
+            let kept: HashSet<u32> = chunk
+                .recs
+                .iter()
+                .map(|r| r.child)
+                .filter(|c| *c != NO_CHILD)
+                .collect();
+            for cid in old_children.values().filter(|c| !kept.contains(c)) {
+                self.collect_subtree(*cid, &replaced, &mut removed);
+            }
+            replaced.insert(pos, Arc::new(chunk));
+            // A directory's own size and times are stored in its parent's listing; keep that record current.
+            if !rel.is_empty() {
+                if let Ok(meta) = root_dir.symlink_metadata(&rel) {
+                    let parent_path = std::path::Path::new(&path)
+                        .parent()
+                        .and_then(|p| p.to_str())
+                        .unwrap_or("");
+                    if let (Some((_, ppos)), Some(name)) = (
+                        self.locate(parent_path, &replaced),
+                        std::path::Path::new(&path)
+                            .file_name()
+                            .and_then(|n| n.to_str()),
+                    ) {
+                        let mut parent = Chunk::clone(
+                            replaced.get(&ppos).unwrap_or(&self.chunks[ppos as usize]),
+                        );
+                        if let Ok(at) = parent
+                            .recs
+                            .binary_search_by(|r| parent.name_bytes(r).cmp(name.as_bytes()))
+                        {
+                            let st = stat_of(&meta);
+                            let r = &mut parent.recs[at];
+                            (r.size, r.mtime_ns, r.ctime_ns, r.mode) =
+                                (st.size, st.mtime_ns, st.ctime_ns, st.mode);
+                            replaced.insert(ppos, Arc::new(parent));
+                        }
+                    }
+                }
+            }
+            for Sub {
+                name,
+                path: sub_path,
+                id,
+            } in subs
+            {
+                let Ok(child) = dir.open_dir(&name) else {
+                    continue;
+                };
+                let b = Builder {
+                    next_id: AtomicU32::new(next_id),
+                    chunks: Mutex::new(Vec::new()),
+                    entries: AtomicUsize::new(0),
+                    bytes: AtomicUsize::new(0),
+                    hard_entries: self.limits.max_entries.saturating_mul(3) / 2,
+                    hard_bytes: self.limits.max_bytes.saturating_mul(3) / 2,
+                    over: AtomicBool::new(false),
+                    cancel,
+                };
+                let sub_rel = rel_join(&rel, &name.to_string_lossy());
+                walk::par_walk_sub(
+                    &b,
+                    Arc::clone(&root_dir),
+                    child,
+                    sub_path.clone(),
+                    sub_rel,
+                    id,
+                );
+                if b.over.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) {
+                    return None;
+                }
+                next_id = b.next_id.load(Ordering::Relaxed);
+                added.extend(b.chunks.into_inner().unwrap());
+                fresh.push(sub_path);
+            }
+        }
+
+        let mut chunks: Vec<Arc<Chunk>> = Vec::with_capacity(self.chunks.len() + added.len());
+        for (pos, c) in self.chunks.iter().enumerate() {
+            if removed.contains(&c.id) {
+                continue;
+            }
+            chunks.push(
+                replaced
+                    .remove(&(pos as u32))
+                    .unwrap_or_else(|| Arc::clone(c)),
+            );
+        }
+        let new_dirs: Vec<String> = added.iter().map(|c| c.dir_path.clone()).collect();
+        chunks.extend(added);
+        let mut id_to_pos = vec![NO_CHILD; next_id as usize];
+        for (pos, c) in chunks.iter().enumerate() {
+            id_to_pos[c.id as usize] = pos as u32;
+        }
+        let roots: Vec<(String, u32)> = self
+            .roots
+            .iter()
+            .map(|(p, old_pos)| {
+                let id = self.chunks[*old_pos as usize].id;
+                (p.clone(), id_to_pos[id as usize])
+            })
+            .collect();
+        let entries: usize = chunks.iter().map(|c| c.recs.len()).sum();
+        let bytes: usize = chunks.iter().map(|c| c.bytes()).sum();
+        if entries > self.limits.max_entries || bytes > self.limits.max_bytes {
+            return None;
+        }
+        let mut index = Index {
+            segs: Vec::new(),
+            chunks,
+            id_to_pos,
+            roots,
+            visible: entries,
+            next_id,
+            limits: self.limits,
+            stats: Stats::default(),
+        };
+        index.segs = index.segments(entries);
+        index.stats = Stats {
+            entries,
+            truncated: false,
+            build_ms: started.elapsed().as_millis() as u64,
+            bytes: bytes + index.segs.len() * std::mem::size_of::<Seg>(),
+        };
+        Some(Applied { index, new_dirs })
     }
 }

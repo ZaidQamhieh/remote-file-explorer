@@ -7,6 +7,7 @@ pub mod entry;
 pub mod filter;
 pub mod glob;
 pub mod index;
+pub mod live;
 pub mod recents;
 pub mod server;
 pub mod walk;

@@ -3,13 +3,14 @@
 
 use crate::filter::{Compiled, Filters};
 use crate::index::{Index, Limits};
+use crate::live::{Events, Watch, MAX_DIRTY_DIRS};
 use crate::recents;
 use rfe_proto::{code, error_response, read_frame, write_frame, Envelope, Hello, KIND_JSON};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -19,9 +20,18 @@ struct State {
     index: RwLock<Option<Arc<Index>>>,
     building: AtomicBool,
     cancels: Mutex<HashMap<u64, Arc<AtomicBool>>>,
+    /// Held while a build starts and while a batch of changes is applied, so the two never interleave.
+    mutate: Mutex<()>,
+    events: Arc<Events>,
+    watch: Mutex<Option<Arc<Watch>>>,
+    last_build: Mutex<Option<BuildReq>>,
+    applier_started: AtomicBool,
+    updates: AtomicU64,
+    rebuilds: AtomicU64,
+    stop: AtomicBool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct BuildReq {
     roots: Vec<String>,
@@ -67,6 +77,14 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
         index: RwLock::new(None),
         building: AtomicBool::new(false),
         cancels: Mutex::new(HashMap::new()),
+        mutate: Mutex::new(()),
+        events: Arc::new(Events::default()),
+        watch: Mutex::new(None),
+        last_build: Mutex::new(None),
+        applier_started: AtomicBool::new(false),
+        updates: AtomicU64::new(0),
+        rebuilds: AtomicU64::new(0),
+        stop: AtomicBool::new(false),
     });
     let mut workers: Vec<std::thread::JoinHandle<()>> = Vec::new();
     while let Some(frame) = read_frame(&mut input)? {
@@ -116,6 +134,7 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
     for h in workers {
         let _ = h.join();
     }
+    state.stop.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -126,38 +145,20 @@ fn parse<T: for<'de> Deserialize<'de>>(payload: &[u8]) -> Result<T, (&'static st
         .map_err(|e| (code::BAD_REQUEST, format!("bad request body: {e}")))
 }
 
-fn handle(state: &State, op: &str, payload: &[u8], cancel: &AtomicBool) -> HandlerResult {
+fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> HandlerResult {
     match op {
         "ping" => Ok(json!({})),
         "index.build" => {
             let req: BuildReq = parse(payload)?;
-            if state.building.swap(true, Ordering::AcqRel) {
-                return Err((code::BUSY, "an index build is already running".into()));
-            }
-            let idx = Index::build(
-                &req.roots,
-                Limits {
-                    max_entries: req.max_entries,
-                    max_bytes: req.max_bytes,
-                },
-                cancel,
-            );
-            state.building.store(false, Ordering::Release);
-            if cancel.load(Ordering::Relaxed) {
-                return Err((code::CANCELED, "build canceled".into()));
-            }
-            let s = idx.stats;
-            *state.index.write().unwrap() = Some(Arc::new(idx));
-            Ok(
-                json!({"entries": s.entries, "truncated": s.truncated, "buildMs": s.build_ms, "bytes": s.bytes}),
-            )
+            build(state, &req, cancel)
         }
         "index.stats" => match state.index.read().unwrap().as_ref() {
             Some(i) => {
                 let s = i.stats;
-                Ok(
-                    json!({"ready": true, "entries": s.entries, "truncated": s.truncated, "buildMs": s.build_ms, "bytes": s.bytes}),
-                )
+                Ok(json!({
+                    "ready": true, "entries": s.entries, "truncated": s.truncated, "buildMs": s.build_ms, "bytes": s.bytes,
+                    "live": live_stats(state),
+                }))
             }
             None => Ok(json!({"ready": false})),
         },
@@ -181,5 +182,104 @@ fn handle(state: &State, op: &str, payload: &[u8], cancel: &AtomicBool) -> Handl
             Ok(json!({"entries": entries, "partial": partial}))
         }
         other => Err((code::BAD_REQUEST, format!("unknown op {other:?}"))),
+    }
+}
+
+fn live_stats(state: &State) -> Value {
+    let (watches, complete, error) = match state.watch.lock().unwrap().as_ref() {
+        Some(w) => (
+            w.health.watches.load(Ordering::Relaxed),
+            w.health.complete.load(Ordering::Relaxed),
+            w.health.error.lock().unwrap().clone(),
+        ),
+        None => (0, false, "no watcher".to_string()),
+    };
+    json!({
+        "watching": complete && error.is_empty(),
+        "watches": watches,
+        "updates": state.updates.load(Ordering::Relaxed),
+        "rebuilds": state.rebuilds.load(Ordering::Relaxed),
+        "error": error,
+    })
+}
+
+/// A full walk. Pending change events are dropped when it starts (the walk reads the disk afresh) and events that
+/// arrive during it are applied to its result afterwards.
+fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResult {
+    {
+        let _g = state.mutate.lock().unwrap();
+        if state.building.swap(true, Ordering::AcqRel) {
+            return Err((code::BUSY, "an index build is already running".into()));
+        }
+        state.events.clear();
+    }
+    let idx = Index::build(
+        &req.roots,
+        Limits {
+            max_entries: req.max_entries,
+            max_bytes: req.max_bytes,
+        },
+        cancel,
+    );
+    if cancel.load(Ordering::Relaxed) {
+        state.building.store(false, Ordering::Release);
+        return Err((code::CANCELED, "build canceled".into()));
+    }
+    let s = idx.stats;
+    let idx = Arc::new(idx);
+    // Watches go in right after the walk; a change made in that window waits for the next reconcile.
+    if let Ok(w) = Watch::new(Arc::clone(&state.events)) {
+        let w = Arc::new(w);
+        *state.watch.lock().unwrap() = Some(Arc::clone(&w));
+        let (roots, for_watch) = (req.roots.clone(), Arc::clone(&idx));
+        std::thread::spawn(move || w.register(&roots, for_watch.dirs()));
+    }
+    *state.last_build.lock().unwrap() = Some(req.clone());
+    *state.index.write().unwrap() = Some(idx);
+    state.building.store(false, Ordering::Release);
+    if !state.applier_started.swap(true, Ordering::AcqRel) {
+        let st = Arc::clone(state);
+        std::thread::spawn(move || applier(st));
+    }
+    Ok(
+        json!({"entries": s.entries, "truncated": s.truncated, "buildMs": s.build_ms, "bytes": s.bytes}),
+    )
+}
+
+/// Applies batches of changed directories to the live index until the server stops.
+fn applier(state: Arc<State>) {
+    while let Some(batch) = state.events.next_batch(&state.stop) {
+        let guard = state.mutate.lock().unwrap();
+        if state.building.load(Ordering::Acquire) {
+            state.events.restore(batch);
+            drop(guard);
+            std::thread::sleep(Duration::from_millis(300));
+            continue;
+        }
+        let Some(current) = state.index.read().unwrap().clone() else {
+            continue;
+        };
+        let applied = if batch.overflow || batch.dirs.len() > MAX_DIRTY_DIRS {
+            None
+        } else {
+            current.apply(&batch.dirs, &AtomicBool::new(false))
+        };
+        match applied {
+            Some(a) => {
+                if let Some(w) = state.watch.lock().unwrap().clone() {
+                    w.add(a.new_dirs.iter().map(String::as_str));
+                }
+                *state.index.write().unwrap() = Some(Arc::new(a.index));
+                state.updates.fetch_add(1, Ordering::Relaxed);
+            }
+            None => {
+                drop(guard);
+                let req = state.last_build.lock().unwrap().clone();
+                if let Some(req) = req {
+                    state.rebuilds.fetch_add(1, Ordering::Relaxed);
+                    let _ = build(&state, &req, &AtomicBool::new(false));
+                }
+            }
+        }
     }
 }

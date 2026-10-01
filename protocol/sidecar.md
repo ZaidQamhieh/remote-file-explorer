@@ -64,7 +64,8 @@ Paths are absolute, UTF-8, and use the platform separator. Entries whose names a
 - `index.build` `{roots:[string], maxEntries, maxBytes}` walks the roots in parallel (rooted, no-follow directory
   handles), swaps in the new snapshot, and answers `{entries, truncated, buildMs, bytes}`. One build at a time
   (`BUSY` otherwise). Queries keep using the old snapshot until the swap.
-- `index.stats` answers `{ready, entries, truncated, buildMs, bytes}`.
+- `index.stats` answers `{ready, entries, truncated, buildMs, bytes, live}` where
+  `live` is `{watching, watches, updates, rebuilds, error}`.
 - `index.query` `{filters, roots:[string], limit}` answers `{ready, entries:[Entry], truncated}`. `ready:false`
   means no snapshot yet; the agent walks live instead. `filters` is
   `{glob, needle, types, exts, minSize, maxSize, modAfterNs, modBeforeNs}` already validated by the agent
@@ -73,6 +74,16 @@ Paths are absolute, UTF-8, and use the platform separator. Entries whose names a
   cut by its budget.
 - `recents.scan` `{roots:[string], limit, budgetMs}` answers `{entries:[Entry], partial}` with the newest files
   (not directories) first. `partial` is true when `budgetMs` cut the scan short.
+
+**Live updates.** After a build the sidecar watches the file system (per directory with inotify on Linux, the
+tree recursively with FSEvents and ReadDirectoryChangesW elsewhere). Events only mark a directory dirty; once they
+have been quiet for 250 ms (or 2 s after the first) the dirty directories are re-listed and an updated snapshot is
+swapped in, sharing every chunk nothing touched. The directory's own record in its parent is refreshed too. A
+batch of more than 4096 directories, a watcher overflow, or an index that was cut by its budget (or would outgrow
+it) triggers a full rebuild instead. `live.watching` is true once every directory has a watch; when registration
+fails (usually the inotify watch limit) `live.error` says why and the agent keeps its short re-walk interval. A
+change made while the watches are being installed is picked up by the next full build, which the agent still runs
+periodically (30 minutes with live updates, 5 without).
 
 Walk rules match the Go agent: hidden directories (leading `.`), `node_modules`, and on Linux `/proc /sys /dev
 /sysroot` are pruned (never the root itself); hidden files are kept; symlinks are listed but never followed, and a

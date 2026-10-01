@@ -50,6 +50,28 @@ pub fn par_walk<V: Visitor>(v: &V, root: &str, root_id: u32) {
     });
 }
 
+/// Walks a subdirectory that is already open inside the walk root `root` (`rel` is its path from that root), so
+/// the walk stays inside the same sandbox as the walk it extends.
+pub fn par_walk_sub<V: Visitor>(
+    v: &V,
+    root: Arc<Dir>,
+    dir: Dir,
+    path: String,
+    rel: String,
+    id: u32,
+) {
+    rayon::scope(|s| {
+        let node = Node {
+            root,
+            dir: Arc::new(dir),
+            path,
+            rel,
+            id,
+        };
+        descend(s, v, node)
+    });
+}
+
 struct Node {
     root: Arc<Dir>,
     dir: Arc<Dir>,

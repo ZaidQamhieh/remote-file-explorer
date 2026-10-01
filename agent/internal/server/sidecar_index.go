@@ -16,23 +16,37 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/thumbs"
 )
 
-// indexBackend is what searchHandler needs from a search index: the in-process SearchIndex or the rfe-indexd
+// indexBackend is what searchHandler needs from a search index: the rfe-indexd sidecar or noIndex
 // sidecar behind sidecarIndex.
 type indexBackend interface {
 	query(filters *searchFilters, roots []string, limit int) (results []fsops.Entry, truncated bool, ok bool)
 }
 
-// newIndexBackend picks the search index: rfe-indexd when enabled and installed, else the in-process index.
+// indexRebuildInterval is how often the sidecar index is re-walked when live updates are not available.
+const indexRebuildInterval = 5 * time.Minute
+
+// maxIndexDutyCycle bounds the share of wall-clock time re-walks may consume: a walk that took longer than the
+// interval waits ten times its own duration, so cost scales with the tree instead of the clock.
+const maxIndexDutyCycle = 10
+
+// Limits handed to rfe-indexd for one snapshot. The byte ceiling stops unusually long names and paths from
+// defeating the entry cap.
+const (
+	indexMaxEntries        = 2_000_000
+	indexMaxEstimatedBytes = 128 << 20
+)
+
+// newIndexBackend picks the search index: rfe-indexd when enabled and installed, else none (live walks).
 func newIndexBackend(ops *fsops.Ops) indexBackend {
 	if sidecarEnabled("indexd") {
 		if cfg, ok := sidecarConfig("rfe-indexd"); ok {
 			log.Printf("search index: using sidecar %s", cfg.Path)
 			return newSidecarIndex(ops, cfg)
 		}
-		log.Printf("search index: RFE_SIDECARS enables indexd but rfe-indexd was not found; using the built-in index")
+		log.Printf("search index: RFE_SIDECARS enables indexd but rfe-indexd was not found; searching by live walk")
 	}
 	warnSidecarMissing("indexd", "search")
-	return NewSearchIndex(ops)
+	return noIndex{}
 }
 
 // warnSidecarMissing says once at startup that a component runs in-process because no verified sidecar came with

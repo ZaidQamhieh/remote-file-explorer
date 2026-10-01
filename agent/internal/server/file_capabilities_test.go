@@ -38,9 +38,9 @@ func TestFileCapabilityRouteGates(t *testing.T) {
 	r.Route("/v1", func(r chi.Router) {
 		registerShareRoutes(r, Config{Address: "127.0.0.1:8765", Settings: st}, db, ops)
 		r.With(requireFileCapabilities(capBrowse)).Get("/system/drives", drivesHandler(ops))
-		r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, NewSearchIndex(ops)))
+		r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, noIndex{}))
 		r.With(requireFileCapabilities(capDownload)).Get("/thumb", thumbHandler(ops, nil))
-		registerFsRoutes(r, Config{TrashDir: t.TempDir()}, ops, &SearchIndex{})
+		registerFsRoutes(r, Config{TrashDir: t.TempDir()}, ops, noIndex{})
 		registerTrashRoutes(r, Config{TrashDir: t.TempDir()}, ops)
 		registerContentRoutes(r, Config{}, ops)
 		registerTransferRoutes(r, tm, Config{}, ops)

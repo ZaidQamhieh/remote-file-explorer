@@ -154,7 +154,7 @@ Port notes and gaps: `docs/rn-migration/ledger.md`. The old Flutter source is in
 | `internal/server/recent.go` | Recent-files endpoint — jail-scoped live recursive walks with a five-second cache for complete results, not a persistent index. |
 | `internal/server/transferhandlers.go` | Upload-session + chunk PUT + download-range endpoints. |
 | `internal/server/search.go` | Search endpoint (indexed fast path, bounded recursive fallback before the first build). |
-| `internal/server/search_index.go` | Five-minute index rebuild through open rooted walks; each request filters results by its effective roots. No content sniffing; 2M-entry and 128 MiB estimated per-snapshot caps signal partial results when reached. |
+| `internal/server/search_noindex.go`, `search_scope.go` | Search backend when there is no sidecar (live walks) and the root-scope helpers; the in-process index was retired in favour of `rfe-indexd`. |
 | `internal/server/thumb.go` | Thumbnail endpoint. |
 | `internal/server/settings_handlers.go` | Live-mutable agent settings endpoints. |
 | `internal/server/apps_handlers.go` + `apps_{linux,windows,darwin,other}.go` | Per-device app catalog/launch routes and OS-specific current-user app inventory/launch adapters. |

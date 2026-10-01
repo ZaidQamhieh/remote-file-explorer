@@ -81,7 +81,7 @@ func doSearch(t *testing.T, ops *fsops.Ops, rawQuery string) (*httptest.Response
 	t.Helper()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?"+rawQuery, nil)
-	searchHandler(ops, &SearchIndex{})(rr, req)
+	searchHandler(ops, noIndex{})(rr, req)
 
 	var entries []fsops.Entry
 	if rr.Code == http.StatusOK {

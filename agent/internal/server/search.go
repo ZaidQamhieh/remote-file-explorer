@@ -1,10 +1,8 @@
 // Package server — search handler.
 //
-// Search is served from an in-memory index (see search_index.go) built once
-// at startup and refreshed periodically — the same fundamental approach as
-// Everything/Spotlight (build once, query memory) minus a live filesystem
-// watcher, which is the upgrade path if periodic-refresh staleness ever
-// becomes a real problem. Building a full-text/FTS store on disk isn't worth
+// Search is served from the in-memory index of the rfe-indexd sidecar (see sidecar_index.go), built at startup and
+// kept current by a filesystem watcher — the same fundamental approach as Everything/Spotlight (build once, query
+// memory). Without the sidecar (or while it is down or still building) the handler walks the roots live. Building a full-text/FTS store on disk isn't worth
 // it for a personal-use agent over a normal-sized home folder; a plain slice
 // scanned linearly is already ~instant at that scale. A live recursive walk
 // (walkForMatches) remains as the fallback for the brief window before the
@@ -125,8 +123,7 @@ func (f *searchFilters) matchName(entryName string) bool {
 }
 
 // matchLower is matchName for a name that's already lowercased — lets the
-// index (search_index.go) precompute each entry's lowercase name once at
-// build time instead of re-lowercasing it on every query.
+// live walk and tests precompute a lowercase name once instead of re-lowercasing it per comparison.
 func (f *searchFilters) matchLower(lower string) bool {
 	if f.glob != "" {
 		ok, err := path.Match(f.glob, lower)
@@ -350,10 +347,10 @@ func searchHandler(ops *fsops.Ops, idx indexBackend) http.HandlerFunc {
 			return
 		}
 
-		// Fast path: the index is a warm in-memory copy of the whole tree
-		// (see search_index.go) — query it directly instead of touching disk.
-		// Only unavailable in the brief window before its first build
-		// finishes, when the live walk below is still needed.
+		// Fast path: the sidecar index is a warm in-memory copy of the whole tree
+		// (see sidecar_index.go) — query it directly instead of touching disk.
+		// Unavailable without the sidecar, while it is down, or before its first
+		// build finishes; then the live walk below is needed.
 		if results, truncated, ok := idx.query(filters, roots, limit); ok {
 			if truncated {
 				w.Header().Set(headerSearchTruncated, "1")
@@ -434,7 +431,7 @@ var virtualLinuxDirs = map[string]bool{
 // git internals, node_modules — anything with a leading dot lands here too,
 // see shouldSkipVirtualDir) rather than user files worth searching or
 // indexing. Found via: on an unjailed root (falls back to the home
-// directory), SearchIndex's periodic rebuild walked several million entries
+// directory), the periodic index rebuild walked several million entries
 // under hidden dirs like ~/.local/share/Steam, ~/.cache, ~/.gradle, ~/.npm —
 // taking longer than the 5-minute rebuild interval, so the background
 // indexer never actually went idle (~30% of a CPU core, continuously, all
@@ -446,8 +443,8 @@ var noisyDirNames = map[string]bool{
 
 // shouldSkipVirtualDir reports whether path is a Linux pseudo-filesystem
 // mount point, a hidden (dot-prefixed) directory, or a known dependency/
-// package-cache directory that walkForMatches/walkForRecent/SearchIndex
-// should prune while walking.
+// package-cache directory that walkForMatches/walkForRecent and the
+// indexer should prune while walking.
 func shouldSkipVirtualDir(path string) bool {
 	if runtime.GOOS == "linux" && virtualLinuxDirs[filepath.Clean(path)] {
 		return true

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,13 +135,118 @@ func keys(es []fsops.Entry) []map[string]any {
 	return out
 }
 
-func TestSidecarIndexMatchesGoIndex(t *testing.T) {
-	bin := indexdBinary(t)
-	root := diffFixture(t)
-	ops := fsops.New([]string{root}, false)
+// goldenFixture materializes the tree the frozen goldens were generated from
+// (agent-rs/crates/rfe-indexd/tests/data/index_golden.json, produced by the Go index before it was retired).
+type goldenFixtureEntry struct {
+	Rel     string `json:"rel"`
+	Kind    string `json:"kind"`
+	Size    int64  `json:"size"`
+	Target  string `json:"target"`
+	MtimeNs int64  `json:"mtimeNs"`
+}
 
-	goIdx := &SearchIndex{ops: ops}
-	goIdx.rebuild()
+type goldenEntry struct {
+	Path      string `json:"path"`
+	IsDir     bool   `json:"isDir"`
+	Size      int64  `json:"size"`
+	MtimeNs   int64  `json:"mtimeNs"`
+	IsSymlink bool   `json:"isSymlink"`
+	Target    string `json:"target"`
+}
+
+type indexGolden struct {
+	Fixture []goldenFixtureEntry `json:"fixture"`
+	Queries []struct {
+		Raw       string        `json:"raw"`
+		Roots     []string      `json:"roots"`
+		Limit     int           `json:"limit"`
+		Truncated bool          `json:"truncated"`
+		Entries   []goldenEntry `json:"entries"`
+	} `json:"queries"`
+}
+
+func loadGolden(t *testing.T) indexGolden {
+	t.Helper()
+	b, err := os.ReadFile("../../../agent-rs/crates/rfe-indexd/tests/data/index_golden.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var g indexGolden
+	if err := json.Unmarshal(b, &g); err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
+func materializeGolden(t *testing.T, g indexGolden) (root, outside string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the golden fixture needs symlink timestamps")
+	}
+	base := t.TempDir()
+	root, outside = filepath.Join(base, "root"), filepath.Join(base, "outside")
+	for _, d := range []string{root, outside} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sub := func(s string) string { return strings.NewReplacer("$ROOT", root, "$OUTSIDE", outside).Replace(s) }
+	for _, f := range g.Fixture {
+		if f.Kind == "dir" {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(f.Rel)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, f := range g.Fixture {
+		p := filepath.Join(root, filepath.FromSlash(f.Rel))
+		switch f.Kind {
+		case "file":
+			if err := os.WriteFile(p, make([]byte, f.Size), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		case "link":
+			if err := os.Symlink(sub(f.Target), p); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+		}
+	}
+	for _, f := range g.Fixture {
+		if f.Kind == "dir" {
+			continue
+		}
+		mt := time.Unix(0, f.MtimeNs)
+		p := filepath.Join(root, filepath.FromSlash(f.Rel))
+		if f.Kind == "link" {
+			if err := setLinkTime(p, mt); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := os.Chtimes(p, mt, mt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := len(g.Fixture) - 1; i >= 0; i-- { // parents are listed before children: set children first
+		if f := g.Fixture[i]; f.Kind == "dir" {
+			mt := time.Unix(0, f.MtimeNs)
+			if err := os.Chtimes(filepath.Join(root, filepath.FromSlash(f.Rel)), mt, mt); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return root, outside
+}
+
+// TestSidecarIndexMatchesFrozenGoIndex runs the whole Go adapter (wire types, root scoping, path re-check) against
+// rfe-indexd and compares with the answers the retired Go index gave for the same tree.
+func TestSidecarIndexMatchesFrozenGoIndex(t *testing.T) {
+	bin := indexdBinary(t)
+	g := loadGolden(t)
+	root, outside := materializeGolden(t, g)
+	sub := func(s string) string { return strings.NewReplacer("$ROOT", root, "$OUTSIDE", outside).Replace(s) }
+	ops := fsops.New([]string{root}, false)
 
 	si := newSidecarIndex(ops, sidecar.Config{Name: "rfe-indexd", Path: bin, Logf: t.Logf})
 	t.Cleanup(si.sup.Stop)
@@ -154,40 +260,43 @@ func TestSidecarIndexMatchesGoIndex(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	queries := []string{
-		"q=photo", "q=PHOTO", "q=a", "q=txt", "q=" + url.QueryEscape("*.jpg"), "q=" + url.QueryEscape("*.TXT"),
-		"q=" + url.QueryEscape("p*"), "q=" + url.QueryEscape("?.txt"), "q=" + url.QueryEscape("[ab]*"),
-		"q=" + url.QueryEscape("[!a-m]*"), "q=link", "q=" + url.QueryEscape("*"), "q=" + url.QueryEscape("na?ve*"),
-		"q=" + url.QueryEscape("é"), "q=" + url.QueryEscape("日本"), "q=" + url.QueryEscape("file name"),
-		"q=e&types=image", "q=e&types=image,video", "q=e&types=document", "q=e&types=archive,audio,other",
-		"q=e&ext=jpg,png", "q=e&ext=txt", "q=e&ext=.md", "q=e&minSize=100", "q=e&maxSize=1000", "q=e&minSize=100&maxSize=2000",
-		"q=e&modifiedAfter=2024-01-01T10:00:00Z", "q=e&modifiedBefore=2024-01-01T20:00:00Z",
-		"q=e&modifiedAfter=2024-01-01T05:00:00Z&modifiedBefore=2024-01-01T15:00:00Z&types=image",
+	if len(g.Queries) < 200 {
+		t.Fatalf("golden looks truncated: %d queries", len(g.Queries))
 	}
-	rootSets := [][]string{
-		{root},
-		{filepath.Join(root, "a")},
-		{filepath.Join(root, "docs"), filepath.Join(root, "a", "b")},
-		{filepath.Join(root, "a") + string(filepath.Separator)},
-		{root + "-sibling"},
-	}
-	limits := []int{1000, 3}
-	for _, raw := range queries {
-		for _, rs := range rootSets {
-			for _, limit := range limits {
-				f := diffQuery(t, raw)
-				want, wantTrunc, wantOK := goIdx.query(f, rs, limit)
-				got, gotTrunc, gotOK := si.query(f, rs, limit)
-				if !wantOK || !gotOK {
-					t.Fatalf("%s roots=%v: ok go=%v sidecar=%v", raw, rs, wantOK, gotOK)
-				}
-				if !reflect.DeepEqual(keys(got), keys(want)) || gotTrunc != wantTrunc {
-					t.Errorf("%s roots=%v limit=%d trunc go=%v sidecar=%v: %s", raw, rs, limit, wantTrunc, gotTrunc, firstDiff(want, got))
-				}
+	for _, q := range g.Queries {
+		roots := make([]string, len(q.Roots))
+		for i, r := range q.Roots {
+			roots[i] = sub(r)
+		}
+		got, trunc, ok := si.query(diffQuery(t, q.Raw), roots, q.Limit)
+		if !ok {
+			t.Fatalf("%s: sidecar not ready", q.Raw)
+		}
+		want := make([]goldenEntry, len(q.Entries))
+		for i, e := range q.Entries {
+			e.Path, e.Target = sub(e.Path), sub(e.Target)
+			want[i] = e
+		}
+		have := make([]goldenEntry, len(got))
+		for i, e := range got {
+			size := e.Size
+			if e.IsDir || e.IsSymlink {
+				size = 0
 			}
+			have[i] = goldenEntry{Path: e.Path, IsDir: e.IsDir, Size: size, MtimeNs: e.Modified.UnixNano(), IsSymlink: e.IsSymlink, Target: e.SymlinkTarget}
+		}
+		if !reflect.DeepEqual(have, want) || trunc != q.Truncated {
+			t.Errorf("%s roots=%v limit=%d truncated golden=%v sidecar=%v\n golden  %v\n sidecar %v", q.Raw, q.Roots, q.Limit, q.Truncated, trunc, paths2(want), paths2(have))
 		}
 	}
+}
+
+func paths2(es []goldenEntry) []string {
+	out := make([]string, len(es))
+	for i, e := range es {
+		out[i] = e.Path
+	}
+	return out
 }
 
 func firstDiff(want, got []fsops.Entry) string {

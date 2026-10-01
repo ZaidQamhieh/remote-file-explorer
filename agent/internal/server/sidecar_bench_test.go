@@ -55,21 +55,6 @@ func TestBenchIndex(t *testing.T) {
 	var sidecarKB int64
 
 	switch impl {
-	case "go":
-		idx := &SearchIndex{ops: ops}
-		start := time.Now()
-		idx.rebuild()
-		build = time.Since(start)
-		entries = idx.Stats().Entries
-		for _, q := range queries {
-			var ds []time.Duration
-			for i := 0; i < 15; i++ {
-				s := time.Now()
-				idx.query(diffQuery(t, q), roots, 200)
-				ds = append(ds, time.Since(s))
-			}
-			qtimes[q] = median(ds)
-		}
 	case "rust":
 		bin := indexdBinary(t)
 		si := &sidecarIndex{ops: ops, sup: sidecar.NewSupervisor(sidecar.Config{Name: "rfe-indexd", Path: bin}, nil)}

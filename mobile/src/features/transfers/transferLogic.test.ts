@@ -32,6 +32,7 @@ describe('transfer logic', () => {
     expect(transferErrorMessage('CONFLICT')).toMatch(/already exists/);
     expect(transferErrorMessage('READ_ONLY')).toMatch(/not allowed/);
     expect(transferErrorMessage('ERR_CONNECTION: timeout')).toMatch(/Could not reach/);
+    expect(transferErrorMessage('ERR_STORAGE_FULL')).toMatch(/out of storage/);
     expect(transferErrorMessage('source file is missing')).toMatch(/no longer on this phone/);
     expect(transferErrorMessage('HTTP 500')).toBe('HTTP 500');
     expect(transferErrorMessage(null)).toBe('');

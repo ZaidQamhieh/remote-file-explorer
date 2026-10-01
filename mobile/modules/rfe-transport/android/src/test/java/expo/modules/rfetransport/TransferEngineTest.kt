@@ -237,4 +237,33 @@ class TransferEngineTest {
       pub.shutdown()
     }
   }
+
+  @Test fun fullDiskFailsWithItsOwnCodeNotAConnectionError() {
+    org.junit.Assume.assumeTrue(File("/dev/full").exists())
+    server.enqueue(full())
+    val d = File(dest("full.bin")).also { it.parentFile!!.mkdirs() }
+    Files.createSymbolicLink(File(d.path + ".part").toPath(), File("/dev/full").toPath())
+    engine.enqueue("t-full", "h", address, "/full.bin", d.path)
+    val r = await("t-full", TransferState.FAILED)
+    assertEquals("ERR_STORAGE_FULL", r.error)
+  }
+
+  @Test fun failureReachesTheListenerEvenWhenTheJournalCannotBeWritten() {
+    val seen = java.util.concurrent.CopyOnWriteArrayList<TransferRecord>()
+    val journal = File(dir, "journal2")
+    val e = TransferEngine(journal, creds, onChange = { seen.add(it) }, timeoutMs = 5000)
+    try {
+      journal.setWritable(false)
+      val readOnly = try { File(journal, "probe").createNewFile(); false } catch (_: java.io.IOException) { true }
+      org.junit.Assume.assumeTrue("needs a non-root user", readOnly)
+      server.enqueue(MockResponse().setResponseCode(403).setBody("{\"code\":\"CAPABILITY_DENIED\"}"))
+      e.enqueue("t-ro", "h", address, "/a.bin", dest("ro.bin"))
+      val end = System.currentTimeMillis() + 10_000
+      while (System.currentTimeMillis() < end && seen.none { it.state == TransferState.FAILED }) Thread.sleep(20)
+      assertEquals("CAPABILITY_DENIED", seen.last { it.state == TransferState.FAILED }.error)
+    } finally {
+      journal.setWritable(true)
+      e.shutdown()
+    }
+  }
 }

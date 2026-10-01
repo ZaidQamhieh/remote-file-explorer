@@ -304,8 +304,13 @@ class TransferEngine(
     is javax.net.ssl.SSLException ->
       if (generateSequence<Throwable>(e) { it.cause }.any { it is CertPinMismatch }) "ERR_CERT_PIN_MISMATCH" else "ERR_TLS"
     is UploadRejected -> e.message ?: "ERR_UPLOAD"
-    is IOException -> "ERR_CONNECTION: ${e.message}"
+    is IOException -> if (isNoSpace(e)) "ERR_STORAGE_FULL" else "ERR_CONNECTION: ${e.message}"
     else -> e.message ?: e.javaClass.simpleName
+  }
+
+  private fun isNoSpace(e: Throwable): Boolean = generateSequence(e) { it.cause }.any {
+    val m = it.message ?: return@any false
+    m.contains("ENOSPC") || m.contains("No space left", ignoreCase = true)
   }
 
   private fun update(next: TransferRecord): TransferRecord {
@@ -316,9 +321,13 @@ class TransferEngine(
     return r
   }
 
+  /** Best effort: a full disk fails the journal write as well, and that must not hide the transfer's own state from the UI. */
   private fun persist(r: TransferRecord) {
-    val tmp = File(dir, "${r.id}.json.tmp")
-    tmp.writeText(r.toJson().toString())
-    tmp.renameTo(File(dir, "${r.id}.json"))
+    try {
+      val tmp = File(dir, "${r.id}.json.tmp")
+      tmp.writeText(r.toJson().toString())
+      tmp.renameTo(File(dir, "${r.id}.json"))
+    } catch (_: IOException) {
+    }
   }
 }

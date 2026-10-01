@@ -52,6 +52,8 @@ export function transferErrorMessage(error: string | null): string {
       return 'The computer is still finishing the previous attempt. Try again in a moment.';
     case 'NOT_FOUND':
       return 'The computer no longer has this file or upload. Try again.';
+    case 'ERR_STORAGE_FULL':
+      return 'This phone is out of storage. Free some space, then tap Retry.';
     case 'ERR_CERT_PIN_MISMATCH':
       return 'The computer’s identity changed. Check it in Devices.';
     case 'ERR_CONNECTION':

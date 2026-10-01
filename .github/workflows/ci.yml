@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, 'rn/**']
   pull_request:
     branches: [master, main]
   # Callable so release.yml can require these exact gates before publishing,

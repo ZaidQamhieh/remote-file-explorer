@@ -2,7 +2,7 @@ name: Mobile (React Native)
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, 'rn/**']
     paths: ['mobile/**', 'agent/**', 'protocol/**', '.github/workflows/mobile.yml']
   pull_request:
     branches: [master, main]

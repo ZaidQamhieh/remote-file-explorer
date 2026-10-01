@@ -230,3 +230,7 @@ More S23 Ultra results (2026-10-01):
 - Reboot: the periodic WorkManager job (network constraint, about 5.5 h delay) was present before and after `adb reboot`.
 - LAN discovery: Find on local network lists the PC (192.168.1.100:8765, instance name "rfedash") within 10 s on the real phone. Pair was not tapped.
 - Test artifacts removed: the large test files on the PC and phone, the tc throttle on the PC (qdiscs back to fq_codel); the temporary download grant on the S23 was restored to browse-only.
+
+Minimum Android (2026-10-01, rfe-iib.2): the x86_64 release build (production key) on an API 24 (Android 7.0) google_apis emulator at 1080x1920: installs and launches, the camera-permission and pairing screens render, "Ask to pair" to a scratch agent works over the pinned TLS connection (match code identical on both sides), and the shared folder lists. Not covered: both real phones are Samsung (Android 14/15); no other brand, and no API 24 hardware.
+
+A53 (R5CTB12ZLQH), 2026-10-01: RN screenshots for the owner's before/after check were taken (Home, Files hosts, Files root, Big Folder, Activity; graphite dark) and saved in `docs/rn-migration/screens-a53/` (not committed). The matching Flutter shots were not taken: the owner said not to use the old app any more. The A53 was uninstalled and reinstalled once during this attempt, so it was re-paired with Find on local network (match code checked on both sides, approved at the computer); it reused its device row and is browse-only again.

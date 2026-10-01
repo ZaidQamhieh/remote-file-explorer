@@ -214,3 +214,5 @@ The owner's systemd user service now runs the `rn/migration` agent build (was th
 Live Apps check (2026-10-01): with `view_apps` briefly granted to the A53 (owner-approved, restored to browse-only afterwards), the Apps tab on the live agent showed 89 apps with real categories (System, Development, Utilities) and the "View only" state.
 
 S23 Ultra stand-in (2026-10-01): the S23 Ultra was not attached, so the x86_64 release build ran on the emulator at 1440x3088 / 450 dpi (the S23 Ultra's size). Home, Files and Apps showed no overflow, truncation or dock problems. This is not a check on the real S23 Ultra; that and the Flutter-upgrade test (rfe-iib.7) still need the phone.
+
+S23 Ultra check (2026-10-01, SM-S918B, 1440x3088 @ 600 dpi, graphite dark, live agent): Home, Activity and the gated Apps state render to the Lumen layout with no overflow or truncation, and the floating dock clears the three-button nav bar. The S23 already ran the RN build (versionCode 81, installed 01:50), so the upgrade-over-Flutter test (rfe-iib.7) cannot be run on it without a Flutter build to install first.

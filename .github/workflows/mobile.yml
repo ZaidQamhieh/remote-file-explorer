@@ -1,9 +1,9 @@
 name: Mobile (React Native)
 
 on:
-  # rn/** pushes run these gates through release.yml (workflow_call), so they are not repeated here.
+  # master and rn/** pushes run these gates through release.yml (workflow_call), so they are not repeated here.
   push:
-    branches: [master, main]
+    branches: [main]
     paths: ['mobile/**', 'agent/**', 'protocol/**', '.github/workflows/mobile.yml', '.github/actions/**']
   pull_request:
     branches: [master, main]

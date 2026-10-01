@@ -15,7 +15,10 @@ name: Release
 on:
   push:
     tags: ['v*']
-    branches: ['rn/**']
+    # master runs the full build too, so the caches it writes are the ones tag runs can read (a tag sees only the
+    # default branch's caches, never a feature branch's).
+    branches: [master, 'rn/**']
+    paths-ignore: ['docs/**', '**.md']
 
 # Read-only by default; only the publish job may write releases.
 permissions:
@@ -102,8 +105,9 @@ jobs:
           SCCACHE_GHA_ENABLED: 'true'
           CMAKE_C_COMPILER_LAUNCHER: sccache
           CMAKE_CXX_COMPILER_LAUNCHER: sccache
-          # A tag builds the ABIs the Flutter app shipped (no 32-bit x86); a branch dry run builds the one real phones use.
-          RFE_ABIS: ${{ github.ref_type == 'tag' && 'arm64-v8a,armeabi-v7a,x86_64' || 'arm64-v8a' }}
+          # A tag and master build the ABIs the Flutter app shipped (no 32-bit x86), which fills the shared caches for
+          # every ABI; a feature-branch dry run builds the one real phones use.
+          RFE_ABIS: ${{ (github.ref_type == 'tag' || github.ref == 'refs/heads/master') && 'arm64-v8a,armeabi-v7a,x86_64' || 'arm64-v8a' }}
         run: |
           scripts/build-release-apk.sh
           {

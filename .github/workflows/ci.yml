@@ -1,10 +1,10 @@
 name: CI
 
-# Pushes to rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
+# Pushes to master and rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
 # them here too would do every check twice. Changes that cannot affect the agent or the Flutter app skip it.
 on:
   push:
-    branches: [master, main]
+    branches: [main]
     paths-ignore: ['mobile/**', 'docs/**', '**.md']
   pull_request:
     branches: [master, main]

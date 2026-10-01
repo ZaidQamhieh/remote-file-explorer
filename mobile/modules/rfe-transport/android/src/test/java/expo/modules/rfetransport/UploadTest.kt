@@ -83,7 +83,7 @@ class UploadTest {
             // Refuse only once the sibling chunks (sent in parallel) have landed, so the test does not race the client
             // cancelling them mid-flight: a cancelled chunk the agent already stored may legitimately be sent again.
             val others = (size + chunkSize - 1) / chunkSize - 1
-            val deadline = System.currentTimeMillis() + 2000
+            val deadline = System.currentTimeMillis() + 15_000
             while (received.size < others && System.currentTimeMillis() < deadline) Thread.sleep(5)
             return err(403, "FORBIDDEN")
           }
@@ -142,6 +142,13 @@ class UploadTest {
       Thread.sleep(20)
     }
     throw AssertionError("timeout waiting for $states, have ${engine.list()}")
+  }
+
+  /** DONE is published before the finished upload's source is removed (the safe order), so wait for the removal. */
+  private fun awaitGone(f: File) {
+    val deadline = System.currentTimeMillis() + 10_000
+    while (f.exists() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+    assertFalse("${f.path} should have been removed", f.exists())
   }
 
   @Test fun uploadsInVerifiedChunksAndCompletes() {
@@ -236,14 +243,14 @@ class UploadTest {
     val src = File(staged, "a.bin").also { it.writeBytes(payload) }
     engine.enqueueUpload("u11", "h", address, src.path, "/dest/a.bin", overwrite = false, deleteSource = true)
     await("u11", TransferState.DONE)
-    assertFalse(staged.exists())
+    awaitGone(staged)
   }
 
   @Test fun deletesAnAppPrivateSourceOnceDoneAndOnCancel() {
     val src = source()
     engine.enqueueUpload("u7", "h", address, src.path, "/dest/a.bin", overwrite = false, deleteSource = true)
     await("u7", TransferState.DONE)
-    assertFalse(src.exists())
+    awaitGone(src)
 
     val second = File(dir, "second.bin").also { it.writeBytes(payload) }
     agent.received.clear()

@@ -152,6 +152,7 @@ func collectAll(root string, entries *[]indexedEntry) {
 
 func collectAllRoot(root *os.Root, rootPath string, entries *[]indexedEntry, estimatedBytes *int64, maxEntries int, maxBytes int64) bool {
 	truncated := false
+	intern := newStringInterner()
 	_ = fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, err error) error {
 		if len(*entries) >= maxEntries {
 			truncated = true
@@ -189,6 +190,7 @@ func collectAllRoot(root *os.Root, rootPath string, entries *[]indexedEntry, est
 		// EntryFromRootInfo is also no-sniff, so indexing never reads file
 		// contents (PR-47).
 		entry := fsops.EntryFromRootInfo(root, rootPath, relPath, info)
+		compactIndexedEntry(&entry, intern)
 		indexed := indexedEntry{
 			entry:     entry,
 			lowerName: strings.ToLower(entry.Name),
@@ -205,14 +207,44 @@ func collectAllRoot(root *os.Root, rootPath string, entries *[]indexedEntry, est
 	return truncated
 }
 
+// stringInterner returns one shared copy of each distinct value. Mode and MimeType repeat across millions of
+// entries from a handful of values, so keeping a copy per entry is pure waste.
+type stringInterner map[string]string
+
+func newStringInterner() stringInterner { return make(stringInterner) }
+
+func (in stringInterner) get(s string) string {
+	if s == "" {
+		return s
+	}
+	if v, ok := in[s]; ok {
+		return v
+	}
+	// A pathological tree must not grow the table without bound; past the cap values are kept as they are.
+	if len(in) < 4096 {
+		in[s] = s
+	}
+	return s
+}
+
+// compactIndexedEntry shrinks what each retained entry holds on to: Name becomes a view into Path (which always ends
+// with it) instead of a second allocation, and the repeated Mode and MimeType strings are shared.
+func compactIndexedEntry(e *fsops.Entry, intern stringInterner) {
+	if n := len(e.Name); n > 0 && strings.HasSuffix(e.Path, e.Name) {
+		e.Name = e.Path[len(e.Path)-n:]
+	}
+	e.Mode = intern.get(e.Mode)
+	e.MimeType = intern.get(e.MimeType)
+}
+
 func indexedEntryEstimatedBytes(entry indexedEntry) int64 {
 	bytes := int64(unsafe.Sizeof(entry))
-	bytes += estimatedStringBytes(entry.entry.Name)
+	// Name shares Path's memory and Mode/MimeType are interned (see compactIndexedEntry), so they add nothing.
 	bytes += estimatedStringBytes(entry.entry.Path)
-	bytes += estimatedStringBytes(entry.entry.MimeType)
-	bytes += estimatedStringBytes(entry.entry.Mode)
 	bytes += estimatedStringBytes(entry.entry.SymlinkTarget)
-	bytes += estimatedStringBytes(entry.lowerName)
+	if entry.lowerName != entry.entry.Name {
+		bytes += estimatedStringBytes(entry.lowerName)
+	}
 	return bytes
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 )
@@ -227,5 +228,37 @@ func TestSearchIndex_StatsReported(t *testing.T) {
 	}
 	if st.BuiltAt.IsZero() {
 		t.Fatal("BuiltAt not stamped — index age is unobservable")
+	}
+}
+
+func TestCompactIndexedEntrySharesNameAndInternsRepeats(t *testing.T) {
+	intern := newStringInterner()
+	mk := func(dir string) fsops.Entry {
+		return fsops.Entry{
+			Name:     strings.Clone("report.pdf"),
+			Path:     strings.Clone(dir + "/report.pdf"),
+			Mode:     strings.Clone("-rw-r--r--"),
+			MimeType: strings.Clone("application/pdf"),
+		}
+	}
+	a, b := mk("/data/a"), mk("/data/b")
+	compactIndexedEntry(&a, intern)
+	compactIndexedEntry(&b, intern)
+
+	if a.Name != "report.pdf" || a.Path != "/data/a/report.pdf" {
+		t.Fatalf("compaction changed values: %+v", a)
+	}
+	// Name is a view into Path, not a second allocation.
+	if unsafe.StringData(a.Name) != unsafe.StringData(a.Path[len(a.Path)-len(a.Name):]) {
+		t.Fatal("Name does not share Path's memory")
+	}
+	if unsafe.StringData(a.Mode) != unsafe.StringData(b.Mode) || unsafe.StringData(a.MimeType) != unsafe.StringData(b.MimeType) {
+		t.Fatal("repeated Mode/MimeType were not interned")
+	}
+	// Negative control: a name that is not the path's tail is left alone.
+	odd := fsops.Entry{Name: "x", Path: "/data/y"}
+	compactIndexedEntry(&odd, intern)
+	if odd.Name != "x" {
+		t.Fatalf("name rewritten without a matching suffix: %q", odd.Name)
 	}
 }

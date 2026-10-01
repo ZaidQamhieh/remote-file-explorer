@@ -214,6 +214,9 @@ func (c *Client) checkHello(h hello) error {
 // Version is the version the sidecar announced.
 func (c *Client) Version() string { return c.version }
 
+// Pid is the sidecar's process id (for diagnostics and tests).
+func (c *Client) Pid() int { return c.cmd.Process.Pid }
+
 // Done is closed when the sidecar is no longer usable.
 func (c *Client) Done() <-chan struct{} { return c.done }
 

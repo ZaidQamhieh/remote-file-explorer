@@ -3,7 +3,9 @@ package server
 import (
 	"container/heap"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -284,5 +286,83 @@ func TestAcceptSidecarPath(t *testing.T) {
 		if got := acceptSidecarPath(p, scopes); got != want {
 			t.Errorf("%q: got %v want %v", p, got, want)
 		}
+	}
+}
+
+func TestSearchSurvivesSidecarKilledMidFlight(t *testing.T) {
+	bin := indexdBinary(t)
+	root := diffFixture(t)
+	ops := fsops.New([]string{root}, false)
+	si := newSidecarIndex(ops, sidecar.Config{Name: "rfe-indexd", Path: bin, Logf: t.Logf})
+	t.Cleanup(si.sup.Stop)
+
+	search := func() []fsops.Entry {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/v1/search?q=photo", nil)
+		searchHandler(ops, si)(rr, req)
+		if rr.Code != 200 {
+			t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+		}
+		var out []fsops.Entry
+		if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	waitFor := func(what string, cond func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for !cond() {
+			if time.Now().After(deadline) {
+				t.Fatalf("timed out waiting for %s", what)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitFor("the first snapshot", func() bool {
+		_, _, ok := si.query(diffQuery(t, "q=photo"), []string{root}, 10)
+		return ok
+	})
+	want := paths(search())
+	if len(want) == 0 {
+		t.Fatal("no results from the sidecar index")
+	}
+
+	c, err := si.sup.Client()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := os.FindProcess(c.Pid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Searches keep arriving while the process dies: none may fail or come back different.
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if got := paths(search()); !reflect.DeepEqual(got, want) {
+				t.Errorf("search during the kill returned %v, want %v", got, want)
+				return
+			}
+		}
+	}()
+	time.Sleep(30 * time.Millisecond)
+	_ = p.Kill()
+	waitFor("the sidecar to be noticed dead", func() bool { _, err := si.sup.Client(); return err != nil })
+	waitFor("the supervisor to restart it and rebuild", func() bool {
+		_, _, ok := si.query(diffQuery(t, "q=photo"), []string{root}, 10)
+		return ok
+	})
+	close(stop)
+	<-done
+	if got := paths(search()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("after the restart got %v, want %v", got, want)
 	}
 }

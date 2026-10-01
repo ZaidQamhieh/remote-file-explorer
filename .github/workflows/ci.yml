@@ -93,6 +93,52 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           "$(go env GOPATH)/bin/govulncheck" ./...
 
+  agent-rs:
+    name: Rust sidecars
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: agent/go.sum
+
+      # The toolchain is pinned in agent-rs/rust-toolchain.toml; rustup installs it on the first cargo call. The cache
+      # holds the registry and the build output, keyed on the lockfile and toolchain (a tag build reads master's).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent-rs/target
+          key: rust-${{ runner.os }}-${{ hashFiles('agent-rs/Cargo.lock', 'agent-rs/rust-toolchain.toml') }}
+          restore-keys: rust-${{ runner.os }}-
+
+      - name: rustfmt
+        working-directory: agent-rs
+        run: cargo fmt --all --check
+
+      - name: clippy
+        working-directory: agent-rs
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: cargo test
+        working-directory: agent-rs
+        run: cargo test --workspace --locked
+
+      - name: Build release sidecars
+        working-directory: agent-rs
+        run: cargo build --release --locked --workspace
+
+      # The Go agent is the oracle: the same fixture trees go through both implementations and must agree.
+      - name: Differential tests (Go vs Rust)
+        working-directory: agent
+        env:
+          RFE_SIDECAR_DIR: ${{ github.workspace }}/agent-rs/target/release
+        run: go test -race -count=1 -v -run 'Sidecar' ./internal/server ./internal/sidecar
+
   web:
     name: Web companion
     runs-on: ubuntu-24.04

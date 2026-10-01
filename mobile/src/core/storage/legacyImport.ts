@@ -33,8 +33,10 @@ export async function importLegacyState(
 
   const raw = legacyPrefs[HOSTS_KEY];
   if (raw === undefined) {
+    // No computers saved, but the settings, favorites and bookmarks of an earlier install still carry over.
+    const copied = await copyOwnedPrefs(legacyPrefs, kv);
     await kv.set(IMPORT_DONE_KEY, '1');
-    return { status: 'nothing-to-import', hosts: 0, needRepair: [], skippedRecords: 0 };
+    return { status: copied > 0 ? 'imported' : 'nothing-to-import', hosts: 0, needRepair: [], skippedRecords: 0 };
   }
 
   let entries: unknown[] = [];
@@ -73,14 +75,26 @@ export async function importLegacyState(
   const existingIds = new Set(existing.map((x) => (x as { id?: string }).id));
   const merged = [...existing, ...hosts.filter((h) => !existingIds.has(h.id)).map(hostToJson)];
   await kv.set(HOSTS_KEY, JSON.stringify(merged));
-  // Non-secret state under the app's own key prefixes (settings, favorites, bookmarks, pins, sync rules, ...).
-  // Values arrive JSON-encoded from the native reader and keep their Flutter key names, so the RN
-  // settings/feature stores read them unchanged. The host list has its own merge above.
+  await copyOwnedPrefs(legacyPrefs, kv);
+  await kv.set(IMPORT_DONE_KEY, '1');
+  return { status: 'imported', hosts: hosts.length, needRepair, skippedRecords: skipped };
+}
+
+/**
+ * Non-secret state under the app's own key prefixes (settings, favorites, bookmarks, pins, sync rules, ...).
+ * Values arrive JSON-encoded from the native reader and keep their Flutter key names, so the RN
+ * settings/feature stores read them unchanged. The host list has its own merge. Never overwrites a
+ * key the RN app already has; returns how many keys it copied.
+ */
+async function copyOwnedPrefs(legacyPrefs: Record<string, string>, kv: KeyValueStore): Promise<number> {
+  let copied = 0;
   for (const [k, v] of Object.entries(legacyPrefs)) {
     if (k === HOSTS_KEY || !OWNED_PREFIXES.some((p) => k.startsWith(p))) continue;
     if (k.startsWith('rfe_last_seen_') && !/^[0-9]+$/.test(v)) continue;
-    if ((await kv.get(k)) === null) await kv.set(k, v);
+    if ((await kv.get(k)) === null) {
+      await kv.set(k, v);
+      copied++;
+    }
   }
-  await kv.set(IMPORT_DONE_KEY, '1');
-  return { status: 'imported', hosts: hosts.length, needRepair, skippedRecords: skipped };
+  return copied;
 }

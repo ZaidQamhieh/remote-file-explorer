@@ -7,6 +7,19 @@ const h1 = { id: 'h1', label: 'A', address: 'a:1', certFingerprint: 'a'.repeat(6
 const h2 = { id: 'h2', label: 'B', address: 'b:1' };
 const legacy = { [HOSTS_KEY]: JSON.stringify([JSON.stringify(h1), JSON.stringify(h2), 'garbage']) };
 
+describe('importLegacyState without saved computers', () => {
+  it('still carries over settings and favorites', async () => {
+    const kv = new MemoryKeyValueStore();
+    const prefs = { 'app.themeMode': '"dark"', bookmarks_v1: '["{}"]', unrelated: '1' };
+    const r = await importLegacyState(prefs, kv, new MemorySecureStore());
+    expect(r).toEqual({ status: 'imported', hosts: 0, needRepair: [], skippedRecords: 0 });
+    expect(kv.data.get('app.themeMode')).toBe('"dark"');
+    expect(kv.data.get('bookmarks_v1')).toBe('["{}"]');
+    expect(kv.data.has('unrelated')).toBe(false);
+    expect(kv.data.has(HOSTS_KEY)).toBe(false);
+  });
+});
+
 describe('importLegacyState', () => {
   it('imports hosts, flags those without secure pin/token for re-pair, never trusts the metadata mirror', async () => {
     const kv = new MemoryKeyValueStore();

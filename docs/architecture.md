@@ -4,7 +4,7 @@
 
 Two components plus a shared contract:
 
-- **`app/`** — Flutter mobile app (Android-focused, v1.42+). All UI + client orchestration.
+- **`mobile/`** — React Native (Expo) Android app. All UI + client orchestration.
 - **`agent/`** — Go host service on each Windows/macOS/Linux computer. Owns filesystem access, the
   transfer engine, search, thumbnails, settings, and the device/token store.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow (source of truth).
@@ -23,7 +23,7 @@ project currently has **no cloud relay or cloud database**.
 
 | Area | Decision |
 |------|----------|
-| Mobile framework | Flutter (Riverpod, dio, flutter_secure_storage) |
+| Mobile framework | React Native (Expo, Expo Router, TypeScript) + a Kotlin Expo module |
 | Backend | Custom Go host agent — single static binary, runs as a service |
 | Connection routes | LAN, optional Tailscale, then a user-configured direct HTTPS address; no built-in relay |
 | Agent discovery | Agent-side `_rfe._tcp` advertisement; Android app performs an explicit, bounded mDNS scan and lists IPv4 candidates |
@@ -116,53 +116,22 @@ See `../protocol/openapi.yaml` for the full API surface.
 > **Keep it current:** when you add/move/split a file, update its row in the same commit.
 > Line counts are rough size hints, not exact.
 
-## App — `app/lib/`
+## App: `mobile/`
 
-### Hub files (touched most often — know these first)
+React Native (Expo, Expo Router, TypeScript), Android only. Routes live in `mobile/src/app/`; everything else is
+outside it:
 
-| File | Responsibility |
-|------|----------------|
-| `core/api/agent_client.dart` (~840) | **The one pinned HTTP client.** App-agent requests use Dio, verify the secure-store/out-of-band certificate pin before request data is sent, and add the bearer token only for pinned hosts. |
-| `features/explorer/explorer_state.dart` (~590) | **`ExplorerNotifier`** — the state hub. Every explorer mutation (navigate, select, sort, refresh, file ops) goes through it; widgets never call `AgentClient` directly. |
-| `features/explorer/explorer_screen.dart` (~950) | The central browse UI (list/grid, breadcrumb, selection, drag, view options) — wires widgets to `ExplorerNotifier`. |
-| `core/settings/settings_controller.dart` (~480) | Two-tier settings: app defaults + per-device overrides; the resolution logic both screens read. |
-
-### `core/` — shared infrastructure
-
-| Area | Files | Responsibility |
+| Area | Where | Responsibility |
 |------|-------|----------------|
-| api | `api/providers.dart` | Riverpod providers exposing `AgentClient` + derived state. |
-| backup | `backup/{backup_service,config_backup}.dart` | Full-app backup/restore + settings-only config export/import. |
-| models | `models/{entry,listing,device,health,drive,host,host_app,pair_response,search_result,upload_session,agent_settings,app_release,agent_status,archive_entry,bandwidth_settings,batch_result,share_link,trash_entry}.dart` | Hand-written JSON DTOs (candidate for codegen — Track 2). |
-| notifications | `notifications/notification_service.dart` | Local notification channel setup + dispatch (transfer progress/completion). |
-| platform | `platform/{file_opener,transfer_notifications,wol}.dart` | Platform-channel glue: open-with, native transfer notifications, Wake-on-LAN send. |
-| security | `security/device_identity.dart` | Generates/persists the phone's device identity keypair (paired token binding). |
-| settings | `settings/{app_settings.dart, settings_controller.dart}` | Settings model + the two-tier controller. |
-| storage | `storage/{host_store,favorites,bookmark_store,pin_store,listing_cache,offline_body_cache,cache_manager,recent_searches,saved_searches,sync_rules,transfer_journal,transfer_queue_store,view_prefs,visibility_prefs,download_saver}.dart` | Local persistence (hosts, favorites/bookmarks/pins, offline listing + body cache, search history, sync rules, transfer queue/journal, prefs, Downloads saver). |
-| theme | `theme/{tokens,app_theme,motion}.dart` | `Brand`/`Spacing`/`Radii`/`Elevations`, M3 theme, motion helpers. Skia-only (Impeller off). |
-| ui | `ui/{format,feedback,entry_leading,state_views}.dart` | Shared `formatSize`/`formatDate` (**use these, no local dupes**), snackbar/haptic toolkit, file-type leading icons, empty/error/loading views. |
-| update | `update/update_service.dart` | OTA updater client (`/v1/app/latest` + `/v1/app/download`). |
-| misc | `app_info.dart`, `main.dart` | App version/info; app entrypoint + router. |
-| l10n | `l10n/app_en.arb` (+ `l10n/generated/`) | Flutter gen-l10n source strings + generated localization delegate. |
+| core | `src/core/{api,security,storage,models}` | The one pinned agent client (`api/agentClient.ts`), TLS pin and token storage, models, legacy Flutter data import (`storage/legacyImport.ts`). |
+| design | `src/design/` | Lumen tokens and shared components. |
+| features | `src/features/<name>/` | One folder per screen or domain: hosts, pairing, explorer, transfers, preview, search, settings, photoBackup, update, and so on. |
+| state | `src/state/` | App state stores. |
+| i18n | `src/i18n/` | Strings (`en.json`). |
+| native | `mobile/modules/rfe-transport/` | Kotlin Expo module: pinned-TLS transport, uploads, MediaStore, FileProvider, package installer. |
+| config | `mobile/plugins/withRfeAndroid.js`, `app.json` | Config plugin for the generated `android/` project (never committed). |
 
-### `features/` — one folder per screen/domain
-
-| Feature | Key files | Responsibility |
-|---------|-----------|----------------|
-| home | `home_shell.dart`, `home_state.dart`, `widgets/app_bottom_nav.dart` | Top-level app shell + bottom nav tab state, hosting the other feature screens. |
-| hosts | `host_list_screen.dart`, `host_apps_screen.dart`, `widgets/{host_card,storage_gauge}.dart` | The computer list, per-host card/storage gauge, and host app catalog/Run screen. |
-| explorer | (hub files above) + `host_root_view.dart`, `meta_sheet.dart`, `thumbnail_image.dart`, `drives_view.dart`, `clipboard_state.dart`, `destination_picker_state.dart`, `widgets/*` | File browser. `host_root_view.dart` resolves the caller's allowed roots before browsing; `clipboard_state` = cut/copy/paste (Wave G2). `widgets/`: breadcrumb, entry tile/grid cell, selection bar, conflict dialog, create/batch-rename menus, chmod dialog, favorites, view options, drag, batch report. `destination_picker_*` kept but unused since clipboard replaced it. |
-| bookmarks | `bookmarks_screen.dart` | Saved-path bookmarks list (backed by `core/storage/bookmark_store.dart`). |
-| preview | `preview.dart` (dispatcher) + `{image,pdf,text,video}_preview.dart`, `text_editor.dart`, `preview_actions.dart`, `preview_common.dart`, `preview_image_cache.dart` | Media preview + in-app text editor (PUT `/v1/content`, Wave G1). |
-| search | `search_screen.dart`, `search_logic.dart` | Remote search UI + query/debounce logic. |
-| settings | `settings_screen.dart`, `app_settings_screen.dart`, `appearance_settings_screen.dart`, `file_visibility_screen.dart`, `notifications_settings_screen.dart`, `storage_security_settings_screen.dart`, `transfers_backup_settings_screen.dart`, `about_screen.dart`, `about_support_settings_screen.dart`, `update_banner.dart`, `update_tile.dart`, `widgets/{backup_restore_section,device_file_access_controls,settings_hero,settings_picker,settings_section,settings_tile}.dart` | Per-device settings and independent file-action grants, app-default settings, appearance/visibility/notifications/storage/backup sub-screens, OTA update tile/banner, about screen. |
-| transfers | `transfer_manager.dart`, `transfer_state.dart`, `chunk_planner.dart`, `transfer_speed.dart`, `widgets/mini_transfer_bar.dart` | Transfer queue/center: manager orchestration, state, chunk planning, speed/ETA, mini bar. |
-| pairing | `pairing_screen.dart`, `lan_discovery.dart` | QR, manual, and Android LAN discovery entry points; discovery feeds into the existing pinned pairing flow. |
-| handoff | `qr_generate_screen.dart`, `qr_scan_screen.dart` | Device-to-device handoff via QR (distinct from agent pairing). |
-| onboarding | `onboarding_screen.dart` | First-run intro flow. |
-| photo_backup | `photo_backup_controller.dart`, `photo_backup_logic.dart`, `photo_backup_prefs.dart`, `photo_backup_screen.dart` | Camera-roll auto-backup to a host: controller/logic split, prefs, settings UI. |
-| share | `share_intake.dart`, `share_sheet.dart` | Receives OS share-sheet intents into the app; app's own outbound share sheet. |
-| sync | `sync_runner.dart`, `sync_screen.dart` | Background two-way folder sync runner + its status/config UI. |
+Port notes and gaps: `docs/rn-migration/ledger.md`. The old Flutter source is in git history at tag `v1.42.5`.
 
 ## Agent — `agent/`
 
@@ -220,6 +189,5 @@ See `../protocol/openapi.yaml` for the full API surface.
 ## Test → source map (used by `scripts/test-affected.sh`)
 
 Go tests sit beside their package (`*_test.go`), so a changed Go file maps to `go test` on its
-own directory. Flutter has no cheap per-file mapping, so any change under `app/` runs the full
-`flutter test` suite locally; trust CI for the rest. A change to `protocol/openapi.yaml` is
+own directory. For `mobile/`, run the affected jest files (`npx jest <path>`); trust CI for the rest. A change to `protocol/openapi.yaml` is
 treated as affecting **both** sides.

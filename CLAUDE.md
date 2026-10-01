@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A phone-as-file-explorer for your own PCs. Two components plus one shared contract:
 
-- **`app/`** — Flutter (Android-first) mobile app. All UI + client orchestration.
+- **`mobile/`** — React Native (Expo, Android-only) app. All UI + client orchestration. The Flutter app it replaced
+  (v1.42.x) is in git history at tag `v1.42.5`.
 - **`agent/`** — Go host service running on each Windows/Linux PC. Owns filesystem
   access, the transfer engine, search, thumbnails, settings, and the device/token store.
 - **`protocol/openapi.yaml`** — the REST contract both sides follow. **Source of truth.**
@@ -41,20 +42,22 @@ Unrestricted filesystem access must be explicitly selected with an empty `-roots
 settings; existing saved root policies are preserved.
 Smoke test: `curl -sk https://127.0.0.1:8765/v1/health`
 
-### App (Flutter 3.44.2 / Dart 3.12, in `app/`)
+### App (React Native / Expo 57, in `mobile/`)
 ```sh
-flutter pub get
-flutter analyze                  # must be clean
-flutter test                     # full suite
-flutter test test/path/foo_test.dart                 # single file
-flutter test --plain-name "description substring"     # single test by name
-flutter run                      # enter agent host:port on the connect screen
+npm ci
+npx tsc --noEmit                 # typecheck
+npx eslint .                     # lint
+npx jest                         # full suite (the live contract suite skips itself without an agent)
+npx jest path/to/foo.test.ts     # single file
+RFE_AGENT_BIN=<built agent> npx jest contract   # live contract test against a real agent
+(cd android && ./gradlew :rfe-transport:testReleaseUnitTest)   # JVM tests of the Kotlin module (after `npx expo prebuild`)
+npx expo run:android             # dev build; enter agent host:port on the connect screen
 ```
 
 ### Release (OTA APK)
-The Android app is `mobile/` (React Native); `app/` (Flutter) is the legacy v1.42 line. Set `expo.version` and
+The Android app is `mobile/` (React Native). Set `expo.version` and
 `expo.android.versionCode` in `mobile/app.json` (the code **must increase every release**: OTA detection compares
-`versionCode`, and it must stay above the Flutter build's 80), commit, push, then tag `vX.Y.Z` (becomes the Latest
+`versionCode`, and it started above the Flutter build's 80 and is 81 for v2.0.0), commit, push, then tag `vX.Y.Z` (becomes the Latest
 release) or `vX.Y.Z-rc.N` (pre-release, never Latest) and push the tag. `.github/workflows/release.yml` runs the CI
 gates, builds and signs the APK with the production key from repo secrets, checks the signing certificate, and
 publishes the GitHub Release plus `latest.json` that the app's updater reads (`releases/latest`). A push to an
@@ -92,12 +95,13 @@ downloads use HTTP Range with resume from last offset. Both support parallelism.
 
 **Layout:**
 ```
-app/lib/core/      api client, models, storage, theme, ui, update
-app/lib/features/  hosts, explorer, transfers, preview, pairing, search, settings
+mobile/src/app/    Expo Router routes (screens only)
+mobile/src/core/   pinned agent client, security, storage, models
+mobile/src/features/  hosts, explorer, transfers, preview, pairing, search, settings, photoBackup, update ...
+mobile/modules/rfe-transport/   Kotlin Expo module (pinned TLS, uploads, MediaStore, installer)
 agent/cmd/agent/   main daemon + admin.go (CLI subcommands)
 agent/internal/    server (incl. search), fsops, transfer, thumbs, pairing, store,
                    security, settings, updates, mdns, netinfo
-agent/internal/mdns/    mDNS/DNS-SD advertise + discover (zeroconf) — implemented
 agent/internal/webui/   web companion; edit the Vite + React + TypeScript SPA in web/src/
                         (`web/package.json`; build with `cd agent/internal/webui/web && npm run build`)
                         to generate ../dist/, which Go embeds into the agent binary; do not edit dist/ directly
@@ -106,35 +110,30 @@ protocol/openapi.yaml        shared REST contract
 
 ## Hard constraints (do not violate)
 
-- **Impeller is DISABLED** (`AndroidManifest.xml` sets `EnableImpeller=false`) due to
-  3.29 glyph-atlas corruption on the owner's Samsung Mali/Xclipse GPU. The app renders on
-  **Skia** — avoid expensive per-frame blurs/shaders; prefer cheap M3 surfaces and
-  opacity/transform animations.
-- **Riverpod stays on 2.x** (`flutter_riverpod ^2.6.1`, Notifier API). **Do not migrate
-  to Riverpod 3.**
-- **Android-first.** Don't break the OTA updater flow (`app/lib/core/update/`,
-  `update_tile.dart`). No iOS work.
+- **Android-first.** Don't break the OTA updater flow (`mobile/src/features/update/`; the app reads
+  `releases/latest/download/latest.json`, so the newest *app* release must hold the Latest flag). No iOS work.
+- **`android/` is generated** (Expo CNG) and never committed: change native config in `mobile/app.json` and
+  `mobile/plugins/withRfeAndroid.js`.
 - **OpenAPI is the contract:** any agent API change ships its `protocol/openapi.yaml`
   edit **in the same commit**. The spec drifted once — don't repeat it.
-- Preserve behavior on the rebuilt transfer engine, TOFU pinning, and pairing flow.
+- Preserve behavior of the transfer engine, TOFU pinning, and the approve-on-PC pairing flow.
+- Same package id and release keystore as the Flutter app, so updates install in place. Never change either.
 
 ## Conventions
 
-- **All explorer state changes go through the notifier** (`ExplorerNotifier`) — widgets
-  don't call `AgentClient` directly.
-- **One formatter:** use the shared `formatSize`/`formatDate` in `core/ui/` — do not
-  reintroduce local `_formatSize` duplicates.
+- **All network calls go through the one pinned agent client** (`mobile/src/core/api/agentClient.ts`); screens
+  don't build requests themselves.
 - **Per-wave commits:** a `feat:` commit, then a separate `fix:` commit for review fixes.
 - **Auto commit/push/release, no permission-asking:** once a change is done and
-  verified (tests/analyze green), commit and push it without stopping to ask first —
+  verified (tests green), commit and push it without stopping to ask first —
   same for tagging and pushing a release (`vX.Y.Z`). Owner said the back-and-forth
   wastes time. Still stop for genuinely destructive/irreversible git ops outside this
   scope (force-push, reset --hard, branch delete).
 
 ## Token-discipline workflow (follow this — CI is free, local re-runs are not)
 
-CI (`.github/workflows/ci.yml`) runs the full suite (`go vet` + `go test`, `flutter
-analyze` + `flutter test`) free in the cloud on every push to master/main. Therefore:
+CI runs the full suites free in the cloud: `ci.yml` (agent: `go vet` + `go test`, cross-builds, OpenAPI lint) and
+`mobile.yml` (tsc, eslint, jest, contract test, JVM tests); `release.yml` calls both before building. Therefore:
 
 - **Run only the directly-affected test files locally** as a sanity check, then push and
   **trust CI** for the full green. Never run the whole suite 3× (local + sub-agent + CI)
@@ -146,9 +145,9 @@ analyze` + `flutter test`) free in the cloud on every push to master/main. There
 ## Local hooks (Lefthook — runs the checks so I don't have to)
 
 One-time after clone: `go install github.com/evilmartians/lefthook@latest && lefthook install`.
-- **pre-commit** (staged files, fast): `dart format` check, `flutter analyze`, `gofmt` check, `go vet`.
-- **pre-push** (changed side only): `go test` / `flutter test`. CI is the full-suite backstop.
-Config: `lefthook.yml` (+ `.lefthook-rc` puts go/flutter on PATH for IDE-launched hooks).
+- **pre-commit** (staged files, fast): `gofmt` check, `go vet`.
+- **pre-push** (changed side only): `go test`. CI is the full-suite backstop.
+Config: `lefthook.yml` (+ `.lefthook-rc` puts go on PATH for IDE-launched hooks).
 Bypass once if needed: `LEFTHOOK=0 git commit …`.
 
 ## Ops (host-side — moved from global ~/.claude/CLAUDE.md, 2026-07-02)

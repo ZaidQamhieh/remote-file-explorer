@@ -4,8 +4,7 @@ A mobile app that turns your phone into a full graphical file explorer for your 
 Linux computers — browse, manage, and transfer files over a Finder/Explorer-style GUI, with no SSH
 or terminal required.
 
-- **`mobile/`** — React Native (Expo) Android app, the successor to the Flutter app (see `docs/upgrade-to-react-native.md`)
-- **`app/`** — Flutter mobile app (Android-focused), the v1.42 line the React Native app upgrades in place
+- **`mobile/`** — React Native (Expo) Android app; it upgrades the old Flutter v1.42 app in place (see `docs/upgrade-to-react-native.md`)
 - **`agent/`** — Go host service that runs on each Windows/macOS/Linux computer
 - **`protocol/`** — OpenAPI 3 contract shared by both sides (source of truth)
 - **`docs/`** — architecture and setup guides
@@ -25,7 +24,7 @@ the full architecture.
 
 The agent serves the v1 API for directory browsing, resumable transfers, search, previews, settings,
 paired-device management, and in-app Android updates. Windows, Linux, and macOS hosts also expose a
-permission-controlled app catalog and launch action. The Flutter app (currently v1.42.x) covers
+permission-controlled app catalog and launch action. The Android app covers
 these features with a Finder/Explorer-style UI and self-updates over the air.
 
 ## Pairing

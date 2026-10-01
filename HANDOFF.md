@@ -11,7 +11,7 @@
 A **phone-as-file-explorer for your PC**, over LAN or Tailscale.
 
 - **Host agent** (Go) runs on the PC, serves a file API over TLS to paired phones.
-- **Mobile app** (Flutter, Android-focused) browses/transfers files, previews media,
+- **Mobile app** (React Native, Android-focused) browses/transfers files, previews media,
   and self-updates over-the-air from the agent.
 
 No cloud. Pairing is TOFU (trust-on-first-use) cert pinning + a bearer token per device.
@@ -32,13 +32,12 @@ Repo root: `~/Storage/Projects/remote-file-explorer`
   - Needs `export XDG_RUNTIME_DIR="/run/user/$(id -u)"` for `systemctl --user`.
 - Build/run: `export PATH="$HOME/.local/go/bin:$PATH"`, work from `agent/`.
 
-### Mobile app (`app/`)
-- **Flutter**, **Riverpod 2.6.1** (PINNED — never 3.x), `dio`, `flutter_secure_storage`.
-- All network/content fetches go through the **pinned `AgentClient`** (no raw dio elsewhere).
-- Native Android bits via MethodChannel `rfe/downloads`:
-  `saveToDownloads`, `installApk` (FileProvider + ACTION_VIEW), `getDeviceId` (Settings.Secure.ANDROID_ID).
-- Build/run: `export PATH="$HOME/flutter/bin:$PATH"`, work from `app/`.
-- applicationId: `com.zqamhieh.remote_file_explorer`
+### Mobile app (`mobile/`)
+- **React Native** (Expo, Expo Router, TypeScript) with a local Kotlin Expo module, `mobile/modules/rfe-transport`.
+- All network/content fetches go through the **pinned agent client** (`mobile/src/core/api/agentClient.ts`).
+- Native Android bits (pinned-TLS transport, uploads, MediaStore saves, FileProvider, package installer) live in the module.
+- Build/run: work from `mobile/`; see `docs/development.md` and the Release section of `CLAUDE.md`.
+- applicationId: `com.zqamhieh.remote_file_explorer`. The Flutter app it replaced is in git history at tag `v1.42.5`.
 
 ### Contract
 - Contract-first **OpenAPI** at `protocol/openapi.yaml`. Change the spec, then implement.
@@ -161,17 +160,16 @@ systemctl --user restart rfe-agent
 systemctl --user status rfe-agent
 
 # --- App ---
-export PATH="$HOME/flutter/bin:$PATH"
-cd ~/Storage/Projects/remote-file-explorer/app
-flutter analyze lib/ && flutter test
-flutter build apk --debug          # or: ../release.sh X.Y.Z+N to publish an OTA
+cd ~/Projects/rfe-rn/mobile
+npx tsc --noEmit && npx eslint . && npx jest
+# Signed release APK: scripts/build-release-apk.sh; publishing is a tag push (CLAUDE.md, Release)
 
 # --- Pair the phone (current next step) ---
 ~/.local/bin/rfe-agent pair         # scan the QR in the app: Add computer → Scan QR
 ```
 
 Tests currently green: Go (store/server/settings/updates incl. pairing-code lifecycle &
-prefix-resolve), Flutter (~43 tests, analyze clean, Riverpod held at 2.6.1).
+prefix-resolve), the React Native app (jest, tsc and eslint clean).
 
 ---
 

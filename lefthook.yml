@@ -1,10 +1,10 @@
-# Git hooks for the Go + Flutter monorepo, managed by Lefthook.
+# Git hooks for the Go agent + React Native monorepo, managed by Lefthook.
 # https://github.com/evilmartians/lefthook
 #
 # Setup once after clone:   lefthook install
 # Run manually any time:    lefthook run pre-commit   /   lefthook run pre-push
 #
-# rc sources the PATH for go/flutter/dart so hooks work even when launched from an
+# rc sources the PATH for go so hooks work even when launched from an
 # IDE or a non-login shell.
 rc: ./.lefthook-rc
 
@@ -13,14 +13,6 @@ rc: ./.lefthook-rc
 pre-commit:
   parallel: true
   commands:
-    dart-format:
-      root: "app/"
-      glob: "*.dart"
-      run: dart format --output=none --set-exit-if-changed {staged_files}
-    flutter-analyze:
-      root: "app/"
-      glob: "*.dart"
-      run: flutter analyze --no-fatal-infos
     gofmt:
       root: "agent/"
       glob: "*.go"
@@ -39,7 +31,3 @@ pre-push:
       root: "agent/"
       glob: "*.go"
       run: go test ./...
-    flutter-test:
-      root: "app/"
-      glob: "*.dart"
-      run: flutter test

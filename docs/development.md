@@ -5,9 +5,7 @@
 - **Go (agent):** `agent/go.mod` requires Go 1.26.0 or newer. CI and host releases use Go 1.26.6
   (`.github/workflows/ci.yml` and `.github/workflows/agent-release.yml`) so builds use the patched
   standard library and can install the current `govulncheck` release.
-- **Flutter (app):** `app/pubspec.yaml` requires Dart `^3.7.0`; it does not declare a minimum
-  Flutter version. CI currently uses Flutter 3.44.2 (`.github/workflows/ci.yml`), which is the
-  recommended local version when you want to match CI.
+- **Node (app):** Node 22 and npm; JDK 21 for Android builds (CI uses both). The app is `mobile/`.
 
 If Go is installed at `~/.local/go`, add it to your PATH (e.g. in `~/.bashrc`):
 
@@ -59,10 +57,10 @@ busy-timeout so concurrent daemon + CLI writes are safe).
 ## App
 
 ```sh
-cd app
-flutter pub get
-flutter analyze
-flutter run        # enter the agent's host:port on the connection screen
+cd mobile
+npm ci
+npx tsc --noEmit && npx eslint . && npx jest
+npx expo run:android     # dev build; enter the agent's host:port on the connect screen
 ```
 
 Note: the app verifies the agent's self-signed certificate against a SHA-256 fingerprint before
@@ -75,8 +73,8 @@ the legacy copy in SharedPreferences; re-pair the host to store a secure pin aga
 ## Layout
 
 ```
-app/lib/core/      api client, models, storage
-app/lib/features/  hosts, explorer, transfers, preview, pairing, settings
+mobile/src/core/      api client, models, storage
+mobile/src/features/  hosts, explorer, transfers, preview, pairing, settings
 agent/cmd/agent/   main (daemon) + admin.go (pair/devices/revoke/remove/status CLI)
 agent/internal/    server, fsops, transfer, search, thumbs, pairing, store, security, settings, updates, mdns
 protocol/          openapi.yaml (shared contract)

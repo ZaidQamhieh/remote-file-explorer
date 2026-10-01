@@ -9,15 +9,7 @@
 agent.db
 agent.db-*
 
-# Flutter / Dart
-/app/.dart_tool/
-/app/.flutter-plugins
-/app/.flutter-plugins-dependencies
-/app/build/
-/app/.idea/
-/app/ios/Pods/
-/app/android/.gradle/
-/app/**/GeneratedPluginRegistrant.*
+# IDE module files
 *.iml
 
 # OS / editor
@@ -26,7 +18,7 @@ Thumbs.db
 .vscode/
 # JetBrains project state: generated per-machine (SDK paths, device caches,
 # resolved Dart packages), so it churns for every user and is regenerated on
-# open. /app/.idea/ was already ignored; the root one was tracked by oversight.
+# open.
 /.idea/
 
 # Agent worktrees (local scratch space, never commit)

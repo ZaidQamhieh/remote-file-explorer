@@ -1,7 +1,7 @@
 name: CI
 
 # Pushes to master and rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
-# them here too would do every check twice. Changes that cannot affect the agent or the Flutter app skip it.
+# them here too would do every check twice. Changes that cannot affect the agent skip it.
 on:
   push:
     branches: [main]
@@ -131,30 +131,3 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Redocly lint (fail on errors)
         run: npx --yes @redocly/cli@latest lint protocol/openapi.yaml
-
-  app:
-    name: App (Flutter)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: app
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          cache: true
-          flutter-version: "3.44.2"
-
-      - name: flutter pub get
-        run: flutter pub get
-
-      - name: dart format check
-        run: dart format --output=none --set-exit-if-changed .
-
-      - name: flutter analyze
-        run: flutter analyze
-
-      - name: flutter test
-        run: flutter test

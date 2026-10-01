@@ -33,3 +33,6 @@ Thumbs.db
 # Web companion build tooling (compiled output ships in dist/)
 /agent/internal/webui/node_modules/
 /agent/internal/webui/web/node_modules/
+
+# Rust sidecars
+/agent-rs/target/

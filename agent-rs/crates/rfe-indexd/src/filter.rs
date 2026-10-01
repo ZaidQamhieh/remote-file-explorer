@@ -78,6 +78,7 @@ pub struct Filters {
 pub struct Compiled {
     glob: String,
     needle: String,
+    needle_ascii: bool,
     types: Option<HashSet<String>>,
     exts: Option<HashSet<String>>,
     min_size: Option<i64>,
@@ -88,9 +89,11 @@ pub struct Compiled {
 
 impl Compiled {
     pub fn new(f: Filters) -> Self {
+        let needle = f.needle.to_lowercase();
         Compiled {
             glob: f.glob.to_lowercase(),
-            needle: f.needle.to_lowercase(),
+            needle_ascii: needle.is_ascii(),
+            needle,
             types: f.types.map(|v| v.into_iter().collect()),
             exts: f.exts.map(|v| v.into_iter().collect()),
             min_size: f.min_size,
@@ -106,6 +109,21 @@ impl Compiled {
             return self.match_lower(name);
         }
         self.match_lower(&name.to_lowercase())
+    }
+
+    /// `match_name` for the query hot path: `ascii` says the name is pure ASCII (known from the index), so it is
+    /// compared without allocating; `buf` is scratch space reused across calls.
+    pub fn match_name_fast(&self, name: &str, ascii: bool, buf: &mut String) -> bool {
+        if !ascii {
+            return self.match_lower(&name.to_lowercase());
+        }
+        if self.glob.is_empty() && self.needle_ascii {
+            return contains_ignore_ascii_case(name.as_bytes(), self.needle.as_bytes());
+        }
+        buf.clear();
+        buf.push_str(name);
+        buf.make_ascii_lowercase();
+        self.match_lower(buf)
     }
 
     fn match_lower(&self, lower: &str) -> bool {
@@ -145,6 +163,24 @@ impl Compiled {
         }
         true
     }
+}
+
+/// `haystack` contains `needle` (already lowercase ASCII), ignoring ASCII case.
+fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
+    let Some((&first, rest)) = needle.split_first() else {
+        return true;
+    };
+    if needle.len() > haystack.len() {
+        return false;
+    }
+    let last_start = haystack.len() - needle.len();
+    (0..=last_start).any(|i| {
+        haystack[i].to_ascii_lowercase() == first
+            && haystack[i + 1..i + needle.len()]
+                .iter()
+                .zip(rest)
+                .all(|(h, n)| h.to_ascii_lowercase() == *n)
+    })
 }
 
 /// A root is matched by exact path or by the path-boundary prefix, exactly like Go's `underAnyRootScopes`.

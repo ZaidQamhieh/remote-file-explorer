@@ -13,6 +13,7 @@ use std::time::Instant;
 const NO_CHILD: u32 = u32::MAX;
 const FLAG_DIR: u8 = 1;
 const FLAG_SYMLINK: u8 = 2;
+const FLAG_ASCII: u8 = 4;
 /// Fixed cost per record plus a rough allowance for the chunk's own allocations.
 const REC_BYTES: usize = std::mem::size_of::<Rec>();
 const CHUNK_OVERHEAD: usize = 96;
@@ -78,8 +79,36 @@ pub struct Limits {
     pub max_bytes: usize,
 }
 
+/// A run of consecutive records of one chunk that are adjacent in depth-first order. Queries scan groups of
+/// segments in parallel and join the results in order.
+#[derive(Debug, Clone, Copy)]
+struct Seg {
+    pos: u32,
+    start: u32,
+    end: u32,
+}
+
+/// Lets a parallel scan stop work that an earlier group has made unnecessary.
+#[derive(Clone, Copy)]
+struct Gate<'a> {
+    n: usize,
+    done_at: &'a AtomicUsize,
+}
+
+impl Gate<'_> {
+    fn superseded(&self) -> bool {
+        self.done_at.load(Ordering::Relaxed) < self.n
+    }
+
+    fn reached(&self) {
+        self.done_at.fetch_min(self.n, Ordering::Relaxed);
+    }
+}
+
 #[derive(Debug)]
 pub struct Index {
+    /// The visible entries as runs, in depth-first order.
+    segs: Vec<Seg>,
     chunks: Vec<Chunk>,
     /// Chunk id -> position in `chunks` (`NO_CHILD` for a directory that could not be listed).
     id_to_pos: Vec<u32>,
@@ -147,7 +176,7 @@ impl Visitor for Builder<'_> {
         for raw in raws {
             let st = stat_of(&raw.meta);
             let is_symlink = raw.meta.file_type().is_symlink();
-            let mut flags = 0u8;
+            let mut flags = if raw.name.is_ascii() { FLAG_ASCII } else { 0 };
             let mut is_dir = raw.meta.is_dir();
             let mut link_target = String::new();
             if is_symlink {
@@ -235,6 +264,7 @@ impl Index {
             .map(|(p, id)| (p, id_to_pos.get(id as usize).copied().unwrap_or(NO_CHILD)))
             .collect();
         let mut idx = Index {
+            segs: Vec::new(),
             chunks,
             id_to_pos,
             roots,
@@ -243,11 +273,12 @@ impl Index {
         };
         let (visible, bytes, truncated) = idx.apply_budget(limits, b.over.load(Ordering::Relaxed));
         idx.visible = visible;
+        idx.segs = idx.segments(visible);
         idx.stats = Stats {
             entries: visible,
             truncated,
             build_ms: started.elapsed().as_millis() as u64,
-            bytes,
+            bytes: bytes + idx.segs.len() * std::mem::size_of::<Seg>(),
         };
         idx
     }
@@ -273,8 +304,17 @@ impl Index {
         (entries, real, truncated)
     }
 
-    /// Depth-first, name-sorted traversal over every root. The callback returns false to stop.
+    /// `dfs` that hands out the chunk's position instead of the chunk.
+    fn dfs_pos<F: FnMut(u32, usize) -> bool>(&self, mut f: F) {
+        self.dfs_raw(|pos, _, i| f(pos, i));
+    }
+
     fn dfs<F: FnMut(&Chunk, usize) -> bool>(&self, mut f: F) {
+        self.dfs_raw(|_, chunk, i| f(chunk, i));
+    }
+
+    /// Depth-first, name-sorted traversal over every root. The callback returns false to stop.
+    fn dfs_raw<F: FnMut(u32, &Chunk, usize) -> bool>(&self, mut f: F) {
         for (_, root_pos) in &self.roots {
             if *root_pos == NO_CHILD {
                 continue;
@@ -287,7 +327,7 @@ impl Index {
                 }
                 // Resume this directory after the current entry once its subtree is done.
                 stack.push((pos, i + 1));
-                if !f(chunk, i) {
+                if !f(pos, chunk, i) {
                     return;
                 }
                 let child = chunk.recs[i].child;
@@ -309,6 +349,80 @@ impl Index {
         self.stats.entries == 0
     }
 
+    /// The first `visible` entries as depth-first runs.
+    fn segments(&self, visible: usize) -> Vec<Seg> {
+        let mut segs: Vec<Seg> = Vec::new();
+        let mut seen = 0usize;
+        self.dfs_pos(|pos, i| {
+            if seen >= visible {
+                return false;
+            }
+            seen += 1;
+            match segs.last_mut() {
+                Some(s) if s.pos == pos && s.end as usize == i => s.end += 1,
+                _ => segs.push(Seg {
+                    pos,
+                    start: i as u32,
+                    end: i as u32 + 1,
+                }),
+            }
+            true
+        });
+        segs
+    }
+
+    /// Scans `segs` in order for matches, stopping once `limit` are found.
+    fn scan(
+        &self,
+        segs: &[Seg],
+        filters: &Compiled,
+        scopes: &RootScopes,
+        limit: usize,
+        gate: Gate<'_>,
+    ) -> Vec<WireEntry> {
+        let mut out: Vec<WireEntry> = Vec::new();
+        let mut buf = String::new();
+        for seg in segs {
+            if gate.superseded() {
+                return out;
+            }
+            let chunk = &self.chunks[seg.pos as usize];
+            for i in seg.start as usize..seg.end as usize {
+                if i % 8192 == 8191 && gate.superseded() {
+                    return out;
+                }
+                let r = &chunk.recs[i];
+                let name = chunk.name(r);
+                if !filters.match_name_fast(name, r.flags & FLAG_ASCII != 0, &mut buf) {
+                    continue;
+                }
+                let is_dir = r.flags & FLAG_DIR != 0;
+                if !filters.match_attrs(name, is_dir, r.size, r.mtime_ns) {
+                    continue;
+                }
+                let path = join_path(&chunk.dir_path, name);
+                if !scopes.contains(&path) {
+                    continue;
+                }
+                out.push(WireEntry {
+                    path,
+                    size: r.size,
+                    mtime_ns: r.mtime_ns,
+                    ctime_ns: r.ctime_ns,
+                    mode: r.mode,
+                    is_dir,
+                    is_symlink: r.flags & FLAG_SYMLINK != 0,
+                    symlink_target: chunk.link_target(i).to_string(),
+                });
+                if out.len() >= limit {
+                    gate.reached();
+                    return out;
+                }
+            }
+        }
+        out
+    }
+
     /// Matches in index order. The bool is true when `limit` was reached or the index itself was truncated.
     pub fn query(
         &self,
@@ -316,42 +430,49 @@ impl Index {
         roots: &[String],
         limit: usize,
     ) -> (Vec<WireEntry>, bool) {
+        use rayon::prelude::*;
         let scopes = RootScopes::new(roots);
+        // Groups of roughly equal entry counts, scanned in parallel; their results are joined in order, so the
+        // answer is the same as a sequential scan.
+        let parts = rayon::current_num_threads().max(1) * 4;
+        let target = (self.visible / parts).max(4096);
+        let mut groups: Vec<&[Seg]> = Vec::new();
+        let (mut from, mut acc) = (0usize, 0usize);
+        for (n, s) in self.segs.iter().enumerate() {
+            acc += (s.end - s.start) as usize;
+            if acc >= target {
+                groups.push(&self.segs[from..=n]);
+                from = n + 1;
+                acc = 0;
+            }
+        }
+        if from < self.segs.len() {
+            groups.push(&self.segs[from..]);
+        }
+        // The lowest group index that already has `limit` matches by itself: later groups cannot contribute.
+        let done_at = AtomicUsize::new(usize::MAX);
+        let parts: Vec<Vec<WireEntry>> = groups
+            .par_iter()
+            .enumerate()
+            .map(|(n, g)| {
+                let gate = Gate {
+                    n,
+                    done_at: &done_at,
+                };
+                self.scan(g, filters, &scopes, limit, gate)
+            })
+            .collect();
         let mut out: Vec<WireEntry> = Vec::new();
         let mut hit_limit = false;
-        let mut seen = 0usize;
-        let visible = self.visible;
-        self.dfs(|chunk, i| {
-            if seen >= visible {
-                return false;
+        'join: for part in parts {
+            for e in part {
+                out.push(e);
+                if out.len() >= limit {
+                    hit_limit = true;
+                    break 'join;
+                }
             }
-            seen += 1;
-            let r = &chunk.recs[i];
-            let name = chunk.name(r);
-            let is_dir = r.flags & FLAG_DIR != 0;
-            if !filters.match_name(name) || !filters.match_attrs(name, is_dir, r.size, r.mtime_ns) {
-                return true;
-            }
-            let path = join_path(&chunk.dir_path, name);
-            if !scopes.contains(&path) {
-                return true;
-            }
-            out.push(WireEntry {
-                path,
-                size: r.size,
-                mtime_ns: r.mtime_ns,
-                ctime_ns: r.ctime_ns,
-                mode: r.mode,
-                is_dir,
-                is_symlink: r.flags & FLAG_SYMLINK != 0,
-                symlink_target: chunk.link_target(i).to_string(),
-            });
-            if out.len() >= limit {
-                hit_limit = true;
-                return false;
-            }
-            true
-        });
+        }
         (out, self.stats.truncated || hit_limit)
     }
 }

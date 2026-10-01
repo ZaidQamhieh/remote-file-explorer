@@ -210,3 +210,5 @@ Empty trust store; exact leaf-cert SHA-256 (lowercase hex) compared in cert call
 ## Live agent upgraded (2026-10-01)
 
 The owner's systemd user service now runs the `rn/migration` agent build (was the earlier build). Backup of the old binary and a SQLite copy of agent.db: `/home/zaid/.rfe-agent/backup-20261001-124637`. Rollback: copy `rfe-agent.old` back to `~/.local/bin/rfe-agent`, restore `agent.db` if the schema moved, `systemctl --user restart rfe-agent`. Verified: `/v1/health` ok, A53 reconnects, folder rows show live counts ("Folder · 600 items", "1 item"). The A53 is browse-only so app categories are only verified on the scratch agent. S23 Ultra still unchecked (not connected).
+
+Live Apps check (2026-10-01): with `view_apps` briefly granted to the A53 (owner-approved, restored to browse-only afterwards), the Apps tab on the live agent showed 89 apps with real categories (System, Development, Utilities) and the "View only" state.

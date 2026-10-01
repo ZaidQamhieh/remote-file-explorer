@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { statusError } from '../../core/api/agentClient';
 import type { Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
 import { fetchToFileNative, openFileExternal, shareFileExternal } from '../../core/native';
@@ -31,7 +32,7 @@ async function copyForHandOff(host: Host, entry: Entry, folder: 'share' | 'open'
   const native = decodeURIComponent(file.uri.replace('file://', ''));
   const spec = (await clientForHost(host)).downloadSpec(entry.path);
   const r = await fetchToFileNative(`x${hashKey(entry.path)}${Date.now().toString(36)}`, spec.url, spec.headers, spec.pin, native, 120_000, MAX_EXTERNAL_BYTES);
-  if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+  if (r.status < 200 || r.status >= 300) throw statusError(r.status);
   return native;
 }
 

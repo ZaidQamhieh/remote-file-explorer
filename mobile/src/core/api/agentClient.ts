@@ -66,6 +66,9 @@ export class AgentApiError extends Error {
   }
 }
 
+/** The error for a streamed download or upload that came back non-2xx: the body is not read there, so only the status is known. */
+export const statusError = (status: number) => new AgentApiError(status, status === 403 ? 'FORBIDDEN' : 'UNKNOWN', `HTTP ${status}`);
+
 const isSafeToRetryOnFallback = (m: string) => m === 'GET' || m === 'HEAD';
 
 /** Only these two calls may run before a pin exists; neither carries a secret. */

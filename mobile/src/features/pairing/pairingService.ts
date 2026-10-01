@@ -44,8 +44,15 @@ export function parsePairingQr(raw: string): { ok: true; qr: PairingQr } | { ok:
 
 /** Message shown for a failed call (port of humanizeError). */
 export function humanizeError(e: unknown): string {
-  if (e instanceof CertPinMismatch || e instanceof MissingCertPin) return e.message;
-  if (e instanceof AgentApiError) return e.message;
+  if (e instanceof CertPinMismatch) return 'This computer’s identity has changed, so RFE refused to connect. If you reinstalled its agent, remove this computer and pair it again. If not, do not trust this network.';
+  if (e instanceof MissingCertPin) return e.message;
+  if (e instanceof AgentApiError) {
+    // A streamed download only knows the status; the agent's own message (when there is one) already says what is missing.
+    if (e.code === 'CAPABILITY_DENIED' || (e.statusCode === 403 && /^HTTP \d+$/.test(e.message))) {
+      return 'This computer has not allowed this phone to do that. Allow it on the computer, in the device’s access settings.';
+    }
+    return e.message;
+  }
   const message = e instanceof Error ? e.message : String(e);
   // A native module rejection wraps the real reason: "Call to function 'X.y' has been rejected.\n→ Caused by: <reason>".
   return message.replace(/^Call to function '[^']*' has been rejected\.\s*→ Caused by:\s*/, '');

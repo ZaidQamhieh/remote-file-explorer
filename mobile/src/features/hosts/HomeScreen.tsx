@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Activity, Bookmark, Folder, History, LayoutGrid, Monitor, Plug, QrCode, RefreshCw, Search, Settings, ShieldCheck, SlidersHorizontal, Zap, type LucideIcon } from 'lucide-react-native';
+import { Activity, Bookmark, Folder, History, LayoutGrid, Monitor, Plug, QrCode, RefreshCw, Search, Settings, ShieldCheck, ShieldX, SlidersHorizontal, Zap, type LucideIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
@@ -96,7 +96,7 @@ function HomeHost({ host, onChanged }: { host: Host; onChanged: () => void }) {
   const readOnly = online && health?.readOnly === true;
   const lowDisk = online && lowDiskThresholdBytes > 0 && (st.drives ?? []).some((d) => d.freeBytes != null && d.freeBytes < lowDiskThresholdBytes);
   const version = health?.version?.trim() ? `v${health.version.trim()}` : '';
-  const status = checking ? t('checkingStatus') : online ? [host.note, version, 'Connected securely'].filter(Boolean).join(' · ') : st.lastSeen ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) }) : t('offlineStatus');
+  const status = checking ? t('checkingStatus') : st.untrusted ? t('statusUntrusted') : online ? [host.note, version, 'Connected securely'].filter(Boolean).join(' · ') : st.lastSeen ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) }) : t('offlineStatus');
 
   const wake = async () => {
     if (!host.macAddress) return;
@@ -125,7 +125,7 @@ function HomeHost({ host, onChanged }: { host: Host; onChanged: () => void }) {
     { key: 'trust', label: 'Trust', icon: ShieldCheck, color: roles.safe, onPress: () => hostRoute('/host/[id]/trust') },
   ];
 
-  const pill = checking ? <StatePill label={t('checkingStatus')} tone="muted" /> : online ? <StatePill label="Linked" tone="safe" icon={ShieldCheck} /> : <StatePill label={t('offlineStatus')} tone="warn" />;
+  const pill = checking ? <StatePill label={t('checkingStatus')} tone="muted" /> : st.untrusted ? <StatePill label="Not trusted" tone="warn" icon={ShieldX} /> : online ? <StatePill label="Linked" tone="safe" icon={ShieldCheck} /> : <StatePill label={t('offlineStatus')} tone="warn" />;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.surface }}>

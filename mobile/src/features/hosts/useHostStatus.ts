@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 
 import type { AgentClient } from '../../core/api/agentClient';
 import type { Drive, Health } from '../../core/api/models';
+import { CertPinMismatch } from '../../core/api/pin';
 import type { Host } from '../../core/models/host';
 import { clientForHost, hostStore } from '../../services';
 
@@ -15,6 +16,8 @@ export type HostStatus = {
   checking: boolean;
   health: Health | null;
   online: boolean;
+  /** The computer answered with a different certificate than the one this phone pinned. */
+  untrusted: boolean;
   activeAddress: string | null;
   lastSeen: Date | null;
   drives: Drive[] | null;
@@ -27,9 +30,10 @@ export type HostStatus = {
  * skip the gauges). Learns a Tailscale address / MAC the agent reports and stores it.
  */
 export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatus {
-  const [state, setState] = useState<{ checking: boolean; health: Health | null; activeAddress: string | null; lastSeen: Date | null; drives: Drive[] | null }>({
+  const [state, setState] = useState<{ checking: boolean; health: Health | null; untrusted: boolean; activeAddress: string | null; lastSeen: Date | null; drives: Drive[] | null }>({
     checking: true,
     health: null,
+    untrusted: false,
     activeAddress: null,
     lastSeen: null,
     drives: null,
@@ -59,7 +63,7 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
         onHostLearned?.();
       }
       await hostStore.setLastSeen(h.id, now);
-      setState((s) => ({ ...s, checking: false, health, activeAddress: client!.activeAddress, lastSeen: now }));
+      setState((s) => ({ ...s, checking: false, health, untrusted: false, activeAddress: client!.activeAddress, lastSeen: now }));
       if (forceDrives || Date.now() - lastDrives.current >= DRIVE_REFRESH_MS) {
         lastDrives.current = Date.now();
         client.drives().then(
@@ -67,8 +71,8 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
           () => setState((s) => ({ ...s, drives: [] })),
         );
       }
-    } catch {
-      setState((s) => ({ ...s, checking: false, health: null }));
+    } catch (e) {
+      setState((s) => ({ ...s, checking: false, health: null, untrusted: e instanceof CertPinMismatch }));
     } finally {
       inFlight.current = false;
     }

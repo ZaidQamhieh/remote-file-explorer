@@ -1,4 +1,4 @@
-import { ERR_CERT_PIN_MISMATCH, type Transport } from '../../core/api/agentClient';
+import { AgentApiError, ERR_CERT_PIN_MISMATCH, statusError, type Transport } from '../../core/api/agentClient';
 import { CertPinMismatch } from '../../core/api/pin';
 import { DeviceIdentity } from '../../core/security/deviceIdentity';
 import { MemorySecureStore } from '../../core/security/secureStore';
@@ -97,6 +97,20 @@ describe('humanizeError', () => {
     expect(humanizeError(e)).toBe('Incorrect passphrase');
   });
   it('leaves other messages alone', () => expect(humanizeError(new Error('boom'))).toBe('boom'));
+  it('says what a bare 403 from a download means instead of showing the status', () => {
+    for (const e of [statusError(403), new AgentApiError(403, 'CAPABILITY_DENIED', 'device lacks download permission')]) {
+      expect(humanizeError(e)).toMatch(/has not allowed this phone to do that/);
+    }
+  });
+  it('keeps the agent’s own wording for other API errors, and plain statuses for non-403', () => {
+    expect(humanizeError(new AgentApiError(403, 'FORBIDDEN', 'answering pairing requests requires an admin session'))).toBe('answering pairing requests requires an admin session');
+    expect(humanizeError(statusError(500))).toBe('HTTP 500');
+  });
+  it('explains a certificate mismatch as a changed computer identity', () => {
+    const m = humanizeError(new CertPinMismatch());
+    expect(m).toMatch(/identity has changed/);
+    expect(m).not.toMatch(/fingerprint/i);
+  });
 });
 
 describe('approve-on-computer pairing', () => {

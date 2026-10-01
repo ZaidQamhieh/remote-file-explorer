@@ -39,7 +39,9 @@ export function WorkspaceRow({
   const route = routeStripState({ online: st.online, checking: st.checking, activeAddress: st.activeAddress }, host);
   const status = st.checking
     ? t('checkingStatus')
-    : st.online
+    : st.untrusted
+      ? t('statusUntrusted')
+      : st.online
       ? `${host.note ?? (route.kind === 'active' ? routeLabel(route.route) : t('onlineStatus'))} · connected now`
       : st.lastSeen
         ? t('statusOfflineLastSeen', { relative: relativeLabel(st.lastSeen) })

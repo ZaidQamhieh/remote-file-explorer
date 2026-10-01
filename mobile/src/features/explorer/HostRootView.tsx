@@ -10,6 +10,7 @@ import { LumenSize, LumenType } from '../../design/lumen';
 import { useRoles, useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
 import { AgentApiError } from '../../core/api/agentClient';
+import { CertPinMismatch } from '../../core/api/pin';
 import { clientForHost, keyValue } from '../../services';
 import { humanizeError } from '../pairing/pairingService';
 import { t } from '../../i18n';
@@ -23,6 +24,7 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
   const [drives, setDrives] = useState<Drive[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  const [untrusted, setUntrusted] = useState(false);
 
   const load = useCallback(() => {
     let live = true;
@@ -48,7 +50,11 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
         setDrives(drives);
         setRes(r);
       },
-      (e) => live && setError(humanizeError(e)),
+      (e) => {
+        if (!live) return;
+        setUntrusted(e instanceof CertPinMismatch);
+        setError(humanizeError(e));
+      },
     );
     return () => {
       live = false;
@@ -56,10 +62,11 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
   }, [host, health, initialPath, onSelectRoot]);
   useEffect(() => load(), [load]);
 
-  if (error) return <Shell host={host} title="Files"><ErrorRetry
+  if (error) return <Shell host={host} title="Files" offline untrusted={untrusted}><ErrorRetry
           message={t('errorLabel', { error })}
           onRetry={() => {
             setError(null);
+            setUntrusted(false);
             setRes(null);
             load();
           }}
@@ -72,10 +79,10 @@ export function HostRootView({ host, health, initialPath, onSelectRoot }: { host
   return null;
 }
 
-function Shell({ host, title, subtitle, offline, children }: { host: Host; title: string; subtitle?: string; offline?: boolean; children: React.ReactNode }) {
+function Shell({ host, title, subtitle, offline, untrusted, children }: { host: Host; title: string; subtitle?: string; offline?: boolean; untrusted?: boolean; children: React.ReactNode }) {
   return (
     <View style={{ flex: 1 }}>
-      <TopBar context={`${host.label} · Files`} sub="Workspace" right={offline ? <StatePill label="Offline" tone="warn" icon={CloudOff} /> : <StatePill label="Connected" tone="safe" icon={ShieldCheck} />} />
+      <TopBar context={`${host.label} · Files`} sub="Workspace" right={untrusted ? <StatePill label="Not trusted" tone="warn" icon={ShieldX} /> : offline ? <StatePill label="Offline" tone="warn" icon={CloudOff} /> : <StatePill label="Connected" tone="safe" icon={ShieldCheck} />} />
       <PageHead title={title} subtitle={subtitle} />
       <View style={{ flex: 1 }}>{children}</View>
     </View>

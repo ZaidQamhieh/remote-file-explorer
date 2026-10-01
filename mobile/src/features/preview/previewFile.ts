@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { AgentApiError } from '../../core/api/agentClient';
+import { statusError } from '../../core/api/agentClient';
 import type { Entry } from '../../core/api/models';
 import type { Host } from '../../core/models/host';
 import { fetchCancelNative, fetchToFileNative } from '../../core/native';
@@ -86,7 +86,7 @@ export async function fetchPreviewFile(host: Host, entry: Entry, maxBytes: numbe
     if (codeOf(e) === 'ERR_CONNECTION' && (await restoreOfflineCopy(offlineDeps, host, entry, nativePath))) return file.uri;
     throw e;
   }
-  if (r.status < 200 || r.status >= 300) throw new AgentApiError(r.status, r.status === 403 ? 'FORBIDDEN' : 'UNKNOWN', `HTTP ${r.status}`);
+  if (r.status < 200 || r.status >= 300) throw statusError(r.status);
   evictIfNeeded(file.uri);
   void keepOfflineCopy(offlineDeps, host, entry, nativePath, true);
   return file.uri;

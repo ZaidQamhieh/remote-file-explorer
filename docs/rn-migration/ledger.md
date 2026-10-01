@@ -263,8 +263,8 @@ Lab: three Linux network namespaces, A `10.10.1.0/24` (scratch agent on `10.10.1
 | HTTPS health from B to A across the router | 200 |
 | Ask-to-pair from the app in B; match code on phone and PC | Same code (3592 9433); agent saw the client as 10.10.2.2 |
 | Approve on the PC, app finishes pairing, host shown "Connected securely", file list | Works; file content read |
-| Router forwarding cut while a preview loads | Spinner for 12 s, no crash; no recovery without Retry |
+| Router forwarding cut while a preview loads | Spinner while the link is down, no crash; the request completed once forwarding returned |
 | Different agent (new certificate) at the same address | Refused: "Error: Certificate fingerprint mismatch"; app shows Offline |
 | mDNS discovery across the router | Not tested (multicast does not cross routers, expected) |
 
-Findings (UX, not security): a phone paired through approve-on-PC is browse-only, so opening a file shows a raw "HTTP 403" (native downloader error) instead of saying the computer has not allowed downloads for this phone; the pinning refusal shows "Error: Certificate fingerprint mismatch" with the workspace pill still saying "Connected". Tracked in bd.
+Findings (UX, not security): a phone paired through approve-on-PC is browse-only, so opening a file shows a raw "HTTP 403" (native downloader error) instead of saying the computer has not allowed downloads for this phone; the pinning refusal shows "Error: Certificate fingerprint mismatch" with the workspace pill still saying "Connected". Fixed afterwards and re-verified in the same lab: `humanizeError` now explains a bare 403 and a certificate mismatch (the "Error:" prefix is gone), the Files header shows "Not trusted" and Home/Workspaces say "Computer identity changed · not connected" instead of "Connected"/"Offline"; recovery to "Linked" once the real agent is back. Tests in `pairingService.test.ts`.

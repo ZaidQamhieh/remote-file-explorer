@@ -36,6 +36,11 @@ const (
 // ErrUnavailable means no healthy sidecar could take the call; callers use their own implementation.
 var ErrUnavailable = errors.New("sidecar unavailable")
 
+// ErrInterrupted (always joined with ErrUnavailable) means the sidecar died or was killed while this request was
+// in flight, as opposed to being down before the call. A caller that parses untrusted input uses it to tell "the
+// sidecar is not running" from "this input may have crashed it".
+var ErrInterrupted = errors.New("sidecar interrupted while handling the request")
+
 // RemoteError is a failure the sidecar reported for one request.
 type RemoteError struct {
 	Code    string
@@ -247,7 +252,7 @@ func (c *Client) fail(err error) {
 	c.kill()
 	_ = c.stdin.Close()
 	for _, ch := range pending {
-		ch <- result{err: fmt.Errorf("%w: %v", ErrUnavailable, err)}
+		ch <- result{err: fmt.Errorf("%w: %w: %v", ErrUnavailable, ErrInterrupted, err)}
 	}
 }
 
@@ -349,7 +354,7 @@ func (c *Client) call(ctx context.Context, op string, req any, body []byte, resp
 	envJSON, _ := json.Marshal(env)
 	if err := c.send(merge(envJSON, reqJSON), body); err != nil {
 		c.fail(fmt.Errorf("write: %w", err))
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return nil, fmt.Errorf("%w: %w: %v", ErrUnavailable, ErrInterrupted, err)
 	}
 
 	select {
@@ -373,7 +378,7 @@ func (c *Client) call(ctx context.Context, op string, req any, body []byte, resp
 		_ = c.send(cancel, nil)
 		return nil, ctx.Err()
 	case <-c.done:
-		return nil, ErrUnavailable
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, ErrInterrupted)
 	}
 }
 

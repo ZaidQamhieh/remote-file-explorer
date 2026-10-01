@@ -354,6 +354,10 @@ func runServe(args []string) {
 
 	srv := newHTTPServer(flags.addr, handler, cert)
 
+	statsCtx, stopStats := context.WithCancel(context.Background())
+	defer stopStats()
+	go server.PublishSidecarStats(statsCtx, flags.dataDir)
+
 	go func() {
 		log.Printf("listening on https://%s/v1  (LAN + Tailscale)", flags.addr)
 		// Cert/key are already in TLSConfig, so empty paths are correct here.

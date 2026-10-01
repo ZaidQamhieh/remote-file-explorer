@@ -138,3 +138,16 @@ The agent looks in `$RFE_SIDECAR_DIR`, then beside its own executable. When the 
 is not listed or whose sha256 differs is refused, and the started process must announce the manifest `version` in
 its `hello` (sidecars embed `RFE_RELEASE_VERSION` at build time). Without a manifest the sidecar is "unverified" and
 only starts when `RFE_SIDECARS` names it. Install and update the whole set together.
+
+## Failure handling and counters
+
+- A call that fails because the sidecar was *down* (`sidecar.ErrUnavailable`) lets the caller use its own
+  implementation. A call that fails because the sidecar *died while holding the request* (`sidecar.ErrInterrupted`,
+  also an `ErrUnavailable`) is different for thumbnails: the file may have killed the sandboxed decoder, so it is never
+  decoded in-process. The first interruption returns a transient error; a second on the same file version (path, size,
+  mtime) poisons it, answered as "no thumbnail" without calling the sidecar again.
+- The agent counts supervisor starts, start failures, crashes and breaker opens per sidecar, plus named events
+  (`thumbd.fallback`, `thumbd.interrupted`, `thumbd.poisoned-file`, `thumbd.unsupported-format`,
+  `indexd.search-fallback`, `indexd.search-not-ready`, `indexd.recents-fallback`, `<name>.refused`,
+  `<name>.crash`, `<name>.breaker-open`). The daemon writes them to `<data dir>/sidecar-stats.json` every 30 s and
+  `rfe-agent status` prints them with their age. `unsupported-format` is expected (e.g. TIFF); the others are not.

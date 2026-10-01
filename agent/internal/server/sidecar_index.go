@@ -31,7 +31,20 @@ func newIndexBackend(ops *fsops.Ops) indexBackend {
 		}
 		log.Printf("search index: RFE_SIDECARS enables indexd but rfe-indexd was not found; using the built-in index")
 	}
+	warnSidecarMissing("indexd", "search")
 	return NewSearchIndex(ops)
+}
+
+// warnSidecarMissing says once at startup that a component runs in-process because no verified sidecar came with
+// this install (a `go build` or a hand-copied agent), unless the owner turned sidecars off on purpose.
+func warnSidecarMissing(name, what string) {
+	if raw := os.Getenv("RFE_SIDECARS"); raw != "" && !sidecarEnabled(name) {
+		return
+	}
+	if _, ok, _ := locateSidecar("rfe-" + name); ok {
+		return
+	}
+	log.Printf("WARNING: rfe-%s is not installed next to the agent: %s runs in-process. Install the packaged release (tools/package-agent.sh) to use the sidecar", name, what)
 }
 
 // sidecarIndex keeps the index in rfe-indexd and answers queries from it. While the sidecar is down or has no
@@ -265,9 +278,11 @@ func (s *sidecarIndex) query(filters *searchFilters, roots []string, limit int) 
 	defer cancel()
 	var resp queryResp
 	if err := s.sup.Call(ctx, "index.query", queryReq{Filters: toWireFilters(filters), Roots: roots, Limit: limit}, &resp); err != nil {
+		sidecar.Note("indexd.search-fallback")
 		return nil, false, false
 	}
 	if !resp.Ready {
+		sidecar.Note("indexd.search-not-ready")
 		return nil, false, false
 	}
 	scopes := prepareRootScopes(roots)
@@ -307,6 +322,7 @@ func sidecarRecentWalker(sup *sidecar.Supervisor) func(context.Context, *fsops.O
 		err := sup.Call(ctx, "recents.scan", recentsReq{Roots: []string{root}, Limit: limit, BudgetMs: budget.Milliseconds()}, &resp)
 		if err != nil {
 			if ctx.Err() == nil {
+				sidecar.Note("indexd.recents-fallback")
 				walkForRecentWithOps(ctx, ops, root, limit, h)
 			}
 			return
@@ -347,6 +363,7 @@ func recentWalker(idx indexBackend) func(context.Context, *fsops.Ops, string, in
 // the renderer decodes in-process whenever the sidecar cannot or is not running.
 func useThumbSidecar(r *thumbs.Renderer) {
 	if !sidecarEnabled("thumbd") {
+		warnSidecarMissing("thumbd", "thumbnail decoding")
 		return
 	}
 	cfg, ok := sidecarConfig("rfe-thumbd")

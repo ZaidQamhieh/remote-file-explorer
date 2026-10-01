@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -545,6 +546,11 @@ func cmdStatus(args []string) error {
 		return fmt.Errorf("read local service status: %w", err)
 	}
 	fmt.Printf("service:     %s\n", service)
+	printSidecarStatus(dir)
+	return nil
+}
+
+func printSidecarStatus(dir string) {
 	for i, line := range server.SidecarReport() {
 		label := "sidecars:"
 		if i > 0 {
@@ -552,7 +558,38 @@ func cmdStatus(args []string) error {
 		}
 		fmt.Printf("%-12s %s\n", label, line)
 	}
-	return nil
+	rep, age, err := server.ReadSidecarStats(dir)
+	if err != nil {
+		return
+	}
+	state := fmt.Sprintf("counters as of %s ago", age.Round(time.Second))
+	if age > 2*time.Minute {
+		state += " (stale: the agent is not running)"
+	}
+	fmt.Printf("%-12s %s\n", "", state)
+	for _, st := range rep.Sidecars {
+		running := "down"
+		if st.Running {
+			running = "running " + st.Version
+		}
+		breaker := ""
+		if st.BreakerOpen {
+			breaker = ", BREAKER OPEN"
+		}
+		fmt.Printf("%-12s %s: %s; starts %d, start failures %d, crashes %d, breaker opens %d%s\n",
+			"", st.Name, running, st.Starts, st.StartFailures, st.Crashes, st.BreakerOpens, breaker)
+	}
+	names := make([]string, 0, len(rep.Events))
+	for k := range rep.Events {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		fmt.Printf("%-12s fallbacks: none\n", "")
+	}
+	for _, k := range names {
+		fmt.Printf("%-12s event %s: %d\n", "", k, rep.Events[k])
+	}
 }
 
 // --- helpers ---

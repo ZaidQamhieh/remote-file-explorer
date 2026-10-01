@@ -77,6 +77,7 @@ type Renderer struct {
 	cacheMu    sync.Mutex // cache writes and pruning
 	cacheBytes int64
 	remote     Remote // optional out-of-process renderer tried before the built-in decoder
+	crashes    crashLog
 }
 
 // renderCall holds the result of one cache miss while concurrent callers for

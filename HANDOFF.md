@@ -155,8 +155,9 @@ Specs/plans live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 export PATH="$HOME/.local/go/bin:$PATH"
 cd ~/Storage/Projects/remote-file-explorer/agent
 go build ./... && go vet ./... && go test ./...
-# deploy:
-go build -o ~/.local/bin/rfe-agent ./cmd/agent
+# deploy (agent + rfe-indexd + rfe-thumbd + rfe-sidecars.txt go together; a bare `go build -o` ships no sidecars
+# and the agent warns that search and thumbnails run in-process):
+cd ~/Projects/rfe-rn && tools/install-agent-local.sh        # then setcap on rfe-agent
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 systemctl --user restart rfe-agent
 systemctl --user status rfe-agent

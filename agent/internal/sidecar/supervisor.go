@@ -30,18 +30,21 @@ type Supervisor struct {
 	// timings are fields so tests can shrink them.
 	minBackoff, maxBackoff, healthyAfter, pingEvery time.Duration
 
-	stop chan struct{}
-	done chan struct{}
+	stats supStats
+	stop  chan struct{}
+	done  chan struct{}
 }
 
 // NewSupervisor creates a supervisor; Run starts it. onReady, when set, runs (in the supervisor goroutine's
 // shadow, not blocking restarts) each time a sidecar completes its handshake.
 func NewSupervisor(cfg Config, onReady func(*Client)) *Supervisor {
-	return &Supervisor{
+	s := &Supervisor{
 		cfg: cfg, onReady: onReady,
 		minBackoff: minBackoff, maxBackoff: maxBackoff, healthyAfter: healthyAfter, pingEvery: pingInterval,
 		stop: make(chan struct{}), done: make(chan struct{}),
 	}
+	register(s)
+	return s
 }
 
 // Run supervises until Stop. It returns immediately; work happens in a goroutine.
@@ -113,6 +116,12 @@ func (s *Supervisor) loop() {
 		c, err := Start(s.cfg)
 		if err != nil {
 			failures++
+			s.stats.startFailures.Add(1)
+			if failures == breakerFailures {
+				s.stats.breakerOpens.Add(1)
+				s.stats.breakerOpen.Store(true)
+				Note(s.cfg.Name + ".breaker-open")
+			}
 			s.cfg.logf("sidecar %s: start failed (%d): %v", s.cfg.Name, failures, err)
 			wait := backoff
 			if failures >= breakerFailures {
@@ -125,6 +134,8 @@ func (s *Supervisor) loop() {
 			continue
 		}
 		failures = 0
+		s.stats.breakerOpen.Store(false)
+		s.stats.starts.Add(1)
 		s.setClient(c)
 		s.cfg.logf("sidecar %s: ready (version %s)", s.cfg.Name, c.Version())
 		if s.onReady != nil {
@@ -138,6 +149,8 @@ func (s *Supervisor) loop() {
 			return
 		default:
 		}
+		s.stats.crashes.Add(1)
+		Note(s.cfg.Name + ".crash")
 		if time.Since(started) >= s.healthyAfter {
 			backoff = s.minBackoff
 		}
@@ -179,6 +192,7 @@ func (s *Supervisor) Stop() {
 		close(s.stop)
 	}
 	<-s.done
+	unregister(s)
 	s.mu.Lock()
 	c := s.client
 	s.client = nil

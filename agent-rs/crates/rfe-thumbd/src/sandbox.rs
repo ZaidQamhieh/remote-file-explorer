@@ -128,7 +128,7 @@ pub fn enter() -> Result<Applied, String> {
         .map_err(|e: seccompiler::BackendError| format!("seccomp compile: {e}"))?;
     seccompiler::apply_filter_all_threads(&program).map_err(|e| format!("seccomp apply: {e}"))?;
     applied.notes.push(format!(
-        "seccomp allowlist ({} syscalls, others EPERM)",
+        "seccomp allowlist ({} syscalls, others ENOSYS)",
         allowed.len()
     ));
     Ok(applied)

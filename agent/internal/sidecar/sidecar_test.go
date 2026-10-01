@@ -92,16 +92,17 @@ func TestCancelSendsCancelAndReturnsCtxErr(t *testing.T) {
 func TestCrashFailsPendingAndMarksUnavailable(t *testing.T) {
 	c := startFake(t, "ok")
 	err := c.Call(context.Background(), "crash", struct{}{}, nil)
-	if !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("got %v", err)
+	if !errors.Is(err, ErrUnavailable) || !errors.Is(err, ErrInterrupted) {
+		t.Fatalf("a crash during a call must be unavailable AND interrupted, got %v", err)
 	}
 	select {
 	case <-c.Done():
 	case <-time.After(time.Second):
 		t.Fatal("Done not closed")
 	}
-	if err := c.Call(context.Background(), "ping", struct{}{}, nil); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("got %v", err)
+	err = c.Call(context.Background(), "ping", struct{}{}, nil)
+	if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrInterrupted) {
+		t.Fatalf("a call to an already dead sidecar is unavailable but not interrupted, got %v", err)
 	}
 }
 
@@ -156,6 +157,37 @@ func TestSupervisorRestartsAfterCrash(t *testing.T) {
 	}
 	if err := s.Call(context.Background(), "ping", struct{}{}, nil); err != nil {
 		t.Fatal(err)
+	}
+	st := s.Stats()
+	if st.Starts < 2 || st.Crashes < 1 || !st.Running {
+		t.Fatalf("stats after a crash and restart: %+v", st)
+	}
+}
+
+func TestSupervisorCountsStartFailuresAndTheBreaker(t *testing.T) {
+	ResetEventsForTest()
+	cfg := fakeCfg("ok")
+	cfg.Path = "/nonexistent/rfe-fake"
+	cfg.Name = "fake-breaker"
+	s := NewSupervisor(cfg, nil)
+	s.minBackoff, s.maxBackoff = time.Millisecond, 5*time.Millisecond
+	s.Run()
+	defer s.Stop()
+	waitUntil(t, func() bool { return s.Stats().BreakerOpen })
+	st := s.Stats()
+	if st.StartFailures < breakerFailures || st.BreakerOpens != 1 || st.Running {
+		t.Fatalf("stats: %+v", st)
+	}
+	rep := Snapshot()
+	if rep.Events["fake-breaker.breaker-open"] != 1 {
+		t.Fatalf("events: %v", rep.Events)
+	}
+	var found bool
+	for _, x := range rep.Sidecars {
+		found = found || x.Name == "fake-breaker"
+	}
+	if !found {
+		t.Fatalf("snapshot lacks the supervisor: %+v", rep.Sidecars)
 	}
 }
 

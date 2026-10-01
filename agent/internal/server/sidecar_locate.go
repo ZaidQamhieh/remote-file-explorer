@@ -157,6 +157,7 @@ func sidecarConfig(name string) (sidecar.Config, bool) {
 	loc, ok, err := locateSidecar(name)
 	if err != nil {
 		log.Printf("sidecar %s refused: %v", name, err)
+		sidecar.Note(name + ".refused")
 		return sidecar.Config{}, false
 	}
 	if !ok {
@@ -178,7 +179,7 @@ func SidecarReport() []string {
 		case err != nil:
 			out = append(out, fmt.Sprintf("%s: REFUSED (%v)", name, err))
 		case !ok:
-			out = append(out, name+": not installed")
+			out = append(out, name+": not installed (this build runs it in-process; install the packaged release)")
 		case loc.verified:
 			out = append(out, fmt.Sprintf("%s: verified, version %s", name, loc.version))
 		default:

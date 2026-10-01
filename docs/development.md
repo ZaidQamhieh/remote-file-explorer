@@ -18,7 +18,7 @@ If Go is installed at `~/.local/go`, add it to your PATH (e.g. in `~/.bashrc`):
 ```sh
 cd agent
 go vet ./...
-go build -o bin/agent ./cmd/agent
+go build -o bin/agent ./cmd/agent   # no sidecars: search/thumbnails run in-process; tools/install-agent-local.sh installs the full set
 go run ./cmd/agent -addr 127.0.0.1:8765 -name "my-pc"
 ```
 

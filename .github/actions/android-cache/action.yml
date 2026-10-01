@@ -1,8 +1,9 @@
 name: Android build caches
 description: >
   Restores and saves everything an Android build downloads or recompiles: the Gradle dependency and wrapper caches,
-  Gradle's task output cache (native libraries are compiled once per input), and the SDK pieces the Android Gradle
-  Plugin installs on demand (NDK, CMake, build-tools, platforms). Use after checkout and before the Gradle build.
+  Gradle's task output cache (native libraries are compiled once per input), and the two SDK pieces the runner image lacks and the
+  Android Gradle Plugin downloads on demand (NDK 27.1, CMake 3.22.1). Do not cache the whole SDK: the image already has the
+  rest, and a multi-GB save costs more than it saves. Use after checkout and before the Gradle build.
 
 runs:
   using: composite
@@ -24,9 +25,6 @@ runs:
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
-          /usr/local/lib/android/sdk/ndk
-          /usr/local/lib/android/sdk/cmake
-          /usr/local/lib/android/sdk/build-tools
-          /usr/local/lib/android/sdk/platforms
-        key: android-sdk-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json') }}
-        restore-keys: android-sdk-${{ runner.os }}-
+          /usr/local/lib/android/sdk/ndk/27.1.12297006
+          /usr/local/lib/android/sdk/cmake/3.22.1
+        key: android-ndk-27.1.12297006-cmake-3.22.1-${{ runner.os }}

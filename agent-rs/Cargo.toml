@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rfe-proto", "crates/rfe-indexd"]
+members = ["crates/rfe-proto", "crates/rfe-indexd", "crates/rfe-thumbd"]
 
 [workspace.package]
 version = "0.1.0"

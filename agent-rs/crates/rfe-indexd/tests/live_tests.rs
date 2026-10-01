@@ -251,7 +251,7 @@ fn real_tree_update_latency() {
         fs::write(&f, "x").unwrap();
         let name = f.to_str().unwrap().to_string();
         let t = Instant::now();
-        wait_until("probe", || sc.paths(&dir).iter().any(|p| *p == name));
+        wait_until("probe", || sc.paths(&dir).contains(&name));
         println!("file {i} visible after {:?}", t.elapsed());
     }
     println!("before {before}, three probes in {:?}", t2.elapsed());

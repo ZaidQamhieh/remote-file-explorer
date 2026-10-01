@@ -189,7 +189,9 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#agent-v}"
+          flags=()
+          if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Remote File Explorer Agent ${version}" \
             --generate-notes \
-            --latest=false
+            --latest=false "${flags[@]}"

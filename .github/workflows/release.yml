@@ -30,10 +30,16 @@ jobs:
     name: Mobile gates
     uses: ./.github/workflows/mobile.yml
 
-  release:
-    name: Build & publish APK
-    needs: [verify, verify-mobile]
+  # Starts at once, alongside the gates (the build does not depend on their result); `publish` waits for both, so a
+  # red gate still stops the release while the slowest step overlaps the checks.
+  build:
+    name: Build APK
     runs-on: ubuntu-24.04
+    outputs:
+      apk: ${{ steps.stage.outputs.apk }}
+      name: ${{ steps.stage.outputs.name }}
+      code: ${{ steps.stage.outputs.code }}
+      prerelease: ${{ steps.stage.outputs.prerelease }}
     # A hung build fails here instead of holding the runner for the 6-hour default.
     timeout-minutes: 60
     env:
@@ -134,17 +140,30 @@ jobs:
             ${{ steps.stage.outputs.apk }}
             latest.json
           retention-days: 14
+          compression-level: 0
 
+  publish:
+    name: Publish GitHub Release
+    if: github.ref_type == 'tag'
+    needs: [verify, verify-mobile, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rfe-${{ needs.build.outputs.name }}-${{ needs.build.outputs.code }}
       - name: Publish GitHub Release
-        if: github.ref_type == 'tag'
         env:
-          APK: ${{ steps.stage.outputs.apk }}
-          PRERELEASE: ${{ steps.stage.outputs.prerelease }}
+          APK: ${{ needs.build.outputs.apk }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
           set -euo pipefail
           # The updater reads releases/latest, so Latest is always explicit: a pre-release never takes it, and a
           # release takes it from whatever else (the agent's releases carry no latest.json) was published last.
           if [ "$PRERELEASE" = true ]; then flag="--prerelease --latest=false"; else flag="--latest"; fi
           gh release create "$GITHUB_REF_NAME" "$APK" latest.json \
-            --title "v${{ steps.stage.outputs.name }} (build ${{ steps.stage.outputs.code }})" \
+            --title "v${{ needs.build.outputs.name }} (build ${{ needs.build.outputs.code }})" \
             --generate-notes $flag

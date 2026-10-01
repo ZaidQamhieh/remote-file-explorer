@@ -274,3 +274,27 @@ fn recents_deadline_marks_a_partial_result() {
     );
     assert!(partial);
 }
+
+#[test]
+fn link_targets_are_raw_and_dir_links_resolve_inside_the_root_not_the_subdir() {
+    use std::os::unix::fs::symlink;
+    let t = tempfile::tempdir().unwrap();
+    let root = t.path().join("root");
+    touch(&root.join("docs/readme.md"));
+    touch(&root.join("a/x.txt"));
+    // The link lives in `a` but points at a sibling directory: it stays inside the root, so it is a directory
+    // link even though `a`'s own handle could not reach it.
+    symlink("../docs", root.join("a/up")).unwrap();
+    // An absolute target is reported as written.
+    let abs = root.join("docs/readme.md");
+    symlink(&abs, root.join("abs")).unwrap();
+
+    let idx = build(&root);
+    let r = root.to_str().unwrap().to_string();
+    let (entries, _) = idx.query(&Compiled::new(Filters::default()), &[r], 1000);
+    let by = |n: &str| entries.iter().find(|e| e.path.ends_with(n)).unwrap();
+    assert!(by("/a/up").is_dir, "dir link resolved against the root");
+    assert_eq!(by("/a/up").symlink_target, "../docs");
+    assert_eq!(by("/abs").symlink_target, abs.to_str().unwrap());
+    assert!(!by("/abs").is_dir);
+}

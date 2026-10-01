@@ -249,11 +249,9 @@ func walkForRecentRoot(ctx context.Context, root *os.Root, rootPath string, limi
 			return nil
 		}
 
-		entryPath := rootPath
-		if relPath != "." {
-			entryPath = filepath.Join(rootPath, filepath.FromSlash(relPath))
-		}
-		entry := fsops.EntryFromInfoNoSniff(info, entryPath)
+		// Symlink metadata is resolved through the open root, like the search index does, so a link cannot make
+		// the walk stat anything outside the root it was given.
+		entry := fsops.EntryFromRootInfo(root, rootPath, relPath, info)
 
 		if h.Len() < limit {
 			heap.Push(h, entry)

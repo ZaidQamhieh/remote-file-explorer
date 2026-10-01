@@ -40,7 +40,7 @@ func TestFileCapabilityRouteGates(t *testing.T) {
 		r.With(requireFileCapabilities(capBrowse)).Get("/system/drives", drivesHandler(ops))
 		r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, NewSearchIndex(ops)))
 		r.With(requireFileCapabilities(capDownload)).Get("/thumb", thumbHandler(ops, nil))
-		registerFsRoutes(r, Config{TrashDir: t.TempDir()}, ops)
+		registerFsRoutes(r, Config{TrashDir: t.TempDir()}, ops, &SearchIndex{})
 		registerTrashRoutes(r, Config{TrashDir: t.TempDir()}, ops)
 		registerContentRoutes(r, Config{}, ops)
 		registerTransferRoutes(r, tm, Config{}, ops)

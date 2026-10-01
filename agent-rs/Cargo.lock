@@ -228,6 +228,7 @@ dependencies = [
  "cap-std",
  "rayon",
  "rfe-proto",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

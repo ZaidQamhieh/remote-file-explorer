@@ -292,7 +292,7 @@ func (f *searchFilters) applyModifiedBounds(q url.Values) (code, message string)
 
 // --------- /search GET ---------
 
-func searchHandler(ops *fsops.Ops, idx *SearchIndex) http.HandlerFunc {
+func searchHandler(ops *fsops.Ops, idx indexBackend) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ops := opsFromContext(r.Context(), ops)
 		query := r.URL.Query()

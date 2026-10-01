@@ -1,0 +1,180 @@
+package sidecar
+
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+const (
+	minBackoff = time.Second
+	maxBackoff = time.Minute
+	// A sidecar that stays up this long is considered healthy again and resets the backoff.
+	healthyAfter = 30 * time.Second
+	// This many consecutive failed starts open the breaker: the agent stays on its Go fallback until the next
+	// retry window.
+	breakerFailures = 5
+	pingInterval    = 15 * time.Second
+	pingTimeout     = 5 * time.Second
+)
+
+// Supervisor keeps one sidecar running: it restarts it with exponential backoff after a crash or a failed
+// health ping and reports unavailability instead of blocking callers.
+type Supervisor struct {
+	cfg     Config
+	onReady func(*Client)
+
+	mu     sync.Mutex
+	client *Client
+
+	// timings are fields so tests can shrink them.
+	minBackoff, maxBackoff, healthyAfter, pingEvery time.Duration
+
+	stop chan struct{}
+	done chan struct{}
+}
+
+// NewSupervisor creates a supervisor; Run starts it. onReady, when set, runs (in the supervisor goroutine's
+// shadow, not blocking restarts) each time a sidecar completes its handshake.
+func NewSupervisor(cfg Config, onReady func(*Client)) *Supervisor {
+	return &Supervisor{
+		cfg: cfg, onReady: onReady,
+		minBackoff: minBackoff, maxBackoff: maxBackoff, healthyAfter: healthyAfter, pingEvery: pingInterval,
+		stop: make(chan struct{}), done: make(chan struct{}),
+	}
+}
+
+// Run supervises until Stop. It returns immediately; work happens in a goroutine.
+func (s *Supervisor) Run() {
+	go s.loop()
+}
+
+// Client returns the live sidecar, or ErrUnavailable.
+func (s *Supervisor) Client() (*Client, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client == nil {
+		return nil, ErrUnavailable
+	}
+	select {
+	case <-s.client.Done():
+		return nil, ErrUnavailable
+	default:
+	}
+	return s.client, nil
+}
+
+// Call runs op on the live sidecar.
+func (s *Supervisor) Call(ctx context.Context, op string, req, resp any) error {
+	c, err := s.Client()
+	if err != nil {
+		return err
+	}
+	return c.Call(ctx, op, req, resp)
+}
+
+func (s *Supervisor) setClient(c *Client) {
+	s.mu.Lock()
+	s.client = c
+	s.mu.Unlock()
+}
+
+func (s *Supervisor) sleep(d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-s.stop:
+		return false
+	}
+}
+
+func (s *Supervisor) loop() {
+	defer close(s.done)
+	backoff := s.minBackoff
+	failures := 0
+	for {
+		select {
+		case <-s.stop:
+			return
+		default:
+		}
+		started := time.Now()
+		c, err := Start(s.cfg)
+		if err != nil {
+			failures++
+			s.cfg.logf("sidecar %s: start failed (%d): %v", s.cfg.Name, failures, err)
+			wait := backoff
+			if failures >= breakerFailures {
+				wait = s.maxBackoff // breaker open: stay on the fallback until the next long retry
+			}
+			if !s.sleep(wait) {
+				return
+			}
+			backoff = min(backoff*2, s.maxBackoff)
+			continue
+		}
+		failures = 0
+		s.setClient(c)
+		s.cfg.logf("sidecar %s: ready (version %s)", s.cfg.Name, c.Version())
+		if s.onReady != nil {
+			go s.onReady(c)
+		}
+		s.watch(c)
+		s.setClient(nil)
+		_ = c.Close()
+		select {
+		case <-s.stop:
+			return
+		default:
+		}
+		if time.Since(started) >= s.healthyAfter {
+			backoff = s.minBackoff
+		}
+		s.cfg.logf("sidecar %s: stopped, restarting in %v", s.cfg.Name, backoff)
+		if !s.sleep(backoff) {
+			return
+		}
+		backoff = min(backoff*2, s.maxBackoff)
+	}
+}
+
+// watch blocks until the client dies, a ping fails, or Stop is called.
+func (s *Supervisor) watch(c *Client) {
+	t := time.NewTicker(s.pingEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-c.Done():
+			return
+		case <-s.stop:
+			return
+		case <-t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+			err := c.Call(ctx, "ping", struct{}{}, nil)
+			cancel()
+			if err != nil {
+				s.cfg.logf("sidecar %s: ping failed: %v", s.cfg.Name, err)
+				return
+			}
+		}
+	}
+}
+
+// Stop ends supervision and the running sidecar.
+func (s *Supervisor) Stop() {
+	select {
+	case <-s.stop:
+	default:
+		close(s.stop)
+	}
+	<-s.done
+	s.mu.Lock()
+	c := s.client
+	s.client = nil
+	s.mu.Unlock()
+	if c != nil {
+		_ = c.Close()
+	}
+}

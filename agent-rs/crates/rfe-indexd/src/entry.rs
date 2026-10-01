@@ -1,5 +1,6 @@
 //! File metadata as it crosses the wire, and the conversions the Go side expects.
 
+use crate::walk::At;
 use cap_std::fs::{Dir, Metadata};
 use serde::Serialize;
 use std::ffi::OsStr;
@@ -128,18 +129,44 @@ pub fn stat_of(meta: &Metadata) -> Stat {
     }
 }
 
-/// The full wire entry for `name` inside `dir`. Symlinks get their target and an `is_dir` that follows the link
-/// inside the sandbox (a link that escapes the root reports as a non-directory).
-pub fn wire_entry(dir: &Dir, name: &OsStr, path: String, meta: &Metadata) -> WireEntry {
+/// What a symlink resolves to, the way the Go agent's rooted handle sees it: `is_dir` follows the link inside the
+/// walk root (an absolute link, or one leaving the root, reports as a non-directory) and the target text is the
+/// raw link contents, whatever they point at.
+pub fn link_info(root: &Dir, dir: &Dir, rel_dir: &str, name: &OsStr) -> (bool, String) {
+    let rel = if rel_dir.is_empty() {
+        name.to_string_lossy().into_owned()
+    } else {
+        format!("{rel_dir}/{}", name.to_string_lossy())
+    };
+    let is_dir = root.metadata(&rel).map(|m| m.is_dir()).unwrap_or(false);
+    (is_dir, read_link_raw(dir, name))
+}
+
+#[cfg(unix)]
+fn read_link_raw(dir: &Dir, name: &OsStr) -> String {
+    // readlinkat on the directory handle: never follows anything, and unlike cap-std's read_link it returns
+    // absolute and root-escaping targets as written.
+    match rustix::fs::readlinkat(dir, name, Vec::new()) {
+        Ok(t) => t.to_string_lossy().into_owned(),
+        Err(_) => String::new(),
+    }
+}
+
+#[cfg(not(unix))]
+fn read_link_raw(dir: &Dir, name: &OsStr) -> String {
+    dir.read_link(name)
+        .map(|t| t.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The full wire entry for `name` inside `at.dir`.
+pub fn wire_entry(at: &At, name: &OsStr, path: String, meta: &Metadata) -> WireEntry {
     let st = stat_of(meta);
     let is_symlink = meta.file_type().is_symlink();
     let mut is_dir = meta.is_dir();
     let mut symlink_target = String::new();
     if is_symlink {
-        is_dir = dir.metadata(name).map(|m| m.is_dir()).unwrap_or(false);
-        if let Ok(t) = dir.read_link(name) {
-            symlink_target = t.to_string_lossy().into_owned();
-        }
+        (is_dir, symlink_target) = link_info(at.root, at.dir, at.rel, name);
     }
     WireEntry {
         path,

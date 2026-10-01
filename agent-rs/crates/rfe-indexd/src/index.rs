@@ -3,10 +3,9 @@
 //! the Go index spends. A query walks the chunks in the same depth-first, name-sorted order Go's `fs.WalkDir`
 //! produces, which keeps result order identical.
 
-use crate::entry::{join_path, stat_of, WireEntry};
+use crate::entry::{join_path, link_info, stat_of, WireEntry};
 use crate::filter::{Compiled, RootScopes};
-use crate::walk::{self, Sub, Visitor};
-use cap_std::fs::Dir;
+use crate::walk::{self, At, Sub, Visitor};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -103,7 +102,8 @@ struct Builder<'a> {
 }
 
 impl Visitor for Builder<'_> {
-    fn visit(&self, dir: &Dir, dir_path: &str, id: u32) -> Vec<Sub> {
+    fn visit(&self, at: &At, id: u32) -> Vec<Sub> {
+        let (dir, dir_path) = (at.dir, at.path);
         let mut chunk = Chunk {
             id,
             dir_path: dir_path.to_string(),
@@ -149,20 +149,17 @@ impl Visitor for Builder<'_> {
             let is_symlink = raw.meta.file_type().is_symlink();
             let mut flags = 0u8;
             let mut is_dir = raw.meta.is_dir();
+            let mut link_target = String::new();
             if is_symlink {
                 flags |= FLAG_SYMLINK;
-                is_dir = dir.metadata(&raw.os).map(|m| m.is_dir()).unwrap_or(false);
+                (is_dir, link_target) = link_info(at.root, dir, at.rel, &raw.os);
             }
             if is_dir {
                 flags |= FLAG_DIR;
             }
             let rec_idx = chunk.recs.len();
-            if is_symlink {
-                if let Ok(t) = dir.read_link(&raw.os) {
-                    chunk
-                        .links
-                        .push((rec_idx as u32, t.to_string_lossy().into_owned()));
-                }
+            if !link_target.is_empty() {
+                chunk.links.push((rec_idx as u32, link_target));
             }
             let mut child = NO_CHILD;
             if raw.walk_into {

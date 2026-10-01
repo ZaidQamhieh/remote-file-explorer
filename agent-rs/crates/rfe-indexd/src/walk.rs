@@ -15,10 +15,19 @@ pub struct Sub {
     pub id: u32,
 }
 
+/// Where a visit happens: the directory's handle and absolute path, plus the walk root's handle and the
+/// directory's path relative to it (`""` for the root), which symlink resolution needs.
+pub struct At<'a> {
+    pub root: &'a Dir,
+    pub dir: &'a Dir,
+    pub path: &'a str,
+    pub rel: &'a str,
+}
+
 /// What a walk does with each directory. `visit` lists one directory and returns the subdirectories to recurse
 /// into; it runs on rayon worker threads, so implementations must be `Sync`.
 pub trait Visitor: Sync {
-    fn visit(&self, dir: &Dir, dir_path: &str, id: u32) -> Vec<Sub>;
+    fn visit(&self, at: &At, id: u32) -> Vec<Sub>;
     /// Checked before each directory is opened; true stops the walk early (cancel, budget, deadline).
     fn stop(&self) -> bool;
 }
@@ -28,16 +37,44 @@ pub fn par_walk<V: Visitor>(v: &V, root: &str, root_id: u32) {
     let Ok(dir) = Dir::open_ambient_dir(root, ambient_authority()) else {
         return;
     };
-    rayon::scope(|s| descend(s, v, Arc::new(dir), root.to_string(), root_id));
+    let dir = Arc::new(dir);
+    rayon::scope(|s| {
+        let at = Node {
+            root: Arc::clone(&dir),
+            dir,
+            path: root.to_string(),
+            rel: String::new(),
+            id: root_id,
+        };
+        descend(s, v, at)
+    });
 }
 
-fn descend<'s, V: Visitor>(s: &rayon::Scope<'s>, v: &'s V, dir: Arc<Dir>, path: String, id: u32) {
+struct Node {
+    root: Arc<Dir>,
+    dir: Arc<Dir>,
+    path: String,
+    rel: String,
+    id: u32,
+}
+
+fn descend<'s, V: Visitor>(s: &rayon::Scope<'s>, v: &'s V, node: Node) {
     if v.stop() {
         return;
     }
-    let subs = v.visit(&dir, &path, id);
+    let subs = v.visit(
+        &At {
+            root: &node.root,
+            dir: &node.dir,
+            path: &node.path,
+            rel: &node.rel,
+        },
+        node.id,
+    );
     for sub in subs {
-        let parent = Arc::clone(&dir);
+        let parent = Arc::clone(&node.dir);
+        let root = Arc::clone(&node.root);
+        let rel = rel_join(&node.rel, &sub.name.to_string_lossy());
         s.spawn(move |s| {
             if v.stop() {
                 return;
@@ -45,9 +82,25 @@ fn descend<'s, V: Visitor>(s: &rayon::Scope<'s>, v: &'s V, dir: Arc<Dir>, path: 
             // open_dir never follows a link out of the sandbox; failures (permissions, a vanished dir) skip it.
             if let Ok(child) = parent.open_dir(&sub.name) {
                 drop(parent);
-                descend(s, v, Arc::new(child), sub.path, sub.id);
+                let node = Node {
+                    root,
+                    dir: Arc::new(child),
+                    path: sub.path,
+                    rel,
+                    id: sub.id,
+                };
+                descend(s, v, node);
             }
         });
+    }
+}
+
+/// Joins a root-relative directory path and a child name with `/` (cap-std accepts it on every platform).
+pub fn rel_join(rel: &str, name: &str) -> String {
+    if rel.is_empty() {
+        name.to_string()
+    } else {
+        format!("{rel}/{name}")
     }
 }
 

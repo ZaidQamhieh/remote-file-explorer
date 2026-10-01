@@ -41,7 +41,7 @@ func TestRouteMatrix_ReadOnlyBlocksEveryMutation(t *testing.T) {
 	})
 	r.Use(deviceJailMiddleware(roOps))
 	r.Route("/v1", func(r chi.Router) {
-		registerFsRoutes(r, cfg, roOps)
+		registerFsRoutes(r, cfg, roOps, &SearchIndex{})
 		registerTrashRoutes(r, cfg, roOps)
 		registerContentRoutes(r, cfg, roOps)
 	})

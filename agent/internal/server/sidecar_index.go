@@ -1,0 +1,337 @@
+package server
+
+import (
+	"container/heap"
+	"context"
+	"io/fs"
+	"log"
+	"mime"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/sidecar"
+)
+
+// indexBackend is what searchHandler needs from a search index: the in-process SearchIndex or the rfe-indexd
+// sidecar behind sidecarIndex.
+type indexBackend interface {
+	query(filters *searchFilters, roots []string, limit int) (results []fsops.Entry, truncated bool, ok bool)
+}
+
+// sidecarEnabled reports whether the RFE_SIDECARS list (comma separated names, or "all"/"1") turns on name.
+func sidecarEnabled(name string) bool {
+	for _, v := range strings.Split(os.Getenv("RFE_SIDECARS"), ",") {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case name, "all", "1", "true":
+			return true
+		}
+	}
+	return false
+}
+
+// sidecarPath finds a sidecar executable: $RFE_SIDECAR_DIR, else next to the agent executable.
+func sidecarPath(name string) (string, bool) {
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	dirs := []string{os.Getenv("RFE_SIDECAR_DIR")}
+	if exe, err := os.Executable(); err == nil {
+		dirs = append(dirs, filepath.Dir(exe))
+	}
+	for _, d := range dirs {
+		if d == "" {
+			continue
+		}
+		p := filepath.Join(d, name)
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+			return p, true
+		}
+	}
+	return "", false
+}
+
+func sidecarConfig(name string) (sidecar.Config, bool) {
+	p, ok := sidecarPath(name)
+	if !ok {
+		return sidecar.Config{}, false
+	}
+	return sidecar.Config{Name: name, Path: p, Logf: log.Printf}, true
+}
+
+// newIndexBackend picks the search index: rfe-indexd when enabled and installed, else the in-process index.
+func newIndexBackend(ops *fsops.Ops) indexBackend {
+	if sidecarEnabled("indexd") {
+		if cfg, ok := sidecarConfig("rfe-indexd"); ok {
+			log.Printf("search index: using sidecar %s", cfg.Path)
+			return newSidecarIndex(ops, cfg)
+		}
+		log.Printf("search index: RFE_SIDECARS enables indexd but rfe-indexd was not found; using the built-in index")
+	}
+	return NewSearchIndex(ops)
+}
+
+// sidecarIndex keeps the index in rfe-indexd and answers queries from it. While the sidecar is down or has no
+// snapshot yet, query reports ok=false and the handler walks live, exactly as before the first Go index build.
+type sidecarIndex struct {
+	ops  *fsops.Ops
+	sup  *sidecar.Supervisor
+	kick chan struct{}
+}
+
+func newSidecarIndex(ops *fsops.Ops, cfg sidecar.Config) *sidecarIndex {
+	s := &sidecarIndex{ops: ops, kick: make(chan struct{}, 1)}
+	s.sup = sidecar.NewSupervisor(cfg, func(*sidecar.Client) { s.rebuildSoon() })
+	s.sup.Run()
+	go s.loop()
+	return s
+}
+
+func (s *sidecarIndex) rebuildSoon() {
+	select {
+	case s.kick <- struct{}{}:
+	default:
+	}
+}
+
+type buildReq struct {
+	Roots      []string `json:"roots"`
+	MaxEntries int      `json:"maxEntries"`
+	MaxBytes   int64    `json:"maxBytes"`
+}
+
+type buildResp struct {
+	Entries   int  `json:"entries"`
+	Truncated bool `json:"truncated"`
+}
+
+func (s *sidecarIndex) loop() {
+	for {
+		wait := time.Minute
+		if c, err := s.sup.Client(); err == nil {
+			started := time.Now()
+			wait = indexRebuildInterval
+			if err := s.build(c); err != nil {
+				log.Printf("search index (sidecar): build failed: %v", err)
+				wait = 30 * time.Second
+			} else if backoff := time.Since(started) * maxIndexDutyCycle; backoff > wait {
+				wait = backoff
+			}
+		}
+		select {
+		case <-time.After(wait):
+		case <-s.kick:
+		}
+	}
+}
+
+func (s *sidecarIndex) build(c *sidecar.Client) error {
+	roots := s.ops.Roots()
+	if len(roots) == 0 {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			roots = []string{home}
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	var resp buildResp
+	if err := c.Call(ctx, "index.build", buildReq{Roots: roots, MaxEntries: indexMaxEntries, MaxBytes: indexMaxEstimatedBytes}, &resp); err != nil {
+		return err
+	}
+	if resp.Truncated {
+		log.Printf("search index (sidecar): truncated at %d entries; remaining files are not searchable", resp.Entries)
+	}
+	return nil
+}
+
+type wireFilters struct {
+	Glob        string   `json:"glob"`
+	Needle      string   `json:"needle"`
+	Types       []string `json:"types"`
+	Exts        []string `json:"exts"`
+	MinSize     *int64   `json:"minSize"`
+	MaxSize     *int64   `json:"maxSize"`
+	ModAfterNs  *int64   `json:"modAfterNs"`
+	ModBeforeNs *int64   `json:"modBeforeNs"`
+}
+
+func sortedKeys(m map[string]bool) []string {
+	if m == nil {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k, ok := range m {
+		if ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func toWireFilters(f *searchFilters) wireFilters {
+	w := wireFilters{Glob: f.glob, Needle: f.needle, Types: sortedKeys(f.types), Exts: sortedKeys(f.exts)}
+	if f.types != nil && w.Types == nil {
+		w.Types = []string{}
+	}
+	if f.exts != nil && w.Exts == nil {
+		w.Exts = []string{}
+	}
+	if f.hasMinSize {
+		v := f.minSize
+		w.MinSize = &v
+	}
+	if f.hasMaxSize {
+		v := f.maxSize
+		w.MaxSize = &v
+	}
+	if f.hasModAfter {
+		v := f.modAfter.UnixNano()
+		w.ModAfterNs = &v
+	}
+	if f.hasModBefore {
+		v := f.modBefore.UnixNano()
+		w.ModBeforeNs = &v
+	}
+	return w
+}
+
+type wireEntry struct {
+	Path          string `json:"path"`
+	Size          int64  `json:"size"`
+	MtimeNs       int64  `json:"mtimeNs"`
+	CtimeNs       int64  `json:"ctimeNs"`
+	Mode          uint32 `json:"mode"`
+	IsDir         bool   `json:"isDir"`
+	IsSymlink     bool   `json:"isSymlink"`
+	SymlinkTarget string `json:"symlinkTarget"`
+}
+
+func (w *wireEntry) toEntry() fsops.Entry {
+	e := fsops.Entry{
+		Name:          filepath.Base(w.Path),
+		Path:          w.Path,
+		IsDir:         w.IsDir,
+		Size:          w.Size,
+		Mode:          fs.FileMode(w.Mode).String(),
+		Modified:      time.Unix(0, w.MtimeNs),
+		IsSymlink:     w.IsSymlink,
+		SymlinkTarget: w.SymlinkTarget,
+	}
+	if w.CtimeNs != 0 {
+		e.Created = time.Unix(0, w.CtimeNs)
+	}
+	if !w.IsDir {
+		// Same as fsops' no-sniff entries: unknown extensions are octet-stream, never empty.
+		e.MimeType = mime.TypeByExtension(filepath.Ext(w.Path))
+		if e.MimeType == "" {
+			e.MimeType = "application/octet-stream"
+		}
+	}
+	return e
+}
+
+// acceptSidecarPath is the agent's own jail check on a path a sidecar returned: absolute, already clean, and
+// inside one of the roots this request is allowed to see. Anything else is dropped, whatever the sidecar says.
+func acceptSidecarPath(p string, scopes []rootScope) bool {
+	return filepath.IsAbs(p) && filepath.Clean(p) == p && underAnyRootScopes(p, scopes)
+}
+
+type queryReq struct {
+	Filters wireFilters `json:"filters"`
+	Roots   []string    `json:"roots"`
+	Limit   int         `json:"limit"`
+}
+
+type queryResp struct {
+	Ready     bool        `json:"ready"`
+	Entries   []wireEntry `json:"entries"`
+	Truncated bool        `json:"truncated"`
+}
+
+func (s *sidecarIndex) query(filters *searchFilters, roots []string, limit int) ([]fsops.Entry, bool, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), searchTimeBudget)
+	defer cancel()
+	var resp queryResp
+	if err := s.sup.Call(ctx, "index.query", queryReq{Filters: toWireFilters(filters), Roots: roots, Limit: limit}, &resp); err != nil {
+		return nil, false, false
+	}
+	if !resp.Ready {
+		return nil, false, false
+	}
+	scopes := prepareRootScopes(roots)
+	out := make([]fsops.Entry, 0, len(resp.Entries))
+	for i := range resp.Entries {
+		if !acceptSidecarPath(resp.Entries[i].Path, scopes) {
+			continue
+		}
+		out = append(out, resp.Entries[i].toEntry())
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, resp.Truncated, true
+}
+
+type recentsReq struct {
+	Roots    []string `json:"roots"`
+	Limit    int      `json:"limit"`
+	BudgetMs int64    `json:"budgetMs"`
+}
+
+type recentsResp struct {
+	Entries []wireEntry `json:"entries"`
+	Partial bool        `json:"partial"`
+}
+
+// sidecarRecentWalker returns a recent-files walker that asks rfe-indexd and falls back to the Go walk when the
+// sidecar is unavailable or misbehaves.
+func sidecarRecentWalker(sup *sidecar.Supervisor) func(context.Context, *fsops.Ops, string, int, *recentHeap) {
+	return func(ctx context.Context, ops *fsops.Ops, root string, limit int, h *recentHeap) {
+		budget := 15 * time.Second
+		if dl, ok := ctx.Deadline(); ok {
+			budget = time.Until(dl)
+		}
+		var resp recentsResp
+		err := sup.Call(ctx, "recents.scan", recentsReq{Roots: []string{root}, Limit: limit, BudgetMs: budget.Milliseconds()}, &resp)
+		if err != nil {
+			if ctx.Err() == nil {
+				walkForRecentWithOps(ctx, ops, root, limit, h)
+			}
+			return
+		}
+		scopes := prepareRootScopes([]string{root})
+		for i := range resp.Entries {
+			w := &resp.Entries[i]
+			// A symlink to a directory is listed with isDir=true, as the Go walk lists it; real directories never arrive.
+			if !acceptSidecarPath(w.Path, scopes) {
+				continue
+			}
+			e := w.toEntry()
+			if h.Len() < limit {
+				heap.Push(h, e)
+			} else if e.Modified.After((*h)[0].Modified) {
+				(*h)[0] = e
+				heap.Fix(h, 0)
+			}
+		}
+		if resp.Partial {
+			// The sidecar stopped at the same deadline the handler holds; wait for it so the handler reports the
+			// time budget exactly as it does for a slow Go walk.
+			<-ctx.Done()
+		}
+	}
+}
+
+// recentWalker returns the walker for /fs/recent: the sidecar's when the search index runs on rfe-indexd (one
+// shared process), else the Go walk.
+func recentWalker(idx indexBackend) func(context.Context, *fsops.Ops, string, int, *recentHeap) {
+	if si, ok := idx.(*sidecarIndex); ok {
+		return sidecarRecentWalker(si.sup)
+	}
+	return walkForRecentWithOps
+}

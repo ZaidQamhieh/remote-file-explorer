@@ -2,8 +2,7 @@
 //! pruning and file-only rule as the Go agent's recents handler.
 
 use crate::entry::{join_path, stat_of, wire_entry, WireEntry};
-use crate::walk::{self, Sub, Visitor};
-use cap_std::fs::Dir;
+use crate::walk::{self, At, Sub, Visitor};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -47,7 +46,8 @@ struct Scan<'a> {
 }
 
 impl Visitor for Scan<'_> {
-    fn visit(&self, dir: &Dir, dir_path: &str, _id: u32) -> Vec<Sub> {
+    fn visit(&self, at: &At, _id: u32) -> Vec<Sub> {
+        let (dir, dir_path) = (at.dir, at.path);
         let mut subs = Vec::new();
         let Ok(rd) = dir.entries() else { return subs };
         for ent in rd {
@@ -71,7 +71,7 @@ impl Visitor for Scan<'_> {
             if mtime <= self.threshold.load(Ordering::Relaxed) {
                 continue;
             }
-            let entry = wire_entry(dir, &os, join_path(dir_path, name), &meta);
+            let entry = wire_entry(at, &os, join_path(dir_path, name), &meta);
             let mut heap = self.heap.lock().unwrap();
             heap.push(Reverse(Item {
                 mtime_ns: mtime,

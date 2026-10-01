@@ -44,7 +44,7 @@ type Config struct {
 // New builds the v1 router and wires all routes.
 func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (http.Handler, error) {
 	ops := fsops.NewWithSettings(cfg.Settings)
-	searchIndex := NewSearchIndex(ops)
+	searchIndex := newIndexBackend(ops)
 
 	thumbRenderer, err := thumbs.New(cfg.ThumbCacheDir)
 	if err != nil {
@@ -121,7 +121,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 			r.With(requireFileCapabilities(capBrowse)).Get("/search", searchHandler(ops, searchIndex))
 			r.With(requireFileCapabilities(capDownload)).Get("/thumb", thumbHandler(ops, thumbRenderer))
 			registerUpdateRoutes(r, cfg)
-			registerFsRoutes(r, cfg, ops)
+			registerFsRoutes(r, cfg, ops, searchIndex)
 			registerTrashRoutes(r, cfg, ops)
 			registerContentRoutes(r, cfg, ops)
 			registerTransferRoutes(r, tm, cfg, ops)
@@ -195,7 +195,7 @@ func registerUpdateRoutes(r chi.Router, cfg Config) {
 }
 
 // registerFsRoutes wires the filesystem CRUD/browse endpoints.
-func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
+func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops, recents indexBackend) {
 	r.With(requireFileCapabilities(capBrowse)).Get("/fs", listDirHandler(ops))
 	r.With(requireFileCapabilities(capDelete)).Delete("/fs", deleteHandler(ops, cfg.TrashDir))
 	r.With(requireFileCapabilities(capModify)).Post("/fs/folder", createFolderHandler(ops))
@@ -210,7 +210,7 @@ func registerFsRoutes(r chi.Router, cfg Config, ops *fsops.Ops) {
 	r.With(requireFileCapabilities(capModify)).Post("/fs/chmod", chmodHandler(ops))
 	r.With(requireFileCapabilities(capBrowse)).Get("/fs/archive", archivePeekHandler(ops))
 	r.With(requireFileCapabilities(capDownload)).Post("/fs/checksums", batchChecksumHandler(ops))
-	r.With(requireFileCapabilities(capBrowse)).Get("/fs/recent", recentHandler(ops))
+	r.With(requireFileCapabilities(capBrowse)).Get("/fs/recent", recentHandlerWithWalker(ops, recentWalker(recents)))
 }
 
 // registerTrashRoutes wires the trash list/restore/empty endpoints.

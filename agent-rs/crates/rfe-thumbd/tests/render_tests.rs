@@ -77,6 +77,15 @@ fn every_decoder_produces_a_thumbnail() {
         ("anim.gif", 120, 80),
         ("lossy.webp", 128, 96),
         ("alpha.webp", 128, 64),
+        ("photo.tiff", 128, 96),
+        ("deflate.tiff", 128, 96),
+        ("raw.tiff", 128, 96),
+        ("gray.tiff", 128, 96),
+        ("rgba.tiff", 128, 96),
+        ("photo.bmp", 128, 96),
+        ("pal.bmp", 128, 96),
+        ("bits32.bmp", 128, 96),
+        ("topdown.bmp", 128, 96),
     ] {
         let t = render::render(&data(name), 128).unwrap_or_else(|e| panic!("{name}: {e:?}"));
         assert_eq!((t.width, t.height), (w, h), "{name}");
@@ -210,4 +219,67 @@ fn random_mutations_never_panic() {
             assert!(r.is_ok(), "{name} panicked on a mutated input");
         }
     }
+}
+
+#[test]
+fn tiff_and_bmp_keep_their_orientation_and_colors() {
+    // The same picture in every variant: a red block top left on blue, 200x150, shown at 128x96.
+    for name in [
+        "photo.tiff",
+        "deflate.tiff",
+        "raw.tiff",
+        "rgba.tiff",
+        "photo.bmp",
+        "bits32.bmp",
+        "topdown.bmp",
+    ] {
+        let t = render::render(&data(name), 128).unwrap();
+        assert_eq!((t.src_width, t.src_height), (200, 150), "{name}");
+        let img = pixels(&t.jpeg);
+        assert!(
+            is_red(at(&img, 10, 8)),
+            "{name}: red block top left, got {:?}",
+            at(&img, 10, 8)
+        );
+        assert!(
+            near(at(&img, 100, 70), [30, 60, 200], 24),
+            "{name}: blue background, got {:?}",
+            at(&img, 100, 70)
+        );
+    }
+    // A paletted bitmap is quantized to 16 colors, so only the layout is checked.
+    let img = pixels(&render::render(&data("pal.bmp"), 128).unwrap().jpeg);
+    assert!(is_red(at(&img, 10, 8)), "{:?}", at(&img, 10, 8));
+    let gray = pixels(&render::render(&data("gray.tiff"), 128).unwrap().jpeg);
+    let p = at(&gray, 100, 70);
+    assert!(
+        p[0].abs_diff(p[1]) < 6 && p[1].abs_diff(p[2]) < 6,
+        "gray tiff is gray: {p:?}"
+    );
+}
+
+#[test]
+fn damaged_tiff_and_bmp_are_unsupported_not_panics() {
+    let tiff = data("photo.tiff");
+    let bmp = data("photo.bmp");
+    for (name, bytes) in [
+        ("tiff cut short", tiff[..tiff.len() / 2].to_vec()),
+        ("tiff header only", tiff[..8].to_vec()),
+        ("bmp cut short", bmp[..bmp.len() / 2].to_vec()),
+        ("bmp header only", bmp[..30].to_vec()),
+        ("bm text", b"BM is not an image".to_vec()),
+    ] {
+        match decode::decode(&bytes, 128) {
+            Err(DecodeError::Unsupported(_)) | Err(DecodeError::TooLarge(_)) => {}
+            other => panic!("{name}: {:?}", other.map(|d| d.format)),
+        }
+    }
+    // A bitmap that declares a huge size is refused before any pixel memory is allocated.
+    let mut huge = bmp.clone();
+    huge[18..22].copy_from_slice(&60000u32.to_le_bytes());
+    huge[22..26].copy_from_slice(&60000u32.to_le_bytes());
+    assert!(matches!(
+        decode::decode(&huge, 128),
+        Err(DecodeError::TooLarge(_))
+    ));
 }

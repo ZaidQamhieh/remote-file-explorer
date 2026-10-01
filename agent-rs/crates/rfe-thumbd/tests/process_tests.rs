@@ -89,6 +89,10 @@ fn renders_under_the_sandbox() {
         ("orient6.jpg", 96, 128),
         ("alpha.webp", 128, 64),
         ("anim.gif", 120, 80),
+        ("photo.tiff", 128, 96),
+        ("deflate.tiff", 128, 96),
+        ("photo.bmp", 128, 96),
+        ("pal.bmp", 128, 96),
     ] {
         let (v, body) = t.call("thumb.render", json!({"maxSize": 128}), Some(&data(name)));
         assert_eq!(v["ok"], true, "{name}: {v}");

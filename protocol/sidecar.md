@@ -110,9 +110,10 @@ The agent opens the file inside its own jail and sends the bytes; the sidecar ne
   `{width, height, srcWidth, srcHeight, format}` with a body frame holding the JPEG. The longest side is at most
   `maxSize` and the image is never upscaled (Go `imaging.Fit`), the EXIF orientation is applied first, the filter is
   Lanczos and the JPEG quality is 80 with 4:2:0 chroma. Transparency is flattened onto black, as the Go renderer does.
-- Formats: JPEG (decoded at a DCT-reduced size when the target is much smaller), PNG, GIF (first frame), WebP.
-  `NOT_SUPPORTED` means the sidecar cannot decode it (any other format, a corrupt file): the agent tries its own
-  decoder, which still handles TIFF and BMP. `TOO_LARGE` means over 40 megapixels: the agent answers "no thumbnail".
+- Formats: JPEG (decoded at a DCT-reduced size when the target is much smaller), PNG, GIF (first frame), WebP, TIFF (gray, RGB, RGBA, 8 or 16 bit; LZW, Deflate or none; no palette or CMYK) and
+  uncompressed BMP (1, 4, 8, 24, 32 bit, bottom-up or top-down; alpha ignored, like Go's x/image/bmp).
+  `NOT_SUPPORTED` means the sidecar cannot decode it (any other format or variant, a corrupt file): the agent tries
+  its own decoder. `TOO_LARGE` means over 40 megapixels: the agent answers "no thumbnail".
 - Four renders run at once; more than 256 MiB of queued sources is answered `BUSY`. A render that runs over 30
   seconds ends the process; the supervisor restarts it.
 

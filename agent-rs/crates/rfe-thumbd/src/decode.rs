@@ -27,6 +27,8 @@ pub enum Format {
     Png,
     Gif,
     Webp,
+    Tiff,
+    Bmp,
 }
 
 impl Format {
@@ -36,6 +38,8 @@ impl Format {
             Format::Png => "png",
             Format::Gif => "gif",
             Format::Webp => "webp",
+            Format::Tiff => "tiff",
+            Format::Bmp => "bmp",
         }
     }
 }
@@ -49,6 +53,10 @@ pub fn sniff(data: &[u8]) -> Option<Format> {
         Some(Format::Gif)
     } else if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
         Some(Format::Webp)
+    } else if data.starts_with(b"II*\0") || data.starts_with(b"MM\0*") {
+        Some(Format::Tiff)
+    } else if data.starts_with(b"BM") {
+        Some(Format::Bmp)
     } else {
         None
     }
@@ -90,6 +98,8 @@ pub fn decode(data: &[u8], want: u32) -> Result<Decoded, DecodeError> {
         Some(Format::Png) => png(data),
         Some(Format::Gif) => gif(data),
         Some(Format::Webp) => webp(data),
+        Some(Format::Tiff) => tiff(data),
+        Some(Format::Bmp) => bmp(data),
         None => Err(DecodeError::Unsupported("not a supported image".into())),
     }
 }
@@ -253,6 +263,149 @@ fn webp(data: &[u8]) -> Result<Decoded, DecodeError> {
     };
     Ok(Decoded {
         format: Format::Webp,
+        src_width: w,
+        src_height: h,
+        width: w,
+        height: h,
+        rgb,
+        orientation: 1,
+    })
+}
+
+/// Scratch memory the TIFF decoder may use on top of the pixel budget.
+const TIFF_BUFFER_LIMIT: usize = 256 << 20;
+
+fn tiff(data: &[u8]) -> Result<Decoded, DecodeError> {
+    use ::tiff::decoder::{Decoder, DecodingResult, Limits};
+    use ::tiff::ColorType;
+    let mut limits = Limits::default();
+    limits.decoding_buffer_size = TIFF_BUFFER_LIMIT;
+    let mut dec = Decoder::new(Cursor::new(data))
+        .map_err(DecodeError::unsupported)?
+        .with_limits(limits);
+    let (w, h) = dec.dimensions().map_err(DecodeError::unsupported)?;
+    check_pixels(w as u64, h as u64)?;
+    let color = dec.colortype().map_err(DecodeError::unsupported)?;
+    let image = dec.read_image().map_err(DecodeError::unsupported)?;
+    // 16-bit samples keep their high byte.
+    let eight: Vec<u8> = match image {
+        DecodingResult::U8(v) => v,
+        DecodingResult::U16(v) => v.into_iter().map(|x| (x >> 8) as u8).collect(),
+        _ => return Err(DecodeError::Unsupported("tiff sample type".into())),
+    };
+    let rgb = match color {
+        ColorType::Gray(8) | ColorType::Gray(16) => eight.iter().flat_map(|&g| [g, g, g]).collect(),
+        ColorType::GrayA(8) | ColorType::GrayA(16) => eight
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|c| {
+                let v = ((c[0] as u32 * c[1] as u32 + 127) / 255) as u8;
+                [v, v, v]
+            })
+            .collect(),
+        ColorType::RGB(8) | ColorType::RGB(16) => eight,
+        ColorType::RGBA(8) | ColorType::RGBA(16) => flatten_rgba(&eight),
+        other => {
+            return Err(DecodeError::Unsupported(format!(
+                "tiff color type {other:?}"
+            )))
+        }
+    };
+    if rgb.len() != w as usize * h as usize * 3 {
+        return Err(DecodeError::Unsupported("tiff pixel count mismatch".into()));
+    }
+    Ok(Decoded {
+        format: Format::Tiff,
+        src_width: w,
+        src_height: h,
+        width: w,
+        height: h,
+        rgb,
+        orientation: 1,
+    })
+}
+
+fn le_u16(d: &[u8], at: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(d.get(at..at + 2)?.try_into().ok()?))
+}
+
+fn le_u32(d: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(d.get(at..at + 4)?.try_into().ok()?))
+}
+
+/// Uncompressed Windows bitmaps (1, 4, 8, 24 and 32 bits per pixel), like Go's x/image/bmp: no RLE, no bit masks,
+/// the alpha of 32-bit pixels is ignored. Rows may be stored bottom-up (the usual) or top-down (negative height).
+fn bmp(data: &[u8]) -> Result<Decoded, DecodeError> {
+    let bad = || DecodeError::Unsupported("malformed bmp".into());
+    let pixel_offset = le_u32(data, 10).ok_or_else(bad)? as usize;
+    let header_size = le_u32(data, 14).ok_or_else(bad)? as usize;
+    if header_size < 40 {
+        return Err(DecodeError::Unsupported("bmp core header".into()));
+    }
+    let w = le_u32(data, 18).ok_or_else(bad)? as i32;
+    let raw_h = le_u32(data, 22).ok_or_else(bad)? as i32;
+    let planes = le_u16(data, 26).ok_or_else(bad)?;
+    let bpp = le_u16(data, 28).ok_or_else(bad)? as u32;
+    let compression = le_u32(data, 30).ok_or_else(bad)?;
+    if planes != 1 || compression != 0 {
+        return Err(DecodeError::Unsupported("compressed bmp".into()));
+    }
+    if w <= 0 || raw_h == 0 || raw_h == i32::MIN {
+        return Err(DecodeError::Unsupported("invalid bmp dimensions".into()));
+    }
+    let top_down = raw_h < 0;
+    let (w, h) = (w as u32, raw_h.unsigned_abs());
+    check_pixels(w as u64, h as u64)?;
+    if !matches!(bpp, 1 | 4 | 8 | 24 | 32) {
+        return Err(DecodeError::Unsupported(format!(
+            "bmp with {bpp} bits per pixel"
+        )));
+    }
+    // Palette: BGRX entries right after the header.
+    let colors = if bpp <= 8 {
+        let n = le_u32(data, 46).ok_or_else(bad)? as usize;
+        if n == 0 {
+            1 << bpp
+        } else {
+            n.min(1 << bpp)
+        }
+    } else {
+        0
+    };
+    let palette_at = 14 + header_size;
+    let palette = data
+        .get(palette_at..palette_at + colors * 4)
+        .ok_or_else(bad)?;
+    let stride = ((w as u64 * bpp as u64).div_ceil(32) * 4) as usize;
+    let needed = pixel_offset as u64 + stride as u64 * h as u64;
+    if needed > data.len() as u64 {
+        return Err(bad());
+    }
+    let mut rgb = Vec::with_capacity(w as usize * h as usize * 3);
+    for y in 0..h as usize {
+        let src_row = if top_down { y } else { h as usize - 1 - y };
+        let row = &data[pixel_offset + src_row * stride..][..stride];
+        for x in 0..w as usize {
+            let px: [u8; 3] = match bpp {
+                24 | 32 => {
+                    let o = x * (bpp as usize / 8);
+                    [row[o + 2], row[o + 1], row[o]]
+                }
+                _ => {
+                    let per_byte = 8 / bpp as usize;
+                    let byte = row[x / per_byte];
+                    let shift = 8 - bpp as usize * (x % per_byte + 1);
+                    let idx = ((byte >> shift) & ((1u16 << bpp) - 1) as u8) as usize;
+                    let e = palette.get(idx * 4..idx * 4 + 3).unwrap_or(&[0, 0, 0]);
+                    [e[2], e[1], e[0]]
+                }
+            };
+            rgb.extend_from_slice(&px);
+        }
+    }
+    Ok(Decoded {
+        format: Format::Bmp,
         src_width: w,
         src_height: h,
         width: w,

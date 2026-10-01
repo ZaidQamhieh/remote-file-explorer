@@ -113,4 +113,5 @@ jobs:
           version="${GITHUB_REF_NAME#agent-v}"
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Remote File Explorer Agent ${version}" \
-            --generate-notes
+            --generate-notes \
+            --latest=false

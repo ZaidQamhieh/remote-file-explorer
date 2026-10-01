@@ -33,13 +33,15 @@ function withSigningAndDebuggable(config) {
     }
     const relKs = process.env.RFE_RELEASE_KEYSTORE;
     const relPass = process.env.RFE_RELEASE_STOREPASS_FILE;
+    // The key password defaults to the store password; CI keeps them as separate secrets.
+    const relKeyPass = process.env.RFE_RELEASE_KEYPASS_FILE || relPass;
     if (relKs && relPass) {
       const alias = process.env.RFE_RELEASE_KEY_ALIAS || 'upload';
       const block = `        release {
             storeFile file(${JSON.stringify(relKs)})
             storePassword new File(${JSON.stringify(relPass)}).text.trim()
             keyAlias ${JSON.stringify(alias)}
-            keyPassword new File(${JSON.stringify(relPass)}).text.trim()
+            keyPassword new File(${JSON.stringify(relKeyPass)}).text.trim()
         }
 `;
       if (!/signingConfigs \{/.test(g)) throw new Error('withRfeAndroid: no signingConfigs block to extend');

@@ -52,11 +52,15 @@ flutter run                      # enter agent host:port on the connect screen
 ```
 
 ### Release (OTA APK)
-Bump `app/pubspec.yaml` `X.Y.Z+N`, commit, push, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
-The tag runs `.github/workflows/release.yml`, which publishes the GitHub Release the app's
-updater reads; confirm with `gh release list`. **The build number (`+N`) must increase every
-release** — OTA update detection compares `versionCode`, not the name. `./release.sh` only
-copies an APK into `~/.rfe-agent/updates/`, which the current app does not read; it is not a release.
+The Android app is `mobile/` (React Native); `app/` (Flutter) is the legacy v1.42 line. Set `expo.version` and
+`expo.android.versionCode` in `mobile/app.json` (the code **must increase every release**: OTA detection compares
+`versionCode`, and it must stay above the Flutter build's 80), commit, push, then tag `vX.Y.Z` (becomes the Latest
+release) or `vX.Y.Z-rc.N` (pre-release, never Latest) and push the tag. `.github/workflows/release.yml` runs the CI
+gates, builds and signs the APK with the production key from repo secrets, checks the signing certificate, and
+publishes the GitHub Release plus `latest.json` that the app's updater reads (`releases/latest`). A push to an
+`rn/**` branch runs the same pipeline as a dry run and keeps the APK as a workflow artifact. Agent releases
+(`agent-v*`) are published with `--latest=false`: the updater needs the newest *app* release to hold the Latest flag.
+Local signed build: `mobile/scripts/build-release-apk.sh`. See `docs/upgrade-to-react-native.md`.
 
 ## Architecture you can't see from one file
 

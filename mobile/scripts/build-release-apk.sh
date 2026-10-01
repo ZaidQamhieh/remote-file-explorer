@@ -9,6 +9,7 @@ PASS="${RFE_RELEASE_STOREPASS_FILE:-$HOME/.rfe-keystore/.storepass}"
 [ -f "$KS" ] && [ -f "$PASS" ] || { echo "missing release keystore ($KS) or password file ($PASS)"; exit 1; }
 unset RFE_TEST_BUILD RFE_DEBUG_KEYSTORE
 export RFE_RELEASE_KEYSTORE="$KS" RFE_RELEASE_STOREPASS_FILE="$PASS"
+[ -z "${RFE_RELEASE_KEYPASS_FILE:-}" ] || export RFE_RELEASE_KEYPASS_FILE
 npx expo prebuild --platform android --clean --no-install >/dev/null
 abis=()
 [ -n "${RFE_ABIS:-}" ] && abis=(-PreactNativeArchitectures="$RFE_ABIS")

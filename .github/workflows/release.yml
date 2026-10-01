@@ -1,60 +1,56 @@
 name: Release
 
-# Continuous delivery: build the Android release APK on a GitHub runner and
-# publish it (plus a `latest.json` manifest) as a GitHub Release asset, so
-# releases no longer go through the local `release.sh` Gradle build.
+# Builds the React Native Android app (mobile/) on a GitHub runner, signs it with the production key and publishes it
+# (plus a `latest.json` manifest) as a GitHub Release, which is what the app's updater reads.
 #
-# **How to cut a release:** bump `app/pubspec.yaml`'s `version:` to `X.Y.Z+N`
-# (the build number N MUST increase — OTA detection compares versionCode),
-# commit, then push a matching tag:
+# **Cutting a release:** set `expo.version` and `expo.android.versionCode` in mobile/app.json (the code MUST increase,
+# OTA detection compares it), commit, then push a matching tag:
 #
-#     git tag v1.12.0 && git push origin v1.12.0
+#     git tag v2.0.0 && git push origin v2.0.0          # becomes the Latest release: every installed app sees it
+#     git tag v2.0.0-rc.1 && git push origin v2.0.0-rc.1  # a tag with a suffix is a pre-release, never Latest
 #
-# This is the ONLY step that publishes a public artifact; nothing here runs
-# until such a tag is pushed. The agent's local update channel (`release.sh` →
-# `~/.rfe-agent/updates/`) keeps working unchanged as a fallback source.
+# A push to an `rn/**` branch runs the whole pipeline (CI gates, signed build, manifest) as a dry run and keeps the
+# APK as a workflow artifact; only a `v*` tag publishes anything.
 
 on:
   push:
     tags: ['v*']
+    branches: ['rn/**']
 
 permissions:
   contents: write
 
 jobs:
-  # A tag used to publish straight from a build that had passed nothing: the
-  # gates only ran on branch pushes, and this workflow tracked floating
-  # `stable` while CI pinned a Flutter version. Requiring the real CI workflow
-  # means the published artifact is built from a commit that passed the very
-  # same checks, on the very same toolchain (PR-70).
+  # The published artifact must come from a commit that passed the same checks CI runs (PR-70).
   verify:
     name: CI gates
     uses: ./.github/workflows/ci.yml
 
+  verify-mobile:
+    name: Mobile gates
+    uses: ./.github/workflows/mobile.yml
+
   release:
     name: Build & publish APK
-    needs: verify
+    needs: [verify, verify-mobile]
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      # Pinned to the same version ci.yml verifies with. Floating `stable`
-      # meant a tag could ship on a toolchain nothing had ever tested.
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          flutter-version: "3.44.2"
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
-      - name: flutter pub get
-        working-directory: app
-        run: flutter pub get
+      - name: npm ci
+        working-directory: mobile
+        run: npm ci
 
-      # Recreate the release signing material from secrets so the CI-built APK
-      # is signed with the SAME upload key as local builds — without this the
-      # OTA updater can detect a new version but Android refuses to install it
-      # (signature mismatch). The keystore lands in $RUNNER_TEMP (absolute path)
-      # and key.properties at app/android/ where build.gradle.kts reads it.
+      # Recreate the release signing material from secrets so the APK carries the SAME key as every earlier release;
+      # without it Android refuses to install the update. The build script checks the certificate digest afterwards.
       - name: Configure release signing
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -64,61 +60,75 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_B64:-}" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot sign release"
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing, cannot sign release"
             exit 1
           fi
-          ks="$RUNNER_TEMP/upload-keystore.jks"
-          printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+          umask 077
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$STORE_PW" > "$RUNNER_TEMP/storepass"
+          printf '%s' "$KEY_PW" > "$RUNNER_TEMP/keypass"
           {
-            echo "storeFile=$ks"
-            echo "storePassword=$STORE_PW"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PW"
-          } > app/android/key.properties
+            echo "RFE_RELEASE_KEYSTORE=$RUNNER_TEMP/upload-keystore.jks"
+            echo "RFE_RELEASE_STOREPASS_FILE=$RUNNER_TEMP/storepass"
+            echo "RFE_RELEASE_KEYPASS_FILE=$RUNNER_TEMP/keypass"
+            echo "RFE_RELEASE_KEY_ALIAS=$KEY_ALIAS"
+          } >> "$GITHUB_ENV"
 
       - name: Build release APK
-        working-directory: app
-        run: flutter build apk --release
+        working-directory: mobile
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
+        run: scripts/build-release-apk.sh
 
       - name: Stage artifact + manifest
         id: stage
         run: |
           set -euo pipefail
-          line="$(grep -E '^version:' app/pubspec.yaml | head -1 | awk '{print $2}')"
-          name="${line%%+*}"
-          code="${line##*+}"
-          if [ "$name" = "$line" ] || [ -z "$code" ]; then
-            echo "::error::pubspec version '$line' must be X.Y.Z+N (build number drives OTA detection)"
-            exit 1
-          fi
-          # The tag should match the pubspec versionName (tag v1.2.0 ↔ 1.2.0).
-          tag_ver="${GITHUB_REF_NAME#v}"
-          if [ "$tag_ver" != "$name" ]; then
-            echo "::error::tag '$GITHUB_REF_NAME' does not match pubspec versionName '$name' — bump pubspec before tagging"
-            exit 1
+          name="$(node -p "require('./mobile/app.json').expo.version")"
+          code="$(node -p "require('./mobile/app.json').expo.android.versionCode")"
+          prerelease=false
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag_ver="${GITHUB_REF_NAME#v}"
+            case "$tag_ver" in *-*) prerelease=true ;; esac
+            if [ "${tag_ver%%-*}" != "$name" ]; then
+              echo "::error::tag '$GITHUB_REF_NAME' does not match app.json version '$name', bump app.json before tagging"
+              exit 1
+            fi
           fi
           apk="rfe-${name}-${code}.apk"
-          cp app/build/app/outputs/flutter-apk/app-release.apk "$apk"
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
           size="$(stat -c%s "$apk")"
           sha256="$(sha256sum "$apk" | cut -d' ' -f1)"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${apk}"
-          # Same shape as the agent's GET /v1/app/latest (versionName/versionCode/
-          # size) plus the download `url` and `sha256` (PR-25) the off-Tailscale
-          # client needs to verify what it downloaded, since size alone can't
-          # catch a truncated-but-same-length or corrupted transfer.
+          # versionName/versionCode/size as the agent's GET /v1/app/latest, plus the download url and the sha256 the
+          # app requires before it will hand the file to the installer.
           printf '{"versionName":"%s","versionCode":%s,"size":%s,"url":"%s","sha256":"%s"}\n' \
             "$name" "$code" "$size" "$url" "$sha256" > latest.json
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "Built $apk ($size bytes)"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Built $apk ($size bytes), prerelease=$prerelease"
           cat latest.json
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rfe-${{ steps.stage.outputs.name }}-${{ steps.stage.outputs.code }}
+          path: |
+            ${{ steps.stage.outputs.apk }}
+            latest.json
+          retention-days: 14
+
       - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          APK: ${{ steps.stage.outputs.apk }}
+          PRERELEASE: ${{ steps.stage.outputs.prerelease }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" \
-            "${{ steps.stage.outputs.apk }}" \
-            latest.json \
+          # The updater reads releases/latest, so Latest is always explicit: a pre-release never takes it, and a
+          # release takes it from whatever else (the agent's releases carry no latest.json) was published last.
+          if [ "$PRERELEASE" = true ]; then flag="--prerelease --latest=false"; else flag="--latest"; fi
+          gh release create "$GITHUB_REF_NAME" "$APK" latest.json \
             --title "v${{ steps.stage.outputs.name }} (build ${{ steps.stage.outputs.code }})" \
-            --generate-notes
+            --generate-notes $flag

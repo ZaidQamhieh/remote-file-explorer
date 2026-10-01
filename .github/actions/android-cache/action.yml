@@ -1,0 +1,32 @@
+name: Android build caches
+description: >
+  Restores and saves everything an Android build downloads or recompiles: the Gradle dependency and wrapper caches,
+  Gradle's task output cache (native libraries are compiled once per input), and the SDK pieces the Android Gradle
+  Plugin installs on demand (NDK, CMake, build-tools, platforms). Use after checkout and before the Gradle build.
+
+runs:
+  using: composite
+  steps:
+    - name: Turn on Gradle's build cache
+      shell: bash
+      run: |
+        mkdir -p ~/.gradle
+        { echo "org.gradle.caching=true"; echo "org.gradle.parallel=true"; } >> ~/.gradle/gradle.properties
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/plugins/**', 'mobile/modules/**/build.gradle') }}
+        restore-keys: gradle-${{ runner.os }}-
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          /usr/local/lib/android/sdk/ndk
+          /usr/local/lib/android/sdk/cmake
+          /usr/local/lib/android/sdk/build-tools
+          /usr/local/lib/android/sdk/platforms
+        key: android-sdk-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json') }}
+        restore-keys: android-sdk-${{ runner.os }}-

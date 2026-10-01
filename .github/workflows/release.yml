@@ -51,14 +51,8 @@ jobs:
         working-directory: mobile
         run: npm ci
 
-      # A cold Gradle build of the native libraries takes tens of minutes; a warm one a fraction of that.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/plugins/**') }}
-          restore-keys: gradle-${{ runner.os }}-
+      # A cold build of the native libraries takes tens of minutes; with the caches restored it is mostly a relink.
+      - uses: ./.github/actions/android-cache
 
       # Recreate the release signing material from secrets so the APK carries the SAME key as every earlier release;
       # without it Android refuses to install the update. The build script checks the certificate digest afterwards.
@@ -85,14 +79,22 @@ jobs:
             echo "RFE_RELEASE_KEY_ALIAS=$KEY_ALIAS"
           } >> "$GITHUB_ENV"
 
+      # sccache (Rust) caches each C++ compile of the native libraries, so a rebuild recompiles only what changed.
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+
       - name: Build release APK
         working-directory: mobile
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
           RFE_VERBOSE: '1'
-          # The ABIs the Flutter app shipped; drops the 32-bit x86 libraries nothing real runs on.
-          RFE_ABIS: arm64-v8a,armeabi-v7a,x86_64
-        run: scripts/build-release-apk.sh
+          SCCACHE_GHA_ENABLED: 'true'
+          CMAKE_C_COMPILER_LAUNCHER: sccache
+          CMAKE_CXX_COMPILER_LAUNCHER: sccache
+          # A tag builds the ABIs the Flutter app shipped (no 32-bit x86); a branch dry run builds the one real phones use.
+          RFE_ABIS: ${{ github.ref_type == 'tag' && 'arm64-v8a,armeabi-v7a,x86_64' || 'arm64-v8a' }}
+        run: |
+          scripts/build-release-apk.sh
+          sccache --show-stats || true
 
       - name: Stage artifact + manifest
         id: stage

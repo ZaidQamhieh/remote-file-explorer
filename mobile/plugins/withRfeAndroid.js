@@ -51,6 +51,10 @@ function withSigningAndDebuggable(config) {
     } else if (relKs || relPass) {
       throw new Error('withRfeAndroid: set both RFE_RELEASE_KEYSTORE and RFE_RELEASE_STOREPASS_FILE');
     }
+    // Release lint (lintVital) re-analyses every module for minutes and gates nothing the CI does not already check.
+    if (!g.includes('checkReleaseBuilds')) {
+      g = g.replace(/(\nandroid \{\n)/, '$1    lint {\n        checkReleaseBuilds false\n    }\n');
+    }
     if (process.env.RFE_TEST_BUILD === '1' && !g.includes('debuggable true')) {
       g = g.replace(/(\n\s*release \{\n)/, '$1            debuggable true\n');
     }

@@ -253,3 +253,18 @@ Scope: agent pairing/auth (`pair_request.go`, `challenge.go`, `store/devices.go`
 Accepted by design (unchanged from Flutter): Register/Login TOFU. The first TLS connection to an address pins whatever certificate it presents, so a LAN attacker who answers before the real PC wins that pairing. Mitigations in place: the QR and approve-on-PC flows carry the fingerprint or an 8-digit match code keyed by it, and a later mismatch is refused.
 
 Checked and fine: pinned TLS (empty trust store, leaf SHA-256 compared inside the handshake, no cleartext, no redirects, unpinned calls limited to health and challenge and never with credentials); network security config (cleartext only to 127.0.0.1); FileProvider limited to cache/share, open, updates; only MainActivity is exported; pairing polling needs the client nonce; tokens are one-shot per approved request; pair requests rate limited and capped.
+
+## Two-network test (agent and app on separate routed networks)
+
+Lab: three Linux network namespaces, A `10.10.1.0/24` (scratch agent on `10.10.1.2:8765`), B `10.10.2.0/24` (API 36 emulator running the release APK, headless, own adb server), joined by a forwarding router namespace. Torn down afterwards.
+
+| Check | Result |
+|-------|--------|
+| HTTPS health from B to A across the router | 200 |
+| Ask-to-pair from the app in B; match code on phone and PC | Same code (3592 9433); agent saw the client as 10.10.2.2 |
+| Approve on the PC, app finishes pairing, host shown "Connected securely", file list | Works; file content read |
+| Router forwarding cut while a preview loads | Spinner for 12 s, no crash; no recovery without Retry |
+| Different agent (new certificate) at the same address | Refused: "Error: Certificate fingerprint mismatch"; app shows Offline |
+| mDNS discovery across the router | Not tested (multicast does not cross routers, expected) |
+
+Findings (UX, not security): a phone paired through approve-on-PC is browse-only, so opening a file shows a raw "HTTP 403" (native downloader error) instead of saying the computer has not allowed downloads for this phone; the pinning refusal shows "Error: Certificate fingerprint mismatch" with the workspace pill still saying "Connected". Tracked in bd.

@@ -66,6 +66,47 @@ func (s *DB) DevicePublicKeyByClientID(clientID string) (string, error) {
 	return key, err
 }
 
+// ClientDevice is the existing device row a hardware client id maps to.
+type ClientDevice struct {
+	ID        string
+	Label     string
+	PublicKey string
+	Revoked   bool
+}
+
+// ClientDeviceByID returns the device already paired under clientID; ok is false for a new client.
+func (s *DB) ClientDeviceByID(clientID string) (ClientDevice, bool, error) {
+	if clientID == "" {
+		return ClientDevice{}, false, nil
+	}
+	var d ClientDevice
+	var revoked int
+	err := s.db.QueryRow(`SELECT id,label,public_key,revoked FROM devices WHERE client_id=?`, clientID).
+		Scan(&d.ID, &d.Label, &d.PublicKey, &revoked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ClientDevice{}, false, nil
+	}
+	d.Revoked = revoked == 1
+	return d, err == nil, err
+}
+
+// ResetDeviceAccess puts a device back to what a freshly paired one gets: browse only, no app access,
+// no share links. The jail root and read-only flag are kept, they only ever narrow access.
+func (s *DB) ResetDeviceAccess(id string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`UPDATE devices SET can_browse=1,can_download=0,can_upload=0,can_modify=0,can_delete=0,can_share=0,view_apps=0,launch_apps=0 WHERE id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM share_tokens WHERE device_id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // UpsertDevice pairs a device, deduplicating by the hardware-stable clientID.
 // If clientID is non-empty and a device with that clientID already exists, its
 // token is rotated, it is un-revoked, and its existing id is returned — so a

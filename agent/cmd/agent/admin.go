@@ -199,6 +199,9 @@ func cmdPairRequests(args []string) error {
 	for _, r := range list {
 		sas, _ := pairing.SAS(security.Fingerprint(cert), r.ClientNonce, r.ID)
 		fmt.Printf("%s  %-24s  from %-15s  match code %s\n", r.ID[:8], r.Label, r.RemoteIP, sas)
+		if d, ok, _ := db.ClientDeviceByID(r.ClientID); ok && (d.Revoked || (d.PublicKey != "" && d.PublicKey != r.PublicKey)) {
+			fmt.Printf("          replaces the paired device %q: new key and token, access reset to browse only\n", d.Label)
+		}
 	}
 	fmt.Println("Approve with `rfe-agent pair accept <id>` only if the code matches the one on the phone.")
 	return nil

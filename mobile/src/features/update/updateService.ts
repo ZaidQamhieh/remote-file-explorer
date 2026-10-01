@@ -36,7 +36,7 @@ const nativePath = (f: File) => decodeURIComponent(f.uri.replace('file://', ''))
 
 async function verified(release: AppRelease, file: File): Promise<boolean> {
   if (!file.exists || (release.size > 0 && file.size !== release.size)) return false;
-  return release.sha256 === null || (await sha256File(nativePath(file))).toLowerCase() === release.sha256;
+  return (await sha256File(nativePath(file))).toLowerCase() === release.sha256;
 }
 
 /** True when a complete, verified copy of this release is already on disk. */

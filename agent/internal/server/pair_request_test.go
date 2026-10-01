@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -146,4 +148,109 @@ func TestSanitizeLabel(t *testing.T) {
 
 func withChiCtx(r *http.Request, rctx *chi.Context) context.Context {
 	return context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
+}
+
+// requestWith sends a pair request for clientID signed with the given key.
+func (e *pairReqEnv) requestWith(clientID string, pub ed25519.PublicKey, priv ed25519.PrivateKey) (id string) {
+	e.t.Helper()
+	nonce, err := e.nonces.Mint()
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(nonce)))
+	body := `{"deviceLabel":"Pixel","deviceId":"` + clientID + `","devicePublicKey":"` + base64.StdEncoding.EncodeToString(pub) +
+		`","nonce":"` + nonce + `","signature":"` + sig + `","clientNonce":"` + testCNonc + `"}`
+	rr := httptest.NewRecorder()
+	e.create(rr, httptest.NewRequest(http.MethodPost, "/v1/pair/request", strings.NewReader(body)))
+	if rr.Code != http.StatusOK {
+		e.t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
+	}
+	var created struct{ RequestID string }
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	return created.RequestID
+}
+
+// approveAndCollect answers the request at the "computer" and polls for the result.
+func (e *pairReqEnv) approveAndCollect(id string) string {
+	e.t.Helper()
+	if err := e.db.DecidePairRequest(id, true); err != nil {
+		e.t.Fatal(err)
+	}
+	code, out := e.pollStatus(id, testCNonc)
+	if code != 200 || out["status"] != "approved" {
+		e.t.Fatalf("poll: %d %v", code, out)
+	}
+	return out["deviceId"].(string)
+}
+
+// seedPairedDevice pairs "phone-1" with a full set of grants and returns its key.
+func (e *pairReqEnv) seedPairedDevice() (ed25519.PublicKey, ed25519.PrivateKey, string) {
+	e.t.Helper()
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	id, err := e.db.UpsertDevice("phone-1", "Owner phone", "old-token", base64.StdEncoding.EncodeToString(pub), false)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if err := e.db.SetDeviceFilePermissions(id, true, true, true, true, true, true); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := e.db.SetDeviceAppPermissions(id, true, true); err != nil {
+		e.t.Fatal(err)
+	}
+	return pub, priv, id
+}
+
+func TestPairRequest_NewKeyForKnownClientReplacesDeviceAndResetsAccess(t *testing.T) {
+	e := newPairReqEnv(t)
+	_, _, id := e.seedPairedDevice()
+	otherPub, otherPriv, _ := ed25519.GenerateKey(nil)
+
+	reqID := e.requestWith("phone-1", otherPub, otherPriv)
+	if e.prompt == nil || e.prompt.Replaces != "Owner phone" {
+		t.Fatalf("prompt must say which device it replaces: %+v", e.prompt)
+	}
+	if got := e.approveAndCollect(reqID); got != id {
+		t.Fatalf("row is reused: got %s want %s", got, id)
+	}
+	d, err := e.db.GetDeviceByID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.CanBrowse || d.CanDownload || d.CanUpload || d.CanModify || d.CanDelete || d.CanShare || d.ViewApps || d.LaunchApps {
+		t.Fatalf("takeover must not inherit grants: %+v", d)
+	}
+	if d.PublicKey != base64.StdEncoding.EncodeToString(otherPub) {
+		t.Fatal("new key not pinned")
+	}
+}
+
+func TestPairRequest_RevokedDeviceReEnabledOnlyWithResetAndWarning(t *testing.T) {
+	e := newPairReqEnv(t)
+	pub, priv, id := e.seedPairedDevice()
+	if err := e.db.RevokeDevice(id); err != nil {
+		t.Fatal(err)
+	}
+	reqID := e.requestWith("phone-1", pub, priv)
+	if e.prompt == nil || e.prompt.Replaces != "Owner phone" {
+		t.Fatalf("a revoked device coming back must be flagged: %+v", e.prompt)
+	}
+	e.approveAndCollect(reqID)
+	d, _ := e.db.GetDeviceByID(id)
+	if d.Revoked || d.CanDownload || d.CanDelete || d.ViewApps {
+		t.Fatalf("re-enabled device must start browse-only: %+v", d)
+	}
+}
+
+func TestPairRequest_SameKeyRepairKeepsGrantsAndIsNotFlagged(t *testing.T) {
+	e := newPairReqEnv(t)
+	pub, priv, id := e.seedPairedDevice()
+	reqID := e.requestWith("phone-1", pub, priv)
+	if e.prompt == nil || e.prompt.Replaces != "" {
+		t.Fatalf("a phone re-pairing with its own key is not a replacement: %+v", e.prompt)
+	}
+	e.approveAndCollect(reqID)
+	d, _ := e.db.GetDeviceByID(id)
+	if !d.CanDownload || !d.CanDelete || !d.ViewApps {
+		t.Fatalf("same-key re-pair keeps its grants: %+v", d)
+	}
 }

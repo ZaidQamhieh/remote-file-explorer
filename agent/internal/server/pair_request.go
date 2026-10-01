@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +38,9 @@ type PairPrompt struct {
 	SAS   string
 	IP    string
 	TTL   time.Duration
+	// Replaces names the already paired device this approval would take over (new key, new token,
+	// access reset to browse-only); empty for a new phone.
+	Replaces string
 }
 
 type pairRequestBody struct {
@@ -86,6 +90,11 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			writeInternal(w, "pair request", err)
 			return
 		}
+		replaces, err := pairReplaces(db, req.DeviceID, req.DevicePublicKey)
+		if err != nil {
+			writeInternal(w, "pair request", err)
+			return
+		}
 		now := time.Now()
 		err = db.CreatePairRequest(store.PairRequest{
 			ID: id, Label: label, ClientID: req.DeviceID, PublicKey: req.DevicePublicKey,
@@ -101,13 +110,27 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			return
 		}
 		if cfg.OnPairRequest != nil {
-			cfg.OnPairRequest(PairPrompt{ID: id, Label: label, SAS: sas, IP: clientIP(r), TTL: pairRequestTTL})
+			cfg.OnPairRequest(PairPrompt{ID: id, Label: label, SAS: sas, IP: clientIP(r), TTL: pairRequestTTL, Replaces: replaces})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"requestId":        id,
 			"expiresInSeconds": int(pairRequestTTL.Seconds()),
 		})
 	}
+}
+
+// pairReplaces names the paired device that approving a request for clientID with publicKey would
+// overwrite: one whose pinned key differs, or that was revoked. A phone re-pairing with its own key
+// is not a replacement, it only lost its token.
+func pairReplaces(db *store.DB, clientID, publicKey string) (string, error) {
+	d, ok, err := db.ClientDeviceByID(clientID)
+	if err != nil || !ok {
+		return "", err
+	}
+	if d.Revoked || (d.PublicKey != "" && d.PublicKey != publicKey) {
+		return d.Label, nil
+	}
+	return "", nil
 }
 
 // sanitizeLabel bounds and cleans the device name shown in the prompt, which an
@@ -168,12 +191,27 @@ func pollPairRequestHandler(cfg Config, db *store.DB) http.HandlerFunc {
 				writeError(w, http.StatusInternalServerError, "INTERNAL", "failed to generate token")
 				return
 			}
+			// Decided now, against the device as it is at approval time, before the upsert overwrites it.
+			replaces, err := pairReplaces(db, claimed.ClientID, claimed.PublicKey)
+			if err != nil {
+				writeInternal(w, "pair poll", err)
+				return
+			}
 			deviceID, err := db.UpsertDevice(claimed.ClientID, claimed.Label, token, claimed.PublicKey, false)
 			if err != nil {
 				writeInternal(w, "pair poll", err)
 				return
 			}
-			auditAs(db, claimed.Label, store.AuditPair, deviceID, "approved at the computer, from "+claimed.RemoteIP)
+			detail := "approved at the computer, from " + claimed.RemoteIP
+			if replaces != "" {
+				// A takeover of an existing row must not inherit that device's grants.
+				if err := db.ResetDeviceAccess(deviceID); err != nil {
+					writeInternal(w, "pair poll", err)
+					return
+				}
+				detail += "; replaced device " + strconv.Quote(replaces) + " (access reset to browse-only)"
+			}
+			auditAs(db, claimed.Label, store.AuditPair, deviceID, detail)
 			resp := pairResponse{
 				DeviceToken:      token,
 				DeviceID:         deviceID,
@@ -212,8 +250,13 @@ func listPairRequestsHandler(cfg Config, db *store.DB) http.HandlerFunc {
 		out := make([]map[string]any, 0, len(list))
 		for _, pr := range list {
 			sas, _ := pairing.SAS(cfg.CertFingerprint, pr.ClientNonce, pr.ID)
+			replaces, err := pairReplaces(db, pr.ClientID, pr.PublicKey)
+			if err != nil {
+				writeInternal(w, "list pair requests", err)
+				return
+			}
 			out = append(out, map[string]any{
-				"id": pr.ID, "label": pr.Label, "matchCode": sas, "remoteIp": pr.RemoteIP,
+				"id": pr.ID, "label": pr.Label, "matchCode": sas, "remoteIp": pr.RemoteIP, "replaces": replaces,
 				"expiresAt": time.Unix(pr.Expires, 0).UTC().Format(time.RFC3339),
 			})
 		}

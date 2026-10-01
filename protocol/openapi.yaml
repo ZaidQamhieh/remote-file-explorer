@@ -482,6 +482,9 @@ paths:
                         label: { type: string }
                         matchCode: { type: string }
                         remoteIp: { type: string }
+                        replaces:
+                          type: string
+                          description: Label of the already paired device this approval would take over (new key and token, access reset to browse-only). Empty for a new phone.
                         expiresAt: { type: string, format: date-time }
         "403":
           description: Not an admin session. code=FORBIDDEN.

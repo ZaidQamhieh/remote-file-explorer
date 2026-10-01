@@ -2,6 +2,8 @@ module github.com/zqamhieh/remote-file-explorer/agent
 
 go 1.26.0
 
+toolchain go1.26.6
+
 require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/go-chi/chi/v5 v5.3.0

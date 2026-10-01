@@ -19,11 +19,15 @@ func notifyPairPrompt(db *store.DB, p server.PairPrompt) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.TTL)
 	defer cancel()
+	body := "A phone on your network wants access to your files.\nMatch code: " + p.SAS + " (must be the same on the phone)"
+	if p.Replaces != "" {
+		body += "\nThis replaces the already paired device \"" + p.Replaces + "\" and resets its access to browse only."
+	}
 	out, err := exec.CommandContext(ctx, bin,
 		"--app-name=Remote File Explorer", "--urgency=critical", "--icon=phone",
 		"--action=approve=Approve", "--action=reject=Reject",
 		"Pair \""+p.Label+"\"?",
-		"A phone on your network wants access to your files.\nMatch code: "+p.SAS+" (must be the same on the phone)",
+		body,
 	).Output()
 	if err != nil {
 		return // timed out, dismissed by the session, or no notification service

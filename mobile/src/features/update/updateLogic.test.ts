@@ -4,8 +4,13 @@ const good = { versionName: '2.1.0', versionCode: 82, size: 1000, url: 'https://
 
 test('reads the manifest the release workflow publishes', () => {
   expect(parseRelease(good)).toEqual({ ...good, sha256: 'a'.repeat(64) });
-  expect(parseRelease({ ...good, sha256: undefined })?.sha256).toBeNull();
-  expect(parseRelease({ ...good, sha256: 'short' })?.sha256).toBeNull();
+});
+
+test('a manifest without a usable SHA-256 is refused, so a download is never installed unchecked', () => {
+  expect(parseRelease({ ...good, sha256: undefined })).toBeNull();
+  expect(parseRelease({ ...good, sha256: 'short' })).toBeNull();
+  expect(parseRelease({ ...good, sha256: 'g'.repeat(64) })).toBeNull();
+  expect(parseRelease({ ...good, sha256: 5 })).toBeNull();
 });
 
 test('a manifest without a version code or with an APK address off GitHub is refused', () => {

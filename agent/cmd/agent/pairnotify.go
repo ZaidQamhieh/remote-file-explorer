@@ -13,6 +13,9 @@ import (
 func pairPromptHandler(db *store.DB) func(server.PairPrompt) {
 	return func(p server.PairPrompt) {
 		log.Printf("pair request from %q (%s), match code %s — `rfe-agent pair accept %s` or `pair reject %s`", p.Label, p.IP, p.SAS, p.ID[:8], p.ID[:8])
+		if p.Replaces != "" {
+			log.Printf("pair request %s would replace the paired device %q and reset its access to browse only", p.ID[:8], p.Replaces)
+		}
 		go notifyPairPrompt(db, p)
 	}
 }

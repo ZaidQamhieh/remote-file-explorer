@@ -4,7 +4,8 @@ A mobile app that turns your phone into a full graphical file explorer for your 
 Linux computers — browse, manage, and transfer files over a Finder/Explorer-style GUI, with no SSH
 or terminal required.
 
-- **`app/`** — Flutter mobile app (Android-focused)
+- **`mobile/`** — React Native (Expo) Android app, the successor to the Flutter app (see `docs/upgrade-to-react-native.md`)
+- **`app/`** — Flutter mobile app (Android-focused), the v1.42 line the React Native app upgrades in place
 - **`agent/`** — Go host service that runs on each Windows/macOS/Linux computer
 - **`protocol/`** — OpenAPI 3 contract shared by both sides (source of truth)
 - **`docs/`** — architecture and setup guides
@@ -42,6 +43,17 @@ must be independently verified: a QR and fingerprint received together over the 
 connection do not establish the host's identity. The app checks the pin before sending pairing
 codes or account credentials. Successful pairing stores a per-device bearer token; no cloud
 account is required.
+
+### Approve on the computer
+
+A phone that can reach the agent but has no code can ask to be paired: in the app choose Add
+workspace → Enter address → Ask to pair. The phone and the computer each show the same 8-digit
+match code; compare them, then approve at the computer (desktop notification, or
+`rfe-agent pair requests` and `rfe-agent pair accept <id>`; `pair reject <id>` declines). The code
+is derived from the certificate the phone actually connected to, so a machine relaying the request
+shows a different code. A new phone starts browse-only. If the request is for a device that is
+already paired under a different key, or one that was revoked, the prompt says which device it
+replaces and approval resets that device to browse-only.
 
 ## Host app access
 

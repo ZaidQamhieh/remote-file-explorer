@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { can, type FileCapability } from '../../core/api/models';
+import { formatSize } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import { ActionListCard, ActionListTile, ActionTile, BottomSheet, PageHead, Pressable, SheetHead, SheetScroll, StatePill, Text, TopBar } from '../../design/components';
 import { LumenType } from '../../design/lumen';
@@ -12,8 +13,9 @@ import { BreadcrumbBar } from './Breadcrumb';
 import type { ExplorerState } from './explorerStore';
 import { atRoot, currentPath } from './explorerStore';
 import { folderLabel } from './paths';
+import { selectedBytes } from './selectionLogic';
 
-export type OverflowAction = 'newItem' | 'toggleFavorite' | 'bookmarks' | 'commandPalette' | 'viewOptions' | 'favorites' | 'transfers' | 'trash' | 'recent' | 'storageByType' | 'dupFinder' | 'pinOffline';
+export type OverflowAction = 'newItem' | 'toggleFavorite' | 'bookmarks' | 'commandPalette' | 'viewOptions' | 'favorites' | 'transfers' | 'trash' | 'recent' | 'recentHere' | 'storageByType' | 'dupFinder' | 'pinOffline';
 
 const itemsLabel = (n: number, more: boolean) => `${n}${more ? '+' : ''} ${n === 1 && !more ? 'item' : 'items'}`;
 
@@ -50,6 +52,7 @@ export function BrowseHeader({
     { key: 'transfers', label: t('transfersMenuItem'), icon: FileUp, onPress: pick('transfers') },
     { key: 'trash', label: t('trashTitle'), icon: Trash2, onPress: pick('trash') },
     { key: 'recent', label: t('recentTitle'), icon: History, onPress: pick('recent') },
+    { key: 'recentHere', label: t('recentInFolder'), icon: History, onPress: pick('recentHere') },
     { key: 'storageByType', label: t('storageByTypeTitle'), icon: PieChart, onPress: pick('storageByType') },
     { key: 'dupFinder', label: 'Find Duplicates', icon: Replace, onPress: pick('dupFinder') },
     { key: 'pinOffline', label: isCurrentFolderPinned ? 'Unpin offline' : 'Pin offline', icon: Pin, onPress: pick('pinOffline') },
@@ -114,12 +117,17 @@ function ChipButton({ label, icon: Icon, onPress }: { label: string; icon: Lucid
   );
 }
 
+/** An extra tool in the selection header's chip row (copy paths, move to, compare, ...). */
+export type SelectionChip = { key: string; label: string; icon: LucideIcon; onPress: () => void };
+
 /** Selection mode header: same `TopBar` and `PageHead` as browsing ("3 selected"), a close button, and a row of selection tools. */
 export function SelectionHeader({
-  host, state, onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails, canModify = true,
-}: { host: Host; state: ExplorerState; canModify?: boolean; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
+  host, state, shown, extras = [], onClose, onBatchRename, onSelectAll, onClearSelection, onInvertSelection, onBookmark, onDetails, canModify = true,
+}: { host: Host; state: ExplorerState; shown: readonly { path: string }[]; canModify?: boolean; extras?: SelectionChip[]; onClose: () => void; onBatchRename: () => void; onSelectAll: () => void; onClearSelection: () => void; onInvertSelection: () => void; onBookmark: () => void; onDetails: () => void }) {
   const c = useScheme();
-  const all = state.entries.length > 0 && state.selected.size === state.entries.length;
+  // "All" means everything on screen (after the hidden-file and tag filters), not everything the folder holds.
+  const bytes = selectedBytes(state.entries, state.selected);
+  const all = shown.length > 0 && shown.every((x) => state.selected.has(x.path));
   return (
     <View>
       <TopBar
@@ -130,11 +138,14 @@ export function SelectionHeader({
           </IconButton>
         }
       />
-      <PageHead title={t('nSelected', { count: state.selected.size })} subtitle={folderLabel(currentPath(state))} />
+      <PageHead title={t('nSelected', { count: state.selected.size })} subtitle={bytes > 0 ? `${folderLabel(currentPath(state))} · ${formatSize(bytes)}` : folderLabel(currentPath(state))} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 6 }} contentContainerStyle={{ paddingHorizontal: 18, gap: 10, alignItems: 'center' }}>
         <ChipButton label={all ? t('deselectAllTooltip') : t('selectAllTooltip')} icon={all ? Square : CheckSquare} onPress={all ? onClearSelection : onSelectAll} />
         <ChipButton label={t('invertSelectionTooltip')} icon={Replace} onPress={onInvertSelection} />
         {canModify && state.selected.size > 0 && <ChipButton label={t('batchRenameTooltip')} icon={FilePen} onPress={onBatchRename} />}
+        {extras.map((x) => (
+          <ChipButton key={x.key} label={x.label} icon={x.icon} onPress={x.onPress} />
+        ))}
         {state.selected.size === 1 && <ChipButton label={t('detailsButton')} icon={Info} onPress={onDetails} />}
         {state.selected.size === 1 && <ChipButton label="Bookmark" icon={Bookmark} onPress={onBookmark} />}
       </ScrollView>

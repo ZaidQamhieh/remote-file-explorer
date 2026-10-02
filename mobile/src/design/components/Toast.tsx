@@ -10,8 +10,8 @@ import { Pressable } from './Pressable';
 import { Text } from './Text';
 
 type Kind = 'success' | 'error' | 'info';
-type Msg = { id: number; kind: Kind; text: string; retry?: () => void };
-type Api = { success(text: string): void; error(text: string, onRetry?: () => void): void; info(text: string): void };
+type Msg = { id: number; kind: Kind; text: string; retry?: () => void; label?: string };
+type Api = { success(text: string, onUndo?: () => void): void; error(text: string, onRetry?: () => void): void; info(text: string): void };
 
 const Ctx = createContext<Api>({ success() {}, error() {}, info() {} });
 export const useToast = () => useContext(Ctx);
@@ -25,10 +25,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const show = useCallback(
-    (kind: Kind, text: string, retry?: () => void) => {
+    (kind: Kind, text: string, retry?: () => void, label?: string) => {
       if (kind === 'success') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       if (kind === 'error') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-      setMsg({ id: Date.now(), kind, text, retry });
+      setMsg({ id: Date.now(), kind, text, retry, label });
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setMsg(null), retry ? 8000 : 4000);
     },
@@ -40,7 +40,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const api = useMemo<Api>(
-    () => ({ success: (t) => show('success', t), error: (t, r) => show('error', t, r), info: (t) => show('info', t) }),
+    () => ({ success: (t, undo) => show('success', t, undo, 'Undo'), error: (t, r) => show('error', t, r), info: (t) => show('info', t) }),
     [show],
   );
 
@@ -62,8 +62,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {msg.text}
             </Text>
             {msg.retry && (
-              <Pressable onPress={() => { const r = msg.retry; setMsg(null); r?.(); }} accessibilityLabel="Retry">
-                <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Lato_700Bold' }}>Retry</Text>
+              <Pressable onPress={() => { const r = msg.retry; setMsg(null); r?.(); }} accessibilityLabel={msg.label ?? 'Retry'}>
+                <Text variant="labelLarge" color={fg} style={{ fontFamily: 'Lato_700Bold' }}>{msg.label ?? 'Retry'}</Text>
               </Pressable>
             )}
           </View>

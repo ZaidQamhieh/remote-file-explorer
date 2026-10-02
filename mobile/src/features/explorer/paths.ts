@@ -49,7 +49,10 @@ export function renameDestination(oldPath: string, newName: string): string {
 export function parentDirOf(path: string): string {
   const sep = path.includes('\\') ? '\\' : '/';
   const idx = path.lastIndexOf(sep);
-  return idx <= 0 ? sep : path.slice(0, idx);
+  if (idx <= 0) return sep;
+  const parent = path.slice(0, idx);
+  // The parent of C:\x is the drive root C:\ (a bare C: means the current folder on that drive).
+  return /^[A-Za-z]:$/.test(parent) ? `${parent}${sep}` : parent;
 }
 
 export function joinRemotePath(dir: string, name: string): string {

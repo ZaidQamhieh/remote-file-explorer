@@ -13,7 +13,7 @@ export function PeekSheet({ host, entry, onClose }: { host: Host; entry: Entry; 
     <BottomSheet visible onClose={onClose}>
       <SheetHead title={entry.name} />
       <View style={{ height: 420, overflow: 'hidden' }}>
-        <PreviewPage host={host} entry={entry} isCurrent lineNumbers={false} rawMarkdown={false} onZoomChange={noop} onText={noop} />
+        <PreviewPage host={host} entry={entry} isCurrent lineNumbers={false} rawMarkdown={false} follow={false} onZoomChange={noop} onText={noop} />
       </View>
     </BottomSheet>
   );

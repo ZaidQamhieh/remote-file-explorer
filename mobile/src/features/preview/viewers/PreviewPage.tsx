@@ -17,18 +17,19 @@ type Props = {
   isCurrent: boolean;
   lineNumbers: boolean;
   rawMarkdown: boolean;
+  follow: boolean;
   onZoomChange: (zoomed: boolean) => void;
   onText: (path: string, text: string | null) => void;
 };
 
 /** Port of _viewerFor: the chromeless per-kind viewer for one pager page. */
-export const PreviewPage = memo(function PreviewPage({ host, entry, isCurrent, lineNumbers, rawMarkdown, onZoomChange, onText }: Props) {
+export const PreviewPage = memo(function PreviewPage({ host, entry, isCurrent, lineNumbers, rawMarkdown, follow, onZoomChange, onText }: Props) {
   const reportText = useCallback((text: string | null) => onText(entry.path, text), [onText, entry.path]);
   switch (previewKindOf(entry)) {
     case 'image':
       return <ImageViewer host={host} entry={entry} onZoomChange={isCurrent ? onZoomChange : undefined} />;
     case 'text':
-      return <TextViewer host={host} entry={entry} showLineNumbers={lineNumbers} onText={reportText} />;
+      return <TextViewer host={host} entry={entry} showLineNumbers={lineNumbers} follow={follow && isCurrent} onText={reportText} />;
     case 'markdown':
       return <MarkdownViewer host={host} entry={entry} raw={rawMarkdown} onText={reportText} />;
     case 'csv':

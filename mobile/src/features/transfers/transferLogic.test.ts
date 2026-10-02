@@ -1,5 +1,5 @@
 import type { TransferRecord } from '../../core/native';
-import { finishedWhen, transferKind, transferPillLabel, transferSummary, transferTone, groupTransfers, savedWhere, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
+import { finishedWhen, transferKind, transferPillLabel, transferSummary, transferTone, groupTransfers, retryableFailures, savedWhere, verifyOutcome, isActive, isFinished, isUpload, transferErrorMessage, transferName, transferProgress } from './transferLogic';
 
 const rec = (o: Partial<TransferRecord> = {}): TransferRecord => ({ id: 'x', hostId: 'h', address: 'a', remotePath: '/docs/a.txt', destPath: '/tmp/a.txt', state: 'RUNNING', received: 0, total: -1, error: null, ...o });
 
@@ -107,5 +107,40 @@ describe('finishedWhen', () => {
     expect(finishedWhen(rec({ updatedAt: now.getTime() - 3 * 60_000 }), now)).toContain('3');
     expect(finishedWhen(rec({ updatedAt: 0 }), now)).toBe('');
     expect(finishedWhen(rec(), now)).toBe('');
+  });
+});
+
+describe('retryableFailures', () => {
+  const failed = (id: string, error: string | null) => rec({ id, state: 'FAILED', error });
+  it('keeps failures that are worth trying again and drops the ones that will fail the same way', () => {
+    const all = [
+      failed('a', 'ERR_CONNECTION'),
+      failed('b', 'CONFLICT: exists'),
+      failed('c', 'HASH_MISMATCH: x'),
+      failed('d', 'ERR_CERT_PIN_MISMATCH'),
+      failed('e', 'CAPABILITY_DENIED'),
+      failed('f', 'RESOURCE_LIMIT'),
+      failed('g', 'ERR_STORAGE_FULL'),
+      failed('h', null),
+    ];
+    expect(retryableFailures(all).map((r) => r.id)).toEqual(['a', 'c', 'f']);
+  });
+  it('ignores records that did not fail', () => {
+    expect(retryableFailures([rec({ id: 'r', state: 'RUNNING', error: 'ERR_CONNECTION' }), rec({ id: 'd', state: 'DONE' })])).toEqual([]);
+  });
+});
+
+describe('verifyOutcome', () => {
+  const h = 'a'.repeat(64);
+  it('verifies when the phone copy and the host copy hash the same, ignoring case', () => {
+    expect(verifyOutcome(h, h.toUpperCase())).toBe('verified');
+  });
+  it('flags a mismatch: one flipped digit is enough', () => {
+    expect(verifyOutcome(h, `${h.slice(0, -1)}b`)).toBe('mismatch');
+  });
+  it('says unavailable, never verified, when either hash is missing', () => {
+    expect(verifyOutcome(null, h)).toBe('unavailable');
+    expect(verifyOutcome(h, null)).toBe('unavailable');
+    expect(verifyOutcome('', '')).toBe('unavailable');
   });
 });

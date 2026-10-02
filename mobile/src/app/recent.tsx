@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { History } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
@@ -13,6 +13,7 @@ import { EntryLeading, useIconChipBg } from '../features/explorer/EntryIcon';
 import { revealInExplorer } from '../features/explorer/reveal';
 import { humanizeError } from '../features/pairing/pairingService';
 import { groupRecent } from '../features/recent/recentBuckets';
+import { recentOptions } from '../features/recent/recentRoot';
 import { ResultCardRow, TruncationBanner } from '../features/search/SearchParts';
 import { t } from '../i18n';
 import { clientForHost } from '../services';
@@ -23,6 +24,8 @@ export default function Recent() {
   const c = useScheme();
   const router = useRouter();
   const active = useActiveHost((s) => s.active);
+  // Opened from a folder's menu: only files under it.
+  const { root } = useLocalSearchParams<{ root?: string }>();
   const [result, setResult] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,11 +34,11 @@ export default function Recent() {
   const fetchRecent = useCallback(async (): Promise<{ result: SearchResult } | { error: string }> => {
     if (!host) return { result: { entries: [], truncated: false, timeBudgetHit: false } };
     try {
-      return { result: await (await clientForHost(host)).recent() };
+      return { result: await (await clientForHost(host)).recent(recentOptions(root)) };
     } catch (e) {
       return { error: humanizeError(e) };
     }
-  }, [host]);
+  }, [host, root]);
   const apply = useCallback((r: { result: SearchResult } | { error: string }) => {
     if ('result' in r) {
       setResult(r.result);

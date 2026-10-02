@@ -1,5 +1,5 @@
 import { File } from 'expo-file-system';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
 import type { Entry } from '../../../core/api/models';
@@ -11,6 +11,7 @@ import { humanizeError } from '../../pairing/pairingService';
 import { PreviewError, PreviewLoading, PreviewTooLarge } from '../PreviewChrome';
 import { MAX_IN_MEMORY_PREVIEW_BYTES, PAGER_CHIP_CLEARANCE, usePreviewFile } from '../previewFile';
 import { NotTextError, decodeAsText } from '../textDecode';
+import { useFollowText } from '../useFollowText';
 
 export const MONO = { fontFamily: FontFamily.mono, fontSize: 13, lineHeight: 18.2 } as const;
 
@@ -54,13 +55,21 @@ export function textStateView(file: ReturnType<typeof usePreviewText>['file'], t
 }
 
 /** Port of TextPreviewScreen's body: monospace, selectable, optional 1-based line-number gutter. */
-export function TextViewer({ host, entry, showLineNumbers, onText }: { host: Host; entry: Entry; showLineNumbers: boolean; onText?: (text: string | null) => void }) {
+export function TextViewer({ host, entry, showLineNumbers, follow = false, onText }: { host: Host; entry: Entry; showLineNumbers: boolean; follow?: boolean; onText?: (text: string | null) => void }) {
   const c = useScheme();
   const { file, text, retry } = usePreviewText(host, entry);
   const ready = text.status === 'ready' ? text.text : null;
   useEffect(() => onText?.(ready), [ready, onText]);
-  const lines = ready === null ? [] : ready.split('\n');
+  // Follow mode: lines appended on the host after this copy was fetched, added at the end as they arrive.
+  const baseBytes = file.status === 'ready' && ready !== null ? (new File(file.uri).size ?? null) : null;
+  const { extra, stopped } = useFollowText(host, entry, follow, baseBytes);
+  const lines = ready === null ? [] : (ready + extra).split('\n');
   const gutter = String(lines.length).length;
+  const list = useRef<FlatList<string>>(null);
+  const grown = extra.length;
+  useEffect(() => {
+    if (follow && grown > 0) list.current?.scrollToEnd({ animated: false });
+  }, [follow, grown]);
 
   const pending = textStateView(file, text, retry, 'Loading text…');
   if (pending) return pending;
@@ -73,9 +82,11 @@ export function TextViewer({ host, entry, showLineNumbers, onText }: { host: Hos
   }
   return (
     <FlatList
+      ref={list}
       data={lines}
       keyExtractor={(_, i) => String(i)}
       contentContainerStyle={{ padding: Spacing.md, paddingBottom: PAGER_CHIP_CLEARANCE }}
+      ListFooterComponent={stopped ? <Text style={{ color: c.error, marginTop: Spacing.md }}>{stopped}</Text> : null}
       initialNumToRender={60}
       windowSize={11}
       renderItem={({ item, index }) => (

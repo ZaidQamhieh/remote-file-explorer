@@ -268,6 +268,7 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
         ) : null}
         <NavRow icon={HardDrive} tint={c.primary} title={t('storageInsightsTitle')} subtitle={t('storageInsightsRowSubtitle')} onPress={() => router.push({ pathname: '/host/[id]/storage', params: { id: host.id } })} />
         <NavRow icon={Activity} tint={roles.safe} title={t('connectionDiagnosticsTitle')} onPress={() => setDiagOpen(true)} />
+        <NavRow icon={LinkIcon} tint={roles.route} title={t('activeShareLinksTitle')} onPress={() => router.push({ pathname: '/host/[id]/shares', params: { id: host.id } })} />
         {owner ? <NavRow icon={ScrollText} tint={roles.warn} title={t('activityLogTitle')} onPress={() => router.push({ pathname: '/host/[id]/audit', params: { id: host.id } })} /> : null}
       </SettingsSection>
 

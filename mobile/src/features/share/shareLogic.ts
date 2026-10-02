@@ -14,3 +14,10 @@ export function sharedFiles(files: readonly Pick<ShareIntentFile, 'path' | 'file
   }
   return out;
 }
+
+/** Expiry choices for a new share link; the agent refuses anything above 24 h, so 24 h is the last. */
+export const SHARE_EXPIRY_PRESETS = [
+  { seconds: 15 * 60, label: '15 minutes' },
+  { seconds: 60 * 60, label: '1 hour' },
+  { seconds: 24 * 60 * 60, label: '24 hours' },
+] as const;

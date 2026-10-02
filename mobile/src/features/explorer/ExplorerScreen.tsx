@@ -1,11 +1,13 @@
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, RefreshControl, View } from 'react-native';
 
 import { can, type Entry } from '../../core/api/models';
+import type { EntryCategory } from '../../core/entryCategory';
 import type { Host } from '../../core/models/host';
-import { ActionFooter, EmptyState, type FooterButton, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
-import { ClipboardPaste, ListChecks, Plus, Upload, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
+import { ActionFooter, Button, EmptyState, type FooterButton, ErrorRetry, ListingSkeleton, OfflineBanner, Pressable, Text, useDialogs, useToast } from '../../design/components';
+import { ClipboardPaste, Copy, CopyPlus, FolderInput, FolderOutput, GitCompare, ListChecks, Plus, Upload, Eye, EyeOff, Bookmark, FileUp, History, LayoutGrid, PieChart, RefreshCw, Replace, Route, Search, SlidersHorizontal, Trash2 } from 'lucide-react-native';
 import { mix } from '../../design/color';
 import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
@@ -21,10 +23,11 @@ import { fetchPreviewFile } from '../preview/previewFile';
 import { isPreviewable, previewableSiblings } from '../preview/previewKind';
 import { usePreviewSession } from '../preview/session';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
-import { BrowseHeader, SelectionBar, SelectionHeader, type OverflowAction } from './Bars';
+import { BrowseHeader, SelectionBar, SelectionHeader, type OverflowAction, type SelectionChip } from './Bars';
 import { BatchRenameSheet } from './BatchRenameSheet';
 import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { CreateMenu } from './CreateMenu';
+import { DestinationPicker } from './DestinationPicker';
 import { footerActions } from './footerLogic';
 import { EntryGridCell } from './EntryGridCell';
 import { EntryTile } from './EntryTile';
@@ -37,7 +40,11 @@ import { transfers } from '../../core/native';
 import { clientForHost, listingCache } from '../../services';
 import { atRoot, currentPath } from './explorerStore';
 import { basenameOf, folderLabel, parentDirOf } from './paths';
+import { recentRouteParams } from '../recent/recentRoot';
 import { rowShape } from './rowShape';
+import { pathsText } from './selectionLogic';
+import { filterByTag } from './tagFilter';
+import { filterByType, typeChips } from './typeFilter';
 import { useExplorer } from './useExplorer';
 import { useFileActions } from './useFileActions';
 import { useFileCapabilities } from './useFileCapabilities';
@@ -67,6 +74,10 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   const [peekEntry, setPeekEntry] = useState<Entry | null>(null);
   // A tag filter applies only to the folder it was picked in.
   const [tagFilter, setTagFilter] = useState<{ path: string; tag: string } | null>(null);
+  // A type filter (images, documents, ...) applies only to the folder it was picked in, like the tag filter.
+  const [typeFilter, setTypeFilter] = useState<{ path: string; category: EntryCategory } | null>(null);
+  // Move to / Copy to: the destination sheet is open for the current selection.
+  const [pickFor, setPickFor] = useState<'move' | 'copy' | null>(null);
   const [width, setWidth] = useState(0);
   // Selection mode entered from the footer "Select" button; long-press also selects without it.
   const [selectMode, setSelectMode] = useState(false);
@@ -154,7 +165,10 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     const visible = new Set(display.map((e) => e.path));
     return [...new Set(collections.bookmarks.filter((b) => b.hostId === host.id && b.tag && visible.has(b.remotePath)).map((b) => b.tag!))];
   }, [collections.bookmarks, display, host.id]);
-  const entries = activeTag ? display.filter((e) => taggedPaths.has(e.path)) : display;
+  const activeType = typeFilter?.path === path ? typeFilter.category : null;
+  const byTag = filterByTag(display, activeTag, taggedPaths);
+  const chips = typeChips(byTag);
+  const entries = filterByType(byTag, activeType && chips.includes(activeType) ? activeType : null);
 
   const openPreview = usePreviewSession((x) => x.open);
   const startPreview = useCallback(
@@ -202,6 +216,21 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     const tag = await dialogs.prompt({ title: `Bookmark "${e.name}"`, placeholder: 'Tag (optional)', confirmLabel: 'Save', allowEmpty: true });
     if (tag === null) return;
     await collections.addBookmark({ hostId: host.id, remotePath: e.path, ...(tag ? { tag } : {}) });
+  }
+
+  /** Long-press starts a selection; with one already going it extends the selection up to the pressed item. */
+  function longPressEntry(e: Entry) {
+    const picked = ex.getState().selected;
+    // On an item that is already selected a long-press still unselects it.
+    if (picked.size > 0 && !picked.has(e.path)) ex.selectRange(entries, e.path);
+    else ex.toggleSelect(e.path);
+  }
+
+  async function copySelectedPaths() {
+    const sel = ex.getState().selected;
+    if (sel.size === 0) return;
+    await Clipboard.setStringAsync(pathsText(state.entries, sel));
+    toast.success(t('pathsCopied', { count: sel.size }));
   }
 
   function bookmarkSelected() {
@@ -252,6 +281,8 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         return router.push('/trash');
       case 'recent':
         return router.push('/recent');
+      case 'recentHere':
+        return router.push({ pathname: '/recent', params: recentRouteParams(path) });
       case 'dupFinder':
         return router.push({ pathname: '/dups', params: { path } });
       case 'storageByType':
@@ -307,8 +338,17 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     { key: 'select', label: 'Select', primary: false, onPress: () => setSelectMode(true), renderIcon: (k: string) => <ListChecks size={22} color={k} /> },
   ];
 
+  const pickedFiles = selectedCount === 2 ? state.entries.filter((e) => state.selected.has(e.path)) : [];
+  const selectionChips: SelectionChip[] = [
+    ...(selectedCount > 0 ? [{ key: 'paths', label: t('copyPathsTooltip', { count: selectedCount }), icon: Copy, onPress: () => void copySelectedPaths() }] : []),
+    ...(selectedCount > 0 && can(caps, 'modify') ? [{ key: 'dup', label: t('duplicateButton'), icon: CopyPlus, onPress: () => void actions.duplicateSelection() }] : []),
+    ...(selectedCount > 0 && can(caps, 'modify') && can(caps, 'delete') ? [{ key: 'moveTo', label: t('moveToTooltip'), icon: FolderInput, onPress: () => setPickFor('move') }] : []),
+    ...(selectedCount > 0 && can(caps, 'modify') ? [{ key: 'copyTo', label: t('copyToTooltip'), icon: FolderOutput, onPress: () => setPickFor('copy') }] : []),
+    ...(pickedFiles.length === 2 && pickedFiles.every((e) => !e.isDir) ? [{ key: 'compare', label: t('compareTooltip'), icon: GitCompare, onPress: () => void actions.compareSelection() }] : []),
+  ];
+
   const header = multi ? (
-    <SelectionHeader host={host} state={state} canModify={can(caps, 'modify')} onClose={endSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(display)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(display)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
+    <SelectionHeader host={host} state={state} shown={entries} extras={selectionChips} canModify={can(caps, 'modify')} onClose={endSelection} onBatchRename={() => setRenameOpen(true)} onSelectAll={() => ex.selectAll(entries)} onClearSelection={ex.clearSelection} onInvertSelection={() => ex.invertSelection(entries)} onBookmark={bookmarkSelected} onDetails={detailsOfSelected} />
   ) : (
     <BrowseHeader
       host={host}
@@ -332,7 +372,13 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   else {
     const footer = (
       <>
-        {showMore && <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>{state.loadingMore ? <ActivityIndicator /> : <View style={{ height: 24 }} />}</View>}
+        {showMore && state.loadMoreError !== null && (
+          <View style={{ paddingVertical: Spacing.md, paddingHorizontal: 18, alignItems: 'center', gap: Spacing.sm }}>
+            <Text style={LumenType.meta} muted>{t('loadMoreFailed', { error: state.loadMoreError })}</Text>
+            <Button size="md" kind="neutral" label={t('retryButton')} onPress={() => void ex.loadMore({ retry: true })} />
+          </View>
+        )}
+        {showMore && state.loadMoreError === null && <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>{state.loadingMore ? <ActivityIndicator /> : <View style={{ height: 24 }} />}</View>}
         {showHidden && (
           <Pressable onPress={ex.toggleShowHidden} accessibilityLabel={`${t('nHidden', { count: hiddenCount })} ${state.showHidden ? t('hideLabel') : t('showLabel')}`}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md }}>
@@ -362,7 +408,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         columnWrapperStyle={{ gap: CARD_GAP }}
         renderItem={({ item }) => (
           <View style={{ flex: 1, opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} />
+            <EntryGridCell entry={item} hostId={host.id} selected={state.selected.has(item.path)} multiSelect={multi} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => longPressEntry(item)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} />
           </View>
         )}
       />
@@ -373,7 +419,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: GUTTER }}
         renderItem={({ item, index }) => (
           <View style={{ opacity: hidden.has(item.path) ? 0.55 : 1 }}>
-            <EntryTile entry={item} hostId={host.id} shape={rowShape(entries, index)} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => ex.toggleSelect(item.path)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => setMetaEntry(item) : undefined} />
+            <EntryTile entry={item} hostId={host.id} shape={rowShape(entries, index)} selected={state.selected.has(item.path)} multiSelect={multi} density={density} isFavorite={favPaths.has(item.path)} isPinned={pinPaths.has(item.path)} onPress={() => openEntry(item)} onLongPress={() => longPressEntry(item)} onPeek={isPreviewable(item) ? () => setPeekEntry(item) : undefined} onSelect={() => ex.toggleSelect(item.path)} onShowMeta={item.isDir ? () => setMetaEntry(item) : undefined} />
           </View>
         )}
       />
@@ -385,6 +431,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     <View style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {header}
       {tags.length > 0 && <TagChips tags={tags} active={activeTag} onChange={setActiveTag} />}
+      {chips.length > 0 && <TypeChips categories={chips} active={activeType} onChange={(category) => setTypeFilter(category ? { path, category } : null)} />}
       {state.offline && <OfflineBanner text={t('offlineBannerText')} />}
       <View style={{ flex: 1 }}>{body}</View>
       {multi ? (
@@ -413,6 +460,21 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
           void actions.applyBatchRename(selectedPaths, newNames);
         }}
       />
+      {pickFor && (
+        <DestinationPicker
+          visible
+          host={host}
+          originPath={path}
+          title={pickFor === 'move' ? t('moveToTitle') : t('copyToTitle')}
+          confirmLabel={pickFor === 'move' ? t('moveToTooltip') : t('copyToTooltip')}
+          onPick={(dir) => {
+            const move = pickFor === 'move';
+            setPickFor(null);
+            void actions.transferSelectionTo(dir, move);
+          }}
+          onClose={() => setPickFor(null)}
+        />
+      )}
       {peekEntry && <PeekSheet host={host} entry={peekEntry} onClose={() => setPeekEntry(null)} />}
       {metaEntry && <MetaSheet visible host={host} entry={metaEntry} onClose={() => setMetaEntry(null)} onChanged={() => void ex.refresh()} onPreview={startPreview} />}
       <FavoritesSheet visible={favOpen} onClose={() => setFavOpen(false)} host={host} state={state} onOpen={ex.jumpTo} />
@@ -433,6 +495,26 @@ function TagChips({ tags, active, onChange }: { tags: string[]; active: string |
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: GUTTER, paddingVertical: 6 }}>
       {active && chip('All', false, () => onChange(null))}
       {tags.map((tag) => chip(tag, active === tag, () => onChange(active === tag ? null : tag)))}
+    </View>
+  );
+}
+
+const CATEGORY_LABEL: Record<EntryCategory, string> = { folder: 'Folders', image: 'Images', video: 'Videos', audio: 'Audio', document: 'Documents', archive: 'Archives', other: 'Other' };
+
+/** One chip per kind of item in the folder; tap to show only that kind, tap again (or All) to show everything. */
+function TypeChips({ categories, active, onChange }: { categories: EntryCategory[]; active: EntryCategory | null; onChange: (c: EntryCategory | null) => void }) {
+  const c = useScheme();
+  const chip = (label: string, on: boolean, onPress: () => void) => (
+    <Pressable key={label} onPress={onPress} hitSlop={6} accessibilityLabel={label} accessibilityState={{ selected: on }}>
+      <View style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: on ? mix(c.primary, c.surfaceContainer, 0.2) : c.surfaceContainerHigh }}>
+        <Text style={LumenType.pill} color={on ? c.primary : c.onSurfaceVariant}>{label}</Text>
+      </View>
+    </Pressable>
+  );
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: GUTTER, paddingVertical: 6 }}>
+      {active && chip('All', false, () => onChange(null))}
+      {categories.map((cat) => chip(CATEGORY_LABEL[cat], active === cat, () => onChange(active === cat ? null : cat)))}
     </View>
   );
 }

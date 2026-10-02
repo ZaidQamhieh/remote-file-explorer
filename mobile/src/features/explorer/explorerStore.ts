@@ -4,16 +4,23 @@ import type { AgentClient } from '../../core/api/agentClient';
 import type { BatchItemResult, BatchResult, Entry } from '../../core/api/models';
 import type { ListingCache } from '../../core/storage/listingCache';
 import { isEntryHidden, type VisibilityPrefs } from '../../core/visibility';
+import { invalidNameReason } from './nameValidation';
 import { basenameOf, buildPathStackWithinRoot, joinRemotePath, renameDestination } from './paths';
+import { rangePaths } from './selectionLogic';
 import { sortEntries, type SortOrder } from './sort';
+import type { UndoOp } from './undoPlan';
 
 export type ExplorerState = {
   pathStack: string[];
   entries: Entry[];
   loading: boolean;
   loadingMore: boolean;
+  /** The last page fetch failed (in memory only); the list stops asking until the user retries or refreshes. */
+  loadMoreError: string | null;
   error: string | null;
   selected: Set<string>;
+  /** The item a range selection extends from: the last one ticked. */
+  anchor: string | null;
   /** Showing cached data; a refresh is in progress or failed. */
   stale: boolean;
   /** The last live fetch failed and the data is from cache only. */
@@ -52,8 +59,10 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     entries: [],
     loading: false,
     loadingMore: false,
+    loadMoreError: null,
     error: null,
     selected: new Set(),
+    anchor: null,
     stale: false,
     offline: false,
     nextCursor: null,
@@ -68,8 +77,8 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     const gen = ++generation;
     const cached = await deps.cache.get(deps.hostId, path);
     if (gen !== generation) return;
-    if (cached) set({ entries: cached.entries, loading: false, stale: true, offline: false, error: null, selected: new Set(), nextCursor: null });
-    else set({ loading: true, error: null, selected: new Set(), nextCursor: null });
+    if (cached) set({ entries: cached.entries, loading: false, loadingMore: false, stale: true, offline: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
+    else set({ loading: true, loadingMore: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
     try {
       const client = await deps.getClient();
       if (gen !== generation) return;
@@ -88,12 +97,14 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
   const api: Explorer = {
     load,
     refresh: load,
-    async loadMore() {
+    async loadMore(o) {
       const s = get();
       if (s.loading || s.loadingMore || s.nextCursor === null) return;
+      // After a failure the list asks again as soon as it is still at the end; only an explicit retry goes out.
+      if (s.loadMoreError !== null && !o?.retry) return;
       const path = currentPath(s);
       const gen = ++generation;
-      set({ loadingMore: true });
+      set({ loadingMore: true, loadMoreError: null });
       try {
         const client = await deps.getClient();
         if (gen !== generation) return;
@@ -103,8 +114,8 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
         await deps.cache.put(deps.hostId, path, merged);
         if (gen !== generation) return;
         set({ entries: merged, loadingMore: false, nextCursor: listing.nextCursor ?? null });
-      } catch {
-        if (gen === generation) set({ loadingMore: false });
+      } catch (e) {
+        if (gen === generation) set({ loadingMore: false, loadMoreError: deps.humanize(e) });
       }
     },
     navigate(path) {
@@ -131,18 +142,28 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     toggleShowHidden: () => set({ showHidden: !get().showHidden }),
     toggleSelect(path) {
       const sel = new Set(get().selected);
-      if (!sel.delete(path)) sel.add(path);
-      set({ selected: sel });
+      const added = !sel.delete(path);
+      if (added) sel.add(path);
+      set({ selected: sel, anchor: added ? path : null });
     },
-    clearSelection: () => set({ selected: new Set() }),
-    selectAll: (displayed) => set({ selected: new Set(displayed.map((e) => e.path)) }),
+    selectRange(displayed, to) {
+      const range = rangePaths(displayed.map((e) => e.path), get().anchor, to);
+      if (range.length === 0) return;
+      set({ selected: new Set([...get().selected, ...range]), anchor: to });
+    },
+    clearSelection: () => set({ selected: new Set(), anchor: null }),
+    selectAll: (displayed) => set({ selected: new Set(displayed.map((e) => e.path)), anchor: null }),
     invertSelection(displayed) {
       const all = new Set(displayed.map((e) => e.path));
       const cur = get().selected;
-      set({ selected: new Set([...all].filter((p) => !cur.has(p))) });
+      set({ selected: new Set([...all].filter((p) => !cur.has(p))), anchor: null });
     },
-    async createFolder(name) {
-      await (await deps.getClient()).createFolder(joinRemotePath(currentPath(get()), name));
+    async createFolder(name, o = {}) {
+      const target = joinRemotePath(currentPath(get()), name);
+      await (await deps.getClient()).createFolder(target);
+      if (o.open) {
+        set({ pathStack: [...get().pathStack, target] });
+      }
       await load();
     },
     async createFile(name) {
@@ -150,6 +171,8 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
       await load();
     },
     async rename(oldPath, newName) {
+      const bad = invalidNameReason(newName);
+      if (bad) throw new Error(bad);
       await (await deps.getClient()).rename(oldPath, renameDestination(oldPath, newName));
       await load();
     },
@@ -168,6 +191,20 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
       await load();
       return res;
     },
+    async undo(op) {
+      const client = await deps.getClient();
+      try {
+        if (op.kind === 'rename') await client.rename(op.from, op.to);
+        else {
+          let refused = 0;
+          for (const g of op.groups) refused += (await client.move(g.paths, g.destDir, {})).failed.length;
+          if (refused > 0) throw new Error(`${refused} could not go back: a file with that name already exists there, or it was changed since`);
+        }
+      } finally {
+        await load();
+      }
+    },
+    duplicateSelected: () => api.copySelected(currentPath(get()), { duplicate: true }),
     async compressSelected(dest, sources) {
       const entry = await (await deps.getClient()).compress(sources ?? [...get().selected], dest);
       await load();
@@ -181,20 +218,34 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     async batchRename(renames) {
       const client = await deps.getClient();
       const results: BatchItemResult[] = [];
-      const pending = new Map<string, string>(); // finalPath -> tempPath
+      const pending = new Map<string, { tmp: string; orig: string }>(); // finalPath -> temp name and original path
       const fail = (path: string, e: unknown): BatchItemResult => ({ path, ok: false, errorCode: 'RENAME_FAILED', errorMessage: deps.humanize(e) });
       // Two sources landing on the same final name would strand the first at its temp name (PR-35): reject
       // every duplicate target up front, before any file is touched.
       const counts = new Map<string, number>();
       for (const r of renames) {
+        if (invalidNameReason(r.newName)) continue;
         const dst = renameDestination(r.path, r.newName);
         counts.set(dst, (counts.get(dst) ?? 0) + 1);
       }
+      // A final name that is already in the folder and is not being vacated by this batch would be refused by the
+      // host after other files had moved; refuse it up front instead (a chain a>b, b>c stays allowed).
+      const shown = new Set(get().entries.map((x) => x.path));
+      const vacated = new Set(renames.filter((r) => !invalidNameReason(r.newName) && renameDestination(r.path, r.newName) !== r.path).map((r) => r.path));
       for (let i = 0; i < renames.length; i++) {
         const r = renames[i];
+        const badName = invalidNameReason(r.newName);
+        if (badName) {
+          results.push({ path: r.path, ok: false, errorCode: 'INVALID_NAME', errorMessage: badName });
+          continue;
+        }
         const dst = renameDestination(r.path, r.newName);
         if (dst === r.path) {
           results.push({ path: r.path, ok: true });
+          continue;
+        }
+        if (shown.has(dst) && !vacated.has(dst)) {
+          results.push({ path: r.path, ok: false, errorCode: 'TARGET_EXISTS', errorMessage: `"${r.newName}" already exists in this folder` });
           continue;
         }
         if ((counts.get(dst) ?? 0) > 1) {
@@ -204,17 +255,24 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
         const tmp = renameDestination(r.path, `.rfe-rn-${i}-${r.newName}`);
         try {
           await client.rename(r.path, tmp);
-          pending.set(dst, tmp);
+          pending.set(dst, { tmp, orig: r.path });
         } catch (e) {
           results.push(fail(r.path, e));
         }
       }
-      for (const [finalPath, tmp] of pending) {
+      for (const [finalPath, { tmp, orig }] of pending) {
         try {
           await client.rename(tmp, finalPath);
           results.push({ path: finalPath, ok: true });
         } catch (e) {
-          results.push(fail(tmp, e));
+          // The final name was refused (for example taken by an item that was not selected): put the file back
+          // under its own name instead of leaving it under the hidden temp name.
+          try {
+            await client.rename(tmp, orig);
+            results.push(fail(orig, e));
+          } catch {
+            results.push({ path: tmp, ok: false, errorCode: 'RENAME_STRANDED', errorMessage: `Could not rename it, and could not restore the name ${orig}: it was left as ${tmp}. ${deps.humanize(e)}` });
+          }
         }
       }
       await load();
@@ -241,22 +299,29 @@ type CollisionOpts = { sources?: string[]; duplicate?: boolean; overwrite?: bool
 export interface Explorer {
   load(): Promise<void>;
   refresh(): Promise<void>;
-  loadMore(): Promise<void>;
+  loadMore(o?: { retry?: boolean }): Promise<void>;
   navigate(path: string): void;
   popDirectory(): boolean;
   navigateTo(index: number): void;
   jumpTo(path: string): void;
   toggleShowHidden(): void;
   toggleSelect(path: string): void;
+  /** Adds everything between the last ticked item and [to] (as listed in [displayed]) to the selection. */
+  selectRange(displayed: Entry[], to: string): void;
   clearSelection(): void;
   selectAll(displayed: Entry[]): void;
   invertSelection(displayed: Entry[]): void;
-  createFolder(name: string): Promise<void>;
+  /** [open] navigates into the new folder instead of re-listing the current one. */
+  createFolder(name: string, o?: { open?: boolean }): Promise<void>;
   createFile(name: string): Promise<void>;
   rename(oldPath: string, newName: string): Promise<void>;
   deleteSelected(o?: { permanent?: boolean }): Promise<BatchResult>;
   moveSelected(destDir: string, o?: CollisionOpts): Promise<BatchResult>;
   copySelected(destDir: string, o?: CollisionOpts): Promise<BatchResult>;
+  /** Reverses a rename or move (the host refuses to replace anything, so a taken name makes it throw). */
+  undo(op: UndoOp): Promise<void>;
+  /** Copies the selection next to the originals, each under a free name. */
+  duplicateSelected(): Promise<BatchResult>;
   compressSelected(dest: string, sources?: string[]): Promise<Entry>;
   extractArchive(archive: string, destDir?: string): Promise<Entry>;
   batchRename(renames: { path: string; newName: string }[]): Promise<BatchResult>;

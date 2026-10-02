@@ -7,10 +7,11 @@ import { AgentApiError } from '../../../core/api/agentClient';
 import type { AuditEntry } from '../../../core/api/models';
 import { formatRelative } from '../../../core/format';
 import { mix } from '../../../design/color';
-import { ErrorRetry, GroupedCard, Text } from '../../../design/components';
+import { Button, ErrorRetry, GroupedCard, Text, useToast } from '../../../design/components';
 import { LumenSize, LumenType } from '../../../design/lumen';
 import { useRoles, useScheme } from '../../../design/theme';
 import type { Roles, Scheme } from '../../../design/tokens';
+import { appendOlder, olderCursor } from '../../../features/settings/auditPaging';
 import { auditLabel } from '../../../features/settings/hostSettingsLogic';
 import { humanizeError } from '../../../features/pairing/pairingService';
 import { t } from '../../../i18n';
@@ -33,10 +34,14 @@ const VISUALS: Record<string, { icon: LucideIcon; tint: Tone }> = {
 /** The host's activity log: pairings, logins, device changes and share links, newest first. Owner-only on the agent. */
 export default function Audit() {
   const c = useScheme();
+  const toast = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<{ message: string; adminOnly: boolean } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // The id to page from, or null when the newest-first list reached its end.
+  const [older, setOlder] = useState<number | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const fetchEntries = useCallback(async (): Promise<{ entries: AuditEntry[] } | { error: { message: string; adminOnly: boolean } }> => {
     try {
@@ -50,6 +55,7 @@ export default function Audit() {
   const apply = useCallback((r: Awaited<ReturnType<typeof fetchEntries>>) => {
     if ('entries' in r) {
       setEntries(r.entries);
+      setOlder(olderCursor(r.entries));
       setError(null);
     } else setError(r.error);
   }, []);
@@ -60,6 +66,22 @@ export default function Audit() {
       live = false;
     };
   }, [apply, fetchEntries]);
+
+  async function loadOlder() {
+    if (older === null || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const host = (await hostStore.listHosts()).find((h) => h.id === id);
+      if (!host) return;
+      const page = await (await clientForHost(host)).audit({ before: older });
+      setEntries((cur) => appendOlder(cur ?? [], page));
+      setOlder(olderCursor(page));
+    } catch (e) {
+      toast.error(humanizeError(e));
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   const notice = (message: string) => (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
@@ -89,6 +111,7 @@ export default function Audit() {
         }
         contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 32, gap: 10 }}
         renderItem={({ item }) => <Row entry={item} />}
+        ListFooterComponent={older !== null ? <View style={{ paddingTop: 4 }}><Button size="md" kind="neutral" label={t('loadOlderButton')} onPress={() => void loadOlder()} disabled={loadingOlder} /></View> : null}
       />
     );
   }

@@ -3,6 +3,7 @@
 // agent itself via go:embed), so requests are relative to "/v1".
 import { sha256 } from '@noble/hashes/sha2.js';
 import { getDevicePublicKeyB64, signNonce } from './deviceIdentity';
+import { mintBody, renameBody, searchParams, trashIdsBody, wolBody } from './requests';
 
 // Remove the JavaScript-readable bearer token stored by older companion
 // builds. Existing browser sessions must sign in again to receive an HttpOnly
@@ -47,7 +48,7 @@ const get = <T>(path: string) => request<T>('GET', path);
 const post = <T>(path: string, body?: unknown) => request<T>('POST', path, body);
 const patch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, body);
 const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, body);
-const del = <T>(path: string) => request<T>('DELETE', path);
+const del = <T>(path: string, body?: unknown) => request<T>('DELETE', path, body);
 
 // Chunk uploads are raw octet-stream bodies with a custom header, not JSON —
 // bypasses the JSON-only `request` helper above.
@@ -196,6 +197,10 @@ export interface ShareLink {
   expiresAt: number;
   url: string;
 }
+/** A batch answer: 200 even when some items failed, so each result must be read. */
+export interface BatchResponse {
+  results?: { path: string; ok: boolean; error?: { code?: string; message?: string } }[];
+}
 export interface ShareLinkSummary {
   tokenHash: string;
   path: string;
@@ -333,27 +338,25 @@ export const api = {
   },
   listDrives: () => get<Drive[]>('/system/drives'),
   mkdir: (path: string) => post<void>('/fs/folder', { path }),
-  rename: (path: string, newName: string) => patch<void>('/fs/rename', { path, newName }),
+  rename: (path: string, newName: string) => patch<Entry>('/fs/rename', renameBody(path, newName)),
   recent: () => get<Entry[]>('/fs/recent'),
-  search: (query: string, path?: string) => {
-    const qs = new URLSearchParams({ q: query, ...(path ? { path } : {}) }).toString();
-    return get<Entry[]>(`/search?${qs}`);
-  },
+  search: (query: string, root?: string) => get<Entry[]>(`/search?${searchParams(query, root)}`),
 
   // trash
   listTrash: () => get<TrashEntry[]>('/trash'),
-  restoreTrash: (id: string) => post<void>('/trash/restore', { id }),
-  deleteTrashForever: (id: string) => del<void>(`/trash?id=${encodeURIComponent(id)}`),
+  restoreTrash: (ids: string[]) => post<BatchResponse>('/trash/restore', trashIdsBody(ids)),
+  // No body would empty the whole trash, so this always names the ids it deletes.
+  deleteTrashForever: (ids: string[]) => del<void>('/trash', trashIdsBody(ids)),
+  emptyTrash: () => del<void>('/trash'),
 
   // shares
   listShares: () => get<ShareLinkSummary[]>('/share'),
-  mintShare: (path: string, ttlSeconds?: number) =>
-    post<ShareLink>('/share/mint', { path, ...(ttlSeconds ? { ttlSeconds } : {}) }),
+  mintShare: (path: string, expiresInSeconds?: number) => post<ShareLink>('/share/mint', mintBody(path, expiresInSeconds)),
   revokeShare: (tokenHash: string) => del<void>(`/share/${tokenHash}`),
 
   // agent lifecycle
   restartAgent: () => post<void>('/agent/restart'),
-  wakeOnLan: (macAddress: string) => post<void>('/wol', { macAddress }),
+  wakeOnLan: (mac: string) => post<void>('/wol', wolBody(mac)),
 };
 
 export function contentUrl(path: string): string {

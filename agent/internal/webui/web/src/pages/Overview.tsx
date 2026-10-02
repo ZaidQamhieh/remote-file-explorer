@@ -71,7 +71,7 @@ export function Overview() {
   const quickActions = [
     { label: 'Pair device', sub: 'POST /v1/pairing/generate', icon: KeyRound, primary: true, onClick: () => navigate('/app/devices') },
     { label: 'New folder', sub: 'POST /v1/fs/folder', icon: FolderPlus, onClick: () => navigate('/app/files') },
-    { label: 'Upload file', sub: 'PUT /v1/fs/upload', icon: Upload, onClick: () => navigate('/app/files') },
+    { label: 'Upload file', sub: 'POST /v1/transfers', icon: Upload, onClick: () => navigate('/app/files') },
     { label: 'Share link', sub: 'POST /v1/share/mint', icon: Share2, onClick: () => navigate('/app/files') },
     {
       label: 'Wake device',

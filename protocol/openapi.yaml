@@ -1050,7 +1050,7 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
     delete:
       summary: Empty the trash (all items, or only the given ids)
-      description: A request with no body empties everything. A body that is present but not valid JSON of the expected shape, that has no ids (`{}`, `null`, `"ids": []`), or that names an invalid trash id, returns 400 and deletes nothing.
+      description: A request with no body empties everything. A body that is present but not valid JSON of the expected shape, that has no ids (an empty object, null or an empty ids list), or that names an invalid trash id, returns 400 and deletes nothing.
       requestBody:
         required: false
         content:

@@ -354,6 +354,101 @@ func TestSidecarRecentsMatchGoWalk(t *testing.T) {
 	}
 }
 
+// With a built, watched index the walker answers from recents.index; the result must still equal the Go walk's, a
+// file created afterwards must show up without a rebuild, and a root outside the index must still be answered.
+func TestSidecarRecentsFromLiveIndexMatchGoWalk(t *testing.T) {
+	bin := indexdBinary(t)
+	root := diffFixture(t)
+	ops := fsops.New([]string{root}, false)
+	sup := sidecar.NewSupervisor(sidecar.Config{Name: "rfe-indexd", Path: bin, Logf: t.Logf}, nil)
+	sup.Run()
+	t.Cleanup(sup.Stop)
+	var c *sidecar.Client
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var err error
+		if c, err = sup.Client(); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("sidecar never started")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	var built buildResp
+	if err := c.Call(context.Background(), "index.build", buildReq{Roots: []string{root}, MaxEntries: 1_000_000, MaxBytes: 1 << 30}, &built); err != nil {
+		t.Fatalf("index.build: %v", err)
+	}
+	if _, ok := watching(c); !ok {
+		t.Skip("the file watcher could not be installed here")
+	}
+
+	// The index must be what answers, not the walk behind it.
+	var direct recentsResp
+	if err := c.Call(context.Background(), "recents.index", recentsReq{Roots: []string{root}, Limit: 5}, &direct); err != nil || !direct.Ready {
+		t.Fatalf("recents.index ready=%v err=%v, want ready", direct.Ready, err)
+	}
+
+	walk := sidecarRecentWalker(sup)
+	compare := func(label string) {
+		t.Helper()
+		for _, limit := range []int{1, 5, 8, 100} {
+			for _, r := range []string{root, filepath.Join(root, "a"), filepath.Join(root, "docs")} {
+				var want, got recentHeap
+				heap.Init(&want)
+				heap.Init(&got)
+				walkForRecentWithOps(context.Background(), ops, r, limit, &want)
+				walk(context.Background(), ops, r, limit, &got)
+				if !reflect.DeepEqual(keys(got.sortedNewestFirst()), keys(want.sortedNewestFirst())) {
+					t.Errorf("%s limit %d root %s: %s", label, limit, r, firstDiff(want.sortedNewestFirst(), got.sortedNewestFirst()))
+				}
+			}
+		}
+	}
+	compare("built")
+
+	fresh := filepath.Join(root, "docs", "created-after-build.txt")
+	if err := os.WriteFile(fresh, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	until := time.Now().Add(10 * time.Second)
+	for {
+		var h recentHeap
+		heap.Init(&h)
+		walk(context.Background(), ops, root, 5, &h)
+		found := false
+		for _, e := range h {
+			if e.Path == fresh {
+				found = true
+			}
+		}
+		if found {
+			break
+		}
+		if time.Now().After(until) {
+			t.Fatal("a file created after the build never reached recents")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	compare("after a change")
+
+	// A root the index does not cover is declined by recents.index and the walker still answers it.
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "o.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var declined recentsResp
+	if err := c.Call(context.Background(), "recents.index", recentsReq{Roots: []string{outside}, Limit: 5}, &declined); err != nil || declined.Ready {
+		t.Fatalf("outside root: ready=%v err=%v, want declined", declined.Ready, err)
+	}
+	var h recentHeap
+	heap.Init(&h)
+	walk(context.Background(), ops, outside, 5, &h)
+	if h.Len() != 1 {
+		t.Fatalf("outside root: walker found %d entries, want 1", h.Len())
+	}
+}
+
 func TestSidecarFallsBackWhenUnavailable(t *testing.T) {
 	ops := fsops.New([]string{t.TempDir()}, false)
 	si := newSidecarIndex(ops, sidecar.Config{Name: "rfe-indexd", Path: "/nonexistent/rfe-indexd"})

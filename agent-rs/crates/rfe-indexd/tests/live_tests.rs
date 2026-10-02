@@ -266,3 +266,47 @@ fn real_tree_update_latency() {
     }
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn recents_come_from_the_live_index_and_decline_before_it_is_ready() {
+    let t = tempfile::tempdir().unwrap();
+    let root = t.path().join("root");
+    touch(&root.join("a.txt"));
+    let r = root.to_str().unwrap();
+
+    let mut sc = Sidecar::start();
+    let before = sc.call("recents.index", json!({"roots": [r], "limit": 5}));
+    assert_eq!(before["ready"], false, "no index yet: {before}");
+
+    sc.call(
+        "index.build",
+        json!({"roots": [r], "maxEntries": 1000000, "maxBytes": 1u64 << 30}),
+    );
+    wait_until("the watches to be installed", || {
+        sc.call("index.stats", json!({}))["live"]["watching"] == true
+    });
+    let v = sc.call("recents.index", json!({"roots": [r], "limit": 5}));
+    assert_eq!(v["ready"], true, "{v}");
+    assert_eq!(v["partial"], false);
+    assert_eq!(v["entries"].as_array().unwrap().len(), 1);
+
+    // A new file reaches recents without a rebuild.
+    touch(&root.join("docs/created.txt"));
+    wait_until("a created file in recents", || {
+        let v = sc.call("recents.index", json!({"roots": [r], "limit": 5}));
+        v["ready"] == true
+            && v["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["path"].as_str().unwrap().ends_with("docs/created.txt"))
+    });
+
+    // A root the index does not cover is declined, so the caller walks.
+    let other = tempfile::tempdir().unwrap();
+    let v = sc.call(
+        "recents.index",
+        json!({"roots": [other.path().to_str().unwrap()], "limit": 5}),
+    );
+    assert_eq!(v["ready"], false, "{v}");
+}

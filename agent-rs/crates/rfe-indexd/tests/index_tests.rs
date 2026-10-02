@@ -298,3 +298,98 @@ fn link_targets_are_raw_and_dir_links_resolve_inside_the_root_not_the_subdir() {
     assert_eq!(by("/abs").symlink_target, abs.to_str().unwrap());
     assert!(!by("/abs").is_dir);
 }
+
+fn age(p: &Path, age_secs: u64) {
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs);
+    fs::File::options()
+        .write(true)
+        .open(p)
+        .unwrap()
+        .set_modified(when)
+        .unwrap();
+}
+
+#[test]
+fn index_recents_match_the_walk() {
+    let t = tempfile::tempdir().unwrap();
+    let r = t.path();
+    for (name, secs) in [
+        ("old.txt", 5000u64),
+        ("sub/mid.txt", 3000),
+        ("sub/deep/newer.txt", 500),
+        ("new.txt", 10),
+        (".hidden/skipped.txt", 1),
+        ("node_modules/pkg/skipped.js", 2),
+    ] {
+        let p = r.join(name);
+        touch(&p);
+        age(&p, secs);
+    }
+    fs::create_dir_all(r.join("emptydir")).unwrap();
+    #[cfg(unix)]
+    {
+        // Symlinks are kept (also to directories), as in the walk. One only: two made in the same instant tie on
+        // mtime, and the walk breaks ties by visit order.
+        std::os::unix::fs::symlink(r.join("sub"), r.join("link-to-dir")).unwrap();
+    }
+    let root = r.to_str().unwrap().to_string();
+    let idx = build(r);
+    for limit in [1usize, 2, 3, 100] {
+        let (walk, partial) = recents::scan(
+            std::slice::from_ref(&root),
+            limit,
+            None,
+            &AtomicBool::new(false),
+        );
+        assert!(!partial);
+        let from_index = idx
+            .recents(std::slice::from_ref(&root), limit)
+            .expect("a complete index answers recents");
+        let a: Vec<_> = walk
+            .iter()
+            .map(|e| (&e.path, e.mtime_ns, e.is_dir))
+            .collect();
+        let b: Vec<_> = from_index
+            .iter()
+            .map(|e| (&e.path, e.mtime_ns, e.is_dir))
+            .collect();
+        assert_eq!(a, b, "limit {limit}: index and walk must agree");
+    }
+}
+
+#[test]
+fn index_recents_declines_what_it_cannot_answer_exactly() {
+    let t = tempfile::tempdir().unwrap();
+    let r = t.path();
+    for i in 0..50 {
+        touch(&r.join(format!("d{i}/f.txt")));
+    }
+    let root = r.to_str().unwrap().to_string();
+
+    // Cut short by its budget: the index no longer holds every file.
+    let small = Index::build(
+        std::slice::from_ref(&root),
+        Limits {
+            max_entries: 10,
+            max_bytes: 1 << 30,
+        },
+        &AtomicBool::new(false),
+    );
+    assert!(small.stats.truncated);
+    assert!(small.recents(std::slice::from_ref(&root), 5).is_none());
+
+    // A root the index does not cover.
+    let idx = build(r);
+    let other = tempfile::tempdir().unwrap();
+    let other_root = other.path().to_str().unwrap().to_string();
+    assert!(idx.recents(&[other_root], 5).is_none());
+
+    // A folder under an indexed root is declined: symlinks resolve against the root, so a sub-folder walk could
+    // answer differently.
+    let sub = r.join("d3").to_str().unwrap().to_string();
+    assert!(idx.recents(std::slice::from_ref(&sub), 5).is_none());
+    assert_eq!(
+        idx.recents(std::slice::from_ref(&root), 5).unwrap().len(),
+        5
+    );
+}

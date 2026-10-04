@@ -31,6 +31,9 @@ KeePassXC or with `secret-tool search service rfe-desktop`.
 
 ## Messages and what to do
 
+Settings has a **Test the keystore** button: it saves a throwaway secret, reads it back and removes it,
+and shows the same message the sign-in would.
+
 | The window says | Cause | Do this |
 |---|---|---|
 | "no OS keystore answered ... DBus error ... Failed to connect to socket" | No session bus, for example over SSH, in a container, or under `sudo`; or a bus with no provider on it | Run the app inside a desktop session with gnome-keyring, KeePassXC or KDE Wallet running. On a server: `dbus-run-session` plus a started and unlocked provider |

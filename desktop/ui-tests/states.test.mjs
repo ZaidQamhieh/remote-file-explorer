@@ -1,106 +1,13 @@
-// Drives desktop/ui/app.js against a minimal fake DOM built from index.html, with `invoke`
-// answered by the test. This checks which screen and message the window shows in each error,
-// empty and loading state. It does not check how the window looks; that needs real pixels.
+// Which screen and message the window shows in each error, empty and loading state, driving
+// desktop/ui/app.js against a fake DOM with `invoke` answered by the test. This does not check how
+// the window looks; that needs real pixels.
 //
-//   node --test desktop/ui-tests
+//   node --test desktop/ui-tests/*.test.mjs
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import vm from "node:vm";
+import { boot, settle, deferred, SIGNED_OUT, SIGNED_IN } from "./harness.mjs";
 
-const ui = new URL("../ui/", import.meta.url);
-const html = readFileSync(new URL("index.html", ui), "utf8");
-const source = readFileSync(new URL("app.js", ui), "utf8");
-
-class El {
-  constructor(tag = "div", attrs = {}) {
-    this.tag = tag;
-    this.id = attrs.id || "";
-    this.hidden = "hidden" in attrs;
-    this.value = attrs.value || "";
-    this.textContent = "";
-    this.disabled = false;
-    this.className = attrs.class || "";
-    this.dataset = {};
-    this.children = [];
-    this.listeners = {};
-    const names = new Set(this.className.split(/\s+/).filter(Boolean));
-    this.classList = {
-      toggle: (n, on) => {
-        on ? names.add(n) : names.delete(n);
-        this.className = [...names].join(" ");
-      },
-      contains: (n) => names.has(n),
-    };
-  }
-  addEventListener(type, fn) {
-    (this.listeners[type] ||= []).push(fn);
-  }
-  append(...kids) {
-    this.children.push(...kids);
-  }
-  replaceChildren(...kids) {
-    this.children = kids;
-  }
-  focus() {}
-  querySelector() {
-    return this;
-  }
-  async fire(type) {
-    const ev = { target: this, currentTarget: this, submitter: this, preventDefault() {} };
-    for (const fn of this.listeners[type] || []) fn(ev);
-    await settle();
-  }
-}
-
-const settle = async () => {
-  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setTimeout(r, 5)); // the polling loop's (shortened) wait
-  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
-};
-
-// An invoke() the test controls: answers come from `handlers`, or from a promise it holds open.
-function boot(handlers) {
-  const els = {};
-  for (const m of html.matchAll(/<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g)) {
-    const attrs = { id: m[3] };
-    if (/\bhidden\b/.test(m[2])) attrs.hidden = "";
-    const v = m[2].match(/\bvalue="([^"]*)"/);
-    if (v) attrs.value = v[1];
-    const c = m[2].match(/\bclass="([^"]*)"/);
-    if (c) attrs.class = c[1];
-    els[m[3]] = new El(m[1], attrs);
-  }
-  const calls = [];
-  const invoke = (name, args) => {
-    calls.push(name);
-    const h = handlers[name];
-    if (!h) return Promise.reject(`unexpected command ${name}`);
-    return Promise.resolve().then(() => (typeof h === "function" ? h(args) : h));
-  };
-  const ctx = {
-    window: { __TAURI__: { core: { invoke } } },
-    document: {
-      getElementById: (id) => els[id] || assert.fail(`no element #${id}`),
-      createElement: (tag) => new El(tag),
-    },
-    setTimeout: (fn) => setTimeout(fn, 0),
-    // keep the polling loop's two-second wait out of the test
-  };
-  vm.runInNewContext(source, ctx);
-  const screen = () => ["step-connect", "step-trust", "step-login", "step-approve", "step-devices"].filter((s) => !els[s].hidden);
-  return { els, calls, screen, message: () => (els.message.hidden ? "" : els.message.textContent) };
-}
-
-const deferred = () => {
-  let resolve, reject;
-  const promise = new Promise((a, b) => ((resolve = a), (reject = b)));
-  return { promise, resolve, reject };
-};
-
-const SIGNED_OUT = { host: "pc:8765", fingerprint: "", signedIn: false, username: "" };
-const SIGNED_IN = { host: "pc:8765", fingerprint: "ab".repeat(32), signedIn: true, username: "zaid" };
 const device = (o = {}) => ({ id: "d1", label: "Laptop", created: 1, lastSeen: 0, revoked: false, current: true, lastAddress: "", lastVersion: "", viaLogin: true, ...o });
 
 test("keystore locked at start: connect screen with the reason, not a blank window", async () => {

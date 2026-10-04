@@ -1,8 +1,10 @@
 (function () {
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
-  const steps = ["step-connect", "step-trust", "step-login", "step-approve", "step-devices"];
+  const steps = ["step-connect", "step-trust", "step-login", "step-approve", "step-devices", "step-settings"];
   let pending = { host: "", fingerprint: "" };
+  let current = { signedIn: false };
+  let settingsReturn = "step-connect";
 
   function show(step) {
     for (const id of steps) $(id).hidden = id !== step;
@@ -35,17 +37,30 @@
   }
 
   // The connect screen lists the agents already trusted, so a pin can be reviewed or forgotten.
+  const connectPins = () => ({
+    body: $("pins"),
+    block: $("pins-block"),
+    empty: null,
+    refresh: showConnect,
+  });
+  const settingsPins = () => ({
+    body: $("settings-pins"),
+    block: null,
+    empty: $("settings-pins-empty"),
+    refresh: async () => renderPins(await invoke("list_pins"), settingsPins()),
+  });
+
   async function showConnect() {
     show("step-connect");
     try {
-      renderPins(await invoke("list_pins"));
+      renderPins(await invoke("list_pins"), connectPins());
     } catch (e) {
       say(String(e), true);
     }
   }
 
-  function renderPins(list) {
-    const body = $("pins");
+  function renderPins(list, view) {
+    const body = view.body;
     body.replaceChildren();
     for (const p of list) {
       const forget = document.createElement("button");
@@ -65,7 +80,8 @@
             renderDevices([]);
             setSession({ signedIn: false });
           }
-          await showConnect();
+          await view.refresh();
+          if (view.empty) settingsAccount();
         });
       });
       const host = cell(p.host + (p.active ? " (signed in)" : ""));
@@ -76,7 +92,8 @@
       tr.append(host, fp, act);
       body.append(tr);
     }
-    $("pins-block").hidden = list.length === 0;
+    if (view.block) view.block.hidden = list.length === 0;
+    if (view.empty) view.empty.hidden = list.length !== 0;
   }
 
   function when(unixSeconds) {
@@ -133,10 +150,88 @@
   }
 
   function setSession(saved) {
+    current = saved;
     const on = saved.signedIn;
     $("session").hidden = !on;
     $("session-text").textContent = on ? (saved.username ? saved.username + " on " : "Paired with ") + saved.host : "";
   }
+
+  // Settings: opens over whatever screen is showing and Back returns to it.
+  function settingsAccount() {
+    const c = current;
+    $("settings-account").textContent = c.signedIn
+      ? c.username
+        ? "Signed in as " + c.username + " on " + c.host + "."
+        : "Paired with " + c.host + " (no account; this computer can list and manage only itself)."
+      : "Not signed in.";
+    $("settings-device").hidden = !(c.signedIn && c.deviceId);
+    $("settings-device").textContent = c.deviceId ? "This computer is device " + c.deviceId : "";
+  }
+
+  async function showSettings() {
+    const from = steps.find((id) => !$(id).hidden);
+    if (from && from !== "step-settings") settingsReturn = from;
+    show("step-settings");
+    say("");
+    settingsAccount();
+    $("keystore-result").textContent = "";
+    $("keystore-result").className = "";
+    try {
+      const [info, pins] = await Promise.all([invoke("app_settings"), invoke("list_pins")]);
+      $("log-level").value = info.logLevel;
+      $("log-level").dataset.saved = info.logLevel;
+      $("about-version").textContent = info.appVersion;
+      $("about-client").textContent = info.clientVersion;
+      $("about-approval").textContent = info.minAgentForApproval + " or newer";
+      $("about-platform").textContent = info.platform;
+      $("about-data").textContent = info.dataDir;
+      renderPins(pins, settingsPins());
+    } catch (e) {
+      say(String(e), true);
+    }
+  }
+
+  $("open-settings").addEventListener("click", showSettings);
+  $("settings-back").addEventListener("click", () => {
+    say("");
+    // The screen underneath may have ended while Settings was open (signed out here, or the
+    // approval loop finished); do not return to a screen that no longer applies.
+    if (settingsReturn === "step-devices" && !current.signedIn) return showConnect();
+    if (settingsReturn === "step-approve" && liveLoops === 0) settingsReturn = "step-login";
+    show(settingsReturn);
+  });
+
+  $("check-keystore").addEventListener("click", (ev) =>
+    run(
+      ev.currentTarget,
+      async () => {
+        const result = $("keystore-result");
+        result.textContent = "";
+        try {
+          await invoke("check_keystore");
+          result.textContent = "Works: a test secret was saved, read back and removed.";
+          result.className = "tag";
+        } catch (e) {
+          result.textContent = "Not working.";
+          result.className = "tag revoked";
+          throw e;
+        }
+      },
+      "Testing the keystore (it may ask you to unlock it)..."
+    )
+  );
+
+  $("log-level").addEventListener("change", async () => {
+    const select = $("log-level");
+    const wanted = select.value;
+    say("");
+    try {
+      select.dataset.saved = await invoke("set_log_level", { level: wanted });
+    } catch (e) {
+      select.value = select.dataset.saved || "info";
+      say(String(e), true);
+    }
+  });
 
   $("connect-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -204,9 +299,19 @@
   // Approve on the PC: show the match code, then ask the agent every two seconds until the
   // owner answers. `waiting` changes on cancel so an old loop stops by itself.
   let waiting = 0;
+  let liveLoops = 0;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   async function askPcToApprove() {
+    liveLoops++;
+    try {
+      await askPcToApproveLoop();
+    } finally {
+      liveLoops--;
+    }
+  }
+
+  async function askPcToApproveLoop() {
     const me = ++waiting;
     const wait = await invoke("request_pairing", {
       host: pending.host,

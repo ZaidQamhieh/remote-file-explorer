@@ -9,9 +9,12 @@
 <body>
   <header class="bar">
     <h1>RFE Desktop</h1>
-    <div id="session" class="session" hidden>
-      <span id="session-text"></span>
-      <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
+    <div class="bar-right">
+      <button id="open-settings" class="link" type="button">Settings</button>
+      <div id="session" class="session" hidden>
+        <span id="session-text"></span>
+        <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
+      </div>
     </div>
   </header>
 
@@ -101,6 +104,54 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+    </section>
+
+    <section id="step-settings" class="panel" hidden>
+      <div class="row between">
+        <h2>Settings</h2>
+        <button id="settings-back" type="button">Back</button>
+      </div>
+
+      <h3>Account</h3>
+      <p id="settings-account" class="hint"></p>
+      <p id="settings-device" class="hint mono-line" hidden></p>
+
+      <h3>Trusted agents</h3>
+      <p class="hint">Forgetting an agent means its fingerprint has to be compared again next time. If you are signed in to it, you are signed out on this computer.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>Fingerprint</th><th></th></tr>
+          </thead>
+          <tbody id="settings-pins"></tbody>
+        </table>
+      </div>
+      <p id="settings-pins-empty" class="hint" hidden>No agent is trusted yet.</p>
+
+      <h3>Keystore</h3>
+      <p class="hint">This computer's device key and the login token are kept in the operating system's keystore, never in a file. A password is never stored.</p>
+      <div class="row">
+        <button id="check-keystore" type="button">Test the keystore</button>
+        <span id="keystore-result" role="status"></span>
+      </div>
+
+      <h3>Log level</h3>
+      <label for="log-level">What the app records in memory for a diagnostics report. Nothing is written to disk.</label>
+      <select id="log-level" name="log-level">
+        <option value="off">Off</option>
+        <option value="error">Errors only</option>
+        <option value="info">Normal</option>
+        <option value="debug">Detailed</option>
+      </select>
+
+      <h3>About</h3>
+      <dl class="about">
+        <dt>App version</dt><dd id="about-version"></dd>
+        <dt>Sent to the agent as</dt><dd id="about-client"></dd>
+        <dt>Approve on the PC needs</dt><dd id="about-approval"></dd>
+        <dt>System</dt><dd id="about-platform"></dd>
+        <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
+      </dl>
     </section>
 
     <p id="message" class="message" role="status" hidden></p>

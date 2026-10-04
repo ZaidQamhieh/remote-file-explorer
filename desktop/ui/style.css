@@ -36,6 +36,7 @@ body {
   padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--surface);
 }
 .bar h1 { font-size: 15px; margin: 0; font-weight: 600; }
+.bar-right { display: flex; gap: 16px; align-items: center; }
 .session { display: flex; gap: 12px; align-items: center; color: var(--muted); }
 main { max-width: 760px; margin: 0 auto; padding: 20px; }
 .panel {
@@ -45,7 +46,7 @@ main { max-width: 760px; margin: 0 auto; padding: 20px; }
 h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
 .hint { color: var(--muted); margin: 0 0 14px; }
 label { display: block; font-weight: 500; margin: 10px 0 4px; }
-input {
+input, select {
   width: 100%; padding: 8px 10px; font: inherit; color: var(--text);
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
 }
@@ -81,3 +82,11 @@ tr:last-child td { border-bottom: 0; }
 .message.error { color: var(--danger); border-color: var(--danger); }
 
 .code { font-size: 32px; letter-spacing: 3px; margin: 8px 0 14px; }
+
+h3 { font-size: 13px; margin: 18px 0 6px; font-weight: 600; }
+select { width: auto; min-width: 12em; }
+.mono-line { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
+.about { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.about dt { color: var(--muted); }
+.about dd { margin: 0; }
+#keystore-result.tag.revoked { color: var(--danger); }

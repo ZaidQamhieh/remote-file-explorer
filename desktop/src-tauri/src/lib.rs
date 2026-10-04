@@ -2,6 +2,7 @@
 //! The device key and login token are kept in the OS keystore.
 
 pub mod agent_client;
+pub mod applog;
 pub mod flows;
 mod fsutil;
 pub mod identity;
@@ -29,6 +30,8 @@ struct SavedView {
     fingerprint: String,
     signed_in: bool,
     username: String,
+    /// The agent's id for this computer; shown in Settings, not a secret.
+    device_id: String,
 }
 
 impl From<Saved> for SavedView {
@@ -38,6 +41,7 @@ impl From<Saved> for SavedView {
             host: s.host,
             fingerprint: s.fingerprint,
             username: s.username,
+            device_id: s.device_id,
         }
     }
 }
@@ -214,6 +218,43 @@ async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
         .map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingsView {
+    log_level: &'static str,
+    app_version: &'static str,
+    client_version: &'static str,
+    min_agent_for_approval: &'static str,
+    data_dir: String,
+    platform: &'static str,
+}
+
+#[tauri::command]
+fn app_settings(app: tauri::AppHandle) -> Result<SettingsView, String> {
+    let dir = data_dir(&app)?;
+    Ok(SettingsView {
+        log_level: flows::log_level(&dir)?.as_str(),
+        app_version: env!("CARGO_PKG_VERSION"),
+        client_version: agent_client::CLIENT_VERSION,
+        min_agent_for_approval: flows::MIN_AGENT_FOR_APPROVAL,
+        data_dir: dir.display().to_string(),
+        platform: std::env::consts::OS,
+    })
+}
+
+#[tauri::command]
+fn set_log_level(app: tauri::AppHandle, level: String) -> Result<&'static str, String> {
+    flows::set_log_level(&data_dir(&app)?, &level).map(|l| l.as_str())
+}
+
+#[tauri::command]
+async fn check_keystore(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = data_dir(&app)?;
+    keystore()
+        .run(move |s| flows::check_keystore(&dir, s))
+        .await
+}
+
 #[tauri::command]
 async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
     flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
@@ -222,6 +263,13 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(PendingPair::default())
+        .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                flows::apply_log_level(&dir);
+            }
+            applog::info(&format!("started {}", agent_client::CLIENT_VERSION));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             saved_agent,
             list_pins,
@@ -234,7 +282,10 @@ pub fn run() {
             cancel_pairing,
             reset_device_key,
             list_devices,
-            sign_out
+            sign_out,
+            app_settings,
+            set_log_level,
+            check_keystore
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

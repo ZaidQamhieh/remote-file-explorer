@@ -4,6 +4,7 @@ use crate::agent_client::{
     capture_fingerprint, match_code, new_client_nonce, normalize_fingerprint, AgentClient,
     AgentError, Device, LoginOk, PairPoll,
 };
+use crate::applog::{self, Level};
 use crate::fsutil::write_private;
 use crate::identity::Identity;
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,9 @@ struct StateFile {
     device_id: String,
     #[serde(default, skip_serializing)]
     token: String,
+    /// What the app records for the diagnostics report (see `applog`); empty means the default.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    log_level: String,
     /// Every certificate the user has trusted, by `pin_key`. `None` only for a file written before
     /// pins were kept per address; `read_state` folds that file's single host into it.
     #[serde(default)]
@@ -118,6 +122,61 @@ fn write_state(dir: &Path, f: &StateFile) -> Result<(), String> {
     write_private(&state_path(dir), &json)
 }
 
+/// The saved log level, or the default (info) when none was chosen.
+pub fn log_level(dir: &Path) -> Result<Level, String> {
+    let f = read_state(dir)?;
+    Ok(Level::parse(&f.log_level).unwrap_or(Level::Info))
+}
+
+/// Saves the log level in `state.json` and applies it now.
+pub fn set_log_level(dir: &Path, level: &str) -> Result<Level, String> {
+    let parsed = Level::parse(level)
+        .ok_or_else(|| format!("unknown log level {level:?}; use off, error, info or debug"))?;
+    let mut f = read_state(dir)?;
+    f.log_level = parsed.as_str().to_string();
+    write_state(dir, &f)?;
+    applog::set_level(parsed);
+    applog::info(&format!("log level set to {}", parsed.as_str()));
+    Ok(parsed)
+}
+
+/// Applies the saved log level; run once at start. A damaged state file leaves the default.
+pub fn apply_log_level(dir: &Path) {
+    if let Ok(level) = log_level(dir) {
+        applog::set_level(level);
+    }
+}
+
+/// Saves a throwaway secret, reads it back and removes it: whether the keystore works right now,
+/// including a locked one asking to be unlocked.
+pub fn check_keystore(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+    let acct = account("check", dir);
+    let outcome = (|| {
+        store.set(&acct, "ok")?;
+        match store.get(&acct)? {
+            Some(v) if v == "ok" => Ok(()),
+            _ => Err("the OS keystore did not return what was saved".to_string()),
+        }
+    })();
+    let cleanup = store.delete(&acct);
+    let result = outcome.and(cleanup);
+    match &result {
+        Ok(()) => applog::info("keystore check passed"),
+        Err(e) => applog::error(&format!("keystore check failed: {e}")),
+    }
+    result
+}
+
+/// Logs the outcome of one flow: `what` succeeded, or failed with the error text (which never
+/// holds a credential).
+fn logged<T>(what: &str, r: Result<T, AgentError>) -> Result<T, AgentError> {
+    match &r {
+        Ok(_) => applog::info(&format!("{what}: ok")),
+        Err(e) => applog::error(&format!("{what} failed: {e}")),
+    }
+    r
+}
+
 /// Loads the saved state and the token from the keystore. A token left in `state.json` by an
 /// earlier version is moved into the keystore first, then removed from the file; if the
 /// keystore refuses, this fails and the file is left as it was.
@@ -169,7 +228,10 @@ pub struct Probe {
 
 pub async fn probe(dir: &Path, host: &str) -> Result<Probe, AgentError> {
     let saved = read_state(dir).map_err(AgentError::Local)?;
-    let fingerprint = capture_fingerprint(host).await?;
+    let fingerprint = logged(
+        &format!("read the certificate of {host}"),
+        capture_fingerprint(host).await,
+    )?;
     let previous = saved
         .pins()
         .get(&pin_key(host))
@@ -228,10 +290,15 @@ pub async fn login(
     label: &str,
     store: &Offloaded,
 ) -> Result<Saved, AgentError> {
-    let identity = device_identity(dir, store).await?;
-    let client = AgentClient::pinned(host, fingerprint)?;
-    let ok = client.login(&identity, username, password, label).await?;
-    remember(dir, host, fingerprint, username, ok, store).await
+    let what = format!("sign-in to {host} as {username}");
+    let result = async {
+        let identity = device_identity(dir, store).await?;
+        let client = AgentClient::pinned(host, fingerprint)?;
+        let ok = client.login(&identity, username, password, label).await?;
+        remember(dir, host, fingerprint, username, ok, store).await
+    }
+    .await;
+    logged(&what, result)
 }
 
 /// Pins `fingerprint`, enrolls with a one-time pairing code, and stores the pin and token. The
@@ -248,10 +315,15 @@ pub async fn pair(
     if code.is_empty() {
         return Err(AgentError::Local("enter the pairing code".into()));
     }
-    let identity = device_identity(dir, store).await?;
-    let client = AgentClient::pinned(host, fingerprint)?;
-    let ok = client.pair(&identity, code, label).await?;
-    remember(dir, host, fingerprint, "", ok, store).await
+    let what = format!("pairing with a code on {host}");
+    let result = async {
+        let identity = device_identity(dir, store).await?;
+        let client = AgentClient::pinned(host, fingerprint)?;
+        let ok = client.pair(&identity, code, label).await?;
+        remember(dir, host, fingerprint, "", ok, store).await
+    }
+    .await;
+    logged(&what, result)
 }
 
 /// The first agent release that has `POST /pair/request`.
@@ -287,6 +359,20 @@ impl std::fmt::Debug for PairWait {
 /// Asks the agent to have the owner approve this computer at the PC. Nothing is stored until
 /// the owner approves; the returned match code is for the user to compare with the PC.
 pub async fn request_pairing(
+    dir: &Path,
+    host: &str,
+    fingerprint: &str,
+    label: &str,
+    store: &Offloaded,
+) -> Result<PairWait, AgentError> {
+    let what = format!("asking {host} to approve this computer on the PC");
+    logged(
+        &what,
+        request_pairing_inner(dir, host, fingerprint, label, store).await,
+    )
+}
+
+async fn request_pairing_inner(
     dir: &Path,
     host: &str,
     fingerprint: &str,
@@ -336,6 +422,23 @@ pub async fn poll_pairing(
     wait: &PairWait,
     store: &Offloaded,
 ) -> Result<PairProgress, AgentError> {
+    let r = poll_pairing_inner(dir, wait, store).await;
+    let host = &wait.host;
+    match &r {
+        Ok(PairProgress::Pending) => applog::debug(&format!("approval on {host} still pending")),
+        Ok(PairProgress::Rejected) => applog::info(&format!("approval on {host} was rejected")),
+        Ok(PairProgress::Expired) => applog::info(&format!("approval request on {host} expired")),
+        Ok(PairProgress::Approved(_)) => applog::info(&format!("approval on {host}: approved")),
+        Err(e) => applog::error(&format!("approval poll on {host} failed: {e}")),
+    }
+    r
+}
+
+async fn poll_pairing_inner(
+    dir: &Path,
+    wait: &PairWait,
+    store: &Offloaded,
+) -> Result<PairProgress, AgentError> {
     let client = AgentClient::pinned(&wait.host, &wait.fingerprint)?;
     match client
         .poll_pair_request(&wait.request_id, &wait.client_nonce)
@@ -358,6 +461,15 @@ pub async fn poll_pairing(
 }
 
 pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, AgentError> {
+    let r = list_devices_inner(dir, store).await;
+    match &r {
+        Ok(list) => applog::debug(&format!("listed {} devices", list.len())),
+        Err(e) => applog::error(&format!("listing devices failed: {e}")),
+    }
+    r
+}
+
+async fn list_devices_inner(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, AgentError> {
     let s = {
         let dir = dir.to_path_buf();
         store
@@ -402,7 +514,9 @@ pub fn reset_device_key(dir: &Path, store: &dyn SecretStore) -> Result<(), Strin
     if !load_saved(dir, store)?.token.is_empty() {
         return Err("Sign out first; the saved login belongs to the current device key.".into());
     }
-    Identity::reset(dir, store)
+    Identity::reset(dir, store)?;
+    applog::info("device key reset");
+    Ok(())
 }
 
 /// Removes the token from `state.json` first (always possible), then from the keystore, so a
@@ -465,6 +579,10 @@ pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOu
     }
     let dir = dir.to_path_buf();
     store.run(move |s| sign_out(&dir, s)).await?;
+    applog::info(&format!(
+        "signed out (agent told: {})",
+        if out.revoked { "yes" } else { "no" }
+    ));
     Ok(out)
 }
 
@@ -524,5 +642,9 @@ pub fn forget_pin(dir: &Path, store: &dyn SecretStore, host: &str) -> Result<For
     } else if out.was_pinned {
         write_state(dir, &f)?;
     }
+    applog::info(&format!(
+        "forgot the trust in {key} (pinned: {}, signed out: {})",
+        out.was_pinned, out.signed_out
+    ));
     Ok(out)
 }

@@ -100,3 +100,37 @@ textarea { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consol
 #hosts-list input { min-width: 12em; }
 #hosts-status { color: var(--muted); }
 #hosts-status.tag.revoked { color: var(--danger); }
+/* ---- feature:health-metrics ---- */
+input[type="checkbox"] { width: auto; margin: 0; }
+label.inline { display: inline; margin: 0; font-weight: 400; }
+.pad-top { margin-top: 12px; }
+
+/* ---- feature:pairing-codes ---- */
+/* One click selects the whole code, so Ctrl+C copies it; the app never touches the clipboard. */
+.pcodes-code { font-size: 36px; letter-spacing: 6px; -webkit-user-select: all; user-select: all; }
+
+/* ---- feature:audit-logs ---- */
+.filters { align-items: flex-end; margin-bottom: 10px; }
+.filters label { margin-top: 0; }
+.filters input { min-width: 12em; width: auto; }
+#audit-body td, #log-body td { white-space: normal; word-break: break-word; }
+#log-body td:last-child { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+#audit-body td:first-child, #log-body td:first-child { white-space: nowrap; }
+
+/* feature:device-actions */
+.da-actions { display: flex; gap: 14px; align-items: center; }
+button.da-danger { color: var(--danger); }
+button.da-danger.armed { background: var(--danger); color: var(--surface); padding: 2px 8px; border: 1px solid var(--danger); border-radius: var(--radius); }
+.da-editor { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 4px; }
+.da-editor fieldset { border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; padding: 4px 12px 8px; }
+.da-editor legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
+.da-check { display: flex; align-items: center; gap: 8px; }
+.da-check input { width: auto; margin: 0; }
+.da-check label { margin: 6px 0; font-weight: 400; }
+
+/* ---- feature:pair-inbox ---- */
+#inbox-rows td { white-space: normal; vertical-align: top; }
+#inbox-rows .hint { margin: 4px 0 0; font-size: 12px; }
+#inbox-rows td.inbox-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 1px; white-space: nowrap; }
+#inbox-rows button.primary { margin-top: 0; }
+/* ---- end feature:pair-inbox ---- */

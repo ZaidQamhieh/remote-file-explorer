@@ -308,6 +308,8 @@ pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> 
 
 /// Stores the token in the keystore (or deletes it when empty), then the rest in `state.json`.
 pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String> {
+    // A different agent replacing the active session must not destroy its login (saved hosts).
+    crate::hosts::park_before_replace(dir, store, &s.host)?;
     let acct = account("token", dir);
     if s.token.is_empty() {
         store.delete(&acct)?;
@@ -740,6 +742,8 @@ pub struct ForgetPin {
 /// trusted enough to talk to.
 pub fn forget_pin(dir: &Path, store: &dyn SecretStore, host: &str) -> Result<ForgetPin, String> {
     let key = pin_key(host);
+    // No login parked for this agent outlives the trust in it (saved hosts).
+    crate::hosts::forget_parked(dir, store, &key)?;
     let mut f = read_state(dir)?;
     let mut out = ForgetPin {
         was_pinned: f.pins_mut().remove(&key).is_some(),

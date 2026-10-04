@@ -18,6 +18,7 @@
         <!-- end feature:file-browser -->
         <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
       </div>
+      <button id="open-hosts" class="link" type="button">Hosts</button><!-- feature:multi-hosts -->
     </div>
   </header>
 
@@ -116,13 +117,59 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th scope="col">Device</th><th scope="col">Last seen</th><th scope="col">Last address</th><th scope="col">Version</th><th scope="col">Status</th></tr>
+            <tr><th scope="col">Device</th><th scope="col">Last seen</th><th scope="col">Last address</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th><!-- feature:device-actions --></tr>
           </thead>
           <tbody id="devices"></tbody>
         </table>
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:app-catalog -->
+      <p class="row"><button id="open-apps" type="button">Apps on this PC</button></p>
+      <!-- /feature:app-catalog -->
+      <!-- feature:health-metrics -->
+      <p class="hint"><button id="open-health" class="link" type="button">Health and metrics</button></p>
+      <!-- feature:pairing-codes -->
+      <p class="hint"><button id="open-pairing" class="link" type="button">Pair a phone with a one-time code</button></p>
+      <!-- /feature:pairing-codes -->
+      <!-- feature:audit-logs -->
+      <p class="hint"><button id="open-audit" class="link" type="button">Audit and logs (admin)</button></p>
+      <!-- /feature:audit-logs -->
+      <!-- feature:device-actions -->
+      <p id="da-hint" class="hint" hidden><strong>Revoke</strong> blocks a device: it stays in the list as Revoked and cannot sign in until it is paired again. <strong>Remove</strong> deletes its row for good. Both need two presses.</p>
+      <div id="da-editor" class="da-editor" role="group" aria-labelledby="da-editor-title" hidden>
+        <h3 id="da-editor-title" tabindex="-1">Access</h3>
+        <p id="da-editor-hint" class="hint"></p>
+        <p id="da-editor-self" class="warn" hidden>This is the computer you are using. Changing its own access can lock it out of folders or make it read-only. Press the button again to confirm.</p>
+        <fieldset>
+          <legend>Files this device may use</legend>
+          <div class="da-check"><input id="da-browse" type="checkbox"><label for="da-browse">Browse folders and see file details</label></div>
+          <div class="da-check"><input id="da-download" type="checkbox"><label for="da-download">Download files</label></div>
+          <div class="da-check"><input id="da-upload" type="checkbox"><label for="da-upload">Upload new files</label></div>
+          <div class="da-check"><input id="da-modify" type="checkbox"><label for="da-modify">Change files (create, rename, copy, move, overwrite)</label></div>
+          <div class="da-check"><input id="da-delete" type="checkbox"><label for="da-delete">Delete files</label></div>
+          <div class="da-check"><input id="da-share" type="checkbox"><label for="da-share">Make share links</label></div>
+        </fieldset>
+        <fieldset>
+          <legend>Apps</legend>
+          <div class="da-check"><input id="da-viewapps" type="checkbox"><label for="da-viewapps">See the apps on this PC</label></div>
+          <div class="da-check"><input id="da-launchapps" type="checkbox"><label for="da-launchapps">Start approved apps</label></div>
+        </fieldset>
+        <fieldset>
+          <legend>Limits</legend>
+          <div class="da-check"><input id="da-readonly" type="checkbox"><label for="da-readonly">Read-only: no changes to files at all</label></div>
+          <label for="da-jail">Only this folder (an absolute path inside the agent's folders; empty for no limit)</label>
+          <input id="da-jail" autocomplete="off" spellcheck="false">
+        </fieldset>
+        <div class="row pad">
+          <button id="da-save" type="button" class="primary">Save access</button>
+          <button id="da-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+
+      <!-- feature:pair-inbox -->
+      <div class="row pad"><button id="open-pair-inbox" type="button">Pairing requests</button></div>
+      <!-- end feature:pair-inbox -->
     </section>
 
     <section id="step-settings" class="panel" hidden>
@@ -180,6 +227,24 @@
         <dt>System</dt><dd id="about-platform"></dd>
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
+
+      <!-- feature:multi-hosts -->
+      <h3 id="title-hosts" tabindex="-1">Saved hosts</h3>
+      <p class="hint">Agents you can switch between. Each keeps its own trusted certificate and its own login in the keystore. Switching signs this window in to the other host without asking for a password if it has a saved login. Removing a host deletes its saved login and forgets its certificate; the device stays registered on the agent until it is revoked there (sign out first to do that).</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Login</th><th scope="col"><span class="sr-only">Action</span></th></tr>
+          </thead>
+          <tbody id="hosts-list"></tbody>
+        </table>
+      </div>
+      <p id="hosts-empty" class="hint" hidden>No host is saved yet.</p>
+      <div class="row pad">
+        <button id="hosts-add" type="button">Add another host</button>
+        <span id="hosts-status" role="status"></span>
+      </div>
+      <!-- /feature:multi-hosts -->
     </section>
 
     <!-- feature:file-browser -->
@@ -240,6 +305,191 @@
       <p id="files-status" class="hint" role="status"></p>
     </section>
     <!-- end feature:file-browser -->
+
+    <!-- feature:app-catalog -->
+    <section id="step-apps" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-apps" tabindex="-1">Apps on the PC</h2>
+        <div class="row">
+          <button id="apps-refresh" type="button">Refresh</button>
+          <button id="apps-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">The apps the PC running the agent offers. Launching one opens it on that PC's screen; nothing runs on this computer, and this app sends only the app's catalog id.</p>
+      <p id="apps-note" class="hint" hidden>This computer may see these apps but not start them. The owner can allow launching in this computer's permissions on the agent.</p>
+      <div id="apps-wrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr><th scope="col">App</th><th scope="col">Category</th><th scope="col">Id</th><th scope="col"><span class="sr-only">Action</span></th></tr>
+          </thead>
+          <tbody id="apps-list"></tbody>
+        </table>
+      </div>
+      <p id="apps-empty" class="hint" hidden>The PC lists no apps.</p>
+    </section>
+    <!-- /feature:app-catalog -->
+    <!-- feature:health-metrics -->
+    <section id="step-health" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-health" tabindex="-1">Health and metrics</h2>
+        <button id="health-back" type="button">Back</button>
+      </div>
+      <p class="hint">What the agent says about itself and, for an administrator, how busy the PC is. The window asks only while this screen is open; the agent keeps no history and neither does the app.</p>
+      <div class="row">
+        <button id="health-refresh" type="button">Refresh</button>
+        <input id="health-auto" type="checkbox">
+        <label for="health-auto" class="inline">Refresh every 5 seconds while this screen is open</label>
+      </div>
+      <p id="health-updated" class="hint pad-top">Not read yet.</p>
+      <p id="health-auto-note" class="hint" role="status" hidden></p>
+
+      <h3>The agent you are connected to</h3>
+      <dl class="about">
+        <dt>Address</dt><dd id="health-host" class="mono-line"></dd>
+        <dt>Certificate fingerprint</dt><dd id="health-fingerprint" class="mono-line"></dd>
+        <dt>Name</dt><dd id="health-name"></dd>
+        <dt>Version</dt><dd id="health-version"></dd>
+        <dt>System</dt><dd id="health-os"></dd>
+        <dt>Read-only</dt><dd id="health-readonly"></dd>
+        <dt>Address it reports</dt><dd id="health-address" class="mono-line"></dd>
+        <dt>Tailscale address</dt><dd id="health-tailscale" class="mono-line"></dd>
+        <dt>MAC address</dt><dd id="health-mac" class="mono-line"></dd>
+      </dl>
+
+      <h3>Health</h3>
+      <dl class="about">
+        <dt>Status</dt><dd id="health-status"></dd>
+        <dt>Running for</dt><dd id="health-uptime"></dd>
+        <dt>Disk free</dt><dd id="health-disk"></dd>
+      </dl>
+      <p id="health-status-note" class="hint" hidden></p>
+
+      <h3>Metrics</h3>
+      <p id="health-forbidden" class="warn" role="status" hidden></p>
+      <p id="health-metrics-note" class="hint" hidden></p>
+      <dl id="health-metrics" class="about">
+        <dt>Processor in use</dt><dd id="health-cpu"></dd>
+        <dt>Memory in use</dt><dd id="health-ram"></dd>
+        <dt>Received since start</dt><dd id="health-rx"></dd>
+        <dt>Sent since start</dt><dd id="health-tx"></dd>
+        <dt>Receiving now</dt><dd id="health-rx-rate"></dd>
+        <dt>Sending now</dt><dd id="health-tx-rate"></dd>
+        <dt>Agent's clock</dt><dd id="health-agent-time"></dd>
+      </dl>
+    </section>
+    <!-- feature:pairing-codes -->
+    <section id="step-pairing" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-pairing" tabindex="-1">Pair a phone</h2>
+        <button id="pcodes-back" type="button">Back</button>
+      </div>
+      <p class="hint">Makes a one-time code for the RFE phone app. On the phone, add this PC's address, then enter the code. A code works once and stops working after 10 minutes. Anyone who sees it before then can pair a device, so show it only to the person pairing.</p>
+      <div id="pcodes-code-block" hidden>
+        <p id="pcodes-code-label" class="hint">Pairing code</p>
+        <p id="pcodes-code" class="code mono pcodes-code" role="status" aria-labelledby="pcodes-code-label"></p>
+        <p id="pcodes-expiry" class="hint"></p>
+        <div class="row">
+          <button id="pcodes-select" type="button">Select the code</button>
+          <span id="pcodes-select-result" role="status"></span>
+        </div>
+      </div>
+      <p id="pcodes-expired" class="hint" role="status" hidden>This pairing code has expired. Generate a new one.</p>
+      <p id="pcodes-forbidden" class="warn" role="alert" hidden>This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. Sign out and sign in with the account, or run <code>rfe-agent pair</code> on the PC.</p>
+      <div class="row pad">
+        <button id="pcodes-generate" class="primary" type="button">Generate a code</button>
+      </div>
+      <p class="hint">Generating a new code does not cancel an earlier one; each stops working when it is used or when its time is up. The code is shown here only: it is not saved or copied for you.</p>
+    </section>
+    <!-- /feature:pairing-codes -->
+
+    <!-- feature:audit-logs -->
+    <section id="step-audit" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-audit" tabindex="-1">Audit and logs</h2>
+        <div class="row">
+          <button id="audit-refresh" type="button">Refresh</button>
+          <button id="audit-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">What happened on the agent: pairings, sign-ins (including failed ones), device and share changes, restarts. File operations are not recorded. Only an account sign-in can read it.</p>
+      <div class="row filters">
+        <div>
+          <label for="audit-view">Show</label>
+          <select id="audit-view" name="audit-view">
+            <option value="audit">Audit log</option>
+            <option value="logs">Agent log</option>
+          </select>
+        </div>
+        <div id="audit-type-wrap">
+          <label for="audit-type">Event</label>
+          <select id="audit-type" name="audit-type"></select>
+        </div>
+        <div id="audit-text-wrap" hidden>
+          <label for="audit-text">Contains</label>
+          <input id="audit-text" name="audit-text" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="audit-time">Time</label>
+          <select id="audit-time" name="audit-time">
+            <option value="0">Any time</option>
+            <option value="3600">Last hour</option>
+            <option value="86400">Last 24 hours</option>
+            <option value="604800">Last 7 days</option>
+          </select>
+        </div>
+      </div>
+      <p id="audit-forbidden" class="warn" role="alert" hidden></p>
+      <p id="audit-error" class="warn" role="alert" hidden></p>
+      <p id="audit-count" class="hint" role="status"></p>
+      <div id="audit-wrap" class="table-wrap">
+        <table>
+          <caption class="sr-only">Audit log, newest first</caption>
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">Event</th><th scope="col">By</th><th scope="col">Target</th><th scope="col">Detail</th></tr>
+          </thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+      </div>
+      <div id="log-wrap" class="table-wrap" hidden>
+        <table>
+          <caption class="sr-only">Agent log, newest first</caption>
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">Message</th></tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+      <p id="audit-empty" class="hint" hidden></p>
+      <div class="row pad">
+        <button id="audit-more" type="button" hidden>Load more</button>
+      </div>
+    </section>
+    <!-- /feature:audit-logs -->
+
+    <!-- feature:pair-inbox -->
+    <section id="step-pair-inbox" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-pair-inbox" tabindex="-1">Pairing requests</h2>
+        <div class="row">
+          <button id="inbox-refresh" type="button">Refresh</button>
+          <button id="inbox-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">Computers and phones that asked to be paired and wait for you. Accept only if the code matches the one shown on the device asking. An accepted device starts with browse access only. The list refreshes by itself while this screen is open.</p>
+      <p id="inbox-status" class="hint" role="status"></p>
+      <p id="inbox-forbidden" class="warn" role="alert" hidden>This login cannot answer pairing requests. Only an account sign-in can. Sign out and sign in with the account, or answer on the PC with <code>rfe-agent pair accept</code> or <code>reject</code>.</p>
+      <div id="inbox-wrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr><th scope="col">Device</th><th scope="col">From</th><th scope="col">Waiting</th><th scope="col">Expires in</th><th scope="col">Match code</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+          </thead>
+          <tbody id="inbox-rows"></tbody>
+        </table>
+      </div>
+      <p id="inbox-empty" class="hint" hidden>No pairing requests are waiting.</p>
+      <p id="inbox-limit" class="hint" hidden>The agent holds at most 3 waiting requests. A new one is refused until you answer one or it expires.</p>
+    </section>
+    <!-- end feature:pair-inbox -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

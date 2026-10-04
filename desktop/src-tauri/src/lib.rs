@@ -3,11 +3,18 @@
 
 pub mod agent_client;
 pub mod applog;
+pub mod apps; // feature:app-catalog
+pub mod audit; // feature:audit-logs
+pub mod device_actions;
 pub mod discovery;
 pub mod files; // feature:file-browser
 pub mod flows;
 mod fsutil;
+pub mod health;
+pub mod hosts;
 pub mod identity;
+pub mod pair_inbox; // feature:pair-inbox
+pub mod pairing_codes; // feature:pairing-codes
 pub mod secrets;
 
 use agent_client::Device;
@@ -288,6 +295,46 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
     flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
 }
 
+// ---- feature:health-metrics ----
+/// One refresh of the health and metrics screen for the saved session. Takes no argument: the
+/// address and certificate are the ones already trusted, and the three routes are fixed.
+#[tauri::command]
+async fn agent_health(app: tauri::AppHandle) -> Result<health::Snapshot, String> {
+    health::agent_health(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ---- feature:pairing-codes ----
+/// Mints a one-time pairing code for a phone. Admin sessions only; any other session gets
+/// `status: "forbidden"`. The code is never logged or saved.
+#[tauri::command]
+async fn generate_pairing_code(app: tauri::AppHandle) -> Result<pairing_codes::CodeView, String> {
+    pairing_codes::generate(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ---- feature:audit-logs ----
+/// One page of the agent's audit trail (admin only). `before` is the cursor from the previous page.
+#[tauri::command]
+async fn audit_page(
+    app: tauri::AppHandle,
+    before: Option<i64>,
+) -> Result<audit::AuditReply, String> {
+    audit::fetch_audit(&data_dir(&app)?, &keystore(), before, audit::AUDIT_PAGE)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The tail of the agent's log (admin only).
+#[tauri::command]
+async fn agent_log(app: tauri::AppHandle) -> Result<audit::LogsReply, String> {
+    audit::fetch_logs(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         // First, as the plugin requires: a second launch hands over to the running app, which
@@ -335,7 +382,26 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            apps::list_host_apps,  // feature:app-catalog
+            apps::launch_host_app, // feature:app-catalog
+            agent_health,
+            generate_pairing_code, // feature:pairing-codes
+            audit_page,            // feature:audit-logs
+            agent_log,
+            // feature:device-actions
+            device_actions::commands::device_access,
+            device_actions::commands::set_device_access,
+            device_actions::commands::revoke_device,
+            device_actions::commands::remove_device,
+            // feature:pair-inbox
+            pair_inbox::list_pair_requests,
+            pair_inbox::answer_pair_request,
+            // feature:multi-hosts
+            hosts::list_hosts,
+            hosts::switch_host,
+            hosts::rename_host,
+            hosts::remove_host
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

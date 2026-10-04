@@ -75,6 +75,57 @@ revokes that device on the agent and removes the saved login here. If the agent 
 the app signs out on this computer only and says so; the login then still works until it is revoked
 on the PC.
 
+<!-- feature:pairing-codes -->
+## Pair a phone
+
+When you are signed in with the account, **Pair a phone with a one-time code** (under the device list)
+opens a screen that makes a pairing code for the RFE phone app, so you do not have to walk to the PC and
+run `rfe-agent pair`.
+
+1. Press **Generate a code**. The app asks the agent for a code and shows it in large type with the
+   time it has left (10 minutes). Nothing is made until you press the button.
+2. On the phone, add this PC's address and enter the code. The phone is paired as an ordinary device.
+3. Press **Select the code** (or click the code once) and Ctrl+C if you need to copy it. The app does
+   not copy it for you: a code on the clipboard can be read by other programs and clipboard history.
+
+A code works once. **Generate a new code** shows another one; it does not cancel an earlier one, which
+stays valid until it is used or its time is up. The code leaves the window when you press **Back**, open
+Settings, sign out, or when the time runs out, and it is never written to `state.json`, the keystore or
+the log. Only an account sign-in may do this: a computer paired with a code or approved on the PC sees
+"This login cannot create pairing codes" and the agent mints nothing.
+<!-- /feature:pairing-codes -->
+
+<!-- feature:pair-inbox -->
+## Pairing requests
+
+When a phone or another computer asks to be paired with **Ask the PC to approve this computer**, you
+can answer it here instead of at the terminal. On the Paired devices screen press **Pairing
+requests**. It lists every request the agent is holding, oldest first:
+
+| Column | What it is |
+|---|---|
+| Device | The name the asking device gave itself. It is whatever that device sent, so do not trust it on its own. If the request would take over a device that is already paired, a line under the name says which one. |
+| From | The network address the request came from. |
+| Waiting, Expires in | How long ago it was made, and how long you have left. A request lasts 2 minutes. |
+| Match code | The code the agent worked out for this request. The device asking shows its own code. |
+
+**Accept only if the code matches the one shown on the device asking.** The code is computed from the
+certificate each side saw, so a machine in the middle shows a different one. Press **Accept** twice (the
+first press only arms it and the button says so; it disarms by itself after a few seconds). The device
+can then collect its login, and it starts with browse access only. **Reject** answers at once and needs no second press. Either way the row leaves the list and
+the window says what it did.
+
+The list refreshes by itself every few seconds, only while this screen is open: leaving it (Back,
+Settings, signing out) stops the refreshing. **Refresh** asks again at once. Rows are updated in place,
+so a button you have tabbed to keeps the keyboard focus and never moves to another request.
+
+Only an account sign-in can answer requests. A computer paired with a code or approved on the PC sees a
+warning instead of the list: sign out and sign in with the account, or answer on the PC with
+`rfe-agent pair accept` or `reject`. The agent holds at most three waiting requests; a fourth device is
+told the PC is busy until you answer one or one expires.
+
+<!-- end feature:pair-inbox -->
+
 ## The window
 
 The app follows the system's light or dark setting and scales with the system's display scaling. It
@@ -129,6 +180,29 @@ Every path is checked before it is sent (it must be absolute and have no `..` st
 checks it again against the folders it allows, including links: nothing outside them is listed.
 
 <!-- end feature:file-browser -->
+
+<!-- feature:multi-hosts -->
+## Saved hosts
+
+You can keep several agents and switch between them. **Hosts** (top right) or **Settings**, **Saved
+hosts** lists every agent you have trusted, with the account signed in to it.
+
+- **Switch** makes that host the one the window uses. If it has a saved login you land on its device
+  list without typing a password; if not, you land on its sign-in screen with the account name filled
+  in. **Open** (on the host in use) just goes to its device list.
+- **Rename** changes only the name shown in the list (up to 64 characters). The address, certificate
+  and login are not touched.
+- **Remove**, pressed twice, deletes that host's saved login from the keystore, forgets its trusted
+  certificate (you compare its fingerprint again if you ever add it back) and takes it off the list. The
+  device stays registered on the agent until it is revoked there: **Sign out** first if you want that.
+- **Add another host** opens the first screen. Check the certificate and sign in as usual; the login you
+  had on the other host stays saved.
+
+Each host has its own certificate pin and its own login token. A token is only ever sent to the agent it
+came from. The app opens on the host you used last. A host that was added before this list existed
+shows up in it automatically; nothing is lost.
+<!-- /feature:multi-hosts -->
+
 ## What is kept, and where
 
 | What | Where |
@@ -136,9 +210,52 @@ checks it again against the folders it allows, including links: nothing outside 
 | Device signing key, login token | the system keystore |
 | Agent address, its fingerprint, account name, device id, log level | `state.json` in the app's data folder (`~/.local/share/app.rfe.desktop/` on Linux; Settings shows the exact path), readable only by you |
 | Password | nowhere |
+| The saved hosts: name, address, account name, device id | `hosts.json` next to `state.json`, readable only by you. No secret is in it. A host's login token is in the keystore under its own entry |
 
 If `state.json` is damaged the app says so and does not guess; delete the file to start over (you will
 compare fingerprints again).
+
+<!-- feature:device-actions -->
+## Manage devices
+
+When you signed in with an **account**, each row of the devices list has actions (a computer paired with a
+code or approved on the PC sees only itself and gets none):
+
+- **Access** opens the device's permissions: which file actions it may use (browse, download, upload,
+  change, delete, make share links), whether it may see or start apps, a read-only switch, and a folder
+  limit (an absolute path inside the agent's folders; empty means no limit). Only the settings you change
+  are sent. A device that itself signed in with an account ignores the file permissions; the read-only
+  switch and the folder limit still apply to it.
+- **Revoke** blocks the device: the agent refuses its login from then on, and the row stays in the list
+  marked Revoked. It can only get back in by being paired or signed in again.
+- **Remove** deletes the device's row for good (an active device is blocked at the same time).
+
+**Revoke** and **Remove** need two presses; the first one only arms the button and the second does it.
+After every action the list is loaded again from the agent.
+
+The agent has no way to rename a device from another device: a device's name is the one it gave when it
+signed in. (The PC-side `rfe-agent` shows the same names.)
+
+**This computer's own row.** Revoking or removing it signs this window out, and changing its own access can
+lock it out. The first press shows a stronger warning ("Press the button again to sign this computer out"),
+and the app itself refuses the action unless that second press confirms it. After it, the window is back
+at the first screen and you sign in again.
+
+Messages of these actions:
+
+| The window says | What it means and what to do |
+|---|---|
+| This login is not an admin session, so the agent will not change other devices. | The agent answered 403. Only a sign-in with the account (not a pairing code, not an approval on the PC) may revoke, remove or change other devices. Sign out and sign in with the account, or use `rfe-agent revoke`, `remove` and `jail` on the PC. |
+| That device is no longer on the agent | The agent answered 404: the device was removed (here, on the PC or from another computer) before the action arrived. The list has been loaded again; nothing else is needed. |
+| This agent does not support that device action | The agent is too old for it. Update the agent, or use `rfe-agent` on the PC. |
+| This is the computer you are using | You tried to revoke, remove or change the access of this computer's own device without the second, confirming press. Press the button again to confirm, or leave it. |
+| Press the button again to sign this computer out | The warning shown when you arm Revoke or Remove on this computer's own row. Nothing has happened yet; press the button again to do it, or press somewhere else to cancel. |
+| Allowing a device to launch apps needs it to be allowed to view apps as well. | Turn on "See the apps on this PC" together with "Start approved apps". |
+| No setting was changed | Saving needs at least one changed setting. |
+| The folder limit must be one path, up to 4096 characters, or empty. | Type one absolute path, or clear the box for no limit. |
+| The agent refused that change: ... | The agent said no, and the text after the colon is its reason, for example a folder limit that is not inside the agent's folders. Nothing was changed. |
+| Revoked, Removed, Saved the access of | The action worked. "This computer is signed out; sign in again to continue." follows when it was this computer's own row. |
+| The list could not be refreshed | The action worked, but loading the list again failed (the text after the colon says why). Press Refresh. |
 
 ## Troubleshooting
 
@@ -188,6 +305,27 @@ Messages from this app:
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
+| this host is not in the saved list | The host was removed (perhaps from another window) before the action ran. Close Settings and open it again. |
+| enter a name for the host | The new name is empty. Type a name, or press Cancel. |
+| the name can be at most 64 characters | Use a shorter name. |
+| the name cannot contain control characters | The name has a line break or another control character. Type it again on one line. |
+| `hosts.json` is damaged (...); delete it to start over | The list of saved hosts cannot be read. Delete `hosts.json` (Settings shows the folder): the list is rebuilt from the agents you trusted, and every login stays where it is. Until then signing in to a second agent is refused so the list is not overwritten. |
+| `hosts.json` was written by a newer version of this app | A newer app wrote the list. Update this app, or delete `hosts.json` to start over as above. |
+| Signed out on this host. Sign in to continue. | You switched to a host that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
+| Type the new host's address. Your current login stays saved. | Shown when you press Add another host. Nothing was changed on the host you were using. |
+| No host is saved yet. | The list is empty: connect to an agent from the first screen. |
+| This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
+| This pairing code has expired. Generate a new one. | The code's 10 minutes are up and it was removed from the window. Press **Generate a code**. |
+| unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |
+| Selected. Press Ctrl+C to copy. / Select the code with the mouse, then press Ctrl+C. | Not a problem: the window selected the code for you, or could not and asks you to select it by hand. |
+| No pairing requests are waiting. | Nobody is asking to be paired right now. The list fills in by itself while the screen is open. |
+| Loading pairing requests... | The window is asking the agent. If it stays, the agent is slow or unreachable; an error follows. |
+| This login cannot answer pairing requests. | This computer was paired with a code or approved on the PC, and the agent lets only an account answer. Sign out and sign in with the account, or use `rfe-agent pair accept` or `reject` on the PC. |
+| This agent is too old to list pairing requests | Answering from the window needs `agent-v1.43.0-rc.1` or newer. Update the agent, or answer on the PC. |
+| The agent holds at most 3 waiting requests. | Shown when three are waiting: a fourth is refused (the device asking sees that the PC is busy) until you answer one or one expires. |
+| Press again to accept | The first press on **Accept** only arms it. Press again within a few seconds to accept, after checking that the match code is the one shown on the device asking. |
+| Accepted ..., Rejected ... | Your answer reached the agent. An accepted device collects its login on its own. |
+| That request already expired or was answered on the PC. | The request ran out of time, or someone answered it (at the PC, or from another window) a moment before you did. Nothing was changed by your press. Ask the device to try again if it was a good one. |
 
 <!-- feature:file-browser -->
 Messages from the file browser:
@@ -216,3 +354,116 @@ Messages from the file browser:
 <!-- end feature:file-browser -->
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).
+
+<!-- feature:app-catalog -->
+## Apps on the PC
+
+On the devices screen, **Apps on this PC** lists the apps the PC running the agent offers (on Linux, the
+applications in its menu). Each row shows the app's name, category and a short form of its catalog id.
+**Launch** opens the app on the PC's own screen; press it twice, the first press only arms it and the
+button then reads "Launch?". Nothing runs on this computer. This app sends the agent only the app's
+catalog id, never a command or a path, and the agent decides what that id means.
+
+What it takes:
+
+- The owner must give this computer two rights on the agent: *view apps* (to see the list) and *launch
+  apps* (to start one). Neither comes with an account sign-in or a pairing code. Without *launch apps*
+  the list is shown and the Launch buttons are replaced by a note.
+- Someone has to be signed in to a graphical desktop on the PC, and the PC needs `gio` for the agent to
+  start anything.
+- A row that says "Cannot be launched" is listed but has no way to start.
+- "The PC lists no apps." means the catalog is empty, not that an error happened.
+
+Success means the PC's launcher accepted the request, not that the app finished starting.
+
+Messages from the agent for these two screens:
+
+| The window says | Code | What to do |
+|---|---|---|
+| This computer is not allowed to see the host's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
+| This computer may see the host's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
+| That app is no longer in the host's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
+| The host has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
+| The host is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
+| Nobody is signed in to a graphical desktop on the host, so there is nowhere to open the app. Sign in at the PC, then try again. | `NO_INTERACTIVE_SESSION` | The agent only opens apps on a screen someone is signed in to. Sign in to the PC's desktop, then try again. |
+| The host's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
+| The host tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
+| Too many requests for the app list. Wait a minute, then refresh. | `APP_CATALOG_RATE_LIMITED` | The agent allows 60 list requests a minute per computer. Wait a minute. |
+| Too many app launches. The agent allows only a few per minute. Wait a minute, then try again. | `APP_LAUNCH_RATE_LIMITED` | The agent allows 5 launches a minute per computer. Wait a minute. |
+| The host's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
+| The agent refused the app id as malformed. This is a bug in the app. | `BAD_APP_ID` | The app sent an id the agent does not accept. This is a bug in the app. Report it with the log level set to Detailed. |
+
+Messages from this app:
+
+| The window says | What it means and what to do |
+|---|---|
+| unexpected app id | The app refused to put an id that does not look like `app_` and 64 hex digits into a request. Refresh the list; if it keeps happening, report it. |
+| unknown launch status | The agent answered a launch with something other than "started". Update the agent and the app; if both are current, report it. |
+| This agent has no app catalog. Update the agent on the PC, then try again. | The agent is older than the app catalog and answers `/apps` with a plain 404. Update it. |
+| Asked the PC to open (app name). It can take a moment to appear on its screen. | Not an error: the PC's launcher accepted the request. If nothing appears, check the PC's screen and that the app starts there. |
+| Cannot be launched, Launching not allowed | A row without a Launch button: the PC has no way to start that app, or this computer lacks the *launch apps* right (see above). |
+<!-- feature:health-metrics -->
+## Health and metrics
+
+On the **Paired devices** screen, **Health and metrics** shows what the agent reports about itself and,
+for an administrator, how busy the PC is.
+
+- **The agent you are connected to**: the address this computer uses and the certificate fingerprint it
+  pinned for it (compare it with `rfe-agent status`), then the agent's name, version, system, whether it
+  is read-only, and the addresses it reports (LAN, Tailscale, MAC).
+- **Health**: that the agent answers, how long it has been running, and the free and total disk space of
+  its data folder.
+- **Metrics** (administrators only): processor and memory in use (percent, at the moment of reading),
+  bytes received and sent since the agent started (binary units: 1 KiB is 1024 bytes), the rate those
+  grew at since the previous reading, and the agent's own clock. The rate needs two readings, so the
+  first shows "Needs a second reading". If a total goes down the agent restarted, and the rate says so.
+- **Refresh** reads again. **Refresh every 5 seconds while this screen is open** does it by itself; it
+  stops when you leave the screen, open Settings (it resumes when you come back) or an error happens.
+  The window keeps only the last reading, and the agent keeps no history.
+
+A value the agent did not send reads "not reported" (an older agent, or one that withheld it) instead
+of a made-up zero. The agent does not report the state of its helper programs, so none is shown.
+
+| The window says | What it means and what to do |
+|---|---|
+| Metrics are for administrators. | This computer signed in with a pairing code or was approved on the PC, so the agent answers the metrics request with 403 (`FORBIDDEN`). The rest of the screen still works. Sign out and sign in with the account (`rfe-agent adduser`) to see the metrics. |
+| No metrics were reported. | The agent answered the health request but not the metrics one; the text after it says why (for example it timed out). Press Refresh to try again. |
+| Uptime and disk space could not be read | The agent's status request failed; the reason follows. The health part is still current. |
+| The agent did not answer within 5 seconds. | The agent did not reply in time. It may be asleep, busy, or on another network. Check that it is running and the address is right, then press Refresh. Each of the three requests has its own five second limit and they run together, so the screen never waits longer. |
+| unexpected response: the agent's health answer does not say ok | The address answered with something that is not an RFE agent's health reply. Check the address and the agent version. |
+| Auto-refresh stopped after an error. | The error is shown above it. Auto-refresh does not retry by itself, so an agent that is off, or a locked keystore, is not asked every five seconds. Fix the cause, then press Refresh or turn auto-refresh on again. |
+| not reported | That value was missing from the agent's answer. |
+
+<!-- feature:audit-logs -->
+## Audit and logs (admin)
+
+On the devices screen, **Audit and logs (admin)** opens what the agent has recorded. It needs an
+account sign-in: the agent refuses it for a computer paired with a code or approved on the PC, because
+the trail describes every device, not just this one.
+
+- **Audit log** (the default): pairings, registrations, sign-ins (failed ones included), device revokes,
+  removals and changes, share links, agent restarts and app launches, newest first. File operations are
+  deliberately not recorded. The agent keeps the most recent 5000 events and sends 100 at a time;
+  **Load more** fetches the next older 100 and the button goes away when nothing older is left.
+- **Agent log**: the last ~200 lines of the agent's own log, which it reads from the systemd journal
+  (`journalctl --user -u rfe-agent.service`). It is empty when the agent does not run as that service.
+- **Event**, **Contains** (agent log only) and **Time** narrow what is already loaded; they do not ask the
+  agent again. To look further back, press **Load more** first. **Refresh** reads the newest events again.
+- Times are shown in this computer's local time. Point at a time to see the exact timestamp the agent
+  recorded.
+- The text of an event (the name of a device or of an account somebody tried to sign in with) comes from
+  whoever sent it, so the app shows it as plain text, replaces control characters, and cuts long text with
+  an ellipsis. The full text, up to 400 characters, is in the tooltip of a cut cell.
+
+| The window says | What it means and what to do |
+|---|---|
+| This login cannot read the audit log or the agent log. | The agent refused (403 FORBIDDEN). Sign out and sign in with an account (`rfe-agent adduser`), not a pairing code or an approval on the PC. |
+| The audit log is empty. | The agent has recorded nothing yet. |
+| No loaded event matches these filters. | Nothing already loaded fits the Event and Time choices. Widen them, or press **Load more** to look further back. |
+| No log line matches these filters. | Nothing in the agent's last lines fits the text and Time. Clear them. |
+| The agent's log is empty. | The agent could not read a journal. Run it as the `rfe-agent` service (`rfe-agent setup`), or read its output where you started it. |
+| unexpected audit cursor, the page size must be | A bug in the app: it asked for a page the agent does not have. Report it with the log level set to Detailed. |
+
+Any other message here (the agent is unreachable, the login was revoked) is one of the messages in the
+tables above.
+<!-- /feature:audit-logs -->

@@ -667,6 +667,29 @@ impl AgentClient {
         )
         .await
     }
+
+    // ---- feature:audit-logs ----
+    /// GET one fixed agent route (`path` is a literal chosen in this crate, never user input) as
+    /// `token` and decodes the JSON body. `query` values are URL-encoded by the client.
+    pub(crate) async fn get_json_at<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        path: &'static str,
+        query: &[(&str, String)],
+    ) -> Result<T, AgentError> {
+        debug_assert!(path.starts_with('/') && !path.contains(['?', '#']));
+        parse(
+            self.http
+                .get(format!("{}{path}", self.base))
+                .query(query)
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
 }
 
 // ---- feature:file-browser ----
@@ -701,3 +724,221 @@ impl AgentClient {
     }
 }
 // ---- end feature:file-browser ----
+
+// ---- feature:app-catalog ----
+impl AgentClient {
+    /// One authenticated JSON call for feature modules (`path` is under `/v1`, built by the caller
+    /// from validated parts, never from user text). Errors are the same `AgentError`s as above.
+    pub(crate) async fn call_json<T: serde::de::DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+    ) -> Result<T, AgentError> {
+        parse(
+            self.http
+                .request(method, format!("{}{path}", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+}
+
+// ---- feature:health-metrics ----
+impl AgentClient {
+    /// `GET` one of the agent's fixed, read-only routes as a signed-in device and parses the JSON
+    /// answer. `path` is a `'static` literal chosen by the app (never text from the window), and
+    /// `timeout` bounds the whole request, so an agent that accepts the connection and then says
+    /// nothing, or a PC that fell off the network, ends in an error instead of a wait.
+    pub async fn get_fixed_json<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        path: &'static str,
+        timeout: Duration,
+    ) -> Result<T, AgentError> {
+        debug_assert!(path.starts_with('/') && !path.contains(['?', '#', ' ']));
+        let resp = self
+            .http
+            .get(format!("{}{path}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION)
+            .timeout(timeout)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    let secs = timeout.as_secs().max(1);
+                    AgentError::Local(format!(
+                        "The agent did not answer within {secs} second{}. It may be asleep, busy \
+                         or on another network; check that it is running and the address is right.",
+                        if secs == 1 { "" } else { "s" }
+                    ))
+                } else {
+                    net(e)
+                }
+            })?;
+        parse(resp).await
+    }
+}
+
+// ---- feature:pairing-codes ----
+// `POST /pairing/generate`: the agent mints a one-time pairing code for an admin session. Only
+// the code and its lifetime are read; the QR payload and picture the agent also sends are
+// ignored on purpose (they carry the same code and this app shows only the text).
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GeneratedCode {
+    pub pairing_code: String,
+    pub expires_in_seconds: u64,
+}
+
+// Not derived: a `{:?}` in a log line or a test failure must not print a live pairing code.
+impl std::fmt::Debug for GeneratedCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeneratedCode")
+            .field("pairing_code", &"<redacted>")
+            .field("expires_in_seconds", &self.expires_in_seconds)
+            .finish()
+    }
+}
+
+impl AgentClient {
+    /// Asks the agent for a new one-time pairing code that stays valid `ttl_seconds`. Admin
+    /// sessions only: any other session gets `FORBIDDEN`.
+    pub async fn generate_pairing_code(
+        &self,
+        token: &str,
+        ttl_seconds: u64,
+    ) -> Result<GeneratedCode, AgentError> {
+        parse(
+            self.http
+                .post(format!("{}/pairing/generate", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .json(&serde_json::json!({ "ttlSeconds": ttl_seconds }))
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+}
+
+// ---- feature:device-actions ----
+impl AgentClient {
+    /// One authenticated JSON call to `/v1{path}` over the pinned connection. `path` is built by
+    /// the caller from validated parts and is never user text. A success returns the body as JSON
+    /// (`Null` when there is none, as for 204); an error is the agent's `{code, message}`.
+    pub(crate) async fn call_device_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value, AgentError> {
+        let mut req = self
+            .http
+            .request(method, format!("{}{path}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION);
+        if let Some(b) = body {
+            req = req.json(b);
+        }
+        let resp = req.send().await.map_err(net)?;
+        if !resp.status().is_success() {
+            return Err(error_of(resp).await);
+        }
+        let bytes = resp.bytes().await.map_err(net)?;
+        if bytes.is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
+        serde_json::from_slice(&bytes)
+            .map_err(|e| AgentError::Local(format!("unexpected response: {e}")))
+    }
+}
+
+// ---- feature:pair-inbox ----
+// The owner's side of approve-on-PC pairing: list the requests waiting at the agent and answer
+// them. Admin session only; any other login gets 403 FORBIDDEN. Kept here because it needs the
+// pinned client's private parts; the flow around it is in `pair_inbox.rs`.
+
+/// One pairing request waiting for the owner, as the agent lists it. `label` and `remote_ip` come
+/// from whoever sent the request, so they are text to show, never to act on.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WaitingPairRequest {
+    pub id: String,
+    pub label: String,
+    pub match_code: String,
+    pub remote_ip: String,
+    /// Label of the paired device an approval would take over; empty for a new computer.
+    pub replaces: String,
+    /// RFC 3339, UTC.
+    pub expires_at: String,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct WaitingPairRequests {
+    requests: Vec<WaitingPairRequest>,
+}
+
+/// Only what the agent makes ids from; nothing else may enter a URL.
+fn valid_pair_request_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+impl AgentClient {
+    /// Lists the requests waiting for the owner (`GET /pair/requests`), oldest first.
+    pub async fn waiting_pair_requests(
+        &self,
+        token: &str,
+    ) -> Result<Vec<WaitingPairRequest>, AgentError> {
+        let body: WaitingPairRequests = parse(
+            self.http
+                .get(format!("{}/pair/requests", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await?;
+        Ok(body.requests)
+    }
+
+    /// Approves or rejects one waiting request (`POST /pair/requests/{id}/approve|reject`).
+    /// `NOT_FOUND` means it expired or was answered already, here or on the PC.
+    pub async fn answer_pair_request(
+        &self,
+        token: &str,
+        request_id: &str,
+        approve: bool,
+    ) -> Result<(), AgentError> {
+        if !valid_pair_request_id(request_id) {
+            return Err(AgentError::Local(format!(
+                "unexpected request id {request_id:?}"
+            )));
+        }
+        let verb = if approve { "approve" } else { "reject" };
+        let resp = self
+            .http
+            .post(format!("{}/pair/requests/{request_id}/{verb}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(error_of(resp).await)
+        }
+    }
+}
+// ---- end feature:pair-inbox ----

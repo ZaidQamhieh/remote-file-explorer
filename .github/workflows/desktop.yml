@@ -153,6 +153,19 @@ jobs:
           NO_STRIP: 'true'
         run: cargo tauri build --ci --bundles deb,appimage
 
+      # What a launcher and a software centre read, from the package that was just built: the
+      # desktop entry, the AppStream metadata and the icon sizes.
+      - name: Launcher entry and metadata
+        run: |
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+          root=$(mktemp -d)
+          dpkg-deb -x target/release/bundle/deb/*.deb "$root"
+          desktop-file-validate "$root"/usr/share/applications/*.desktop
+          appstreamcli validate --no-net "$root"/usr/share/metainfo/*.xml
+          for size in 16 24 32 48 64 128 256 512; do
+            test -f "$root/usr/share/icons/hicolor/${size}x${size}/apps/rfe-desktop.png"
+          done
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rfe-desktop-linux

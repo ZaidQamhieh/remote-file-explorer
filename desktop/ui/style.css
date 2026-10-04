@@ -89,7 +89,7 @@ tr:last-child td { border-bottom: 0; }
 
 .code { font-size: 32px; letter-spacing: 3px; margin: 8px 0 14px; }
 
-h3 { font-size: 13px; margin: 18px 0 6px; font-weight: 600; }
+h3 { font-size: 14px; margin: 18px 0 6px; font-weight: 600; }
 select { width: auto; min-width: 12em; }
 .mono-line { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
 .about { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }

@@ -207,7 +207,9 @@ async fn the_catalog_lists_the_hosts_apps_and_grants_decide_what_the_computer_ma
     assert_eq!(names, ["Display Only", "Harmless"], "{catalog:?}");
     let h = catalog.apps.iter().find(|x| x.name == "Harmless").unwrap();
     assert_eq!((h.id.as_str(), h.launchable), (harmless.as_str(), true));
-    assert_eq!(h.category, "Utilities");
+    if common::modern("app categories") {
+        assert_eq!(h.category, "Utilities");
+    }
     assert!(
         !catalog.apps[0].launchable,
         "an entry with no command is listed but not launchable"

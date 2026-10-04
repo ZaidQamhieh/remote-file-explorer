@@ -203,8 +203,10 @@ async fn lists_nested_folders_unicode_names_and_shows_a_symlink_as_a_symlink() {
     assert_eq!(r.locations.len(), 1, "{r:?}");
     assert_eq!(r.locations[0].path, root);
     assert!(!r.read_only && !r.access_denied);
-    let caps = r.caps.expect("an up-to-date agent reports permissions");
-    assert!(caps.browse && caps.modify && caps.delete, "{caps:?}");
+    if common::modern("the agent reports permissions") {
+        let caps = r.caps.expect("an up-to-date agent reports permissions");
+        assert!(caps.browse && caps.modify && caps.delete, "{caps:?}");
+    }
 
     let top = files::list(app.path(), &store, &root, None, None)
         .await
@@ -231,10 +233,10 @@ async fn lists_nested_folders_unicode_names_and_shows_a_symlink_as_a_symlink() {
     assert_eq!(got, sorted);
 
     let docs = top.entries.iter().find(|e| e.name == "docs").unwrap();
-    assert!(
-        docs.is_dir && !docs.is_symlink && docs.child_count == Some(2),
-        "{docs:?}"
-    );
+    assert!(docs.is_dir && !docs.is_symlink, "{docs:?}");
+    if common::modern("folder child counts") {
+        assert_eq!(docs.child_count, Some(2), "{docs:?}");
+    }
     let esc = top.entries.iter().find(|e| e.name == "escape").unwrap();
     assert!(esc.is_symlink, "{esc:?}");
     assert_eq!(esc.symlink_target, a.outside.path().to_str().unwrap());
@@ -385,7 +387,9 @@ async fn a_large_folder_comes_in_pages_that_join_up_exactly() {
         .await
         .unwrap();
     let b = top.entries.iter().find(|e| e.name == "big").unwrap();
-    assert_eq!(b.child_count, Some(1000));
+    if common::modern("folder child counts") {
+        assert_eq!(b.child_count, Some(1000));
+    }
 
     // Asking for more than the agent allows is clamped, not refused; zero is a page of one.
     let p = files::list(app.path(), &store, &big, None, Some(50_000))
@@ -467,11 +471,13 @@ async fn new_folder_rename_and_trash_work_for_an_owner_and_never_leave_the_root(
     let e = files::rename(app.path(), &store, &a.at("umbenannt"), "keep.txt")
         .await
         .unwrap_err();
-    assert_eq!(refusal(&e).1, "CONFLICT", "{e:?}");
-    assert_eq!(
-        std::fs::read_to_string(a.at("keep.txt")).unwrap(),
-        "keep me"
-    );
+    if common::modern("renaming onto an existing name answers CONFLICT") {
+        assert_eq!(refusal(&e).1, "CONFLICT", "{e:?}");
+        assert_eq!(
+            std::fs::read_to_string(a.at("keep.txt")).unwrap(),
+            "keep me"
+        );
+    }
 
     // Names that could climb out or hide a path are refused before the agent is asked.
     for bad in ["../x", "a/b", "a\\b", "", ".", "..", " x", "x\n"] {
@@ -540,8 +546,10 @@ async fn a_browse_only_device_can_look_and_is_refused_with_the_agents_words() {
     write(a.at("seen.txt"), "x");
 
     let r = files::roots(app.path(), &store).await.unwrap();
-    let caps = r.caps.expect("permissions are reported");
-    assert!(caps.browse && !caps.modify && !caps.delete, "{caps:?}");
+    if common::modern("the agent reports permissions") {
+        let caps = r.caps.expect("permissions are reported");
+        assert!(caps.browse && !caps.modify && !caps.delete, "{caps:?}");
+    }
     let top = files::list(app.path(), &store, &root, None, None)
         .await
         .unwrap();

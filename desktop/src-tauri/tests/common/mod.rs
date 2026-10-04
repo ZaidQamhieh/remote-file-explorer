@@ -281,3 +281,15 @@ pub fn identity() -> (Identity, TempDir) {
     let id = Identity::load_or_create(dir.path(), &MemoryStore::default()).unwrap();
     (id, dir)
 }
+
+/// `true` when the agent under test is expected to have the feature a test is about to check.
+/// The previous-release CI job sets RFE_ALLOW_OLD_AGENT on purpose and a feature that release
+/// lacks is then skipped with a note; without the flag the check always runs, so a missing
+/// feature can never pass silently in the main job.
+pub fn modern(feature: &str) -> bool {
+    if std::env::var_os("RFE_ALLOW_OLD_AGENT").is_some() {
+        eprintln!("skipped (older agent): {feature}");
+        return false;
+    }
+    true
+}

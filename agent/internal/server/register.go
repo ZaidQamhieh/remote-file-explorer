@@ -75,7 +75,7 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusConflict, "ACCOUNT_ALREADY_EXISTS", "this computer already has an account — log in instead, or ask the owner to add a device")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
 		if !pm.Consume(req.PairingCode).Valid {

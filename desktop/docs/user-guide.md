@@ -10,8 +10,9 @@ kept, and what every message means.
 - An `rfe-agent` running on the PC you want to reach, and its address (`host:port`).
 - Linux with a Secret Service provider (GNOME Keyring, KeePassXC or KDE Wallet) running and unlocked.
   See [keystore.md](keystore.md).
-- For "approve on the PC": an agent from `agent-v1.43.0-rc.1` or newer. Everything else works with
-  `agent-v1.42.6` or newer. See [agent-compatibility.md](agent-compatibility.md).
+- An agent that includes the certificate-bound sign-in proof (the release after `agent-v1.43.0-rc.1`; the app
+  refuses older agents before it sends a password). "Approve on the PC" also needs `agent-v1.43.0-rc.1` or
+  newer. See [agent-compatibility.md](agent-compatibility.md).
 
 ## Install
 
@@ -250,6 +251,7 @@ Messages of these actions:
 | This agent does not support that device action | The agent is too old for it. Update the agent, or use `rfe-agent` on the PC. |
 | This is the computer you are using | You tried to revoke, remove or change the access of this computer's own device without the second, confirming press. Press the button again to confirm, or leave it. |
 | Could not tell which device is this computer | The saved login has no device id and the agent did not say which listed device is this one, so nothing was changed. Refresh the list and try again. |
+| This agent is too old to sign in from this app | The agent only knows the older sign-in proof, which is not tied to its own certificate, so the app refuses it before any password is sent. Update the agent on the PC (the release that adds `proof: v2` to `/auth/challenge`), then try again. |
 | Press the button again to sign this computer out | The warning shown when you arm Revoke or Remove on this computer's own row. Nothing has happened yet; press the button again to do it, or press somewhere else to cancel. |
 | Allowing a device to launch apps needs it to be allowed to view apps as well. | Turn on "See the apps on this PC" together with "Start approved apps". |
 | No setting was changed | Saving needs at least one changed setting. |

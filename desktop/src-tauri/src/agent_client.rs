@@ -326,6 +326,24 @@ struct ApiError {
 #[derive(Deserialize)]
 struct Challenge {
     nonce: String,
+    /// `"v2"` on agents that accept the certificate-bound proof.
+    #[serde(default)]
+    proof: String,
+}
+
+/// Said when an agent offers only the bare-nonce proof, before any credential is sent.
+pub const ERR_AGENT_NO_BOUND_PROOF: &str =
+    "This agent is too old to sign in from this app: it cannot tie the sign-in proof to its own \
+     certificate. Update the agent on the PC, then try again.";
+
+/// The app signs only a proof bound to the agent's certificate, so an agent that does not say it
+/// verifies one is refused (an agent could otherwise hide its support to get a bare-nonce signature).
+fn require_bound_proof(c: &Challenge) -> Result<(), AgentError> {
+    if c.proof == "v2" {
+        Ok(())
+    } else {
+        Err(AgentError::Local(ERR_AGENT_NO_BOUND_PROOF.into()))
+    }
 }
 
 #[derive(Serialize)]
@@ -515,6 +533,7 @@ impl AgentClient {
                 .map_err(net)?,
         )
         .await?;
+        require_bound_proof(&c)?;
         Ok(c.nonce)
     }
 
@@ -545,7 +564,7 @@ impl AgentClient {
             device_label: label,
             device_id: id.device_id(),
             device_public_key: id.public_key_b64(),
-            signature: id.sign_b64(&nonce),
+            signature: id.proof_b64(&self.fingerprint, &nonce),
             nonce,
         };
         let ok: LoginOk = parse(
@@ -576,7 +595,7 @@ impl AgentClient {
             device_label: label,
             device_id: id.device_id(),
             device_public_key: id.public_key_b64(),
-            signature: id.sign_b64(&nonce),
+            signature: id.proof_b64(&self.fingerprint, &nonce),
             nonce,
         };
         let ok: LoginOk = parse(
@@ -605,7 +624,7 @@ impl AgentClient {
             device_label: label,
             device_id: id.device_id(),
             device_public_key: id.public_key_b64(),
-            signature: id.sign_b64(&nonce),
+            signature: id.proof_b64(&self.fingerprint, &nonce),
             nonce,
             client_nonce,
         };
@@ -1022,5 +1041,33 @@ mod body_cap_tests {
         assert!(err.to_string().contains("more data than"), "{err}");
         let ok = reqwest::get(serve(1_000).await).await.unwrap();
         assert_eq!(read_capped(ok, 1_000).await.unwrap().len(), 1_000);
+    }
+}
+
+#[cfg(test)]
+mod proof_tests {
+    use super::*;
+
+    #[test]
+    fn only_an_agent_that_verifies_the_bound_proof_is_used() {
+        let ok = Challenge {
+            nonce: "n".into(),
+            proof: "v2".into(),
+        };
+        assert!(require_bound_proof(&ok).is_ok());
+        for proof in ["", "v1", "V2", "v3"] {
+            let c = Challenge {
+                nonce: "n".into(),
+                proof: proof.into(),
+            };
+            let e = require_bound_proof(&c).unwrap_err();
+            assert_eq!(e.to_string(), ERR_AGENT_NO_BOUND_PROOF, "{proof:?}");
+        }
+    }
+
+    #[test]
+    fn a_missing_proof_field_parses_as_unsupported() {
+        let c: Challenge = serde_json::from_str(r#"{"nonce":"abc"}"#).unwrap();
+        assert!(require_bound_proof(&c).is_err());
     }
 }

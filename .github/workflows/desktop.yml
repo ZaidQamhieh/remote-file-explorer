@@ -97,7 +97,16 @@ jobs:
           echo "testing against $tag"
           git worktree add "$RUNNER_TEMP/prev-agent" "$tag"
           (cd "$RUNNER_TEMP/prev-agent/agent" && go build -o "$RUNNER_TEMP/rfe-agent-prev" ./cmd/agent)
-          RFE_AGENT_BIN="$RUNNER_TEMP/rfe-agent-prev" cargo test --locked
+          # The app signs in only with the certificate-bound proof (proofVersion in
+          # agent/internal/server/challenge.go). A stable release without it is refused by design, so
+          # against it the one thing to prove is that refusal; once a stable release has the proof,
+          # the whole suite runs against it again.
+          if grep -q 'proofVersion' "$RUNNER_TEMP/prev-agent/agent/internal/server/challenge.go" 2>/dev/null; then
+            RFE_AGENT_BIN="$RUNNER_TEMP/rfe-agent-prev" cargo test --locked
+          else
+            echo "::notice::$tag has no bound sign-in proof; the app must refuse it, testing only that"
+            RFE_AGENT_BIN="$RUNNER_TEMP/rfe-agent-prev" cargo test --locked --test bound_proof
+          fi
 
       # The real Secret Service, in a private D-Bus session with a throwaway empty keyring. The other
       # tests use in-memory stores; this one proves the OS keystore path itself.

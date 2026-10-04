@@ -81,7 +81,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		// recoverable client-side hiccup — burning the code on that would
 		// force a trip back to the PC for something that wasn't the code's
 		// fault.
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
 		codeInfo := pm.Consume(req.PairingCode)

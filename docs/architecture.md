@@ -146,7 +146,7 @@ Port notes and gaps: `docs/rn-migration/ledger.md`. The old Flutter source is in
 | `internal/server/auth.go` | Bearer-token auth middleware + per-device authorization. |
 | `internal/server/login.go` | Username/password login — a second way (besides `/v1/pair`) to obtain a device token. |
 | `internal/server/register.go` | Account registration; self-gated since it's reachable before any account exists. |
-| `internal/server/challenge.go` | Nonce mint/verify for device-signature proof-of-possession (pairs with `security/device_identity.go`). |
+| `internal/server/challenge.go` | Nonce mint/verify for device-signature proof-of-possession (pairs with `security/device_identity.go`). Accepts the certificate-bound v2 proof (`security.DeviceProofMessageV2`) and, for older clients, a bare-nonce signature. |
 | `internal/server/fshandlers.go` | List/read/create/delete/move/rename file endpoints. |
 | `internal/server/archive_handler.go` | Compress/extract endpoints (fronts `fsops/archive.go`). |
 | `internal/server/chmod_handler.go` | chmod endpoint. |

@@ -143,7 +143,20 @@ impl Identity {
         STANDARD.encode(self.key.verifying_key().to_bytes())
     }
 
-    /// Signs the nonce string's UTF-8 bytes, which is what the agent verifies.
+    /// The proof the app sends: a signature over the agent's certificate fingerprint and the nonce
+    /// (`rfe-device-proof-v2`), so it is worthless at any other agent. A malicious agent that fetched a
+    /// nonce from a second agent and presented it as its own challenge would get a signature that
+    /// names the first agent's certificate, and the second one rejects it.
+    pub fn proof_b64(&self, agent_fingerprint: &str, nonce: &str) -> String {
+        self.sign_b64(&format!(
+            "rfe-device-proof-v2\n{}\n{nonce}",
+            agent_fingerprint.to_ascii_lowercase()
+        ))
+    }
+
+    /// Signs the message's UTF-8 bytes as they are. The app never signs a bare nonce (use
+    /// [`Identity::proof_b64`]); this is public for tests that build requests the app would not.
+    #[doc(hidden)]
     pub fn sign_b64(&self, message: &str) -> String {
         STANDARD.encode(self.key.sign(message.as_bytes()).to_bytes())
     }

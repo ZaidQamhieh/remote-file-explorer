@@ -154,7 +154,9 @@
       throw e;
     }
     renderDevices(list);
-    show("step-devices");
+    // The list can arrive after the user opened Settings; do not pull them out of it. Back goes here.
+    if ($("step-settings").hidden) show("step-devices");
+    else settingsReturn = "step-devices";
   }
 
   function setSession(saved) {

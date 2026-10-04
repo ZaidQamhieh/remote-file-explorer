@@ -263,3 +263,22 @@ test("diagnostics: a failure shows the reason and leaves no stale report; reopen
   assert.equal(app.els.diagnostics.hidden, true);
   assert.equal(app.els["make-diagnostics"].disabled, false);
 });
+
+test("a device list that arrives while Settings is open does not pull the user out of it", async () => {
+  const gate = deferred();
+  const handlers = base({ saved_agent: SIGNED_IN, list_devices: [] });
+  const app = boot(handlers);
+  await settle();
+  assert.deepEqual(app.screen(), ["step-devices"]);
+  handlers.list_devices = () => gate.promise;
+  const pressed = app.els.refresh.fire("click");
+  await settle();
+  await app.els["open-settings"].fire("click");
+  assert.deepEqual(app.screen(), ["step-settings"]);
+  gate.resolve([]);
+  await pressed;
+  await settle();
+  assert.deepEqual(app.screen(), ["step-settings"], "still in Settings");
+  await app.els["settings-back"].fire("click");
+  assert.deepEqual(app.screen(), ["step-devices"]);
+});

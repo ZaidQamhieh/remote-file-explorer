@@ -7,6 +7,7 @@ pub mod discovery;
 pub mod flows;
 mod fsutil;
 pub mod identity;
+pub mod pairing_codes; // feature:pairing-codes
 pub mod secrets;
 
 use agent_client::Device;
@@ -287,6 +288,16 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
     flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
 }
 
+// ---- feature:pairing-codes ----
+/// Mints a one-time pairing code for a phone. Admin sessions only; any other session gets
+/// `status: "forbidden"`. The code is never logged or saved.
+#[tauri::command]
+async fn generate_pairing_code(app: tauri::AppHandle) -> Result<pairing_codes::CodeView, String> {
+    pairing_codes::generate(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         // First, as the plugin requires: a second launch hands over to the running app, which
@@ -327,7 +338,8 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            generate_pairing_code // feature:pairing-codes
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

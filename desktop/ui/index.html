@@ -120,6 +120,9 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:pairing-codes -->
+      <p class="hint"><button id="open-pairing" class="link" type="button">Pair a phone with a one-time code</button></p>
+      <!-- /feature:pairing-codes -->
     </section>
 
     <section id="step-settings" class="panel" hidden>
@@ -178,6 +181,31 @@
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
     </section>
+
+    <!-- feature:pairing-codes -->
+    <section id="step-pairing" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-pairing" tabindex="-1">Pair a phone</h2>
+        <button id="pcodes-back" type="button">Back</button>
+      </div>
+      <p class="hint">Makes a one-time code for the RFE phone app. On the phone, add this PC's address, then enter the code. A code works once and stops working after 10 minutes. Anyone who sees it before then can pair a device, so show it only to the person pairing.</p>
+      <div id="pcodes-code-block" hidden>
+        <p id="pcodes-code-label" class="hint">Pairing code</p>
+        <p id="pcodes-code" class="code mono pcodes-code" role="status" aria-labelledby="pcodes-code-label"></p>
+        <p id="pcodes-expiry" class="hint"></p>
+        <div class="row">
+          <button id="pcodes-select" type="button">Select the code</button>
+          <span id="pcodes-select-result" role="status"></span>
+        </div>
+      </div>
+      <p id="pcodes-expired" class="hint" role="status" hidden>This pairing code has expired. Generate a new one.</p>
+      <p id="pcodes-forbidden" class="warn" role="alert" hidden>This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. Sign out and sign in with the account, or run <code>rfe-agent pair</code> on the PC.</p>
+      <div class="row pad">
+        <button id="pcodes-generate" class="primary" type="button">Generate a code</button>
+      </div>
+      <p class="hint">Generating a new code does not cancel an earlier one; each stops working when it is used or when its time is up. The code is shown here only: it is not saved or copied for you.</p>
+    </section>
+    <!-- /feature:pairing-codes -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

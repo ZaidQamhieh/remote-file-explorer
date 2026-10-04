@@ -75,6 +75,26 @@ revokes that device on the agent and removes the saved login here. If the agent 
 the app signs out on this computer only and says so; the login then still works until it is revoked
 on the PC.
 
+<!-- feature:pairing-codes -->
+## Pair a phone
+
+When you are signed in with the account, **Pair a phone with a one-time code** (under the device list)
+opens a screen that makes a pairing code for the RFE phone app, so you do not have to walk to the PC and
+run `rfe-agent pair`.
+
+1. Press **Generate a code**. The app asks the agent for a code and shows it in large type with the
+   time it has left (10 minutes). Nothing is made until you press the button.
+2. On the phone, add this PC's address and enter the code. The phone is paired as an ordinary device.
+3. Press **Select the code** (or click the code once) and Ctrl+C if you need to copy it. The app does
+   not copy it for you: a code on the clipboard can be read by other programs and clipboard history.
+
+A code works once. **Generate a new code** shows another one; it does not cancel an earlier one, which
+stays valid until it is used or its time is up. The code leaves the window when you press **Back**, open
+Settings, sign out, or when the time runs out, and it is never written to `state.json`, the keystore or
+the log. Only an account sign-in may do this: a computer paired with a code or approved on the PC sees
+"This login cannot create pairing codes" and the agent mints nothing.
+<!-- /feature:pairing-codes -->
+
 ## The window
 
 The app follows the system's light or dark setting and scales with the system's display scaling. It
@@ -152,6 +172,10 @@ Messages from this app:
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
+| This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
+| This pairing code has expired. Generate a new one. | The code's 10 minutes are up and it was removed from the window. Press **Generate a code**. |
+| unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |
+| Selected. Press Ctrl+C to copy. / Select the code with the mouse, then press Ctrl+C. | Not a problem: the window selected the code for you, or could not and asks you to select it by hand. |
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).

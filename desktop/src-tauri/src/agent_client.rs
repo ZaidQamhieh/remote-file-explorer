@@ -668,3 +668,47 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:pairing-codes ----
+// `POST /pairing/generate`: the agent mints a one-time pairing code for an admin session. Only
+// the code and its lifetime are read; the QR payload and picture the agent also sends are
+// ignored on purpose (they carry the same code and this app shows only the text).
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GeneratedCode {
+    pub pairing_code: String,
+    pub expires_in_seconds: u64,
+}
+
+// Not derived: a `{:?}` in a log line or a test failure must not print a live pairing code.
+impl std::fmt::Debug for GeneratedCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeneratedCode")
+            .field("pairing_code", &"<redacted>")
+            .field("expires_in_seconds", &self.expires_in_seconds)
+            .finish()
+    }
+}
+
+impl AgentClient {
+    /// Asks the agent for a new one-time pairing code that stays valid `ttl_seconds`. Admin
+    /// sessions only: any other session gets `FORBIDDEN`.
+    pub async fn generate_pairing_code(
+        &self,
+        token: &str,
+        ttl_seconds: u64,
+    ) -> Result<GeneratedCode, AgentError> {
+        parse(
+            self.http
+                .post(format!("{}/pairing/generate", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .json(&serde_json::json!({ "ttlSeconds": ttl_seconds }))
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+}

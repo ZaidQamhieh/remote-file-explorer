@@ -509,4 +509,105 @@
     }
     showConnect();
   })();
+
+  // ---- feature:pairing-codes ----
+  // "Pair a phone": asks the agent for a one-time code (admin sessions only) and shows it. The
+  // code exists only as the text of #pcodes-code. Leaving the screen for any reason (Back,
+  // Settings, sign-out, expiry) clears it, and the app never puts it on the clipboard.
+  steps.push("step-pairing");
+  let pcodesEpoch = 0; // bumped on every clear, so an answer or a tick that comes late is dropped
+  let pcodesDeadline = 0;
+
+  function pcodesClear() {
+    pcodesEpoch++;
+    pcodesDeadline = 0;
+    $("pcodes-code").textContent = "";
+    $("pcodes-code-block").hidden = true;
+    $("pcodes-expiry").textContent = "";
+    $("pcodes-select-result").textContent = "";
+    $("pcodes-expired").hidden = true;
+    $("pcodes-forbidden").hidden = true;
+    $("pcodes-generate").textContent = "Generate a code";
+  }
+
+  // Every screen change clears the code, whoever asked for it. The pairing screen itself is
+  // never shown to a session that has ended (Back from Settings after forgetting the agent).
+  const showScreen = show;
+  show = function (step) {
+    if (step === "step-pairing" && !current.signedIn) return showConnect();
+    pcodesClear();
+    showScreen(step);
+  };
+
+  function pcodesTick(me) {
+    if (me !== pcodesEpoch) return;
+    const left = Math.ceil((pcodesDeadline - Date.now()) / 1000);
+    if (left <= 0) {
+      pcodesClear();
+      $("pcodes-expired").hidden = false;
+      // The button that had focus is gone with the code; keep the keyboard user somewhere useful.
+      $("pcodes-generate").focus();
+      return;
+    }
+    $("pcodes-expiry").textContent = "Expires in " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0") + ".";
+    setTimeout(() => pcodesTick(me), 1000);
+  }
+
+  async function pcodesGenerate() {
+    pcodesClear(); // the old code leaves the screen first; it stays valid on the agent until its time is up
+    const me = pcodesEpoch;
+    let out;
+    try {
+      out = await invoke("generate_pairing_code");
+    } catch (e) {
+      // The agent may have refused the saved login (revoked or removed there). The app then
+      // dropped the token but kept the pin, so go back to sign-in on that agent.
+      if (me === pcodesEpoch) {
+        const saved = await invoke("saved_agent").catch(() => null);
+        if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+          setSession(saved);
+          pending = { host: saved.host, fingerprint: saved.fingerprint };
+          $("username").value = saved.username;
+          show("step-login");
+          loginMode(false);
+        }
+      }
+      throw e;
+    }
+    if (me !== pcodesEpoch) return; // the user left the screen while the agent was answering
+    if (out.status === "forbidden") {
+      $("pcodes-forbidden").hidden = false;
+      return;
+    }
+    $("pcodes-code").textContent = out.code;
+    $("pcodes-code-block").hidden = false;
+    $("pcodes-generate").textContent = "Generate a new code";
+    pcodesDeadline = Date.now() + out.expiresInSeconds * 1000;
+    pcodesTick(me);
+  }
+
+  $("open-pairing").addEventListener("click", () => {
+    say("");
+    show("step-pairing");
+  });
+  $("pcodes-back").addEventListener("click", () => {
+    say("");
+    show("step-devices");
+  });
+  $("pcodes-generate").addEventListener("click", (ev) =>
+    run(ev.currentTarget, pcodesGenerate, "Asking the agent for a code...")
+  );
+  // Sign-out takes a moment to reach the agent; the code goes the instant the button is pressed.
+  $("sign-out").addEventListener("click", pcodesClear);
+
+  // Selecting is the copy path: the app does not use the clipboard for a live pairing code.
+  $("pcodes-select").addEventListener("click", () => {
+    const result = $("pcodes-select-result");
+    try {
+      window.getSelection().selectAllChildren($("pcodes-code"));
+      result.textContent = "Selected. Press Ctrl+C to copy.";
+    } catch (e) {
+      result.textContent = "Select the code with the mouse, then press Ctrl+C.";
+    }
+  });
 })();

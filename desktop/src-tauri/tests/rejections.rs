@@ -161,3 +161,20 @@ async fn too_many_attempts_is_reported_as_rate_limited_with_a_wait_hint() {
     let e = limited.expect("the agent never rate-limited 15 failed logins");
     assert!(e.to_string().contains("Wait a minute"), "{e}");
 }
+
+/// Nothing listens on the address: the error the window shows says so and what to check, and
+/// it is not mistaken for a certificate problem.
+#[tokio::test]
+async fn an_unreachable_agent_is_reported_with_what_to_check() {
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    };
+    let err = rfe_desktop_lib::agent_client::capture_fingerprint(&format!("127.0.0.1:{port}"))
+        .await
+        .expect_err("nothing is listening");
+    let text = err.to_string();
+    assert!(text.contains("cannot reach the agent"), "{text}");
+    assert!(text.contains("Check that the agent is running"), "{text}");
+    assert!(!text.contains("not the one you trusted"), "{text}");
+}

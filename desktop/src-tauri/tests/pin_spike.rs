@@ -103,6 +103,8 @@ async fn wrong_pin_is_refused_and_sends_no_credentials() {
         "expected a TLS failure, got {err:?}"
     );
     assert!(err.to_string().contains("fingerprint mismatch"), "{err}");
+    // The window shows this text: it must say what to do, not only that TLS failed.
+    assert!(err.to_string().contains("not the one you trusted"), "{err}");
 
     // Nothing reached the server: no device row and no login/failed-login audit entry.
     assert!(

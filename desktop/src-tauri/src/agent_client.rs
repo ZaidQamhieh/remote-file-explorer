@@ -42,7 +42,17 @@ pub enum AgentError {
 impl std::fmt::Display for AgentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AgentError::Network(m) => write!(f, "cannot reach the agent securely: {m}"),
+            AgentError::Network(m) if m.contains("fingerprint mismatch") => write!(
+                f,
+                "This agent's certificate is not the one you trusted ({m}). Do not sign in. If you \
+                 replaced or reinstalled the agent, forget it under Trusted agents and compare its \
+                 fingerprint again."
+            ),
+            AgentError::Network(m) => write!(
+                f,
+                "cannot reach the agent securely: {m}. Check that the agent is running and the \
+                 address is right."
+            ),
             AgentError::Server { code, message, .. } => match known_message(code) {
                 Some(text) => write!(f, "{text}"),
                 None => write!(f, "{code}: {message}"),

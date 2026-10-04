@@ -19,15 +19,18 @@
     return ev.submitter || ev.target.querySelector('button[type="submit"]');
   }
 
-  async function run(button, fn) {
+  // `busy` is shown while the call is in flight (the agent may take up to ten seconds to answer),
+  // then removed unless something else has been said in the meantime.
+  async function run(button, fn, busy) {
     button.disabled = true;
-    say("");
+    say(busy || "");
     try {
       await fn();
     } catch (e) {
       say(String(e), true);
     } finally {
       button.disabled = false;
+      if (busy && $("message").textContent === busy) say("");
     }
   }
 
@@ -149,7 +152,7 @@
         : "";
       $("trust").textContent = probe.changed ? "I know it changed, trust the new certificate" : "They match, trust this agent";
       show("step-trust");
-    });
+    }, "Reading the agent's certificate...");
   });
 
   $("trust").addEventListener("click", () => {
@@ -173,7 +176,7 @@
       $("password").value = "";
       setSession(saved);
       await showDevices();
-    });
+    }, "Signing in...");
   });
 
   function loginMode(code) {
@@ -195,7 +198,7 @@
       $("pairing-code").value = "";
       setSession(saved);
       await showDevices();
-    });
+    }, "Pairing...");
   });
 
   // Approve on the PC: show the match code, then ask the agent every two seconds until the
@@ -277,7 +280,9 @@
     showConnect();
   });
 
-  $("refresh").addEventListener("click", (ev) => run(ev.currentTarget, showDevices));
+  $("refresh").addEventListener("click", (ev) =>
+    run(ev.currentTarget, showDevices, "Loading devices...")
+  );
 
   $("sign-out").addEventListener("click", (ev) =>
     run(ev.currentTarget, async () => {
@@ -286,16 +291,21 @@
       setSession({ signedIn: false });
       showConnect();
       if (out.note) say(out.note, true);
-    })
+    }, "Signing out...")
   );
 
   (async function start() {
     try {
+      // Reading the saved login can wait on the OS keystore's unlock prompt.
+      say("Opening your saved login from the OS keystore (it may ask you to unlock it)...");
       const saved = await invoke("saved_agent");
+      say("");
       if (saved.host) $("host").value = saved.host;
       setSession(saved);
       if (saved.signedIn) {
+        say("Loading devices...");
         await showDevices();
+        say("");
         return;
       }
     } catch (e) {

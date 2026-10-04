@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RFE Desktop</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>RFE Desktop</h1>
+    <div id="session" class="session" hidden>
+      <span id="session-text"></span>
+      <button id="sign-out" class="link" type="button" title="Removes this computer's saved login. The device stays listed on the agent until it is revoked there.">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="step-connect" class="panel" hidden>
+      <h2>Connect to an agent</h2>
+      <p class="hint">Enter the agent's address. The app reads its certificate fingerprint first and sends no password until you confirm it.</p>
+      <form id="connect-form">
+        <label for="host">Agent address</label>
+        <input id="host" name="host" value="127.0.0.1:8765" autocomplete="off" spellcheck="false" required>
+        <button type="submit" class="primary">Check certificate</button>
+      </form>
+    </section>
+
+    <section id="step-trust" class="panel" hidden>
+      <h2>Confirm the certificate</h2>
+      <p class="hint">On the PC running the agent, run <code>rfe-agent status</code> and compare its fingerprint with this one. Trust it only if they match exactly.</p>
+      <p id="changed" class="warn" hidden></p>
+      <p class="mono" id="fingerprint"></p>
+      <div class="row">
+        <button id="trust" class="primary" type="button">They match, trust this agent</button>
+        <button id="trust-cancel" type="button">Cancel</button>
+      </div>
+    </section>
+
+    <section id="step-login" class="panel" hidden>
+      <h2>Sign in</h2>
+      <p class="hint">Use the agent account created with <code>rfe-agent adduser</code>. Signing in also registers this computer as a device.</p>
+      <form id="login-form">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <div class="row pad">
+          <button type="submit" class="primary">Sign in</button>
+          <button id="login-back" type="button">Back</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="step-devices" class="panel" hidden>
+      <div class="row between">
+        <h2>Paired devices</h2>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Device</th><th>Last seen</th><th>Last address</th><th>Version</th><th>Status</th></tr>
+          </thead>
+          <tbody id="devices"></tbody>
+        </table>
+      </div>
+      <p id="devices-empty" class="hint" hidden>No devices yet.</p>
+    </section>
+
+    <p id="message" class="message" role="status" hidden></p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -14,6 +14,15 @@
     // goes to the new screen's heading, which is read out.
     const title = $(step.replace("step-", "title-"));
     if (title) title.focus();
+    placeMessage();
+  }
+
+  // The message line lives at the end of the screen being shown, so a refusal or result appears
+  // inside the panel the user is looking at, not below it where a long list can push it off screen.
+  function placeMessage() {
+    const el = $("message");
+    const panel = steps.map($).find((p) => !p.hidden);
+    if (panel && el.parentNode !== panel) panel.append(el);
   }
 
   function say(text, isError) {
@@ -23,6 +32,7 @@
     el.classList.toggle("error", !!isError);
     // An error interrupts a screen reader; progress and results wait their turn.
     el.setAttribute("role", isError ? "alert" : "status");
+    placeMessage();
   }
 
   function submitter(ev) {

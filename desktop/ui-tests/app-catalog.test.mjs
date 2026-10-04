@@ -141,6 +141,14 @@ test("a refused list shows its reason as an alert and no stale or empty list", a
   assert.equal(a.els["apps-refresh"].disabled, false);
 });
 
+test("the message is shown inside the Apps panel, and follows the user to the next screen", async () => {
+  const a = await open({ list_host_apps: () => Promise.reject(refusals.view) });
+  assert.equal(a.els.message.parentNode, a.els["step-apps"]);
+  await a.els["apps-back"].fire("click");
+  assert.equal(a.els["step-devices"].hidden, false);
+  assert.equal(a.els.message.parentNode, a.els["step-devices"]);
+});
+
 test("refresh after a refusal can succeed and replaces the message", async () => {
   let ok = false;
   const a = await open({ list_host_apps: () => (ok ? catalog([app()]) : Promise.reject(refusals.view)) });

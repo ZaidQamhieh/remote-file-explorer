@@ -43,6 +43,7 @@ export class El {
     (this.listeners[type] ||= []).push(fn);
   }
   append(...kids) {
+    for (const k of kids) k.parentNode = this;
     this.children.push(...kids);
   }
   replaceChildren(...kids) {

@@ -430,13 +430,43 @@ pub struct AgentClient {
     fingerprint: String,
 }
 
+/// The most a JSON answer may be (a big folder listing is a few MiB) and the most an error body
+/// may be. A pinned agent is the user's own, but a misbehaving one must not fill this computer's
+/// memory by never ending a response.
+pub(crate) const MAX_JSON_BODY: usize = 64 << 20;
+const MAX_ERROR_BODY: usize = 1 << 20;
+
+/// The body of `resp`, refused once it is longer than `max` bytes.
+pub(crate) async fn read_capped(
+    mut resp: reqwest::Response,
+    max: usize,
+) -> Result<Vec<u8>, AgentError> {
+    let mut out = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(net)? {
+        if out.len() + chunk.len() > max {
+            return Err(AgentError::Local(
+                "unexpected response: the agent sent more data than this app accepts".into(),
+            ));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
+/// A JSON answer, read with a size limit.
+pub(crate) async fn read_json<T: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+    max: usize,
+) -> Result<T, AgentError> {
+    let bytes = read_capped(resp, max).await?;
+    serde_json::from_slice(&bytes)
+        .map_err(|e| AgentError::Local(format!("unexpected response: {e}")))
+}
+
 async fn parse<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Result<T, AgentError> {
     let status = resp.status();
     if status.is_success() {
-        return resp
-            .json::<T>()
-            .await
-            .map_err(|e| AgentError::Local(format!("unexpected response: {e}")));
+        return read_json(resp, MAX_JSON_BODY).await;
     }
     Err(error_of(resp).await)
 }
@@ -444,7 +474,7 @@ async fn parse<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Resul
 /// The error for a non-success response: the agent's `{code, message}` body when it has one.
 async fn error_of(resp: reqwest::Response) -> AgentError {
     let code = resp.status().as_u16();
-    let body = resp.bytes().await.unwrap_or_default();
+    let body = read_capped(resp, MAX_ERROR_BODY).await.unwrap_or_default();
     match serde_json::from_slice::<ApiError>(&body) {
         Ok(e) => AgentError::Server {
             status: code,
@@ -855,7 +885,7 @@ impl AgentClient {
         if !resp.status().is_success() {
             return Err(error_of(resp).await);
         }
-        let bytes = resp.bytes().await.map_err(net)?;
+        let bytes = read_capped(resp, MAX_JSON_BODY).await?;
         if bytes.is_empty() {
             return Ok(serde_json::Value::Null);
         }
@@ -963,4 +993,34 @@ pub(crate) async fn response_error(resp: reqwest::Response) -> AgentError {
 /// A transport failure as an `AgentError`, with the whole cause chain in the text.
 pub(crate) fn network_error(e: reqwest::Error) -> AgentError {
     net(e)
+}
+
+#[cfg(test)]
+mod body_cap_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// A plain-HTTP server that answers once with `body_len` bytes of `x` and then closes.
+    async fn serve(body_len: usize) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+            let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {body_len}\r\n\r\n");
+            let _ = sock.write_all(head.as_bytes()).await;
+            let _ = sock.write_all(&vec![b'x'; body_len]).await;
+        });
+        format!("http://{addr}/")
+    }
+
+    #[tokio::test]
+    async fn a_body_over_the_cap_is_refused_and_one_at_the_cap_is_read() {
+        let over = reqwest::get(serve(2_000).await).await.unwrap();
+        let err = read_capped(over, 1_000).await.unwrap_err();
+        assert!(err.to_string().contains("more data than"), "{err}");
+        let ok = reqwest::get(serve(1_000).await).await.unwrap();
+        assert_eq!(read_capped(ok, 1_000).await.unwrap().len(), 1_000);
+    }
 }

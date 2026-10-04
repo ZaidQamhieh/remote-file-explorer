@@ -13,7 +13,10 @@
 //! memory; after a restart the window starts with an empty list (a part file left behind by a crash
 //! stays in the downloads folder under a name starting `.rfe-`).
 
-use crate::agent_client::{network_error, response_error, AgentClient, AgentError, CLIENT_VERSION};
+use crate::agent_client::{
+    network_error, read_json, response_error, AgentClient, AgentError, CLIENT_VERSION,
+    MAX_JSON_BODY,
+};
 use crate::applog;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -179,6 +182,7 @@ struct Item {
     /// The agent this transfer was queued for. The saved login can be switched to another agent
     /// meanwhile; the paths, sessions and part files here mean nothing to that one.
     host: String,
+    fingerprint: String,
     kind: Kind,
     resume: Mutex<Resume>,
 }
@@ -235,7 +239,8 @@ impl Transfers {
     /// Queues a download of `remote_path` into `ctx.download_dir`. Needs a tokio runtime.
     pub async fn start_download(&self, ctx: Ctx, remote_path: &str) -> Result<String, String> {
         validate_remote(remote_path, "enter the path of the file on the computer")?;
-        let host = (ctx.creds)().await?.host;
+        let conn = (ctx.creds)().await?;
+        let (host, fingerprint) = (conn.host, conn.fingerprint);
         std::fs::create_dir_all(&ctx.download_dir).map_err(|e| {
             format!(
                 "cannot use the downloads folder {}: {e}",
@@ -257,7 +262,12 @@ impl Transfers {
             error: String::new(),
             verified: false,
         };
-        self.add(ctx, host, Kind::Download { part, name }, view);
+        self.add(
+            ctx,
+            (host, fingerprint),
+            Kind::Download { part, name },
+            view,
+        );
         Ok(id)
     }
 
@@ -279,7 +289,8 @@ impl Transfers {
         let src = PathBuf::from(local_path);
         let (_file, ident) = open_source(&src)?;
         let name = remote_file_name(&src)?;
-        let host = (ctx.creds)().await?.host;
+        let conn = (ctx.creds)().await?;
+        let (host, fingerprint) = (conn.host, conn.fingerprint);
         let id = new_id()?;
         let remote_path = join_remote(remote_dir, &name);
         let view = TransferView {
@@ -294,17 +305,23 @@ impl Transfers {
             error: String::new(),
             verified: false,
         };
-        self.add(ctx, host, Kind::Upload { src, remote_path }, view);
+        self.add(
+            ctx,
+            (host, fingerprint),
+            Kind::Upload { src, remote_path },
+            view,
+        );
         Ok(id)
     }
 
-    fn add(&self, ctx: Ctx, host: String, kind: Kind, view: TransferView) {
+    fn add(&self, ctx: Ctx, (host, fingerprint): (String, String), kind: Kind, view: TransferView) {
         let (tx, rx) = watch::channel(false);
         let item = Arc::new(Item {
             view: Mutex::new(view),
             cancel: Mutex::new(tx),
             ctx,
             host,
+            fingerprint,
             kind,
             resume: Mutex::new(Resume::default()),
         });
@@ -445,7 +462,7 @@ async fn work(opts: &Options, item: &Item) -> Result<(), String> {
 /// another agent a transfer waits (fails, retryable) instead of acting on the wrong computer.
 async fn conn_for(item: &Item) -> Result<Conn, String> {
     let conn = (item.ctx.creds)().await?;
-    if conn.host != item.host {
+    if conn.host != item.host || conn.fingerprint != item.fingerprint {
         return Err(format!(
             "This transfer belongs to {}. Switch back to that agent to continue it.",
             item.host
@@ -888,12 +905,13 @@ async fn append_body(
     let mut file = open_part(part, truncate)?;
     let mut written = 0u64;
     while let Some(chunk) = resp.chunk().await.map_err(net)? {
+        // Check before writing: bytes past the asked-for range must never reach the part file.
+        if written + chunk.len() as u64 > expect {
+            return Err("unexpected response: the agent sent more than was asked for".into());
+        }
         file.write_all(&chunk)
             .map_err(|e| format!("cannot write {}: {e}", part.display()))?;
         written += chunk.len() as u64;
-        if written > expect {
-            return Err("unexpected response: the agent sent more than was asked for".into());
-        }
         item.set_progress(from + written, total);
     }
     file.flush()
@@ -926,7 +944,10 @@ async fn remote_checksum(
     if !resp.status().is_success() {
         return None;
     }
-    resp.json::<Sum>().await.ok().map(|s| s.checksum)
+    read_json::<Sum>(resp, 1 << 20)
+        .await
+        .ok()
+        .map(|s| s.checksum)
 }
 
 async fn download(opts: &Options, item: &Item) -> Result<(), String> {
@@ -1056,13 +1077,18 @@ struct SessionBody {
     status: String,
 }
 
-fn bad_session(b: &SessionBody) -> bool {
+/// How many chunks the agent opens for `size` bytes: `ceil(size / chunk)`, and one for an empty file.
+fn expected_chunks(size: u64, chunk: u64) -> u64 {
+    size.div_ceil(chunk.max(1)).max(1)
+}
+
+fn bad_session(b: &SessionBody, size: u64) -> bool {
     b.id.is_empty()
         || b.id
             .contains(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
         || b.chunk_size == 0
         || b.chunk_size > MAX_SESSION_CHUNK
-        || b.total_chunks == 0
+        || b.total_chunks as u64 != expected_chunks(size, b.chunk_size as u64)
 }
 
 fn authed(rb: reqwest::RequestBuilder, conn: &Conn) -> reqwest::RequestBuilder {
@@ -1110,12 +1136,17 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
             .map_err(net)?;
         match resp.status().as_u16() {
             200 => {
-                let body: SessionBody = resp
-                    .json()
+                let body: SessionBody = read_json(resp, MAX_JSON_BODY)
                     .await
-                    .map_err(|e| format!("unexpected response: {e}"))?;
+                    .map_err(|e| e.to_string())?;
                 match body.status.as_str() {
                     "open" => {
+                        if body.received_chunks.iter().any(|&n| n >= s.total_chunks) {
+                            return Err(
+                                "unexpected response: the agent listed a chunk this upload does not have"
+                                    .into(),
+                            );
+                        }
                         have = body.received_chunks.into_iter().collect();
                         session = Some(s);
                     }
@@ -1160,11 +1191,10 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
             if resp.status().as_u16() != 201 {
                 return Err(refused(resp).await);
             }
-            let body: SessionBody = resp
-                .json()
+            let body: SessionBody = read_json(resp, MAX_JSON_BODY)
                 .await
-                .map_err(|e| format!("unexpected response: {e}"))?;
-            if bad_session(&body) {
+                .map_err(|e| e.to_string())?;
+            if bad_session(&body, size) {
                 return Err(
                     "unexpected response: the agent sent a session this app cannot use".into(),
                 );
@@ -1358,4 +1388,38 @@ pub async fn transfer_clear_finished(state: tauri::State<'_, Transfers>) -> Resu
 #[tauri::command]
 pub async fn transfer_folder(app: tauri::AppHandle) -> Result<String, String> {
     Ok(download_folder(&app)?.display().to_string())
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+
+    fn body(chunk_size: usize, total_chunks: usize) -> SessionBody {
+        SessionBody {
+            id: "abc".into(),
+            chunk_size,
+            total_chunks,
+            received_chunks: vec![],
+            status: "open".into(),
+        }
+    }
+
+    #[test]
+    fn the_chunk_count_must_match_the_file_size() {
+        assert_eq!(expected_chunks(0, 1024), 1);
+        assert_eq!(expected_chunks(1, 1024), 1);
+        assert_eq!(expected_chunks(1024, 1024), 1);
+        assert_eq!(expected_chunks(1025, 1024), 2);
+        assert!(!bad_session(&body(1024, 2), 1025));
+        assert!(bad_session(&body(1024, 3), 1025), "too many chunks");
+        assert!(bad_session(&body(1024, 1), 1025), "too few chunks");
+        assert!(
+            bad_session(&body(1024, usize::MAX), 10),
+            "a huge count must be refused, not sent"
+        );
+        assert!(
+            !bad_session(&body(1024, 1), 0),
+            "an empty file has one chunk"
+        );
+    }
 }

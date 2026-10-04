@@ -2,7 +2,7 @@
 //! the window opens on the device list, and adds a second device.
 //! Usage: seed_state <host:port> <user> <password> <state-dir> <second-state-dir>
 
-use rfe_desktop_lib::{agent_client::capture_fingerprint, flows};
+use rfe_desktop_lib::{agent_client::capture_fingerprint, flows, secrets::OsKeystore};
 use std::path::Path;
 
 #[tokio::main]
@@ -12,11 +12,27 @@ async fn main() {
         panic!("usage: seed_state <host:port> <user> <password> <state-dir> <second-state-dir>");
     };
     let fp = capture_fingerprint(host).await.expect("probe");
-    flows::login(Path::new(dir2), host, &fp, user, pw, "Phone (test)")
-        .await
-        .expect("second device");
-    flows::login(Path::new(dir), host, &fp, user, pw, "RFE Desktop")
-        .await
-        .expect("login");
+    flows::login(
+        Path::new(dir2),
+        host,
+        &fp,
+        user,
+        pw,
+        "Phone (test)",
+        &OsKeystore::new(),
+    )
+    .await
+    .expect("second device");
+    flows::login(
+        Path::new(dir),
+        host,
+        &fp,
+        user,
+        pw,
+        "RFE Desktop",
+        &OsKeystore::new(),
+    )
+    .await
+    .expect("login");
     println!("{fp}");
 }

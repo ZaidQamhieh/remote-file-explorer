@@ -1,12 +1,15 @@
 //! RFE desktop app, first slice: pin the agent's certificate, log in, list devices.
+//! The device key and login token are kept in the OS keystore.
 
 pub mod agent_client;
 pub mod flows;
 mod fsutil;
 pub mod identity;
+pub mod secrets;
 
 use agent_client::Device;
 use flows::Saved;
+use secrets::OsKeystore;
 use serde::Serialize;
 use tauri::Manager;
 
@@ -36,7 +39,7 @@ impl From<Saved> for SavedView {
 
 #[tauri::command]
 fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
-    Ok(flows::load_saved(&data_dir(&app)?)?.into())
+    Ok(flows::load_saved(&data_dir(&app)?, &OsKeystore::new())?.into())
 }
 
 #[tauri::command]
@@ -62,6 +65,7 @@ async fn login(
         &username,
         &password,
         "RFE Desktop",
+        &OsKeystore::new(),
     )
     .await
     .map(Into::into)
@@ -70,14 +74,14 @@ async fn login(
 
 #[tauri::command]
 async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
-    flows::list_devices(&data_dir(&app)?)
+    flows::list_devices(&data_dir(&app)?, &OsKeystore::new())
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn sign_out(app: tauri::AppHandle) -> Result<(), String> {
-    flows::sign_out(&data_dir(&app)?)
+    flows::sign_out(&data_dir(&app)?, &OsKeystore::new())
 }
 
 pub fn run() {

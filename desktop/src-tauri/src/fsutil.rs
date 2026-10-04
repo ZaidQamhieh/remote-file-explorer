@@ -1,6 +1,5 @@
-//! Private-file helper: the device key and token are secrets, so they are
-//! written owner-only (0600) on Unix. On other platforms the file keeps the
-//! default ACL; an OS keystore is an open item for the real app.
+//! Private-file helper for the app's state file: written owner-only (0600) on Unix, atomically.
+//! It holds no secrets (those are in the OS keystore); the pin and host are still private to the user.
 
 use std::io::Write;
 use std::path::Path;

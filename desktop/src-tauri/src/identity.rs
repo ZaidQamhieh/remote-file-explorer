@@ -1,7 +1,10 @@
 //! Persistent Ed25519 device identity. The agent pins the public key to the
 //! device row at enrollment and checks a signature over a fresh nonce.
+//!
+//! The private key lives in the OS keystore only. A pre-keystore `identity.json` is moved into
+//! the keystore and then deleted.
 
-use crate::fsutil::write_private;
+use crate::secrets::{account, SecretStore};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
@@ -25,29 +28,69 @@ fn random<const N: usize>() -> Result<[u8; N], String> {
 }
 
 impl Identity {
-    pub fn load_or_create(dir: &Path) -> Result<Self, String> {
-        let path = dir.join("identity.json");
-        match std::fs::read(&path) {
-            Ok(bytes) => {
-                return Self::from_file(&bytes).map_err(|e| {
-                    format!(
-                        "{} is damaged ({e}); delete it to create a new device identity",
-                        path.display()
-                    )
-                })
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(format!("read {}: {e}", path.display())),
-        }
-        let key = SigningKey::from_bytes(&random::<32>()?);
-        let device_id = format!("desktop-{}", hex::encode(random::<12>()?));
-        let file = IdentityFile {
-            device_id: device_id.clone(),
-            private_key: STANDARD.encode(key.to_bytes()),
+    pub fn load_or_create(dir: &Path, store: &dyn SecretStore) -> Result<Self, String> {
+        let acct = account("identity", dir);
+        let legacy_path = dir.join("identity.json");
+        let legacy = match std::fs::read(&legacy_path) {
+            Ok(bytes) => Some(Self::from_file(&bytes).map_err(|e| {
+                format!(
+                    "{} is damaged ({e}); delete it to create a new device identity",
+                    legacy_path.display()
+                )
+            })?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(format!("read {}: {e}", legacy_path.display())),
         };
-        let json = serde_json::to_vec(&file).map_err(|e| e.to_string())?;
-        write_private(&path, &json)?;
-        Ok(Self { device_id, key })
+        let stored = match store.get(&acct)? {
+            Some(json) => Some(
+                Self::from_file(json.as_bytes())
+                    .map_err(|e| format!("the keystore identity is damaged ({e})"))?,
+            ),
+            None => None,
+        };
+        match (stored, legacy) {
+            (Some(id), None) => Ok(id),
+            (Some(id), Some(old)) => {
+                // A migration that stopped after the keystore write: finish it, but never
+                // delete a key that differs from the one in the keystore.
+                if old.key.to_bytes() != id.key.to_bytes() {
+                    return Err(format!(
+                        "{} holds a different key than the keystore; delete the one you do not want",
+                        legacy_path.display()
+                    ));
+                }
+                remove_legacy(&legacy_path)?;
+                Ok(id)
+            }
+            (None, Some(old)) => {
+                old.save(store, &acct)?;
+                remove_legacy(&legacy_path)?;
+                Ok(old)
+            }
+            (None, None) => {
+                let id = Self {
+                    device_id: format!("desktop-{}", hex::encode(random::<12>()?)),
+                    key: SigningKey::from_bytes(&random::<32>()?),
+                };
+                id.save(store, &acct)?;
+                Ok(id)
+            }
+        }
+    }
+
+    /// Stores the identity and reads it back, so a keystore that accepts but loses the write
+    /// is caught before the legacy file is removed or the key is used.
+    fn save(&self, store: &dyn SecretStore, acct: &str) -> Result<(), String> {
+        let json = serde_json::to_string(&IdentityFile {
+            device_id: self.device_id.clone(),
+            private_key: STANDARD.encode(self.key.to_bytes()),
+        })
+        .map_err(|e| e.to_string())?;
+        store.set(acct, &json)?;
+        if store.get(acct)?.as_deref() != Some(json.as_str()) {
+            return Err("the OS keystore did not keep the device key".into());
+        }
+        Ok(())
     }
 
     fn from_file(bytes: &[u8]) -> Result<Self, String> {
@@ -77,4 +120,8 @@ impl Identity {
     pub fn sign_b64(&self, message: &str) -> String {
         STANDARD.encode(self.key.sign(message.as_bytes()).to_bytes())
     }
+}
+
+fn remove_legacy(path: &Path) -> Result<(), String> {
+    std::fs::remove_file(path).map_err(|e| format!("remove {}: {e}", path.display()))
 }

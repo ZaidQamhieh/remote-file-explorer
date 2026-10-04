@@ -29,5 +29,16 @@ base64 = "0.22"
 sha2 = "0.10"
 hex = "0.4"
 
+# One OS keystore backend per platform, and nothing else: keyring silently falls back to an
+# in-memory mock when no backend feature is enabled, which would lose the secrets on exit.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+
 [dev-dependencies]
 tempfile = "3"

@@ -11,6 +11,7 @@ use agent_client::Device;
 use flows::Saved;
 use secrets::{Offloaded, OsKeystore};
 use serde::Serialize;
+use std::sync::Mutex;
 use tauri::Manager;
 
 fn keystore() -> Offloaded {
@@ -113,6 +114,91 @@ async fn pair_with_code(
     .map_err(|e| e.to_string())
 }
 
+/// The pairing request this window is waiting on. Only one at a time: asking again replaces it.
+#[derive(Default)]
+struct PendingPair(Mutex<Option<flows::PairWait>>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PairWaitView {
+    match_code: String,
+    expires_in_seconds: u64,
+}
+
+#[tauri::command]
+async fn request_pairing(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingPair>,
+    host: String,
+    fingerprint: String,
+) -> Result<PairWaitView, String> {
+    let wait = flows::request_pairing(
+        &data_dir(&app)?,
+        &host,
+        &fingerprint,
+        "RFE Desktop",
+        &keystore(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    let view = PairWaitView {
+        match_code: wait.match_code.clone(),
+        expires_in_seconds: wait.expires_in_seconds,
+    };
+    *pending.0.lock().unwrap() = Some(wait);
+    Ok(view)
+}
+
+#[derive(Serialize)]
+struct PollView {
+    /// "pending", "rejected", "expired" or "approved".
+    status: &'static str,
+    saved: Option<SavedView>,
+}
+
+#[tauri::command]
+async fn poll_pairing(
+    app: tauri::AppHandle,
+    pending: tauri::State<'_, PendingPair>,
+) -> Result<PollView, String> {
+    let wait = pending
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "no pairing request is waiting".to_string())?;
+    let progress = flows::poll_pairing(&data_dir(&app)?, &wait, &keystore()).await;
+    let view = |status, saved| PollView { status, saved };
+    match progress {
+        Ok(flows::PairProgress::Pending) => Ok(view("pending", None)),
+        Ok(flows::PairProgress::Rejected) => {
+            pending.0.lock().unwrap().take();
+            Ok(view("rejected", None))
+        }
+        Ok(flows::PairProgress::Expired) => {
+            pending.0.lock().unwrap().take();
+            Ok(view("expired", None))
+        }
+        Ok(flows::PairProgress::Approved(saved)) => {
+            pending.0.lock().unwrap().take();
+            Ok(view("approved", Some(saved.into())))
+        }
+        Err(e) => {
+            // An error after the agent handed out the approval cannot be retried: the request
+            // is spent. Keep waiting only for errors that left it untouched.
+            if matches!(e, agent_client::AgentError::Local(_)) {
+                pending.0.lock().unwrap().take();
+            }
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn cancel_pairing(pending: tauri::State<'_, PendingPair>) {
+    pending.0.lock().unwrap().take();
+}
+
 #[tauri::command]
 async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
     flows::list_devices(&data_dir(&app)?, &keystore())
@@ -127,6 +213,7 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(PendingPair::default())
         .invoke_handler(tauri::generate_handler![
             saved_agent,
             list_pins,
@@ -134,6 +221,9 @@ pub fn run() {
             probe_agent,
             login,
             pair_with_code,
+            request_pairing,
+            poll_pairing,
+            cancel_pairing,
             list_devices,
             sign_out
         ])

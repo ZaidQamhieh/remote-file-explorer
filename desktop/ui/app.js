@@ -1,7 +1,7 @@
 (function () {
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
-  const steps = ["step-connect", "step-trust", "step-login", "step-devices"];
+  const steps = ["step-connect", "step-trust", "step-login", "step-approve", "step-devices"];
   let pending = { host: "", fingerprint: "" };
 
   function show(step) {
@@ -179,6 +179,58 @@
       setSession(saved);
       await showDevices();
     });
+  });
+
+  // Approve on the PC: show the match code, then ask the agent every two seconds until the
+  // owner answers. `waiting` changes on cancel so an old loop stops by itself.
+  let waiting = 0;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function askPcToApprove() {
+    const me = ++waiting;
+    const wait = await invoke("request_pairing", {
+      host: pending.host,
+      fingerprint: pending.fingerprint,
+    });
+    $("match-code").textContent = wait.matchCode;
+    $("approve-status").textContent = "Waiting for the PC...";
+    show("step-approve");
+    const give_up = Date.now() + (wait.expiresInSeconds + 10) * 1000;
+    while (me === waiting && Date.now() < give_up) {
+      await sleep(2000);
+      if (me !== waiting) return;
+      const out = await invoke("poll_pairing");
+      if (out.status === "approved") {
+        setSession(out.saved);
+        await showDevices();
+        return;
+      }
+      if (out.status === "rejected") throw "The request was rejected on the PC.";
+      if (out.status === "expired") throw "The request expired or was already used. Ask again.";
+    }
+    if (me === waiting) throw "The request timed out. Ask again.";
+  }
+
+  $("use-approval").addEventListener("click", (ev) =>
+    run(ev.currentTarget, async () => {
+      try {
+        await askPcToApprove();
+      } catch (e) {
+        // Back to sign-in with the reason; a stale loop must not move the screen.
+        waiting++;
+        show("step-login");
+        throw e;
+      }
+    })
+  );
+
+  $("approve-cancel").addEventListener("click", async () => {
+    waiting++;
+    try {
+      await invoke("cancel_pairing");
+    } finally {
+      show("step-login");
+    }
   });
 
   $("pair-back").addEventListener("click", () => {

@@ -56,6 +56,11 @@ impl Agent {
             .args(["-addr", &host, "-name", "rfe-desktop-test"])
             .args(["-data", data.path().to_str().unwrap()])
             .args(["-roots", roots.path().to_str().unwrap()])
+            // The agent shows a desktop notification for each pairing request through notify-send.
+            // With no notify-send on its PATH and no session bus, a test never reaches the
+            // owner's screen; tests answer requests with the CLI below.
+            .env("PATH", "/nonexistent-rfe-test-path")
+            .env_remove("DBUS_SESSION_BUS_ADDRESS")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -102,6 +107,27 @@ impl Agent {
             .next()
             .expect("a code")
             .to_string()
+    }
+
+    /// `rfe-agent pair requests`: one line per waiting request, with its match code.
+    pub fn pair_requests_cli(&self) -> String {
+        cli(&["pair", "requests", "-data", self.dir()])
+    }
+
+    /// The match code the agent shows the owner for the (only) waiting request.
+    pub fn waiting_match_code(&self) -> String {
+        let out = self.pair_requests_cli();
+        let line = out
+            .lines()
+            .find(|l| l.contains("match code"))
+            .unwrap_or_else(|| panic!("no waiting request: {out}"));
+        line.rsplit("match code").next().unwrap().trim().to_string()
+    }
+
+    /// Answers the only waiting request, as the owner would.
+    pub fn answer_pair_request(&self, approve: bool) {
+        let verb = if approve { "accept" } else { "reject" };
+        cli(&["pair", verb, "-data", self.dir()]);
     }
 
     pub fn devices_cli(&self) -> String {

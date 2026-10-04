@@ -13,6 +13,7 @@
 //!   unverified connection.
 
 use crate::identity::Identity;
+use hmac::{Hmac, Mac};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvider};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
@@ -218,6 +219,39 @@ pub fn normalize_fingerprint(s: &str) -> String {
         .to_ascii_lowercase()
 }
 
+/// The code both sides show so the user can tell the agent they reached is the one that holds the
+/// certificate this app saw: `HMAC-SHA256(key = certificate SHA-256, msg = "rfe-pair-sas\n" +
+/// clientNonce + requestId)`, first 8 bytes as a big-endian number mod 10^8, as "1234 5678". A
+/// machine relaying the connection presents a different certificate and so gets a different code.
+pub fn match_code(
+    fingerprint_hex: &str,
+    client_nonce_hex: &str,
+    request_id: &str,
+) -> Result<String, AgentError> {
+    let fp = hex::decode(normalize_fingerprint(fingerprint_hex))
+        .ok()
+        .filter(|b| b.len() == 32)
+        .ok_or_else(|| AgentError::Local("bad fingerprint".into()))?;
+    let nonce = hex::decode(client_nonce_hex)
+        .ok()
+        .filter(|b| b.len() == 16)
+        .ok_or_else(|| AgentError::Local("bad client nonce".into()))?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(&fp).expect("HMAC takes any key length");
+    mac.update(b"rfe-pair-sas\n");
+    mac.update(&nonce);
+    mac.update(request_id.as_bytes());
+    let digest = mac.finalize().into_bytes();
+    let n = u64::from_be_bytes(digest[..8].try_into().expect("8 bytes")) % 100_000_000;
+    Ok(format!("{:04} {:04}", n / 10_000, n % 10_000))
+}
+
+/// 16 random bytes, hex: the secret that authorises polling for one pairing request.
+pub fn new_client_nonce() -> Result<String, AgentError> {
+    let mut b = [0u8; 16];
+    getrandom::getrandom(&mut b).map_err(|e| AgentError::Local(format!("random: {e}")))?;
+    Ok(hex::encode(b))
+}
+
 /// `host:port` only: no scheme, path, userinfo or query, so a typo cannot
 /// redirect credentials to another origin.
 pub fn validate_hostport(hostport: &str) -> Result<(), AgentError> {
@@ -303,6 +337,44 @@ struct PairBody<'a> {
     device_public_key: String,
     nonce: String,
     signature: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PairRequestBody<'a> {
+    device_label: &'a str,
+    device_id: &'a str,
+    device_public_key: String,
+    nonce: String,
+    signature: String,
+    client_nonce: &'a str,
+}
+
+/// A pairing request the agent is holding for the owner to answer.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PairRequestStarted {
+    pub request_id: String,
+    pub expires_in_seconds: u64,
+}
+
+/// Where a pairing request stands. `Approved` carries the token and is returned once only.
+#[derive(Debug)]
+pub enum PairPoll {
+    Pending,
+    Rejected,
+    Approved(LoginOk),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+#[derive(Default)]
+struct PollBody {
+    status: String,
+    device_token: String,
+    device_id: String,
+    agent_name: String,
+    cert_fingerprint: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -464,6 +536,74 @@ impl AgentClient {
         .await?;
         self.check_fingerprint(&ok)?;
         Ok(ok)
+    }
+
+    /// Asks the owner to approve this computer at the PC (`POST /pair/request`). The device proof
+    /// goes with it; `client_nonce` is the secret needed to poll for the answer.
+    pub async fn pair_request(
+        &self,
+        id: &Identity,
+        label: &str,
+        client_nonce: &str,
+    ) -> Result<PairRequestStarted, AgentError> {
+        let nonce = self.challenge().await?;
+        let body = PairRequestBody {
+            device_label: label,
+            device_id: id.device_id(),
+            device_public_key: id.public_key_b64(),
+            signature: id.sign_b64(&nonce),
+            nonce,
+            client_nonce,
+        };
+        parse(
+            self.http
+                .post(format!("{}/pair/request", self.base))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+
+    /// Asks how a pairing request stands (`GET /pair/request/{id}`). The approval, with the
+    /// token, is handed out once: a second poll gets `NOT_FOUND`.
+    pub async fn poll_pair_request(
+        &self,
+        request_id: &str,
+        client_nonce: &str,
+    ) -> Result<PairPoll, AgentError> {
+        if request_id.is_empty() || !request_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(AgentError::Local(format!(
+                "unexpected request id {request_id:?}"
+            )));
+        }
+        let body: PollBody = parse(
+            self.http
+                .get(format!("{}/pair/request/{request_id}", self.base))
+                .query(&[("nonce", client_nonce)])
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await?;
+        match body.status.as_str() {
+            "pending" => Ok(PairPoll::Pending),
+            "rejected" => Ok(PairPoll::Rejected),
+            "approved" => {
+                let ok = LoginOk {
+                    device_token: body.device_token,
+                    device_id: body.device_id,
+                    agent_name: body.agent_name,
+                    cert_fingerprint: body.cert_fingerprint,
+                };
+                self.check_fingerprint(&ok)?;
+                Ok(PairPoll::Approved(ok))
+            }
+            other => Err(AgentError::Local(format!(
+                "the agent answered with an unknown pairing status {other:?}"
+            ))),
+        }
     }
 
     /// Revokes this computer's own device on the agent (`DELETE /devices/{id}`), after which the

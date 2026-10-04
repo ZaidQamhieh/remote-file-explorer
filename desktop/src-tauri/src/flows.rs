@@ -1,7 +1,8 @@
 //! App-level flows shared by the Tauri commands and the integration tests.
 
 use crate::agent_client::{
-    capture_fingerprint, normalize_fingerprint, AgentClient, AgentError, Device, LoginOk,
+    capture_fingerprint, match_code, new_client_nonce, normalize_fingerprint, AgentClient,
+    AgentError, Device, LoginOk, PairPoll,
 };
 use crate::fsutil::write_private;
 use crate::identity::Identity;
@@ -238,6 +239,80 @@ pub async fn pair(
     let client = AgentClient::pinned(host, fingerprint)?;
     let ok = client.pair(&identity, code, label).await?;
     remember(dir, host, fingerprint, "", ok, store).await
+}
+
+/// A pairing request waiting for the owner to answer at the PC. `client_nonce` is the secret that
+/// authorises polling, so it stays on the Rust side and is not part of what the window sees.
+#[derive(Debug, Clone)]
+pub struct PairWait {
+    pub host: String,
+    pub fingerprint: String,
+    pub request_id: String,
+    pub client_nonce: String,
+    /// What the owner must see on the PC too, before approving.
+    pub match_code: String,
+    pub expires_in_seconds: u64,
+}
+
+/// Asks the agent to have the owner approve this computer at the PC. Nothing is stored until
+/// the owner approves; the returned match code is for the user to compare with the PC.
+pub async fn request_pairing(
+    dir: &Path,
+    host: &str,
+    fingerprint: &str,
+    label: &str,
+    store: &Offloaded,
+) -> Result<PairWait, AgentError> {
+    let identity = device_identity(dir, store).await?;
+    let client = AgentClient::pinned(host, fingerprint)?;
+    let client_nonce = new_client_nonce()?;
+    let started = client.pair_request(&identity, label, &client_nonce).await?;
+    let fingerprint = normalize_fingerprint(fingerprint);
+    Ok(PairWait {
+        match_code: match_code(&fingerprint, &client_nonce, &started.request_id)?,
+        host: host.to_string(),
+        fingerprint,
+        request_id: started.request_id,
+        client_nonce,
+        expires_in_seconds: started.expires_in_seconds,
+    })
+}
+
+#[derive(Debug)]
+pub enum PairProgress {
+    Pending,
+    Rejected,
+    /// The request is gone: it expired, or its approval was already collected.
+    Expired,
+    Approved(Saved),
+}
+
+/// Checks the request once. On approval the token is stored right away, because the agent hands
+/// it out only once: if storing fails the approval is lost and the user must ask again.
+pub async fn poll_pairing(
+    dir: &Path,
+    wait: &PairWait,
+    store: &Offloaded,
+) -> Result<PairProgress, AgentError> {
+    let client = AgentClient::pinned(&wait.host, &wait.fingerprint)?;
+    match client
+        .poll_pair_request(&wait.request_id, &wait.client_nonce)
+        .await
+    {
+        Ok(PairPoll::Pending) => Ok(PairProgress::Pending),
+        Ok(PairPoll::Rejected) => Ok(PairProgress::Rejected),
+        Ok(PairPoll::Approved(ok)) => {
+            match remember(dir, &wait.host, &wait.fingerprint, "", ok, store).await {
+                Ok(saved) => Ok(PairProgress::Approved(saved)),
+                Err(e) => Err(AgentError::Local(format!(
+                    "The PC approved this computer, but saving the login failed ({e}). The \
+                     approval can be collected only once and is now used up. Ask again."
+                ))),
+            }
+        }
+        Err(AgentError::Server { status: 404, .. }) => Ok(PairProgress::Expired),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, AgentError> {

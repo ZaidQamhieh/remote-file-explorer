@@ -79,3 +79,5 @@ tr:last-child td { border-bottom: 0; }
 .warn { color: var(--danger); border: 1px solid var(--danger); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px; }
 .message { padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
 .message.error { color: var(--danger); border-color: var(--danger); }
+
+.code { font-size: 32px; letter-spacing: 3px; margin: 8px 0 14px; }

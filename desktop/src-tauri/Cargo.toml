@@ -28,6 +28,7 @@ getrandom = "0.2"
 base64 = "0.22"
 sha2 = "0.10"
 hex = "0.4"
+hmac = "0.12"
 
 # One OS keystore backend per platform, and nothing else: keyring silently falls back to an
 # in-memory mock when no backend feature is enabled, which would lose the secrets on exit.

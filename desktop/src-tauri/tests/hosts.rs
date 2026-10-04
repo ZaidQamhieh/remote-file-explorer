@@ -506,3 +506,28 @@ fn the_new_messages_are_explained_in_the_guide() {
         "the kept-files table names hosts.json"
     );
 }
+
+#[test]
+fn a_damaged_hosts_file_does_not_stop_a_new_sign_in_from_being_saved() {
+    let dir = TempDir::new().unwrap();
+    let store = MemoryStore::default();
+    two_hosts(dir.path(), &store);
+    std::fs::write(dir.path().join("hosts.json"), "{ not json").unwrap();
+
+    // The active agent is B; signing in to C must keep C's token even though A/B cannot be parked.
+    let c = "c.example:8765";
+    let mut saved = flows::load_saved(dir.path(), &store).unwrap();
+    saved.host = c.into();
+    saved.fingerprint = "cd".repeat(32);
+    saved.token = "token-for-c".into();
+    flows::save(dir.path(), &store, &saved).expect("the sign-in is saved");
+
+    let now = flows::load_saved(dir.path(), &store).unwrap();
+    assert_eq!(now.host, c);
+    assert_eq!(now.token, "token-for-c");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("hosts.json")).unwrap(),
+        "{ not json",
+        "the damaged file is never overwritten"
+    );
+}

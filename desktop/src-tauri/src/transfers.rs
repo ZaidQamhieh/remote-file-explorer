@@ -31,6 +31,8 @@ use tokio::sync::{watch, Semaphore};
 pub const PARALLEL: usize = 2;
 
 const DEFAULT_CHUNK: usize = 8 << 20;
+// The most an agent may ask for per chunk: a larger answer would make this side allocate it whole.
+const MAX_SESSION_CHUNK: usize = 32 << 20;
 const DEFAULT_SEGMENT: u64 = 4 << 20;
 /// Upper bounds for one request, so a stalled connection ends; a healthy one never gets near them.
 const SEGMENT_TIMEOUT: Duration = Duration::from_secs(300);
@@ -413,7 +415,9 @@ async fn run(inner: Arc<Inner>, item: Arc<Item>, mut cancel: watch::Receiver<boo
             applog::info(&format!("{direction:?} finished"));
         }
         Some(Err(msg)) => {
-            applog::error(&format!("{direction:?} failed: {msg}"));
+            // The message can carry the request URL (with the remote path) or a local path; the log feeds the
+            // diagnostics report, so it only records that the transfer failed. The window shows the message.
+            applog::error(&format!("{direction:?} failed"));
             item.update(|v| {
                 v.state = State::Failed;
                 v.error = msg;
@@ -1014,6 +1018,7 @@ fn bad_session(b: &SessionBody) -> bool {
         || b.id
             .contains(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
         || b.chunk_size == 0
+        || b.chunk_size > MAX_SESSION_CHUNK
         || b.total_chunks == 0
 }
 

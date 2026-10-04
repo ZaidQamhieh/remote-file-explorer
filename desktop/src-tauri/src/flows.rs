@@ -309,7 +309,15 @@ pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> 
 /// Stores the token in the keystore (or deletes it when empty), then the rest in `state.json`.
 pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String> {
     // A different agent replacing the active session must not destroy its login (saved hosts).
-    crate::hosts::park_before_replace(dir, store, &s.host)?;
+    // If the saved-hosts file cannot be used (damaged, or from a newer app) a fresh sign-in still goes
+    // through: an approval token is single-use and would be lost, and the old login was never
+    // recoverable from that file anyway. The file is left as it is.
+    if let Err(e) = crate::hosts::park_before_replace(dir, store, &s.host) {
+        if s.token.is_empty() {
+            return Err(e);
+        }
+        applog::error("the previous login could not be kept in the saved hosts");
+    }
     let acct = account("token", dir);
     if s.token.is_empty() {
         store.delete(&acct)?;

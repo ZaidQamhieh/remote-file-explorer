@@ -58,17 +58,21 @@ jobs:
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: rfe-desktop-linux
-          path: dist
+          # Not `dist`: that folder is tracked in the repository (the agent's WINDOWS.md) and would be
+          # published and checksummed with the packages.
+          path: release-files
 
       # GitHub rewrites a space in an asset name to a dot, which would break the names in SHA256SUMS. The product name
       # has a space ("RFE Desktop_1.0.0_amd64.deb"), so the files get hyphens before the sums are written again.
       - name: Release file names and checksums
-        working-directory: dist
+        working-directory: release-files
         run: |
           set -euo pipefail
           for f in *; do
             if [[ "$f" == *" "* ]]; then mv -- "$f" "${f// /-}"; fi
           done
+          # Exactly the four files the build job uploads; anything else here would be published.
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 4
           test "$(find . -maxdepth 1 -type f -name '*.deb' | wc -l)" -eq 1
           test "$(find . -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -eq 1
           test -f rfe-desktop.sbom.json
@@ -80,9 +84,9 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
-            dist/*.deb
-            dist/*.AppImage
-            dist/rfe-desktop.sbom.json
+            release-files/*.deb
+            release-files/*.AppImage
+            release-files/rfe-desktop.sbom.json
 
       - name: Publish desktop release
         env:
@@ -92,7 +96,7 @@ jobs:
           version="${GITHUB_REF_NAME#desktop-v}"
           flags=()
           if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          gh release create "$GITHUB_REF_NAME" release-files/* \
             --title "Remote File Explorer Desktop ${version}" \
             --generate-notes \
             --latest=false "${flags[@]}"

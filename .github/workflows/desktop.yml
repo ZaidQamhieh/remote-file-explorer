@@ -48,7 +48,11 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev libssl-dev libdbus-1-dev \
             dbus-daemon gnome-keyring libsecret-tools
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # A cache made by a tag run is readable by that tag only (GitHub scopes caches to the ref and the
+      # default branch), so tag runs restore but never save: the 3 GB would only crowd out the caches
+      # the branch and pull-request runs use.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cache-rust
         with:
           path: |
             ~/.cargo/registry
@@ -123,6 +127,16 @@ jobs:
           command -v cargo-audit >/dev/null || cargo install cargo-audit --locked --version 0.22.2
           cargo audit --deny warnings
 
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.ref_type != 'tag' && steps.cache-rust.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-audit
+            desktop/src-tauri/target
+          key: desktop-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+
   bundle:
     name: deb and AppImage
     needs: rust
@@ -143,19 +157,20 @@ jobs:
       - name: Rust toolchain
         run: rustup toolchain install
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cache-bundle
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin/cargo-tauri
             desktop/src-tauri/target
           key: desktop-bundle-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
           restore-keys: desktop-bundle-${{ runner.os }}-
 
-      # Same version as the tauri crate in Cargo.lock.
+      # The prebuilt CLI from npm, the same version as the tauri crate in Cargo.lock. `cargo install
+      # tauri-cli` compiled several hundred crates on every run that missed the cache.
       - name: tauri-cli
-        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version 2.12.1 --locked
+        run: npm install --no-save --prefix "$RUNNER_TEMP/tauri-cli" @tauri-apps/cli@2.12.1 && echo "$RUNNER_TEMP/tauri-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       # linuxdeploy and its AppImage plugin are downloaded by the bundler at build time and are not
       # pinned by it; the artifact is for testing, and release signing/provenance is a separate task.
@@ -167,7 +182,7 @@ jobs:
         # leaves that version's .deb behind, and two .deb files break the steps below and the release.
         run: |
           rm -rf target/release/bundle
-          cargo tauri build --ci --bundles deb,appimage
+          tauri build --ci --bundles deb,appimage
 
       # What a launcher and a software centre read, from the package that was just built: the
       # desktop entry, the AppStream metadata and the icon sizes.
@@ -205,3 +220,12 @@ jobs:
             desktop/dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.ref_type != 'tag' && steps.cache-bundle.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: desktop-bundle-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}

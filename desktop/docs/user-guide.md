@@ -148,7 +148,7 @@ clipboard; if the system refuses, the text is selected so Ctrl+C works.
 ## Files
 
 **Files** (top right, when you are signed in) browses the files the agent shares with this computer.
-Nothing is downloaded or uploaded here.
+Opening a file selects it and shows **Download <name>** next to Refresh; pressing it starts a download on the Transfers screen (see Transfers). Going to another folder or pressing Refresh or Back drops the button. Uploads start from the Transfers screen.
 
 1. **Locations.** The first screen lists where you may start: the folders the agent was confined to
    (`-roots`, or a per-device folder), or, when the agent has no folder limit, its drives with their

@@ -2496,4 +2496,42 @@
       return id;
     },
   };
+
+  // ---- file browser -> transfers: a selected file offers a download ----
+  // Wraps the file browser's hook (it keeps its own behaviour); a folder never reaches it.
+  {
+    const btn = $("files-download");
+    let picked = null;
+    const offer = (entry) => {
+      picked = entry && entry.path ? entry : null;
+      if (!picked) return;
+      btn.textContent = "Download " + (picked.name || picked.path);
+      btn.hidden = false;
+    };
+    const clear = () => {
+      picked = null;
+      btn.hidden = true;
+    };
+    const previous = window.rfeFileActions.onFileSelected;
+    window.rfeFileActions.onFileSelected = (entry) => {
+      previous(entry);
+      offer(entry);
+    };
+    btn.addEventListener("click", async () => {
+      if (!picked) return;
+      const file = picked;
+      btn.disabled = true;
+      try {
+        await window.rfeTransfers.download(file.path);
+        say("Download of " + (file.name || file.path) + " started. Progress is on the Transfers screen.");
+      } catch (err) {
+        say(String(err), true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    // Moving to another folder, or leaving the screen, drops the offer.
+    for (const id of ["files-refresh", "files-back"]) $(id).addEventListener("click", clear);
+    if (typeof MutationObserver !== "undefined") new MutationObserver(clear).observe($("files-trail"), { childList: true });
+  }
 })();

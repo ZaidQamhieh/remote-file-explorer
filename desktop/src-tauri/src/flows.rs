@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::secrets::{account, Offloaded, SecretStore};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Saved {
     pub host: String,
     pub fingerprint: String,
@@ -21,6 +21,19 @@ pub struct Saved {
     pub username: String,
     /// The agent-assigned id of this computer's device row.
     pub device_id: String,
+}
+
+// Not derived: a `{:?}` in a log line or a test failure must not print the login token.
+impl std::fmt::Debug for Saved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Saved")
+            .field("host", &self.host)
+            .field("fingerprint", &self.fingerprint)
+            .field("token", &"<redacted>")
+            .field("username", &self.username)
+            .field("device_id", &self.device_id)
+            .finish()
+    }
 }
 
 /// What `state.json` holds: no secrets. `token` is read only to migrate a pre-keystore file
@@ -246,7 +259,7 @@ pub const MIN_AGENT_FOR_APPROVAL: &str = "agent-v1.43.0-rc.1";
 
 /// A pairing request waiting for the owner to answer at the PC. `client_nonce` is the secret that
 /// authorises polling, so it stays on the Rust side and is not part of what the window sees.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PairWait {
     pub host: String,
     pub fingerprint: String,
@@ -255,6 +268,20 @@ pub struct PairWait {
     /// What the owner must see on the PC too, before approving.
     pub match_code: String,
     pub expires_in_seconds: u64,
+}
+
+// Not derived: the client nonce is the secret that authorises polling.
+impl std::fmt::Debug for PairWait {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PairWait")
+            .field("host", &self.host)
+            .field("fingerprint", &self.fingerprint)
+            .field("request_id", &self.request_id)
+            .field("client_nonce", &"<redacted>")
+            .field("match_code", &self.match_code)
+            .field("expires_in_seconds", &self.expires_in_seconds)
+            .finish()
+    }
 }
 
 /// Asks the agent to have the owner approve this computer at the PC. Nothing is stored until

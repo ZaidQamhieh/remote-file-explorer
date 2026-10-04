@@ -377,13 +377,25 @@ struct PollBody {
     cert_fingerprint: String,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoginOk {
     pub device_token: String,
     pub device_id: String,
     pub agent_name: String,
     pub cert_fingerprint: String,
+}
+
+// Not derived: a `{:?}` in a log line or a test failure must not print the device token.
+impl std::fmt::Debug for LoginOk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginOk")
+            .field("device_token", &"<redacted>")
+            .field("device_id", &self.device_id)
+            .field("agent_name", &self.agent_name)
+            .field("cert_fingerprint", &self.cert_fingerprint)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

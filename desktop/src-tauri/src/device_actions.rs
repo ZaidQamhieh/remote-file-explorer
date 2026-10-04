@@ -38,6 +38,10 @@ pub const SELF_UNCONFIRMED: &str =
     "This is the computer you are using. Revoking or removing it signs you out here, and \
      changing its own access can lock it out. Confirm that you mean it.";
 
+/// The saved login has no device id and the agent did not say which device this computer is.
+pub const UNKNOWN_SELF: &str =
+    "Could not tell which device is this computer, so nothing was changed. Refresh the list and try again.";
+
 /// Turning on launching apps without viewing them (the agent refuses it too).
 pub const LAUNCH_NEEDS_VIEW: &str =
     "Allowing a device to launch apps needs it to be allowed to view apps as well.";
@@ -171,9 +175,28 @@ fn logged<T>(what: &str, r: Result<T, AgentError>) -> Result<T, AgentError> {
     r
 }
 
+/// This computer's own device id. The saved one is used when there is one; a login saved without
+/// it (an older state file) asks the agent which listed device is the current one. When that cannot
+/// be answered the action is refused: guessing "not mine" could revoke the device this window runs on.
+async fn own_device_id(s: &Session) -> Result<String, AgentError> {
+    if !s.device_id.is_empty() {
+        return Ok(s.device_id.clone());
+    }
+    let list = s
+        .client
+        .call_device_json(Method::GET, "/devices", &s.token, None)
+        .await?;
+    let all: Vec<DeviceAccess> = serde_json::from_value(list)
+        .map_err(|e| AgentError::Local(format!("unexpected response: {e}")))?;
+    all.into_iter()
+        .find(|d| d.current && !d.id.is_empty())
+        .map(|d| d.id)
+        .ok_or_else(|| AgentError::Local(UNKNOWN_SELF.into()))
+}
+
 /// Refuses an action on this computer's own device unless the caller confirmed it.
-fn guard_self(s: &Session, id: &str, confirm_self: bool) -> Result<bool, AgentError> {
-    let is_self = !s.device_id.is_empty() && s.device_id == id;
+async fn guard_self(s: &Session, id: &str, confirm_self: bool) -> Result<bool, AgentError> {
+    let is_self = own_device_id(s).await? == id;
     if is_self && !confirm_self {
         return Err(AgentError::Local(SELF_UNCONFIRMED.into()));
     }
@@ -234,7 +257,7 @@ pub async fn set_access(
     }
     let r = async {
         let s = session(dir, store).await?;
-        guard_self(&s, id, confirm_self)?;
+        guard_self(&s, id, confirm_self).await?;
         let body = serde_json::to_value(patch)
             .map_err(|e| AgentError::Local(format!("unexpected request: {e}")))?;
         let v = s
@@ -261,7 +284,7 @@ async fn delete(
 ) -> Result<Done, AgentError> {
     check_id(id)?;
     let s = session(dir, store).await?;
-    let is_self = guard_self(&s, id, confirm_self)?;
+    let is_self = guard_self(&s, id, confirm_self).await?;
     let path = if purge {
         format!("/devices/{id}?purge=true")
     } else {
@@ -271,10 +294,12 @@ async fn delete(
         .call_device_json(Method::DELETE, &path, &s.token, None)
         .await?;
     if is_self {
-        // The agent now refuses this token; drop it here too, as signing out does.
+        // The agent now refuses this token; drop it here too, as signing out does. Only that token:
+        // the user may have switched to another host while the call ran.
         let dir = dir.to_path_buf();
+        let token = s.token.clone();
         store
-            .run(move |st| flows::sign_out(&dir, st))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }

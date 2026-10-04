@@ -249,6 +249,7 @@ Messages of these actions:
 | That device is no longer on the agent | The agent answered 404: the device was removed (here, on the PC or from another computer) before the action arrived. The list has been loaded again; nothing else is needed. |
 | This agent does not support that device action | The agent is too old for it. Update the agent, or use `rfe-agent` on the PC. |
 | This is the computer you are using | You tried to revoke, remove or change the access of this computer's own device without the second, confirming press. Press the button again to confirm, or leave it. |
+| Could not tell which device is this computer | The saved login has no device id and the agent did not say which listed device is this one, so nothing was changed. Refresh the list and try again. |
 | Press the button again to sign this computer out | The warning shown when you arm Revoke or Remove on this computer's own row. Nothing has happened yet; press the button again to do it, or press somewhere else to cancel. |
 | Allowing a device to launch apps needs it to be allowed to view apps as well. | Turn on "See the apps on this PC" together with "Start approved apps". |
 | No setting was changed | Saving needs at least one changed setting. |
@@ -297,7 +298,7 @@ Messages from this app:
 | The PC approved this computer, but saving the login failed | The agent hands out the approval only once and the keystore refused to keep it. Fix the keystore ([keystore.md](keystore.md)), then ask again. |
 | not signed in | Sign in first. |
 | is no longer a trusted agent; connect and compare its fingerprint again | The pin was forgotten while a login for it existed. Connect to the agent again from the first screen. |
-| Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. |
+| Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. Making one also removes the logins saved for your other agents (their devices stay registered on those agents until removed there), so you sign in to each again. |
 | Signed out on this computer only | The agent could not be told. Revoke this computer on the PC (`rfe-agent revoke <id>`) so its old login stops working. |
 | is damaged (...); delete it to create a new device identity | An `identity.json` left by an early version cannot be read. Delete that file; the app makes a new device key at the next sign-in. |
 | cannot start network discovery, network discovery stopped | The app could not listen for mDNS answers (no network interface, or the system refused). Type the agent's address instead. |

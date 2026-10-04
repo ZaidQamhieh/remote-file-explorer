@@ -6,7 +6,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{account, Offloaded};
+use crate::secrets::Offloaded;
 use serde::Serialize;
 use std::path::Path;
 
@@ -106,8 +106,9 @@ async fn generate_inner(dir: &Path, store: &Offloaded) -> Result<CodeView, Agent
                 // The agent refuses this token: drop the dead login so the window goes back to
                 // sign-in, as for the device list.
                 let dir = dir.to_path_buf();
+                let token = saved.token.clone();
                 store
-                    .run(move |st| st.delete(&account("token", &dir)))
+                    .run(move |st| flows::drop_refused_token(&dir, st, &token))
                     .await
                     .map_err(AgentError::Local)?;
             }

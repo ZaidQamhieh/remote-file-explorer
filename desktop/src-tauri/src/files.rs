@@ -11,7 +11,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{account, Offloaded, OsKeystore};
+use crate::secrets::{Offloaded, OsKeystore};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::Path;
@@ -322,6 +322,7 @@ async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String),
 async fn settle<T>(
     dir: &Path,
     store: &Offloaded,
+    token: &str,
     op: &str,
     r: Result<T, AgentError>,
 ) -> Result<T, AgentError> {
@@ -335,8 +336,9 @@ async fn settle<T>(
     }
     if let Err(AgentError::Server { status: 401, .. }) = &r {
         let dir = dir.to_path_buf();
+        let token = token.to_string();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }
@@ -415,7 +417,7 @@ pub async fn roots(dir: &Path, store: &Offloaded) -> Result<Roots, AgentError> {
         })
     }
     .await;
-    settle(dir, store, "roots", r).await
+    settle(dir, store, &token, "roots", r).await
 }
 
 /// One page of the folder at `path`. `cursor` is the previous page's `next_cursor`; `limit` is
@@ -457,7 +459,7 @@ pub async fn list(
         })
     }
     .await;
-    settle(dir, store, "list", r).await
+    settle(dir, store, &token, "list", r).await
 }
 
 /// The agent's own record of one entry. Used for a symlink that is not known to be a folder, so the
@@ -474,7 +476,7 @@ pub async fn meta(dir: &Path, store: &Offloaded, path: &str) -> Result<FileEntry
             None,
         )
         .await;
-    settle(dir, store, "meta", r).await
+    settle(dir, store, &token, "meta", r).await
 }
 
 /// Makes a folder called `name` inside `parent`. The agent refuses it for a login without the
@@ -496,7 +498,7 @@ pub async fn create_folder(
             Some(json!({ "path": target })),
         )
         .await;
-    settle(dir, store, "new folder", r).await
+    settle(dir, store, &token, "new folder", r).await
 }
 
 /// Renames the entry at `path` to `new_name` inside the same folder. It cannot move an entry: the
@@ -520,7 +522,7 @@ pub async fn rename(
             Some(json!({ "src": path, "dst": target })),
         )
         .await;
-    settle(dir, store, "rename", r).await
+    settle(dir, store, &token, "rename", r).await
 }
 
 /// Moves the entry at `path` to the agent's trash, where it can be restored. There is no way to
@@ -549,7 +551,7 @@ pub async fn trash(dir: &Path, store: &Offloaded, path: &str) -> Result<(), Agen
         }
     }
     .await;
-    settle(dir, store, "delete to trash", r).await
+    settle(dir, store, &token, "delete to trash", r).await
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -513,6 +513,110 @@ async fn an_interrupted_upload_sends_only_the_missing_chunks() {
     );
 }
 
+/// Rewrites `path` with `data` and gives it a modification time well after the old one, as an edit
+/// a minute later would (the agent's validator has one-second resolution).
+fn edit_later(path: &Path, data: &[u8]) {
+    let before = std::fs::metadata(path).unwrap().modified().unwrap();
+    std::fs::write(path, data).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(before + Duration::from_secs(60))
+        .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_download_never_continues_old_bytes_into_a_file_that_changed() {
+    let rig = Rig::new().await;
+    let old = pattern(10 * MIB);
+    let new: Vec<u8> = old.iter().map(|b| b ^ 0x5a).collect();
+    std::fs::write(rig.remote("big.bin"), &old).unwrap();
+    let proxy = Proxy::start(&rig.host);
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+
+    proxy.cut_after_download_bytes((3 * MIB + MIB / 2) as u64);
+    let id = t
+        .start_download(
+            Ctx::fixed(rig.conn_via(&proxy.addr), folder.clone()),
+            &rig.remote("big.bin"),
+        )
+        .await
+        .unwrap();
+    let failed = finished(&t, &id).await;
+    assert_eq!(failed.state, State::Failed, "{failed:?}");
+    assert!(
+        failed.done > 0 && failed.done < old.len() as u64,
+        "{failed:?}"
+    );
+
+    // Same length, other bytes: only the version of the file tells the two apart (a mixed file would
+    // still be the right size).
+    edit_later(Path::new(&rig.remote("big.bin")), &new);
+    proxy.heal();
+    t.retry(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert!(v.verified, "{v:?}");
+    assert_eq!(
+        sha256_file(&folder.join("big.bin")),
+        hex::encode(Sha256::digest(&new)),
+        "the file is the new one, whole"
+    );
+    // It started over: the retry moved the whole file, not just the missing part.
+    assert!(
+        proxy.to_client.load(Ordering::SeqCst) >= new.len() as u64,
+        "the retry moved {} bytes",
+        proxy.to_client.load(Ordering::SeqCst)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_upload_session_for_a_file_that_changed_is_closed_on_the_agent() {
+    let rig = Rig::new().await;
+    let old = pattern(10 * MIB);
+    let new: Vec<u8> = old.iter().map(|b| b ^ 0x5a).collect();
+    let src = TempDir::new().unwrap();
+    let local = src.path().join("up.bin");
+    std::fs::write(&local, &old).unwrap();
+    let proxy = Proxy::start(&rig.host);
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+
+    proxy.cut_after_upload_bytes((3 * MIB + MIB / 2) as u64);
+    let id = t
+        .start_upload(
+            Ctx::fixed(rig.conn_via(&proxy.addr), folder),
+            local.to_str().unwrap(),
+            rig.root(),
+        )
+        .await
+        .unwrap();
+    let failed = finished(&t, &id).await;
+    assert_eq!(failed.state, State::Failed, "{failed:?}");
+    assert_eq!(
+        rig.temp_files().len(),
+        1,
+        "the half-sent upload is on the agent"
+    );
+
+    edit_later(&local, &new);
+    proxy.heal();
+    t.retry(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(
+        sha256_file(&rig.roots.path().join("up.bin")),
+        hex::encode(Sha256::digest(&new))
+    );
+    assert!(
+        rig.temp_files().is_empty(),
+        "the old session's temporary file was left behind: {:?}",
+        rig.temp_files()
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancelling_a_download_leaves_no_file_at_all() {
     let rig = Rig::new().await;

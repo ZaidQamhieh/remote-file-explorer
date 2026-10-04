@@ -11,7 +11,7 @@
 use crate::agent_client::{AgentClient, AgentError, WaitingPairRequest};
 use crate::applog;
 use crate::flows::{self, MIN_AGENT_FOR_APPROVAL};
-use crate::secrets::{account, Offloaded};
+use crate::secrets::Offloaded;
 use serde::Serialize;
 use std::path::Path;
 
@@ -160,12 +160,14 @@ async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String),
 async fn forget_dead_token<T>(
     dir: &Path,
     store: &Offloaded,
+    token: &str,
     r: Result<T, AgentError>,
 ) -> Result<T, AgentError> {
     if let Err(AgentError::Server { status: 401, .. }) = &r {
         let dir = dir.to_path_buf();
+        let token = token.to_string();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }
@@ -207,7 +209,7 @@ async fn load_inner(dir: &Path, store: &Offloaded) -> Result<Inbox, AgentError> 
             limit: LIMIT,
             ttl_seconds: TTL_SECONDS,
         }),
-        Err(e) => forget_dead_token(dir, store, Err(too_old(e))).await,
+        Err(e) => forget_dead_token(dir, store, &token, Err(too_old(e))).await,
     }
 }
 
@@ -246,7 +248,7 @@ async fn answer_inner(
         Err(AgentError::Server {
             status: 404, code, ..
         }) if code == "NOT_FOUND" => Ok(Answer::Gone),
-        Err(e) => forget_dead_token(dir, store, Err(too_old(e))).await,
+        Err(e) => forget_dead_token(dir, store, &token, Err(too_old(e))).await,
     }
 }
 

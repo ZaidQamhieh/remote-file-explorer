@@ -487,6 +487,36 @@ async fn acting_on_this_computers_own_device_needs_a_confirmation_and_signs_it_o
 }
 
 #[tokio::test]
+async fn a_login_saved_without_its_device_id_still_needs_the_self_confirmation() {
+    let f = fixture().await;
+    // An older state file: the login is there, the device id is not.
+    let state = f.admin().join("state.json");
+    let text = std::fs::read_to_string(&state).unwrap();
+    assert!(text.contains(&f.admin_id), "{text}");
+    std::fs::write(&state, text.replace(&f.admin_id, "")).unwrap();
+    assert!(flows::load_saved(f.admin(), &f.store)
+        .unwrap()
+        .device_id
+        .is_empty());
+
+    let e = actions::revoke(f.admin(), &f.store, &f.admin_id, false)
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), SELF_UNCONFIRMED);
+    assert!(
+        f.cli_row(&f.admin_id).unwrap().contains("active"),
+        "nothing reached the agent"
+    );
+
+    // Another device is still no trouble, and needs no confirmation.
+    let (_dir, other) = f.pair_other().await;
+    actions::revoke(f.admin(), &f.store, &other.device_id, false)
+        .await
+        .unwrap();
+    assert!(f.cli_row(&other.device_id).unwrap().contains("revoked"));
+}
+
+#[tokio::test]
 async fn an_ordinary_session_may_still_remove_itself_when_it_confirms() {
     let f = fixture().await;
     let (dir, me) = f.pair_other().await;

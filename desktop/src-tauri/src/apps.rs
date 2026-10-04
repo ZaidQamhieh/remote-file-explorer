@@ -9,7 +9,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{account, Offloaded, OsKeystore};
+use crate::secrets::{Offloaded, OsKeystore};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::Manager;
@@ -187,12 +187,14 @@ async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String),
 async fn drop_dead_token<T>(
     dir: &Path,
     store: &Offloaded,
+    token: &str,
     r: &Result<T, AgentError>,
 ) -> Result<(), AgentError> {
     if let Err(AgentError::Server { status: 401, .. }) = r {
         let dir = dir.to_path_buf();
+        let token = token.to_string();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }
@@ -202,7 +204,7 @@ async fn drop_dead_token<T>(
 pub async fn list(dir: &Path, store: &Offloaded) -> Result<HostAppCatalog, AgentError> {
     let (client, token) = session(dir, store).await?;
     let r = client.host_apps(&token).await;
-    drop_dead_token(dir, store, &r).await?;
+    drop_dead_token(dir, store, &token, &r).await?;
     match &r {
         Ok(c) => applog::debug(&format!("listed {} host apps", c.apps.len())),
         Err(e) => applog::error(&format!("listing host apps failed: {e}")),
@@ -215,7 +217,7 @@ pub async fn launch(dir: &Path, store: &Offloaded, id: &str) -> Result<(), Agent
     validate_app_id(id)?;
     let (client, token) = session(dir, store).await?;
     let r = client.launch_host_app(&token, id).await;
-    drop_dead_token(dir, store, &r).await?;
+    drop_dead_token(dir, store, &token, &r).await?;
     match &r {
         Ok(()) => applog::info(&format!("asked the host to start {id}")),
         Err(e) => applog::error(&format!("starting {id} failed: {e}")),

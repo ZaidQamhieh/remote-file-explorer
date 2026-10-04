@@ -59,7 +59,8 @@ Every one of these appears before the agent is contacted, so a failed attempt ne
   there"); reading or writing one that does exist needs the unlock. A locked keyring therefore shows
   up at sign-in or when the saved login is first used, not before.
 - Signing out removes the token from the keystore. The device key stays, so signing in again is the
-  same device. "Create a new device key" on the sign-in screen replaces it.
+  same device. "Create a new device key" on the sign-in screen replaces it, and removes the logins parked for
+  your other saved agents, since they were made with the old key.
 
 ## Testing against a real provider
 

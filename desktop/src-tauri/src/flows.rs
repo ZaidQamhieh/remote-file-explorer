@@ -291,6 +291,9 @@ fn logged<T>(what: &str, r: Result<T, AgentError>) -> Result<T, AgentError> {
 /// earlier version is moved into the keystore first, then removed from the file; if the
 /// keystore refuses, this fails and the file is left as it was.
 pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> {
+    // Under the saved-hosts lock: a switch in progress has changed the token and not yet the
+    // address (or the reverse), and this must never pair one agent's address with another's token.
+    let _held = crate::hosts::lock();
     let mut f = read_state(dir)?;
     let acct = account("token", dir);
     if !f.token.is_empty() {
@@ -308,6 +311,7 @@ pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> 
 
 /// Stores the token in the keystore (or deletes it when empty), then the rest in `state.json`.
 pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String> {
+    let _held = crate::hosts::lock();
     // A different agent replacing the active session must not destroy its login (saved hosts).
     // If the saved-hosts file cannot be used (damaged, or from a newer app) a fresh sign-in still goes
     // through: an approval token is single-use and would be lost, and the old login was never
@@ -624,21 +628,41 @@ async fn list_devices_inner(dir: &Path, store: &Offloaded) -> Result<Vec<Device>
         // The agent refuses this token: it was revoked or removed there. Drop the dead token so
         // the window goes back to sign-in, and keep the pin, the account name and the device key.
         let dir = dir.to_path_buf();
+        let token = s.token.clone();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }
     listed
 }
 
+/// Drops the login an agent refused (401), but only the login that was refused. The caller sent
+/// `token` some time ago; the user may have switched to another host since, or signed in again,
+/// and that session must not lose its token to a refusal about another one. A token is valid at
+/// one agent only, so a match on the token is a match on the login: the active one is deleted when
+/// it is that token, otherwise the parked copy of it (the host was switched away from).
+pub fn drop_refused_token(dir: &Path, store: &dyn SecretStore, token: &str) -> Result<(), String> {
+    if token.is_empty() {
+        return Ok(());
+    }
+    let _held = crate::hosts::lock();
+    if load_saved(dir, store)?.token == token {
+        return store.delete(&account("token", dir));
+    }
+    crate::hosts::forget_parked_token(dir, store, token)
+}
+
 /// Creates a new identity for this computer on the user's request: the next sign-in enrolls a
 /// new device row. Refused while signed in, because the saved login belongs to the old key's
 /// device and would be left behind on the agent.
 pub fn reset_device_key(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+    let _held = crate::hosts::lock();
     if !load_saved(dir, store)?.token.is_empty() {
         return Err("Sign out first; the saved login belongs to the current device key.".into());
     }
+    // The logins parked for the other saved hosts were made with the key being retired too.
+    crate::hosts::forget_all_parked(dir, store)?;
     Identity::reset(dir, store)?;
     applog::info("device key reset");
     Ok(())
@@ -647,6 +671,7 @@ pub fn reset_device_key(dir: &Path, store: &dyn SecretStore) -> Result<(), Strin
 /// Removes the token from `state.json` first (always possible), then from the keystore, so a
 /// locked keystore can never leave a plaintext copy behind.
 pub fn sign_out(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+    let _held = crate::hosts::lock();
     let mut f = read_state(dir)?;
     if !f.token.is_empty() {
         f.token.clear();
@@ -749,6 +774,7 @@ pub struct ForgetPin {
 /// session rested on that trust. That cannot revoke the device, because the agent is no longer
 /// trusted enough to talk to.
 pub fn forget_pin(dir: &Path, store: &dyn SecretStore, host: &str) -> Result<ForgetPin, String> {
+    let _held = crate::hosts::lock();
     let key = pin_key(host);
     // No login parked for this agent outlives the trust in it (saved hosts).
     crate::hosts::forget_parked(dir, store, &key)?;

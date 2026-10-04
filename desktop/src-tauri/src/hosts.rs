@@ -108,7 +108,7 @@ static LOCK: Mutex<()> = Mutex::new(());
 
 /// Serialises the host operations. Re-entrant on one thread, because `switch` calls `flows::save`,
 /// which calls back into [`park_before_replace`].
-struct Held(Option<MutexGuard<'static, ()>>);
+pub(crate) struct Held(Option<MutexGuard<'static, ()>>);
 
 impl Drop for Held {
     fn drop(&mut self) {
@@ -118,7 +118,7 @@ impl Drop for Held {
     }
 }
 
-fn lock() -> Held {
+pub(crate) fn lock() -> Held {
     if HELD.with(|h| h.get()) {
         return Held(None);
     }
@@ -172,6 +172,29 @@ pub fn park_before_replace(
     let mut file = read_file(dir)?;
     upsert(&mut file, &cur.host, &cur.username, &cur.device_id);
     write_file(dir, &file)
+}
+
+/// Removes every parked login, for every saved host. A reset device key retires the identity those
+/// logins were made with, so none of them may outlive it.
+pub fn forget_all_parked(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+    let _held = lock();
+    for r in &read_file(dir)?.hosts {
+        store.delete(&parked_account(dir, &r.key))?;
+    }
+    Ok(())
+}
+
+/// Removes the parked login that equals `token`, if any: the agent refused it after the user had
+/// already switched to another host. A token is valid at one agent only, so equal means the same login.
+pub fn forget_parked_token(dir: &Path, store: &dyn SecretStore, token: &str) -> Result<(), String> {
+    let _held = lock();
+    for r in &read_file(dir)?.hosts {
+        let acct = parked_account(dir, &r.key);
+        if store.get(&acct)?.as_deref() == Some(token) {
+            store.delete(&acct)?;
+        }
+    }
+    Ok(())
 }
 
 /// Removes a parked login. Called when a pin is forgotten, so no token outlives its trust.

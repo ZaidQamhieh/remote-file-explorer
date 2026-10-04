@@ -162,11 +162,14 @@ struct Session {
     total_chunks: usize,
 }
 
-/// What an upload keeps between attempts.
+/// What a transfer keeps between attempts.
 #[derive(Default)]
 struct Resume {
     session: Option<Session>,
     ident: Option<Ident>,
+    /// A download's validator of the remote file (its ETag or Last-Modified) as of the first byte
+    /// kept in the part file; a resume only goes on if the agent still has that version.
+    remote_version: Option<String>,
 }
 
 struct Item {
@@ -807,6 +810,19 @@ fn parse_content_range(h: &reqwest::header::HeaderMap) -> Option<(u64, u64, u64)
     (a <= b && b < total).then_some((a, b, total))
 }
 
+/// What identifies this version of the remote file: a strong ETag, else its Last-Modified. The
+/// agent sends the latter for every file; `If-Range` with it makes a changed file come back whole
+/// instead of as a continuation of the old bytes.
+fn validator(h: &reqwest::header::HeaderMap) -> Option<String> {
+    let get = |name| h.get(name).and_then(|v| v.to_str().ok()).map(str::trim);
+    match get(reqwest::header::ETAG) {
+        Some(tag) if !tag.is_empty() && !tag.starts_with("W/") => Some(tag.to_string()),
+        _ => get(reqwest::header::LAST_MODIFIED)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string),
+    }
+}
+
 /// The total from an unsatisfiable range's `Content-Range: bytes */total`.
 fn parse_unsatisfied(h: &reqwest::header::HeaderMap) -> Option<u64> {
     h.get("content-range")?
@@ -908,12 +924,13 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
 
     let mut total: Option<u64> = None;
     let mut restarted = false;
+    let mut version = lock(&item.resume).remote_version.clone();
     loop {
         let offset = part_len(part)?;
         if total.is_some_and(|t| offset >= t) {
             break;
         }
-        let resp = http
+        let mut req = http
             .get(format!("{base}/content"))
             .query(&[("path", remote.as_str())])
             .bearer_auth(&conn.token)
@@ -922,10 +939,19 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
             // A gzip body would not line up with byte offsets; a ranged request is never gzipped,
             // and this keeps the first one honest too.
             .header("Accept-Encoding", "identity")
-            .timeout(SEGMENT_TIMEOUT)
-            .send()
-            .await
-            .map_err(net)?;
+            .timeout(SEGMENT_TIMEOUT);
+        // Continuing is only right if the file is the one the first bytes came from; if not, the
+        // agent answers with the whole new file (200) and the part is started over below.
+        if let (true, Some(v)) = (offset > 0, &version) {
+            req = req.header("If-Range", v);
+        }
+        let resp = req.send().await.map_err(net)?;
+        // A response that starts at byte 0 says which version the part file will hold.
+        let first_bytes = offset == 0 || resp.status().as_u16() == 200;
+        if first_bytes {
+            version = validator(resp.headers());
+            lock(&item.resume).remote_version = version.clone();
+        }
         match resp.status().as_u16() {
             206 => {
                 let (first, last, size) = parse_content_range(resp.headers())
@@ -1040,14 +1066,23 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
     let size = ident.size;
     item.set_progress(0, size);
 
-    // Is the session from an earlier attempt still good, and for the same file?
-    let saved = {
-        let r = lock(&item.resume);
-        match (&r.session, &r.ident) {
-            (Some(s), Some(i)) if *i == ident => Some(s.clone()),
-            _ => None,
+    // Is the session from an earlier attempt still good, and for the same file? One for a file
+    // that has changed since is of no use and would sit on the agent (with its temporary file), so
+    // it is closed there before a new one is opened.
+    let (saved, stale) = {
+        let mut r = lock(&item.resume);
+        match (r.session.clone(), &r.ident) {
+            (Some(s), Some(i)) if *i == ident => (Some(s), None),
+            (Some(s), _) => {
+                r.session = None;
+                (None, Some(s))
+            }
+            _ => (None, None),
         }
     };
+    if let Some(s) = stale {
+        delete_session(&conn, &s.id).await;
+    }
     let mut have: HashSet<usize> = HashSet::new();
     let mut session = None;
     if let Some(s) = saved {

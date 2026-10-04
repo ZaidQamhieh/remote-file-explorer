@@ -10,7 +10,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{account, Offloaded};
+use crate::secrets::Offloaded;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -132,11 +132,17 @@ async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String),
     Ok((AgentClient::pinned(&saved.host, &pinned)?, saved.token))
 }
 
-async fn drop_dead_token(dir: &Path, store: &Offloaded, e: &AgentError) -> Result<(), AgentError> {
+async fn drop_dead_token(
+    dir: &Path,
+    store: &Offloaded,
+    token: &str,
+    e: &AgentError,
+) -> Result<(), AgentError> {
     if let AgentError::Server { status: 401, .. } = e {
         let dir = dir.to_path_buf();
+        let token = token.to_string();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }
@@ -204,7 +210,7 @@ async fn fetch_audit_inner(
             ..Default::default()
         }),
         Err(e) => {
-            drop_dead_token(dir, store, &e).await?;
+            drop_dead_token(dir, store, &token, &e).await?;
             Err(e)
         }
     }
@@ -246,7 +252,7 @@ async fn fetch_logs_inner(dir: &Path, store: &Offloaded) -> Result<LogsReply, Ag
             ..Default::default()
         }),
         Err(e) => {
-            drop_dead_token(dir, store, &e).await?;
+            drop_dead_token(dir, store, &token, &e).await?;
             Err(e)
         }
     }

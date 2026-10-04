@@ -473,7 +473,7 @@
       await invoke("reset_device_key");
       delete b.dataset.armed;
       b.textContent = "Create a new device key for this computer";
-      say("A new device key will be created the next time you sign in. The old one stays registered on the agent until it is removed there.");
+      say("A new device key will be created the next time you sign in. The old one stays registered on the agent until it is removed there. Logins saved for your other agents were removed too; sign in to each again.");
     });
   });
 

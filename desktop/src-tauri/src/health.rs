@@ -11,7 +11,7 @@
 use crate::agent_client::{normalize_fingerprint, AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{account, Offloaded};
+use crate::secrets::Offloaded;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
@@ -172,8 +172,9 @@ async fn agent_health_inner(dir: &Path, store: &Offloaded) -> Result<Snapshot, A
     let got = snapshot(&client, &s.host, &pinned, &s.token, REQUEST_TIMEOUT).await;
     if let Err(AgentError::Server { status: 401, .. }) = &got {
         let dir = dir.to_path_buf();
+        let token = s.token.clone();
         store
-            .run(move |st| st.delete(&account("token", &dir)))
+            .run(move |st| flows::drop_refused_token(&dir, st, &token))
             .await
             .map_err(AgentError::Local)?;
     }

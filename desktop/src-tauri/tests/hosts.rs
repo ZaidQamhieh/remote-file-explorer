@@ -176,6 +176,100 @@ fn two_hosts_keep_separate_tokens_and_switching_moves_each_one() {
 }
 
 #[test]
+fn a_refusal_from_a_host_that_was_switched_away_from_drops_only_its_own_login() {
+    let dir = TempDir::new().unwrap();
+    let store = MemoryStore::default();
+    two_hosts(dir.path(), &store); // B is active, A is parked
+    let tok_a = format!("token-for-{A}");
+    let tok_b = format!("token-for-{B}");
+
+    // A call to A was in flight when the user switched to B; A answers 401 now.
+    flows::drop_refused_token(dir.path(), &store, &tok_a).unwrap();
+    assert_eq!(
+        flows::load_saved(dir.path(), &store).unwrap().token,
+        tok_b,
+        "the active host keeps its login"
+    );
+    assert!(store
+        .get(&hosts::parked_account(dir.path(), A))
+        .unwrap()
+        .is_none());
+
+    // A token nobody holds changes nothing, and neither does an empty one.
+    flows::drop_refused_token(dir.path(), &store, "token-of-nobody").unwrap();
+    flows::drop_refused_token(dir.path(), &store, "").unwrap();
+    assert_eq!(flows::load_saved(dir.path(), &store).unwrap().token, tok_b);
+
+    // The refused login is the active one: it goes, and a parked login of another host stays.
+    let dir2 = TempDir::new().unwrap();
+    let store2 = MemoryStore::default();
+    two_hosts(dir2.path(), &store2);
+    flows::drop_refused_token(dir2.path(), &store2, &tok_b).unwrap();
+    assert!(flows::load_saved(dir2.path(), &store2)
+        .unwrap()
+        .token
+        .is_empty());
+    assert_eq!(
+        store2
+            .get(&hosts::parked_account(dir2.path(), A))
+            .unwrap()
+            .as_deref(),
+        Some(tok_a.as_str())
+    );
+}
+
+#[test]
+fn a_device_key_reset_leaves_no_parked_login_of_the_old_key() {
+    let dir = TempDir::new().unwrap();
+    let store = MemoryStore::default();
+    two_hosts(dir.path(), &store);
+    // Signed in to B: refused as before.
+    assert!(flows::reset_device_key(dir.path(), &store).is_err());
+    assert!(store
+        .get(&hosts::parked_account(dir.path(), A))
+        .unwrap()
+        .is_some());
+
+    flows::sign_out(dir.path(), &store).unwrap();
+    flows::reset_device_key(dir.path(), &store).unwrap();
+    for key in [A, B] {
+        assert!(
+            store
+                .get(&hosts::parked_account(dir.path(), key))
+                .unwrap()
+                .is_none(),
+            "{key}"
+        );
+    }
+    let list = hosts::list(dir.path(), &store).unwrap();
+    assert!(list.iter().all(|h| !h.signed_in), "{list:?}");
+}
+
+#[test]
+fn reading_the_session_while_hosts_switch_never_pairs_an_address_with_the_other_token() {
+    let dir = TempDir::new().unwrap();
+    let store = std::sync::Arc::new(MemoryStore::default());
+    two_hosts(dir.path(), &store);
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let switcher = {
+        let (dir, store, stop) = (dir.path().to_path_buf(), store.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut n = 0;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) && n < 400 {
+                hosts::switch(&dir, &*store, if n % 2 == 0 { A } else { B }).unwrap();
+                n += 1;
+            }
+        })
+    };
+    for _ in 0..2000 {
+        let s = flows::load_saved(dir.path(), &*store).unwrap();
+        assert_eq!(s.token, format!("token-for-{}", s.host), "{}", s.host);
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    switcher.join().unwrap();
+}
+
+#[test]
 fn the_app_opens_on_the_host_used_last() {
     let dir = TempDir::new().unwrap();
     let store = MemoryStore::default();

@@ -78,6 +78,19 @@ impl Identity {
         }
     }
 
+    /// Deletes this computer's device key (and a leftover pre-keystore file), so the next sign-in
+    /// creates a new key and a new device id. Only ever called on the user's explicit request:
+    /// nothing else in the app removes the key, not even a refused sign-in.
+    pub fn reset(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+        let legacy_path = dir.join("identity.json");
+        store.delete(&account("identity", dir))?;
+        match std::fs::remove_file(&legacy_path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("remove {}: {e}", legacy_path.display())),
+        }
+    }
+
     /// Stores the identity and reads it back, so a keystore that accepts but loses the write
     /// is caught before the legacy file is removed or the key is used.
     fn save(&self, store: &dyn SecretStore, acct: &str) -> Result<(), String> {

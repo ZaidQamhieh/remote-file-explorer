@@ -130,6 +130,16 @@ impl Agent {
         cli(&["pair", verb, "-data", self.dir()]);
     }
 
+    /// Blocks a device on the agent, as the owner would at the PC.
+    pub fn revoke_cli(&self, device_id: &str) {
+        cli(&["revoke", "-data", self.dir(), device_id]);
+    }
+
+    /// Deletes a device row on the agent.
+    pub fn remove_cli(&self, device_id: &str) {
+        cli(&["remove", "-data", self.dir(), device_id]);
+    }
+
     pub fn devices_cli(&self) -> String {
         cli(&["devices", "-data", self.dir()])
     }

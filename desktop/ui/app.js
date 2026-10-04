@@ -107,7 +107,22 @@
 
   async function showDevices() {
     // Fetch first: a failure must not leave an empty or stale list on screen.
-    const list = await invoke("list_devices");
+    let list;
+    try {
+      list = await invoke("list_devices");
+    } catch (e) {
+      // The agent may have refused the saved login (revoked or removed there). The app then
+      // dropped the token but kept the pin, so go back to sign-in on that agent.
+      const saved = await invoke("saved_agent").catch(() => null);
+      if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+        setSession(saved);
+        pending = { host: saved.host, fingerprint: saved.fingerprint };
+        $("username").value = saved.username;
+        show("step-login");
+        loginMode(false);
+      }
+      throw e;
+    }
     renderDevices(list);
     show("step-devices");
   }
@@ -233,6 +248,22 @@
     }
   });
 
+  // Two clicks, and only from here: the app never replaces the device key by itself.
+  $("reset-key").addEventListener("click", (ev) => {
+    const b = ev.currentTarget;
+    if (!b.dataset.armed) {
+      b.dataset.armed = "1";
+      b.textContent = "Click again to create a new device key";
+      return;
+    }
+    run(b, async () => {
+      await invoke("reset_device_key");
+      delete b.dataset.armed;
+      b.textContent = "Create a new device key for this computer";
+      say("A new device key will be created the next time you sign in. The old one stays registered on the agent until it is removed there.");
+    });
+  });
+
   $("pair-back").addEventListener("click", () => {
     $("pairing-code").value = "";
     loginMode(false);
@@ -267,6 +298,8 @@
       }
     } catch (e) {
       say(String(e), true);
+      // showDevices may already have moved to sign-in; do not override that.
+      if (!$("step-login").hidden) return;
     }
     showConnect();
   })();

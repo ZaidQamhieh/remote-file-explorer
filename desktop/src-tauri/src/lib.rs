@@ -195,6 +195,14 @@ async fn poll_pairing(
 }
 
 #[tauri::command]
+async fn reset_device_key(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = data_dir(&app)?;
+    keystore()
+        .run(move |s| flows::reset_device_key(&dir, s))
+        .await
+}
+
+#[tauri::command]
 fn cancel_pairing(pending: tauri::State<'_, PendingPair>) {
     pending.0.lock().unwrap().take();
 }
@@ -224,6 +232,7 @@ pub fn run() {
             request_pairing,
             poll_pairing,
             cancel_pairing,
+            reset_device_key,
             list_devices,
             sign_out
         ])

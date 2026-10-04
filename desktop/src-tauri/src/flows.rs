@@ -338,9 +338,29 @@ pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, 
                 s.host
             ))
         })?;
-    AgentClient::pinned(&s.host, &pinned)?
+    let listed = AgentClient::pinned(&s.host, &pinned)?
         .devices(&s.token)
-        .await
+        .await;
+    if let Err(AgentError::Server { status: 401, .. }) = &listed {
+        // The agent refuses this token: it was revoked or removed there. Drop the dead token so
+        // the window goes back to sign-in, and keep the pin, the account name and the device key.
+        let dir = dir.to_path_buf();
+        store
+            .run(move |st| st.delete(&account("token", &dir)))
+            .await
+            .map_err(AgentError::Local)?;
+    }
+    listed
+}
+
+/// Creates a new identity for this computer on the user's request: the next sign-in enrolls a
+/// new device row. Refused while signed in, because the saved login belongs to the old key's
+/// device and would be left behind on the agent.
+pub fn reset_device_key(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+    if !load_saved(dir, store)?.token.is_empty() {
+        return Err("Sign out first; the saved login belongs to the current device key.".into());
+    }
+    Identity::reset(dir, store)
 }
 
 /// Removes the token from `state.json` first (always possible), then from the keystore, so a

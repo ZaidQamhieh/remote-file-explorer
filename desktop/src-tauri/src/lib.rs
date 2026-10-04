@@ -7,6 +7,7 @@ pub mod discovery;
 pub mod flows;
 mod fsutil;
 pub mod identity;
+pub mod pair_inbox;
 pub mod secrets;
 
 use agent_client::Device;
@@ -327,7 +328,9 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            pair_inbox::list_pair_requests,
+            pair_inbox::answer_pair_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

@@ -94,3 +94,10 @@ select { width: auto; min-width: 12em; }
 textarea { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [tabindex="-1"]:focus { outline: none; }
+
+/* ---- feature:pair-inbox ---- */
+#inbox-rows td { white-space: normal; vertical-align: top; }
+#inbox-rows .hint { margin: 4px 0 0; font-size: 12px; }
+#inbox-rows td.inbox-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 1px; white-space: nowrap; }
+#inbox-rows button.primary { margin-top: 0; }
+/* ---- end feature:pair-inbox ---- */

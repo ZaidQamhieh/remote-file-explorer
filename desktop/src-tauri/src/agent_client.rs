@@ -668,3 +668,84 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:pair-inbox ----
+// The owner's side of approve-on-PC pairing: list the requests waiting at the agent and answer
+// them. Admin session only; any other login gets 403 FORBIDDEN. Kept here because it needs the
+// pinned client's private parts; the flow around it is in `pair_inbox.rs`.
+
+/// One pairing request waiting for the owner, as the agent lists it. `label` and `remote_ip` come
+/// from whoever sent the request, so they are text to show, never to act on.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WaitingPairRequest {
+    pub id: String,
+    pub label: String,
+    pub match_code: String,
+    pub remote_ip: String,
+    /// Label of the paired device an approval would take over; empty for a new computer.
+    pub replaces: String,
+    /// RFC 3339, UTC.
+    pub expires_at: String,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct WaitingPairRequests {
+    requests: Vec<WaitingPairRequest>,
+}
+
+/// Only what the agent makes ids from; nothing else may enter a URL.
+fn valid_pair_request_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+impl AgentClient {
+    /// Lists the requests waiting for the owner (`GET /pair/requests`), oldest first.
+    pub async fn waiting_pair_requests(
+        &self,
+        token: &str,
+    ) -> Result<Vec<WaitingPairRequest>, AgentError> {
+        let body: WaitingPairRequests = parse(
+            self.http
+                .get(format!("{}/pair/requests", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await?;
+        Ok(body.requests)
+    }
+
+    /// Approves or rejects one waiting request (`POST /pair/requests/{id}/approve|reject`).
+    /// `NOT_FOUND` means it expired or was answered already, here or on the PC.
+    pub async fn answer_pair_request(
+        &self,
+        token: &str,
+        request_id: &str,
+        approve: bool,
+    ) -> Result<(), AgentError> {
+        if !valid_pair_request_id(request_id) {
+            return Err(AgentError::Local(format!(
+                "unexpected request id {request_id:?}"
+            )));
+        }
+        let verb = if approve { "approve" } else { "reject" };
+        let resp = self
+            .http
+            .post(format!("{}/pair/requests/{request_id}/{verb}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(error_of(resp).await)
+        }
+    }
+}
+// ---- end feature:pair-inbox ----

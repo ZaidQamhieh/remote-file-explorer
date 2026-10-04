@@ -488,6 +488,249 @@
     }, "Signing out...")
   );
 
+  // ---- feature:pair-inbox ----
+  // The pairing-request inbox: what the agent holds for the owner to answer. The list refreshes on
+  // a timer only while this screen is showing (the `show` wrapper below starts and stops it).
+  // Rows are updated in place, not rebuilt, so a button the user has tabbed to keeps focus and a
+  // click always lands on the request it was drawn for.
+  steps.push("step-pair-inbox");
+  const inbox = { rows: new Map(), gen: 0, timer: null, ticks: 0, fetching: -1, failed: false };
+
+  const baseShow = show;
+  show = function (step) {
+    baseShow(step);
+    if (step === "step-pair-inbox") inboxEnter();
+    else inboxLeave();
+  };
+
+  function duration(s) {
+    return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + (s % 60) + " s";
+  }
+
+  function inboxLeave() {
+    inbox.gen++;
+    if (inbox.timer !== null) clearInterval(inbox.timer);
+    inbox.timer = null;
+  }
+
+  function inboxStartTimer() {
+    if (inbox.timer === null) inbox.timer = setInterval(inboxTick, 1000);
+  }
+
+  function inboxReset() {
+    inbox.rows.clear();
+    $("inbox-rows").replaceChildren();
+    $("inbox-wrap").hidden = true;
+    $("inbox-empty").hidden = true;
+    $("inbox-limit").hidden = true;
+    $("inbox-forbidden").hidden = true;
+  }
+
+  function inboxEnter() {
+    if (!current.signedIn) {
+      showConnect();
+      return;
+    }
+    inboxLeave();
+    inbox.ticks = 0;
+    inbox.failed = false;
+    inboxReset();
+    $("inbox-status").textContent = "Loading pairing requests...";
+    inboxStartTimer();
+    inboxFetch();
+  }
+
+  // The agent may have refused the saved login (revoked or removed there): the app dropped the
+  // token and kept the pin, so go back to sign-in on that agent, as the device list does.
+  async function inboxSessionEnded() {
+    const saved = await invoke("saved_agent").catch(() => null);
+    if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+      setSession(saved);
+      pending = { host: saved.host, fingerprint: saved.fingerprint };
+      $("username").value = saved.username;
+      show("step-login");
+      loginMode(false);
+    }
+  }
+
+  async function inboxFetch() {
+    const me = inbox.gen;
+    if (inbox.fetching === me) return;
+    inbox.fetching = me;
+    try {
+      let out;
+      try {
+        out = await invoke("list_pair_requests");
+      } catch (e) {
+        if (me !== inbox.gen) return;
+        inbox.failed = true;
+        $("inbox-status").textContent = "";
+        say(String(e), true);
+        await inboxSessionEnded();
+        return;
+      }
+      // The screen was left, or left and opened again, while the agent was answering.
+      if (me !== inbox.gen) return;
+      if (inbox.failed) {
+        inbox.failed = false;
+        say("");
+      }
+      inboxRender(out);
+    } finally {
+      if (inbox.fetching === me) inbox.fetching = -1;
+    }
+  }
+
+  function inboxRender(out) {
+    $("inbox-forbidden").hidden = !out.forbidden;
+    if (out.forbidden) {
+      // Nothing to poll for: this login can never see requests.
+      inboxLeave();
+      inboxReset();
+      $("inbox-forbidden").hidden = false;
+      $("inbox-status").textContent = "";
+      return;
+    }
+    const seen = new Set(out.requests.map((r) => r.id));
+    const gone = [...inbox.rows.keys()].filter((id) => !seen.has(id));
+    if (gone.length) {
+      const active = document.activeElement;
+      for (const id of gone) inbox.rows.delete(id);
+      $("inbox-rows").replaceChildren(...[...inbox.rows.values()].map((r) => r.tr));
+      // A row that disappeared must not take the keyboard's place with it.
+      if (active && typeof active.focus === "function" && active.isConnected) active.focus();
+      else if (active && active !== document.body) $("title-pair-inbox").focus();
+    }
+    for (const r of out.requests) {
+      let row = inbox.rows.get(r.id);
+      if (!row) {
+        row = inboxMakeRow(r);
+        inbox.rows.set(r.id, row);
+        $("inbox-rows").append(row.tr);
+      }
+      row.age = r.ageSeconds;
+      row.left = r.expiresInSeconds;
+      inboxPaint(row);
+    }
+    const n = out.requests.length;
+    $("inbox-wrap").hidden = n === 0;
+    $("inbox-empty").hidden = n !== 0;
+    $("inbox-limit").hidden = n < out.limit;
+    $("inbox-status").textContent = n ? n + (n === 1 ? " request waiting." : " requests waiting.") : "";
+  }
+
+  function inboxMakeRow(r) {
+    const row = { id: r.id, label: r.label, code: r.matchCode, age: 0, left: 0, armLeft: 0 };
+    const device = cell(r.label);
+    if (r.replaces) {
+      const note = document.createElement("div");
+      note.className = "hint";
+      note.textContent = "Takes over the paired device " + r.replaces + " (new login, access reset to browse-only).";
+      device.append(note);
+    }
+    row.waiting = cell("");
+    row.expires = cell("");
+    const who = r.label + ", code " + r.matchCode;
+    row.accept = document.createElement("button");
+    row.accept.type = "button";
+    row.accept.className = "primary";
+    row.reject = document.createElement("button");
+    row.reject.type = "button";
+    row.reject.textContent = "Reject";
+    row.reject.setAttribute("aria-label", "Reject " + who);
+    inboxDisarm(row);
+    row.accept.addEventListener("click", () => {
+      // Two presses: the first only arms the button, so a stray click grants nothing.
+      if (!row.accept.dataset.armed) {
+        row.accept.dataset.armed = "1";
+        row.armLeft = 8;
+        row.accept.textContent = "Press again to accept";
+        row.accept.setAttribute("aria-label", "Press again to accept " + who);
+        return;
+      }
+      inboxAnswer(row, true, row.accept);
+    });
+    row.reject.addEventListener("click", () => inboxAnswer(row, false, row.reject));
+    const actions = document.createElement("td");
+    const wrap = document.createElement("div");
+    wrap.className = "row";
+    wrap.append(row.accept, row.reject);
+    actions.append(wrap);
+    row.tr = document.createElement("tr");
+    row.tr.append(device, cell(r.address || "unknown"), row.waiting, row.expires, cell(r.matchCode, "inbox-code"), actions);
+    return row;
+  }
+
+  function inboxDisarm(row) {
+    delete row.accept.dataset.armed;
+    row.armLeft = 0;
+    row.accept.textContent = "Accept";
+    row.accept.setAttribute("aria-label", "Accept " + row.label + ", code " + row.code);
+  }
+
+  function inboxPaint(row) {
+    row.waiting.textContent = duration(row.age);
+    row.expires.textContent = row.left > 0 ? duration(row.left) : "expired";
+    row.accept.disabled = row.reject.disabled = row.left <= 0;
+  }
+
+  async function inboxAnswer(row, approve, button) {
+    const both = [row.accept, row.reject];
+    await run(button, async () => {
+      for (const b of both) b.disabled = true;
+      let out;
+      try {
+        out = await invoke("answer_pair_request", { id: row.id, approve });
+      } catch (e) {
+        inboxPaint(row);
+        await inboxSessionEnded();
+        throw e;
+      }
+      // Refresh before saying what happened, so the list already shows it.
+      await inboxFetch();
+      say(
+        out === "gone"
+          ? "That request already expired or was answered on the PC."
+          : (approve ? "Accepted " : "Rejected ") + row.label + "."
+      );
+      $("title-pair-inbox").focus();
+    });
+    // A row that is still there (the answer failed, or the list could not be refreshed) goes back
+    // to its resting state.
+    if (inbox.rows.get(row.id) === row) {
+      inboxDisarm(row);
+      inboxPaint(row);
+    }
+  }
+
+  function inboxTick() {
+    if ($("step-pair-inbox").hidden) {
+      inboxLeave();
+      return;
+    }
+    for (const row of inbox.rows.values()) {
+      row.left = Math.max(0, row.left - 1);
+      row.age = Math.min(120, row.age + 1);
+      if (row.armLeft && --row.armLeft === 0) inboxDisarm(row);
+      inboxPaint(row);
+    }
+    if (++inbox.ticks % 3 === 0) inboxFetch();
+  }
+
+  $("open-pair-inbox").addEventListener("click", () => {
+    say("");
+    show("step-pair-inbox");
+  });
+  $("inbox-back").addEventListener("click", () => {
+    say("");
+    show("step-devices");
+  });
+  $("inbox-refresh").addEventListener("click", () => {
+    inboxStartTimer();
+    inboxFetch();
+  });
+  // ---- end feature:pair-inbox ----
+
   (async function start() {
     try {
       // Reading the saved login can wait on the OS keystore's unlock prompt.

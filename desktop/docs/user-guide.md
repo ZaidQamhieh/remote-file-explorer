@@ -75,6 +75,37 @@ revokes that device on the agent and removes the saved login here. If the agent 
 the app signs out on this computer only and says so; the login then still works until it is revoked
 on the PC.
 
+<!-- feature:pair-inbox -->
+## Pairing requests
+
+When a phone or another computer asks to be paired with **Ask the PC to approve this computer**, you
+can answer it here instead of at the terminal. On the Paired devices screen press **Pairing
+requests**. It lists every request the agent is holding, oldest first:
+
+| Column | What it is |
+|---|---|
+| Device | The name the asking device gave itself. It is whatever that device sent, so do not trust it on its own. If the request would take over a device that is already paired, a line under the name says which one. |
+| From | The network address the request came from. |
+| Waiting, Expires in | How long ago it was made, and how long you have left. A request lasts 2 minutes. |
+| Match code | The code the agent worked out for this request. The device asking shows its own code. |
+
+**Accept only if the code matches the one shown on the device asking.** The code is computed from the
+certificate each side saw, so a machine in the middle shows a different one. Press **Accept** twice (the
+first press only arms it and the button says so; it disarms by itself after a few seconds). The device
+can then collect its login, and it starts with browse access only. **Reject** answers at once and needs no second press. Either way the row leaves the list and
+the window says what it did.
+
+The list refreshes by itself every few seconds, only while this screen is open: leaving it (Back,
+Settings, signing out) stops the refreshing. **Refresh** asks again at once. Rows are updated in place,
+so a button you have tabbed to keeps the keyboard focus and never moves to another request.
+
+Only an account sign-in can answer requests. A computer paired with a code or approved on the PC sees a
+warning instead of the list: sign out and sign in with the account, or answer on the PC with
+`rfe-agent pair accept` or `reject`. The agent holds at most three waiting requests; a fourth device is
+told the PC is busy until you answer one or one expires.
+
+<!-- end feature:pair-inbox -->
+
 ## The window
 
 The app follows the system's light or dark setting and scales with the system's display scaling. It
@@ -152,6 +183,14 @@ Messages from this app:
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
+| No pairing requests are waiting. | Nobody is asking to be paired right now. The list fills in by itself while the screen is open. |
+| Loading pairing requests... | The window is asking the agent. If it stays, the agent is slow or unreachable; an error follows. |
+| This login cannot answer pairing requests. | This computer was paired with a code or approved on the PC, and the agent lets only an account answer. Sign out and sign in with the account, or use `rfe-agent pair accept` or `reject` on the PC. |
+| This agent is too old to list pairing requests | Answering from the window needs `agent-v1.43.0-rc.1` or newer. Update the agent, or answer on the PC. |
+| The agent holds at most 3 waiting requests. | Shown when three are waiting: a fourth is refused (the device asking sees that the PC is busy) until you answer one or one expires. |
+| Press again to accept | The first press on **Accept** only arms it. Press again within a few seconds to accept, after checking that the match code is the one shown on the device asking. |
+| Accepted ..., Rejected ... | Your answer reached the agent. An accepted device collects its login on its own. |
+| That request already expired or was answered on the PC. | The request ran out of time, or someone answered it (at the PC, or from another window) a moment before you did. Nothing was changed by your press. Ask the device to try again if it was a good one. |
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).

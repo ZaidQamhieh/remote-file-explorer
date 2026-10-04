@@ -120,6 +120,9 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:pair-inbox -->
+      <div class="row pad"><button id="open-pair-inbox" type="button">Pairing requests</button></div>
+      <!-- end feature:pair-inbox -->
     </section>
 
     <section id="step-settings" class="panel" hidden>
@@ -178,6 +181,31 @@
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
     </section>
+
+    <!-- feature:pair-inbox -->
+    <section id="step-pair-inbox" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-pair-inbox" tabindex="-1">Pairing requests</h2>
+        <div class="row">
+          <button id="inbox-refresh" type="button">Refresh</button>
+          <button id="inbox-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">Computers and phones that asked to be paired and wait for you. Accept only if the code matches the one shown on the device asking. An accepted device starts with browse access only. The list refreshes by itself while this screen is open.</p>
+      <p id="inbox-status" class="hint" role="status"></p>
+      <p id="inbox-forbidden" class="warn" role="alert" hidden>This login cannot answer pairing requests. Only an account sign-in can. Sign out and sign in with the account, or answer on the PC with <code>rfe-agent pair accept</code> or <code>reject</code>.</p>
+      <div id="inbox-wrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr><th scope="col">Device</th><th scope="col">From</th><th scope="col">Waiting</th><th scope="col">Expires in</th><th scope="col">Match code</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+          </thead>
+          <tbody id="inbox-rows"></tbody>
+        </table>
+      </div>
+      <p id="inbox-empty" class="hint" hidden>No pairing requests are waiting.</p>
+      <p id="inbox-limit" class="hint" hidden>The agent holds at most 3 waiting requests. A new one is refused until you answer one or it expires.</p>
+    </section>
+    <!-- end feature:pair-inbox -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

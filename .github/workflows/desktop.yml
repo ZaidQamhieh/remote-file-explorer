@@ -17,7 +17,8 @@ permissions:
 
 concurrency:
   group: desktop-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A tag run (a desktop release calls this workflow) is never cancelled.
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   rust:
@@ -153,7 +154,11 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
           NO_STRIP: 'true'
-        run: cargo tauri build --ci --bundles deb,appimage
+        # A version bump changes Cargo.lock, so the cache above can restore target/ from an older version; the bundler
+        # leaves that version's .deb behind, and two .deb files break the steps below and the release.
+        run: |
+          rm -rf target/release/bundle
+          cargo tauri build --ci --bundles deb,appimage
 
       # What a launcher and a software centre read, from the package that was just built: the
       # desktop entry, the AppStream metadata and the icon sizes.

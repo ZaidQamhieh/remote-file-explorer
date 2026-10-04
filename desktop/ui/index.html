@@ -15,6 +15,7 @@
         <span id="session-text"></span>
         <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
       </div>
+      <button id="open-hosts" class="link" type="button">Hosts</button><!-- feature:multi-hosts -->
     </div>
   </header>
 
@@ -177,6 +178,24 @@
         <dt>System</dt><dd id="about-platform"></dd>
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
+
+      <!-- feature:multi-hosts -->
+      <h3 id="title-hosts" tabindex="-1">Saved hosts</h3>
+      <p class="hint">Agents you can switch between. Each keeps its own trusted certificate and its own login in the keystore. Switching signs this window in to the other host without asking for a password if it has a saved login. Removing a host deletes its saved login and forgets its certificate; the device stays registered on the agent until it is revoked there (sign out first to do that).</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Login</th><th scope="col"><span class="sr-only">Action</span></th></tr>
+          </thead>
+          <tbody id="hosts-list"></tbody>
+        </table>
+      </div>
+      <p id="hosts-empty" class="hint" hidden>No host is saved yet.</p>
+      <div class="row pad">
+        <button id="hosts-add" type="button">Add another host</button>
+        <span id="hosts-status" role="status"></span>
+      </div>
+      <!-- /feature:multi-hosts -->
     </section>
 
     <p id="message" class="message" role="status" hidden></p>

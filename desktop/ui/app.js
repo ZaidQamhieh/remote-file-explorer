@@ -509,4 +509,164 @@
     }
     showConnect();
   })();
+
+  // ---- feature:multi-hosts ----
+  // Saved hosts: switch between agents, rename, remove (two clicks), add. The window only asks the
+  // Rust core by key; it never sees a token and never sends an address of its own to these commands.
+  function hostsStatus(text, isError) {
+    const el = $("hosts-status");
+    el.textContent = text || "";
+    el.className = isError ? "tag revoked" : "";
+  }
+
+  function hostLoginText(h) {
+    if (!h.signedIn) return "Signed out";
+    return h.username ? "Signed in as " + h.username : "Paired with a code";
+  }
+
+  async function refreshHosts() {
+    try {
+      renderHosts(await invoke("list_hosts"));
+    } catch (e) {
+      hostsStatus(String(e), true);
+    }
+  }
+
+  async function switchToHost(h, button) {
+    await run(
+      button,
+      async () => {
+        const saved = await invoke("switch_host", { key: h.key });
+        renderDevices([]);
+        setSession(saved);
+        $("host").value = saved.host;
+        pending = { host: saved.host, fingerprint: saved.fingerprint };
+        settingsAccount();
+        await refreshHosts();
+        await settingsPins().refresh();
+        if (saved.signedIn) {
+          await showDevices();
+          show("step-devices");
+          say("");
+        } else {
+          $("username").value = saved.username;
+          $("login-form").hidden = false;
+          $("pair-form").hidden = true;
+          show("step-login");
+          say("Signed out on this host. Sign in to continue.");
+        }
+      },
+      "Switching host..."
+    );
+  }
+
+  function startRename(h, nameCell, actions) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = h.name;
+    input.maxLength = 64;
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "New name for " + h.name);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Save";
+    save.setAttribute("aria-label", "Save the new name for " + h.name);
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "link";
+    cancel.textContent = "Cancel";
+    cancel.setAttribute("aria-label", "Cancel renaming " + h.name);
+    const doSave = () =>
+      run(save, async () => {
+        await invoke("rename_host", { key: h.key, name: input.value });
+        await refreshHosts();
+        hostsStatus("Renamed.");
+      });
+    save.addEventListener("click", doSave);
+    cancel.addEventListener("click", async () => {
+      await refreshHosts();
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        doSave();
+      } else if (ev.key === "Escape") {
+        refreshHosts();
+      }
+    });
+    nameCell.replaceChildren(input);
+    actions.replaceChildren(save, cancel);
+    input.focus();
+  }
+
+  function renderHosts(list) {
+    const body = $("hosts-list");
+    body.replaceChildren();
+    for (const h of list) {
+      const use = document.createElement("button");
+      use.type = "button";
+      use.className = "link";
+      use.textContent = h.active ? "Open" : "Switch";
+      use.setAttribute("aria-label", (h.active ? "Open " : "Switch to ") + h.name);
+      use.addEventListener("click", () => switchToHost(h, use));
+
+      const rename = document.createElement("button");
+      rename.type = "button";
+      rename.className = "link";
+      rename.textContent = "Rename";
+      rename.setAttribute("aria-label", "Rename " + h.name);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "link";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", "Remove " + h.name);
+      remove.addEventListener("click", () => {
+        // Two clicks: the first only arms the button.
+        if (!remove.dataset.armed) {
+          remove.dataset.armed = "1";
+          remove.textContent = "Remove and delete login?";
+          remove.setAttribute(
+            "aria-label",
+            "Remove and delete the saved login for " + h.name + "? Press again to confirm."
+          );
+          return;
+        }
+        run(remove, async () => {
+          const out = await invoke("remove_host", { key: h.key });
+          if (out.wasActive) {
+            renderDevices([]);
+            setSession({ signedIn: false });
+            settingsAccount();
+            settingsReturn = "step-connect";
+          }
+          await refreshHosts();
+          await settingsPins().refresh();
+          hostsStatus("Removed " + h.name + ".");
+        });
+      });
+
+      const actions = document.createElement("td");
+      actions.append(use, rename, remove);
+      const nameCell = cell(h.name + (h.active ? " (in use)" : ""));
+      rename.addEventListener("click", () => startRename(h, nameCell, actions));
+      const tr = document.createElement("tr");
+      tr.append(nameCell, cell(h.host, "mono"), cell(hostLoginText(h)), actions);
+      body.append(tr);
+    }
+    $("hosts-empty").hidden = list.length !== 0;
+  }
+
+  $("open-settings").addEventListener("click", refreshHosts);
+  $("open-hosts").addEventListener("click", async () => {
+    await showSettings();
+    await refreshHosts();
+    $("title-hosts").focus();
+  });
+  $("hosts-add").addEventListener("click", async () => {
+    await showConnect();
+    $("host").value = "";
+    $("host").focus();
+    say("Type the new host's address. Your current login stays saved.");
+  });
 })();

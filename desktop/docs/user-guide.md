@@ -93,6 +93,28 @@ handles are masked out of the log even if one slipped in). It does name the agen
 log names the hosts you tried, so read it before you post it in public. **Copy** puts it on the
 clipboard; if the system refuses, the text is selected so Ctrl+C works.
 
+<!-- feature:multi-hosts -->
+## Saved hosts
+
+You can keep several agents and switch between them. **Hosts** (top right) or **Settings**, **Saved
+hosts** lists every agent you have trusted, with the account signed in to it.
+
+- **Switch** makes that host the one the window uses. If it has a saved login you land on its device
+  list without typing a password; if not, you land on its sign-in screen with the account name filled
+  in. **Open** (on the host in use) just goes to its device list.
+- **Rename** changes only the name shown in the list (up to 64 characters). The address, certificate
+  and login are not touched.
+- **Remove**, pressed twice, deletes that host's saved login from the keystore, forgets its trusted
+  certificate (you compare its fingerprint again if you ever add it back) and takes it off the list. The
+  device stays registered on the agent until it is revoked there: **Sign out** first if you want that.
+- **Add another host** opens the first screen. Check the certificate and sign in as usual; the login you
+  had on the other host stays saved.
+
+Each host has its own certificate pin and its own login token. A token is only ever sent to the agent it
+came from. The app opens on the host you used last. A host that was added before this list existed
+shows up in it automatically; nothing is lost.
+<!-- /feature:multi-hosts -->
+
 ## What is kept, and where
 
 | What | Where |
@@ -100,6 +122,7 @@ clipboard; if the system refuses, the text is selected so Ctrl+C works.
 | Device signing key, login token | the system keystore |
 | Agent address, its fingerprint, account name, device id, log level | `state.json` in the app's data folder (`~/.local/share/app.rfe.desktop/` on Linux; Settings shows the exact path), readable only by you |
 | Password | nowhere |
+| The saved hosts: name, address, account name, device id | `hosts.json` next to `state.json`, readable only by you. No secret is in it. A host's login token is in the keystore under its own entry |
 
 If `state.json` is damaged the app says so and does not guess; delete the file to start over (you will
 compare fingerprints again).
@@ -152,6 +175,15 @@ Messages from this app:
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
+| this host is not in the saved list | The host was removed (perhaps from another window) before the action ran. Close Settings and open it again. |
+| enter a name for the host | The new name is empty. Type a name, or press Cancel. |
+| the name can be at most 64 characters | Use a shorter name. |
+| the name cannot contain control characters | The name has a line break or another control character. Type it again on one line. |
+| `hosts.json` is damaged (...); delete it to start over | The list of saved hosts cannot be read. Delete `hosts.json` (Settings shows the folder): the list is rebuilt from the agents you trusted, and every login stays where it is. Until then signing in to a second agent is refused so the list is not overwritten. |
+| `hosts.json` was written by a newer version of this app | A newer app wrote the list. Update this app, or delete `hosts.json` to start over as above. |
+| Signed out on this host. Sign in to continue. | You switched to a host that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
+| Type the new host's address. Your current login stays saved. | Shown when you press Add another host. Nothing was changed on the host you were using. |
+| No host is saved yet. | The list is empty: connect to an agent from the first screen. |
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).

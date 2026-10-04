@@ -6,6 +6,7 @@ pub mod applog;
 pub mod discovery;
 pub mod flows;
 mod fsutil;
+pub mod hosts;
 pub mod identity;
 pub mod secrets;
 
@@ -327,7 +328,12 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            // feature:multi-hosts
+            hosts::list_hosts,
+            hosts::switch_host,
+            hosts::rename_host,
+            hosts::remove_host
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

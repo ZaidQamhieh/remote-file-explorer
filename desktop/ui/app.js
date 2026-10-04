@@ -621,4 +621,216 @@
     }
     showConnect();
   })();
+
+  // ---- feature:health-metrics ----
+  // Health and metrics. One command, `agent_health`, reads /health, /status and /metrics through the
+  // pinned client. Auto-refresh runs only while this screen is showing, and each refresh starts when
+  // the last one has ended, so a slow agent never piles up requests. Only the previous reading is
+  // kept, to turn the agent's byte totals into a rate; there is no history. Text goes in with
+  // textContent only.
+  steps.push("step-health");
+  const NOT_REPORTED = "not reported";
+  const HEALTH_EVERY_MS = 5000;
+  const FORBIDDEN_TEXT =
+    "Metrics are for administrators. This computer signed in with a pairing code or was approved on the PC, so the agent refuses to share the PC's processor, memory and traffic figures (403). Sign in with the account to see them.";
+  const HEALTH_FIELDS = [
+    "health-host", "health-fingerprint", "health-name", "health-version", "health-os", "health-readonly",
+    "health-address", "health-tailscale", "health-mac", "health-status", "health-uptime", "health-disk",
+    "health-cpu", "health-ram", "health-rx", "health-tx", "health-rx-rate", "health-tx-rate", "health-agent-time",
+  ];
+  let healthRun = 0; // changes when the screen is opened or left or auto-refresh is switched, so an old loop ends
+  let healthBusy = false;
+  let healthPrev = null; // the previous metrics reading: { rx, tx, ts }
+
+  // Binary units (1 KiB = 1024 bytes). `sizeText` is the short form, `formatBytes` adds the exact
+  // count for anything over a kilobyte.
+  function sizeText(n) {
+    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let v = Math.max(0, n);
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return (i === 0 ? String(Math.round(v)) : v.toFixed(v >= 100 ? 0 : 1)) + " " + units[i];
+  }
+
+  function formatBytes(n) {
+    if (n == null) return NOT_REPORTED;
+    return n < 1024 ? sizeText(n) : sizeText(n) + " (" + Math.round(n).toLocaleString() + " bytes)";
+  }
+
+  function formatDuration(seconds) {
+    if (seconds == null) return NOT_REPORTED;
+    const s = Math.max(0, Math.floor(seconds));
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d) return d + " d " + h + " h " + m + " min";
+    if (h) return h + " h " + m + " min";
+    if (m) return m + " min " + (s % 60) + " s";
+    return s + " s";
+  }
+
+  const formatPercent = (p) => (p == null ? NOT_REPORTED : p.toFixed(1) + " %");
+  const orNone = (v) => (v ? v : NOT_REPORTED);
+  const setText = (id, text) => {
+    $(id).textContent = text;
+  };
+
+  // The agent's totals only grow, so a rate is the difference between two readings over the time
+  // between them, on the agent's own clock. A total that went down means the agent restarted.
+  function healthRates(m) {
+    if (m.rxBytes == null || m.txBytes == null || m.tsMs == null) return [NOT_REPORTED, NOT_REPORTED];
+    const prev = healthPrev;
+    healthPrev = { rx: m.rxBytes, tx: m.txBytes, ts: m.tsMs };
+    if (!prev) return ["Needs a second reading", "Needs a second reading"];
+    const seconds = (m.tsMs - prev.ts) / 1000;
+    if (m.rxBytes < prev.rx || m.txBytes < prev.tx) {
+      return ["Counters were reset (the agent restarted)", "Counters were reset (the agent restarted)"];
+    }
+    if (seconds <= 0) return ["Needs a newer reading", "Needs a newer reading"];
+    return [sizeText((m.rxBytes - prev.rx) / seconds) + "/s", sizeText((m.txBytes - prev.tx) / seconds) + "/s"];
+  }
+
+  function renderHealth(s) {
+    const h = s.health || {};
+    setText("health-host", s.host);
+    setText("health-fingerprint", s.fingerprint);
+    setText("health-name", orNone(h.name));
+    setText("health-version", orNone(h.version));
+    setText("health-os", orNone(h.os));
+    setText("health-readonly", h.readOnly == null ? NOT_REPORTED : h.readOnly ? "Yes (the agent refuses changes)" : "No");
+    setText("health-address", orNone(h.address));
+    setText("health-tailscale", orNone(h.tailscaleAddress));
+    setText("health-mac", orNone(h.macAddress));
+    setText("health-status", h.status === "ok" ? "Running (ok)" : orNone(h.status));
+
+    const st = s.status;
+    setText("health-uptime", st ? formatDuration(st.uptimeSeconds) : NOT_REPORTED);
+    setText(
+      "health-disk",
+      st && st.freeBytes != null && st.totalBytes != null
+        ? sizeText(st.freeBytes) + " of " + sizeText(st.totalBytes)
+        : NOT_REPORTED
+    );
+    $("health-status-note").hidden = !s.statusNote;
+    setText("health-status-note", s.statusNote ? "Uptime and disk space could not be read: " + s.statusNote : "");
+
+    const m = s.metrics;
+    $("health-forbidden").hidden = !s.metricsForbidden;
+    setText("health-forbidden", s.metricsForbidden ? FORBIDDEN_TEXT : "");
+    $("health-metrics").hidden = !m;
+    const noMetrics = !m && !s.metricsForbidden;
+    $("health-metrics-note").hidden = !noMetrics;
+    setText("health-metrics-note", noMetrics ? "No metrics were reported. " + (s.metricsNote || "") : "");
+    if (!m) {
+      healthPrev = null;
+      return;
+    }
+    setText("health-cpu", formatPercent(m.cpuPercent));
+    setText("health-ram", formatPercent(m.ramPercent));
+    setText("health-rx", formatBytes(m.rxBytes));
+    setText("health-tx", formatBytes(m.txBytes));
+    const [rx, tx] = healthRates(m);
+    setText("health-rx-rate", rx);
+    setText("health-tx-rate", tx);
+    setText("health-agent-time", m.tsMs == null ? NOT_REPORTED : new Date(m.tsMs).toLocaleString());
+  }
+
+  // One refresh. Returns false without asking when another is still in flight. On an error the
+  // numbers already on screen stay; if the agent refused the saved login the app has dropped it
+  // and kept the pin, so go back to sign-in on that agent, as the device list does.
+  async function loadHealth() {
+    if (healthBusy) return false;
+    healthBusy = true;
+    try {
+      const s = await invoke("agent_health");
+      renderHealth(s);
+      setText("health-updated", "Last updated " + new Date().toLocaleTimeString() + ".");
+      $("health-auto-note").hidden = true;
+      return true;
+    } catch (e) {
+      const saved = await invoke("saved_agent").catch(() => null);
+      if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+        healthRun++;
+        setSession(saved);
+        pending = { host: saved.host, fingerprint: saved.fingerprint };
+        $("username").value = saved.username;
+        show("step-login");
+        loginMode(false);
+      }
+      throw e;
+    } finally {
+      healthBusy = false;
+    }
+  }
+
+  // Stops auto-refresh after an error, so a locked keystore or a PC that is off is not asked every
+  // five seconds; the user turns it back on.
+  function healthAutoStopped() {
+    healthRun++;
+    $("health-auto").checked = false;
+    setText("health-auto-note", "Auto-refresh stopped after an error. Press Refresh, or turn it on again.");
+    $("health-auto-note").hidden = false;
+  }
+
+  function healthAutoLoop(me) {
+    setTimeout(async () => {
+      if (me !== healthRun || $("step-health").hidden || !$("health-auto").checked) return;
+      try {
+        await loadHealth();
+      } catch (e) {
+        if (me === healthRun) {
+          healthAutoStopped();
+          say(String(e), true);
+        }
+        return;
+      }
+      if (me === healthRun) healthAutoLoop(me);
+    }, HEALTH_EVERY_MS);
+  }
+
+  $("open-health").addEventListener("click", (ev) => {
+    healthRun++;
+    healthPrev = null;
+    for (const id of HEALTH_FIELDS) setText(id, "");
+    for (const id of ["health-forbidden", "health-metrics-note", "health-status-note", "health-auto-note"]) $(id).hidden = true;
+    $("health-metrics").hidden = false;
+    $("health-auto").checked = false;
+    setText("health-updated", "Not read yet.");
+    say("");
+    show("step-health");
+    run(ev.currentTarget, loadHealth, "Reading the agent's health...");
+  });
+
+  $("health-back").addEventListener("click", () => {
+    healthRun++;
+    say("");
+    show("step-devices");
+  });
+
+  $("health-refresh").addEventListener("click", (ev) =>
+    run(ev.currentTarget, async () => {
+      try {
+        await loadHealth();
+      } catch (e) {
+        if ($("health-auto").checked) healthAutoStopped();
+        throw e;
+      }
+    }, "Reading the agent's health...")
+  );
+
+  $("health-auto").addEventListener("change", () => {
+    const me = ++healthRun;
+    $("health-auto-note").hidden = true;
+    if (!$("health-auto").checked) return;
+    healthAutoLoop(me);
+  });
+
+  // Back from Settings to this screen: the loop ended while it was hidden; pick it up again.
+  $("settings-back").addEventListener("click", () => {
+    if ($("step-health").hidden || !$("health-auto").checked) return;
+    healthAutoLoop(++healthRun);
+  });
 })();

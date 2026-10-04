@@ -235,6 +235,67 @@ func TestRename_WithinJailWorks(t *testing.T) {
 	}
 }
 
+// TestRename_ExistingDestinationConflicts verifies a rename never replaces
+// an existing file or folder.
+func TestRename_ExistingDestinationConflicts(t *testing.T) {
+	ops, root := setupJail(t)
+
+	src := filepath.Join(root, "a.txt")
+	dst := filepath.Join(root, "b.txt")
+	if err := os.WriteFile(src, []byte("source"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ops.Rename(src, dst); !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+	if got, err := os.ReadFile(dst); err != nil || string(got) != "keep me" {
+		t.Fatalf("destination was changed: %q (err %v)", got, err)
+	}
+	if got, err := os.ReadFile(src); err != nil || string(got) != "source" {
+		t.Fatalf("source was changed: %q (err %v)", got, err)
+	}
+
+	// An existing folder is a conflict too.
+	dir := filepath.Join(root, "dir")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ops.Rename(src, dir); !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected ErrConflict for a folder destination, got %v", err)
+	}
+}
+
+// TestRename_ToSelfIsNoConflict keeps renaming a path to itself harmless.
+func TestRename_ToSelfIsNoConflict(t *testing.T) {
+	ops, root := setupJail(t)
+	p := filepath.Join(root, "a.txt")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ops.Rename(p, p); err != nil {
+		t.Fatalf("rename to self: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatalf("file gone after rename to self: %v", err)
+	}
+}
+
+func TestRename_MissingSourceIsNotAConflict(t *testing.T) {
+	ops, root := setupJail(t)
+	dst := filepath.Join(root, "exists.txt")
+	if err := os.WriteFile(dst, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ops.Rename(filepath.Join(root, "gone.txt"), dst)
+	if err == nil || errors.Is(err, ErrConflict) || !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("want a not-found error, got %v", err)
+	}
+}
+
 // TestReadOnly verifies that write ops are rejected when readOnly=true.
 func TestReadOnly(t *testing.T) {
 	root := t.TempDir()

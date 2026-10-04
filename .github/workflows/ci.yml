@@ -1,14 +1,15 @@
 name: CI
 
-# Pushes to master and rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
-# them here too would do every check twice. Changes that cannot affect the agent skip it.
+# A master push that touches mobile/** or protocol/** runs these gates through release.yml (workflow_call) plus the build,
+# so those paths are not listed here (every check would run twice). A push that only touches the agent side runs them here
+# and never starts the APK build.
 on:
   push:
-    branches: [main]
-    paths-ignore: ['mobile/**', 'docs/**', '**.md']
+    branches: [master, main]
+    paths: ['agent/**', 'agent-rs/**', 'tools/**', '.github/workflows/ci.yml']
   pull_request:
     branches: [master, main]
-    paths-ignore: ['mobile/**', 'docs/**', '**.md']
+    paths-ignore: ['mobile/**', 'desktop/**', 'docs/**', '**.md']
   # Callable so release.yml can require these exact gates before publishing,
   # instead of a second copy that drifts out of sync with this one (PR-70).
   workflow_call:
@@ -127,6 +128,22 @@ jobs:
       - name: cargo test
         working-directory: agent-rs
         run: cargo test --workspace --locked
+
+      # Advisory check of Cargo.lock, the Rust counterpart of govulncheck. The version is pinned and the binary is
+      # cached, so only the first run (or a version bump) compiles it.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cargo-audit-bin
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-0.22.2-${{ runner.os }}
+
+      - name: Install cargo-audit
+        if: steps.cargo-audit-bin.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked --version 0.22.2
+
+      - name: cargo audit
+        working-directory: agent-rs
+        run: cargo audit
 
       - name: Build release sidecars
         working-directory: agent-rs

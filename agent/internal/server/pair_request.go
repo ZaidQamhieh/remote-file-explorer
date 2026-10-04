@@ -76,7 +76,7 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "clientNonce must be 16 random bytes, hex encoded")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
 			return
 		}
 		label := sanitizeLabel(req.DeviceLabel)

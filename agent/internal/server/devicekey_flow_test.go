@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -199,5 +201,55 @@ func TestPairHandler_KeyChangeRePinsRatherThanRejects(t *testing.T) {
 	}
 	if pinned != pubKey2 {
 		t.Fatalf("expected the pinned key to be updated to the new key, got %q want %q", pinned, pubKey2)
+	}
+}
+
+func TestChallengeHandler_AdvertisesTheBoundProof(t *testing.T) {
+	rr := httptest.NewRecorder()
+	challengeHandler(newNonceStore())(rr, httptest.NewRequest(http.MethodPost, "/v1/auth/challenge", nil))
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["proof"] != "v2" {
+		t.Fatalf("a client that refuses bare-nonce signatures needs proof=v2, got %q", resp["proof"])
+	}
+}
+
+// TestVerifyDeviceProof_BoundToThisAgentsCertificate: a v2 signature is only good at the agent whose
+// certificate fingerprint it names, so a nonce relayed from a second agent signs nothing useful here.
+// A signature over the bare nonce (phone and browser clients) still verifies.
+func TestVerifyDeviceProof_BoundToThisAgentsCertificate(t *testing.T) {
+	const here = "aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11"
+	const elsewhere = "bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22"
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pubB64 := base64.StdEncoding.EncodeToString(pub)
+	sign := func(message string) string {
+		return base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(message)))
+	}
+	cases := []struct {
+		name    string
+		message func(nonce string) string
+		ok      bool
+	}{
+		{"v2 for this agent", func(n string) string { return security.DeviceProofMessageV2(here, n) }, true},
+		{"v2 for another agent", func(n string) string { return security.DeviceProofMessageV2(elsewhere, n) }, false},
+		{"bare nonce (older clients)", func(n string) string { return n }, true},
+		{"v2 label without the fingerprint", func(n string) string { return "rfe-device-proof-v2\n\n" + n }, false},
+	}
+	for _, c := range cases {
+		nonces := newNonceStore()
+		nonce, err := nonces.Mint()
+		if err != nil {
+			t.Fatalf("mint: %v", err)
+		}
+		rr := httptest.NewRecorder()
+		err = verifyDeviceProof(nil, nonces, here, "dev", pubB64, nonce, sign(c.message(nonce)), rr, rePinOnKeyChange)
+		if (err == nil) != c.ok {
+			t.Errorf("%s: accepted=%v, want %v (%s)", c.name, err == nil, c.ok, rr.Body.String())
+		}
 	}
 }

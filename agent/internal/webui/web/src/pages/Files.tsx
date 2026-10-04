@@ -21,6 +21,7 @@ import {
   Check,
 } from 'lucide-react';
 import { api, ApiError, contentUrl, type Entry, type ShareLink, type ShareLinkSummary, type TrashEntry } from '@/lib/api';
+import { restoreFailure } from '@/lib/requests';
 import { useToast } from '@/lib/toast-context';
 import { DataTable } from '@/components/DataTable';
 import { Dialog } from '@/components/Dialog';
@@ -344,15 +345,19 @@ export function Files() {
   // ---------- Trash ----------
   const trash = useQuery({ queryKey: ['trash'], queryFn: api.listTrash, enabled: activeTab === 'trash' });
   const restoreMutation = useMutation({
-    mutationFn: (id: string) => api.restoreTrash(id),
+    mutationFn: async (id: string) => {
+      // The agent answers 200 even when the item could not be restored, so read the per-item result.
+      const failure = restoreFailure(await api.restoreTrash([id]));
+      if (failure) throw new Error(failure);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trash'] });
       toast('Restored');
     },
-    onError: (err) => toast(err instanceof ApiError ? err.message : 'Restore failed'),
+    onError: (err) => toast(err instanceof Error && err.message ? err.message : 'Restore failed'),
   });
   const deleteForeverMutation = useMutation({
-    mutationFn: (id: string) => api.deleteTrashForever(id),
+    mutationFn: (id: string) => api.deleteTrashForever([id]),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trash'] });
       toast('Deleted forever');
@@ -362,9 +367,13 @@ export function Files() {
   async function emptyTrash() {
     if (!trash.data || trash.data.length === 0) return;
     if (!window.confirm(`Permanently delete all ${trash.data.length} item(s) in trash?`)) return;
-    await Promise.all(trash.data.map((t) => api.deleteTrashForever(t.id)));
+    try {
+      await api.emptyTrash();
+      toast('Trash emptied');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Could not empty the trash');
+    }
     qc.invalidateQueries({ queryKey: ['trash'] });
-    toast('Trash emptied');
   }
   const trashColumns: ColumnDef<TrashEntry, any>[] = [
     {

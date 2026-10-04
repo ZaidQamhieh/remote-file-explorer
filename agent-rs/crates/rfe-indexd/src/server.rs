@@ -19,6 +19,8 @@ pub const NAME: &str = "rfe-indexd";
 struct State {
     index: RwLock<Option<Arc<Index>>>,
     building: AtomicBool,
+    /// Events were lost and the rebuild that repairs the index has not finished: the index may miss changes.
+    resync: AtomicBool,
     cancels: Mutex<HashMap<u64, Arc<AtomicBool>>>,
     /// Held while a build starts and while a batch of changes is applied, so the two never interleave.
     mutate: Mutex<()>,
@@ -80,6 +82,7 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
     let state = Arc::new(State {
         index: RwLock::new(None),
         building: AtomicBool::new(false),
+        resync: AtomicBool::new(false),
         cancels: Mutex::new(HashMap::new()),
         mutate: Mutex::new(()),
         events: Arc::new(Events::default()),
@@ -175,6 +178,22 @@ fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> 
                 idx.query(&Compiled::new(req.filters), &req.roots, req.limit);
             Ok(json!({"ready": true, "entries": entries, "truncated": truncated}))
         }
+        // Recents from the live in-memory index, or {"ready": false} when it cannot answer exactly (no index yet,
+        // the file watcher is not healthy so it may be stale, it was cut by its budget, or a root is not
+        // exactly an indexed root). The caller then asks recents.scan, which walks.
+        "recents.index" => {
+            let req: RecentsReq = parse(payload)?;
+            let Some(idx) = state.index.read().unwrap().clone() else {
+                return Ok(json!({"ready": false}));
+            };
+            if !live_ok(state) {
+                return Ok(json!({"ready": false}));
+            }
+            match idx.recents(&req.roots, req.limit) {
+                Some(entries) => Ok(json!({"ready": true, "entries": entries, "partial": false})),
+                None => Ok(json!({"ready": false})),
+            }
+        }
         "recents.scan" => {
             let req: RecentsReq = parse(payload)?;
             let deadline =
@@ -186,6 +205,23 @@ fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> 
             Ok(json!({"entries": entries, "partial": partial}))
         }
         other => Err((code::BAD_REQUEST, format!("unknown op {other:?}"))),
+    }
+}
+
+/// True while the file watcher covers every indexed directory and has not failed, and no lost events or rebuild
+/// are outstanding, so the index can be trusted to be current.
+fn live_ok(state: &State) -> bool {
+    if state.building.load(Ordering::Acquire)
+        || state.resync.load(Ordering::Acquire)
+        || state.events.overflow_pending()
+    {
+        return false;
+    }
+    match state.watch.lock().unwrap().as_ref() {
+        Some(w) => {
+            w.health.complete.load(Ordering::Relaxed) && w.health.error.lock().unwrap().is_empty()
+        }
+        None => false,
     }
 }
 
@@ -240,6 +276,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
     }
     *state.last_build.lock().unwrap() = Some(req.clone());
     *state.index.write().unwrap() = Some(idx);
+    state.resync.store(false, Ordering::Release);
     state.building.store(false, Ordering::Release);
     if !state.applier_started.swap(true, Ordering::AcqRel) {
         let st = Arc::clone(state);
@@ -277,6 +314,7 @@ fn applier(state: Arc<State>) {
                 state.updates.fetch_add(1, Ordering::Relaxed);
             }
             None => {
+                state.resync.store(true, Ordering::Release);
                 drop(guard);
                 let req = state.last_build.lock().unwrap().clone();
                 if let Some(req) = req {

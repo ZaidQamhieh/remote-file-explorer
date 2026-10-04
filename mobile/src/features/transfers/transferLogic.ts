@@ -63,6 +63,22 @@ export function transferErrorMessage(error: string | null): string {
   }
 }
 
+// Failures where trying again can work: the host was unreachable or busy, or the data was damaged in transit.
+// Everything else (name clash, no permission, changed identity, full phone) fails the same way until something changes.
+const RETRYABLE = new Set(['ERR_CONNECTION', 'TRANSFER_ACTIVE', 'HASH_MISMATCH', 'CHUNK_HASH_MISMATCH', 'NOT_FOUND', 'RESOURCE_LIMIT']);
+
+/** Failed transfers worth a one-tap "Retry all". */
+export const retryableFailures = (all: readonly TransferRecord[]): TransferRecord[] =>
+  all.filter((r) => r.state === 'FAILED' && r.error !== null && RETRYABLE.has(r.error.split(':')[0].trim()));
+
+export type VerifyOutcome = 'verified' | 'mismatch' | 'unavailable';
+
+/** Compares the downloaded copy's SHA-256 with the host's. A missing hash is unavailable, never a match. */
+export function verifyOutcome(localHash: string | null, hostHash: string | null): VerifyOutcome {
+  if (!localHash || !hostHash) return 'unavailable';
+  return localHash.toLowerCase() === hostHash.toLowerCase() ? 'verified' : 'mismatch';
+}
+
 /** Newest first. Ids are a kind letter then the enqueue time in base 36, so the time orders them across kinds. */
 export function newestFirst(a: TransferRecord, b: TransferRecord): number {
   const at = parseInt(a.id.slice(1, 9), 36);

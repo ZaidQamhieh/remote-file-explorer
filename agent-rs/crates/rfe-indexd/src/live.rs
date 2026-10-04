@@ -56,6 +56,11 @@ impl Events {
         self.cv.notify_all();
     }
 
+    /// True while a lost-events marker waits for the applier: the published index may be missing changes.
+    pub fn overflow_pending(&self) -> bool {
+        self.pending.lock().unwrap().overflow
+    }
+
     /// Forgets everything pending (a full rebuild is about to read the disk afresh).
     pub fn clear(&self) {
         *self.pending.lock().unwrap() = Pending::default();
@@ -260,6 +265,19 @@ mod tests {
         let b = ev.next_batch(&stop).unwrap();
         assert_eq!(b.dirs, vec!["/r/x"]);
         assert!(b.overflow);
+    }
+
+    #[test]
+    fn a_lost_events_marker_is_visible_until_its_batch_is_taken() {
+        let ev = Events::default();
+        let stop = AtomicBool::new(false);
+        assert!(!ev.overflow_pending());
+        ev.mark("/r/a".into());
+        assert!(!ev.overflow_pending());
+        ev.mark_overflow();
+        assert!(ev.overflow_pending());
+        ev.next_batch(&stop).unwrap();
+        assert!(!ev.overflow_pending());
     }
 
     #[test]

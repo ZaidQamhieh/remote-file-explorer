@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -607,6 +608,68 @@ func TestEmptyTrashHandler_WithIDs(t *testing.T) {
 	emptyTrashHandler(fsops.New(nil, false), trashDir)(rr, req)
 
 	// Should succeed even with nonexistent IDs (idempotent).
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// A body that fails to decode must be rejected, never read as "empty all".
+func TestEmptyTrashHandler_BadBodyKeepsTrash(t *testing.T) {
+	cases := map[string]func() *http.Request{
+		"wrong type": func() *http.Request {
+			return httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`{"ids":"x"}`))
+		},
+		"malformed json": func() *http.Request {
+			return httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`{"ids":[`))
+		},
+		"empty object": func() *http.Request {
+			return httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`{}`))
+		},
+		"empty ids": func() *http.Request {
+			return httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`{"ids":[]}`))
+		},
+		"null": func() *http.Request {
+			return httptest.NewRequest(http.MethodDelete, "/v1/trash", strings.NewReader(`null`))
+		},
+		"unsized body": func() *http.Request {
+			req := httptest.NewRequest(http.MethodDelete, "/v1/trash", io.NopCloser(strings.NewReader(`{"ids":"x"}`)))
+			req.ContentLength = -1
+			return req
+		},
+	}
+	for name, mk := range cases {
+		t.Run(name, func(t *testing.T) {
+			ops, root := newFsFixture(t)
+			trashDir := filepath.Join(root, ".trash")
+			if err := os.Mkdir(trashDir, 0o755); err != nil {
+				t.Fatalf("mkdir trash: %v", err)
+			}
+			ops.MoveToTrash([]string{filepath.Join(root, "a.txt")}, trashDir)
+			before, err := os.ReadDir(trashDir)
+			if err != nil || len(before) == 0 {
+				t.Fatalf("expected trash items before the call, got %d (err %v)", len(before), err)
+			}
+
+			rr := httptest.NewRecorder()
+			emptyTrashHandler(ops, trashDir)(rr, mk())
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+			}
+			after, _ := os.ReadDir(trashDir)
+			if len(after) != len(before) {
+				t.Fatalf("trash changed on a rejected request: %d entries before, %d after", len(before), len(after))
+			}
+		})
+	}
+}
+
+// An unsized body that does decode still purges only the listed ids.
+func TestEmptyTrashHandler_UnsizedValidBody(t *testing.T) {
+	trashDir := t.TempDir()
+	req := httptest.NewRequest(http.MethodDelete, "/v1/trash", io.NopCloser(strings.NewReader(`{"ids":["nonexistent-id"]}`)))
+	req.ContentLength = -1
+	rr := httptest.NewRecorder()
+	emptyTrashHandler(fsops.New(nil, false), trashDir)(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}

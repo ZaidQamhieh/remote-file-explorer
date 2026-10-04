@@ -14,7 +14,16 @@ package security
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"strings"
 )
+
+// DeviceProofMessageV2 is what a v2 client signs instead of the bare nonce: the agent's own TLS
+// certificate fingerprint (lowercase hex SHA-256) and the nonce, under a fixed label. A signature
+// made for one agent is then worthless at another, so a malicious agent cannot pass a nonce it
+// fetched from a second agent to the device and replay the signature there.
+func DeviceProofMessageV2(certFingerprint, nonce string) string {
+	return "rfe-device-proof-v2\n" + strings.ToLower(certFingerprint) + "\n" + nonce
+}
 
 // VerifyDeviceSignature reports whether sig is a valid Ed25519 signature over
 // message by the key encoded in pubKeyB64 (standard base64, raw 32-byte

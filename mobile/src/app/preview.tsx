@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { Download, ExternalLink, FileCode, Info, ListOrdered, Pencil, Trash2 } from 'lucide-react-native';
+import { Download, ExternalLink, FileCode, Info, ListOrdered, Pencil, Radio, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,6 +57,7 @@ function Pager({ onClose }: { onClose: () => void }) {
   const [zoomed, setZoomed] = useState(false);
   const [lineNumbers, setLineNumbers] = useState(false);
   const [rawMarkdown, setRawMarkdown] = useState(false);
+  const [follow, setFollow] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
   const [texts, setTexts] = useState<Record<string, string>>({});
@@ -154,6 +155,11 @@ function Pager({ onClose }: { onClose: () => void }) {
           <ListOrdered size={19} color={lineNumbers ? c.primary : c.onSurfaceVariant} />
         </PreviewIconButton>
       )}
+      {kind === 'text' && (
+        <PreviewIconButton label={t('followButton')} selected={follow} onPress={() => setFollow((v) => !v)}>
+          <Radio size={19} color={follow ? c.primary : c.onSurfaceVariant} />
+        </PreviewIconButton>
+      )}
       {kind === 'markdown' && (
         <PreviewIconButton label="Show source" selected={rawMarkdown} onPress={() => setRawMarkdown((v) => !v)}>
           <FileCode size={19} color={rawMarkdown ? c.primary : c.onSurfaceVariant} />
@@ -195,7 +201,7 @@ function Pager({ onClose }: { onClose: () => void }) {
         renderItem={({ item, index: i }) => (
           // Documents stop above the gesture bar; image/video stay full-bleed.
           <View style={{ width, flex: 1, paddingBottom: ['image', 'video'].includes(previewKindOf(item)) ? 0 : insets.bottom }}>
-            <PreviewPage host={session.host} entry={item} isCurrent={i === index} lineNumbers={lineNumbers} rawMarkdown={rawMarkdown} onZoomChange={setZoomed} onText={onText} />
+            <PreviewPage host={session.host} entry={item} isCurrent={i === index} lineNumbers={lineNumbers} rawMarkdown={rawMarkdown} follow={follow} onZoomChange={setZoomed} onText={onText} />
           </View>
         )}
       />

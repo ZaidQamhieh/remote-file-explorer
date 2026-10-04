@@ -1,0 +1,12 @@
+# cargo audit reads this from desktop/src-tauri. CI runs `cargo audit --deny warnings`, so only the
+# advisories below are accepted; anything new fails the job.
+#
+# Both come from tauri 2.12.1 -> muda -> gtk 0.18 (the GTK3 bindings). They are fixed only by tauri
+# moving off gtk-rs 0.18, not by anything in this crate. Re-check on every tauri upgrade.
+[advisories]
+ignore = [
+  # proc-macro-error is unmaintained; a build-time proc macro only (via glib-macros).
+  "RUSTSEC-2024-0370",
+  # glib 0.18.5: unsound VariantStrIter. This crate never calls glib::Variant APIs itself.
+  "RUSTSEC-2024-0429",
+]

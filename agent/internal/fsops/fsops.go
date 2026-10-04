@@ -600,6 +600,19 @@ func (o *Ops) Rename(src, dst string) (*Entry, error) {
 	if resDst.root != resSrc.root {
 		defer resDst.close()
 	}
+	// A rename never replaces an existing file or folder. The check is
+	// best effort: a file created between it and the rename still wins.
+	if dstInfo, derr := resDst.lstat(); derr == nil {
+		srcInfo, serr := resSrc.lstat()
+		if serr != nil {
+			return nil, serr // a vanished source is not found, not a conflict
+		}
+		if !os.SameFile(srcInfo, dstInfo) {
+			return nil, ErrConflict
+		}
+	} else if !os.IsNotExist(derr) {
+		return nil, derr
+	}
 	if err := resDst.parent().mkdirAll(0o755); err != nil {
 		return nil, err
 	}

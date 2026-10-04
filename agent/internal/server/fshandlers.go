@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -127,8 +128,19 @@ func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		var body struct {
 			IDs []string `json:"ids"`
 		}
-		if r.ContentLength > 0 {
-			_ = json.NewDecoder(r.Body).Decode(&body)
+		// Only a body with no content at all means "empty all"; a body that
+		// fails to decode (including an unsized one) is rejected so a bad
+		// request can never wipe the whole trash.
+		err := json.NewDecoder(r.Body).Decode(&body)
+		if err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid body")
+			return
+		}
+		// A body that is present must name ids ({}, null and {"ids":[]} would otherwise wipe everything,
+		// for example when a client has nothing selected).
+		if err == nil && len(body.IDs) == 0 {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "ids must not be empty; send no body to empty all")
+			return
 		}
 		if err := reqOps.EmptyTrash(trashDir, body.IDs); err != nil {
 			if errors.Is(err, fsops.ErrBadTrashID) {

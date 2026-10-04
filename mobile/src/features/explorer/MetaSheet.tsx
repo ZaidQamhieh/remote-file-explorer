@@ -21,9 +21,11 @@ import { ShareLinkSheet } from '../share/ShareLinkSheet';
 import { enqueueDownloads } from '../transfers/enqueueDownloads';
 import { ChmodDialog } from './ChmodDialog';
 import { EntryLeading, useIconChipBg } from './EntryIcon';
-import { isExtractableArchive } from './metaLogic';
+import { SHARE_EXPIRY_PRESETS } from '../share/shareLogic';
+import { extractFolderName, hashMatches, isExtractableArchive } from './metaLogic';
 import { useFileCapabilities } from './useFileCapabilities';
-import { folderLabel, parentDirOf, renameDestination } from './paths';
+import { renameUndo } from './undoPlan';
+import { folderLabel, joinRemotePath, parentDirOf, renameDestination } from './paths';
 import { clientForHost, hostStore } from '../../services';
 
 type Action = { key: string; icon: LucideIcon; label: string; onPress: () => void; tint?: string };
@@ -48,6 +50,8 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   const [checksum, setChecksum] = useState<string | null>(null);
   const [checksumBusy, setChecksumBusy] = useState(false);
   const [link, setLink] = useState<ShareLink | null>(null);
+  // The sheet steps aside while one of its dialogs (expiry choice, pasted hash) is on screen.
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [qr, setQr] = useState<{ certFingerprint: string; path: string; name: string } | null>(null);
   const chip = useIconChipBg(entry);
   const external = useExternalActions(host);
@@ -114,10 +118,20 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
     onClose();
     const name = await dialogs.prompt({ title: t('renameButton'), placeholder: t('newNameLabel'), initialValue: entry.name, confirmLabel: t('renameButton') });
     if (!name || name === entry.name) return;
-    const updated = await run((cl) => cl.rename(entry.path, renameDestination(entry.path, name)), (e) => t('renameFailed', { error: e }));
+    const target = renameDestination(entry.path, name);
+    const updated = await run((cl) => cl.rename(entry.path, target), (e) => t('renameFailed', { error: e }));
     if (updated) {
       changed();
-      toast.success(t('renamedTo', { newName: name }));
+      const back = renameUndo(entry.path, target);
+      // The host refuses to replace anything, so undoing into a name that was taken meanwhile fails instead of overwriting.
+      const undo = back?.kind === 'rename' ? async () => {
+        const undone = await run((cl) => cl.rename(back.from, back.to), (e) => t('undoFailed', { error: e }));
+        if (undone) {
+          changed();
+          toast.success(t('undoDone'));
+        }
+      } : undefined;
+      toast.success(t('renamedTo', { newName: name }), undo ? () => void undo() : undefined);
     }
   }
 
@@ -132,10 +146,26 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
 
   async function extract() {
     onClose();
-    const out = await run((cl) => cl.extract(entry.path, parentDirOf(entry.path)), (e) => t('extractFailed', { error: e }));
+    const parent = parentDirOf(entry.path);
+    const out = await run(
+      async (cl) => {
+        // Extraction replaces same-name files in an existing folder, so go into a folder name nothing uses yet.
+        const taken = new Set<string>();
+        let cursor: string | undefined;
+        do {
+          const page = await cl.list(parent, { cursor });
+          for (const e of page.entries) taken.add(e.name);
+          cursor = page.nextCursor;
+        } while (cursor);
+        const folder = extractFolderName(entry.name, taken);
+        await cl.extract(entry.path, joinRemotePath(parent, folder));
+        return folder;
+      },
+      (e) => t('extractFailed', { error: e }),
+    );
     if (out) {
       changed();
-      toast.success(t('extractedFile', { name: entry.name }));
+      toast.success(t('extractedToFolder', { folder: out }));
     }
   }
 
@@ -160,8 +190,37 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
   }
 
   async function shareLink() {
-    const minted = await run((cl) => cl.mintShareLink(entry.path), (e) => t('shareLinkFailed', { error: e }), true);
+    setDialogOpen(true);
+    const seconds = await dialogs.choose<string>({
+      title: t('shareLinkExpiryTitle'),
+      subtitle: entry.name,
+      options: SHARE_EXPIRY_PRESETS.map((p) => ({ value: String(p.seconds), label: p.label })),
+    });
+    setDialogOpen(false);
+    if (seconds === null) return;
+    const minted = await run((cl) => cl.mintShareLink(entry.path, Number(seconds)), (e) => t('shareLinkFailed', { error: e }), true);
     if (minted) setLink(minted);
+  }
+
+  /** Compares the file's SHA-256 with a hash the user pastes, and says plainly whether they match. */
+  async function verifyHash() {
+    setDialogOpen(true);
+    try {
+      const pasted = await dialogs.prompt({ title: t('verifyHashTitle'), placeholder: t('verifyHashPlaceholder'), confirmLabel: t('verifyButton'), mono: true });
+      if (!pasted) return;
+      const sum = checksum ?? (await run((cl) => cl.checksum(entry.path), (e) => `Checksum failed: ${e}`));
+      if (!sum) return;
+      setChecksum(sum);
+      await dialogs.report({
+        title: hashMatches(pasted, sum) ? t('hashMatchTitle') : t('hashMismatchTitle'),
+        items: [
+          { primary: t('hashExpected'), secondary: pasted },
+          { primary: t('hashActual'), secondary: sum },
+        ],
+      });
+    } finally {
+      setDialogOpen(false);
+    }
   }
 
   /** The QR names the host by its secure-store pin, never the record's mirrored copy. */
@@ -196,7 +255,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
     !entry.isDir && allowed('download') ? { key: 'share', icon: Share2, label: t('shareTooltip'), onPress: () => { onClose(); void external.share(entry); } } : null,
     !entry.isDir && allowed('share') ? { key: 'link', icon: LinkIcon, label: t('shareLinkButton'), onPress: shareLink } : null,
     !entry.isDir && allowed('download') ? { key: 'qr', icon: QrCode, label: t('qrHandoffSheetTitle'), onPress: () => void sendViaQr() } : null,
-    !entry.isDir && allowed('modify') && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractHereButton'), onPress: extract } : null,
+    !entry.isDir && allowed('modify') && isExtractableArchive(entry.name) ? { key: 'extract', icon: Archive, label: t('extractToFolderButton'), onPress: extract } : null,
     !entry.isDir && allowed('modify') ? { key: 'rename', icon: FilePen, label: t('renameButton'), onPress: rename } : null,
     !entry.isDir && allowed('modify') ? { key: 'dup', icon: Copy, label: t('duplicateButton'), onPress: duplicate } : null,
     { key: 'details', icon: Info, label: t('detailsButton'), onPress: () => setView('details') },
@@ -206,7 +265,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
 
   return (
     <>
-      <BottomSheet visible={visible && link === null && qr === null} onClose={onClose}>
+      <BottomSheet visible={visible && link === null && qr === null && !dialogOpen} onClose={onClose}>
         {view === 'actions' ? (
           <ScrollView>
             <SheetHero badge={<EntryLeading entry={entry} size={30} />} badgeColor={chip} title={entry.name} subtitle={subtitle} onClose={onClose} />
@@ -229,7 +288,7 @@ export function MetaSheet({ visible, host, entry: initial, onClose, onChanged, o
               <SheetGrabber />
               <Text style={LumenType.title} accessibilityRole="header">{t('detailsButton')}</Text>
               <View style={{ backgroundColor: c.surfaceContainerHigh, borderRadius: LumenSize.cardRadius, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs }}>
-                <DetailRows entry={entry} checksum={checksum} checksumBusy={checksumBusy} onComputeChecksum={computeChecksum} onEditPermissions={() => setChmodOpen(true)} />
+                <DetailRows entry={entry} checksum={checksum} checksumBusy={checksumBusy} onComputeChecksum={computeChecksum} onVerifyHash={() => void verifyHash()} onEditPermissions={() => setChmodOpen(true)} />
               </View>
             </View>
           </ScrollView>
@@ -282,7 +341,7 @@ function MoreRow({ action, divider }: { action: Action; divider: boolean }) {
   );
 }
 
-function DetailRows({ entry, checksum, checksumBusy, onComputeChecksum, onEditPermissions }: { entry: Entry; checksum: string | null; checksumBusy: boolean; onComputeChecksum: () => void; onEditPermissions: () => void }) {
+function DetailRows({ entry, checksum, checksumBusy, onComputeChecksum, onVerifyHash, onEditPermissions }: { entry: Entry; checksum: string | null; checksumBusy: boolean; onComputeChecksum: () => void; onVerifyHash: () => void; onEditPermissions: () => void }) {
   const c = useScheme();
   const toast = useToast();
   const rows: ReactNode[] = [];
@@ -307,6 +366,11 @@ function DetailRows({ entry, checksum, checksumBusy, onComputeChecksum, onEditPe
         </Pressable>
       ),
     );
+    add('verify', Tag, t('verifyHashRow'), (
+      <Pressable onPress={onVerifyHash} accessibilityLabel={t('verifyHashTitle')}>
+        <Text color={c.primary} style={[LumenType.name, { textDecorationLine: 'underline' }]}>{t('verifyHashAction')}</Text>
+      </Pressable>
+    ));
   }
   return (
     <>

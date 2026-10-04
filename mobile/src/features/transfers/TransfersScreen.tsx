@@ -1,19 +1,19 @@
-import { File as FileIcon, FileArchive, FileText, Image as ImageIcon, Music, Pause, Play, RotateCw, Trash2, Video, X, type LucideIcon } from 'lucide-react-native';
+import { File as FileIcon, FileArchive, FileText, Image as ImageIcon, Music, Pause, Play, RotateCw, ShieldCheck, Trash2, Video, X, type LucideIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
 import { formatSize } from '../../core/format';
-import { openPublicUri, transfers, type TransferRecord } from '../../core/native';
+import { openPublicUri, sha256File, transfers, type TransferRecord } from '../../core/native';
 import { mix } from '../../design/color';
 import { Button, EmptyState, GroupedCard, PageHead, Pressable, SectionLabel, Text, TopBar, useDialogs, useToast } from '../../design/components';
 import { LumenType } from '../../design/lumen';
 import { useRoles, useScheme } from '../../design/theme';
 import { t } from '../../i18n';
-import { hostStore } from '../../services';
+import { clientForHost, hostStore } from '../../services';
 import { externalMime } from '../preview/externalFiles';
 import { etaSeconds, formatEta, formatSpeed, SpeedTracker } from './speedTracker';
-import { finishedWhen, groupTransfers, isActive, isUpload, savedWhere, transferErrorMessage, transferKind, transferName, transferPillLabel, transferProgress, transferSummary, transferTone, type TransferKind } from './transferLogic';
+import { finishedWhen, groupTransfers, isActive, isUpload, retryableFailures, savedWhere, transferErrorMessage, transferKind, transferName, transferPillLabel, transferProgress, transferSummary, transferTone, verifyOutcome, type TransferKind, type VerifyOutcome } from './transferLogic';
 
 const GLYPHS: Record<TransferKind['glyph'], LucideIcon> = { image: ImageIcon, video: Video, audio: Music, archive: FileArchive, doc: FileText, file: FileIcon };
 
@@ -76,8 +76,11 @@ export function TransfersScreen() {
     const options: { value: string; label: string; icon: React.ReactNode }[] = [];
     if (groups.finished.length > 0) options.push({ value: 'clear', label: 'Clear completed', icon: <Trash2 size={20} color={c.onSurface} /> });
     if (groups.failed.length > 0) options.push({ value: 'clearFailed', label: 'Clear failed', icon: <Trash2 size={20} color={c.onSurface} /> });
+    const retryable = retryableFailures(groups.failed);
+    if (retryable.length > 0) options.unshift({ value: 'retryAll', label: t('retryAllFailed', { count: retryable.length }), icon: <RotateCw size={20} color={c.onSurface} /> });
     options.push({ value: 'files', label: 'Open Files', icon: <FileIcon size={20} color={c.onSurface} /> });
     const pick = await dialogs.choose({ title: t('transfersSettingsTitle'), options });
+    if (pick === 'retryAll') void Promise.all(retryable.map((r) => transfers.resume(r.id)));
     if (pick === 'clear') void forget(groups.finished);
     if (pick === 'clearFailed') void forget(groups.failed);
     if (pick === 'files') router.navigate('/files');
@@ -133,6 +136,8 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
   const c = useScheme();
   const roles = useRoles();
   const toast = useToast();
+  // The result of "Verify" for this row; kept only while the screen is open.
+  const [verified, setVerified] = useState<VerifyOutcome | 'checking' | null>(null);
   const name = transferName(r);
   const kind = transferKind(name);
   const Glyph = GLYPHS[kind.glyph];
@@ -156,6 +161,18 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
     else if (openable) void open();
   };
 
+  const verify = async () => {
+    setVerified('checking');
+    try {
+      const host = (await hostStore.listHosts()).find((h) => h.id === r.hostId);
+      if (!host) return setVerified('unavailable');
+      const [local, remote] = await Promise.all([sha256File(r.destPath), clientForHost(host).then((cl) => cl.checksum(r.remotePath))]);
+      setVerified(verifyOutcome(local, remote));
+    } catch {
+      setVerified('unavailable');
+    }
+  };
+
   const place = hostName ? ` ${up ? 'to' : 'from'} ${hostName}` : '';
   const size = r.total > 0 ? formatSize(r.total) : r.received > 0 ? formatSize(r.received) : '';
   const lead = size ? `${size} · ` : '';
@@ -170,6 +187,7 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
           : r.state === 'QUEUED'
             ? `${lead}Waiting${place}`
             : `${lead}${up ? 'Sending' : 'Receiving'}${place}`;
+  const verdictText = verified === 'checking' ? t('verifyChecking') : verified === 'verified' ? t('verifyVerified') : verified === 'mismatch' ? t('verifyMismatch') : verified === 'unavailable' ? t('verifyUnavailable') : '';
   const eta = live && speed !== undefined ? etaSeconds(r.total, r.received, speed) : null;
   const pace = live && speed !== undefined ? `${formatSpeed(speed)}${eta === null ? '' : ` · about ${formatEta(eta)} left`}` : '';
   const showBar = progress !== null && !done && r.state !== 'CANCELLED';
@@ -179,6 +197,7 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
   if (paused) actions.push({ key: 'resume', label: 'Resume', Icon: Play, primary: true, onPress: () => void transfers.resume(r.id) });
   if (failed) actions.push({ key: 'retry', label: 'Retry', Icon: RotateCw, primary: true, onPress: () => void transfers.resume(r.id) });
   if (openable) actions.push({ key: 'open', label: 'Open', Icon: FileIcon, primary: true, onPress: () => void open() });
+  if (done && !up && verified !== 'checking') actions.push({ key: 'verify', label: t('verifyDownloadButton'), Icon: ShieldCheck, onPress: () => void verify() });
   if (live || paused) actions.push({ key: 'cancel', label: 'Cancel', Icon: X, onPress: () => void transfers.cancel(r.id) });
   if (failed || done || r.state === 'CANCELLED') actions.push({ key: 'remove', label: 'Remove', Icon: Trash2, onPress: onForget });
 
@@ -190,7 +209,7 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
           <Text style={[LumenType.rowTitle, { flex: 1 }]} numberOfLines={1}>{name}</Text>
           <Pill label={transferPillLabel(r)} color={tint} />
         </View>
-        <Text style={[LumenType.meta, { marginTop: 6, marginLeft: 38 }]} color={c.onSurfaceVariant} numberOfLines={failed ? 3 : 2}>{detail}</Text>
+        <Text style={[LumenType.meta, { marginTop: 6, marginLeft: 38 }]} color={c.onSurfaceVariant} numberOfLines={failed ? 3 : 2}>{verdictText ? `${detail} · ${verdictText}` : detail}</Text>
         {showBar ? (
           <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 6, borderRadius: 8, marginTop: 12, backgroundColor: c.surfaceContainerHigh, overflow: 'hidden' }}>
             <View style={{ width: `${progress * 100}%`, height: 6, borderRadius: 8, backgroundColor: tint }} />

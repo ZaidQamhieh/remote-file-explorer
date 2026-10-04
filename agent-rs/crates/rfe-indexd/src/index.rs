@@ -6,7 +6,8 @@
 use crate::entry::{join_path, link_info, stat_of, WireEntry};
 use crate::filter::{Compiled, RootScopes};
 use crate::walk::{self, At, Sub, Visitor};
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -452,6 +453,71 @@ impl Index {
             }
         }
         out
+    }
+
+    /// Newest-first top `limit` files under `roots`, answered from memory with the rule `recents::scan` uses: real
+    /// directories are left out, symlinks (also to directories) are kept. None when the index cannot answer exactly:
+    /// it was cut short by its budget, or a requested root is not exactly an indexed root. A sub-folder is declined
+    /// because whether a symlink counts as a directory depends on the root it was resolved against, so the answer
+    /// could differ from a walk of that sub-folder. Callers then walk instead.
+    pub fn recents(&self, roots: &[String], limit: usize) -> Option<Vec<WireEntry>> {
+        if self.stats.truncated || roots.is_empty() {
+            return None;
+        }
+        if !roots.iter().all(|r| self.roots.iter().any(|(p, _)| p == r)) {
+            return None;
+        }
+        let scopes = RootScopes::new(roots);
+        let limit = limit.max(1);
+        // Keyed like recents::scan (older first, then path descending) so the heap keeps the newest `limit`.
+        type Key = (i64, Reverse<String>, u32, u32);
+        let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
+        let mut threshold = i64::MIN;
+        for seg in &self.segs {
+            let chunk = &self.chunks[seg.pos as usize];
+            for i in seg.start as usize..seg.end as usize {
+                let r = &chunk.recs[i];
+                if r.flags & FLAG_DIR != 0 && r.flags & FLAG_SYMLINK == 0 {
+                    continue;
+                }
+                if r.mtime_ns < threshold {
+                    continue;
+                }
+                let path = join_path(&chunk.dir_path, chunk.name(r));
+                if !scopes.contains(&path) {
+                    continue;
+                }
+                heap.push(Reverse((r.mtime_ns, Reverse(path), seg.pos, i as u32)));
+                if heap.len() > limit {
+                    heap.pop();
+                }
+                if heap.len() >= limit {
+                    if let Some(Reverse(oldest)) = heap.peek() {
+                        threshold = oldest.0;
+                    }
+                }
+            }
+        }
+        let mut keys: Vec<Key> = heap.into_iter().map(|Reverse(k)| k).collect();
+        keys.sort_by(|a, b| b.cmp(a));
+        Some(
+            keys.into_iter()
+                .map(|(mtime_ns, Reverse(path), pos, i)| {
+                    let chunk = &self.chunks[pos as usize];
+                    let r = &chunk.recs[i as usize];
+                    WireEntry {
+                        path,
+                        size: r.size,
+                        mtime_ns,
+                        ctime_ns: r.ctime_ns,
+                        mode: r.mode,
+                        is_dir: r.flags & FLAG_DIR != 0,
+                        is_symlink: r.flags & FLAG_SYMLINK != 0,
+                        symlink_target: chunk.link_target(i as usize).to_string(),
+                    }
+                })
+                .collect(),
+        )
     }
 
     /// Matches in index order. The bool is true when `limit` was reached or the index itself was truncated.

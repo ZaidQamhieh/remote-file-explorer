@@ -3,6 +3,7 @@ import type { Entry } from '../../core/api/models';
 import { ListingCache, MemoryListingBackend } from '../../core/storage/listingCache';
 import { defaultVisibility } from '../../core/visibility';
 import { createExplorer, currentPath, deriveDisplay } from './explorerStore';
+import type { UndoOp } from './undoPlan';
 
 const e = (name: string, dir = false): Entry => ({ name, path: `/r/${name}`, isDir: dir, isSymlink: false });
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -99,6 +100,44 @@ describe('navigation and selection', () => {
   });
 });
 
+describe('loadMore failures', () => {
+  it('shows the error, stops asking on its own, and a retry loads the page', async () => {
+    const list = jest
+      .fn()
+      .mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c1' })
+      .mockRejectedValueOnce(new Error('timed out'))
+      .mockResolvedValueOnce({ path: '/r', entries: [e('b')] });
+    const { ex } = setup({ list });
+    await ex.load();
+
+    await ex.loadMore();
+    expect(ex.getState()).toMatchObject({ loadingMore: false, loadMoreError: 'timed out', nextCursor: 'c1' });
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a']);
+
+    // The list asks again when it is still at the end; that must not hammer a failing host.
+    await ex.loadMore();
+    expect(list).toHaveBeenCalledTimes(2);
+
+    await ex.loadMore({ retry: true });
+    expect(ex.getState()).toMatchObject({ loadMoreError: null, nextCursor: null });
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a', 'b']);
+  });
+
+  it('a refresh clears the error', async () => {
+    const list = jest
+      .fn()
+      .mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c1' })
+      .mockRejectedValueOnce(new Error('timed out'))
+      .mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c1' });
+    const { ex } = setup({ list });
+    await ex.load();
+    await ex.loadMore();
+    expect(ex.getState().loadMoreError).toBe('timed out');
+    await ex.refresh();
+    expect(ex.getState().loadMoreError).toBeNull();
+  });
+});
+
 describe('operations', () => {
   it('batchRename does two-phase renames and rejects duplicate targets before touching anything', async () => {
     const rename = jest.fn().mockResolvedValue({});
@@ -114,6 +153,142 @@ describe('operations', () => {
     const calls = rename.mock.calls.map((c) => c.join('>'));
     expect(calls).toEqual(['/r/a>/r/.rfe-rn-0-b', '/r/b>/r/.rfe-rn-1-a', '/r/.rfe-rn-0-b>/r/b', '/r/.rfe-rn-1-a>/r/a']);
     expect(res.results.find((r) => r.path === '/r/e')!.ok).toBe(true);
+  });
+
+  it('batchRename puts a file back under its own name when phase 2 fails', async () => {
+    // The agent now answers 409 when a final name is taken by an item that was not selected.
+    const rename = jest.fn().mockImplementation(async (from: string, to: string) => {
+      if (from === '/r/.rfe-rn-0-b' && to === '/r/b') throw new Error('destination already exists');
+    });
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [] }), rename });
+    const res = await ex.batchRename([
+      { path: '/r/a', newName: 'b' },
+      { path: '/r/c', newName: 'd' },
+    ]);
+    expect(rename.mock.calls.map((c) => c.join('>'))).toEqual([
+      '/r/a>/r/.rfe-rn-0-b',
+      '/r/c>/r/.rfe-rn-1-d',
+      '/r/.rfe-rn-0-b>/r/b',
+      '/r/.rfe-rn-0-b>/r/a',
+      '/r/.rfe-rn-1-d>/r/d',
+    ]);
+    expect(res.failed).toHaveLength(1);
+    expect(res.failed[0]).toMatchObject({ path: '/r/a', ok: false, errorCode: 'RENAME_FAILED' });
+    expect(res.results.find((r) => r.path === '/r/d')!.ok).toBe(true);
+  });
+
+  it('batchRename reports a file it could not put back, with the name it was left under', async () => {
+    const rename = jest.fn().mockImplementation(async (from: string) => {
+      if (from === '/r/.rfe-rn-0-b') throw new Error('nope');
+    });
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [] }), rename });
+    const res = await ex.batchRename([{ path: '/r/a', newName: 'b' }]);
+    expect(res.failed).toHaveLength(1);
+    expect(res.failed[0]).toMatchObject({ path: '/r/.rfe-rn-0-b', ok: false, errorCode: 'RENAME_STRANDED' });
+    expect(res.failed[0].errorMessage).toContain('/r/a');
+  });
+
+  it('batchRename refuses a name that is taken by an unselected item before moving anything, and still allows a chain', async () => {
+    const files = new Set(['/r/a', '/r/b', '/r/c', '/r/d']);
+    const rename = jest.fn().mockImplementation(async (from: string, to: string) => {
+      if (files.has(to)) throw new Error('destination already exists');
+      files.delete(from);
+      files.add(to);
+    });
+    const list = jest.fn().mockImplementation(async () => ({ path: '/r', entries: [...files].map((p) => e(p.slice(3))) }));
+    const { ex } = setup({ list, rename });
+    await ex.load();
+    // a>b then b>c is a chain through b, and c exists unselected: b>c is refused up front, a>b is refused by the host
+    // and put back, and nothing is left under a temp name.
+    const res = await ex.batchRename([
+      { path: '/r/a', newName: 'b' },
+      { path: '/r/b', newName: 'c' },
+      { path: '/r/d', newName: 'e' },
+    ]);
+    expect(res.failed.map((r) => [r.path, r.errorCode])).toEqual([['/r/b', 'TARGET_EXISTS'], ['/r/a', 'RENAME_FAILED']]);
+    expect([...files].sort()).toEqual(['/r/a', '/r/b', '/r/c', '/r/e']);
+    expect([...files].some((p) => p.includes('.rfe-rn-'))).toBe(false);
+  });
+
+  it('a loadMore that a refresh superseded does not leave the list unable to page', async () => {
+    let releaseMore!: (v: unknown) => void;
+    const list = jest
+      .fn()
+      .mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c1' })
+      .mockImplementationOnce(() => new Promise((r) => (releaseMore = r)))
+      .mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c1' })
+      .mockResolvedValueOnce({ path: '/r', entries: [e('b')] });
+    const { ex } = setup({ list });
+    await ex.load();
+    const more = ex.loadMore();
+    await tick();
+    await ex.refresh();
+    releaseMore({ path: '/r', entries: [e('late')] });
+    await more;
+    expect(ex.getState().loadingMore).toBe(false);
+    await ex.loadMore();
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a', 'b']);
+  });
+
+  it('duplicateSelected copies the selection into the folder on screen as keep-both', async () => {
+    const res = { results: [], failed: [] };
+    const copy = jest.fn().mockResolvedValue(res);
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [] }), copy });
+    ex.toggleSelect('/r/a');
+    ex.toggleSelect('/r/b');
+    expect(await ex.duplicateSelected()).toBe(res);
+    expect(copy).toHaveBeenCalledWith(['/r/a', '/r/b'], '/r', { duplicate: true });
+  });
+
+  it('undo of a rename renames back; undo of a move moves back without ever overwriting', async () => {
+    const rename = jest.fn().mockResolvedValue({});
+    const move = jest.fn().mockResolvedValue({ results: [{ path: '/d/x', ok: true }], failed: [] });
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [] }), rename, move });
+    await ex.undo({ kind: 'rename', from: '/r/b', to: '/r/a' });
+    expect(rename).toHaveBeenCalledWith('/r/b', '/r/a');
+    const op: UndoOp = { kind: 'move', groups: [{ paths: ['/d/x'], destDir: '/a' }] };
+    await ex.undo(op);
+    expect(move).toHaveBeenCalledWith(['/d/x'], '/a', {});
+  });
+
+  it('undo reports a move that the host refused, so it is never shown as undone', async () => {
+    const move = jest.fn().mockResolvedValue({ results: [{ path: '/d/x', ok: false, errorCode: 'CONFLICT' }], failed: [{ path: '/d/x', ok: false, errorCode: 'CONFLICT' }] });
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [] }), move });
+    await expect(ex.undo({ kind: 'move', groups: [{ paths: ['/d/x'], destDir: '/a' }] })).rejects.toThrow(/already exists|could not/i);
+  });
+
+  it('selectRange extends from the last toggled item to the target, on the list as displayed', async () => {
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [e('a'), e('b'), e('c'), e('d'), e('e')] }) });
+    await ex.load();
+    const shown = ex.getState().entries;
+    ex.toggleSelect('/r/b');
+    ex.selectRange(shown, '/r/d');
+    expect([...ex.getState().selected].sort()).toEqual(['/r/b', '/r/c', '/r/d']);
+    // The anchor moves to the target, so the next range starts there and keeps what is already selected.
+    ex.selectRange(shown, '/r/e');
+    expect([...ex.getState().selected].sort()).toEqual(['/r/b', '/r/c', '/r/d', '/r/e']);
+  });
+
+  it('selectRange with nothing selected selects just the target; clearing forgets the anchor', async () => {
+    const { ex } = setup({ list: jest.fn().mockResolvedValue({ path: '/r', entries: [e('a'), e('b'), e('c')] }) });
+    await ex.load();
+    const shown = ex.getState().entries;
+    ex.selectRange(shown, '/r/c');
+    expect([...ex.getState().selected]).toEqual(['/r/c']);
+    ex.clearSelection();
+    ex.selectRange(shown, '/r/a');
+    expect([...ex.getState().selected]).toEqual(['/r/a']);
+  });
+
+  it('createFolder can open the new folder with a single listing', async () => {
+    const list = jest.fn().mockResolvedValue({ path: '/r/new', entries: [] });
+    const createFolder = jest.fn().mockResolvedValue({});
+    const { ex } = setup({ list, createFolder });
+    await ex.createFolder('new', { open: true });
+    expect(createFolder).toHaveBeenCalledWith('/r/new');
+    expect(currentPath(ex.getState())).toBe('/r/new');
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls[0][0]).toBe('/r/new');
   });
 
   it('collidingBasenames pages the whole destination', async () => {

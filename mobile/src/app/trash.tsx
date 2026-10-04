@@ -9,6 +9,7 @@ import { AppBarIconButton, Button, EmptyState, ErrorRetry, Pressable, Text, useD
 import { LumenSize, LumenType } from '../design/lumen';
 import { useScheme } from '../design/theme';
 import { ResultCardRow } from '../features/search/SearchParts';
+import { restoreOutcome } from '../features/explorer/trashRestore';
 import { explorerFor } from '../features/explorer/useExplorer';
 import { humanizeError } from '../features/pairing/pairingService';
 import { t } from '../i18n';
@@ -62,9 +63,13 @@ export default function Trash() {
 
   async function restore(item: TrashEntry) {
     try {
-      await (await clientForHost(host)).restoreTrash([item.id]);
+      const outcome = restoreOutcome(item.name, await (await clientForHost(host)).restoreTrash([item.id]));
+      if (!outcome.ok) {
+        toast.error(t('restoreFailed', { error: outcome.error }));
+        return;
+      }
       refreshFolder();
-      toast.success(t('restoredItem', { name: item.name }));
+      toast.success(t(outcome.renamed ? 'restoredAs' : 'restoredItem', { name: outcome.name }));
       await load();
     } catch (e) {
       toast.error(t('restoreFailed', { error: humanizeError(e) }));

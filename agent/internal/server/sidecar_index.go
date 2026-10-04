@@ -322,6 +322,8 @@ type recentsReq struct {
 type recentsResp struct {
 	Entries []wireEntry `json:"entries"`
 	Partial bool        `json:"partial"`
+	// Ready is set by recents.index only: false means the live index could not answer exactly and the caller walks.
+	Ready bool `json:"ready"`
 }
 
 // sidecarRecentWalker returns a recent-files walker that asks rfe-indexd and falls back to the Go walk when the
@@ -332,8 +334,15 @@ func sidecarRecentWalker(sup *sidecar.Supervisor) func(context.Context, *fsops.O
 		if dl, ok := ctx.Deadline(); ok {
 			budget = time.Until(dl)
 		}
+		req := recentsReq{Roots: []string{root}, Limit: limit, BudgetMs: budget.Milliseconds()}
 		var resp recentsResp
-		err := sup.Call(ctx, "recents.scan", recentsReq{Roots: []string{root}, Limit: limit, BudgetMs: budget.Milliseconds()}, &resp)
+		// The live index answers from memory in milliseconds; it declines (ready=false) when it is missing, stale-able
+		// (watcher unhealthy), cut by its budget, or does not cover the root, and then the sidecar walks as before.
+		err := sup.Call(ctx, "recents.index", req, &resp)
+		if err != nil || !resp.Ready {
+			resp = recentsResp{}
+			err = sup.Call(ctx, "recents.scan", req, &resp)
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				sidecar.Note("indexd.recents-fallback")

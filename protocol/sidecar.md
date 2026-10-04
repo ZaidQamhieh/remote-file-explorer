@@ -72,6 +72,11 @@ Paths are absolute, UTF-8, and use the platform separator. Entries whose names a
   (lowercase glob in Go `path.Match` syntax, or a lowercase substring). Results come in depth-first, name-sorted
   order, the order Go's `fs.WalkDir` yields. `truncated` is true when `limit` was reached or the index itself was
   cut by its budget.
+- `recents.index` `{roots:[string], limit}` answers `{ready, entries, partial}` with the newest files from the live
+  index, in memory. `ready` is false (no entries) when it cannot answer exactly: no index yet, the file watcher is
+  not healthy, the index was cut by its budget, or a root is not exactly an indexed root (a sub-folder is walked, as
+  symlinks resolve against the root). The agent then calls
+  `recents.scan`.
 - `recents.scan` `{roots:[string], limit, budgetMs}` answers `{entries:[Entry], partial}` with the newest files
   (not directories) first. `partial` is true when `budgetMs` cut the scan short.
 

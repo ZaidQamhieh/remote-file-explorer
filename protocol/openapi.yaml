@@ -312,6 +312,13 @@ paths:
         Sign the returned nonce with the device's Ed25519 private key and pass
         it (with the device's public key) to /pair, /register, or /login as
         proof the caller controls that key. Valid for 2 minutes, single-use.
+
+        Two signatures are accepted. The bare nonce (UTF-8 bytes) is what the phone app and the
+        browser companion send. `proof: "v2"` says the agent also accepts a signature over
+        `"rfe-device-proof-v2\n" + <this agent's TLS leaf-certificate SHA-256, lowercase hex> + "\n" + nonce`.
+        That signature is worthless at any other agent, so a malicious agent cannot fetch a nonce
+        from this one, hand it to a device as its own challenge and replay the answer here. A client
+        that must not sign a bare nonce (the desktop app) refuses an agent that does not send `proof`.
       security: []
       responses:
         "200":
@@ -320,7 +327,12 @@ paths:
             application/json:
               schema:
                 type: object
-                properties: { nonce: { type: string } }
+                properties:
+                  nonce: { type: string }
+                  proof:
+                    type: string
+                    enum: [v2]
+                    description: Present on agents that accept the certificate-bound v2 proof.
         "429":
           description: Too many challenge requests (rate-limited at 30/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -1050,6 +1062,7 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
     delete:
       summary: Empty the trash (all items, or only the given ids)
+      description: A request with no body empties everything. A body that is present but not valid JSON of the expected shape, that has no ids (an empty object, null or an empty ids list), or that names an invalid trash id, returns 400 and deletes nothing.
       requestBody:
         required: false
         content:
@@ -1060,6 +1073,7 @@ paths:
                 ids: { type: array, items: { type: string }, description: "Specific trash ids to purge; omit to empty all." }
       responses:
         "200": { description: Emptied, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+        "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
 
   /trash/restore:

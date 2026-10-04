@@ -1,0 +1,193 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1a1d23;
+  --muted: #5d6573;
+  --line: #dfe3ea;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --danger: #b3261e;
+  --ok: #1b7a43;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1c1f25;
+    --text: #e8eaee;
+    --muted: #9aa3b2;
+    --line: #2f343d;
+    --accent: #6ea0f0;
+    --accent-text: #0e1116;
+    --danger: #f2a09a;
+    --ok: #7fd1a1;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.bar h1 { font-size: 15px; margin: 0; font-weight: 600; }
+.bar-right { display: flex; gap: 16px; align-items: center; }
+.session { display: flex; gap: 12px; align-items: center; color: var(--muted); }
+main { max-width: 760px; margin: 0 auto; padding: 20px; }
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px;
+}
+h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+.hint { color: var(--muted); margin: 0 0 14px; }
+label { display: block; font-weight: 500; margin: 10px 0 4px; }
+input, select, textarea {
+  width: 100%; padding: 8px 10px; font: inherit; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button {
+  font: inherit; padding: 8px 14px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); margin-top: 14px; }
+button.link { border: 0; background: none; color: var(--accent); padding: 0; }
+button:disabled { opacity: 0.6; cursor: default; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+.row .primary { margin-top: 0; }
+.row.pad { margin-top: 14px; }
+.mono, code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px;
+}
+.mono {
+  word-break: break-all; padding: 10px 12px; margin: 0 0 14px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.table-wrap { overflow-x: auto; }
+/* A monospace table cell is plain text in a row, not the boxed block `.mono` makes elsewhere. */
+td.mono { margin: 0; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; font-size: 12px; }
+tr:last-child td.mono { border-bottom: 0; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+tr:last-child td { border-bottom: 0; }
+.tag { color: var(--ok); }
+.tag.revoked { color: var(--danger); }
+.warn { color: var(--danger); border: 1px solid var(--danger); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px; }
+.message { padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
+.message.error { color: var(--danger); border-color: var(--danger); }
+.panel > .message { margin: 14px 0 0; }
+.row.pad + .hint { margin-top: 14px; }
+
+.code { font-size: 32px; letter-spacing: 3px; margin: 8px 0 14px; }
+
+h3 { font-size: 14px; margin: 18px 0 6px; font-weight: 600; }
+select { width: auto; min-width: 12em; }
+.mono-line { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
+.about { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.about dt { color: var(--muted); }
+.about dd { margin: 0; }
+#keystore-result.tag.revoked { color: var(--danger); }
+textarea { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[tabindex="-1"]:focus { outline: none; }
+
+/* ---- feature:file-browser ---- */
+.crumbs { list-style: none; display: flex; flex-wrap: wrap; gap: 2px 6px; padding: 0; margin: 0 0 12px; }
+.crumbs li + li::before { content: "/"; color: var(--muted); margin-right: 6px; }
+.crumbs [aria-current="page"] { font-weight: 600; }
+.muted { color: var(--muted); }
+table.files td:first-child { white-space: normal; word-break: break-all; }
+table.files tbody tr:focus-within { background: var(--bg); }
+table.files td:last-child button + button { margin-left: 12px; }
+th button.link { color: var(--muted); font-size: 12px; font-weight: 500; }
+th[aria-sort="ascending"] button.link::after { content: " \25B2"; }
+th[aria-sort="descending"] button.link::after { content: " \25BC"; }
+button.filelink { text-align: left; }
+#files-status:empty { display: none; }
+/* ---- end feature:file-browser ---- */
+
+/* The 64-character fingerprint wraps; the agent and the Forget button stay readable without scrolling sideways. */
+#pins td, #settings-pins td { white-space: normal; overflow-wrap: anywhere; }
+#pins td:last-child, #settings-pins td:last-child { white-space: nowrap; }
+
+/* ---- feature:multi-hosts ---- */
+#hosts-list button + button { margin-left: 12px; }
+#hosts-list input { min-width: 12em; }
+#hosts-status { color: var(--muted); }
+#hosts-status.tag.revoked { color: var(--danger); }
+/* ---- feature:health-metrics ---- */
+input[type="checkbox"] { width: auto; margin: 0; }
+label.inline { display: inline; margin: 0; font-weight: 400; }
+.pad-top { margin-top: 12px; }
+
+/* ---- feature:pairing-codes ---- */
+/* One click selects the whole code, so Ctrl+C copies it; the app never touches the clipboard. */
+.pcodes-code { font-size: 36px; letter-spacing: 6px; -webkit-user-select: all; user-select: all; }
+
+/* ---- feature:audit-logs ---- */
+.filters { align-items: flex-end; margin-bottom: 10px; }
+.filters label { margin-top: 0; }
+.filters input { min-width: 12em; width: auto; }
+#audit-body td, #log-body td { white-space: normal; word-break: break-word; }
+#log-body td:last-child { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+#audit-body td:first-child, #log-body td:first-child { white-space: nowrap; }
+
+/* feature:device-actions */
+.da-actions { display: flex; gap: 14px; align-items: center; }
+/* The 760px column cannot hold six nowrap columns plus three buttons: the data wraps, the buttons do not. */
+#devices td { white-space: normal; overflow-wrap: break-word; }
+#devices td:nth-child(n+4) { white-space: nowrap; }
+button.da-danger { color: var(--danger); }
+button.da-danger.armed { background: var(--danger); color: var(--surface); padding: 2px 8px; border: 1px solid var(--danger); border-radius: var(--radius); }
+.da-editor { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 4px; }
+.da-editor fieldset { border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; padding: 4px 12px 8px; }
+.da-editor legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
+.da-check { display: flex; align-items: center; gap: 8px; }
+.da-check input { width: auto; margin: 0; }
+.da-check label { margin: 6px 0; font-weight: 400; }
+
+/* ---- feature:pair-inbox ---- */
+#inbox-rows td { white-space: normal; vertical-align: top; }
+#inbox-rows .hint { margin: 4px 0 0; font-size: 12px; }
+#inbox-rows td.inbox-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 1px; white-space: nowrap; }
+#inbox-rows button.primary { margin-top: 0; }
+/* ---- end feature:pair-inbox ---- */
+
+/* ---- feature:transfers ---- */
+.transfers { list-style: none; margin: 0; padding: 0; }
+.transfer { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.transfer:last-child { border-bottom: 0; }
+.transfer-name { font-weight: 500; word-break: break-all; }
+.transfer-status { color: var(--muted); margin: 2px 0 6px; word-break: break-word; }
+.transfer-status.failed { color: var(--danger); }
+.transfer progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
+.transfer .row { margin-top: 8px; }
+
+/* ---- narrow window (a 200% display shows this window at about 640 CSS pixels) ---- */
+/* Cells wrap so no table needs a sideways scroll; a status word and the buttons stay whole words. */
+@media (max-width: 700px) {
+  th, td { white-space: normal; padding-left: 6px; padding-right: 6px; }
+  td.tag { white-space: nowrap; }
+  td.mono, td .mono-line { overflow-wrap: anywhere; }
+  .da-actions { flex-wrap: wrap; gap: 4px 12px; }
+  #hosts-list td:last-child button + button, table.files td:last-child button + button { margin-left: 8px; }
+}
+@media (max-width: 560px) {
+  main { padding: 12px; }
+  .panel { padding: 14px; }
+  .da-actions { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+@media (max-width: 700px) {
+  .bar { flex-wrap: wrap; gap: 6px 12px; }
+  .bar-right, .session { flex-wrap: wrap; gap: 4px 12px; }
+  .bar h1, .bar button { white-space: nowrap; }
+}

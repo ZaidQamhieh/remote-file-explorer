@@ -101,6 +101,10 @@ jobs:
       - name: Secret Service round trip
         run: ../scripts/with-keyring.sh cargo test --locked --test keystore -- --ignored
 
+      # The same, with the default keyring present and locked: the refusal must name the fix.
+      - name: Secret Service locked
+        run: ../scripts/with-keyring.sh --locked cargo test --locked --test keystore_locked -- --ignored
+
       # Accepted advisories are listed with reasons in .cargo/audit.toml; any new warning fails the job.
       - name: cargo audit
         run: |

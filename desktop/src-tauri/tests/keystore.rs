@@ -233,6 +233,9 @@ fn the_real_backend_reports_an_unreachable_keystore() {
             .get("probe")
             .expect_err("no keystore is reachable");
         assert!(err.contains("OS keystore"), "{err}");
+        // Names the cause and the fix, not only "unavailable".
+        assert!(err.contains("no OS keystore answered"), "{err}");
+        assert!(err.contains("Secret Service provider"), "{err}");
         let dir = TempDir::new().unwrap();
         assert!(Identity::load_or_create(dir.path(), &OsKeystore::new()).is_err());
         assert!(listing(dir.path()).is_empty(), "no file fallback");

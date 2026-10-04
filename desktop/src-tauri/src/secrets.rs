@@ -52,11 +52,33 @@ impl Default for OsKeystore {
     }
 }
 
+/// What to do about a keystore failure, by cause. keyring maps "the service answered but refused"
+/// (locked, no default keyring, prompt dismissed) to `NoStorageAccess` and "no service answered"
+/// (no session bus, no provider) to `PlatformFailure`. Every message still says "OS keystore" and
+/// that nothing is saved to files, so a caller can tell this failure from any other.
 fn unavailable(e: keyring::Error) -> String {
-    format!(
-        "the OS keystore is missing or locked ({e}); unlock it or start a Secret Service \
-         provider (for example gnome-keyring or KWallet). Secrets are never saved to files"
-    )
+    // A locked collection is reported by the service as a D-Bus error, which keyring files under
+    // `PlatformFailure`; it is still a locked keystore, not a missing one.
+    let refused = matches!(e, keyring::Error::NoStorageAccess(_))
+        || e.to_string().to_ascii_lowercase().contains("locked");
+    let (what, fix) = match &e {
+        _ if refused => (
+            "the OS keystore refused access",
+            "Unlock it (log in again, or unlock the \"Login\" or default keyring or wallet), and \
+             make sure a default keyring exists",
+        ),
+        keyring::Error::PlatformFailure(_) => (
+            "no OS keystore answered",
+            "Start a Secret Service provider and unlock it: gnome-keyring, KeePassXC (turn on \
+             Secret Service Integration in its settings) or KDE Wallet. Over SSH or on a server \
+             there is no desktop session bus; run the app inside a session that has one",
+        ),
+        _ => (
+            "the OS keystore could not be used",
+            "Check the keystore and try again",
+        ),
+    };
+    format!("{what} ({e}). {fix}. Secrets are never saved to files")
 }
 
 impl SecretStore for OsKeystore {

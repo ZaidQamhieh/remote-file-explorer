@@ -7,7 +7,7 @@ use rfe_desktop_lib::agent_client::{
 };
 use rfe_desktop_lib::flows;
 use rfe_desktop_lib::identity::Identity;
-use rfe_desktop_lib::secrets::{MemoryStore, UnavailableStore};
+use rfe_desktop_lib::secrets::{MemoryStore, Offloaded, UnavailableStore};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -126,7 +126,7 @@ async fn captured_fingerprint_matches_the_agents_own_report() {
 
 #[tokio::test]
 async fn pinned_login_lists_the_full_device_list() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     let a = Agent::start(free_port());
     a.add_user("owner", "correct horse battery");
     let fp = capture_fingerprint(&a.host).await.unwrap();
@@ -184,7 +184,7 @@ async fn pinned_login_lists_the_full_device_list() {
 
 #[tokio::test]
 async fn wrong_pin_is_refused_and_sends_no_credentials() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     let a = Agent::start(free_port());
     a.add_user("owner", "pw-for-wrong-pin-test");
     let state = TempDir::new().unwrap();
@@ -237,7 +237,7 @@ async fn wrong_pin_is_refused_and_sends_no_credentials() {
 
 #[tokio::test]
 async fn a_changed_certificate_after_pairing_is_refused() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     let port = free_port();
     let first = Agent::start(port);
     first.add_user("owner", "pw-for-cert-change");
@@ -319,7 +319,7 @@ async fn a_missing_or_locked_keystore_stops_login_before_any_network_traffic() {
         "owner",
         "pw-for-keystore-test",
         "X",
-        &UnavailableStore,
+        &Offloaded::new(UnavailableStore),
     )
     .await
     .expect_err("login must fail without a keystore");
@@ -337,7 +337,7 @@ async fn a_missing_or_locked_keystore_stops_login_before_any_network_traffic() {
     assert!(files.is_empty(), "no file fallback was written: {files:?}");
 
     // Negative control: the same agent and credentials succeed with a working keystore.
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     flows::login(
         state.path(),
         &a.host,
@@ -351,7 +351,7 @@ async fn a_missing_or_locked_keystore_stops_login_before_any_network_traffic() {
     .expect("a working keystore must succeed");
     assert!(a.audit_cli().contains("login"));
     // And a locked keystore also blocks reading the saved token afterwards.
-    let err = flows::list_devices(state.path(), &UnavailableStore)
+    let err = flows::list_devices(state.path(), &Offloaded::new(UnavailableStore))
         .await
         .expect_err("a locked keystore must not yield a token");
     assert!(err.to_string().contains("OS keystore"), "{err}");
@@ -366,7 +366,7 @@ async fn a_missing_or_locked_keystore_stops_login_before_any_network_traffic() {
 
 #[tokio::test]
 async fn wrong_password_surfaces_the_agents_error_code() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     let a = Agent::start(free_port());
     a.add_user("owner", "the-right-one");
     let fp = capture_fingerprint(&a.host).await.unwrap();
@@ -410,7 +410,7 @@ fn host_and_fingerprint_inputs_are_validated() {
 
 #[test]
 fn damaged_state_and_identity_files_are_errors_not_resets() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("state.json"), b"{not json").unwrap();
     assert!(flows::load_saved(dir.path(), &store).is_err());
@@ -442,7 +442,7 @@ fn damaged_state_and_identity_files_are_errors_not_resets() {
 
 #[test]
 fn private_writes_replace_atomically_stay_0600_and_ignore_loose_leftovers() {
-    let store = MemoryStore::default();
+    let store = Offloaded::new(MemoryStore::default());
     use rfe_desktop_lib::flows::{load_saved, save, Saved};
     let dir = TempDir::new().unwrap();
     // A loose-permission file at the old fixed temp name must not be reused.

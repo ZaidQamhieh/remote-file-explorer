@@ -9,9 +9,13 @@ pub mod secrets;
 
 use agent_client::Device;
 use flows::Saved;
-use secrets::OsKeystore;
+use secrets::{Offloaded, OsKeystore};
 use serde::Serialize;
 use tauri::Manager;
+
+fn keystore() -> Offloaded {
+    Offloaded::new(OsKeystore::new())
+}
 
 fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
@@ -37,9 +41,13 @@ impl From<Saved> for SavedView {
     }
 }
 
+// Every command that touches the keystore is async and goes through `Offloaded`, so an open
+// unlock prompt never blocks the main thread or a runtime worker.
 #[tauri::command]
-fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
-    Ok(flows::load_saved(&data_dir(&app)?, &OsKeystore::new())?.into())
+async fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
+    let dir = data_dir(&app)?;
+    let saved = keystore().run(move |s| flows::load_saved(&dir, s)).await?;
+    Ok(saved.into())
 }
 
 #[tauri::command]
@@ -65,7 +73,7 @@ async fn login(
         &username,
         &password,
         "RFE Desktop",
-        &OsKeystore::new(),
+        &keystore(),
     )
     .await
     .map(Into::into)
@@ -74,14 +82,15 @@ async fn login(
 
 #[tauri::command]
 async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
-    flows::list_devices(&data_dir(&app)?, &OsKeystore::new())
+    flows::list_devices(&data_dir(&app)?, &keystore())
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn sign_out(app: tauri::AppHandle) -> Result<(), String> {
-    flows::sign_out(&data_dir(&app)?, &OsKeystore::new())
+async fn sign_out(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = data_dir(&app)?;
+    keystore().run(move |s| flows::sign_out(&dir, s)).await
 }
 
 pub fn run() {

@@ -6,7 +6,8 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub trait SecretStore: Send + Sync {
     /// `Ok(None)` means "no such secret"; any other failure is an error.
@@ -78,6 +79,72 @@ impl SecretStore for OsKeystore {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(unavailable(e)),
         }
+    }
+}
+
+/// A store whose calls can be made without blocking the async runtime.
+///
+/// Keystore calls are synchronous and can sit on an unlock prompt for as long as the user takes.
+/// Run on a runtime worker (or Tauri's main thread for a sync command) that stalls every other
+/// command, so async code goes through [`Offloaded::run`], which moves the call to a blocking
+/// thread and gives up waiting after a timeout. The blocked thread itself cannot be cancelled: if
+/// the user answers the prompt later, the call finishes and its result is dropped.
+///
+/// It also implements [`SecretStore`] by calling straight through, for code that is already
+/// synchronous (tests, examples, `load_saved`).
+#[derive(Clone)]
+pub struct Offloaded {
+    inner: Arc<dyn SecretStore>,
+    timeout: Duration,
+}
+
+impl Offloaded {
+    /// Long enough for a person to type a keyring password, short enough to end a hung session bus.
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+
+    pub fn new(store: impl SecretStore + 'static) -> Self {
+        Self {
+            inner: Arc::new(store),
+            timeout: Self::DEFAULT_TIMEOUT,
+        }
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Runs `f` against the store on a blocking thread.
+    pub async fn run<T, F>(&self, f: F) -> Result<T, String>
+    where
+        T: Send + 'static,
+        F: FnOnce(&dyn SecretStore) -> Result<T, String> + Send + 'static,
+    {
+        let store = Arc::clone(&self.inner);
+        let task = tokio::task::spawn_blocking(move || f(&*store));
+        match tokio::time::timeout(self.timeout, task).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(e)) => Err(format!("the OS keystore call failed to run: {e}")),
+            Err(_) => Err(format!(
+                "the OS keystore did not answer within {:?}; an unlock prompt may be waiting \
+                 behind another window. Unlock it and try again. Secrets are never saved to files",
+                self.timeout
+            )),
+        }
+    }
+}
+
+impl SecretStore for Offloaded {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        self.inner.get(account)
+    }
+
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.inner.set(account, secret)
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        self.inner.delete(account)
     }
 }
 

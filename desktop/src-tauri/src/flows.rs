@@ -8,7 +8,7 @@ use crate::identity::Identity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-use crate::secrets::{account, SecretStore};
+use crate::secrets::{account, Offloaded, SecretStore};
 
 #[derive(Debug, Clone, Default)]
 pub struct Saved {
@@ -146,10 +146,16 @@ pub async fn login(
     username: &str,
     password: &str,
     label: &str,
-    store: &dyn SecretStore,
+    store: &Offloaded,
 ) -> Result<Saved, AgentError> {
     // Before any network traffic: a missing or locked keystore must stop the login here.
-    let identity = Identity::load_or_create(dir, store).map_err(AgentError::Local)?;
+    let identity = {
+        let dir = dir.to_path_buf();
+        store
+            .run(move |s| Identity::load_or_create(&dir, s))
+            .await
+            .map_err(AgentError::Local)?
+    };
     let client = AgentClient::pinned(host, fingerprint)?;
     let ok = client.login(&identity, username, password, label).await?;
     let saved = Saved {
@@ -159,12 +165,24 @@ pub async fn login(
         username: username.to_string(),
         device_id: ok.device_id,
     };
-    save(dir, store, &saved).map_err(AgentError::Local)?;
+    {
+        let (dir, saved) = (dir.to_path_buf(), saved.clone());
+        store
+            .run(move |s| save(&dir, s, &saved))
+            .await
+            .map_err(AgentError::Local)?;
+    }
     Ok(saved)
 }
 
-pub async fn list_devices(dir: &Path, store: &dyn SecretStore) -> Result<Vec<Device>, AgentError> {
-    let s = load_saved(dir, store).map_err(AgentError::Local)?;
+pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, AgentError> {
+    let s = {
+        let dir = dir.to_path_buf();
+        store
+            .run(move |s| load_saved(&dir, s))
+            .await
+            .map_err(AgentError::Local)?
+    };
     if s.token.is_empty() || s.host.is_empty() {
         return Err(AgentError::Local("not signed in".into()));
     }

@@ -2,7 +2,11 @@
 //! the window opens on the device list, and adds a second device.
 //! Usage: seed_state <host:port> <user> <password> <state-dir> <second-state-dir>
 
-use rfe_desktop_lib::{agent_client::capture_fingerprint, flows, secrets::OsKeystore};
+use rfe_desktop_lib::{
+    agent_client::capture_fingerprint,
+    flows,
+    secrets::{Offloaded, OsKeystore},
+};
 use std::path::Path;
 
 #[tokio::main]
@@ -19,7 +23,7 @@ async fn main() {
         user,
         pw,
         "Phone (test)",
-        &OsKeystore::new(),
+        &Offloaded::new(OsKeystore::new()),
     )
     .await
     .expect("second device");
@@ -30,7 +34,7 @@ async fn main() {
         user,
         pw,
         "RFE Desktop",
-        &OsKeystore::new(),
+        &Offloaded::new(OsKeystore::new()),
     )
     .await
     .expect("login");

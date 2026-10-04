@@ -3,6 +3,7 @@
 
 pub mod agent_client;
 pub mod applog;
+pub mod discovery;
 pub mod flows;
 mod fsutil;
 pub mod identity;
@@ -242,6 +243,27 @@ fn app_settings(app: tauri::AppHandle) -> Result<SettingsView, String> {
     })
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FoundView {
+    #[serde(flatten)]
+    found: discovery::Found,
+    /// This app already trusts a certificate for that address.
+    known: bool,
+}
+
+/// Looks for agents on the local network for a few seconds. The result is a list of addresses to
+/// try, nothing more: no credential is sent and no agent is trusted by being listed.
+#[tauri::command]
+async fn discover_agents(app: tauri::AppHandle) -> Result<Vec<FoundView>, String> {
+    let dir = data_dir(&app)?;
+    let list = flows::discover(&dir, std::time::Duration::from_secs(3)).await?;
+    Ok(list
+        .into_iter()
+        .map(|(found, known)| FoundView { found, known })
+        .collect())
+}
+
 #[tauri::command]
 fn diagnostics(app: tauri::AppHandle) -> Result<String, String> {
     Ok(flows::diagnostics(&data_dir(&app)?))
@@ -289,6 +311,7 @@ pub fn run() {
             list_devices,
             sign_out,
             app_settings,
+            discover_agents,
             diagnostics,
             set_log_level,
             check_keystore

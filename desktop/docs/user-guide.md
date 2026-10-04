@@ -34,6 +34,13 @@ Until then, build it yourself: [README.md](../README.md).
 3. After you trust it, the app remembers the fingerprint for that exact `host:port`. Every later
    connection to that address must present the same certificate or the app refuses it.
 
+**Find agents** on the first screen lists agents on the same network that advertise themselves (mDNS,
+`_rfe._tcp`). **Use** only fills in the address; it does not connect, sign in or trust anything. Anyone
+on the network can advertise a service with that name, so a listed agent is exactly as unverified as one
+you typed: you still press **Check certificate** and compare the fingerprint with `rfe-agent status`. The
+search takes a few seconds and happens only when you press the button. Agents on other networks, or on
+networks that block multicast (many guest and corporate networks), are not listed; type their address.
+
 If the certificate changes (the agent was reinstalled or its data folder was deleted), the app shows a
 warning with the old fingerprint and asks you to compare again. Only continue if you know why it changed.
 
@@ -128,6 +135,7 @@ Messages from this app:
 | Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. |
 | Signed out on this computer only | The agent could not be told. Revoke this computer on the PC (`rfe-agent revoke <id>`) so its old login stops working. |
 | is damaged (...); delete it to create a new device identity | An `identity.json` left by an early version cannot be read. Delete that file; the app makes a new device key at the next sign-in. |
+| cannot start network discovery, network discovery stopped | The app could not listen for mDNS answers (no network interface, or the system refused). Type the agent's address instead. |
 | unknown log level | Choose one of the levels in the list. |
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |

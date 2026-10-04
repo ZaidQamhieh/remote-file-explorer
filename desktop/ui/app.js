@@ -265,6 +265,52 @@
     }
   });
 
+  // Finding agents on the network only fills in the address box. Nothing is probed and nothing
+  // is trusted until the user presses "Check certificate" and compares the fingerprint.
+  function renderFound(list) {
+    const body = $("found");
+    body.replaceChildren();
+    for (const f of list) {
+      const use = document.createElement("button");
+      use.type = "button";
+      use.className = "link";
+      use.textContent = "Use";
+      use.addEventListener("click", () => {
+        $("host").value = f.hostport;
+        $("host").focus();
+        say("Address filled in. Press Check certificate, then compare the fingerprint with the PC.");
+      });
+      const act = document.createElement("td");
+      act.append(use);
+      const tr = document.createElement("tr");
+      tr.append(
+        cell(f.name || "agent"),
+        cell(f.hostport + (f.known ? " (trusted before)" : ""), "mono"),
+        cell(f.version || "unknown"),
+        act
+      );
+      body.append(tr);
+    }
+    $("found-wrap").hidden = list.length === 0;
+  }
+
+  $("discover").addEventListener("click", (ev) =>
+    run(
+      ev.currentTarget,
+      async () => {
+        const status = $("discover-status");
+        status.textContent = "";
+        renderFound([]);
+        const list = await invoke("discover_agents");
+        renderFound(list);
+        status.textContent = list.length
+          ? list.length + (list.length === 1 ? " agent found." : " agents found.")
+          : "No agents found. It may be on another network, or the network blocks mDNS; type the address instead.";
+      },
+      "Looking for agents (a few seconds)..."
+    )
+  );
+
   $("connect-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
     const host = $("host").value.trim();

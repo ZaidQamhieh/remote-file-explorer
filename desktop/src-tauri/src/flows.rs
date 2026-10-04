@@ -167,6 +167,28 @@ pub fn check_keystore(dir: &Path, store: &dyn SecretStore) -> Result<(), String>
     result
 }
 
+/// Agents advertising on the local network, each with whether this app already trusts a
+/// certificate for its address. Listing an agent trusts nothing: the caller still runs [`probe`]
+/// and the user still compares the fingerprint.
+pub async fn discover(
+    dir: &Path,
+    window: std::time::Duration,
+) -> Result<Vec<(crate::discovery::Found, bool)>, String> {
+    let pins: Vec<String> = read_state(dir)?.pins().keys().cloned().collect();
+    let r = crate::discovery::discover(window).await;
+    match &r {
+        Ok(list) => applog::info(&format!("found {} agents on the network", list.len())),
+        Err(e) => applog::error(&format!("network discovery failed: {e}")),
+    }
+    Ok(r?
+        .into_iter()
+        .map(|f| {
+            let known = pins.contains(&pin_key(&f.hostport));
+            (f, known)
+        })
+        .collect())
+}
+
 /// A report the user can paste into a bug report: versions, the agent's address and pinned
 /// fingerprint, the recent errors and the in-memory log. It is assembled from fixed fields, never
 /// from the keystore or the token, and the log lines are masked ([`applog`]). It does name the

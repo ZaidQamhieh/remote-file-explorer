@@ -27,6 +27,22 @@
         <input id="host" name="host" value="127.0.0.1:8765" autocomplete="off" spellcheck="false" required>
         <button type="submit" class="primary">Check certificate</button>
       </form>
+      <div id="discover-block">
+        <h3>Agents on this network</h3>
+        <p class="hint">Found by mDNS. Anyone on the network can advertise one, so a listed agent is not trusted yet: choosing it only fills in the address. You still compare its fingerprint before you sign in.</p>
+        <div class="row">
+          <button id="discover" type="button">Find agents</button>
+          <span id="discover-status" role="status"></span>
+        </div>
+        <div id="found-wrap" class="table-wrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Address</th><th>Version</th><th></th></tr>
+            </thead>
+            <tbody id="found"></tbody>
+          </table>
+        </div>
+      </div>
       <div id="pins-block" hidden>
         <h3>Trusted agents</h3>
         <p class="hint">Forgetting an agent means its fingerprint has to be compared again next time. If you are signed in to it, you are signed out on this computer.</p>

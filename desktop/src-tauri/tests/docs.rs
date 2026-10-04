@@ -48,6 +48,8 @@ const APP_MESSAGES: &[&str] = &[
     "Sign out first; the saved login belongs to the current device key.",
     "Signed out on this computer only",
     "unknown log level",
+    "cannot start network discovery",
+    "network discovery stopped",
     "; delete it to start over",
     "delete it to create a new device identity",
     "tls config",
@@ -88,7 +90,13 @@ fn every_message_the_app_makes_up_is_explained() {
 fn the_listed_messages_still_exist_in_the_app() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut code = String::new();
-    for f in ["agent_client.rs", "flows.rs", "identity.rs", "secrets.rs"] {
+    for f in [
+        "agent_client.rs",
+        "discovery.rs",
+        "flows.rs",
+        "identity.rs",
+        "secrets.rs",
+    ] {
         code.push_str(&std::fs::read_to_string(src.join("src").join(f)).unwrap());
     }
     code.push_str(&std::fs::read_to_string(src.join("../ui/app.js")).unwrap());

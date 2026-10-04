@@ -668,3 +668,36 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:file-browser ----
+impl AgentClient {
+    /// One signed-in JSON call on a fixed `/v1` route, for the file browser (`crate::files`). The
+    /// route is a literal chosen by the caller, never user input; the user's values travel in
+    /// `query` (percent-encoded by the HTTP library) or in the JSON `body`. Like every call of
+    /// this client it goes over the pinned connection.
+    pub(crate) async fn authed_json<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        method: reqwest::Method,
+        route: &str,
+        query: &[(&str, &str)],
+        body: Option<serde_json::Value>,
+    ) -> Result<T, AgentError> {
+        if !route.starts_with('/') || route.contains(['?', '#', '\\']) || route.contains("..") {
+            return Err(AgentError::Local(format!("unexpected route {route:?}")));
+        }
+        let mut req = self
+            .http
+            .request(method, format!("{}{route}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION);
+        if !query.is_empty() {
+            req = req.query(query);
+        }
+        if let Some(body) = body {
+            req = req.json(&body);
+        }
+        parse(req.send().await.map_err(net)?).await
+    }
+}
+// ---- end feature:file-browser ----

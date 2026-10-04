@@ -13,6 +13,9 @@
       <button id="open-settings" class="link" type="button">Settings</button>
       <div id="session" class="session" hidden>
         <span id="session-text"></span>
+        <!-- feature:file-browser -->
+        <button id="open-files" class="link" type="button">Files</button>
+        <!-- end feature:file-browser -->
         <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
       </div>
     </div>
@@ -178,6 +181,65 @@
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
     </section>
+
+    <!-- feature:file-browser -->
+    <section id="step-files" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-files" tabindex="-1">Files</h2>
+        <div class="row">
+          <button id="files-new-folder" type="button" hidden>New folder</button>
+          <button id="files-refresh" type="button">Refresh</button>
+          <button id="files-back" type="button">Back</button>
+        </div>
+      </div>
+      <nav aria-label="Folder path"><ol id="files-trail" class="crumbs"></ol></nav>
+      <p id="files-note" class="hint" hidden></p>
+      <form id="files-name-form" hidden>
+        <label id="files-name-label" for="files-name">Folder name</label>
+        <input id="files-name" name="files-name" autocomplete="off" spellcheck="false" required>
+        <div class="row pad">
+          <button type="submit" class="primary">Save</button>
+          <button id="files-name-cancel" type="button">Cancel</button>
+        </div>
+      </form>
+
+      <div id="files-locations-wrap">
+        <p class="hint">Choose where to start. These are the folders or drives this agent lets this computer see.</p>
+        <div id="files-locations-table" class="table-wrap" hidden>
+          <table aria-label="Locations">
+            <thead>
+              <tr><th scope="col">Location</th><th scope="col">Path</th><th scope="col">Free space</th></tr>
+            </thead>
+            <tbody id="files-locations"></tbody>
+          </table>
+        </div>
+        <p id="files-locations-empty" class="hint" hidden></p>
+      </div>
+
+      <div id="files-list-wrap" hidden>
+        <div class="table-wrap">
+          <table id="files-table" class="files" aria-label="Contents of the open folder">
+            <thead>
+              <tr>
+                <th scope="col" id="files-th-name" aria-sort="ascending"><button id="files-sort-name" class="link" type="button">Name</button></th>
+                <th scope="col" id="files-th-type" aria-sort="none"><button id="files-sort-type" class="link" type="button">Type</button></th>
+                <th scope="col" id="files-th-size" aria-sort="none"><button id="files-sort-size" class="link" type="button">Size</button></th>
+                <th scope="col" id="files-th-modified" aria-sort="none"><button id="files-sort-modified" class="link" type="button">Modified</button></th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="files-rows"></tbody>
+          </table>
+        </div>
+        <p id="files-empty" class="hint" hidden>This folder is empty.</p>
+        <div id="files-more-block" hidden>
+          <p class="hint">The agent lists more items than are shown. Sorting applies to what is loaded so far.</p>
+          <button id="files-more" type="button">Load more</button>
+        </div>
+      </div>
+      <p id="files-status" class="hint" role="status"></p>
+    </section>
+    <!-- end feature:file-browser -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

@@ -509,4 +509,499 @@
     }
     showConnect();
   })();
+
+  // ---- feature:file-browser ----
+  // Browse the agent's files. The window never builds a path or a URL: it sends back paths the agent
+  // listed (the Rust core checks them) and shows what comes back with textContent only. Changes
+  // (new folder, rename, delete to trash) are offered only when the agent's permissions allow them,
+  // and a refusal is shown in the agent's own words.
+  steps.push("step-files");
+
+  const files = {
+    roots: null, // what files_roots returned: locations, readOnly, caps
+    mode: "locations", // "locations" or "folder"
+    root: "", // the location the open folder is under; the trail starts there
+    path: "",
+    crumbs: [],
+    entries: [],
+    cursor: null, // set while the agent has more entries for this folder
+    sortKey: "name",
+    sortDir: 1,
+    rows: [], // one {entry, open, controls} per shown row, in shown order
+    active: 0, // the row whose controls are in the tab order
+    form: null, // {kind: "new"} or {kind: "rename", entry}
+    armed: null, // the delete button waiting for its second press
+    token: 0, // bumped by every load, so a slow answer for an old folder is dropped
+  };
+
+  // The hook the transfers screen uses: it replaces onFileSelected with what happens when a file
+  // (not a folder) is opened with Enter or a click. This default only says which file it was.
+  window.rfeFileActions = window.rfeFileActions || {
+    onFileSelected(entry) {
+      filesStatus("Selected " + entry.path + ".");
+    },
+  };
+
+  const filesStatus = (text) => {
+    $("files-status").textContent = text;
+  };
+  const canModify = () => !!files.roots && !files.roots.readOnly && (!files.roots.caps || files.roots.caps.modify);
+  const canDelete = () => !!files.roots && !files.roots.readOnly && (!files.roots.caps || files.roots.caps.delete);
+
+  function fmtSize(n) {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) {
+      n /= 1024;
+      i++;
+    }
+    return (i === 0 || n >= 10 ? Math.round(n) : n.toFixed(1)) + " " + units[i];
+  }
+
+  const typeLabel = (e) => (e.isDir ? (e.isSymlink ? "Folder link" : "Folder") : e.isSymlink ? "Link" : e.mimeType || "File");
+
+  function sizeLabel(e) {
+    if (!e.isDir) return fmtSize(e.size || 0);
+    if (e.childCount == null) return "";
+    if (e.childCount >= 1000) return "1000+ items";
+    return e.childCount + (e.childCount === 1 ? " item" : " items");
+  }
+
+  function filesSorted() {
+    const keys = {
+      name: (e) => e.name,
+      size: (e) => (e.isDir ? (e.childCount == null ? -1 : e.childCount) : e.size || 0),
+      modified: (e) => Date.parse(e.modified) || 0,
+      type: typeLabel,
+    };
+    const key = keys[files.sortKey];
+    const text = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    return files.entries.slice().sort((a, b) => {
+      // Folders stay together above the files whatever the sort.
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      const x = key(a);
+      const y = key(b);
+      let r = typeof x === "string" ? text(x, y) : x - y;
+      if (r === 0 && files.sortKey !== "name") r = text(a.name, b.name);
+      return r * files.sortDir;
+    });
+  }
+
+  // Where the agent is not letting this login in is the agent's call; the trail only starts at the
+  // location the user opened, so it never offers steps above it.
+  function trimTrail(crumbs, root) {
+    const at = crumbs.findIndex((c) => c.path === root);
+    return at > 0 ? crumbs.slice(at) : crumbs;
+  }
+
+  function disarm() {
+    const a = files.armed;
+    if (!a) return;
+    a.button.textContent = "Delete";
+    a.button.setAttribute("aria-label", "Delete " + a.entry.name);
+    files.armed = null;
+  }
+
+  function filesRenderTrail() {
+    const loc = files.mode === "locations";
+    const items = [{ label: "Locations", aria: "Go to the list of locations", go: loc ? null : filesOpenLocations }];
+    if (!loc) {
+      files.crumbs.forEach((c, i) => {
+        const last = i === files.crumbs.length - 1;
+        items.push({ label: c.label, aria: "Go to folder " + c.label, go: last ? null : () => filesOpenFolder(c.path) });
+      });
+    }
+    $("files-trail").replaceChildren(
+      ...items.map((it) => {
+        const li = document.createElement("li");
+        if (it.go) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "link";
+          b.textContent = it.label;
+          b.setAttribute("aria-label", it.aria);
+          b.addEventListener("click", it.go);
+          li.append(b);
+        } else {
+          const s = document.createElement("span");
+          s.textContent = it.label;
+          s.setAttribute("aria-current", "page");
+          li.append(s);
+        }
+        return li;
+      })
+    );
+  }
+
+  function filesRenderNote() {
+    const r = files.roots;
+    let text = "";
+    if (r && r.readOnly) text = "The agent is read-only, so nothing here can be created, renamed or deleted.";
+    else if (r && r.caps && !r.caps.modify && !r.caps.delete) text = "This computer may look but not change files on this agent.";
+    $("files-note").hidden = !text;
+    $("files-note").textContent = text;
+  }
+
+  function filesRenderLocations() {
+    const r = files.roots;
+    const body = $("files-locations");
+    body.replaceChildren();
+    for (const loc of r ? r.locations : []) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "link filelink";
+      open.textContent = loc.label;
+      open.setAttribute("aria-label", "Open " + loc.label + " (" + loc.path + ")");
+      open.addEventListener("click", () => filesOpenFolder(loc.path, loc));
+      const nameCell = document.createElement("td");
+      nameCell.append(open);
+      const tr = document.createElement("tr");
+      tr.append(nameCell, cell(loc.path, "mono-line"), cell(loc.totalBytes ? fmtSize(loc.freeBytes) + " free of " + fmtSize(loc.totalBytes) : ""));
+      body.append(tr);
+    }
+    const none = !!r && r.locations.length === 0;
+    $("files-locations-table").hidden = !r || none;
+    $("files-locations-empty").hidden = !none;
+    if (none) {
+      $("files-locations-empty").textContent =
+        "No folder is open to this login." +
+        (r.accessDenied
+          ? " The agent confined this computer to a folder it does not allow."
+          : r.caps && !r.caps.browse
+            ? " This computer is not allowed to browse."
+            : " The agent has not shared a folder with it.");
+    }
+  }
+
+  function filesSetActive(i, focus) {
+    if (files.armed && (!files.rows[i] || files.rows[i].entry !== files.armed.entry)) disarm();
+    files.active = i;
+    files.rows.forEach((row, n) => {
+      for (const c of row.controls) c.setAttribute("tabindex", n === i ? "0" : "-1");
+    });
+    if (focus && files.rows[i]) files.rows[i].open.focus();
+  }
+
+  function filesRenderRows() {
+    files.armed = null;
+    const list = filesSorted();
+    const body = $("files-rows");
+    body.replaceChildren();
+    files.rows = [];
+    list.forEach((e, i) => {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "link filelink";
+      open.textContent = e.name;
+      open.setAttribute("aria-label", (e.isDir ? "Open folder " : e.isSymlink ? "Open link " : "Select file ") + e.name);
+      open.addEventListener("click", () => {
+        filesSetActive(files.rows.findIndex((r) => r.entry === e));
+        filesActivate(e);
+      });
+      const controls = [open];
+      const nameCell = document.createElement("td");
+      nameCell.append(open);
+      if (e.isSymlink) {
+        const to = document.createElement("span");
+        to.className = "muted";
+        to.textContent = e.symlinkTarget ? " → " + e.symlinkTarget : " (link)";
+        nameCell.append(to);
+      }
+      const act = document.createElement("td");
+      if (canModify()) {
+        const ren = document.createElement("button");
+        ren.type = "button";
+        ren.className = "link";
+        ren.textContent = "Rename";
+        ren.setAttribute("aria-label", "Rename " + e.name);
+        ren.addEventListener("click", () => filesOpenForm({ kind: "rename", entry: e }));
+        controls.push(ren);
+        act.append(ren);
+      }
+      if (canDelete()) {
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "link";
+        del.textContent = "Delete";
+        del.setAttribute("aria-label", "Delete " + e.name);
+        del.addEventListener("click", () => {
+          // Two presses: the first only arms it. Deleting moves the entry to the agent's trash.
+          if (!files.armed || files.armed.button !== del) {
+            disarm();
+            files.armed = { button: del, entry: e };
+            del.textContent = "Delete?";
+            del.setAttribute("aria-label", "Delete " + e.name + "? Press again to move it to the trash.");
+            say("Press Delete again to move " + e.name + " to the trash. It can be restored from there.");
+            return;
+          }
+          filesRun(
+            del,
+            async () => {
+              await invoke("files_trash", { path: e.path });
+              files.armed = null;
+              files.entries = files.entries.filter((x) => x.path !== e.path);
+              const at = files.rows.findIndex((r) => r.entry === e);
+              filesRenderRows();
+              filesSetActive(Math.min(at, files.rows.length - 1), true);
+              say("Moved to the trash: " + e.name);
+            },
+            "Moving to the trash..."
+          );
+        });
+        controls.push(del);
+        act.append(del);
+      }
+      const tr = document.createElement("tr");
+      tr.append(nameCell, cell(typeLabel(e)), cell(sizeLabel(e)), cell(Date.parse(e.modified) ? new Date(e.modified).toLocaleString() : ""), act);
+      body.append(tr);
+      files.rows.push({ entry: e, open, controls });
+    });
+    $("files-empty").hidden = list.length !== 0;
+    $("files-more-block").hidden = !files.cursor;
+    for (const key of ["name", "size", "modified", "type"]) {
+      $("files-th-" + key).setAttribute("aria-sort", key === files.sortKey ? (files.sortDir > 0 ? "ascending" : "descending") : "none");
+    }
+    $("files-table").setAttribute("aria-label", "Contents of " + files.path);
+    files.active = Math.max(0, Math.min(files.active, files.rows.length - 1));
+    filesSetActive(files.active, false);
+  }
+
+  function filesRender() {
+    const loc = files.mode === "locations";
+    $("files-locations-wrap").hidden = !loc;
+    $("files-list-wrap").hidden = loc;
+    $("files-new-folder").hidden = loc || !canModify();
+    filesRenderTrail();
+    filesRenderNote();
+    if (loc) filesRenderLocations();
+    else filesRenderRows();
+  }
+
+  function filesCloseForm() {
+    files.form = null;
+    $("files-name-form").hidden = true;
+    $("files-name").value = "";
+  }
+
+  function filesOpenForm(form) {
+    files.form = form;
+    $("files-name-label").textContent = form.kind === "new" ? "Folder name" : "New name for " + form.entry.name;
+    $("files-name").value = form.kind === "new" ? "" : form.entry.name;
+    $("files-name-form").hidden = false;
+    $("files-name").focus();
+    if (form.kind === "rename") $("files-name").select();
+  }
+
+  // The agent no longer accepts the login: go back to sign-in, as the device list does.
+  async function filesSessionCheck() {
+    const saved = await invoke("saved_agent").catch(() => null);
+    if (!saved || saved.signedIn) return;
+    setSession(saved);
+    await showDevices().catch(() => {});
+    if (!$("step-files").hidden) showConnect();
+  }
+
+  async function filesFail(e, gen) {
+    if (gen !== files.token) return;
+    await filesSessionCheck();
+    say(String(e), true);
+  }
+
+  function filesRun(button, fn, busy) {
+    return run(
+      button,
+      async () => {
+        try {
+          await fn();
+        } catch (e) {
+          await filesSessionCheck();
+          throw e;
+        }
+      },
+      busy
+    );
+  }
+
+  async function filesOpenLocations() {
+    const gen = ++files.token;
+    say("Loading folder...");
+    let r;
+    try {
+      r = await invoke("files_roots");
+    } catch (e) {
+      return filesFail(e, gen);
+    }
+    if (gen !== files.token) return;
+    say("");
+    files.roots = r;
+    files.mode = "locations";
+    filesCloseForm();
+    filesStatus("");
+    filesRender();
+    $("title-files").focus();
+  }
+
+  async function filesOpenFolder(path, location) {
+    const gen = ++files.token;
+    say("Loading folder...");
+    let page;
+    try {
+      page = await invoke("files_list", { path, cursor: null, limit: 500 });
+    } catch (e) {
+      return filesFail(e, gen);
+    }
+    if (gen !== files.token) return;
+    say("");
+    if (location) files.root = location.path;
+    files.mode = "folder";
+    files.path = page.path;
+    files.crumbs = trimTrail(page.crumbs, files.root);
+    files.entries = page.entries;
+    files.cursor = page.nextCursor || null;
+    files.active = 0;
+    filesCloseForm();
+    filesStatus("");
+    filesRender();
+    if (files.rows.length) filesSetActive(0, true);
+    else $("title-files").focus();
+  }
+
+  async function filesActivate(e) {
+    if (e.isDir) return filesOpenFolder(e.path);
+    if (e.isSymlink) {
+      // The listing does not say whether a link leads to a folder, and the agent decides whether
+      // the link may be followed at all, so ask it and show its answer.
+      const gen = ++files.token;
+      let m;
+      try {
+        m = await invoke("files_meta", { path: e.path });
+      } catch (err) {
+        return filesFail(err, gen);
+      }
+      if (gen !== files.token) return;
+      return m.isDir ? filesOpenFolder(m.path) : filesSelect(m);
+    }
+    filesSelect(e);
+  }
+
+  function filesSelect(entry) {
+    try {
+      window.rfeFileActions.onFileSelected(Object.assign({}, entry));
+    } catch (err) {
+      say(String(err), true);
+    }
+  }
+
+  function filesUp() {
+    if (files.mode === "locations") return filesLeave();
+    if (files.crumbs.length >= 2) return filesOpenFolder(files.crumbs[files.crumbs.length - 2].path);
+    return filesOpenLocations();
+  }
+
+  function filesLeave() {
+    if (!current.signedIn) return showConnect();
+    show("step-devices");
+  }
+
+  $("open-files").addEventListener("click", () => {
+    show("step-files");
+    files.roots = null;
+    files.mode = "locations";
+    filesRender();
+    filesOpenLocations();
+  });
+  $("files-back").addEventListener("click", filesLeave);
+  $("files-refresh").addEventListener("click", () => (files.mode === "locations" ? filesOpenLocations() : filesOpenFolder(files.path)));
+  $("files-new-folder").addEventListener("click", () => filesOpenForm({ kind: "new" }));
+  function filesCancelForm() {
+    const back = files.form && files.form.kind === "rename" ? files.rows.find((r) => r.entry === files.form.entry) : null;
+    filesCloseForm();
+    if (back) back.open.focus();
+    else $("files-new-folder").focus();
+  }
+  $("files-name-cancel").addEventListener("click", filesCancelForm);
+
+  $("files-name-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const form = files.form;
+    if (!form) return;
+    filesRun(
+      submitter(ev),
+      async () => {
+        const name = $("files-name").value;
+        let changed;
+        if (form.kind === "new") {
+          changed = await invoke("files_create_folder", { parent: files.path, name });
+          files.entries.push(changed);
+        } else {
+          changed = await invoke("files_rename", { path: form.entry.path, newName: name });
+          files.entries = files.entries.map((x) => (x === form.entry ? changed : x));
+        }
+        filesCloseForm();
+        filesRenderRows();
+        const at = files.rows.findIndex((r) => r.entry === changed);
+        filesSetActive(Math.max(0, at), true);
+      },
+      form.kind === "new" ? "Creating the folder..." : "Renaming..."
+    );
+  });
+
+  $("files-more").addEventListener("click", (ev) =>
+    filesRun(
+      ev.currentTarget,
+      async () => {
+        const gen = files.token;
+        const page = await invoke("files_list", { path: files.path, cursor: files.cursor, limit: 500 });
+        if (gen !== files.token) return;
+        for (const e of page.entries) files.entries.push(e);
+        files.cursor = page.nextCursor || null;
+        filesRenderRows();
+      },
+      "Loading folder..."
+    )
+  );
+
+  for (const key of ["name", "size", "modified", "type"]) {
+    $("files-sort-" + key).addEventListener("click", () => {
+      if (files.sortKey === key) files.sortDir = -files.sortDir;
+      else {
+        files.sortKey = key;
+        files.sortDir = 1;
+      }
+      filesRenderRows();
+      filesStatus("Sorted by " + key + ", " + (files.sortDir > 0 ? "ascending" : "descending") + (files.cursor ? " (only the entries loaded so far)" : "") + ".");
+    });
+  }
+
+  // Keyboard: arrows, Home and End move between rows (one tab stop for the whole list), Enter or
+  // Space on a name opens it (they are buttons), Backspace goes up a folder, Escape closes the name
+  // box or cancels a delete.
+  $("files-table").addEventListener("keydown", (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const last = files.rows.length - 1;
+    const go = (i) => {
+      ev.preventDefault();
+      if (last >= 0) filesSetActive(Math.max(0, Math.min(last, i)), true);
+    };
+    if (ev.key === "ArrowDown") go(files.active + 1);
+    else if (ev.key === "ArrowUp") go(files.active - 1);
+    else if (ev.key === "Home") go(0);
+    else if (ev.key === "End") go(last);
+  });
+  $("step-files").addEventListener("keydown", (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (ev.key === "Escape") {
+      if (files.armed) {
+        disarm();
+        say("");
+      }
+      if (files.form) filesCancelForm();
+      return;
+    }
+    if (ev.key !== "Backspace" || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    ev.preventDefault();
+    filesUp();
+  });
+  // ---- end feature:file-browser ----
 })();

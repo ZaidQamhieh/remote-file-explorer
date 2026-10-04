@@ -4,6 +4,7 @@
 pub mod agent_client;
 pub mod applog;
 pub mod discovery;
+pub mod files; // feature:file-browser
 pub mod flows;
 mod fsutil;
 pub mod identity;
@@ -311,6 +312,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // feature:file-browser
+            files::files_roots,
+            files::files_list,
+            files::files_meta,
+            files::files_create_folder,
+            files::files_rename,
+            files::files_trash,
             saved_agent,
             list_pins,
             forget_pin,

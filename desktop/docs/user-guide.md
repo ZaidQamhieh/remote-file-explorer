@@ -93,6 +93,42 @@ handles are masked out of the log even if one slipped in). It does name the agen
 log names the hosts you tried, so read it before you post it in public. **Copy** puts it on the
 clipboard; if the system refuses, the text is selected so Ctrl+C works.
 
+<!-- feature:file-browser -->
+## Files
+
+**Files** (top right, when you are signed in) browses the files the agent shares with this computer.
+Nothing is downloaded or uploaded here.
+
+1. **Locations.** The first screen lists where you may start: the folders the agent was confined to
+   (`-roots`, or a per-device folder), or, when the agent has no folder limit, its drives with their
+   free space. Choose one to open it.
+2. **A folder** shows each entry's name, type, size (a folder shows how many items it holds, up to
+   `1000+`) and modified time. A link shows where it points (`name → target`). The path above the
+   list is a trail: each earlier step is a button that goes there. **Refresh** reads the folder again.
+3. **Sort** by pressing a column heading; press it again to reverse. Folders always stay above files.
+   The agent sends a folder by name, 500 entries at a time. If it has more, **Load more** appends the
+   next page, and sorting applies only to what is loaded so far.
+4. **A file** (Enter, Space or a click on its name) does nothing to the file itself in this screen: it
+   is handed to the transfers screen when that is installed, and otherwise the status line says which
+   file you chose. **A link** is looked up first: the agent decides whether it may be followed, and a
+   link that leaves the folders the agent allows is refused with the agent's own words (below).
+
+**Keyboard.** Tab reaches the list once; Up and Down, Home and End move between rows; Enter or Space on
+a name opens a folder or chooses a file; Tab then reaches that row's Rename and Delete. Backspace goes up
+one folder (from the top of a location it goes to the locations, then back). Escape closes the name box
+or cancels a delete that is waiting for its second press.
+
+**Changes.** **New folder**, **Rename** and **Delete** appear only when the agent allows this computer to
+change files and is not read-only; otherwise a note says so. A computer paired with a code starts with
+looking only; the owner can allow more on the PC. **Delete** moves the entry to the agent's trash, where
+it can be restored, and needs a second press. There is no permanent delete here. If the agent refuses a
+change anyway, you see its refusal and nothing changes. A new name is one plain name (no `/` or `\`, no
+control characters, not `.` or `..`); it cannot move an entry to another folder.
+
+Every path is checked before it is sent (it must be absolute and have no `..` step), and the agent
+checks it again against the folders it allows, including links: nothing outside them is listed.
+
+<!-- end feature:file-browser -->
 ## What is kept, and where
 
 | What | Where |
@@ -153,5 +189,30 @@ Messages from this app:
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
 
+<!-- feature:file-browser -->
+Messages from the file browser:
+
+| The window says | What it means and what to do |
+|---|---|
+| The agent says: ... (CODE) | The agent refused or could not do what you asked, and this is its own wording and code. Common ones: `FORBIDDEN` (the path, or a link, is outside the folders the agent allows; nothing was listed or changed), `CAPABILITY_DENIED` (this computer is not allowed that action; the owner can allow it on the PC), `READ_ONLY` (the agent is in read-only mode), `CONFLICT` (that name already exists), `PATH_NOT_FOUND` (it was moved or deleted; press Refresh). |
+| a path must be absolute (start with / or a drive letter) | The app refused to send a path that is not absolute. Open it from the list instead of typing it. |
+| a path cannot be empty, hold a NUL character or a .. step, or be longer than 4096 bytes | The app refused to send that path. A `..` step is never sent; the agent would clean it, but the app does not rely on that. |
+| a name must be 1 to 255 bytes, with no / or \, no control characters, no space at either end, and not . or .. | The name you typed for a new folder or a rename is not one plain name. Choose another. |
+| the agent did not say whether the delete worked | The agent answered without a result for the entry. Press Refresh to see whether it is still there. |
+| unexpected route | Internal check on the address the app asked for. Report it. |
+| No folder is open to this login. | The agent shows this computer nothing to browse. The sentence after it says why: the agent confined this computer to a folder it does not allow (change it on the PC), this computer is not allowed to browse (allow it on the PC), or the agent has not shared a folder with it. |
+| This folder is empty. | There is nothing in it. |
+| The agent lists more items than are shown. | The folder has more entries than one page. Press **Load more**. |
+| The agent is read-only, so nothing here can be created, renamed or deleted. | The agent was started with `-read-only`. |
+| This computer may look but not change files on this agent. | This login has no modify or delete permission. The owner can allow it on the PC. |
+| Loading folder... | The agent is answering. The previous folder stays until the new one arrives. |
+| Creating the folder..., Renaming..., Moving to the trash... | A change is in progress. |
+| Press Delete again to move NAME to the trash. | The first press only arms Delete. Press it again, or Escape to cancel. |
+| Moved to the trash: NAME | Done. Restore it from the agent's trash. |
+| Selected PATH. | You chose a file; this screen has no download. |
+| Sorted by COLUMN, ascending. | Announces the new order (it says when only the loaded entries were sorted). |
+| Folder name | The label of the box for a new folder (a rename says "New name for NAME"). |
+
+<!-- end feature:file-browser -->
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).

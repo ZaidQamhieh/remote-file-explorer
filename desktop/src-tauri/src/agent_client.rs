@@ -42,10 +42,74 @@ impl std::fmt::Display for AgentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AgentError::Network(m) => write!(f, "cannot reach the agent securely: {m}"),
-            AgentError::Server { code, message, .. } => write!(f, "{code}: {message}"),
+            AgentError::Server { code, message, .. } => match known_message(code) {
+                Some(text) => write!(f, "{text}"),
+                None => write!(f, "{code}: {message}"),
+            },
             AgentError::Local(m) => write!(f, "{m}"),
         }
     }
+}
+
+/// Every error code the agent's sign-in and pairing endpoints return, each with its own
+/// wording and what to do next. A code not listed here is shown as the agent sent it.
+pub const KNOWN_CODES: &[&str] = &[
+    "INVALID_CREDENTIALS",
+    "INVALID_CODE",
+    "INVALID_NONCE",
+    "INVALID_SIGNATURE",
+    "DEVICE_KEY_REQUIRED",
+    "DEVICE_KEY_MISMATCH",
+    "RATE_LIMITED",
+    "PAIR_BUSY",
+    "UNAUTHORIZED",
+    "FORBIDDEN",
+    "NOT_FOUND",
+    "BAD_REQUEST",
+    "INTERNAL",
+];
+
+/// The message for an agent error code, or `None` for a code this app does not know.
+pub fn known_message(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "INVALID_CREDENTIALS" => "Wrong username or password.",
+        "INVALID_CODE" => {
+            "That pairing code is wrong, expired or already used. Generate a new one on the PC."
+        }
+        "INVALID_NONCE" => {
+            "The agent no longer accepts this sign-in attempt (it expired or was already used). \
+             Try again."
+        }
+        "INVALID_SIGNATURE" => {
+            "The agent could not verify this computer's device key. Try again; if it keeps \
+             failing, report it."
+        }
+        "DEVICE_KEY_REQUIRED" => {
+            "The agent requires a device key proof that this app did not send. This is a bug in \
+             the app."
+        }
+        "DEVICE_KEY_MISMATCH" => {
+            "The agent already knows a different key for this computer. Remove this computer from \
+             the agent's device list (rfe-agent remove <id> on the PC), then sign in again."
+        }
+        "RATE_LIMITED" => {
+            "Too many attempts. The agent allows only a few sign-in and pairing attempts per \
+             minute. Wait a minute, then try again."
+        }
+        "PAIR_BUSY" => {
+            "The agent already has pairing requests waiting for approval on the PC. Answer them or \
+             wait for them to expire, then try again."
+        }
+        "UNAUTHORIZED" => "The agent no longer accepts this login. Sign in again.",
+        "FORBIDDEN" => {
+            "This login is not allowed to do that. Sign in with the account, not a pairing code, \
+             to manage devices."
+        }
+        "NOT_FOUND" => "The agent has no such item. It may have expired.",
+        "BAD_REQUEST" => "The agent refused the request as malformed. This is a bug in the app.",
+        "INTERNAL" => "The agent had an internal error. Check its log on the PC.",
+        _ => return None,
+    })
 }
 
 impl std::error::Error for AgentError {}

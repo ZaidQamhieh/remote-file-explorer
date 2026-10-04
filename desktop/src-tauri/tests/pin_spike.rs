@@ -2,119 +2,16 @@
 //! agents (explicit -addr/-data/-roots, random loopback port, temp dirs).
 //! Set RFE_AGENT_BIN to a built `rfe-agent` binary.
 
+use common::{free_port, Agent};
 use rfe_desktop_lib::agent_client::{
     capture_fingerprint, normalize_fingerprint, validate_hostport, AgentClient, AgentError,
 };
 use rfe_desktop_lib::flows;
 use rfe_desktop_lib::identity::Identity;
 use rfe_desktop_lib::secrets::{MemoryStore, Offloaded, UnavailableStore};
-use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-fn agent_bin() -> PathBuf {
-    PathBuf::from(
-        std::env::var("RFE_AGENT_BIN").expect("set RFE_AGENT_BIN to a built rfe-agent binary"),
-    )
-}
-
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn cli(args: &[&str]) -> String {
-    let out = Command::new(agent_bin())
-        .args(args)
-        .output()
-        .expect("run rfe-agent");
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    assert!(out.status.success(), "rfe-agent {args:?} failed: {text}");
-    text
-}
-
-struct Agent {
-    child: Child,
-    data: TempDir,
-    _roots: TempDir,
-    host: String,
-}
-
-impl Agent {
-    fn start(port: u16) -> Self {
-        let data = TempDir::new().unwrap();
-        let roots = TempDir::new().unwrap();
-        let host = format!("127.0.0.1:{port}");
-        let child = Command::new(agent_bin())
-            .args(["-addr", &host, "-name", "rfe-desktop-test"])
-            .args(["-data", data.path().to_str().unwrap()])
-            .args(["-roots", roots.path().to_str().unwrap()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("start rfe-agent");
-        let deadline = Instant::now() + Duration::from_secs(20);
-        while TcpStream::connect(&host).is_err() {
-            assert!(Instant::now() < deadline, "agent did not start on {host}");
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        Agent {
-            child,
-            data,
-            _roots: roots,
-            host,
-        }
-    }
-
-    fn dir(&self) -> &str {
-        self.data.path().to_str().unwrap()
-    }
-
-    fn add_user(&self, user: &str, password: &str) {
-        cli(&["adduser", "-password", password, "-data", self.dir(), user]);
-    }
-
-    /// Ground truth: the fingerprint the agent itself reports.
-    fn status_fingerprint(&self) -> String {
-        let out = cli(&["status", "-data", self.dir()]);
-        let line = out
-            .lines()
-            .find(|l| l.starts_with("fingerprint:"))
-            .expect("fingerprint line");
-        normalize_fingerprint(line.trim_start_matches("fingerprint:"))
-    }
-
-    fn devices_cli(&self) -> String {
-        cli(&["devices", "-data", self.dir()])
-    }
-
-    fn audit_cli(&self) -> String {
-        cli(&["audit", "-data", self.dir()])
-    }
-
-    fn stop(mut self) -> TempDir {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-        // keep the data dir alive for the caller by moving it out
-        std::mem::replace(&mut self.data, TempDir::new().unwrap())
-    }
-}
-
-impl Drop for Agent {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
+mod common;
 
 #[tokio::test]
 async fn captured_fingerprint_matches_the_agents_own_report() {

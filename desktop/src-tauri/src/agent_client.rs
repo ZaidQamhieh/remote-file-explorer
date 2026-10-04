@@ -668,3 +668,26 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:app-catalog ----
+impl AgentClient {
+    /// One authenticated JSON call for feature modules (`path` is under `/v1`, built by the caller
+    /// from validated parts, never from user text). Errors are the same `AgentError`s as above.
+    pub(crate) async fn call_json<T: serde::de::DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+    ) -> Result<T, AgentError> {
+        parse(
+            self.http
+                .request(method, format!("{}{path}", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+}

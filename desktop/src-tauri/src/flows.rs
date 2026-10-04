@@ -241,6 +241,9 @@ pub async fn pair(
     remember(dir, host, fingerprint, "", ok, store).await
 }
 
+/// The first agent release that has `POST /pair/request`.
+pub const MIN_AGENT_FOR_APPROVAL: &str = "agent-v1.43.0-rc.1";
+
 /// A pairing request waiting for the owner to answer at the PC. `client_nonce` is the secret that
 /// authorises polling, so it stays on the Rust side and is not part of what the window sees.
 #[derive(Debug, Clone)]
@@ -266,7 +269,19 @@ pub async fn request_pairing(
     let identity = device_identity(dir, store).await?;
     let client = AgentClient::pinned(host, fingerprint)?;
     let client_nonce = new_client_nonce()?;
-    let started = client.pair_request(&identity, label, &client_nonce).await?;
+    let started = client
+        .pair_request(&identity, label, &client_nonce)
+        .await
+        .map_err(|e| match e {
+            // An agent without the endpoint answers a bare-text 404, not the JSON error body.
+            AgentError::Server { status: 404, code, .. } if code.starts_with("HTTP_") => {
+                AgentError::Local(format!(
+                    "This agent is too old to approve a new computer from the PC (it needs {MIN_AGENT_FOR_APPROVAL} or newer). \
+                     Pair with a code or sign in with an account instead."
+                ))
+            }
+            other => other,
+        })?;
     let fingerprint = normalize_fingerprint(fingerprint);
     Ok(PairWait {
         match_code: match_code(&fingerprint, &client_nonce, &started.request_id)?,

@@ -29,6 +29,9 @@ fn saved(p: PairProgress) -> flows::Saved {
 #[tokio::test]
 async fn the_match_code_equals_the_one_the_agent_shows_the_owner() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let store = Offloaded::new(MemoryStore::default());
     let dir = TempDir::new().unwrap();
@@ -48,6 +51,9 @@ async fn the_match_code_equals_the_one_the_agent_shows_the_owner() {
 #[tokio::test]
 async fn pending_then_approved_stores_the_token_once() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let store = Offloaded::new(MemoryStore::default());
     let dir = TempDir::new().unwrap();
@@ -96,6 +102,9 @@ async fn pending_then_approved_stores_the_token_once() {
 #[tokio::test]
 async fn a_rejected_request_stores_nothing() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let store = Offloaded::new(MemoryStore::default());
     let dir = TempDir::new().unwrap();
@@ -118,6 +127,9 @@ async fn a_rejected_request_stores_nothing() {
 #[tokio::test]
 async fn an_unknown_request_or_a_wrong_nonce_reads_as_expired() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let store = Offloaded::new(MemoryStore::default());
     let dir = TempDir::new().unwrap();
@@ -149,6 +161,9 @@ async fn an_unknown_request_or_a_wrong_nonce_reads_as_expired() {
 #[tokio::test]
 async fn a_locked_keystore_stops_the_request_before_the_agent_hears_of_it() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let dir = TempDir::new().unwrap();
 
@@ -195,6 +210,9 @@ impl SecretStore for LocksAfterFirstWrite {
 #[tokio::test]
 async fn an_approval_that_cannot_be_stored_says_it_is_used_up() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let dir = TempDir::new().unwrap();
     let store = Offloaded::new(LocksAfterFirstWrite {
@@ -224,6 +242,9 @@ async fn an_approval_that_cannot_be_stored_says_it_is_used_up() {
 #[tokio::test]
 async fn a_fourth_waiting_request_is_told_the_pc_is_busy() {
     let a = Agent::start(free_port());
+    if !a.require_pair_request().await {
+        return;
+    }
     let fp = capture_fingerprint(&a.host).await.unwrap();
     let store = Offloaded::new(MemoryStore::default());
     let dirs: Vec<_> = (0..4).map(|_| TempDir::new().unwrap()).collect();
@@ -236,4 +257,26 @@ async fn a_fourth_waiting_request_is_told_the_pc_is_busy() {
         other => panic!("{other:?}"),
     }
     assert_eq!(err.to_string(), known_message("PAIR_BUSY").unwrap());
+}
+
+/// Only meaningful against an agent without the endpoint (the previous-release CI job): the app
+/// must say so in words and point to the other ways to pair, not show "HTTP_404".
+#[tokio::test]
+async fn an_agent_without_approval_is_told_so_in_words() {
+    let a = Agent::start(free_port());
+    if a.supports_pair_request().await {
+        eprintln!("skipped: this agent supports approval");
+        return;
+    }
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let store = Offloaded::new(MemoryStore::default());
+    let err = ask(&a, &fp, &TempDir::new().unwrap(), &store)
+        .await
+        .unwrap_err();
+    let text = err.to_string();
+    assert!(
+        text.contains("too old") && text.contains(flows::MIN_AGENT_FOR_APPROVAL),
+        "{text}"
+    );
+    assert!(!text.contains("HTTP_404"), "{text}");
 }

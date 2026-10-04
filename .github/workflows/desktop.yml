@@ -27,6 +27,8 @@ jobs:
         working-directory: desktop/src-tauri
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0 # the release tags are checked out below
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -71,6 +73,23 @@ jobs:
         env:
           RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
         run: cargo test --locked
+
+      # The app must keep working with the last stable agent release, not only with the agent built
+      # from this checkout. Tests of features that release lacks may skip (RFE_ALLOW_OLD_AGENT);
+      # the tests above run without that flag, so a missing feature fails them.
+      - name: Tests against the last stable agent release
+        env:
+          RFE_ALLOW_OLD_AGENT: '1'
+        run: |
+          tag=$(git tag -l 'agent-v*' --sort=-v:refname | grep -v -- '-rc' | head -n 1 || true)
+          if [ -z "$tag" ]; then
+            echo "::notice::no stable agent tag yet, skipping"
+            exit 0
+          fi
+          echo "testing against $tag"
+          git worktree add "$RUNNER_TEMP/prev-agent" "$tag"
+          (cd "$RUNNER_TEMP/prev-agent/agent" && go build -o "$RUNNER_TEMP/rfe-agent-prev" ./cmd/agent)
+          RFE_AGENT_BIN="$RUNNER_TEMP/rfe-agent-prev" cargo test --locked
 
       # The real Secret Service, in a private D-Bus session with a throwaway empty keyring. The other
       # tests use in-memory stores; this one proves the OS keystore path itself.

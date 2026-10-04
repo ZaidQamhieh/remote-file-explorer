@@ -130,6 +130,37 @@ impl Agent {
         cli(&["pair", verb, "-data", self.dir()]);
     }
 
+    /// Whether this agent has `/pair/request`: a newer agent answers with a JSON error body, an
+    /// older one with a bare-text 404.
+    pub async fn supports_pair_request(&self) -> bool {
+        let raw = Raw::new(&self.host);
+        let resp = raw
+            .http
+            .get(format!("{}/pair/request/probe?nonce=00", raw.base))
+            .send()
+            .await
+            .unwrap();
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with("application/json"))
+    }
+
+    /// For tests of approve-on-PC: `true` when the agent can do it. An older agent fails the test
+    /// unless RFE_ALLOW_OLD_AGENT is set, which the previous-release CI job sets on purpose, so a
+    /// missing feature can never pass silently in the main job.
+    pub async fn require_pair_request(&self) -> bool {
+        if self.supports_pair_request().await {
+            return true;
+        }
+        assert!(
+            std::env::var_os("RFE_ALLOW_OLD_AGENT").is_some(),
+            "this agent has no /pair/request; set RFE_ALLOW_OLD_AGENT=1 to test an older release"
+        );
+        eprintln!("skipped: agent has no /pair/request");
+        false
+    }
+
     /// Blocks a device on the agent, as the owner would at the PC.
     pub fn revoke_cli(&self, device_id: &str) {
         cli(&["revoke", "-data", self.dir(), device_id]);

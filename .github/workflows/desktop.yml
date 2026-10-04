@@ -47,9 +47,14 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin/cargo-audit
             desktop/src-tauri/target
           key: desktop-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
           restore-keys: desktop-${{ runner.os }}-
+
+      # rust-toolchain.toml pins the compiler; rustup 1.28+ does not install it on first use.
+      - name: Rust toolchain
+        run: rustup toolchain install
 
       - name: Build the agent the tests run against
         working-directory: agent
@@ -65,3 +70,9 @@ jobs:
         env:
           RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
         run: cargo test --locked
+
+      # Accepted advisories are listed with reasons in .cargo/audit.toml; any new warning fails the job.
+      - name: cargo audit
+        run: |
+          command -v cargo-audit >/dev/null || cargo install cargo-audit --locked --version 0.22.2
+          cargo audit --deny warnings

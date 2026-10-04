@@ -243,6 +243,11 @@ fn app_settings(app: tauri::AppHandle) -> Result<SettingsView, String> {
 }
 
 #[tauri::command]
+fn diagnostics(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(flows::diagnostics(&data_dir(&app)?))
+}
+
+#[tauri::command]
 fn set_log_level(app: tauri::AppHandle, level: String) -> Result<&'static str, String> {
     flows::set_log_level(&data_dir(&app)?, &level).map(|l| l.as_str())
 }
@@ -284,6 +289,7 @@ pub fn run() {
             list_devices,
             sign_out,
             app_settings,
+            diagnostics,
             set_log_level,
             check_keystore
         ])

@@ -45,6 +45,7 @@ export class El {
     this.children = kids;
   }
   focus() {}
+  select() {}
   querySelector() {
     return this;
   }
@@ -62,7 +63,7 @@ export const settle = async () => {
 };
 
 // An invoke() the test controls: answers come from `handlers`, or from a promise it holds open.
-export function boot(handlers) {
+export function boot(handlers, extra = {}) {
   const els = {};
   for (const m of html.matchAll(/<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g)) {
     const attrs = { id: m[3] };
@@ -87,6 +88,7 @@ export function boot(handlers) {
       createElement: (tag) => new El(tag),
     },
     setTimeout: (fn) => setTimeout(fn, 0),
+    ...extra,
     // keep the polling loop's two-second wait out of the test
   };
   vm.runInNewContext(source, ctx);

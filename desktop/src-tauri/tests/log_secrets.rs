@@ -8,6 +8,7 @@ use common::{free_port, Agent};
 use rfe_desktop_lib::agent_client::capture_fingerprint;
 use rfe_desktop_lib::applog::{self, Level};
 use rfe_desktop_lib::flows;
+use rfe_desktop_lib::secrets::{account, SecretStore};
 use rfe_desktop_lib::secrets::{MemoryStore, Offloaded};
 use tempfile::TempDir;
 
@@ -63,6 +64,47 @@ async fn the_log_holds_no_secret_after_a_real_sign_in_and_pairing() {
         assert!(
             !secret.is_empty() && !text.contains(secret),
             "{secret} leaked:\n{text}"
+        );
+    }
+    // The diagnostics report is built from the same log plus the state file; none of the secrets
+    // may be in it either, including the device's private key.
+    let identity_json = store
+        .get(&account("identity", dir.path()))
+        .unwrap()
+        .unwrap();
+    let private_key = serde_json::from_str::<serde_json::Value>(&identity_json).unwrap()
+        ["private_key"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(private_key.len() >= 40, "the test found the key");
+    applog::error(&format!("a careless line with the token {}", saved.token));
+    applog::error(&format!("and with the key {private_key}"));
+    let report = flows::diagnostics(dir.path());
+    assert!(
+        report.contains("sign-in to"),
+        "the report carries the log:\n{report}"
+    );
+    assert!(
+        report.contains(&fp),
+        "and the pinned fingerprint:\n{report}"
+    );
+    assert!(
+        report.contains("***"),
+        "the careless lines were masked:\n{report}"
+    );
+    for secret in [
+        PW,
+        "wrong-pw-xyz",
+        saved.token.as_str(),
+        paired.token.as_str(),
+        code.as_str(),
+        private_key.as_str(),
+        identity_json.as_str(),
+    ] {
+        assert!(
+            !secret.is_empty() && !report.contains(secret),
+            "{secret} leaked into the report:\n{report}"
         );
     }
     applog::clear();

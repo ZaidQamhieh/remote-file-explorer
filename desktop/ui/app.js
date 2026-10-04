@@ -176,6 +176,10 @@
     settingsAccount();
     $("keystore-result").textContent = "";
     $("keystore-result").className = "";
+    $("diagnostics").hidden = true;
+    $("diagnostics").value = "";
+    $("copy-diagnostics").hidden = true;
+    $("diagnostics-result").textContent = "";
     try {
       const [info, pins] = await Promise.all([invoke("app_settings"), invoke("list_pins")]);
       $("log-level").value = info.logLevel;
@@ -220,6 +224,34 @@
       "Testing the keystore (it may ask you to unlock it)..."
     )
   );
+
+  $("make-diagnostics").addEventListener("click", (ev) =>
+    run(
+      ev.currentTarget,
+      async () => {
+        const box = $("diagnostics");
+        box.value = await invoke("diagnostics");
+        box.hidden = false;
+        $("copy-diagnostics").hidden = false;
+        $("diagnostics-result").textContent = "";
+      },
+      "Creating the report..."
+    )
+  );
+
+  $("copy-diagnostics").addEventListener("click", async () => {
+    const box = $("diagnostics");
+    const result = $("diagnostics-result");
+    try {
+      await navigator.clipboard.writeText(box.value);
+      result.textContent = "Copied.";
+    } catch (e) {
+      // No clipboard access: select the text so Ctrl+C works.
+      box.focus();
+      box.select();
+      result.textContent = "Select all and press Ctrl+C to copy.";
+    }
+  });
 
   $("log-level").addEventListener("change", async () => {
     const select = $("log-level");

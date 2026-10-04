@@ -167,6 +167,94 @@ pub fn check_keystore(dir: &Path, store: &dyn SecretStore) -> Result<(), String>
     result
 }
 
+/// A report the user can paste into a bug report: versions, the agent's address and pinned
+/// fingerprint, the recent errors and the in-memory log. It is assembled from fixed fields, never
+/// from the keystore or the token, and the log lines are masked ([`applog`]). It does name the
+/// agent's address, so it says to read it before posting it in public.
+pub fn diagnostics(dir: &Path) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let line = |out: &mut String, text: String| {
+        out.push_str(&text);
+        out.push('\n');
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    line(&mut out, "RFE Desktop diagnostics".into());
+    line(&mut out, format!("generated (unix time): {secs}"));
+    line(
+        &mut out,
+        format!("app version: {}", env!("CARGO_PKG_VERSION")),
+    );
+    line(
+        &mut out,
+        format!("sent to agents as: {}", crate::agent_client::CLIENT_VERSION),
+    );
+    line(
+        &mut out,
+        format!(
+            "system: {} {}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        ),
+    );
+    line(
+        &mut out,
+        format!("approval on the PC needs: {MIN_AGENT_FOR_APPROVAL} or newer"),
+    );
+    line(&mut out, format!("log level: {}", applog::level().as_str()));
+    match read_state(dir) {
+        Ok(f) => {
+            let none = |v: &str| {
+                if v.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    v.to_string()
+                }
+            };
+            line(&mut out, format!("agent address: {}", none(&f.host)));
+            line(
+                &mut out,
+                format!("pinned fingerprint: {}", none(&f.fingerprint)),
+            );
+            line(&mut out, format!("trusted agents: {}", f.pins().len()));
+            let login = if !f.username.is_empty() {
+                "account"
+            } else if !f.device_id.is_empty() {
+                "pairing code or approval"
+            } else {
+                "none"
+            };
+            line(&mut out, format!("saved login: {login}"));
+        }
+        Err(e) => line(&mut out, format!("state: unreadable ({e})")),
+    }
+    line(
+        &mut out,
+        "device key and login token: in the OS keystore, not included".into(),
+    );
+    let lines = applog::lines();
+    let errors: Vec<&String> = lines.iter().filter(|l| l.contains(" ERROR ")).collect();
+    out.push_str("\nrecent errors:\n");
+    if errors.is_empty() {
+        out.push_str("  (none)\n");
+    }
+    for e in errors.iter().rev().take(20).rev() {
+        let _ = writeln!(out, "  {e}");
+    }
+    let _ = writeln!(out, "\nlog ({} lines, oldest first):", lines.len());
+    for l in &lines {
+        let _ = writeln!(out, "  {l}");
+    }
+    out.push_str(
+        "\nThis report holds no password, token or key. It names the agent's address; read it \
+         before you post it in public.\n",
+    );
+    out
+}
+
 /// Logs the outcome of one flow: `what` succeeded, or failed with the error text (which never
 /// holds a credential).
 fn logged<T>(what: &str, r: Result<T, AgentError>) -> Result<T, AgentError> {
@@ -192,6 +280,7 @@ pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> 
         write_state(dir, &f)?;
     }
     let token = store.get(&acct)?.unwrap_or_default();
+    applog::register_secret(&token);
     Ok(f.into_saved(token))
 }
 
@@ -272,6 +361,7 @@ async fn remember(
         username: username.to_string(),
         device_id: ok.device_id,
     };
+    applog::register_secret(&saved.token);
     let (dir, to_save) = (dir.to_path_buf(), saved.clone());
     store
         .run(move |s| save(&dir, s, &to_save))
@@ -290,6 +380,7 @@ pub async fn login(
     label: &str,
     store: &Offloaded,
 ) -> Result<Saved, AgentError> {
+    applog::register_secret(password);
     let what = format!("sign-in to {host} as {username}");
     let result = async {
         let identity = device_identity(dir, store).await?;
@@ -315,6 +406,7 @@ pub async fn pair(
     if code.is_empty() {
         return Err(AgentError::Local("enter the pairing code".into()));
     }
+    applog::register_secret(code);
     let what = format!("pairing with a code on {host}");
     let result = async {
         let identity = device_identity(dir, store).await?;
@@ -382,6 +474,7 @@ async fn request_pairing_inner(
     let identity = device_identity(dir, store).await?;
     let client = AgentClient::pinned(host, fingerprint)?;
     let client_nonce = new_client_nonce()?;
+    applog::register_secret(&client_nonce);
     let started = client
         .pair_request(&identity, label, &client_nonce)
         .await

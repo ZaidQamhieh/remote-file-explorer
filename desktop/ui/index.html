@@ -144,6 +144,15 @@
         <option value="debug">Detailed</option>
       </select>
 
+      <h3>Diagnostics</h3>
+      <p class="hint">A report for a bug report: versions, the agent's address and pinned fingerprint, recent errors and the log. It holds no password, token or key. It names the agent's address, so read it before you post it in public.</p>
+      <div class="row">
+        <button id="make-diagnostics" type="button">Create report</button>
+        <button id="copy-diagnostics" type="button" hidden>Copy</button>
+        <span id="diagnostics-result" role="status"></span>
+      </div>
+      <textarea id="diagnostics" rows="12" readonly spellcheck="false" aria-label="Diagnostics report" hidden></textarea>
+
       <h3>About</h3>
       <dl class="about">
         <dt>App version</dt><dd id="about-version"></dd>

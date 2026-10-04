@@ -4,6 +4,7 @@
 //! The private key lives in the OS keystore only. A pre-keystore `identity.json` is moved into
 //! the keystore and then deleted.
 
+use crate::applog;
 use crate::secrets::{account, SecretStore};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::{Signer, SigningKey};
@@ -72,6 +73,7 @@ impl Identity {
                     device_id: format!("desktop-{}", hex::encode(random::<12>()?)),
                     key: SigningKey::from_bytes(&random::<32>()?),
                 };
+                applog::register_secret(&STANDARD.encode(id.key.to_bytes()));
                 id.save(store, &acct)?;
                 Ok(id)
             }
@@ -115,6 +117,7 @@ impl Identity {
         let arr: [u8; 32] = raw
             .try_into()
             .map_err(|_| "identity key must be 32 bytes".to_string())?;
+        applog::register_secret(&f.private_key);
         Ok(Self {
             device_id: f.device_id,
             key: SigningKey::from_bytes(&arr),

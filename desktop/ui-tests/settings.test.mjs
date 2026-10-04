@@ -210,3 +210,56 @@ test("nothing secret is ever written into the Settings screen", async () => {
     .join(" ");
   assert.ok(!text.includes("tok-secret") && !text.includes("pw-secret"), text);
 });
+
+test("diagnostics: created on request, shown for reading, and copied", async () => {
+  const REPORT = "RFE Desktop diagnostics\napp version: 0.1.0\n";
+  const copied = [];
+  const app = boot(base({ diagnostics: REPORT }), {
+    navigator: { clipboard: { writeText: async (t) => copied.push(t) } },
+  });
+  await settle();
+  await app.els["open-settings"].fire("click");
+  assert.equal(app.els.diagnostics.hidden, true, "nothing is built until asked");
+  assert.equal(app.els["copy-diagnostics"].hidden, true);
+
+  await app.els["make-diagnostics"].fire("click");
+  assert.equal(app.els.diagnostics.hidden, false);
+  assert.equal(app.els.diagnostics.value, REPORT);
+  assert.equal(app.els["copy-diagnostics"].hidden, false);
+
+  await app.els["copy-diagnostics"].fire("click");
+  assert.deepEqual(copied, [REPORT]);
+  assert.equal(app.els["diagnostics-result"].textContent, "Copied.");
+});
+
+test("diagnostics: with no clipboard access the text is selected and the user is told how to copy", async () => {
+  const app = boot(base({ diagnostics: "report" }), {
+    navigator: { clipboard: { writeText: () => Promise.reject(new Error("denied")) } },
+  });
+  await settle();
+  await app.els["open-settings"].fire("click");
+  await app.els["make-diagnostics"].fire("click");
+  await app.els["copy-diagnostics"].fire("click");
+  assert.match(app.els["diagnostics-result"].textContent, /Ctrl\+C/);
+});
+
+test("diagnostics: a failure shows the reason and leaves no stale report; reopening Settings clears it", async () => {
+  let fail = false;
+  const app = boot(
+    base({ diagnostics: () => (fail ? Promise.reject("cannot build the report") : "old report") })
+  );
+  await settle();
+  await app.els["open-settings"].fire("click");
+  await app.els["make-diagnostics"].fire("click");
+  assert.equal(app.els.diagnostics.value, "old report");
+  await app.els["settings-back"].fire("click");
+  await app.els["open-settings"].fire("click");
+  assert.equal(app.els.diagnostics.hidden, true, "a report from before is not kept");
+  assert.equal(app.els.diagnostics.value, "");
+
+  fail = true;
+  await app.els["make-diagnostics"].fire("click");
+  assert.match(app.message(), /cannot build the report/);
+  assert.equal(app.els.diagnostics.hidden, true);
+  assert.equal(app.els["make-diagnostics"].disabled, false);
+});

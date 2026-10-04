@@ -65,8 +65,14 @@ on the PC.
 ## Settings
 
 **Settings** (top right) shows the account and this computer's device id, the trusted agents, a
-keystore test, the log level and the version. The log level controls what the app keeps in memory for
-a diagnostics report; nothing is written to disk.
+keystore test, the log level, a diagnostics report and the version. The log level controls what the
+app keeps in memory (the last 500 events); nothing is written to disk.
+
+**Create report** builds the diagnostics report for a bug report: versions, the agent's address and
+pinned fingerprint, the recent errors and the log. It holds no password, token or key (secrets the app
+handles are masked out of the log even if one slipped in). It does name the agent's address, and the
+log names the hosts you tried, so read it before you post it in public. **Copy** puts it on the
+clipboard; if the system refuses, the text is selected so Ctrl+C works.
 
 ## What is kept, and where
 
@@ -121,6 +127,7 @@ Messages from this app:
 | is no longer a trusted agent; connect and compare its fingerprint again | The pin was forgotten while a login for it existed. Connect to the agent again from the first screen. |
 | Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. |
 | Signed out on this computer only | The agent could not be told. Revoke this computer on the PC (`rfe-agent revoke <id>`) so its old login stops working. |
+| is damaged (...); delete it to create a new device identity | An `identity.json` left by an early version cannot be read. Delete that file; the app makes a new device key at the next sign-in. |
 | unknown log level | Choose one of the levels in the list. |
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |

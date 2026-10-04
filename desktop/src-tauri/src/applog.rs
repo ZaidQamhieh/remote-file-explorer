@@ -1,6 +1,8 @@
 //! A small in-memory log for the diagnostics report: the last few hundred events, filtered by the
 //! level the user chose in Settings. It is never written to disk. Callers pass event words and
-//! error text, never credentials: passwords, tokens and nonces do not reach this module.
+//! error text, never credentials. As a second line of defence, every secret the app handles is
+//! registered here the moment it exists (`register_secret`), and any registered value that still
+//! ends up in a line is replaced by `***`, both when the line is recorded and when it is read.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -43,11 +45,18 @@ const MAX_LINE: usize = 300;
 struct Log {
     level: Level,
     lines: VecDeque<String>,
+    /// Values to mask. Bounded; the oldest are dropped first.
+    secrets: Vec<String>,
 }
+
+/// Shorter values are not registered: they would mask ordinary words.
+const MIN_SECRET: usize = 6;
+const MAX_SECRETS: usize = 64;
 
 static LOG: Mutex<Log> = Mutex::new(Log {
     level: Level::Info,
     lines: VecDeque::new(),
+    secrets: Vec::new(),
 });
 
 fn log() -> std::sync::MutexGuard<'static, Log> {
@@ -62,13 +71,40 @@ pub fn level() -> Level {
     log().level
 }
 
+/// Registers a secret value (a password, token, nonce, pairing code or key) to be masked in the log.
+pub fn register_secret(secret: &str) {
+    if secret.len() < MIN_SECRET {
+        return;
+    }
+    let mut l = log();
+    if l.secrets.iter().any(|s| s == secret) {
+        return;
+    }
+    if l.secrets.len() == MAX_SECRETS {
+        l.secrets.remove(0);
+    }
+    l.secrets.push(secret.to_string());
+}
+
+fn mask(secrets: &[String], text: &str) -> String {
+    let mut out = text.to_string();
+    // Longest first, so a secret that contains another is masked whole.
+    let mut ordered: Vec<&String> = secrets.iter().collect();
+    ordered.sort_by_key(|s| std::cmp::Reverse(s.len()));
+    for s in ordered {
+        out = out.replace(s.as_str(), "***");
+    }
+    out
+}
+
 /// Records `msg` if `at` is within the chosen level. One line: control characters become spaces.
 pub fn record(at: Level, msg: &str) {
     let mut l = log();
     if at == Level::Off || at > l.level {
         return;
     }
-    let clean: String = msg
+    // Mask before cutting the line short, so a secret cannot be left half showing.
+    let clean: String = mask(&l.secrets, msg)
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .take(MAX_LINE)
@@ -97,7 +133,8 @@ pub fn debug(msg: &str) {
 }
 
 pub fn lines() -> Vec<String> {
-    log().lines.iter().cloned().collect()
+    let l = log();
+    l.lines.iter().map(|line| mask(&l.secrets, line)).collect()
 }
 
 pub fn clear() {

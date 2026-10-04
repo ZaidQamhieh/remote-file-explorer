@@ -49,6 +49,7 @@ const APP_MESSAGES: &[&str] = &[
     "Signed out on this computer only",
     "unknown log level",
     "; delete it to start over",
+    "delete it to create a new device identity",
     "tls config",
 ];
 

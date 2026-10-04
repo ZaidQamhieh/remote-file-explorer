@@ -3,6 +3,7 @@
 
 pub mod agent_client;
 pub mod applog;
+pub mod audit; // feature:audit-logs
 pub mod discovery;
 pub mod flows;
 mod fsutil;
@@ -287,6 +288,26 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
     flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
 }
 
+// ---- feature:audit-logs ----
+/// One page of the agent's audit trail (admin only). `before` is the cursor from the previous page.
+#[tauri::command]
+async fn audit_page(
+    app: tauri::AppHandle,
+    before: Option<i64>,
+) -> Result<audit::AuditReply, String> {
+    audit::fetch_audit(&data_dir(&app)?, &keystore(), before, audit::AUDIT_PAGE)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The tail of the agent's log (admin only).
+#[tauri::command]
+async fn agent_log(app: tauri::AppHandle) -> Result<audit::LogsReply, String> {
+    audit::fetch_logs(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         // First, as the plugin requires: a second launch hands over to the running app, which
@@ -327,7 +348,9 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            audit_page, // feature:audit-logs
+            agent_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

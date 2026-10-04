@@ -509,4 +509,236 @@
     }
     showConnect();
   })();
+
+  // ---- feature:audit-logs ----
+  // The agent's audit trail and log tail (admin only). Every string below came from the agent and
+  // can carry text chosen by a stranger (a username tried at sign-in), so it only ever goes in
+  // through textContent and is shortened first.
+  steps.push("step-audit");
+
+  const AUDIT_NAMES = {
+    pair: "Device paired",
+    register: "Account registered",
+    login: "Signed in",
+    login_failed: "Failed sign-in",
+    device_revoked: "Device revoked",
+    device_removed: "Device removed",
+    device_updated: "Device changed",
+    share_created: "Share link created",
+    share_revoked: "Share link revoked",
+    agent_restart: "Agent restarted",
+    app_launch: "App launched",
+  };
+  const AUDIT_BAD = new Set(["login_failed", "device_revoked", "device_removed"]);
+  const AUDIT_CAP = { action: 40, actor: 80, target: 120, detail: 160, message: 400, time: 40 };
+  const auditState = { entries: [], next: null, forbidden: false, error: "", logs: [], logsLoaded: false, auditLoaded: false, seq: 0 };
+
+  // Control characters and bidirectional overrides become spaces; long text is cut with an ellipsis.
+  function auditClip(text, max) {
+    const s = String(text == null ? "" : text).replace(/[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g, " ");
+    const chars = Array.from(s);
+    return chars.length > max ? chars.slice(0, max).join("") + "…" : s;
+  }
+
+  // Local time for reading; the agent's own timestamp stays in the title attribute.
+  function auditCell(text, title, className) {
+    const td = cell(text, className);
+    if (title) td.setAttribute("title", title);
+    return td;
+  }
+  function auditTimeCell(iso) {
+    const raw = auditClip(iso, AUDIT_CAP.time);
+    const ms = Date.parse(raw);
+    return Number.isNaN(ms) ? auditCell(raw || "unknown", raw) : auditCell(new Date(ms).toLocaleString(), raw);
+  }
+  function inAuditWindow(iso) {
+    const secs = Number($("audit-time").value) || 0;
+    if (!secs) return true;
+    const ms = Date.parse(iso);
+    return !Number.isNaN(ms) && ms >= Date.now() - secs * 1000;
+  }
+  const auditIsLogs = () => $("audit-view").value === "logs";
+
+  function renderAuditTypes() {
+    const sel = $("audit-type");
+    const kept = sel.value || "";
+    const seen = new Set(Object.keys(AUDIT_NAMES));
+    for (const e of auditState.entries) seen.add(auditClip(e.action, AUDIT_CAP.action));
+    const opts = [["", "All events"]];
+    for (const a of seen) opts.push([a, AUDIT_NAMES[a] || a]);
+    sel.replaceChildren(
+      ...opts.map(([value, label]) => {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = label;
+        return o;
+      })
+    );
+    sel.value = seen.has(kept) ? kept : "";
+  }
+
+  function renderAudit() {
+    const wantLogs = auditIsLogs();
+    $("audit-wrap").hidden = wantLogs || auditState.forbidden;
+    $("log-wrap").hidden = !wantLogs || auditState.forbidden;
+    $("audit-type-wrap").hidden = wantLogs;
+    $("audit-text-wrap").hidden = !wantLogs;
+    $("audit-forbidden").hidden = !auditState.forbidden;
+    $("audit-forbidden").textContent = auditState.forbidden
+      ? "This login cannot read the audit log or the agent log. Only an account sign-in (an admin device) can; a pairing code or an approval on the PC gives an ordinary device. Sign out and sign in with an account."
+      : "";
+    $("audit-error").hidden = !auditState.error;
+    $("audit-error").textContent = auditState.error;
+    const caption = $("audit-count");
+    const empty = $("audit-empty");
+    if (auditState.forbidden) {
+      caption.textContent = "";
+      empty.hidden = true;
+      $("audit-more").hidden = true;
+      return;
+    }
+    let rows;
+    let loaded;
+    if (wantLogs) {
+      const needle = $("audit-text").value.trim().toLowerCase();
+      loaded = auditState.logs.length;
+      // The agent sends oldest first; the screen shows newest first like the audit log.
+      rows = auditState.logs.filter((l) => inAuditWindow(l.ts) && (!needle || String(l.message).toLowerCase().includes(needle))).reverse();
+      const body = $("log-body");
+      body.replaceChildren();
+      for (const l of rows) {
+        const tr = document.createElement("tr");
+        tr.append(auditTimeCell(l.ts), auditCell(auditClip(l.message, AUDIT_CAP.message)));
+        body.append(tr);
+      }
+    } else {
+      const type = $("audit-type").value;
+      loaded = auditState.entries.length;
+      rows = auditState.entries.filter((e) => (!type || e.action === type) && inAuditWindow(e.at));
+      const body = $("audit-body");
+      body.replaceChildren();
+      for (const e of rows) {
+        const action = auditClip(e.action, AUDIT_CAP.action);
+        const target = auditClip(e.target, AUDIT_CAP.target);
+        const detail = auditClip(e.detail, AUDIT_CAP.detail);
+        const tr = document.createElement("tr");
+        tr.append(
+          auditTimeCell(e.at),
+          auditCell(AUDIT_NAMES[action] || action, action, AUDIT_BAD.has(action) ? "tag revoked" : ""),
+          auditCell(auditClip(e.actor, AUDIT_CAP.actor) || "unknown"),
+          auditCell(target, target.length < String(e.target || "").length ? auditClip(e.target, 400) : ""),
+          auditCell(detail, detail.length < String(e.detail || "").length ? auditClip(e.detail, 400) : "")
+        );
+        body.append(tr);
+      }
+    }
+    const loadedAll = wantLogs || !auditState.next;
+    caption.textContent =
+      rows.length + " shown of " + loaded + " loaded." +
+      (wantLogs ? " The agent sends only its last lines." : loadedAll ? " That is every event the agent kept." : " Older events are available: press Load more.");
+    empty.hidden = rows.length !== 0 || !!auditState.error;
+    if (rows.length === 0) {
+      empty.textContent = wantLogs
+        ? loaded === 0
+          ? "The agent's log is empty. The agent reads it from the systemd journal, so it is empty when the agent does not run as the rfe-agent service."
+          : "No log line matches these filters."
+        : loaded === 0
+          ? "The audit log is empty. Nothing has been recorded yet."
+          : "No loaded event matches these filters." + (loadedAll ? "" : " Press Load more to look further back.");
+    }
+    $("audit-more").hidden = wantLogs || !auditState.next;
+  }
+
+  // The agent may have refused the saved login (revoked or removed there); the app then dropped the
+  // token, so go back to sign-in like the device list does.
+  async function auditBackToSignIn() {
+    const saved = await invoke("saved_agent").catch(() => null);
+    if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+      setSession(saved);
+      pending = { host: saved.host, fingerprint: saved.fingerprint };
+      $("username").value = saved.username;
+      show("step-login");
+      loginMode(false);
+      return true;
+    }
+    return false;
+  }
+
+  // Loads the newest page (more = false) or the next older one. A newer request or a change of view
+  // makes an older answer stale: it is dropped.
+  async function loadAudit(more) {
+    const me = ++auditState.seq;
+    const logs = auditIsLogs();
+    try {
+      if (logs) {
+        const reply = await invoke("agent_log");
+        if (me !== auditState.seq) return;
+        auditState.forbidden = !!reply.forbidden;
+        auditState.logs = reply.lines || [];
+        auditState.logsLoaded = true;
+      } else {
+        const reply = await invoke("audit_page", { before: more ? auditState.next : null });
+        if (me !== auditState.seq) return;
+        auditState.forbidden = !!reply.forbidden;
+        if (more) {
+          const seen = new Set(auditState.entries.map((e) => e.id));
+          auditState.entries = auditState.entries.concat((reply.entries || []).filter((e) => !seen.has(e.id)));
+        } else {
+          auditState.entries = reply.entries || [];
+        }
+        auditState.next = reply.forbidden ? null : reply.nextBefore == null ? null : reply.nextBefore;
+        auditState.auditLoaded = true;
+      }
+      auditState.error = "";
+    } catch (e) {
+      if (me !== auditState.seq) return;
+      auditState.error = String(e);
+      if (await auditBackToSignIn()) say(String(e), true);
+    }
+    if (me !== auditState.seq) return;
+    renderAuditTypes();
+    renderAudit();
+    // A hidden button cannot keep focus: after the last page, focus goes to Refresh.
+    if (more && $("audit-more").hidden) $("audit-refresh").focus();
+  }
+
+  function clearAudit() {
+    auditState.seq++;
+    Object.assign(auditState, { entries: [], next: null, forbidden: false, error: "", logs: [], logsLoaded: false, auditLoaded: false });
+    $("audit-body").replaceChildren();
+    $("log-body").replaceChildren();
+  }
+
+  $("open-audit").addEventListener("click", (ev) =>
+    run(
+      ev.currentTarget,
+      async () => {
+        clearAudit();
+        show("step-audit");
+        renderAudit();
+        await loadAudit(false);
+      },
+      "Loading the audit log..."
+    )
+  );
+  const auditBusy = () => (auditIsLogs() ? "Loading the agent log..." : "Loading the audit log...");
+  $("audit-refresh").addEventListener("click", (ev) => run(ev.currentTarget, () => loadAudit(false), auditBusy()));
+  $("audit-more").addEventListener("click", (ev) => run(ev.currentTarget, () => loadAudit(true), "Loading older events..."));
+  $("audit-view").addEventListener("change", () => {
+    auditState.seq++; // an answer for the other view is stale
+    auditState.error = "";
+    const loaded = auditIsLogs() ? auditState.logsLoaded : auditState.auditLoaded;
+    renderAudit();
+    if (!loaded) run($("audit-refresh"), () => loadAudit(false), auditBusy());
+  });
+  for (const id of ["audit-type", "audit-time"]) $(id).addEventListener("change", renderAudit);
+  $("audit-text").addEventListener("input", renderAudit);
+  $("audit-back").addEventListener("click", () => {
+    say("");
+    clearAudit();
+    if (!current.signedIn) return showConnect();
+    show("step-devices");
+  });
+  // The events belong to the session that read them.
+  $("sign-out").addEventListener("click", clearAudit);
 })();

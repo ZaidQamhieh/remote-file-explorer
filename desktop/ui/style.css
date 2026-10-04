@@ -94,3 +94,11 @@ select { width: auto; min-width: 12em; }
 textarea { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [tabindex="-1"]:focus { outline: none; }
+
+/* ---- feature:audit-logs ---- */
+.filters { align-items: flex-end; margin-bottom: 10px; }
+.filters label { margin-top: 0; }
+.filters input { min-width: 12em; width: auto; }
+#audit-body td, #log-body td { white-space: normal; word-break: break-word; }
+#log-body td:last-child { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+#audit-body td:first-child, #log-body td:first-child { white-space: nowrap; }

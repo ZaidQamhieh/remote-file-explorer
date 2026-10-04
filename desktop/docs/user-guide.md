@@ -155,3 +155,37 @@ Messages from this app:
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).
+
+<!-- feature:audit-logs -->
+## Audit and logs (admin)
+
+On the devices screen, **Audit and logs (admin)** opens what the agent has recorded. It needs an
+account sign-in: the agent refuses it for a computer paired with a code or approved on the PC, because
+the trail describes every device, not just this one.
+
+- **Audit log** (the default): pairings, registrations, sign-ins (failed ones included), device revokes,
+  removals and changes, share links, agent restarts and app launches, newest first. File operations are
+  deliberately not recorded. The agent keeps the most recent 5000 events and sends 100 at a time;
+  **Load more** fetches the next older 100 and the button goes away when nothing older is left.
+- **Agent log**: the last ~200 lines of the agent's own log, which it reads from the systemd journal
+  (`journalctl --user -u rfe-agent.service`). It is empty when the agent does not run as that service.
+- **Event**, **Contains** (agent log only) and **Time** narrow what is already loaded; they do not ask the
+  agent again. To look further back, press **Load more** first. **Refresh** reads the newest events again.
+- Times are shown in this computer's local time. Point at a time to see the exact timestamp the agent
+  recorded.
+- The text of an event (the name of a device or of an account somebody tried to sign in with) comes from
+  whoever sent it, so the app shows it as plain text, replaces control characters, and cuts long text with
+  an ellipsis. The full text, up to 400 characters, is in the tooltip of a cut cell.
+
+| The window says | What it means and what to do |
+|---|---|
+| This login cannot read the audit log or the agent log. | The agent refused (403 FORBIDDEN). Sign out and sign in with an account (`rfe-agent adduser`), not a pairing code or an approval on the PC. |
+| The audit log is empty. | The agent has recorded nothing yet. |
+| No loaded event matches these filters. | Nothing already loaded fits the Event and Time choices. Widen them, or press **Load more** to look further back. |
+| No log line matches these filters. | Nothing in the agent's last lines fits the text and Time. Clear them. |
+| The agent's log is empty. | The agent could not read a journal. Run it as the `rfe-agent` service (`rfe-agent setup`), or read its output where you started it. |
+| unexpected audit cursor, the page size must be | A bug in the app: it asked for a page the agent does not have. Report it with the log level set to Detailed. |
+
+Any other message here (the agent is unreachable, the login was revoked) is one of the messages in the
+tables above.
+<!-- /feature:audit-logs -->

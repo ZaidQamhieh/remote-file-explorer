@@ -667,4 +667,27 @@ impl AgentClient {
         )
         .await
     }
+
+    // ---- feature:audit-logs ----
+    /// GET one fixed agent route (`path` is a literal chosen in this crate, never user input) as
+    /// `token` and decodes the JSON body. `query` values are URL-encoded by the client.
+    pub(crate) async fn get_json_at<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        path: &'static str,
+        query: &[(&str, String)],
+    ) -> Result<T, AgentError> {
+        debug_assert!(path.starts_with('/') && !path.contains(['?', '#']));
+        parse(
+            self.http
+                .get(format!("{}{path}", self.base))
+                .query(query)
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
 }

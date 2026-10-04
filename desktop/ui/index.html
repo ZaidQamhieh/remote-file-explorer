@@ -120,6 +120,9 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:audit-logs -->
+      <p class="hint"><button id="open-audit" class="link" type="button">Audit and logs (admin)</button></p>
+      <!-- /feature:audit-logs -->
     </section>
 
     <section id="step-settings" class="panel" hidden>
@@ -178,6 +181,70 @@
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
     </section>
+
+    <!-- feature:audit-logs -->
+    <section id="step-audit" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-audit" tabindex="-1">Audit and logs</h2>
+        <div class="row">
+          <button id="audit-refresh" type="button">Refresh</button>
+          <button id="audit-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">What happened on the agent: pairings, sign-ins (including failed ones), device and share changes, restarts. File operations are not recorded. Only an account sign-in can read it.</p>
+      <div class="row filters">
+        <div>
+          <label for="audit-view">Show</label>
+          <select id="audit-view" name="audit-view">
+            <option value="audit">Audit log</option>
+            <option value="logs">Agent log</option>
+          </select>
+        </div>
+        <div id="audit-type-wrap">
+          <label for="audit-type">Event</label>
+          <select id="audit-type" name="audit-type"></select>
+        </div>
+        <div id="audit-text-wrap" hidden>
+          <label for="audit-text">Contains</label>
+          <input id="audit-text" name="audit-text" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="audit-time">Time</label>
+          <select id="audit-time" name="audit-time">
+            <option value="0">Any time</option>
+            <option value="3600">Last hour</option>
+            <option value="86400">Last 24 hours</option>
+            <option value="604800">Last 7 days</option>
+          </select>
+        </div>
+      </div>
+      <p id="audit-forbidden" class="warn" role="alert" hidden></p>
+      <p id="audit-error" class="warn" role="alert" hidden></p>
+      <p id="audit-count" class="hint" role="status"></p>
+      <div id="audit-wrap" class="table-wrap">
+        <table>
+          <caption class="sr-only">Audit log, newest first</caption>
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">Event</th><th scope="col">By</th><th scope="col">Target</th><th scope="col">Detail</th></tr>
+          </thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+      </div>
+      <div id="log-wrap" class="table-wrap" hidden>
+        <table>
+          <caption class="sr-only">Agent log, newest first</caption>
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">Message</th></tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+      <p id="audit-empty" class="hint" hidden></p>
+      <div class="row pad">
+        <button id="audit-more" type="button" hidden>Load more</button>
+      </div>
+    </section>
+    <!-- /feature:audit-logs -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

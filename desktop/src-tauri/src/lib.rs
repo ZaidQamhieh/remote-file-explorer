@@ -94,6 +94,26 @@ async fn login(
 }
 
 #[tauri::command]
+async fn pair_with_code(
+    app: tauri::AppHandle,
+    host: String,
+    fingerprint: String,
+    code: String,
+) -> Result<SavedView, String> {
+    flows::pair(
+        &data_dir(&app)?,
+        &host,
+        &fingerprint,
+        &code,
+        "RFE Desktop",
+        &keystore(),
+    )
+    .await
+    .map(Into::into)
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
     flows::list_devices(&data_dir(&app)?, &keystore())
         .await
@@ -113,6 +133,7 @@ pub fn run() {
             forget_pin,
             probe_agent,
             login,
+            pair_with_code,
             list_devices,
             sign_out
         ])

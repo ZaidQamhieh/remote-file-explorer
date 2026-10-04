@@ -294,6 +294,17 @@ struct LoginBody<'a> {
     signature: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PairBody<'a> {
+    pairing_code: &'a str,
+    device_label: &'a str,
+    device_id: &'a str,
+    device_public_key: String,
+    nonce: String,
+    signature: String,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoginOk {
@@ -369,14 +380,8 @@ impl AgentClient {
         })
     }
 
-    pub async fn login(
-        &self,
-        id: &Identity,
-        username: &str,
-        password: &str,
-        label: &str,
-    ) -> Result<LoginOk, AgentError> {
-        let challenge: Challenge = parse(
+    async fn challenge(&self) -> Result<String, AgentError> {
+        let c: Challenge = parse(
             self.http
                 .post(format!("{}/auth/challenge", self.base))
                 .send()
@@ -384,14 +389,38 @@ impl AgentClient {
                 .map_err(net)?,
         )
         .await?;
+        Ok(c.nonce)
+    }
+
+    /// The TLS pin already guarantees the certificate; the agent's own statement of its
+    /// fingerprint is a second check that fails loudly if the two ever differ.
+    fn check_fingerprint(&self, ok: &LoginOk) -> Result<(), AgentError> {
+        if !ok.cert_fingerprint.is_empty()
+            && normalize_fingerprint(&ok.cert_fingerprint) != self.fingerprint
+        {
+            return Err(AgentError::Local(
+                "the agent reports a different fingerprint than the pinned one".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn login(
+        &self,
+        id: &Identity,
+        username: &str,
+        password: &str,
+        label: &str,
+    ) -> Result<LoginOk, AgentError> {
+        let nonce = self.challenge().await?;
         let body = LoginBody {
             username,
             password,
             device_label: label,
             device_id: id.device_id(),
             device_public_key: id.public_key_b64(),
-            signature: id.sign_b64(&challenge.nonce),
-            nonce: challenge.nonce,
+            signature: id.sign_b64(&nonce),
+            nonce,
         };
         let ok: LoginOk = parse(
             self.http
@@ -402,15 +431,38 @@ impl AgentClient {
                 .map_err(net)?,
         )
         .await?;
-        // The TLS pin already guarantees this; the agent's own statement of its
-        // fingerprint is a second check that fails loudly if the two ever differ.
-        if !ok.cert_fingerprint.is_empty()
-            && normalize_fingerprint(&ok.cert_fingerprint) != self.fingerprint
-        {
-            return Err(AgentError::Local(
-                "the agent reports a different fingerprint than the pinned one".into(),
-            ));
-        }
+        self.check_fingerprint(&ok)?;
+        Ok(ok)
+    }
+
+    /// Enrolls with a one-time pairing code (`POST /pair`). The agent checks the device proof
+    /// before it spends the code, so a failed attempt does not burn a valid one. The token this
+    /// returns belongs to an ordinary device, not an admin one.
+    pub async fn pair(
+        &self,
+        id: &Identity,
+        code: &str,
+        label: &str,
+    ) -> Result<LoginOk, AgentError> {
+        let nonce = self.challenge().await?;
+        let body = PairBody {
+            pairing_code: code,
+            device_label: label,
+            device_id: id.device_id(),
+            device_public_key: id.public_key_b64(),
+            signature: id.sign_b64(&nonce),
+            nonce,
+        };
+        let ok: LoginOk = parse(
+            self.http
+                .post(format!("{}/pair", self.base))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await?;
+        self.check_fingerprint(&ok)?;
         Ok(ok)
     }
 

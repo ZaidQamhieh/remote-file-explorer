@@ -1,7 +1,7 @@
 //! App-level flows shared by the Tauri commands and the integration tests.
 
 use crate::agent_client::{
-    capture_fingerprint, normalize_fingerprint, AgentClient, AgentError, Device,
+    capture_fingerprint, normalize_fingerprint, AgentClient, AgentError, Device, LoginOk,
 };
 use crate::fsutil::write_private;
 use crate::identity::Identity;
@@ -169,6 +169,41 @@ pub async fn probe(dir: &Path, host: &str) -> Result<Probe, AgentError> {
     })
 }
 
+/// Loads or creates this computer's device key. Runs before any network traffic, so a missing or
+/// locked keystore stops enrollment before the agent sees anything.
+async fn device_identity(dir: &Path, store: &Offloaded) -> Result<Identity, AgentError> {
+    let dir = dir.to_path_buf();
+    store
+        .run(move |s| Identity::load_or_create(&dir, s))
+        .await
+        .map_err(AgentError::Local)
+}
+
+/// Stores what an enrollment returned: the pin and device id in `state.json`, the token in the
+/// keystore.
+async fn remember(
+    dir: &Path,
+    host: &str,
+    fingerprint: &str,
+    username: &str,
+    ok: LoginOk,
+    store: &Offloaded,
+) -> Result<Saved, AgentError> {
+    let saved = Saved {
+        host: host.to_string(),
+        fingerprint: normalize_fingerprint(fingerprint),
+        token: ok.device_token,
+        username: username.to_string(),
+        device_id: ok.device_id,
+    };
+    let (dir, to_save) = (dir.to_path_buf(), saved.clone());
+    store
+        .run(move |s| save(&dir, s, &to_save))
+        .await
+        .map_err(AgentError::Local)?;
+    Ok(saved)
+}
+
 /// Pins `fingerprint` (the one the user confirmed), logs in, and stores the pin and token.
 pub async fn login(
     dir: &Path,
@@ -179,31 +214,30 @@ pub async fn login(
     label: &str,
     store: &Offloaded,
 ) -> Result<Saved, AgentError> {
-    // Before any network traffic: a missing or locked keystore must stop the login here.
-    let identity = {
-        let dir = dir.to_path_buf();
-        store
-            .run(move |s| Identity::load_or_create(&dir, s))
-            .await
-            .map_err(AgentError::Local)?
-    };
+    let identity = device_identity(dir, store).await?;
     let client = AgentClient::pinned(host, fingerprint)?;
     let ok = client.login(&identity, username, password, label).await?;
-    let saved = Saved {
-        host: host.to_string(),
-        fingerprint: normalize_fingerprint(fingerprint),
-        token: ok.device_token,
-        username: username.to_string(),
-        device_id: ok.device_id,
-    };
-    {
-        let (dir, saved) = (dir.to_path_buf(), saved.clone());
-        store
-            .run(move |s| save(&dir, s, &saved))
-            .await
-            .map_err(AgentError::Local)?;
+    remember(dir, host, fingerprint, username, ok, store).await
+}
+
+/// Pins `fingerprint`, enrolls with a one-time pairing code, and stores the pin and token. The
+/// result is an ordinary device (no account name), which the agent lets list and manage only itself.
+pub async fn pair(
+    dir: &Path,
+    host: &str,
+    fingerprint: &str,
+    code: &str,
+    label: &str,
+    store: &Offloaded,
+) -> Result<Saved, AgentError> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Err(AgentError::Local("enter the pairing code".into()));
     }
-    Ok(saved)
+    let identity = device_identity(dir, store).await?;
+    let client = AgentClient::pinned(host, fingerprint)?;
+    let ok = client.pair(&identity, code, label).await?;
+    remember(dir, host, fingerprint, "", ok, store).await
 }
 
 pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, AgentError> {

@@ -61,6 +61,17 @@
           <button type="submit" class="primary">Sign in</button>
           <button id="login-back" type="button">Back</button>
         </div>
+        <p class="hint"><button id="use-code" class="link" type="button">Use a pairing code instead</button></p>
+      </form>
+      <form id="pair-form" hidden>
+        <p class="hint">On the PC running the agent, run <code>rfe-agent pair</code> and enter the code it prints. A code pairs this computer as an ordinary device: it can list and manage only itself.</p>
+        <label for="pairing-code">Pairing code</label>
+        <input id="pairing-code" name="pairing-code" autocomplete="off" spellcheck="false" required>
+        <div class="row pad">
+          <button type="submit" class="primary">Pair</button>
+          <button id="pair-back" type="button">Back</button>
+        </div>
+        <p class="hint"><button id="use-account" class="link" type="button">Sign in with an account instead</button></p>
       </form>
     </section>
 

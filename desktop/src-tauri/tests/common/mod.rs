@@ -2,7 +2,10 @@
 //! loopback port with its own data and roots directories. Set RFE_AGENT_BIN to a built agent.
 #![allow(dead_code)]
 
-use rfe_desktop_lib::agent_client::normalize_fingerprint;
+use rfe_desktop_lib::agent_client::{normalize_fingerprint, AgentError};
+use rfe_desktop_lib::identity::Identity;
+use rfe_desktop_lib::secrets::MemoryStore;
+use serde_json::Value;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -88,6 +91,19 @@ impl Agent {
         normalize_fingerprint(line.trim_start_matches("fingerprint:"))
     }
 
+    /// A fresh one-time pairing code, as `rfe-agent pair` prints it on its first line.
+    pub fn pair_code(&self) -> String {
+        let out = cli(&["pair", "-data", self.dir()]);
+        let first = out.lines().next().expect("pair output");
+        first
+            .strip_prefix("Pairing code:")
+            .unwrap_or_else(|| panic!("unexpected pair output: {first}"))
+            .split_whitespace()
+            .next()
+            .expect("a code")
+            .to_string()
+    }
+
     pub fn devices_cli(&self) -> String {
         cli(&["devices", "-data", self.dir()])
     }
@@ -109,4 +125,72 @@ impl Drop for Agent {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+pub struct Raw {
+    pub http: reqwest::Client,
+    pub base: String,
+}
+
+impl Raw {
+    /// Plain HTTPS to the agent, trusting any certificate: the tests build requests the app never
+    /// would (a replayed nonce, a wrong signature) to make the agent refuse them.
+    pub fn new(host: &str) -> Self {
+        Self {
+            http: reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap(),
+            base: format!("https://{host}/v1"),
+        }
+    }
+
+    pub async fn nonce(&self) -> String {
+        let v: Value = self
+            .http
+            .post(format!("{}/auth/challenge", self.base))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        v["nonce"].as_str().unwrap().to_string()
+    }
+
+    /// The agent's refusal as the app would see it.
+    pub async fn refused(&self, path: &str, body: Value) -> AgentError {
+        let resp = self
+            .http
+            .post(format!("{}{path}", self.base))
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        let status = resp.status().as_u16();
+        assert!(status >= 400, "{path} unexpectedly succeeded: {status}");
+        let v: Value = resp.json().await.unwrap();
+        AgentError::Server {
+            status,
+            code: v["code"].as_str().unwrap_or_default().to_string(),
+            message: v["message"].as_str().unwrap_or_default().to_string(),
+        }
+    }
+
+    pub async fn ok(&self, path: &str, body: Value) {
+        let resp = self
+            .http
+            .post(format!("{}{path}", self.base))
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success(), "{path}: {}", resp.status());
+    }
+}
+
+pub fn identity() -> (Identity, TempDir) {
+    let dir = TempDir::new().unwrap();
+    let id = Identity::load_or_create(dir.path(), &MemoryStore::default()).unwrap();
+    (id, dir)
 }

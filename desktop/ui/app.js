@@ -115,7 +115,7 @@
   function setSession(saved) {
     const on = saved.signedIn;
     $("session").hidden = !on;
-    $("session-text").textContent = on ? saved.username + " on " + saved.host : "";
+    $("session-text").textContent = on ? (saved.username ? saved.username + " on " : "Paired with ") + saved.host : "";
   }
 
   $("connect-form").addEventListener("submit", (ev) => {
@@ -137,7 +137,7 @@
 
   $("trust").addEventListener("click", () => {
     show("step-login");
-    $("username").focus();
+    loginMode(false);
   });
   $("trust-cancel").addEventListener("click", () => {
     pending = { host: "", fingerprint: "" };
@@ -157,6 +157,34 @@
       setSession(saved);
       await showDevices();
     });
+  });
+
+  function loginMode(code) {
+    $("login-form").hidden = code;
+    $("pair-form").hidden = !code;
+    $(code ? "pairing-code" : "username").focus();
+  }
+  $("use-code").addEventListener("click", () => loginMode(true));
+  $("use-account").addEventListener("click", () => loginMode(false));
+
+  $("pair-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    run(submitter(ev), async () => {
+      const saved = await invoke("pair_with_code", {
+        host: pending.host,
+        fingerprint: pending.fingerprint,
+        code: $("pairing-code").value.trim(),
+      });
+      $("pairing-code").value = "";
+      setSession(saved);
+      await showDevices();
+    });
+  });
+
+  $("pair-back").addEventListener("click", () => {
+    $("pairing-code").value = "";
+    loginMode(false);
+    showConnect();
   });
 
   $("login-back").addEventListener("click", () => {

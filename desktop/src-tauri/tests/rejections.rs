@@ -3,83 +3,13 @@
 
 mod common;
 
-use common::{free_port, Agent};
+use common::{free_port, identity, Agent, Raw};
 use rfe_desktop_lib::agent_client::{known_message, AgentError, KNOWN_CODES};
 use rfe_desktop_lib::identity::Identity;
-use rfe_desktop_lib::secrets::MemoryStore;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use tempfile::TempDir;
 
 const PW: &str = "pw-for-rejection-tests";
-
-struct Raw {
-    http: reqwest::Client,
-    base: String,
-}
-
-impl Raw {
-    /// Plain HTTPS to the agent, trusting any certificate: the tests build requests the app never
-    /// would (a replayed nonce, a wrong signature) to make the agent refuse them.
-    fn new(host: &str) -> Self {
-        Self {
-            http: reqwest::Client::builder()
-                .danger_accept_invalid_certs(true)
-                .build()
-                .unwrap(),
-            base: format!("https://{host}/v1"),
-        }
-    }
-
-    async fn nonce(&self) -> String {
-        let v: Value = self
-            .http
-            .post(format!("{}/auth/challenge", self.base))
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        v["nonce"].as_str().unwrap().to_string()
-    }
-
-    /// The agent's refusal as the app would see it.
-    async fn refused(&self, path: &str, body: Value) -> AgentError {
-        let resp = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .json(&body)
-            .send()
-            .await
-            .unwrap();
-        let status = resp.status().as_u16();
-        assert!(status >= 400, "{path} unexpectedly succeeded: {status}");
-        let v: Value = resp.json().await.unwrap();
-        AgentError::Server {
-            status,
-            code: v["code"].as_str().unwrap_or_default().to_string(),
-            message: v["message"].as_str().unwrap_or_default().to_string(),
-        }
-    }
-
-    async fn ok(&self, path: &str, body: Value) {
-        let resp = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .json(&body)
-            .send()
-            .await
-            .unwrap();
-        assert!(resp.status().is_success(), "{path}: {}", resp.status());
-    }
-}
-
-fn identity() -> (Identity, TempDir) {
-    let dir = TempDir::new().unwrap();
-    let id = Identity::load_or_create(dir.path(), &MemoryStore::default()).unwrap();
-    (id, dir)
-}
 
 fn login_body(id: &Identity, password: &str, nonce: &str, signed: &str) -> Value {
     json!({

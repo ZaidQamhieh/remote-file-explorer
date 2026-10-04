@@ -5,12 +5,12 @@ Measured 2026-10-04 by building each release from its tag and running the whole 
 
 | Agent release | Sign in with an account | Pair with a code | Approve on the PC | Result |
 |---|---|---|---|---|
-| `agent-v1.42.6`, `agent-v1.42.7` (last stable) | refused: no bound proof | refused | no, endpoint missing | the app says "This agent is too old to sign in from this app" before it sends a password; measured: 81 of the suite's tests need a sign-in and fail with that message, the rest pass |
+| `agent-v1.42.6`, `agent-v1.42.7` | refused: no bound proof | refused | no, endpoint missing | the app says "This agent is too old to sign in from this app" before it sends a password; measured: 81 of the suite's tests need a sign-in and fail with that message, the rest pass |
 | `agent-v1.43.0-rc.1` | refused: no bound proof | refused | yes | same refusal |
-| `agent-v1.43.0-rc.2` and the checkout (first release with `proof: v2`) | yes | yes | yes | all tests pass (the main CI job) |
+| `agent-v1.43.0` (stable), `agent-v1.43.0-rc.2` and the checkout (first releases with `proof: v2`) | yes | yes | yes | all tests pass (the main CI job) |
 
 **Minimum agent:** the first release that includes the certificate-bound sign-in proof (`proof: "v2"` in the
-`POST /auth/challenge` answer, `security.DeviceProofMessageV2`). `agent-v1.43.0-rc.2` is the first tag that has it. The desktop app signs only that proof. A bare-nonce signature is good at every agent, so
+`POST /auth/challenge` answer, `security.DeviceProofMessageV2`). `agent-v1.43.0-rc.2` is the first tag that has it, and `agent-v1.43.0` the first stable one. The desktop app signs only that proof. A bare-nonce signature is good at every agent, so
 an agent that relays a nonce from a second agent to this app could replay the answer there; refusing agents
 without the field keeps such an agent from hiding its support to get one. The phone app and the browser
 companion still sign the bare nonce, and the agent still accepts it from them.

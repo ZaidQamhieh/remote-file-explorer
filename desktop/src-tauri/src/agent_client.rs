@@ -292,6 +292,8 @@ pub fn validate_hostport(hostport: &str) -> Result<(), AgentError> {
 }
 
 fn net(e: reqwest::Error) -> AgentError {
+    // The request URL can carry a secret (the approval poll's nonce is a query parameter).
+    let e = e.without_url();
     let mut msg = e.to_string();
     let mut src = std::error::Error::source(&e);
     while let Some(s) = src {

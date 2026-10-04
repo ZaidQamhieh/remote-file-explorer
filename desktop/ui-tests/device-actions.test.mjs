@@ -6,7 +6,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { boot, settle, focused, SIGNED_IN } from "./harness.mjs";
+import { boot, settle, focused, deferred, SIGNED_IN } from "./harness.mjs";
 
 const device = (o = {}) => ({ id: "d1", label: "Laptop", created: 1, lastSeen: 0, revoked: false, current: false, lastAddress: "", lastVersion: "", viaLogin: false, ...o });
 const me = device({ id: "me", label: "This PC", current: true, viaLogin: true });
@@ -273,4 +273,22 @@ test("the action buttons carry the row's name, so they differ for a screen reade
   const labels = [0, 1].flatMap((i) => buttons(app, i).map((b) => b.attrs["aria-label"]));
   assert.equal(new Set(labels).size, labels.length);
   assert.ok(labels.every((l) => /Laptop|Phone|This PC/.test(l)));
+});
+
+test("a slow device list for the agent the user left never draws over the newer one", async () => {
+  const slow = deferred();
+  let calls = 0;
+  const app = boot({
+    saved_agent: SIGNED_IN,
+    list_pins: [],
+    list_devices: () => (calls++ === 0 ? slow.promise : [device({ id: "new", label: "Second agent PC", current: true })]),
+  });
+  await settle();
+  app.els.refresh.fire("click");
+  await settle();
+  assert.equal(app.els.devices.children.length, 1);
+  slow.resolve([me, phone]); // the first agent answers last
+  await settle();
+  assert.equal(app.els.devices.children.length, 1, "the older answer must be dropped");
+  assert.match(app.els.devices.children[0].children[0].textContent, /Second agent PC/);
 });

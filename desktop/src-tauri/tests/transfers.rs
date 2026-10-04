@@ -1112,3 +1112,49 @@ fn every_transfer_message_is_in_the_user_guide() {
         );
     }
 }
+
+/// The saved login is switched to another agent after a transfer was queued: the transfer must not
+/// run against that other agent (same path, other computer); once the login is back it goes on.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_transfer_never_runs_against_another_agent_after_a_switch() {
+    use std::sync::atomic::AtomicBool;
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("f.txt"), b"hello").unwrap();
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+
+    let away = Arc::new(AtomicBool::new(false));
+    let calls = Arc::new(AtomicU64::new(0));
+    let (real, other) = (rig.conn(), rig.conn_via("127.0.0.1:1"));
+    let ctx = Ctx {
+        creds: {
+            let (away, calls) = (away.clone(), calls.clone());
+            Arc::new(move || {
+                // The first read is the queueing itself; the switch happens right after it.
+                let first = calls.fetch_add(1, Ordering::SeqCst) == 0;
+                let c = if first || !away.load(Ordering::SeqCst) {
+                    real.clone()
+                } else {
+                    other.clone()
+                };
+                Box::pin(async move { Ok(c) })
+            })
+        },
+        download_dir: folder.clone(),
+    };
+    away.store(true, Ordering::SeqCst);
+    let id = t.start_download(ctx, &rig.remote("f.txt")).await.unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Failed, "{v:?}");
+    assert!(v.error.contains("belongs to"), "{v:?}");
+    assert!(
+        !folder.join("f.txt").exists(),
+        "nothing may be saved from the wrong agent"
+    );
+
+    away.store(false, Ordering::SeqCst);
+    t.retry(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(std::fs::read(folder.join("f.txt")).unwrap(), b"hello");
+}

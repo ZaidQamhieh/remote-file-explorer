@@ -283,3 +283,29 @@ fn the_real_secret_service_round_trips() {
     assert_eq!(store.get(&acct).unwrap(), None);
     store.delete(&acct).unwrap(); // deleting a missing secret is fine
 }
+
+/// A sign-in and a pairing starting together on a fresh install must share one device key.
+#[test]
+fn two_first_uses_at_once_end_with_one_device_key() {
+    let dir = TempDir::new().unwrap();
+    let store = std::sync::Arc::new(MemoryStore::default());
+    let start = std::sync::Arc::new(std::sync::Barrier::new(8));
+    let ids: Vec<String> = (0..8)
+        .map(|_| {
+            let (dir, store, start) = (dir.path().to_path_buf(), store.clone(), start.clone());
+            std::thread::spawn(move || {
+                start.wait();
+                Identity::load_or_create(&dir, &*store)
+                    .unwrap()
+                    .device_id()
+                    .to_string()
+            })
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|h| h.join().unwrap())
+        .collect();
+    assert!(ids.iter().all(|i| *i == ids[0]), "{ids:?}");
+    let after = Identity::load_or_create(dir.path(), &*store).unwrap();
+    assert_eq!(after.device_id(), ids[0]);
+}

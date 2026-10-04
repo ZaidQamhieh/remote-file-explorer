@@ -29,3 +29,20 @@ fn debug_output_hides_tokens_and_nonces() {
     }
     assert!(text.contains("pc:8765") && text.contains("dev1"), "{text}");
 }
+
+/// The approval poll carries its secret as a query parameter; a connection error that quotes the
+/// request URL would put it in text the window shows.
+#[tokio::test]
+async fn a_failed_approval_poll_does_not_quote_its_nonce() {
+    use rfe_desktop_lib::agent_client::AgentClient;
+    // Nothing listens on this port, so the request fails before any TLS.
+    let client = AgentClient::pinned("127.0.0.1:1", &"ab".repeat(32)).unwrap();
+    let err = client
+        .poll_pair_request("req1", "nonce-secret-4")
+        .await
+        .unwrap_err();
+    assert!(
+        !err.to_string().contains("nonce-secret-4"),
+        "nonce leaked: {err}"
+    );
+}

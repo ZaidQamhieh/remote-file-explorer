@@ -323,12 +323,8 @@ pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String
         applog::error("the previous login could not be kept in the saved hosts");
     }
     let acct = account("token", dir);
-    if s.token.is_empty() {
-        store.delete(&acct)?;
-    } else {
-        store.set(&acct, &s.token)?;
-    }
     // Keep every other trusted address; this session's address is trusted at this fingerprint.
+    // Read before the token changes: a state file that cannot be read must leave both as they were.
     let mut f = read_state(dir)?;
     if !s.host.is_empty() && !s.fingerprint.is_empty() {
         f.pins_mut().insert(pin_key(&s.host), s.fingerprint.clone());
@@ -338,7 +334,21 @@ pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String
     f.username = s.username.clone();
     f.device_id = s.device_id.clone();
     f.token.clear();
-    write_state(dir, &f)
+    let previous = store.get(&acct).ok().flatten();
+    if s.token.is_empty() {
+        store.delete(&acct)?;
+    } else {
+        store.set(&acct, &s.token)?;
+    }
+    if let Err(e) = write_state(dir, &f) {
+        // The token and the address must stay a pair: put the old token back beside the old address.
+        let _ = match previous {
+            Some(t) => store.set(&acct, &t),
+            None => store.delete(&acct),
+        };
+        return Err(e);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -695,23 +705,36 @@ pub struct SignOut {
 /// changed certificate never leaves the token on this computer; the result says when the agent
 /// could not be told.
 pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOut, String> {
-    let state = read_state(dir)?;
-    let token = {
-        let dir = dir.to_path_buf();
-        match store.run(move |s| s.get(&account("token", &dir))).await {
-            Ok(Some(t)) => t,
+    // One snapshot of address, device and token under the saved-hosts lock: a switch to another agent
+    // between separate reads would send that agent's login to this one.
+    let saved = {
+        let owned = dir.to_path_buf();
+        match store.run(move |s| load_saved(&owned, s)).await {
+            Ok(saved) => saved,
             // A keystore that is locked still lets a pre-keystore file token be revoked.
-            _ => state.token.clone(),
+            Err(_) => {
+                let f = read_state(dir)?;
+                let token = f.token.clone();
+                f.into_saved(token)
+            }
         }
     };
+    let state = read_state(dir)?;
+    let token = saved.token.clone();
     let mut out = SignOut::default();
-    if !token.is_empty() && !state.host.is_empty() && !state.device_id.is_empty() {
-        let pinned = state.pins().get(&pin_key(&state.host)).cloned();
+    if !token.is_empty() && !saved.host.is_empty() && saved.device_id.is_empty() {
+        out.note = "Signed out on this computer only. This computer's device is not known, so the \
+                    agent was not told and this login still works until it is revoked from the \
+                    agent's device list or with `rfe-agent revoke` on the PC."
+            .into();
+    }
+    if !token.is_empty() && !saved.host.is_empty() && !saved.device_id.is_empty() {
+        let pinned = state.pins().get(&pin_key(&saved.host)).cloned();
         let revoked = match pinned
             .ok_or_else(|| AgentError::Local("this agent is no longer trusted".into()))
-            .and_then(|fp| AgentClient::pinned(&state.host, &fp))
+            .and_then(|fp| AgentClient::pinned(&saved.host, &fp))
         {
-            Ok(c) => c.revoke_own_device(&token, &state.device_id).await,
+            Ok(c) => c.revoke_own_device(&token, &saved.device_id).await,
             Err(e) => Err(e),
         };
         match revoked {
@@ -727,8 +750,21 @@ pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOu
             }
         }
     }
+    // Clear the login that was revoked, not whichever one is active by now: the user may have
+    // switched to another agent during the request, and that login stays.
     let dir = dir.to_path_buf();
-    store.run(move |s| sign_out(&dir, s)).await?;
+    store
+        .run(move |s| {
+            let _held = crate::hosts::lock();
+            let still_active =
+                token.is_empty() || load_saved(&dir, s).map_or(true, |l| l.token == token);
+            if still_active {
+                sign_out(&dir, s)
+            } else {
+                crate::hosts::forget_parked_token(&dir, s, &token)
+            }
+        })
+        .await?;
     applog::info(&format!(
         "signed out (agent told: {})",
         if out.revoked { "yes" } else { "no" }
@@ -802,8 +838,10 @@ pub fn forget_pin(dir: &Path, store: &dyn SecretStore, host: &str) -> Result<For
         f.username.clear();
         f.device_id.clear();
         f.token.clear();
-        write_state(dir, &f)?;
+        // The login first: if the keystore refuses, nothing changed and the user can try again,
+        // instead of an empty address beside a token that still counts as signed in.
         store.delete(&account("token", dir))?;
+        write_state(dir, &f)?;
     } else if out.was_pinned {
         write_state(dir, &f)?;
     }

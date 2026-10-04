@@ -176,6 +176,9 @@ struct Item {
     view: Mutex<TransferView>,
     cancel: Mutex<watch::Sender<bool>>,
     ctx: Ctx,
+    /// The agent this transfer was queued for. The saved login can be switched to another agent
+    /// meanwhile; the paths, sessions and part files here mean nothing to that one.
+    host: String,
     kind: Kind,
     resume: Mutex<Resume>,
 }
@@ -232,7 +235,7 @@ impl Transfers {
     /// Queues a download of `remote_path` into `ctx.download_dir`. Needs a tokio runtime.
     pub async fn start_download(&self, ctx: Ctx, remote_path: &str) -> Result<String, String> {
         validate_remote(remote_path, "enter the path of the file on the computer")?;
-        (ctx.creds)().await?;
+        let host = (ctx.creds)().await?.host;
         std::fs::create_dir_all(&ctx.download_dir).map_err(|e| {
             format!(
                 "cannot use the downloads folder {}: {e}",
@@ -254,7 +257,7 @@ impl Transfers {
             error: String::new(),
             verified: false,
         };
-        self.add(ctx, Kind::Download { part, name }, view);
+        self.add(ctx, host, Kind::Download { part, name }, view);
         Ok(id)
     }
 
@@ -276,7 +279,7 @@ impl Transfers {
         let src = PathBuf::from(local_path);
         let (_file, ident) = open_source(&src)?;
         let name = remote_file_name(&src)?;
-        (ctx.creds)().await?;
+        let host = (ctx.creds)().await?.host;
         let id = new_id()?;
         let remote_path = join_remote(remote_dir, &name);
         let view = TransferView {
@@ -291,16 +294,17 @@ impl Transfers {
             error: String::new(),
             verified: false,
         };
-        self.add(ctx, Kind::Upload { src, remote_path }, view);
+        self.add(ctx, host, Kind::Upload { src, remote_path }, view);
         Ok(id)
     }
 
-    fn add(&self, ctx: Ctx, kind: Kind, view: TransferView) {
+    fn add(&self, ctx: Ctx, host: String, kind: Kind, view: TransferView) {
         let (tx, rx) = watch::channel(false);
         let item = Arc::new(Item {
             view: Mutex::new(view),
             cancel: Mutex::new(tx),
             ctx,
+            host,
             kind,
             resume: Mutex::new(Resume::default()),
         });
@@ -347,7 +351,7 @@ impl Transfers {
                 if let Some(session) = lock(&item.resume).session.take() {
                     let item = item.clone();
                     tokio::spawn(async move {
-                        if let Ok(conn) = (item.ctx.creds)().await {
+                        if let Ok(conn) = conn_for(&item).await {
                             delete_session(&conn, &session.id).await;
                         }
                     });
@@ -437,6 +441,19 @@ async fn work(opts: &Options, item: &Item) -> Result<(), String> {
     }
 }
 
+/// The saved login, if it is still the agent this transfer was queued for. After a switch to
+/// another agent a transfer waits (fails, retryable) instead of acting on the wrong computer.
+async fn conn_for(item: &Item) -> Result<Conn, String> {
+    let conn = (item.ctx.creds)().await?;
+    if conn.host != item.host {
+        return Err(format!(
+            "This transfer belongs to {}. Switch back to that agent to continue it.",
+            item.host
+        ));
+    }
+    Ok(conn)
+}
+
 fn discard_local(item: &Item) {
     if let Kind::Download { part, .. } = &item.kind {
         let _ = std::fs::remove_file(part);
@@ -447,7 +464,7 @@ async fn cleanup_cancelled(item: &Item) {
     discard_local(item);
     let session = lock(&item.resume).session.take();
     if let Some(session) = session {
-        if let Ok(conn) = (item.ctx.creds)().await {
+        if let Ok(conn) = conn_for(item).await {
             delete_session(&conn, &session.id).await;
         }
     }
@@ -916,7 +933,7 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
     let Kind::Download { part, name } = &item.kind else {
         return Err("internal: not a download".into());
     };
-    let conn = (item.ctx.creds)().await?;
+    let conn = conn_for(item).await?;
     let client = client_for(&conn)?;
     let (http, base) = client.transport();
     let remote = item.snapshot().remote_path;
@@ -1057,7 +1074,7 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
     let Kind::Upload { src, remote_path } = &item.kind else {
         return Err("internal: not an upload".into());
     };
-    let conn = (item.ctx.creds)().await?;
+    let conn = conn_for(item).await?;
     let client = client_for(&conn)?;
     let (http, base) = client.transport();
 

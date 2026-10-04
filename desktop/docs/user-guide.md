@@ -300,6 +300,7 @@ Messages from this app:
 | is no longer a trusted agent; connect and compare its fingerprint again | The pin was forgotten while a login for it existed. Connect to the agent again from the first screen. |
 | Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. Making one also removes the logins saved for your other agents (their devices stay registered on those agents until removed there), so you sign in to each again. |
 | Signed out on this computer only | The agent could not be told. Revoke this computer on the PC (`rfe-agent revoke <id>`) so its old login stops working. |
+| This transfer belongs to <agent> | The transfer was started on another agent and you have since switched to a different one. It does nothing to the wrong computer. Switch back to that agent (Hosts) and press Retry, or cancel it. |
 | is damaged (...); delete it to create a new device identity | An `identity.json` left by an early version cannot be read. Delete that file; the app makes a new device key at the next sign-in. |
 | cannot start network discovery, network discovery stopped | The app could not listen for mDNS answers (no network interface, or the system refused). Type the agent's address instead. |
 | unknown log level | Choose one of the levels in the list. |

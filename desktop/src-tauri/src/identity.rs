@@ -10,6 +10,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
 pub struct Identity {
     device_id: String,
@@ -22,6 +23,14 @@ struct IdentityFile {
     private_key: String,
 }
 
+/// One creation or reset at a time: a sign-in and a pairing starting together on a fresh install
+/// must end up with the same key, not each their own with the last write winning.
+static KEY_LOCK: Mutex<()> = Mutex::new(());
+
+fn key_lock() -> MutexGuard<'static, ()> {
+    KEY_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 fn random<const N: usize>() -> Result<[u8; N], String> {
     let mut buf = [0u8; N];
     getrandom::getrandom(&mut buf).map_err(|e| format!("random: {e}"))?;
@@ -30,6 +39,7 @@ fn random<const N: usize>() -> Result<[u8; N], String> {
 
 impl Identity {
     pub fn load_or_create(dir: &Path, store: &dyn SecretStore) -> Result<Self, String> {
+        let _one_at_a_time = key_lock();
         let acct = account("identity", dir);
         let legacy_path = dir.join("identity.json");
         let legacy = match std::fs::read(&legacy_path) {
@@ -84,6 +94,7 @@ impl Identity {
     /// creates a new key and a new device id. Only ever called on the user's explicit request:
     /// nothing else in the app removes the key, not even a refused sign-in.
     pub fn reset(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
+        let _one_at_a_time = key_lock();
         let legacy_path = dir.join("identity.json");
         store.delete(&account("identity", dir))?;
         match std::fs::remove_file(&legacy_path) {

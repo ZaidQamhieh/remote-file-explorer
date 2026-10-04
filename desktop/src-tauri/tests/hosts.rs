@@ -641,3 +641,53 @@ fn a_damaged_hosts_file_does_not_stop_a_new_sign_in_from_being_saved() {
         "the damaged file is never overwritten"
     );
 }
+
+/// A state file that cannot be written must not leave the new login beside the old address.
+#[cfg(unix)]
+#[test]
+fn a_failed_save_keeps_the_old_address_and_its_own_token() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let store = MemoryStore::default();
+    flows::save(dir.path(), &store, &session(A, FP_A, "alice")).unwrap();
+
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let res = flows::save(dir.path(), &store, &session(B, FP_B, "bob"));
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    assert!(res.is_err(), "writing into a read-only folder must fail");
+    let now = flows::load_saved(dir.path(), &store).unwrap();
+    assert_eq!(now.host, A);
+    assert_eq!(now.token, format!("token-for-{A}"), "{now:?}");
+}
+
+/// A keystore that refuses to delete the active login (parked ones still go).
+struct DeniesDelete(MemoryStore);
+
+impl SecretStore for DeniesDelete {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        self.0.get(account)
+    }
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.0.set(account, secret)
+    }
+    fn delete(&self, account: &str) -> Result<(), String> {
+        if account.starts_with("token:") {
+            return Err("the keystore refused".into());
+        }
+        self.0.delete(account)
+    }
+}
+
+#[test]
+fn forgetting_the_active_agent_with_a_refusing_keystore_changes_nothing() {
+    let dir = TempDir::new().unwrap();
+    let store = DeniesDelete(MemoryStore::default());
+    flows::save(dir.path(), &store, &session(A, FP_A, "alice")).unwrap();
+
+    assert!(flows::forget_pin(dir.path(), &store, A).is_err());
+
+    let now = flows::load_saved(dir.path(), &store).unwrap();
+    assert_eq!(now.host, A, "the address stays with its token: {now:?}");
+    assert_eq!(now.token, format!("token-for-{A}"));
+}

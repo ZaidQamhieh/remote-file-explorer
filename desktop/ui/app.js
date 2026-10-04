@@ -147,12 +147,17 @@
     $("devices-note").hidden = !(list.length === 1 && !list[0].viaLogin);
   }
 
+  // The newest showDevices call wins: a slow answer for the agent the user left must not draw
+  // over the list of the one they are on now.
+  let devicesRun = 0;
   async function showDevices() {
+    const mine = ++devicesRun;
     // Fetch first: a failure must not leave an empty or stale list on screen.
     let list;
     try {
       list = await invoke("list_devices");
     } catch (e) {
+      if (mine !== devicesRun) return;
       // The agent may have refused the saved login (revoked or removed there). The app then
       // dropped the token but kept the pin, so go back to sign-in on that agent.
       const saved = await invoke("saved_agent").catch(() => null);
@@ -165,6 +170,7 @@
       }
       throw e;
     }
+    if (mine !== devicesRun) return;
     renderDevices(list);
     // The list can arrive after the user opened Settings; do not pull them out of it. Back goes here.
     const here = steps.find((id) => !$(id).hidden);

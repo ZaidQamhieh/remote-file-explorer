@@ -5,7 +5,7 @@
 <component type="desktop-application">
   <id>app.rfe.desktop</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>GPL-3.0-only</project_license>
   <name>RFE Desktop</name>
   <summary>Control your PC from your PC: pin the RFE agent and manage its devices</summary>
   <developer id="app.rfe">

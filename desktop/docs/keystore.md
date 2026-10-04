@@ -40,6 +40,11 @@ and shows the same message the sign-in would.
 | "the OS keystore refused access ... unlock prompt was dismissed" | A provider is running but locked, and the unlock prompt was closed or could not be shown | Unlock the keyring or wallet (log in again, or open it in Seahorse, KWalletManager or KeePassXC), then retry |
 | "the OS keystore refused access ... no result found" | The provider has no default keyring | Create one (Seahorse: new password keyring, set as default) |
 | "the OS keystore refused access ... Cannot create an item in a locked collection" | Locked, as above | Unlock it |
+| "the OS keystore did not keep the login token" or "... the device key" | The keystore accepted a write but returned something else when read back | Try again; if it repeats, the provider is faulty or full. Run **Test the keystore** in Settings |
+| "the OS keystore did not return what was saved" | Same, from the Settings test | Same |
+| "the OS keystore call failed to run" | The app's own worker stopped | Restart the app; report it if it repeats |
+| "the keystore identity is damaged" | The stored device key cannot be read | Use "Create a new device key for this computer" on the sign-in screen while signed out |
+| "... holds a different key than the keystore; delete the one you do not want" | A leftover `identity.json` from an early version differs from the key in the keystore | Delete whichever of the two you do not want to keep, then retry |
 | "the OS keystore did not answer within ..." | An unlock prompt is open and nobody answered | Answer it. The app stops waiting after the timeout; try again |
 
 Every one of these appears before the agent is contacted, so a failed attempt never reaches the PC.

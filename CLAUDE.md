@@ -88,6 +88,8 @@ Versioning: `desktop/src-tauri/Cargo.toml` and `tauri.conf.json` carry the same 
 fails when they differ). A release is the tag `desktop-vX.Y.Z` (`desktop-vX.Y.Z-rc.N` for a pre-release) on a commit with
 that version, published with `--latest=false` like `agent-v*`, because the Android updater needs the newest *app* release to
 hold the Latest flag. `release.yml` only runs for `v*` tags, so `desktop-v*` never starts an APK build.
+Docs: `desktop/README.md`, `desktop/docs/user-guide.md` (troubleshooting), `keystore.md`. A message the user can see needs a row there;
+`desktop/src-tauri/tests/docs.rs` fails for an agent error code without one and lists the app's own messages by stem. Also run `node --test desktop/ui-tests/*.test.mjs`.
 
 ## Architecture you can't see from one file
 

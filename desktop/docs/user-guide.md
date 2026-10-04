@@ -21,6 +21,11 @@ When a release exists, download the `.deb` or the `.AppImage` from the release p
   has a space in it). The package recommends `gnome-keyring` or `keepassxc`.
 - Any Linux: make the AppImage executable (`chmod +x`) and run it. It does not bring a keystore.
 
+Check a download before you install it: each release lists `SHA256SUMS` and a software bill of
+materials (`rfe-desktop.sbom.json`, CycloneDX) next to the packages. With the sums file and the package
+in your downloads folder, `scripts/verify-download.sh SHA256SUMS "<package file>"` (from this repository)
+prints `OK` or fails, and `sha256sum -c --ignore-missing SHA256SUMS` does the same without it.
+
 Until then, build it yourself: [README.md](../README.md).
 
 ## Connect and trust an agent

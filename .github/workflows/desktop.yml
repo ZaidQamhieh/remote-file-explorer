@@ -166,11 +166,26 @@ jobs:
             test -f "$root/usr/share/icons/hicolor/${size}x${size}/apps/rfe-desktop.png"
           done
 
+      # What a release publishes next to the packages: the SBOM, and SHA256SUMS over everything.
+      # The sums are checked straight away with the script a downloader uses. Build provenance
+      # (an attestation) belongs to the release job, which has the permissions for it.
+      - name: Checksums and SBOM
+        working-directory: desktop
+        run: |
+          mkdir -p dist
+          cp src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/appimage/*.AppImage dist/
+          python3 scripts/sbom.py src-tauri/Cargo.lock dist/rfe-desktop.sbom.json
+          scripts/checksums.sh dist
+          cd dist
+          ../scripts/verify-download.sh SHA256SUMS ./*.deb ./*.AppImage ./rfe-desktop.sbom.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rfe-desktop-linux
           path: |
-            desktop/src-tauri/target/release/bundle/deb/*.deb
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.AppImage
+            desktop/dist/rfe-desktop.sbom.json
+            desktop/dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14

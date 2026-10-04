@@ -34,11 +34,13 @@ jobs:
           cache-dependency-path: agent/go.sum
 
       # Tauri 2 on Linux links against WebKitGTK; the tests build the whole crate, so the dev packages are needed.
+      # libdbus-1-dev is for the keystore (keyring -> dbus -> libdbus-sys, which has no vendored build here).
+      # GTK pulls it in transitively today; it is named so the build does not depend on that.
       - name: System libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
-            libayatana-appindicator3-dev librsvg2-dev libssl-dev
+          sudo apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev libdbus-1-dev
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

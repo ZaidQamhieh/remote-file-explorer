@@ -137,9 +137,10 @@ jobs:
             desktop/src-tauri/target
           key: desktop-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
 
+  # Runs beside the test job, not after it: building needs nothing from the tests, and the release job waits
+  # for this whole workflow before it publishes, so a red test job still blocks a release.
   bundle:
     name: deb and AppImage
-    needs: rust
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:

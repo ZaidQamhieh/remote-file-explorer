@@ -169,3 +169,54 @@ async fn signing_out_of_a_code_pairing_revokes_it_and_an_empty_code_never_leaves
         other => panic!("the old token must be rejected, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn a_code_paired_device_is_told_plainly_that_admin_actions_are_not_for_it() {
+    let a = Agent::start(free_port());
+    a.add_user("owner", "pw-for-403-test");
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let store = Offloaded::new(MemoryStore::default());
+    let raw = Raw::new(&a.host);
+
+    // An ordinary device, paired with a code, asks for an admin-only action.
+    let ordinary_dir = TempDir::new().unwrap();
+    let ordinary = pair(&a, &fp, &ordinary_dir, &a.pair_code(), &store)
+        .await
+        .unwrap();
+    let e = raw
+        .refused_as(&ordinary.token, "/pairing/generate", json!({}))
+        .await;
+    assert_eq!(code_of(&e), "FORBIDDEN", "{e:?}");
+    assert!(e.to_string().contains("Sign in with the account"), "{e}");
+
+    // Control: an account session is allowed the same call, so the 403 was about the session.
+    let admin_dir = TempDir::new().unwrap();
+    let admin = flows::login(
+        admin_dir.path(),
+        &a.host,
+        &fp,
+        "owner",
+        "pw-for-403-test",
+        "Admin",
+        &store,
+    )
+    .await
+    .unwrap();
+    let resp = raw
+        .http
+        .post(format!("{}/pairing/generate", raw.base))
+        .bearer_auth(&admin.token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.status().is_success(), "{}", resp.status());
+
+    // And the two sessions see different lists of the same agent.
+    let seen_by_ordinary = flows::list_devices(ordinary_dir.path(), &store)
+        .await
+        .unwrap();
+    let seen_by_admin = flows::list_devices(admin_dir.path(), &store).await.unwrap();
+    assert_eq!(seen_by_ordinary.len(), 1, "{seen_by_ordinary:?}");
+    assert_eq!(seen_by_admin.len(), 2, "{seen_by_admin:?}");
+}

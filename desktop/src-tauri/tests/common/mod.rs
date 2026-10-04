@@ -213,6 +213,26 @@ impl Raw {
         }
     }
 
+    /// Like `refused`, as a paired device presenting its bearer token.
+    pub async fn refused_as(&self, token: &str, path: &str, body: Value) -> AgentError {
+        let resp = self
+            .http
+            .post(format!("{}{path}", self.base))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        let status = resp.status().as_u16();
+        assert!(status >= 400, "{path} unexpectedly succeeded: {status}");
+        let v: Value = resp.json().await.unwrap();
+        AgentError::Server {
+            status,
+            code: v["code"].as_str().unwrap_or_default().to_string(),
+            message: v["message"].as_str().unwrap_or_default().to_string(),
+        }
+    }
+
     pub async fn ok(&self, path: &str, body: Value) {
         let resp = self
             .http

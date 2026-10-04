@@ -103,6 +103,8 @@
       body.append(tr);
     }
     $("devices-empty").hidden = list.length !== 0;
+    // An ordinary device is shown only itself; say why, so a short list does not look like a bug.
+    $("devices-note").hidden = !(list.length === 1 && !list[0].viaLogin);
   }
 
   async function showDevices() {

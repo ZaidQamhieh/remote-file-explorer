@@ -17,8 +17,9 @@ kept, and what every message means.
 
 When a release exists, download the `.deb` or the `.AppImage` from the release page.
 
-- Debian and Ubuntu: `sudo apt install "./RFE Desktop_0.1.0_amd64.deb"` (use the file's real name; it
-  has a space in it). The package recommends `gnome-keyring` or `keepassxc`.
+- Debian and Ubuntu: `sudo apt install ./RFE-Desktop_1.0.0_amd64.deb` (use the file's real name; a
+  release's files have hyphens, a local build's `.deb` has a space in it). The package recommends
+  `gnome-keyring` or `keepassxc`.
 - Any Linux: make the AppImage executable (`chmod +x`) and run it. It does not bring a keystore.
 
 Check a download before you install it: each release lists `SHA256SUMS` and a software bill of

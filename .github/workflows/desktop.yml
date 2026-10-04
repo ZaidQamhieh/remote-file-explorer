@@ -9,6 +9,8 @@ on:
   pull_request:
     branches: [master, main]
     paths: ['desktop/**', 'agent/**', 'protocol/**', '.github/workflows/desktop.yml']
+  # Callable so desktop-release.yml can require these gates and reuse the bundles from the same run.
+  workflow_call:
 
 permissions:
   contents: read

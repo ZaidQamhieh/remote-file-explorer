@@ -51,6 +51,19 @@ async fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
 }
 
 #[tauri::command]
+fn list_pins(app: tauri::AppHandle) -> Result<Vec<flows::PinView>, String> {
+    flows::list_pins(&data_dir(&app)?)
+}
+
+#[tauri::command]
+async fn forget_pin(app: tauri::AppHandle, host: String) -> Result<flows::ForgetPin, String> {
+    let dir = data_dir(&app)?;
+    keystore()
+        .run(move |s| flows::forget_pin(&dir, s, &host))
+        .await
+}
+
+#[tauri::command]
 async fn probe_agent(app: tauri::AppHandle, host: String) -> Result<flows::Probe, String> {
     flows::probe(&data_dir(&app)?, &host)
         .await
@@ -96,6 +109,8 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             saved_agent,
+            list_pins,
+            forget_pin,
             probe_agent,
             login,
             list_devices,

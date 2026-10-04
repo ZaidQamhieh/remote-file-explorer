@@ -631,3 +631,49 @@ async fn signing_in_again_after_a_revoking_sign_out_works() {
         "the new login is an active device: {list:?}"
     );
 }
+
+#[tokio::test]
+async fn each_agent_keeps_its_own_pin_and_a_changed_certificate_is_flagged_for_the_right_one() {
+    let store = Offloaded::new(MemoryStore::default());
+    let port_a = free_port();
+    let a = Agent::start(port_a);
+    let b = Agent::start(free_port());
+    a.add_user("owner", "pw-for-two-agents");
+    b.add_user("owner", "pw-for-two-agents");
+    let fp_a = capture_fingerprint(&a.host).await.unwrap();
+    let fp_b = capture_fingerprint(&b.host).await.unwrap();
+    let state = TempDir::new().unwrap();
+    for (host, fp) in [(&a.host, &fp_a), (&b.host, &fp_b)] {
+        flows::login(
+            state.path(),
+            host,
+            fp,
+            "owner",
+            "pw-for-two-agents",
+            "Desktop",
+            &store,
+        )
+        .await
+        .unwrap();
+    }
+
+    // The session now belongs to B, yet A is still a trusted address with its own pin.
+    let probe_a = flows::probe(state.path(), &a.host).await.unwrap();
+    assert!(
+        !probe_a.changed && probe_a.previous == fp_a,
+        "the first agent's pin was lost: {probe_a:?}"
+    );
+
+    let _old = a.stop();
+    let impostor = Agent::start(port_a);
+    let probe_a = flows::probe(state.path(), &impostor.host).await.unwrap();
+    assert!(
+        probe_a.changed && probe_a.previous == fp_a,
+        "a new certificate at A's address must be flagged: {probe_a:?}"
+    );
+    let probe_b = flows::probe(state.path(), &b.host).await.unwrap();
+    assert!(
+        !probe_b.changed && probe_b.previous == fp_b,
+        "control: B's own pin is untouched: {probe_b:?}"
+    );
+}

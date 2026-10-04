@@ -6,6 +6,7 @@ use crate::agent_client::{
 use crate::fsutil::write_private;
 use crate::identity::Identity;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::secrets::{account, Offloaded, SecretStore};
@@ -35,6 +36,27 @@ struct StateFile {
     device_id: String,
     #[serde(default, skip_serializing)]
     token: String,
+    /// Every certificate the user has trusted, by `pin_key`. `None` only for a file written before
+    /// pins were kept per address; `read_state` folds that file's single host into it.
+    #[serde(default)]
+    pins: Option<BTreeMap<String, String>>,
+}
+
+/// The key a pin is stored under: the address as `host:port`, case-folded. The same host on
+/// another port is another agent and has its own pin.
+pub fn pin_key(host: &str) -> String {
+    host.trim().to_ascii_lowercase()
+}
+
+impl StateFile {
+    fn pins(&self) -> &BTreeMap<String, String> {
+        static NONE: BTreeMap<String, String> = BTreeMap::new();
+        self.pins.as_ref().unwrap_or(&NONE)
+    }
+
+    fn pins_mut(&mut self) -> &mut BTreeMap<String, String> {
+        self.pins.get_or_insert_with(BTreeMap::new)
+    }
 }
 
 impl StateFile {
@@ -58,12 +80,20 @@ fn state_path(dir: &Path) -> std::path::PathBuf {
 fn read_state(dir: &Path) -> Result<StateFile, String> {
     let path = state_path(dir);
     match std::fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| {
-            format!(
-                "{} is damaged ({e}); delete it to start over",
-                path.display()
-            )
-        }),
+        Ok(bytes) => {
+            let mut f: StateFile = serde_json::from_slice(&bytes).map_err(|e| {
+                format!(
+                    "{} is damaged ({e}); delete it to start over",
+                    path.display()
+                )
+            })?;
+            if f.pins.is_none() {
+                let legacy = (!f.host.is_empty() && !f.fingerprint.is_empty())
+                    .then(|| (pin_key(&f.host), f.fingerprint.clone()));
+                f.pins = Some(legacy.into_iter().collect());
+            }
+            Ok(f)
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(StateFile::default()),
         Err(e) => Err(format!("read {}: {e}", path.display())),
     }
@@ -100,16 +130,17 @@ pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String
     } else {
         store.set(&acct, &s.token)?;
     }
-    write_state(
-        dir,
-        &StateFile {
-            host: s.host.clone(),
-            fingerprint: s.fingerprint.clone(),
-            username: s.username.clone(),
-            device_id: s.device_id.clone(),
-            token: String::new(),
-        },
-    )
+    // Keep every other trusted address; this session's address is trusted at this fingerprint.
+    let mut f = read_state(dir)?;
+    if !s.host.is_empty() && !s.fingerprint.is_empty() {
+        f.pins_mut().insert(pin_key(&s.host), s.fingerprint.clone());
+    }
+    f.host = s.host.clone();
+    f.fingerprint = s.fingerprint.clone();
+    f.username = s.username.clone();
+    f.device_id = s.device_id.clone();
+    f.token.clear();
+    write_state(dir, &f)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,11 +156,11 @@ pub struct Probe {
 pub async fn probe(dir: &Path, host: &str) -> Result<Probe, AgentError> {
     let saved = read_state(dir).map_err(AgentError::Local)?;
     let fingerprint = capture_fingerprint(host).await?;
-    let previous = if saved.host == host {
-        saved.fingerprint
-    } else {
-        String::new()
-    };
+    let previous = saved
+        .pins()
+        .get(&pin_key(host))
+        .cloned()
+        .unwrap_or_default();
     let changed = !previous.is_empty() && previous != fingerprint;
     Ok(Probe {
         fingerprint,
@@ -186,7 +217,19 @@ pub async fn list_devices(dir: &Path, store: &Offloaded) -> Result<Vec<Device>, 
     if s.token.is_empty() || s.host.is_empty() {
         return Err(AgentError::Local("not signed in".into()));
     }
-    AgentClient::pinned(&s.host, &s.fingerprint)?
+    // The pin map is the record of what is trusted: a forgotten pin ends the session here.
+    let pinned = read_state(dir)
+        .map_err(AgentError::Local)?
+        .pins()
+        .get(&pin_key(&s.host))
+        .cloned()
+        .ok_or_else(|| {
+            AgentError::Local(format!(
+                "{} is no longer a trusted agent; connect and compare its fingerprint again",
+                s.host
+            ))
+        })?;
+    AgentClient::pinned(&s.host, &pinned)?
         .devices(&s.token)
         .await
 }
@@ -228,7 +271,11 @@ pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOu
     };
     let mut out = SignOut::default();
     if !token.is_empty() && !state.host.is_empty() && !state.device_id.is_empty() {
-        let revoked = match AgentClient::pinned(&state.host, &state.fingerprint) {
+        let pinned = state.pins().get(&pin_key(&state.host)).cloned();
+        let revoked = match pinned
+            .ok_or_else(|| AgentError::Local("this agent is no longer trusted".into()))
+            .and_then(|fp| AgentClient::pinned(&state.host, &fp))
+        {
             Ok(c) => c.revoke_own_device(&token, &state.device_id).await,
             Err(e) => Err(e),
         };
@@ -247,5 +294,64 @@ pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOu
     }
     let dir = dir.to_path_buf();
     store.run(move |s| sign_out(&dir, s)).await?;
+    Ok(out)
+}
+
+/// One trusted agent, for the "trusted agents" list.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinView {
+    pub host: String,
+    pub fingerprint: String,
+    /// This computer is signed in to this agent now.
+    pub active: bool,
+}
+
+pub fn list_pins(dir: &Path) -> Result<Vec<PinView>, String> {
+    let f = read_state(dir)?;
+    let active = (!f.host.is_empty()).then(|| pin_key(&f.host));
+    Ok(f.pins()
+        .iter()
+        .map(|(host, fingerprint)| PinView {
+            host: host.clone(),
+            fingerprint: fingerprint.clone(),
+            active: active.as_deref() == Some(host.as_str()),
+        })
+        .collect())
+}
+
+/// What forgetting a pin did.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgetPin {
+    pub was_pinned: bool,
+    /// The pin belonged to the agent this computer was signed in to, so the saved login was
+    /// cleared here too. The device stays valid on the agent until it is revoked there.
+    pub signed_out: bool,
+}
+
+/// Forgets the trust in one address. Connecting to it again shows the fingerprint to compare as
+/// for a new agent. If this computer was signed in to it, the saved login is cleared too: the
+/// session rested on that trust. That cannot revoke the device, because the agent is no longer
+/// trusted enough to talk to.
+pub fn forget_pin(dir: &Path, store: &dyn SecretStore, host: &str) -> Result<ForgetPin, String> {
+    let key = pin_key(host);
+    let mut f = read_state(dir)?;
+    let mut out = ForgetPin {
+        was_pinned: f.pins_mut().remove(&key).is_some(),
+        signed_out: false,
+    };
+    if !f.host.is_empty() && pin_key(&f.host) == key {
+        out.signed_out = true;
+        f.host.clear();
+        f.fingerprint.clear();
+        f.username.clear();
+        f.device_id.clear();
+        f.token.clear();
+        write_state(dir, &f)?;
+        store.delete(&account("token", dir))?;
+    } else if out.was_pinned {
+        write_state(dir, &f)?;
+    }
     Ok(out)
 }

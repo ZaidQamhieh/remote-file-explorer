@@ -24,6 +24,18 @@
         <input id="host" name="host" value="127.0.0.1:8765" autocomplete="off" spellcheck="false" required>
         <button type="submit" class="primary">Check certificate</button>
       </form>
+      <div id="pins-block" hidden>
+        <h3>Trusted agents</h3>
+        <p class="hint">Forgetting an agent means its fingerprint has to be compared again next time. If you are signed in to it, you are signed out on this computer.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Agent</th><th>Fingerprint</th><th></th></tr>
+            </thead>
+            <tbody id="pins"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section id="step-trust" class="panel" hidden>

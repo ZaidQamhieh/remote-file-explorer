@@ -31,6 +31,51 @@
     }
   }
 
+  // The connect screen lists the agents already trusted, so a pin can be reviewed or forgotten.
+  async function showConnect() {
+    show("step-connect");
+    try {
+      renderPins(await invoke("list_pins"));
+    } catch (e) {
+      say(String(e), true);
+    }
+  }
+
+  function renderPins(list) {
+    const body = $("pins");
+    body.replaceChildren();
+    for (const p of list) {
+      const forget = document.createElement("button");
+      forget.type = "button";
+      forget.className = "link";
+      forget.textContent = "Forget";
+      forget.addEventListener("click", () => {
+        // Two clicks: the first only arms the button.
+        if (!forget.dataset.armed) {
+          forget.dataset.armed = "1";
+          forget.textContent = p.active ? "Forget and sign out?" : "Forget?";
+          return;
+        }
+        run(forget, async () => {
+          const out = await invoke("forget_pin", { host: p.host });
+          if (out.signedOut) {
+            renderDevices([]);
+            setSession({ signedIn: false });
+          }
+          await showConnect();
+        });
+      });
+      const host = cell(p.host + (p.active ? " (signed in)" : ""));
+      const fp = cell(p.fingerprint, "mono");
+      const act = document.createElement("td");
+      act.append(forget);
+      const tr = document.createElement("tr");
+      tr.append(host, fp, act);
+      body.append(tr);
+    }
+    $("pins-block").hidden = list.length === 0;
+  }
+
   function when(unixSeconds) {
     if (!unixSeconds) return "never";
     return new Date(unixSeconds * 1000).toLocaleString();
@@ -96,7 +141,7 @@
   });
   $("trust-cancel").addEventListener("click", () => {
     pending = { host: "", fingerprint: "" };
-    show("step-connect");
+    showConnect();
   });
 
   $("login-form").addEventListener("submit", (ev) => {
@@ -116,7 +161,7 @@
 
   $("login-back").addEventListener("click", () => {
     $("password").value = "";
-    show("step-connect");
+    showConnect();
   });
 
   $("refresh").addEventListener("click", (ev) => run(ev.currentTarget, showDevices));
@@ -126,7 +171,7 @@
       const out = await invoke("sign_out");
       renderDevices([]);
       setSession({ signedIn: false });
-      show("step-connect");
+      showConnect();
       if (out.note) say(out.note, true);
     })
   );
@@ -143,6 +188,6 @@
     } catch (e) {
       say(String(e), true);
     }
-    show("step-connect");
+    showConnect();
   })();
 })();

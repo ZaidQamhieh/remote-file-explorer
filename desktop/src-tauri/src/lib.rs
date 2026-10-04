@@ -25,7 +25,12 @@ struct SavedView {
 
 impl From<Saved> for SavedView {
     fn from(s: Saved) -> Self {
-        Self { signed_in: !s.token.is_empty(), host: s.host, fingerprint: s.fingerprint, username: s.username }
+        Self {
+            signed_in: !s.token.is_empty(),
+            host: s.host,
+            fingerprint: s.fingerprint,
+            username: s.username,
+        }
     }
 }
 
@@ -36,7 +41,9 @@ fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
 
 #[tauri::command]
 async fn probe_agent(app: tauri::AppHandle, host: String) -> Result<flows::Probe, String> {
-    flows::probe(&data_dir(&app)?, &host).await.map_err(|e| e.to_string())
+    flows::probe(&data_dir(&app)?, &host)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -48,15 +55,24 @@ async fn login(
     password: String,
 ) -> Result<SavedView, String> {
     let dir = data_dir(&app)?;
-    flows::login(&dir, &host, &fingerprint, &username, &password, "RFE Desktop")
-        .await
-        .map(Into::into)
-        .map_err(|e| e.to_string())
+    flows::login(
+        &dir,
+        &host,
+        &fingerprint,
+        &username,
+        &password,
+        "RFE Desktop",
+    )
+    .await
+    .map(Into::into)
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
-    flows::list_devices(&data_dir(&app)?).await.map_err(|e| e.to_string())
+    flows::list_devices(&data_dir(&app)?)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -66,7 +82,13 @@ fn sign_out(app: tauri::AppHandle) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![saved_agent, probe_agent, login, list_devices, sign_out])
+        .invoke_handler(tauri::generate_handler![
+            saved_agent,
+            probe_agent,
+            login,
+            list_devices,
+            sign_out
+        ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");
 }

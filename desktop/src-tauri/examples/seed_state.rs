@@ -12,7 +12,11 @@ async fn main() {
         panic!("usage: seed_state <host:port> <user> <password> <state-dir> <second-state-dir>");
     };
     let fp = capture_fingerprint(host).await.expect("probe");
-    flows::login(Path::new(dir2), host, &fp, user, pw, "Phone (test)").await.expect("second device");
-    flows::login(Path::new(dir), host, &fp, user, pw, "RFE Desktop").await.expect("login");
+    flows::login(Path::new(dir2), host, &fp, user, pw, "Phone (test)")
+        .await
+        .expect("second device");
+    flows::login(Path::new(dir), host, &fp, user, pw, "RFE Desktop")
+        .await
+        .expect("login");
     println!("{fp}");
 }

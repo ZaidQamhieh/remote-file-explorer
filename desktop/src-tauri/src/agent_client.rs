@@ -29,7 +29,11 @@ pub enum AgentError {
     /// Connection or TLS failure (including a fingerprint mismatch).
     Network(String),
     /// The agent answered with an error body `{code, message}`.
-    Server { status: u16, code: String, message: String },
+    Server {
+        status: u16,
+        code: String,
+        message: String,
+    },
     /// Bad local input or state.
     Local(String),
 }
@@ -95,7 +99,12 @@ impl ServerCertVerifier for PinVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, TlsError> {
-        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
@@ -104,11 +113,18 @@ impl ServerCertVerifier for PinVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, TlsError> {
-        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -141,7 +157,12 @@ pub fn normalize_fingerprint(s: &str) -> String {
 /// `host:port` only: no scheme, path, userinfo or query, so a typo cannot
 /// redirect credentials to another origin.
 pub fn validate_hostport(hostport: &str) -> Result<(), AgentError> {
-    let bad = || AgentError::Local("agent address must be host:port (put an IPv6 address in brackets, like [::1]:8765)".into());
+    let bad = || {
+        AgentError::Local(
+            "agent address must be host:port (put an IPv6 address in brackets, like [::1]:8765)"
+                .into(),
+        )
+    };
     let ok_chars = hostport
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']'));
@@ -149,7 +170,10 @@ pub fn validate_hostport(hostport: &str) -> Result<(), AgentError> {
     let port_ok = port.parse::<u16>().map(|p| p != 0).unwrap_or(false);
     // A host with ':' is an IPv6 literal and must be bracketed; otherwise no brackets at all.
     let host_ok = if host.contains(':') {
-        host.len() > 2 && host.starts_with('[') && host.ends_with(']') && !host[1..host.len() - 1].contains(['[', ']'])
+        host.len() > 2
+            && host.starts_with('[')
+            && host.ends_with(']')
+            && !host[1..host.len() - 1].contains(['[', ']'])
     } else {
         !host.is_empty() && !host.contains(['[', ']'])
     };
@@ -246,7 +270,11 @@ async fn parse<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Resul
     let code = status.as_u16();
     let body = resp.bytes().await.unwrap_or_default();
     Err(match serde_json::from_slice::<ApiError>(&body) {
-        Ok(e) => AgentError::Server { status: code, code: e.code, message: e.message },
+        Ok(e) => AgentError::Server {
+            status: code,
+            code: e.code,
+            message: e.message,
+        },
         Err(_) => AgentError::Server {
             status: code,
             code: format!("HTTP_{code}"),
@@ -261,7 +289,9 @@ impl AgentClient {
         validate_hostport(hostport)?;
         let fp = normalize_fingerprint(fingerprint);
         if fp.len() != 64 {
-            return Err(AgentError::Local("fingerprint must be 64 hex characters".into()));
+            return Err(AgentError::Local(
+                "fingerprint must be 64 hex characters".into(),
+            ));
         }
         Ok(Self {
             http: build_http(Mode::Pin(fp.clone()))?,
@@ -305,7 +335,9 @@ impl AgentClient {
         .await?;
         // The TLS pin already guarantees this; the agent's own statement of its
         // fingerprint is a second check that fails loudly if the two ever differ.
-        if !ok.cert_fingerprint.is_empty() && normalize_fingerprint(&ok.cert_fingerprint) != self.fingerprint {
+        if !ok.cert_fingerprint.is_empty()
+            && normalize_fingerprint(&ok.cert_fingerprint) != self.fingerprint
+        {
             return Err(AgentError::Local(
                 "the agent reports a different fingerprint than the pinned one".into(),
             ));

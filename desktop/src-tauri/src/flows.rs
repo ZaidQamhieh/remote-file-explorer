@@ -1,8 +1,10 @@
 //! App-level flows shared by the Tauri commands and the integration tests.
 
-use crate::agent_client::{capture_fingerprint, normalize_fingerprint, AgentClient, AgentError, Device};
-use crate::identity::Identity;
+use crate::agent_client::{
+    capture_fingerprint, normalize_fingerprint, AgentClient, AgentError, Device,
+};
 use crate::fsutil::write_private;
+use crate::identity::Identity;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -22,7 +24,10 @@ pub fn load_saved(dir: &Path) -> Result<Saved, String> {
     let path = dir.join("state.json");
     match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| {
-            format!("{} is damaged ({e}); delete it to start over", path.display())
+            format!(
+                "{} is damaged ({e}); delete it to start over",
+                path.display()
+            )
         }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Saved::default()),
         Err(e) => Err(format!("read {}: {e}", path.display())),
@@ -47,9 +52,17 @@ pub struct Probe {
 pub async fn probe(dir: &Path, host: &str) -> Result<Probe, AgentError> {
     let saved = load_saved(dir).map_err(AgentError::Local)?;
     let fingerprint = capture_fingerprint(host).await?;
-    let previous = if saved.host == host { saved.fingerprint } else { String::new() };
+    let previous = if saved.host == host {
+        saved.fingerprint
+    } else {
+        String::new()
+    };
     let changed = !previous.is_empty() && previous != fingerprint;
-    Ok(Probe { fingerprint, previous, changed })
+    Ok(Probe {
+        fingerprint,
+        previous,
+        changed,
+    })
 }
 
 /// Pins `fingerprint` (the one the user confirmed), logs in, and stores the pin and token.
@@ -80,7 +93,9 @@ pub async fn list_devices(dir: &Path) -> Result<Vec<Device>, AgentError> {
     if s.token.is_empty() || s.host.is_empty() {
         return Err(AgentError::Local("not signed in".into()));
     }
-    AgentClient::pinned(&s.host, &s.fingerprint)?.devices(&s.token).await
+    AgentClient::pinned(&s.host, &s.fingerprint)?
+        .devices(&s.token)
+        .await
 }
 
 pub fn sign_out(dir: &Path) -> Result<(), String> {

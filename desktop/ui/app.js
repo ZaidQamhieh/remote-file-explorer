@@ -123,10 +123,11 @@
 
   $("sign-out").addEventListener("click", (ev) =>
     run(ev.currentTarget, async () => {
-      await invoke("sign_out");
+      const out = await invoke("sign_out");
       renderDevices([]);
       setSession({ signedIn: false });
       show("step-connect");
+      if (out.note) say(out.note, true);
     })
   );
 

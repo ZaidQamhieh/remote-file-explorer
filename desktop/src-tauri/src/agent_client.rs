@@ -267,9 +267,14 @@ async fn parse<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Resul
             .await
             .map_err(|e| AgentError::Local(format!("unexpected response: {e}")));
     }
-    let code = status.as_u16();
+    Err(error_of(resp).await)
+}
+
+/// The error for a non-success response: the agent's `{code, message}` body when it has one.
+async fn error_of(resp: reqwest::Response) -> AgentError {
+    let code = resp.status().as_u16();
     let body = resp.bytes().await.unwrap_or_default();
-    Err(match serde_json::from_slice::<ApiError>(&body) {
+    match serde_json::from_slice::<ApiError>(&body) {
         Ok(e) => AgentError::Server {
             status: code,
             code: e.code,
@@ -280,7 +285,7 @@ async fn parse<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Resul
             code: format!("HTTP_{code}"),
             message: "the agent returned an unexpected error".into(),
         },
-    })
+    }
 }
 
 impl AgentClient {
@@ -343,6 +348,33 @@ impl AgentClient {
             ));
         }
         Ok(ok)
+    }
+
+    /// Revokes this computer's own device on the agent (`DELETE /devices/{id}`), after which the
+    /// agent rejects `token`. Any device may do this to itself, admin or not.
+    pub async fn revoke_own_device(&self, token: &str, device_id: &str) -> Result<(), AgentError> {
+        if device_id.is_empty()
+            || !device_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return Err(AgentError::Local(format!(
+                "unexpected device id {device_id:?}"
+            )));
+        }
+        let resp = self
+            .http
+            .delete(format!("{}/devices/{device_id}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION)
+            .send()
+            .await
+            .map_err(net)?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(error_of(resp).await)
+        }
     }
 
     pub async fn devices(&self, token: &str) -> Result<Vec<Device>, AgentError> {

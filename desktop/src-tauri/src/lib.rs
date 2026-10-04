@@ -88,9 +88,8 @@ async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
 }
 
 #[tauri::command]
-async fn sign_out(app: tauri::AppHandle) -> Result<(), String> {
-    let dir = data_dir(&app)?;
-    keystore().run(move |s| flows::sign_out(&dir, s)).await
+async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
+    flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
 }
 
 pub fn run() {

@@ -487,3 +487,147 @@ fn private_writes_replace_atomically_stay_0600_and_ignore_loose_leftovers() {
         );
     }
 }
+
+const SIGN_OUT_PW: &str = "pw-for-sign-out-test";
+
+#[tokio::test]
+async fn sign_out_revokes_the_token_on_the_agent() {
+    let store = Offloaded::new(MemoryStore::default());
+    let a = Agent::start(free_port());
+    a.add_user("owner", SIGN_OUT_PW);
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let state = TempDir::new().unwrap();
+    let saved = flows::login(
+        state.path(),
+        &a.host,
+        &fp,
+        "owner",
+        SIGN_OUT_PW,
+        "Desktop",
+        &store,
+    )
+    .await
+    .unwrap();
+    let client = AgentClient::pinned(&a.host, &fp).unwrap();
+    client
+        .devices(&saved.token)
+        .await
+        .expect("the token works before sign-out");
+
+    let out = flows::sign_out_and_revoke(state.path(), &store)
+        .await
+        .unwrap();
+    assert!(out.revoked && out.note.is_empty(), "{out:?}");
+
+    match client.devices(&saved.token).await {
+        Err(AgentError::Server { status: 401, .. }) => {}
+        other => panic!("the old token must be rejected with 401, got {other:?}"),
+    }
+    assert!(flows::load_saved(state.path(), &store)
+        .unwrap()
+        .token
+        .is_empty());
+    assert!(
+        a.devices_cli().to_lowercase().contains("revoked"),
+        "the CLI shows the device as revoked: {}",
+        a.devices_cli()
+    );
+}
+
+/// Negative control: clearing only the local copy, as sign-out did before, leaves the token valid.
+#[tokio::test]
+async fn control_a_local_only_sign_out_leaves_the_token_valid_on_the_agent() {
+    let store = Offloaded::new(MemoryStore::default());
+    let a = Agent::start(free_port());
+    a.add_user("owner", SIGN_OUT_PW);
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let state = TempDir::new().unwrap();
+    let saved = flows::login(
+        state.path(),
+        &a.host,
+        &fp,
+        "owner",
+        SIGN_OUT_PW,
+        "Desktop",
+        &store,
+    )
+    .await
+    .unwrap();
+
+    flows::sign_out(state.path(), &store).unwrap();
+
+    AgentClient::pinned(&a.host, &fp)
+        .unwrap()
+        .devices(&saved.token)
+        .await
+        .expect("a local-only sign-out does not revoke anything");
+}
+
+#[tokio::test]
+async fn sign_out_clears_the_local_login_even_when_the_agent_is_unreachable() {
+    let store = Offloaded::new(MemoryStore::default());
+    let a = Agent::start(free_port());
+    a.add_user("owner", SIGN_OUT_PW);
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let state = TempDir::new().unwrap();
+    flows::login(
+        state.path(),
+        &a.host,
+        &fp,
+        "owner",
+        SIGN_OUT_PW,
+        "Desktop",
+        &store,
+    )
+    .await
+    .unwrap();
+    drop(a.stop()); // the agent goes away
+
+    let out = flows::sign_out_and_revoke(state.path(), &store)
+        .await
+        .unwrap();
+    assert!(!out.revoked);
+    assert!(
+        out.note.contains("could not be told") && out.note.contains("rfe-agent revoke"),
+        "{}",
+        out.note
+    );
+    assert!(flows::load_saved(state.path(), &store)
+        .unwrap()
+        .token
+        .is_empty());
+}
+
+#[tokio::test]
+async fn signing_in_again_after_a_revoking_sign_out_works() {
+    let store = Offloaded::new(MemoryStore::default());
+    let a = Agent::start(free_port());
+    a.add_user("owner", SIGN_OUT_PW);
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let state = TempDir::new().unwrap();
+    let login = || {
+        flows::login(
+            state.path(),
+            &a.host,
+            &fp,
+            "owner",
+            SIGN_OUT_PW,
+            "Desktop",
+            &store,
+        )
+    };
+    let first = login().await.unwrap();
+    flows::sign_out_and_revoke(state.path(), &store)
+        .await
+        .unwrap();
+
+    let second = login()
+        .await
+        .expect("the same computer can sign in again after sign-out");
+    assert_ne!(first.token, second.token);
+    let list = flows::list_devices(state.path(), &store).await.unwrap();
+    assert!(
+        list.iter().any(|d| d.current && !d.revoked),
+        "the new login is an active device: {list:?}"
+    );
+}

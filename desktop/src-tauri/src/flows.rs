@@ -201,3 +201,51 @@ pub fn sign_out(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {
     }
     store.delete(&account("token", dir))
 }
+
+/// What signing out did beyond clearing this computer.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignOut {
+    /// The agent no longer accepts the old token.
+    pub revoked: bool,
+    /// Set when the agent could not be told; says what is still valid and how to fix it.
+    pub note: String,
+}
+
+/// Signs out: revokes this computer's device on the agent so the old token stops working, then
+/// clears it locally ([`sign_out`]). The local part always runs, so an unreachable agent or a
+/// changed certificate never leaves the token on this computer; the result says when the agent
+/// could not be told.
+pub async fn sign_out_and_revoke(dir: &Path, store: &Offloaded) -> Result<SignOut, String> {
+    let state = read_state(dir)?;
+    let token = {
+        let dir = dir.to_path_buf();
+        match store.run(move |s| s.get(&account("token", &dir))).await {
+            Ok(Some(t)) => t,
+            // A keystore that is locked still lets a pre-keystore file token be revoked.
+            _ => state.token.clone(),
+        }
+    };
+    let mut out = SignOut::default();
+    if !token.is_empty() && !state.host.is_empty() && !state.device_id.is_empty() {
+        let revoked = match AgentClient::pinned(&state.host, &state.fingerprint) {
+            Ok(c) => c.revoke_own_device(&token, &state.device_id).await,
+            Err(e) => Err(e),
+        };
+        match revoked {
+            Ok(()) => out.revoked = true,
+            // The agent already refuses this token, which is what sign-out is for.
+            Err(AgentError::Server { status: 401, .. }) => out.revoked = true,
+            Err(e) => {
+                out.note = format!(
+                    "Signed out on this computer only. The agent could not be told ({e}), so this \
+                     computer's login still works until it is revoked from the agent's device list \
+                     or with `rfe-agent revoke` on the PC."
+                );
+            }
+        }
+    }
+    let dir = dir.to_path_buf();
+    store.run(move |s| sign_out(&dir, s)).await?;
+    Ok(out)
+}

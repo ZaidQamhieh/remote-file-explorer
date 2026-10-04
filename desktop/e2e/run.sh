@@ -28,9 +28,13 @@ case "$stage" in
 inside)
   # Running inside the virtual desktop, started by the session stage below.
   # Through a file: the daemon keeps the pipe of a command substitution open and would hang it.
-  gnome-keyring-daemon --start --components=secrets </dev/null >"$XDG_RUNTIME_DIR/keyring.env" 2>"$XDG_RUNTIME_DIR/keyring.err"
-  eval "$(cat "$XDG_RUNTIME_DIR/keyring.env")"
-  export GNOME_KEYRING_CONTROL SSH_AUTH_SOCK
+  # RFE_E2E_NO_KEYRING=1 leaves the session with no Secret Service at all, for e2e/no-keystore.test.mjs
+  # (run it alone with RFE_E2E_ONLY=no-keystore); the other tests need the keyring.
+  if [ "${RFE_E2E_NO_KEYRING:-}" != "1" ]; then
+    gnome-keyring-daemon --start --components=secrets </dev/null >"$XDG_RUNTIME_DIR/keyring.env" 2>"$XDG_RUNTIME_DIR/keyring.err"
+    eval "$(cat "$XDG_RUNTIME_DIR/keyring.env")"
+    export GNOME_KEYRING_CONTROL SSH_AUTH_SOCK
+  fi
   export GDK_BACKEND=wayland WAYLAND_DISPLAY=rfe-e2e WEBKIT_DISABLE_DMABUF_RENDERER=1
   # The accessibility bus, so the app's AT-SPI tree can be read as a screen reader reads it
   # (e2e/a11y.test.mjs); without it the app logs an "atk-bridge" warning and nothing else changes.
@@ -50,7 +54,7 @@ inside)
     sleep 0.1
   done
   status=0
-  node --test --test-concurrency=1 "$here"/*.test.mjs || status=$?
+  node --test --test-concurrency=1 "$here"/${RFE_E2E_ONLY:-*}.test.mjs || status=$?
   kill "$driver" 2>/dev/null || true
   echo "$status" >"$XDG_RUNTIME_DIR/e2e-status"
   exit 0
@@ -91,7 +95,16 @@ session)
   # KWin runs its command with no arguments, so the next stage is passed in the environment. It stays
   # in the background; this stage leaves as soon as the tests wrote their status (or KWin died, or
   # five minutes passed) and the launcher then stops the whole scope.
-  RFE_E2E_STAGE=inside dbus-run-session -- kwin_wayland --virtual --socket rfe-e2e --width 1280 --height 800 \
+  # With no keyring the session bus must not be able to start one on demand either: this machine's
+  # gnome-keyring is dbus-activatable, and an activated one waits for a password prompt no one can see.
+  # A session config whose only service folder is empty leaves "no Secret Service" truly empty.
+  bus_config=()
+  if [ "${RFE_E2E_NO_KEYRING:-}" = "1" ]; then
+    mkdir -p "$XDG_RUNTIME_DIR/no-services"
+    sed "s|<standard_session_servicedirs */>|<servicedir>$XDG_RUNTIME_DIR/no-services</servicedir>|" /usr/share/dbus-1/session.conf >"$XDG_RUNTIME_DIR/session-no-services.conf"
+    bus_config=(--config-file="$XDG_RUNTIME_DIR/session-no-services.conf")
+  fi
+  RFE_E2E_STAGE=inside dbus-run-session "${bus_config[@]}" -- kwin_wayland --virtual --socket rfe-e2e --width 1280 --height 800 \
     --scale "${SCALE:-1}" --no-lockscreen --no-global-shortcuts -- "$here/run.sh" >"$XDG_RUNTIME_DIR/tests.log" 2>&1 &
   kwin=$!
   waited=0

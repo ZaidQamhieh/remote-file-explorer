@@ -21,7 +21,11 @@ When a release exists, download the `.deb` or the `.AppImage` from the release p
 - Debian and Ubuntu: `sudo apt install ./RFE-Desktop_1.0.0_amd64.deb` (use the file's real name; a
   release's files have hyphens, a local build's `.deb` has a space in it). The package recommends
   `gnome-keyring` or `keepassxc`.
-- Any Linux: make the AppImage executable (`chmod +x`) and run it. It does not bring a keystore.
+- Any Linux: make the AppImage executable (`chmod +x`) and run it. It does not bring a keystore. It uses the
+  system's graphics and GTK libraries, which any desktop install has. On a minimal system add them first
+  (Debian and Ubuntu: `sudo apt install libgtk-3-0 libegl1 libgl1 libgles2 libgbm1`); without them it stops at
+  once with "error while loading shared libraries". Tested on a clean Ubuntu 24.04 with those packages.
+- With no display (an SSH session, a text console) the app says it needs a graphical session and exits.
 
 Check a download before you install it: each release lists `SHA256SUMS` and a software bill of
 materials (`rfe-desktop.sbom.json`, CycloneDX) next to the packages. With the sums file and the package

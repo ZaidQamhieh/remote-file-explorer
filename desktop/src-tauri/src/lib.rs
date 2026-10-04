@@ -340,7 +340,26 @@ async fn agent_log(app: tauri::AppHandle) -> Result<audit::LogsReply, String> {
         .map_err(|e| e.to_string())
 }
 
+/// What to tell a user who starts the app with no graphical session (an SSH login, a console):
+/// GTK would otherwise abort with a panic that names no cause they can act on.
+pub fn no_display_message(var: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
+    let set = |k: &str| var(k).is_some_and(|v| !v.is_empty());
+    if set("DISPLAY") || set("WAYLAND_DISPLAY") {
+        None
+    } else {
+        Some(
+            "RFE Desktop needs a graphical session, and neither DISPLAY nor WAYLAND_DISPLAY is set. \
+             Start it from your desktop's application menu, not from a text-only login.",
+        )
+    }
+}
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    if let Some(msg) = no_display_message(|k| std::env::var(k).ok()) {
+        eprintln!("{msg}");
+        std::process::exit(1);
+    }
     tauri::Builder::default()
         // First, as the plugin requires: a second launch hands over to the running app, which
         // brings its window forward, and the second process exits.
@@ -420,4 +439,31 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::no_display_message;
+
+    fn env(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |k| {
+            pairs
+                .iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, v)| v.to_string())
+        }
+    }
+
+    #[test]
+    fn a_session_with_x11_or_wayland_starts_and_one_with_neither_says_why() {
+        assert!(no_display_message(env(&[("DISPLAY", ":0")])).is_none());
+        assert!(no_display_message(env(&[("WAYLAND_DISPLAY", "wayland-0")])).is_none());
+        assert!(no_display_message(env(&[]))
+            .unwrap()
+            .contains("graphical session"));
+        assert!(
+            no_display_message(env(&[("DISPLAY", ""), ("WAYLAND_DISPLAY", "")])).is_some(),
+            "empty values are not a display"
+        );
+    }
 }

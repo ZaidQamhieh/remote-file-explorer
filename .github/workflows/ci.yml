@@ -1,11 +1,12 @@
 name: CI
 
-# Pushes to master and rn/** are covered by release.yml, which runs these same gates (workflow_call) plus the build; running
-# them here too would do every check twice. Changes that cannot affect the agent skip it.
+# A master push that touches mobile/** or protocol/** runs these gates through release.yml (workflow_call) plus the build,
+# so those paths are not listed here (every check would run twice). A push that only touches the agent side runs them here
+# and never starts the APK build.
 on:
   push:
-    branches: [main]
-    paths-ignore: ['mobile/**', 'desktop/**', 'docs/**', '**.md']
+    branches: [master, main]
+    paths: ['agent/**', 'agent-rs/**', 'tools/**', '.github/workflows/ci.yml']
   pull_request:
     branches: [master, main]
     paths-ignore: ['mobile/**', 'desktop/**', 'docs/**', '**.md']

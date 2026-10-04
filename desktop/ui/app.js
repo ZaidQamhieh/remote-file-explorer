@@ -5,6 +5,8 @@
   let pending = { host: "", fingerprint: "" };
   let current = { signedIn: false };
   let settingsReturn = "step-connect";
+  // The screens that need no session; every other screen (devices, files, audit, ...) belongs to one.
+  const PRE_LOGIN = ["step-connect", "step-trust", "step-login", "step-approve", "step-settings"];
 
   function show(step) {
     for (const id of steps) $(id).hidden = id !== step;
@@ -155,8 +157,10 @@
     }
     renderDevices(list);
     // The list can arrive after the user opened Settings; do not pull them out of it. Back goes here.
-    if ($("step-settings").hidden) show("step-devices");
-    else settingsReturn = "step-devices";
+    const here = steps.find((id) => !$(id).hidden);
+    if ($("step-settings").hidden) {
+      if (!here || PRE_LOGIN.includes(here) || here === "step-devices") show("step-devices");
+    } else settingsReturn = "step-devices";
   }
 
   function setSession(saved) {
@@ -210,7 +214,7 @@
     say("");
     // The screen underneath may have ended while Settings was open (signed out here, or the
     // approval loop finished); do not return to a screen that no longer applies.
-    if (settingsReturn === "step-devices" && !current.signedIn) return showConnect();
+    if (!current.signedIn && !PRE_LOGIN.includes(settingsReturn)) return showConnect();
     if (settingsReturn === "step-approve" && liveLoops === 0) settingsReturn = "step-login";
     show(settingsReturn);
   });
@@ -1097,7 +1101,8 @@
               files.entries = files.entries.filter((x) => x.path !== e.path);
               const at = files.rows.findIndex((r) => r.entry === e);
               filesRenderRows();
-              filesSetActive(Math.min(at, files.rows.length - 1), true);
+              if (files.rows.length) filesSetActive(Math.min(at, files.rows.length - 1), true);
+              else $("files-refresh").focus();
               say("Moved to the trash: " + e.name);
             },
             "Moving to the trash..."
@@ -2034,11 +2039,7 @@
     healthAutoLoop(me);
   });
 
-  // Back from Settings to this screen: the loop ended while it was hidden; pick it up again.
-  $("settings-back").addEventListener("click", () => {
-    if ($("step-health").hidden || !$("health-auto").checked) return;
-    healthAutoLoop(++healthRun);
-  });
+  // Coming back to this screen (from Settings or Transfers) restarts the loop in the last show() wrapper.
 
   // ---- feature:audit-logs ----
   // The agent's audit trail and log tail (admin only). Every string below came from the agent and
@@ -2458,7 +2459,7 @@
       await invoke("transfer_download", { remotePath: $("download-path").value.trim() });
       $("download-path").value = "";
       $("transfers-status").textContent = "Download started.";
-      await pollTransfers();
+      pollTransfers();
     });
   });
 
@@ -2471,7 +2472,7 @@
       });
       $("upload-path").value = "";
       $("transfers-status").textContent = "Upload started.";
-      await pollTransfers();
+      pollTransfers();
     });
   });
 
@@ -2533,5 +2534,19 @@
     // Moving to another folder, or leaving the screen, drops the offer.
     for (const id of ["files-refresh", "files-back"]) $(id).addEventListener("click", clear);
     if (typeof MutationObserver !== "undefined") new MutationObserver(clear).observe($("files-trail"), { childList: true });
+  }
+
+  // ---- integration: pollers that depend on the visible screen ----
+  // Last wrapper of show(): coming back to Transfers or Health (from Settings, or from each other)
+  // restarts the loop that ended while the screen was hidden, and the pairing-request rows are
+  // dropped when the user lands on a screen outside the session.
+  {
+    const wrapped = show;
+    show = function (step) {
+      wrapped(step);
+      if (step === "step-transfers") pollTransfers();
+      if (step === "step-health" && $("health-auto").checked) healthAutoLoop(++healthRun);
+      if (PRE_LOGIN.includes(step) && step !== "step-settings") inboxReset();
+    };
   }
 })();

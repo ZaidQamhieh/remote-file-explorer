@@ -3,6 +3,7 @@
 
 pub mod agent_client;
 pub mod applog;
+pub mod device_actions;
 pub mod discovery;
 pub mod flows;
 mod fsutil;
@@ -327,7 +328,12 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            // feature:device-actions
+            device_actions::commands::device_access,
+            device_actions::commands::set_device_access,
+            device_actions::commands::revoke_device,
+            device_actions::commands::remove_device
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

@@ -509,4 +509,212 @@
     }
     showConnect();
   })();
+
+  // ---- feature:device-actions ----
+  // Per-device actions in the devices table for an admin session (an account sign-in): change a
+  // device's access, revoke it, remove it. The agent has no rename. renderDevices is wrapped, not
+  // edited: it is first called after an await, so this block has run by then. Everything goes
+  // through the Rust core; the agent decides who may (403 for anyone else) and the window only
+  // shows the actions to a session that can use them.
+  {
+    const baseRenderDevices = renderDevices;
+    const BOXES = {
+      browse: "da-browse",
+      download: "da-download",
+      upload: "da-upload",
+      modify: "da-modify",
+      delete: "da-delete",
+      share: "da-share",
+      viewApps: "da-viewapps",
+      launchApps: "da-launchapps",
+      readOnly: "da-readonly",
+    };
+    let editing = null; // { id, label, self, loaded, opener }
+
+    const resetSave = () => {
+      $("da-editor-self").hidden = true;
+      delete $("da-save").dataset.armed;
+      $("da-save").textContent = "Save access";
+    };
+
+    const closeEditor = () => {
+      editing = null;
+      $("da-editor").hidden = true;
+      resetSave();
+    };
+
+    // Runs one device action: busy text while it is in flight, then the list as the agent has it
+    // (also after a failure: a 404 means the row is gone), then the result. An action on this
+    // computer's own device ends the session, so the window goes back to the first screen.
+    function perform(button, busy, call, done, after) {
+      return run(
+        button,
+        async () => {
+          let out;
+          try {
+            out = await call();
+          } catch (e) {
+            await showDevices().catch(() => {});
+            throw e;
+          }
+          if (after) after();
+          if (out && out.signedOut) {
+            closeEditor();
+            renderDevices([]);
+            setSession({ signedIn: false });
+            await showConnect();
+            say(done);
+            return;
+          }
+          try {
+            await showDevices();
+            say(done);
+          } catch (e) {
+            say(done + " The list could not be refreshed: " + e, true);
+          }
+        },
+        busy
+      );
+    }
+
+    const rowName = (d) => d.label + (d.current ? " (this computer)" : "");
+
+    // Two presses, like Forget: the first only arms the button. On this computer's own device the
+    // first press also shows a stronger warning, and the core refuses without the confirmation.
+    function dangerButton(d, verb, command, past) {
+      const b = document.createElement("button");
+      b.type = "button";
+      let warning = "";
+      const idle = () => {
+        delete b.dataset.armed;
+        b.className = "link da-danger";
+        b.textContent = verb;
+        b.setAttribute("aria-label", verb + " " + rowName(d));
+        if (warning && $("message").textContent === warning) say("");
+        warning = "";
+      };
+      idle();
+      b.addEventListener("blur", () => {
+        if (b.dataset.armed && !b.disabled) idle();
+      });
+      b.addEventListener("click", () => {
+        if (!b.dataset.armed) {
+          b.dataset.armed = "1";
+          b.className = "link da-danger armed";
+          if (d.current) {
+            b.textContent = "Sign this computer out?";
+            warning =
+              "This is the computer you are using. " + verb + " signs you out here, and you will have to sign in again. Press the button again to sign this computer out.";
+            b.setAttribute("aria-label", "Press the button again to sign this computer out: " + verb + " " + d.label);
+            say(warning, true);
+          } else {
+            b.textContent = verb + "?";
+            b.setAttribute("aria-label", verb + "? " + d.label + " Press again to confirm.");
+          }
+          return;
+        }
+        warning = "";
+        perform(
+          b,
+          verb === "Remove" ? "Removing..." : "Revoking...",
+          () => invoke(command, { id: d.id, confirmSelf: !!d.current }),
+          past + d.label + "." + (d.current ? " This computer is signed out; sign in again to continue." : "")
+        );
+      });
+      return b;
+    }
+
+    function openEditor(d, rec, opener) {
+      editing = { id: d.id, label: d.label, self: !!d.current, loaded: rec, opener };
+      $("da-editor-title").textContent = "Access for " + rowName(d);
+      $("da-editor-hint").textContent = rec.viaLogin
+        ? "This device signed in with an account, so the agent ignores its file permissions. The read-only and folder limits still apply."
+        : "";
+      for (const [key, id] of Object.entries(BOXES)) $(id).checked = !!rec[key];
+      $("da-jail").value = rec.jailRoot || "";
+      resetSave();
+      $("da-editor").hidden = false;
+      $("da-editor-title").focus();
+    }
+
+    function accessButton(d) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "link";
+      b.textContent = "Access";
+      b.setAttribute("aria-label", "Change access for " + rowName(d));
+      b.addEventListener("click", () =>
+        run(
+          b,
+          async () => openEditor(d, await invoke("device_access", { id: d.id }), b),
+          "Reading the device's access..."
+        )
+      );
+      return b;
+    }
+
+    renderDevices = function (list) {
+      baseRenderDevices(list);
+      const admin = list.some((d) => d.current && d.viaLogin);
+      $("da-hint").hidden = !admin || list.length === 0;
+      if (!admin || (editing && !list.some((d) => d.id === editing.id))) closeEditor();
+      const rows = $("devices").children;
+      list.forEach((d, i) => {
+        const td = document.createElement("td");
+        if (admin) {
+          const box = document.createElement("div");
+          box.className = "da-actions";
+          if (!d.revoked) box.append(accessButton(d), dangerButton(d, "Revoke", "revoke_device", "Revoked "));
+          box.append(dangerButton(d, "Remove", "remove_device", "Removed "));
+          td.append(box);
+        }
+        rows[i].append(td);
+      });
+    };
+
+    // Allowing apps to be started needs them to be viewable; keep the two boxes consistent.
+    $("da-launchapps").addEventListener("change", () => {
+      if ($("da-launchapps").checked) $("da-viewapps").checked = true;
+    });
+    $("da-viewapps").addEventListener("change", () => {
+      if (!$("da-viewapps").checked) $("da-launchapps").checked = false;
+    });
+
+    $("da-cancel").addEventListener("click", () => {
+      const opener = editing && editing.opener;
+      closeEditor();
+      say("");
+      (opener || $("title-devices")).focus();
+    });
+
+    $("da-save").addEventListener("click", () => {
+      const e = editing;
+      if (!e) return;
+      // Only what changed is sent, so an unchanged folder limit is not checked again.
+      const patch = {};
+      for (const [key, id] of Object.entries(BOXES)) {
+        if ($(id).checked !== !!e.loaded[key]) patch[key] = $(id).checked;
+      }
+      const jail = $("da-jail").value.trim();
+      if (jail !== (e.loaded.jailRoot || "")) patch.jailRoot = jail;
+      if (Object.keys(patch).length === 0) {
+        say("No setting was changed, so there is nothing to save.");
+        return;
+      }
+      const save = $("da-save");
+      if (e.self && !save.dataset.armed) {
+        save.dataset.armed = "1";
+        save.textContent = "Save access to this computer?";
+        $("da-editor-self").hidden = false;
+        return;
+      }
+      perform(
+        save,
+        "Saving access...",
+        () => invoke("set_device_access", { id: e.id, patch, confirmSelf: e.self }),
+        "Saved the access of " + e.label + ".",
+        closeEditor
+      );
+    });
+  }
 })();

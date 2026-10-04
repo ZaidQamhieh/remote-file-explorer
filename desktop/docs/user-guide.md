@@ -104,6 +104,48 @@ clipboard; if the system refuses, the text is selected so Ctrl+C works.
 If `state.json` is damaged the app says so and does not guess; delete the file to start over (you will
 compare fingerprints again).
 
+<!-- feature:device-actions -->
+## Manage devices
+
+When you signed in with an **account**, each row of the devices list has actions (a computer paired with a
+code or approved on the PC sees only itself and gets none):
+
+- **Access** opens the device's permissions: which file actions it may use (browse, download, upload,
+  change, delete, make share links), whether it may see or start apps, a read-only switch, and a folder
+  limit (an absolute path inside the agent's folders; empty means no limit). Only the settings you change
+  are sent. A device that itself signed in with an account ignores the file permissions; the read-only
+  switch and the folder limit still apply to it.
+- **Revoke** blocks the device: the agent refuses its login from then on, and the row stays in the list
+  marked Revoked. It can only get back in by being paired or signed in again.
+- **Remove** deletes the device's row for good (an active device is blocked at the same time).
+
+**Revoke** and **Remove** need two presses; the first one only arms the button and the second does it.
+After every action the list is loaded again from the agent.
+
+The agent has no way to rename a device from another device: a device's name is the one it gave when it
+signed in. (The PC-side `rfe-agent` shows the same names.)
+
+**This computer's own row.** Revoking or removing it signs this window out, and changing its own access can
+lock it out. The first press shows a stronger warning ("Press the button again to sign this computer out"),
+and the app itself refuses the action unless that second press confirms it. After it, the window is back
+at the first screen and you sign in again.
+
+Messages of these actions:
+
+| The window says | What it means and what to do |
+|---|---|
+| This login is not an admin session, so the agent will not change other devices. | The agent answered 403. Only a sign-in with the account (not a pairing code, not an approval on the PC) may revoke, remove or change other devices. Sign out and sign in with the account, or use `rfe-agent revoke`, `remove` and `jail` on the PC. |
+| That device is no longer on the agent | The agent answered 404: the device was removed (here, on the PC or from another computer) before the action arrived. The list has been loaded again; nothing else is needed. |
+| This agent does not support that device action | The agent is too old for it. Update the agent, or use `rfe-agent` on the PC. |
+| This is the computer you are using | You tried to revoke, remove or change the access of this computer's own device without the second, confirming press. Press the button again to confirm, or leave it. |
+| Press the button again to sign this computer out | The warning shown when you arm Revoke or Remove on this computer's own row. Nothing has happened yet; press the button again to do it, or press somewhere else to cancel. |
+| Allowing a device to launch apps needs it to be allowed to view apps as well. | Turn on "See the apps on this PC" together with "Start approved apps". |
+| No setting was changed | Saving needs at least one changed setting. |
+| The folder limit must be one path, up to 4096 characters, or empty. | Type one absolute path, or clear the box for no limit. |
+| The agent refused that change: ... | The agent said no, and the text after the colon is its reason, for example a folder limit that is not inside the agent's folders. Nothing was changed. |
+| Revoked, Removed, Saved the access of | The action worked. "This computer is signed out; sign in again to continue." follows when it was this computer's own row. |
+| The list could not be refreshed | The action worked, but loading the list again failed (the text after the colon says why). Press Refresh. |
+
 ## Troubleshooting
 
 Find the message the window shows. Messages from the agent:

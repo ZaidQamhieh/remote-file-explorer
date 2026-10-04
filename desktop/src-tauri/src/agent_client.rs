@@ -668,3 +668,36 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:device-actions ----
+impl AgentClient {
+    /// One authenticated JSON call to `/v1{path}` over the pinned connection. `path` is built by
+    /// the caller from validated parts and is never user text. A success returns the body as JSON
+    /// (`Null` when there is none, as for 204); an error is the agent's `{code, message}`.
+    pub(crate) async fn call_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value, AgentError> {
+        let mut req = self
+            .http
+            .request(method, format!("{}{path}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION);
+        if let Some(b) = body {
+            req = req.json(b);
+        }
+        let resp = req.send().await.map_err(net)?;
+        if !resp.status().is_success() {
+            return Err(error_of(resp).await);
+        }
+        let bytes = resp.bytes().await.map_err(net)?;
+        if bytes.is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
+        serde_json::from_slice(&bytes)
+            .map_err(|e| AgentError::Local(format!("unexpected response: {e}")))
+    }
+}

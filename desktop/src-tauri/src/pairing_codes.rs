@@ -1,0 +1,117 @@
+//! Generate a one-time pairing code for a phone (`POST /pairing/generate`). Only an admin session
+//! (one signed in with the account) may do it; any other session gets a plain "not allowed"
+//! state instead of an error. The code goes to the window once, to be shown; this app never
+//! writes it to `state.json`, the keystore or the log, and keeps no copy after answering.
+
+use crate::agent_client::{AgentClient, AgentError};
+use crate::applog;
+use crate::flows;
+use crate::secrets::{account, Offloaded};
+use serde::Serialize;
+use std::path::Path;
+
+/// How long a code made here stays valid. Shorter than the agent's default hour, because the
+/// code sits on a screen; "Generate a new code" makes another.
+pub const TTL_SECONDS: u64 = 600;
+
+/// What the window gets: a code and its lifetime, or the fact that this login may not make one.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeView {
+    /// `"ok"` or `"forbidden"`.
+    pub status: &'static str,
+    /// Empty unless `status` is `"ok"`.
+    pub code: String,
+    pub expires_in_seconds: u64,
+}
+
+// Not derived: a `{:?}` in a log line or a test failure must not print a live pairing code.
+impl std::fmt::Debug for CodeView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeView")
+            .field("status", &self.status)
+            .field(
+                "code",
+                &if self.code.is_empty() {
+                    ""
+                } else {
+                    "<redacted>"
+                },
+            )
+            .field("expires_in_seconds", &self.expires_in_seconds)
+            .finish()
+    }
+}
+
+/// Mints a code with the saved login. A refusal because the session is not an admin one is a
+/// result (`forbidden`), not an error, so the window can explain it; every other failure is an
+/// error whose text is shown as it is.
+pub async fn generate(dir: &Path, store: &Offloaded) -> Result<CodeView, AgentError> {
+    let r = generate_inner(dir, store).await;
+    match &r {
+        Ok(v) if v.status == "ok" => applog::info("pairing code generation: ok"),
+        Ok(_) => {
+            applog::info("pairing code generation: refused, this login is not an admin session")
+        }
+        Err(e) => applog::error(&format!("pairing code generation failed: {e}")),
+    }
+    r
+}
+
+async fn generate_inner(dir: &Path, store: &Offloaded) -> Result<CodeView, AgentError> {
+    let saved = {
+        let dir = dir.to_path_buf();
+        store
+            .run(move |s| flows::load_saved(&dir, s))
+            .await
+            .map_err(AgentError::Local)?
+    };
+    if saved.token.is_empty() || saved.host.is_empty() {
+        return Err(AgentError::Local("not signed in".into()));
+    }
+    // The pin list is the record of what is trusted: a forgotten pin ends the session here.
+    let pinned = flows::list_pins(dir)
+        .map_err(AgentError::Local)?
+        .into_iter()
+        .find(|p| p.host == flows::pin_key(&saved.host))
+        .map(|p| p.fingerprint)
+        .ok_or_else(|| {
+            AgentError::Local(format!(
+                "{} is no longer a trusted agent; connect and compare its fingerprint again",
+                saved.host
+            ))
+        })?;
+    let made = AgentClient::pinned(&saved.host, &pinned)?
+        .generate_pairing_code(&saved.token, TTL_SECONDS)
+        .await;
+    match made {
+        Ok(g) if g.pairing_code.is_empty() => Err(AgentError::Local(
+            "unexpected response: the agent sent no pairing code".into(),
+        )),
+        Ok(g) => {
+            applog::register_secret(&g.pairing_code);
+            Ok(CodeView {
+                status: "ok",
+                code: g.pairing_code,
+                expires_in_seconds: g.expires_in_seconds,
+            })
+        }
+        Err(AgentError::Server { status: 403, .. }) => Ok(CodeView {
+            status: "forbidden",
+            code: String::new(),
+            expires_in_seconds: 0,
+        }),
+        Err(e) => {
+            if let AgentError::Server { status: 401, .. } = &e {
+                // The agent refuses this token: drop the dead login so the window goes back to
+                // sign-in, as for the device list.
+                let dir = dir.to_path_buf();
+                store
+                    .run(move |st| st.delete(&account("token", &dir)))
+                    .await
+                    .map_err(AgentError::Local)?;
+            }
+            Err(e)
+        }
+    }
+}

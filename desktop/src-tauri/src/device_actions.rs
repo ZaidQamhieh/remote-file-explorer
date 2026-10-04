@@ -196,7 +196,7 @@ pub async fn device_access(
         let s = session(dir, store).await?;
         let list = s
             .client
-            .call_json(Method::GET, "/devices", &s.token, None)
+            .call_device_json(Method::GET, "/devices", &s.token, None)
             .await?;
         let all: Vec<DeviceAccess> = serde_json::from_value(list)
             .map_err(|e| AgentError::Local(format!("unexpected response: {e}")))?;
@@ -239,7 +239,7 @@ pub async fn set_access(
             .map_err(|e| AgentError::Local(format!("unexpected request: {e}")))?;
         let v = s
             .client
-            .call_json(
+            .call_device_json(
                 Method::PATCH,
                 &format!("/devices/{id}"),
                 &s.token,
@@ -268,7 +268,7 @@ async fn delete(
         format!("/devices/{id}")
     };
     s.client
-        .call_json(Method::DELETE, &path, &s.token, None)
+        .call_device_json(Method::DELETE, &path, &s.token, None)
         .await?;
     if is_self {
         // The agent now refuses this token; drop it here too, as signing out does.

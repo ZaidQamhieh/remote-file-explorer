@@ -40,7 +40,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
-            libayatana-appindicator3-dev librsvg2-dev libssl-dev libdbus-1-dev
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev libdbus-1-dev \
+            dbus-daemon gnome-keyring libsecret-tools
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -70,6 +71,11 @@ jobs:
         env:
           RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
         run: cargo test --locked
+
+      # The real Secret Service, in a private D-Bus session with a throwaway empty keyring. The other
+      # tests use in-memory stores; this one proves the OS keystore path itself.
+      - name: Secret Service round trip
+        run: ../scripts/with-keyring.sh cargo test --locked --test keystore -- --ignored
 
       # Accepted advisories are listed with reasons in .cargo/audit.toml; any new warning fails the job.
       - name: cargo audit

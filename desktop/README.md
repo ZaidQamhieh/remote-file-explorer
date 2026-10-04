@@ -14,6 +14,7 @@ secrets in the system keystore.
 |---|---|
 | `src-tauri/` | The Rust core. It owns every network call and every secret; the window has no network access. |
 | `ui/` | The window: plain HTML, CSS and one script, no build step. |
+| `e2e/` | End-to-end tests in the real window (`e2e/run.sh`): WebDriver through `tauri-driver`, a real keyring and a throwaway agent, in a private virtual desktop that never touches yours. Also measures the app's memory. |
 | `ui-tests/` | Node tests that drive `ui/app.js` against a fake DOM (which screen and message, not looks). |
 | `scripts/with-keyring.sh` | Runs a command against a private, real gnome-keyring. |
 | `docs/` | The guides above. |
@@ -30,6 +31,7 @@ cargo fmt --all --check
 cargo clippy --all-targets --locked -- -D warnings
 RFE_AGENT_BIN=/path/to/rfe-agent cargo test --locked    # go build -o /path/to/rfe-agent ./cmd/agent, in agent/
 node --test ../ui-tests/*.test.mjs
+RFE_AGENT_BIN=<built agent> e2e/run.sh       # real window; needs kwin_wayland, tauri-driver, a built debug app; SHOTS=1 refreshes docs/*.png
 ```
 
 The tests start throwaway agents on random ports with temporary data folders and no desktop

@@ -69,6 +69,12 @@ revokes that device on the agent and removes the saved login here. If the agent 
 the app signs out on this computer only and says so; the login then still works until it is revoked
 on the PC.
 
+## The window
+
+The app follows the system's light or dark setting and scales with the system's display scaling. It
+remembers the window's size and position. Starting it a second time does not open a second copy: the
+first window is brought forward.
+
 ## Settings
 
 **Settings** (top right) shows the account and this computer's device id, the trusted agents, a

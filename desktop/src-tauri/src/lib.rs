@@ -289,6 +289,19 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        // First, as the plugin requires: a second launch hands over to the running app, which
+        // brings its window forward, and the second process exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            applog::info("a second launch was handed over to this window");
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
+        // Remembers the window's size and position between runs (kept in the app's config folder;
+        // it holds nothing but geometry).
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(PendingPair::default())
         .setup(|app| {
             if let Ok(dir) = app.path().app_data_dir() {

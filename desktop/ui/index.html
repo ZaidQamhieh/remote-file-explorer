@@ -120,6 +120,11 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:app-catalog -->
+      <p class="row"><button id="open-apps" type="button">Apps on this PC</button></p>
+      <!-- /feature:app-catalog -->
+      <!-- feature:health-metrics -->
+      <p class="hint"><button id="open-health" class="link" type="button">Health and metrics</button></p>
       <!-- feature:pairing-codes -->
       <p class="hint"><button id="open-pairing" class="link" type="button">Pair a phone with a one-time code</button></p>
       <!-- /feature:pairing-codes -->
@@ -182,6 +187,77 @@
       </dl>
     </section>
 
+    <!-- feature:app-catalog -->
+    <section id="step-apps" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-apps" tabindex="-1">Apps on the PC</h2>
+        <div class="row">
+          <button id="apps-refresh" type="button">Refresh</button>
+          <button id="apps-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">The apps the PC running the agent offers. Launching one opens it on that PC's screen; nothing runs on this computer, and this app sends only the app's catalog id.</p>
+      <p id="apps-note" class="hint" hidden>This computer may see these apps but not start them. The owner can allow launching in this computer's permissions on the agent.</p>
+      <div id="apps-wrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr><th scope="col">App</th><th scope="col">Category</th><th scope="col">Id</th><th scope="col"><span class="sr-only">Action</span></th></tr>
+          </thead>
+          <tbody id="apps-list"></tbody>
+        </table>
+      </div>
+      <p id="apps-empty" class="hint" hidden>The PC lists no apps.</p>
+    </section>
+    <!-- /feature:app-catalog -->
+    <!-- feature:health-metrics -->
+    <section id="step-health" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-health" tabindex="-1">Health and metrics</h2>
+        <button id="health-back" type="button">Back</button>
+      </div>
+      <p class="hint">What the agent says about itself and, for an administrator, how busy the PC is. The window asks only while this screen is open; the agent keeps no history and neither does the app.</p>
+      <div class="row">
+        <button id="health-refresh" type="button">Refresh</button>
+        <input id="health-auto" type="checkbox">
+        <label for="health-auto" class="inline">Refresh every 5 seconds while this screen is open</label>
+      </div>
+      <p id="health-updated" class="hint pad-top">Not read yet.</p>
+      <p id="health-auto-note" class="hint" role="status" hidden></p>
+
+      <h3>The agent you are connected to</h3>
+      <dl class="about">
+        <dt>Address</dt><dd id="health-host" class="mono-line"></dd>
+        <dt>Certificate fingerprint</dt><dd id="health-fingerprint" class="mono-line"></dd>
+        <dt>Name</dt><dd id="health-name"></dd>
+        <dt>Version</dt><dd id="health-version"></dd>
+        <dt>System</dt><dd id="health-os"></dd>
+        <dt>Read-only</dt><dd id="health-readonly"></dd>
+        <dt>Address it reports</dt><dd id="health-address" class="mono-line"></dd>
+        <dt>Tailscale address</dt><dd id="health-tailscale" class="mono-line"></dd>
+        <dt>MAC address</dt><dd id="health-mac" class="mono-line"></dd>
+      </dl>
+
+      <h3>Health</h3>
+      <dl class="about">
+        <dt>Status</dt><dd id="health-status"></dd>
+        <dt>Running for</dt><dd id="health-uptime"></dd>
+        <dt>Disk free</dt><dd id="health-disk"></dd>
+      </dl>
+      <p id="health-status-note" class="hint" hidden></p>
+
+      <h3>Metrics</h3>
+      <p id="health-forbidden" class="warn" role="status" hidden></p>
+      <p id="health-metrics-note" class="hint" hidden></p>
+      <dl id="health-metrics" class="about">
+        <dt>Processor in use</dt><dd id="health-cpu"></dd>
+        <dt>Memory in use</dt><dd id="health-ram"></dd>
+        <dt>Received since start</dt><dd id="health-rx"></dd>
+        <dt>Sent since start</dt><dd id="health-tx"></dd>
+        <dt>Receiving now</dt><dd id="health-rx-rate"></dd>
+        <dt>Sending now</dt><dd id="health-tx-rate"></dd>
+        <dt>Agent's clock</dt><dd id="health-agent-time"></dd>
+      </dl>
+    </section>
     <!-- feature:pairing-codes -->
     <section id="step-pairing" class="panel" hidden>
       <div class="row between">

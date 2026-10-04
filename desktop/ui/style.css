@@ -95,6 +95,11 @@ textarea { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consol
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [tabindex="-1"]:focus { outline: none; }
 
+/* ---- feature:health-metrics ---- */
+input[type="checkbox"] { width: auto; margin: 0; }
+label.inline { display: inline; margin: 0; font-weight: 400; }
+.pad-top { margin-top: 12px; }
+
 /* ---- feature:pairing-codes ---- */
 /* One click selects the whole code, so Ctrl+C copies it; the app never touches the clipboard. */
 .pcodes-code { font-size: 36px; letter-spacing: 6px; -webkit-user-select: all; user-select: all; }

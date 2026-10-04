@@ -179,3 +179,82 @@ Messages from this app:
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).
+
+<!-- feature:app-catalog -->
+## Apps on the PC
+
+On the devices screen, **Apps on this PC** lists the apps the PC running the agent offers (on Linux, the
+applications in its menu). Each row shows the app's name, category and a short form of its catalog id.
+**Launch** opens the app on the PC's own screen; press it twice, the first press only arms it and the
+button then reads "Launch?". Nothing runs on this computer. This app sends the agent only the app's
+catalog id, never a command or a path, and the agent decides what that id means.
+
+What it takes:
+
+- The owner must give this computer two rights on the agent: *view apps* (to see the list) and *launch
+  apps* (to start one). Neither comes with an account sign-in or a pairing code. Without *launch apps*
+  the list is shown and the Launch buttons are replaced by a note.
+- Someone has to be signed in to a graphical desktop on the PC, and the PC needs `gio` for the agent to
+  start anything.
+- A row that says "Cannot be launched" is listed but has no way to start.
+- "The PC lists no apps." means the catalog is empty, not that an error happened.
+
+Success means the PC's launcher accepted the request, not that the app finished starting.
+
+Messages from the agent for these two screens:
+
+| The window says | Code | What to do |
+|---|---|---|
+| This computer is not allowed to see the host's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
+| This computer may see the host's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
+| That app is no longer in the host's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
+| The host has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
+| The host is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
+| Nobody is signed in to a graphical desktop on the host, so there is nowhere to open the app. Sign in at the PC, then try again. | `NO_INTERACTIVE_SESSION` | The agent only opens apps on a screen someone is signed in to. Sign in to the PC's desktop, then try again. |
+| The host's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
+| The host tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
+| Too many requests for the app list. Wait a minute, then refresh. | `APP_CATALOG_RATE_LIMITED` | The agent allows 60 list requests a minute per computer. Wait a minute. |
+| Too many app launches. The agent allows only a few per minute. Wait a minute, then try again. | `APP_LAUNCH_RATE_LIMITED` | The agent allows 5 launches a minute per computer. Wait a minute. |
+| The host's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
+| The agent refused the app id as malformed. This is a bug in the app. | `BAD_APP_ID` | The app sent an id the agent does not accept. This is a bug in the app. Report it with the log level set to Detailed. |
+
+Messages from this app:
+
+| The window says | What it means and what to do |
+|---|---|
+| unexpected app id | The app refused to put an id that does not look like `app_` and 64 hex digits into a request. Refresh the list; if it keeps happening, report it. |
+| unknown launch status | The agent answered a launch with something other than "started". Update the agent and the app; if both are current, report it. |
+| This agent has no app catalog. Update the agent on the PC, then try again. | The agent is older than the app catalog and answers `/apps` with a plain 404. Update it. |
+| Asked the PC to open (app name). It can take a moment to appear on its screen. | Not an error: the PC's launcher accepted the request. If nothing appears, check the PC's screen and that the app starts there. |
+| Cannot be launched, Launching not allowed | A row without a Launch button: the PC has no way to start that app, or this computer lacks the *launch apps* right (see above). |
+<!-- feature:health-metrics -->
+## Health and metrics
+
+On the **Paired devices** screen, **Health and metrics** shows what the agent reports about itself and,
+for an administrator, how busy the PC is.
+
+- **The agent you are connected to**: the address this computer uses and the certificate fingerprint it
+  pinned for it (compare it with `rfe-agent status`), then the agent's name, version, system, whether it
+  is read-only, and the addresses it reports (LAN, Tailscale, MAC).
+- **Health**: that the agent answers, how long it has been running, and the free and total disk space of
+  its data folder.
+- **Metrics** (administrators only): processor and memory in use (percent, at the moment of reading),
+  bytes received and sent since the agent started (binary units: 1 KiB is 1024 bytes), the rate those
+  grew at since the previous reading, and the agent's own clock. The rate needs two readings, so the
+  first shows "Needs a second reading". If a total goes down the agent restarted, and the rate says so.
+- **Refresh** reads again. **Refresh every 5 seconds while this screen is open** does it by itself; it
+  stops when you leave the screen, open Settings (it resumes when you come back) or an error happens.
+  The window keeps only the last reading, and the agent keeps no history.
+
+A value the agent did not send reads "not reported" (an older agent, or one that withheld it) instead
+of a made-up zero. The agent does not report the state of its helper programs, so none is shown.
+
+| The window says | What it means and what to do |
+|---|---|
+| Metrics are for administrators. | This computer signed in with a pairing code or was approved on the PC, so the agent answers the metrics request with 403 (`FORBIDDEN`). The rest of the screen still works. Sign out and sign in with the account (`rfe-agent adduser`) to see the metrics. |
+| No metrics were reported. | The agent answered the health request but not the metrics one; the text after it says why (for example it timed out). Press Refresh to try again. |
+| Uptime and disk space could not be read | The agent's status request failed; the reason follows. The health part is still current. |
+| The agent did not answer within 5 seconds. | The agent did not reply in time. It may be asleep, busy, or on another network. Check that it is running and the address is right, then press Refresh. Each of the three requests has its own five second limit and they run together, so the screen never waits longer. |
+| unexpected response: the agent's health answer does not say ok | The address answered with something that is not an RFE agent's health reply. Check the address and the agent version. |
+| Auto-refresh stopped after an error. | The error is shown above it. Auto-refresh does not retry by itself, so an agent that is off, or a locked keystore, is not asked every five seconds. Fix the cause, then press Refresh or turn auto-refresh on again. |
+| not reported | That value was missing from the agent's answer. |

@@ -3,9 +3,11 @@
 
 pub mod agent_client;
 pub mod applog;
+pub mod apps; // feature:app-catalog
 pub mod discovery;
 pub mod flows;
 mod fsutil;
+pub mod health;
 pub mod identity;
 pub mod pairing_codes; // feature:pairing-codes
 pub mod secrets;
@@ -288,6 +290,16 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
     flows::sign_out_and_revoke(&data_dir(&app)?, &keystore()).await
 }
 
+// ---- feature:health-metrics ----
+/// One refresh of the health and metrics screen for the saved session. Takes no argument: the
+/// address and certificate are the ones already trusted, and the three routes are fixed.
+#[tauri::command]
+async fn agent_health(app: tauri::AppHandle) -> Result<health::Snapshot, String> {
+    health::agent_health(&data_dir(&app)?, &keystore())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ---- feature:pairing-codes ----
 /// Mints a one-time pairing code for a phone. Admin sessions only; any other session gets
 /// `status: "forbidden"`. The code is never logged or saved.
@@ -339,6 +351,9 @@ pub fn run() {
             diagnostics,
             set_log_level,
             check_keystore,
+            apps::list_host_apps,  // feature:app-catalog
+            apps::launch_host_app, // feature:app-catalog
+            agent_health,
             generate_pairing_code // feature:pairing-codes
         ])
         .run(tauri::generate_context!())

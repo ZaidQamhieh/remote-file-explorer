@@ -669,6 +669,66 @@ impl AgentClient {
     }
 }
 
+// ---- feature:app-catalog ----
+impl AgentClient {
+    /// One authenticated JSON call for feature modules (`path` is under `/v1`, built by the caller
+    /// from validated parts, never from user text). Errors are the same `AgentError`s as above.
+    pub(crate) async fn call_json<T: serde::de::DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+    ) -> Result<T, AgentError> {
+        parse(
+            self.http
+                .request(method, format!("{}{path}", self.base))
+                .bearer_auth(token)
+                .header("X-RFE-Client-Version", CLIENT_VERSION)
+                .send()
+                .await
+                .map_err(net)?,
+        )
+        .await
+    }
+}
+
+// ---- feature:health-metrics ----
+impl AgentClient {
+    /// `GET` one of the agent's fixed, read-only routes as a signed-in device and parses the JSON
+    /// answer. `path` is a `'static` literal chosen by the app (never text from the window), and
+    /// `timeout` bounds the whole request, so an agent that accepts the connection and then says
+    /// nothing, or a PC that fell off the network, ends in an error instead of a wait.
+    pub async fn get_fixed_json<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        path: &'static str,
+        timeout: Duration,
+    ) -> Result<T, AgentError> {
+        debug_assert!(path.starts_with('/') && !path.contains(['?', '#', ' ']));
+        let resp = self
+            .http
+            .get(format!("{}{path}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION)
+            .timeout(timeout)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    let secs = timeout.as_secs().max(1);
+                    AgentError::Local(format!(
+                        "The agent did not answer within {secs} second{}. It may be asleep, busy \
+                         or on another network; check that it is running and the address is right.",
+                        if secs == 1 { "" } else { "s" }
+                    ))
+                } else {
+                    net(e)
+                }
+            })?;
+        parse(resp).await
+    }
+}
+
 // ---- feature:pairing-codes ----
 // `POST /pairing/generate`: the agent mints a one-time pairing code for an admin session. Only
 // the code and its lifetime are read; the QR payload and picture the agent also sends are

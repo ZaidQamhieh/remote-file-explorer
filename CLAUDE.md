@@ -83,8 +83,11 @@ CI runs per area: on branch pushes `release.yml` (APK build) only runs when `mob
 
 ### Desktop app (Tauri, `desktop/`)
 PC control app for the local agent; not part of the Android release (`desktop.yml` is its gate). From `desktop/src-tauri`: `RFE_AGENT_BIN=<built agent> cargo test --locked`,
-`cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`. No desktop release exists yet; when one
-does, tag it `desktop-v*` and publish with `--latest=false`, like `agent-v*`.
+`cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`. No desktop release exists yet.
+Versioning: `desktop/src-tauri/Cargo.toml` and `tauri.conf.json` carry the same version (`desktop/src-tauri/tests/versions.rs`
+fails when they differ). A release is the tag `desktop-vX.Y.Z` (`desktop-vX.Y.Z-rc.N` for a pre-release) on a commit with
+that version, published with `--latest=false` like `agent-v*`, because the Android updater needs the newest *app* release to
+hold the Latest flag. `release.yml` only runs for `v*` tags, so `desktop-v*` never starts an APK build.
 
 ## Architecture you can't see from one file
 

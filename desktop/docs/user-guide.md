@@ -155,3 +155,83 @@ Messages from this app:
 
 Messages about the system keystore (`the OS keystore ...`, `no OS keystore answered`) are explained
 in [keystore.md](keystore.md).
+
+<!-- feature:transfers -->
+## Transfers
+
+**Transfers** (top right, once you are signed in) downloads files from the computer and uploads files to
+it, with a progress bar for each. Everything is done by the app's core over the same pinned connection as
+the rest; the window only shows the progress.
+
+- **Download a file:** type the file's path on the computer and press **Download**. The file is saved in
+  your download folder under `RFE Desktop` (`~/Downloads/RFE Desktop` on most systems; the screen shows
+  the exact folder). You cannot choose another folder. Only the file's name is used: folders in the
+  path, dots at the start, control characters and a very long name are removed, so a download can never
+  be written outside that folder or hidden. A name that is already taken is never replaced; the new
+  file is saved as `name (1)`, `name (2)` and so on. The file only gets its real name when it is whole,
+  and the app then asks the computer for the file's SHA-256 and compares it with the saved copy; a
+  match is shown as "Verified by the computer", a difference discards the copy.
+- **Upload a file:** type the file's full path on this computer (starting with `/`) and the folder on the
+  computer to put it in, then press **Upload**. The path must be a regular file. A path that is itself a
+  symbolic link is refused (type the real path); the app does not follow it. The file keeps its name, and
+  a file of that name on the computer is never replaced. The computer checks every piece and the whole
+  file before the file appears under its name.
+- **Cancel** stops a waiting or running transfer. A download's unfinished file is deleted and an upload's
+  unfinished copy is removed from the computer. **Retry** (after a failure or a cancel) starts again: a
+  download continues from what it already has, an upload sends only the pieces the computer is missing.
+  **Cancel** on a failed transfer gives up on it and removes the leftovers. **Clear finished**
+  removes finished and cancelled transfers from the list.
+- Two transfers run at a time; the others say "Waiting for a free slot". The list is kept only while the
+  app runs. A download that was running when the app was killed leaves a hidden file starting with
+  `.rfe-` and ending `.part` in the download folder; delete it.
+- A download of a very large file ends with "Checking the file" while the computer works out its
+  SHA-256; an upload ends the same way while the computer checks the whole file.
+
+For the file browser, the page offers `window.rfeTransfers.download(remotePath)` and
+`window.rfeTransfers.upload(localPath, remoteDir)`. Each returns the transfer's id, or fails with the
+messages below, and does not change the screen.
+
+Messages about transfers from the agent (the window shows this wording instead of the generic one for
+these codes):
+
+| The window says | Code | What to do |
+|---|---|---|
+| The computer has no file at that path. It may have been moved or deleted. | `PATH_NOT_FOUND` | Check the path. File names are case-sensitive on Linux. |
+| This login may not use that path on the computer. It is outside the folders it can reach. | `FORBIDDEN` | The agent limits this device to certain folders. Use a path inside them, or change the limit on the PC (`rfe-agent jail`). |
+| The agent or this device is read-only, so it cannot accept uploads. | `READ_ONLY` | Turn read-only mode off on the PC. |
+| This device has not been allowed to do that. Allow it on the computer, in the device's access settings. | `CAPABILITY_DENIED` | A pairing-code or approved device may be limited to browsing. Allow downloads or uploads for it on the PC. |
+| A file with this name already exists on the computer. | `CONFLICT` | Uploads never replace a file. Rename the file here or pick another folder. |
+| The file changed or was damaged while it was uploading. The upload was discarded; try again. | `HASH_MISMATCH` | Do not change the file while it uploads, then retry. |
+| A piece of the file was damaged in transit three times in a row. Try again. | `CHUNK_HASH_MISMATCH` | The network is corrupting data. Retry; if it repeats, check the connection. |
+| The file is too large for the computer to accept. | `PAYLOAD_TOO_LARGE` | The agent accepts at most 64 GiB per upload. |
+| The computer has too many uploads open. Wait for one to finish, then retry. | `RESOURCE_LIMIT` | The agent allows a few open uploads per device and per computer. Wait, then retry. |
+| The computer is still finishing the previous attempt. Retry in a moment. | `TRANSFER_ACTIVE` | The agent is still busy with the last attempt. Retry after a few seconds. |
+| The computer closed this upload. Retry starts it again from the beginning. | `TRANSFER_NOT_OPEN` | The agent no longer holds the partly uploaded file. Retry. |
+
+Messages about transfers from this app:
+
+| The window says | What it means and what to do |
+|---|---|
+| enter the path of the file on the computer | The download path is empty. |
+| enter the full path of the file on this computer | The upload path is empty. |
+| enter the folder on the computer to upload into | The destination folder is empty. |
+| that path on the computer is not usable | The path holds a character that cannot be sent or is longer than 4096 bytes. |
+| cannot use the downloads folder | The app could not create `RFE Desktop` in your download folder. The text after it says why; check that you own the folder. |
+| cannot find your Downloads folder | The system does not say where your download folder is. Create `~/Downloads` or set `XDG_DOWNLOAD_DIR`. |
+| give the full path of the file, starting with / | The upload path is relative. Type the whole path. |
+| that path is a symbolic link; type the real path of the file | The app does not follow a link. Type the path of the file the link points to. |
+| that is not a regular file | The path is a folder, a device or something else that is not a plain file. |
+| cannot read that file | The file is missing or you may not read it. The text after it says which. |
+| the file changed while it was being opened; try again | The path was replaced by another file at that moment. Try again. |
+| cannot write | The app could not write the unfinished download. Check free space and permissions of the download folder. |
+| The downloaded copy does not match the file on the computer | The saved bytes differ from the file's SHA-256 on the computer, so the copy was deleted. Start the download again. If it repeats, the file may be changing. |
+| the downloaded file could not be put in place | The finished file could not be given its name. Check the download folder's permissions. |
+| the agent ended the download early | The connection ended before all the bytes arrived. Press Retry; the download continues. |
+| no such transfer | The transfer is no longer in the list. |
+| that transfer cannot be retried now | Retry works only on a failed or cancelled transfer. |
+| a background task failed | Reading or checking a file stopped unexpectedly. Report it with the log level set to Detailed. |
+
+In the list: "Waiting for a free slot" is a transfer queued behind two running ones, "Checking the file"
+is a finished transfer being verified, and "Verified by the computer" means the computer confirmed the
+file's SHA-256. A download from an older agent may finish without that line because it could not answer
+the check.

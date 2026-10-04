@@ -509,4 +509,228 @@
     }
     showConnect();
   })();
+  // ---- feature:transfers ----
+  // Downloads and uploads. The window only asks the Rust core to start, cancel or retry a transfer
+  // and polls its list; the core does every network call and every file access.
+  steps.push("step-transfers");
+  let transfersReturn = "step-connect";
+  const transferRows = new Map();
+  const transferSeen = new Map();
+  let transfersPolling = false;
+
+  function fmtSize(n) {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let i = 0;
+    let v = n;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return (i === 0 ? String(v) : v.toFixed(v < 10 ? 1 : 0)) + " " + units[i];
+  }
+
+  function transferPercent(t) {
+    if (t.state === "done") return 100;
+    return t.total > 0 ? Math.min(100, Math.floor((100 * t.done) / t.total)) : 0;
+  }
+
+  function transferText(t) {
+    switch (t.state) {
+      case "queued":
+        return "Waiting for a free slot";
+      case "running":
+        if (t.total > 0 && t.done >= t.total) return "Checking the file";
+        return t.total > 0
+          ? transferPercent(t) + "% (" + fmtSize(t.done) + " of " + fmtSize(t.total) + ")"
+          : fmtSize(t.done) + " so far";
+      case "done":
+        return (
+          "Done, " + fmtSize(t.total) +
+          (t.direction === "download" ? ", saved as " + t.localPath : "") +
+          (t.verified ? ". Verified by the computer." : ".")
+        );
+      case "failed":
+        return "Failed: " + t.error;
+      default:
+        return "Cancelled";
+    }
+  }
+
+  function makeTransferRow(id) {
+    const li = document.createElement("li");
+    li.className = "transfer";
+    li.setAttribute("tabindex", "-1");
+    const name = document.createElement("div");
+    name.className = "transfer-name";
+    const status = document.createElement("div");
+    status.className = "transfer-status";
+    const bar = document.createElement("progress");
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", "100");
+    bar.max = 100;
+    const actions = document.createElement("div");
+    actions.className = "row";
+    const act = (text, command) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.addEventListener("click", () =>
+        run(b, async () => {
+          await invoke(command, { id });
+          await pollTransfersOnce();
+          pollTransfers();
+          li.focus();
+        })
+      );
+      return b;
+    };
+    const cancel = act("Cancel", "transfer_cancel");
+    const retry = act("Retry", "transfer_retry");
+    actions.append(cancel, retry);
+    li.append(name, status, bar, actions);
+    return { li, name, status, bar, cancel, retry };
+  }
+
+  function updateTransferRow(row, t) {
+    const down = t.direction === "download";
+    row.name.textContent = (down ? "Download: " : "Upload: ") + t.name;
+    row.li.setAttribute("title", down ? "From " + t.remotePath : "To " + t.remotePath + " from " + t.localPath);
+    row.status.textContent = transferText(t);
+    row.status.classList.toggle("failed", t.state === "failed");
+    const pct = transferPercent(t);
+    row.bar.value = pct;
+    row.bar.setAttribute("aria-label", (down ? "Downloading " : "Uploading ") + t.name);
+    row.bar.setAttribute("aria-valuenow", String(pct));
+    row.bar.setAttribute("aria-valuetext", transferText(t));
+    row.cancel.hidden = !(t.state === "queued" || t.state === "running" || t.state === "failed");
+    row.cancel.setAttribute("aria-label", (t.state === "failed" ? "Give up on " : "Cancel ") + t.name);
+    row.retry.hidden = !(t.state === "failed" || t.state === "cancelled");
+    row.retry.setAttribute("aria-label", "Retry " + t.name);
+  }
+
+  function renderTransfers(list) {
+    const order = [];
+    for (const t of list) {
+      let row = transferRows.get(t.id);
+      if (!row) {
+        row = makeTransferRow(t.id);
+        transferRows.set(t.id, row);
+      }
+      updateTransferRow(row, t);
+      order.push(t.id);
+      const before = transferSeen.get(t.id);
+      transferSeen.set(t.id, t.state);
+      if (before && before !== t.state) {
+        if (t.state === "done") $("transfers-status").textContent = t.name + " finished.";
+        if (t.state === "failed") say(t.name + " failed: " + t.error, true);
+      }
+    }
+    for (const id of [...transferRows.keys()]) {
+      if (!order.includes(id)) {
+        transferRows.delete(id);
+        transferSeen.delete(id);
+      }
+    }
+    // Rebuild the list only when its rows changed, so a focused button is not torn out under the user.
+    const listEl = $("transfer-list");
+    const shown = listEl.children;
+    const same = shown.length === order.length && order.every((id, i) => shown[i] === transferRows.get(id).li);
+    if (!same) listEl.replaceChildren(...order.map((id) => transferRows.get(id).li));
+    $("transfers-empty").hidden = order.length !== 0;
+    $("transfers-clear").disabled = !list.some((t) => t.state === "done" || t.state === "cancelled");
+  }
+
+  async function pollTransfersOnce() {
+    const list = await invoke("transfer_list");
+    renderTransfers(list);
+    return list;
+  }
+
+  // Ask the core every half second while the screen is open and something is still moving.
+  async function pollTransfers() {
+    if (transfersPolling) return;
+    transfersPolling = true;
+    try {
+      while (!$("step-transfers").hidden) {
+        let list;
+        try {
+          list = await pollTransfersOnce();
+        } catch (e) {
+          say(String(e), true);
+          break;
+        }
+        if (!list.some((t) => t.state === "queued" || t.state === "running")) break;
+        await sleep(500);
+      }
+    } finally {
+      transfersPolling = false;
+    }
+  }
+
+  async function showTransfers() {
+    const from = steps.find((id) => !$(id).hidden);
+    if (from && from !== "step-transfers") transfersReturn = from;
+    show("step-transfers");
+    say("");
+    $("transfers-status").textContent = "";
+    try {
+      $("transfers-folder").textContent = await invoke("transfer_folder");
+    } catch (e) {
+      say(String(e), true);
+    }
+    await pollTransfers();
+  }
+
+  $("open-transfers").addEventListener("click", showTransfers);
+  $("transfers-back").addEventListener("click", () => {
+    say("");
+    if (!current.signedIn) return showConnect();
+    show(transfersReturn === "step-transfers" ? "step-devices" : transfersReturn);
+  });
+
+  $("download-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    run(submitter(ev), async () => {
+      await invoke("transfer_download", { remotePath: $("download-path").value.trim() });
+      $("download-path").value = "";
+      $("transfers-status").textContent = "Download started.";
+      await pollTransfers();
+    });
+  });
+
+  $("upload-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    run(submitter(ev), async () => {
+      await invoke("transfer_upload", {
+        localPath: $("upload-path").value.trim(),
+        remoteDir: $("upload-dir").value.trim(),
+      });
+      $("upload-path").value = "";
+      $("transfers-status").textContent = "Upload started.";
+      await pollTransfers();
+    });
+  });
+
+  $("transfers-clear").addEventListener("click", (ev) =>
+    run(ev.currentTarget, async () => {
+      await invoke("transfer_clear_finished");
+      await pollTransfersOnce();
+    })
+  );
+
+  // For the file browser: start a transfer by path. Resolves to the transfer's id, rejects with the
+  // reason. It does not change the screen; the Transfers screen shows the progress.
+  window.rfeTransfers = {
+    download: async (remotePath) => {
+      const id = await invoke("transfer_download", { remotePath: String(remotePath) });
+      pollTransfers();
+      return id;
+    },
+    upload: async (localPath, remoteDir) => {
+      const id = await invoke("transfer_upload", { localPath: String(localPath), remoteDir: String(remoteDir) });
+      pollTransfers();
+      return id;
+    },
+  };
 })();

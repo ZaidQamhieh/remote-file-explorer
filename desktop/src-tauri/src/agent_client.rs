@@ -668,3 +668,23 @@ impl AgentClient {
         .await
     }
 }
+
+// ---- feature:transfers ----
+// What `transfers.rs` needs from this module and cannot reach: the pinned HTTP client and the error
+// helpers. Every transfer request still goes through a client built by `AgentClient::pinned`.
+impl AgentClient {
+    /// The pinned HTTP client and the `https://host:port/v1` base, for requests that stream a body.
+    pub(crate) fn transport(&self) -> (&reqwest::Client, &str) {
+        (&self.http, &self.base)
+    }
+}
+
+/// The error for a non-success response (the agent's `{code, message}` body when it has one).
+pub(crate) async fn response_error(resp: reqwest::Response) -> AgentError {
+    error_of(resp).await
+}
+
+/// A transport failure as an `AgentError`, with the whole cause chain in the text.
+pub(crate) fn network_error(e: reqwest::Error) -> AgentError {
+    net(e)
+}

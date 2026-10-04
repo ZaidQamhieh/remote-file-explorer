@@ -8,6 +8,8 @@ pub mod flows;
 mod fsutil;
 pub mod identity;
 pub mod secrets;
+// ---- feature:transfers ----
+pub mod transfers;
 
 use agent_client::Device;
 use flows::Saved;
@@ -303,6 +305,8 @@ pub fn run() {
         // it holds nothing but geometry).
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(PendingPair::default())
+        // ---- feature:transfers ----
+        .manage(transfers::Transfers::default())
         .setup(|app| {
             if let Ok(dir) = app.path().app_data_dir() {
                 flows::apply_log_level(&dir);
@@ -327,7 +331,15 @@ pub fn run() {
             discover_agents,
             diagnostics,
             set_log_level,
-            check_keystore
+            check_keystore,
+            // ---- feature:transfers ----
+            transfers::transfer_download,
+            transfers::transfer_upload,
+            transfers::transfer_list,
+            transfers::transfer_cancel,
+            transfers::transfer_retry,
+            transfers::transfer_clear_finished,
+            transfers::transfer_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

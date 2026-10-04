@@ -14,6 +14,8 @@
       <div id="session" class="session" hidden>
         <span id="session-text"></span>
         <button id="sign-out" class="link" type="button" title="Revokes this computer's login on the agent and removes the saved copy here.">Sign out</button>
+        <!-- feature:transfers -->
+        <button id="open-transfers" class="link" type="button">Transfers</button>
       </div>
     </div>
   </header>
@@ -177,6 +179,39 @@
         <dt>System</dt><dd id="about-platform"></dd>
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
+    </section>
+
+    <!-- feature:transfers -->
+    <section id="step-transfers" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-transfers" tabindex="-1">Transfers</h2>
+        <button id="transfers-back" type="button">Back</button>
+      </div>
+      <p class="hint">Downloads are saved in <span id="transfers-folder" class="mono-line"></span>. A file that already exists there is never replaced: the new one gets a number. Two transfers run at a time; the rest wait.</p>
+
+      <h3>Download a file</h3>
+      <form id="download-form">
+        <label for="download-path">Path of the file on the computer</label>
+        <input id="download-path" name="download-path" autocomplete="off" spellcheck="false" placeholder="/home/me/report.pdf" required>
+        <div class="row pad"><button type="submit" class="primary">Download</button></div>
+      </form>
+
+      <h3>Upload a file</h3>
+      <form id="upload-form">
+        <label for="upload-path">Full path of the file on this computer</label>
+        <input id="upload-path" name="upload-path" autocomplete="off" spellcheck="false" placeholder="/home/you/Documents/report.pdf" required>
+        <label for="upload-dir">Folder on the computer to put it in</label>
+        <input id="upload-dir" name="upload-dir" autocomplete="off" spellcheck="false" placeholder="/home/me/Documents" required>
+        <div class="row pad"><button type="submit" class="primary">Upload</button></div>
+      </form>
+
+      <div class="row between">
+        <h3>Transfers</h3>
+        <button id="transfers-clear" type="button">Clear finished</button>
+      </div>
+      <ul id="transfer-list" class="transfers" aria-label="Transfers"></ul>
+      <p id="transfers-empty" class="hint">No transfers yet.</p>
+      <p id="transfers-status" class="hint" role="status"></p>
     </section>
 
     <p id="message" class="message" role="status" hidden></p>

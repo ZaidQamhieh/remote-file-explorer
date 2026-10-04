@@ -120,6 +120,9 @@
       </div>
       <p id="devices-empty" class="hint" hidden>No devices yet.</p>
       <p id="devices-note" class="hint" hidden>This computer was paired with a code or approved on the PC, so the agent lets it list only itself. Sign in with an account to see every device.</p>
+      <!-- feature:app-catalog -->
+      <p class="row"><button id="open-apps" type="button">Apps on this PC</button></p>
+      <!-- /feature:app-catalog -->
     </section>
 
     <section id="step-settings" class="panel" hidden>
@@ -178,6 +181,29 @@
         <dt>Saved settings</dt><dd id="about-data" class="mono-line"></dd>
       </dl>
     </section>
+
+    <!-- feature:app-catalog -->
+    <section id="step-apps" class="panel" hidden>
+      <div class="row between">
+        <h2 id="title-apps" tabindex="-1">Apps on the PC</h2>
+        <div class="row">
+          <button id="apps-refresh" type="button">Refresh</button>
+          <button id="apps-back" type="button">Back</button>
+        </div>
+      </div>
+      <p class="hint">The apps the PC running the agent offers. Launching one opens it on that PC's screen; nothing runs on this computer, and this app sends only the app's catalog id.</p>
+      <p id="apps-note" class="hint" hidden>This computer may see these apps but not start them. The owner can allow launching in this computer's permissions on the agent.</p>
+      <div id="apps-wrap" class="table-wrap" hidden>
+        <table>
+          <thead>
+            <tr><th scope="col">App</th><th scope="col">Category</th><th scope="col">Id</th><th scope="col"><span class="sr-only">Action</span></th></tr>
+          </thead>
+          <tbody id="apps-list"></tbody>
+        </table>
+      </div>
+      <p id="apps-empty" class="hint" hidden>The PC lists no apps.</p>
+    </section>
+    <!-- /feature:app-catalog -->
 
     <p id="message" class="message" role="status" hidden></p>
   </main>

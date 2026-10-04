@@ -488,6 +488,118 @@
     }, "Signing out...")
   );
 
+  // ---- feature:app-catalog ----
+  // The host's apps: list them and start one. The window sends only the catalog id; the agent
+  // looks it up and hands it to the host's launcher. Launching takes two presses (the first arms
+  // the button) because it opens something on another person's screen.
+  (function appCatalog() {
+    steps.push("step-apps");
+    let armed = null;
+
+    function disarm() {
+      if (!armed) return;
+      armed.button.dataset.armed = "";
+      armed.button.textContent = "Launch";
+      armed.button.setAttribute("aria-label", "Launch " + armed.name);
+      armed = null;
+    }
+
+    function renderApps(catalog) {
+      const body = $("apps-list");
+      body.replaceChildren();
+      armed = null;
+      const apps = catalog ? catalog.apps : [];
+      for (const a of apps) {
+        const act = document.createElement("td");
+        if (!a.launchable) {
+          act.textContent = "Cannot be launched";
+        } else if (catalog.launchAllowed) {
+          act.append(launchButton(a));
+        } else {
+          act.textContent = "Launching not allowed";
+        }
+        const tr = document.createElement("tr");
+        tr.append(cell(a.name), cell(a.category || ""), cell(a.id.slice(0, 12) + "...", "mono"), act);
+        tr.children[2].setAttribute("title", a.id);
+        body.append(tr);
+      }
+      $("apps-wrap").hidden = apps.length === 0;
+      $("apps-empty").hidden = !catalog || apps.length !== 0;
+      $("apps-note").hidden = !catalog || catalog.launchAllowed || !apps.some((a) => a.launchable);
+    }
+
+    function launchButton(a) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "link";
+      b.textContent = "Launch";
+      b.setAttribute("aria-label", "Launch " + a.name);
+      b.addEventListener("click", () => {
+        if (!b.dataset.armed) {
+          disarm();
+          b.dataset.armed = "1";
+          b.textContent = "Launch?";
+          b.setAttribute("aria-label", "Launch " + a.name + "? Press again to confirm.");
+          armed = { button: b, name: a.name };
+          return;
+        }
+        disarm();
+        run(
+          b,
+          async () => {
+            try {
+              await invoke("launch_host_app", { id: a.id });
+            } catch (e) {
+              await backToSignInIfLoggedOut();
+              throw e;
+            }
+            say("Asked the PC to open " + a.name + ". It can take a moment to appear on its screen.");
+          },
+          "Asking the PC to open " + a.name + "..."
+        );
+      });
+      return b;
+    }
+
+    // A refused login drops the saved token in the core; go back to sign-in, as the device list does.
+    async function backToSignInIfLoggedOut() {
+      const saved = await invoke("saved_agent").catch(() => null);
+      if (saved && saved.host && saved.fingerprint && !saved.signedIn) {
+        setSession(saved);
+        pending = { host: saved.host, fingerprint: saved.fingerprint };
+        $("username").value = saved.username;
+        show("step-login");
+        loginMode(false);
+        return true;
+      }
+      return false;
+    }
+
+    async function loadApps() {
+      disarm();
+      try {
+        renderApps(await invoke("list_host_apps"));
+      } catch (e) {
+        // Nothing stale stays on screen, so a refused or failed list is not mistaken for the PC's apps.
+        renderApps(null);
+        await backToSignInIfLoggedOut();
+        throw e;
+      }
+    }
+
+    $("open-apps").addEventListener("click", (ev) => {
+      renderApps(null);
+      show("step-apps");
+      run(ev.currentTarget, loadApps, "Loading apps...");
+    });
+    $("apps-refresh").addEventListener("click", (ev) => run(ev.currentTarget, loadApps, "Loading apps..."));
+    $("apps-back").addEventListener("click", () => {
+      say("");
+      if (current.signedIn) show("step-devices");
+      else showConnect();
+    });
+  })();
+
   (async function start() {
     try {
       // Reading the saved login can wait on the OS keystore's unlock prompt.

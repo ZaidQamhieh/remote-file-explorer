@@ -78,6 +78,12 @@ publishes the GitHub Release plus `latest.json` that the app's updater reads (`r
 (`agent-v*`) are published with `--latest=false`: the updater needs the newest *app* release to hold the Latest flag.
 Local signed build: `mobile/scripts/build-release-apk.sh`. See `docs/upgrade-to-react-native.md`.
 
+### Desktop app (Tauri, `desktop/`)
+PC control app for the local agent; not part of the Android release (`release.yml` and `ci.yml` ignore `desktop/**`,
+`desktop.yml` is its gate). From `desktop/src-tauri`: `RFE_AGENT_BIN=<built agent> cargo test --locked`,
+`cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`. No desktop release exists yet; when one
+does, tag it `desktop-v*` and publish with `--latest=false`, like `agent-v*`.
+
 ## Architecture you can't see from one file
 
 **Data dir resolution (agent):** `-data <dir>` flag > `$RFE_DATA_DIR` > `~/.rfe-agent`

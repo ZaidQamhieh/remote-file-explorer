@@ -1,0 +1,65 @@
+name: Desktop (Tauri)
+
+# The desktop app lives in desktop/. It is not part of the Android release, so release.yml and ci.yml ignore desktop/**;
+# this workflow is its only gate. Its tests run against an agent built from the same checkout.
+on:
+  push:
+    branches: [master, main]
+    paths: ['desktop/**', 'agent/**', 'protocol/**', '.github/workflows/desktop.yml']
+  pull_request:
+    branches: [master, main]
+    paths: ['desktop/**', 'agent/**', 'protocol/**', '.github/workflows/desktop.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: fmt, clippy, tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: agent/go.sum
+
+      # Tauri 2 on Linux links against WebKitGTK; the tests build the whole crate, so the dev packages are needed.
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: desktop-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-${{ runner.os }}-
+
+      - name: Build the agent the tests run against
+        working-directory: agent
+        run: go build -o "$RUNNER_TEMP/rfe-agent" ./cmd/agent
+
+      - name: rustfmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: cargo test
+        env:
+          RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
+        run: cargo test --locked

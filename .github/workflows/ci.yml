@@ -5,10 +5,10 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore: ['mobile/**', 'docs/**', '**.md']
+    paths-ignore: ['mobile/**', 'desktop/**', 'docs/**', '**.md']
   pull_request:
     branches: [master, main]
-    paths-ignore: ['mobile/**', 'docs/**', '**.md']
+    paths-ignore: ['mobile/**', 'desktop/**', 'docs/**', '**.md']
   # Callable so release.yml can require these exact gates before publishing,
   # instead of a second copy that drifts out of sync with this one (PR-70).
   workflow_call:

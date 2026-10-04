@@ -9,6 +9,9 @@ const ui = new URL("../ui/", import.meta.url);
 const html = readFileSync(new URL("index.html", ui), "utf8");
 const source = readFileSync(new URL("app.js", ui), "utf8");
 
+// Ids of elements that were given focus, in order (cleared by the test that cares).
+export const focused = [];
+
 export class El {
   constructor(tag = "div", attrs = {}) {
     this.tag = tag;
@@ -18,6 +21,7 @@ export class El {
     this.textContent = "";
     this.disabled = false;
     this.dataset = {};
+    this.attrs = {};
     this.children = [];
     this.listeners = {};
     // className and classList are one thing in a real DOM.
@@ -44,7 +48,12 @@ export class El {
   replaceChildren(...kids) {
     this.children = kids;
   }
-  focus() {}
+  focus() {
+    focused.push(this.id);
+  }
+  setAttribute(name, value) {
+    this.attrs[name] = value;
+  }
   select() {}
   querySelector() {
     return this;

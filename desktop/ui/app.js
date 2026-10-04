@@ -8,6 +8,10 @@
 
   function show(step) {
     for (const id of steps) $(id).hidden = id !== step;
+    // Keyboard and screen reader users are not left on a control that just disappeared: focus
+    // goes to the new screen's heading, which is read out.
+    const title = $(step.replace("step-", "title-"));
+    if (title) title.focus();
   }
 
   function say(text, isError) {
@@ -15,6 +19,8 @@
     el.hidden = !text;
     el.textContent = text || "";
     el.classList.toggle("error", !!isError);
+    // An error interrupts a screen reader; progress and results wait their turn.
+    el.setAttribute("role", isError ? "alert" : "status");
   }
 
   function submitter(ev) {
@@ -67,11 +73,13 @@
       forget.type = "button";
       forget.className = "link";
       forget.textContent = "Forget";
+      forget.setAttribute("aria-label", "Forget " + p.host);
       forget.addEventListener("click", () => {
         // Two clicks: the first only arms the button.
         if (!forget.dataset.armed) {
           forget.dataset.armed = "1";
           forget.textContent = p.active ? "Forget and sign out?" : "Forget?";
+          forget.setAttribute("aria-label", forget.textContent + " " + p.host + " Press again to confirm.");
           return;
         }
         run(forget, async () => {
@@ -275,6 +283,7 @@
       use.type = "button";
       use.className = "link";
       use.textContent = "Use";
+      use.setAttribute("aria-label", "Use " + f.hostport + (f.name ? " (" + f.name + ")" : ""));
       use.addEventListener("click", () => {
         $("host").value = f.hostport;
         $("host").focus();

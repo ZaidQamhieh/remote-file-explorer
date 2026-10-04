@@ -20,7 +20,7 @@
 
   <main>
     <section id="step-connect" class="panel" hidden>
-      <h2>Connect to an agent</h2>
+      <h2 id="title-connect" tabindex="-1">Connect to an agent</h2>
       <p class="hint">Enter the agent's address. The app reads its certificate fingerprint first and sends no password until you confirm it.</p>
       <form id="connect-form">
         <label for="host">Agent address</label>
@@ -37,7 +37,7 @@
         <div id="found-wrap" class="table-wrap" hidden>
           <table>
             <thead>
-              <tr><th>Name</th><th>Address</th><th>Version</th><th></th></tr>
+              <tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Version</th><th scope="col"><span class="sr-only">Action</span></th></tr>
             </thead>
             <tbody id="found"></tbody>
           </table>
@@ -49,7 +49,7 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Agent</th><th>Fingerprint</th><th></th></tr>
+              <tr><th scope="col">Agent</th><th scope="col">Fingerprint</th><th scope="col"><span class="sr-only">Action</span></th></tr>
             </thead>
             <tbody id="pins"></tbody>
           </table>
@@ -58,7 +58,7 @@
     </section>
 
     <section id="step-trust" class="panel" hidden>
-      <h2>Confirm the certificate</h2>
+      <h2 id="title-trust" tabindex="-1">Confirm the certificate</h2>
       <p class="hint">On the PC running the agent, run <code>rfe-agent status</code> and compare its fingerprint with this one. Trust it only if they match exactly.</p>
       <p id="changed" class="warn" hidden></p>
       <p class="mono" id="fingerprint"></p>
@@ -69,7 +69,7 @@
     </section>
 
     <section id="step-login" class="panel" hidden>
-      <h2>Sign in</h2>
+      <h2 id="title-login" tabindex="-1">Sign in</h2>
       <p class="hint">Use the agent account created with <code>rfe-agent adduser</code>. Signing in also registers this computer as a device.</p>
       <form id="login-form">
         <label for="username">Username</label>
@@ -96,7 +96,7 @@
     </section>
 
     <section id="step-approve" class="panel" hidden>
-      <h2>Approve on the PC</h2>
+      <h2 id="title-approve" tabindex="-1">Approve on the PC</h2>
       <p class="hint">On the PC running the agent, approve the request in the notification, or run <code>rfe-agent pair requests</code> and then <code>rfe-agent pair accept</code>. Approve only if the PC shows this same code.</p>
       <p class="code mono" id="match-code" aria-label="Match code"></p>
       <p class="hint" id="approve-status">Waiting for the PC...</p>
@@ -107,13 +107,13 @@
 
     <section id="step-devices" class="panel" hidden>
       <div class="row between">
-        <h2>Paired devices</h2>
+        <h2 id="title-devices" tabindex="-1">Paired devices</h2>
         <button id="refresh" type="button">Refresh</button>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Device</th><th>Last seen</th><th>Last address</th><th>Version</th><th>Status</th></tr>
+            <tr><th scope="col">Device</th><th scope="col">Last seen</th><th scope="col">Last address</th><th scope="col">Version</th><th scope="col">Status</th></tr>
           </thead>
           <tbody id="devices"></tbody>
         </table>
@@ -124,7 +124,7 @@
 
     <section id="step-settings" class="panel" hidden>
       <div class="row between">
-        <h2>Settings</h2>
+        <h2 id="title-settings" tabindex="-1">Settings</h2>
         <button id="settings-back" type="button">Back</button>
       </div>
 
@@ -137,7 +137,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Agent</th><th>Fingerprint</th><th></th></tr>
+            <tr><th scope="col">Agent</th><th scope="col">Fingerprint</th><th scope="col"><span class="sr-only">Action</span></th></tr>
           </thead>
           <tbody id="settings-pins"></tbody>
         </table>

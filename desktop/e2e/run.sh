@@ -32,6 +32,15 @@ inside)
   eval "$(cat "$XDG_RUNTIME_DIR/keyring.env")"
   export GNOME_KEYRING_CONTROL SSH_AUTH_SOCK
   export GDK_BACKEND=wayland WAYLAND_DISPLAY=rfe-e2e WEBKIT_DISABLE_DMABUF_RENDERER=1
+  # The accessibility bus, so the app's AT-SPI tree can be read as a screen reader reads it
+  # (e2e/a11y.test.mjs); without it the app logs an "atk-bridge" warning and nothing else changes.
+  if [ -x /usr/lib/at-spi-bus-launcher ]; then
+    /usr/lib/at-spi-bus-launcher --launch-immediately >"$XDG_RUNTIME_DIR/atspi.log" 2>&1 &
+    sleep 0.5
+    [ -x /usr/lib/at-spi2-registryd ] && /usr/lib/at-spi2-registryd --use-gnome-session >>"$XDG_RUNTIME_DIR/atspi.log" 2>&1 &
+    export NO_AT_BRIDGE=0 GTK_A11Y=atspi
+    sleep 0.5
+  fi
   tauri-driver --port 4444 >"$XDG_RUNTIME_DIR/driver.log" 2>&1 &
   driver=$!
   waited=0

@@ -67,8 +67,11 @@ async fn saved_agent(app: tauri::AppHandle) -> Result<SavedView, String> {
 }
 
 #[tauri::command]
-fn list_pins(app: tauri::AppHandle) -> Result<Vec<flows::PinView>, String> {
-    flows::list_pins(&data_dir(&app)?)
+async fn list_pins(app: tauri::AppHandle) -> Result<Vec<flows::PinView>, String> {
+    let dir = data_dir(&app)?;
+    keystore()
+        .run(move |s| flows::list_pins_with_login(&dir, s))
+        .await
 }
 
 #[tauri::command]

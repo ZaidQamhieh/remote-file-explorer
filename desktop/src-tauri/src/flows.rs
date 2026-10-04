@@ -759,6 +759,18 @@ pub fn list_pins(dir: &Path) -> Result<Vec<PinView>, String> {
         .collect())
 }
 
+/// [`list_pins`] with `active` meaning what it says: the saved session for that agent still has a
+/// login. After signing out the address stays in `state.json` (the next sign-in starts there), but
+/// the list must not call that agent "signed in".
+pub fn list_pins_with_login(dir: &Path, store: &dyn SecretStore) -> Result<Vec<PinView>, String> {
+    let signed_in = !load_saved(dir, store)?.token.is_empty();
+    let mut pins = list_pins(dir)?;
+    for p in &mut pins {
+        p.active &= signed_in;
+    }
+    Ok(pins)
+}
+
 /// What forgetting a pin did.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]

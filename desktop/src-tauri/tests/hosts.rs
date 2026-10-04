@@ -270,6 +270,22 @@ fn reading_the_session_while_hosts_switch_never_pairs_an_address_with_the_other_
 }
 
 #[test]
+fn only_a_session_with_a_login_is_marked_signed_in_in_the_trusted_list() {
+    let dir = TempDir::new().unwrap();
+    let store = MemoryStore::default();
+    two_hosts(dir.path(), &store);
+    let pins = flows::list_pins_with_login(dir.path(), &store).unwrap();
+    assert_eq!(pins.iter().filter(|p| p.active).count(), 1, "{pins:?}");
+    assert!(pins.iter().find(|p| p.active).unwrap().host == B);
+
+    // Signed out: the address is still remembered, but nobody is signed in to it.
+    flows::sign_out(dir.path(), &store).unwrap();
+    let pins = flows::list_pins_with_login(dir.path(), &store).unwrap();
+    assert_eq!(pins.len(), 2);
+    assert!(pins.iter().all(|p| !p.active), "{pins:?}");
+}
+
+#[test]
 fn the_app_opens_on_the_host_used_last() {
     let dir = TempDir::new().unwrap();
     let store = MemoryStore::default();

@@ -50,7 +50,8 @@ test("first run: address, compare fingerprint, trust, sign in, devices, settings
   // Settings, then back.
   await app.click("#open-settings");
   await waitFor("settings", () => app.visible("#step-settings"));
-  assert.match(await app.text("#about-version"), /\d+\.\d+\.\d+/);
+  // The About section is filled in after the screen shows.
+  await waitFor("the app version", async () => /\d+\.\d+\.\d+/.test(await app.text("#about-version")));
   await app.click("#check-keystore");
   await waitFor("the keystore result", async () => (await app.text("#keystore-result")).length > 0);
   assert.doesNotMatch(await app.text("#keystore-result"), /fail|error|cannot/i);

@@ -72,6 +72,9 @@ button:disabled { opacity: 0.6; cursor: default; }
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
 }
 .table-wrap { overflow-x: auto; }
+/* A monospace table cell is plain text in a row, not the boxed block `.mono` makes elsewhere. */
+td.mono { margin: 0; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; font-size: 12px; }
+tr:last-child td.mono { border-bottom: 0; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; font-size: 12px; }
@@ -111,6 +114,10 @@ th[aria-sort="descending"] button.link::after { content: " \25BC"; }
 button.filelink { text-align: left; }
 #files-status:empty { display: none; }
 /* ---- end feature:file-browser ---- */
+
+/* The 64-character fingerprint wraps; the agent and the Forget button stay readable without scrolling sideways. */
+#pins td, #settings-pins td { white-space: normal; overflow-wrap: anywhere; }
+#pins td:last-child, #settings-pins td:last-child { white-space: nowrap; }
 
 /* ---- feature:multi-hosts ---- */
 #hosts-list button + button { margin-left: 12px; }
@@ -164,3 +171,23 @@ button.da-danger.armed { background: var(--danger); color: var(--surface); paddi
 .transfer-status.failed { color: var(--danger); }
 .transfer progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
 .transfer .row { margin-top: 8px; }
+
+/* ---- narrow window (a 200% display shows this window at about 640 CSS pixels) ---- */
+/* Cells wrap so no table needs a sideways scroll; a status word and the buttons stay whole words. */
+@media (max-width: 700px) {
+  th, td { white-space: normal; padding-left: 6px; padding-right: 6px; }
+  td.tag { white-space: nowrap; }
+  td.mono, td .mono-line { overflow-wrap: anywhere; }
+  .da-actions { flex-wrap: wrap; gap: 4px 12px; }
+  #hosts-list td:last-child button + button, table.files td:last-child button + button { margin-left: 8px; }
+}
+@media (max-width: 560px) {
+  main { padding: 12px; }
+  .panel { padding: 14px; }
+  .da-actions { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+@media (max-width: 700px) {
+  .bar { flex-wrap: wrap; gap: 6px 12px; }
+  .bar-right, .session { flex-wrap: wrap; gap: 4px 12px; }
+  .bar h1, .bar button { white-space: nowrap; }
+}

@@ -187,6 +187,35 @@ export class Agent {
     return agentCli(["devices", "-data", this.data]);
   }
 
+  /** A fresh one-time pairing code, as `rfe-agent pair` prints it on its first line. */
+  pairCode() {
+    const first = agentCli(["pair", "-data", this.data]).split("\n")[0];
+    const m = first.match(/^Pairing code:\s*(\S+)/);
+    if (!m) throw new Error(`unexpected pair output: ${first}`);
+    return m[1];
+  }
+
+  /** `rfe-agent pair requests`: the waiting approve-on-PC requests. */
+  pairRequests() {
+    return agentCli(["pair", "requests", "-data", this.data]);
+  }
+
+  /** What the owner does on the PC: "accept" or "reject" the waiting request with this id. */
+  answerPairRequest(verb, id) {
+    return agentCli(["pair", verb, "-data", this.data, id]);
+  }
+
+  /** The id of the waiting request that shows this match code. */
+  pairRequestId(matchCode) {
+    const line = this.pairRequests().split("\n").find((l) => l.includes(matchCode));
+    if (!line) throw new Error(`no waiting request with match code ${matchCode}`);
+    return line.trim().split(/\s+/)[0];
+  }
+
+  revoke(id) {
+    return agentCli(["revoke", "-data", this.data, id]);
+  }
+
   stop() {
     this.child.kill();
     rmSync(this.data, { recursive: true, force: true });

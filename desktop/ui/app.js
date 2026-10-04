@@ -1529,8 +1529,9 @@
     $("title-hosts").focus();
   });
   $("hosts-add").addEventListener("click", async () => {
-    await showConnect();
+    // Emptied before the await: whatever is typed while the trusted list loads must survive.
     $("host").value = "";
+    await showConnect();
     $("host").focus();
     say("Type the new host's address. Your current login stays saved.");
   });

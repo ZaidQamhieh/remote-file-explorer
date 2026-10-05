@@ -120,7 +120,7 @@ test("a bigger interface size scales everything and keeps the layout whole", asy
 });
 
 test("the page scales with the window: 16 px at the smallest, bigger as the window grows", async () => {
-  const want = { "1100x700": 16, "1440x900": 18.1, "1920x1080": 20, "2560x1440": 23.8 };
+  const want = { "1100x700": 16, "1440x900": 17.6, "1920x1080": 19, "2560x1440": 21.8 };
   for (const [size, px] of Object.entries(want)) {
     const [width, height] = size.split("x").map(Number);
     await app.setRect({ x: 0, y: 0, width, height });

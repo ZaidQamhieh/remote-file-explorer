@@ -16,8 +16,8 @@
   --k-dir:#e0b44a;--k-pkg:#8fb6e8;--k-video:#c3a6f0;--k-image:#7fd49a;--k-archive:#f0a05a;--k-text:#9aa5a2;--k-code:#58d0d8;--k-doc:#ff9a90;--k-key:#e0b44a;--k-exec:#7fd49a;--k-file:#9aa5a2;
 }
 :root[data-density="compact"]{--rh:2.375rem}
-/* One size for the whole page: 16px in the smallest window (1100x700), growing in step with the window (the smaller of its width and height) up to 32px. Every length in this sheet is in rem, so everything scales together. */
-html{--ui:1;font-size:clamp(calc(16px * var(--ui)),min(calc(16px * var(--ui) + (100vh - 700px * var(--ui)) * .0105),calc(16px * var(--ui) + (100vw - 1100px * var(--ui)) * .0075)),calc(32px * var(--ui)))}html{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
+/* One size for the whole page: 16px in the smallest window (1100x700), growing in step with the window (the smaller of its width and height) up to 28px. Every length in this sheet is in rem, so everything scales together. */
+html{--ui:1;font-size:clamp(calc(16px * var(--ui)),min(calc(16px * var(--ui) + (100vh - 700px * var(--ui)) * .0078),calc(16px * var(--ui) + (100vw - 1100px * var(--ui)) * .0056)),calc(28px * var(--ui)))}html{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
 body{font:.875rem/1.45 var(--font);background:var(--surface);color:var(--on-surface);overflow:hidden}
 button{cursor:pointer}
 .app{display:grid;grid-template-columns:5.5rem 1fr;height:100vh;min-width:68.75rem}

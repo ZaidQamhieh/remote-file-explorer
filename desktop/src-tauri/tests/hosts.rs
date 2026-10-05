@@ -4,6 +4,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{free_port, Agent};
 use rfe_desktop_lib::agent_client::capture_fingerprint;
 use rfe_desktop_lib::flows::{self, Saved};
@@ -583,7 +585,7 @@ fn the_new_messages_are_explained_in_the_guide() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let guide = std::fs::read_to_string(root.join("../docs/user-guide.md")).unwrap();
     let mut code = std::fs::read_to_string(root.join("src/hosts.rs")).unwrap();
-    code.push_str(&std::fs::read_to_string(root.join("../ui/app.js")).unwrap());
+    code.push_str(&ui::js());
     let html = std::fs::read_to_string(root.join("../ui/index.html")).unwrap();
     let flat: String = code
         .split_whitespace()

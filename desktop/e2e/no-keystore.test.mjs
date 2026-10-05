@@ -24,33 +24,26 @@ after(async () => {
 test("no Secret Service: the window opens and sign-in says what is missing", { skip: !without }, async () => {
   resetAppState();
   app = await App.start();
-  await waitFor("the connect step", () => app.visible("#step-connect"));
-  await app.fill("#host", agent.host);
-  await app.click('#connect-form button[type="submit"]');
-  await waitFor("the trust step", () => app.visible("#step-trust"));
-  await app.click("#trust");
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-  await app.fill("#username", agent.user);
-  await app.fill("#password", agent.password);
-  await app.click('#login-form button[type="submit"]');
+  await app.addServer(agent, "no-keystore-pc");
+  await app.clickLabel("They match: trust");
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  await app.fill("#siu", agent.user);
+  await app.fill("#sip", agent.password);
+  await app.clickLabel("Sign in");
 
-  // "Signing in..." shows first; the answer replaces it.
-  await waitFor("the answer", async () => {
-    const t = await app.text("#message");
-    return t.length > 0 && !/^Signing in/.test(t);
-  });
-  const said = await app.text("#message");
-  console.log(`message shown: ${said}`);
-  assert.match(said, /keystore|Secret Service|keyring/i, said);
-  assert.ok(await app.visible("#step-login"), "still on the sign-in step");
+  // The answer is shown in the dialog, which stays open for another try.
+  await waitFor("the answer", () => app.has(/keystore|Secret Service|keyring/i, ".dlg"));
+  const said = await app.script("return document.querySelector('.dlg').innerText;");
+  console.log(`message shown: ${said.replace(/\n+/g, " | ")}`);
+  assert.ok(await app.visible("#siu"), "still on the sign-in dialog");
   assert.doesNotMatch(agent.devices(), /RFE Desktop/, "nothing was enrolled on the agent");
   await app.shot("7-no-keystore.png");
+  await app.clickLabel("Not now");
 
-  // Settings: the keystore test says it is not working, and the message beside it says why.
-  await app.click("#open-settings");
-  await waitFor("settings", () => app.visible("#step-settings"));
-  await app.click("#check-keystore");
-  await waitFor("the keystore result", async () => (await app.text("#keystore-result")).length > 0);
-  assert.match(await app.text("#keystore-result"), /Not working/);
-  await waitFor("the reason", async () => /Secret Service/i.test(await app.text("#message")));
+  // Settings: the keystore check says it is not working, and says why.
+  await app.go("settings");
+  await waitFor("settings", () => app.has(/Check the keystore/, "#stage"));
+  await app.clickLabel("Check", "#stage");
+  await waitFor("the answer", async () => /keystore is not working/.test(await app.snacks()));
+  assert.match(await app.snacks(), /Secret Service/i);
 });

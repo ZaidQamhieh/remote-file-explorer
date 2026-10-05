@@ -4,6 +4,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{free_port, Agent};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, known_message, AgentError};
 use rfe_desktop_lib::flows::{self, PairProgress, PairWait};
@@ -312,18 +314,16 @@ fn every_inbox_message_is_in_the_user_guide_and_in_the_app() {
         "This agent is too old to list pairing requests",
         "No pairing requests are waiting.",
         "This login cannot answer pairing requests.",
-        "Loading pairing requests...",
         "Accept only if the code matches",
         "The agent holds at most 3 waiting requests.",
         "That request already expired or was answered on the PC.",
-        "Press again to accept",
         "Accepted ",
         "Rejected ",
     ];
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let guide = std::fs::read_to_string(root.join("../docs/user-guide.md")).unwrap();
     let mut code = std::fs::read_to_string(root.join("src/pair_inbox.rs")).unwrap();
-    code.push_str(&std::fs::read_to_string(root.join("../ui/app.js")).unwrap());
+    code.push_str(&ui::js());
     code.push_str(&std::fs::read_to_string(root.join("../ui/index.html")).unwrap());
     let flat: String = code.split_whitespace().collect::<Vec<_>>().join(" ");
     let flat = flat.replace("\\ ", "").replace("\" \"", "");

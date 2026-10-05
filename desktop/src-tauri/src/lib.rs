@@ -5,17 +5,22 @@ pub mod agent_client;
 pub mod applog;
 pub mod apps; // feature:app-catalog
 pub mod audit; // feature:audit-logs
+pub mod desktop;
 pub mod device_actions;
 pub mod discovery;
+pub mod fileops; // feature:file-ops
 pub mod files; // feature:file-browser
 pub mod flows;
 mod fsutil;
 pub mod health;
 pub mod hosts;
 pub mod identity;
+pub mod local; // feature:local-files
+pub mod native;
 pub mod pair_inbox; // feature:pair-inbox
 pub mod pairing_codes; // feature:pairing-codes
 pub mod secrets;
+pub mod updates;
 // ---- feature:transfers ----
 pub mod transfers;
 
@@ -226,8 +231,8 @@ fn cancel_pairing(pending: tauri::State<'_, PendingPair>) {
 }
 
 #[tauri::command]
-async fn list_devices(app: tauri::AppHandle) -> Result<Vec<Device>, String> {
-    flows::list_devices(&data_dir(&app)?, &keystore())
+async fn list_devices(app: tauri::AppHandle, host: Option<String>) -> Result<Vec<Device>, String> {
+    flows::list_devices(&data_dir(&app)?, &keystore().scoped(host))
         .await
         .map_err(|e| e.to_string())
 }
@@ -304,8 +309,11 @@ async fn sign_out(app: tauri::AppHandle) -> Result<flows::SignOut, String> {
 /// One refresh of the health and metrics screen for the saved session. Takes no argument: the
 /// address and certificate are the ones already trusted, and the three routes are fixed.
 #[tauri::command]
-async fn agent_health(app: tauri::AppHandle) -> Result<health::Snapshot, String> {
-    health::agent_health(&data_dir(&app)?, &keystore())
+async fn agent_health(
+    app: tauri::AppHandle,
+    host: Option<String>,
+) -> Result<health::Snapshot, String> {
+    health::agent_health(&data_dir(&app)?, &keystore().scoped(host))
         .await
         .map_err(|e| e.to_string())
 }
@@ -314,10 +322,18 @@ async fn agent_health(app: tauri::AppHandle) -> Result<health::Snapshot, String>
 /// Mints a one-time pairing code for a phone. Admin sessions only; any other session gets
 /// `status: "forbidden"`. The code is never logged or saved.
 #[tauri::command]
-async fn generate_pairing_code(app: tauri::AppHandle) -> Result<pairing_codes::CodeView, String> {
-    pairing_codes::generate(&data_dir(&app)?, &keystore())
-        .await
-        .map_err(|e| e.to_string())
+async fn generate_pairing_code(
+    app: tauri::AppHandle,
+    host: Option<String>,
+    ttl_seconds: Option<u64>,
+) -> Result<pairing_codes::CodeView, String> {
+    pairing_codes::generate_for(
+        &data_dir(&app)?,
+        &keystore().scoped(host),
+        ttl_seconds.unwrap_or(pairing_codes::TTL_SECONDS),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 // ---- feature:audit-logs ----
@@ -325,17 +341,26 @@ async fn generate_pairing_code(app: tauri::AppHandle) -> Result<pairing_codes::C
 #[tauri::command]
 async fn audit_page(
     app: tauri::AppHandle,
+    host: Option<String>,
     before: Option<i64>,
 ) -> Result<audit::AuditReply, String> {
-    audit::fetch_audit(&data_dir(&app)?, &keystore(), before, audit::AUDIT_PAGE)
-        .await
-        .map_err(|e| e.to_string())
+    audit::fetch_audit(
+        &data_dir(&app)?,
+        &keystore().scoped(host),
+        before,
+        audit::AUDIT_PAGE,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// The tail of the agent's log (admin only).
 #[tauri::command]
-async fn agent_log(app: tauri::AppHandle) -> Result<audit::LogsReply, String> {
-    audit::fetch_logs(&data_dir(&app)?, &keystore())
+async fn agent_log(
+    app: tauri::AppHandle,
+    host: Option<String>,
+) -> Result<audit::LogsReply, String> {
+    audit::fetch_logs(&data_dir(&app)?, &keystore().scoped(host))
         .await
         .map_err(|e| e.to_string())
 }
@@ -365,15 +390,20 @@ pub fn run() {
         // brings its window forward, and the second process exits.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             applog::info("a second launch was handed over to this window");
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            desktop::show_for_second_start(app);
         }))
         // Remembers the window's size and position between runs (kept in the app's config folder;
         // it holds nothing but geometry).
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        // Notifications are shown only by `desktop_notify`: the page has no permission on this plugin.
+        .plugin(tauri_plugin_notification::init())
+        .manage(desktop::Desktop::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                desktop::on_close_requested(window, api);
+            }
+        })
         .manage(PendingPair::default())
         // ---- feature:transfers ----
         .manage(transfers::Transfers::default())
@@ -382,6 +412,8 @@ pub fn run() {
                 flows::apply_log_level(&dir);
             }
             applog::info(&format!("started {}", agent_client::CLIENT_VERSION));
+            desktop::setup_tray(app.handle());
+            desktop::start_hidden_if_asked(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -392,6 +424,28 @@ pub fn run() {
             files::files_create_folder,
             files::files_rename,
             files::files_trash,
+            // feature:file-ops
+            fileops::files_search,
+            fileops::files_recent,
+            fileops::files_copy,
+            fileops::files_move,
+            fileops::files_create_file,
+            fileops::files_compress,
+            fileops::files_extract,
+            fileops::files_archive_list,
+            fileops::files_checksum,
+            fileops::files_checksums,
+            fileops::files_chmod,
+            fileops::share_mint,
+            fileops::share_links,
+            fileops::share_revoke_link,
+            fileops::trash_items,
+            fileops::trash_restore_items,
+            fileops::trash_empty_items,
+            fileops::files_read_text,
+            fileops::files_write_text,
+            fileops::files_thumb,
+            fileops::wake_computer,
             saved_agent,
             list_pins,
             forget_pin,
@@ -417,6 +471,7 @@ pub fn run() {
             agent_log,
             // feature:device-actions
             device_actions::commands::device_access,
+            device_actions::commands::device_access_all,
             device_actions::commands::set_device_access,
             device_actions::commands::revoke_device,
             device_actions::commands::remove_device,
@@ -431,11 +486,36 @@ pub fn run() {
             // ---- feature:transfers ----
             transfers::transfer_download,
             transfers::transfer_upload,
+            transfers::transfer_upload_tree,
+            transfers::transfer_download_tree,
+            local::local_places,
+            local::local_list,
+            local::local_create_folder,
+            local::local_rename,
+            local::local_delete,
+            local::local_read_text,
+            local::local_read_image,
+            local::local_open,
+            local::local_save_text,
+            native::pick_files,
+            native::pick_folder,
             transfers::transfer_list,
             transfers::transfer_cancel,
+            transfers::transfer_pause,
             transfers::transfer_retry,
+            transfers::transfer_set_prefs,
+            transfers::transfer_resolve,
             transfers::transfer_clear_finished,
-            transfers::transfer_folder
+            transfers::transfer_folder,
+            desktop::desktop_set_prefs,
+            desktop::desktop_has_tray,
+            desktop::desktop_notify,
+            desktop::desktop_autostart_state,
+            desktop::desktop_set_autostart,
+            updates::update_check,
+            updates::update_download,
+            transfers::choose_download_folder,
+            transfers::reset_download_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running the RFE desktop app");

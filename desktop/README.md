@@ -1,8 +1,9 @@
 # RFE Desktop
 
-A Tauri app for a PC that talks to an `rfe-agent`: it pins the agent's certificate, signs this computer
-in (account, pairing code, or approval on the PC) and lists the agent's paired devices. It keeps its
-secrets in the system keystore.
+A Tauri app for a PC that talks to one or several `rfe-agent`s: it pins each agent's certificate, signs
+this computer in (account, pairing code, or approval on the PC), browses and transfers files between this
+computer and the servers, and manages the devices paired with them. It keeps its secrets in the system
+keystore.
 
 - Using it: [docs/user-guide.md](docs/user-guide.md) (install, trust, sign in, every message explained)
 - The keystore, per provider, and its messages: [docs/keystore.md](docs/keystore.md)
@@ -13,9 +14,10 @@ secrets in the system keystore.
 | Path | What |
 |---|---|
 | `src-tauri/` | The Rust core. It owns every network call and every secret; the window has no network access. |
-| `ui/` | The window: plain HTML, CSS and one script, no build step. |
+| `ui/` | The window: plain HTML, CSS and scripts, no build step. `engine.js` is the layer between the pages and the core (folder cache, servers, transfers); the pages (`pages.js`, `fpages.js`, `features.js`, `fx*.js`) only draw. |
+| `ui-dev/` | A browser harness for the window (`ui-dev/harness.html`): a stand-in for the core, so a page can be opened and screenshotted without building the app. Not shipped. |
 | `e2e/` | End-to-end tests in the real window (`e2e/run.sh`): WebDriver through `tauri-driver`, a real keyring and a throwaway agent, in a private virtual desktop that never touches yours. Also measures the app's memory. |
-| `ui-tests/` | Node tests that drive `ui/app.js` against a fake DOM (which screen and message, not looks). |
+| `ui-tests/` | Node tests: the engine against a fake core, the QR encoder, the content-security rules, the colour contrast, that the window and the Rust core agree on every command, and the whole window run in jsdom (every screen, every dialog, a pause and resume). |
 | `scripts/with-keyring.sh` | Runs a command against a private, real gnome-keyring. |
 | `docs/` | The guides above. |
 
@@ -30,8 +32,8 @@ cd desktop/src-tauri
 cargo fmt --all --check
 cargo clippy --all-targets --locked -- -D warnings
 RFE_AGENT_BIN=/path/to/rfe-agent cargo test --locked    # go build -o /path/to/rfe-agent ./cmd/agent, in agent/
-node --test ../ui-tests/*.test.mjs
-RFE_AGENT_BIN=<built agent> e2e/run.sh       # real window; needs kwin_wayland, tauri-driver, a built debug app; SHOTS=1 refreshes docs/*.png
+npm ci --prefix ../ui-tests && node --test ../ui-tests/*.test.mjs    # jsdom is the only dependency
+RFE_AGENT_BIN=<built agent> e2e/run.sh       # real window; needs kwin_wayland, tauri-driver, a built debug app; SHOTS=1 refreshes the pictures in docs/
 ```
 
 The tests start throwaway agents on random ports with temporary data folders and no desktop

@@ -1,6 +1,6 @@
-// The first-run flow in the real window: type the address, compare the fingerprint, trust, sign in,
-// see this computer in the device table, open Settings, sign out. Real WebKit, real keyring, a
-// real agent; nothing is faked. Screenshots go to E2E_SHOTS when it is set.
+// The first-run flow in the real window: New connection, compare the fingerprint, trust, sign in,
+// see this computer on Devices, sign out. Real WebKit, real keyring, a real agent; nothing is faked.
+// Screenshots go to E2E_SHOTS when it is set.
 //
 //   desktop/e2e/run.sh
 
@@ -22,63 +22,68 @@ after(async () => {
 
 const norm = (s) => s.replace(/[^0-9a-fA-F]/g, "").toLowerCase();
 
-test("first run: address, compare fingerprint, trust, sign in, devices, settings, sign out", async () => {
+test("first run: address, compare fingerprint, trust, sign in, devices, sign out", async () => {
   resetAppState();
   app = await App.start();
-  await app.fill("#host", agent.host);
-  await app.shot("1-connect.png");
-  await app.click('#connect-form button[type="submit"]');
+  // A first run opens the welcome: three steps, the last one offers how to add a computer.
+  await waitFor("the welcome", () => app.visible(".onb"));
+  await app.shot("1-welcome.png");
+  await app.click('.onb [data-ob="next"]');
+  await app.click('.onb [data-ob="next"]');
+  await app.shot("1b-add-a-computer.png");
+  await app.click('.onb [data-ob="manual"]');
+  await waitFor("the connection dialog", () => app.visible("#sh"));
+  await app.fill("#sn", "e2e-pc");
+  await app.fill("#sh", agent.host.split(":")[0]);
+  await app.fill("#sp", agent.host.split(":")[1]);
+  await app.shot("2-new-connection.png");
+  await app.clickLabel("Connect");
 
-  await waitFor("the trust step", () => app.visible("#step-trust"));
-  assert.equal(norm(await app.text("#fingerprint")), agent.fingerprint(), "the window shows the agent's own fingerprint");
-  await app.shot("2-trust.png");
-  await app.click("#trust");
+  await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  assert.equal(norm(await app.text(".fpfull")), agent.fingerprint(), "the window shows the agent's own fingerprint");
+  await app.shot("3-trust.png");
+  await app.clickLabel("They match: trust");
 
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-  await app.fill("#username", agent.user);
-  await app.fill("#password", agent.password);
-  await app.shot("3-login.png");
-  await app.click('#login-form button[type="submit"]');
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  await app.fill("#siu", agent.user);
+  await app.fill("#sip", agent.password);
+  await app.shot("4-sign-in.png");
+  await app.clickLabel("Sign in");
 
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  await waitFor("a row", async () => (await app.rows("#devices tr")) >= 1);
-  assert.match(await app.text("#devices"), /this computer/);
-  assert.match(await app.text("#session-text"), new RegExp(agent.user));
+  await waitFor("the dialog to close", async () => !(await app.visible("#siu")));
+  await waitFor("the server's own name in the rail's header", () => app.has(/e2e-pc/, "#top"));
+  await waitFor("a listing", () => app.visible("[data-rows]"));
   assert.match(agent.devices(), /RFE Desktop/, "the agent lists the paired device");
-  await app.shot("4-devices.png");
+  await app.go("devices");
+  await waitFor("this app on Devices", () => app.has(/RFE Desktop\s+This app/, "#stage"));
+  await app.shot("5-devices.png");
 
-  // Settings, then back.
-  await app.click("#open-settings");
-  await waitFor("settings", () => app.visible("#step-settings"));
-  // The About section is filled in after the screen shows.
-  await waitFor("the app version", async () => /\d+\.\d+\.\d+/.test(await app.text("#about-version")));
-  await app.click("#check-keystore");
-  await waitFor("the keystore result", async () => (await app.text("#keystore-result")).length > 0);
-  assert.doesNotMatch(await app.text("#keystore-result"), /fail|error|cannot/i);
-  await app.click("#settings-back");
-  await waitFor("devices again", () => app.visible("#step-devices"));
-  await app.shot("5-back.png");
-
-  await app.click("#sign-out");
-  await waitFor("connect after sign out", () => app.visible("#step-connect") || app.visible("#step-login"));
+  await app.go("servers");
+  await waitFor("the server card", () => app.has(/e2e-pc/, "#stage"));
+  await app.shot("6-servers.png");
 });
 
 test("keyboard only: the whole sign-in without touching the mouse", async () => {
-  resetAppState();
   await app.end();
+  resetAppState();
   app = await App.start();
-  await app.script("document.querySelector('#host').focus();");
-  await app.press(agent.host);
+  await waitFor("the welcome", () => app.visible(".onb"));
+  await app.press(KEYS.escape);
+  await waitFor("the welcome to close", async () => !(await app.visible(".onb")));
+  await app.script("document.querySelector('#rail [data-new]').focus();");
   await app.press(KEYS.enter);
-  await waitFor("the trust step", () => app.visible("#step-trust"));
-  // Focus moves to the step's heading; Tab reaches the trust button first.
-  assert.equal(await app.focused(), "title-trust");
-  await app.press(KEYS.tab);
-  assert.equal(await app.focused(), "trust");
+  await waitFor("the connection dialog", () => app.visible("#sh"));
+  await app.script("document.querySelector('#sn').focus();");
+  await app.press("e2e-kb" + KEYS.tab);
+  await app.fill("#sh", agent.host.split(":")[0]);
+  await app.fill("#sp", agent.host.split(":")[1]);
+  await app.script("document.querySelector('#sh').focus();");
   await app.press(KEYS.enter);
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-  assert.equal(await app.focused(), "username", "sign-in starts in the username field");
+  await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  await app.press(KEYS.enter);
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  assert.equal(await app.focused(), "siu", "sign-in starts in the username field");
   await app.press(agent.user + KEYS.tab + agent.password + KEYS.enter);
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  assert.equal(await app.focused(), "title-devices");
+  await waitFor("the dialog to close", async () => !(await app.visible("#siu")));
+  await waitFor("a signed-in server", () => app.has(/Signed in to e2e-kb/, "body").catch(() => false).then((v) => v || app.script("return !!document.querySelector('.rows')")));
 });

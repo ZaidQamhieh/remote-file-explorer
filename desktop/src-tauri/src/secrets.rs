@@ -15,6 +15,12 @@ pub trait SecretStore: Send + Sync {
     fn set(&self, account: &str, secret: &str) -> Result<(), String>;
     /// Deleting a secret that does not exist is not an error.
     fn delete(&self, account: &str) -> Result<(), String>;
+    /// The saved host this handle acts for, when it is not the active one. Only
+    /// `flows::load_saved` looks at it: a read-only command scoped to a host sees that host's
+    /// address, pin and login instead of the active session's. Writes never go through it.
+    fn scope_host(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// One keystore entry per secret kind and state directory, so separate state directories
@@ -118,6 +124,31 @@ impl SecretStore for OsKeystore {
 pub struct Offloaded {
     inner: Arc<dyn SecretStore>,
     timeout: Duration,
+    host: Option<String>,
+}
+
+/// The store a closure sees when its [`Offloaded`] is scoped to a host.
+struct Scoped<'a> {
+    inner: &'a dyn SecretStore,
+    host: &'a str,
+}
+
+impl SecretStore for Scoped<'_> {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        self.inner.get(account)
+    }
+
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.inner.set(account, secret)
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        self.inner.delete(account)
+    }
+
+    fn scope_host(&self) -> Option<&str> {
+        Some(self.host)
+    }
 }
 
 impl Offloaded {
@@ -128,7 +159,16 @@ impl Offloaded {
         Self {
             inner: Arc::new(store),
             timeout: Self::DEFAULT_TIMEOUT,
+            host: None,
         }
+    }
+
+    /// The same store, acting for the saved host `host` (`host:port`) instead of the active
+    /// session; `None` or an empty text means the active session.
+    pub fn scoped(&self, host: Option<String>) -> Self {
+        let mut s = self.clone();
+        s.host = host.filter(|h| !h.trim().is_empty());
+        s
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -143,7 +183,14 @@ impl Offloaded {
         F: FnOnce(&dyn SecretStore) -> Result<T, String> + Send + 'static,
     {
         let store = Arc::clone(&self.inner);
-        let task = tokio::task::spawn_blocking(move || f(&*store));
+        let host = self.host.clone();
+        let task = tokio::task::spawn_blocking(move || match &host {
+            Some(h) => f(&Scoped {
+                inner: &*store,
+                host: h,
+            }),
+            None => f(&*store),
+        });
         match tokio::time::timeout(self.timeout, task).await {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(format!("the OS keystore call failed to run: {e}")),
@@ -167,6 +214,10 @@ impl SecretStore for Offloaded {
 
     fn delete(&self, account: &str) -> Result<(), String> {
         self.inner.delete(account)
+    }
+
+    fn scope_host(&self) -> Option<&str> {
+        self.host.as_deref()
     }
 }
 

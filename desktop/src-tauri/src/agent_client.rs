@@ -776,6 +776,90 @@ impl AgentClient {
 }
 // ---- end feature:file-browser ----
 
+// ---- feature:file-ops ----
+impl AgentClient {
+    fn authed_request(
+        &self,
+        token: &str,
+        method: reqwest::Method,
+        route: &str,
+        query: &[(&str, &str)],
+    ) -> Result<reqwest::RequestBuilder, AgentError> {
+        if !route.starts_with('/') || route.contains(['?', '#', '\\']) || route.contains("..") {
+            return Err(AgentError::Local(format!("unexpected route {route:?}")));
+        }
+        let mut req = self
+            .http
+            .request(method, format!("{}{route}", self.base))
+            .bearer_auth(token)
+            .header("X-RFE-Client-Version", CLIENT_VERSION);
+        if !query.is_empty() {
+            req = req.query(query);
+        }
+        Ok(req)
+    }
+
+    /// A signed-in call whose answer carries nothing the app needs (copy, move, compress, restore).
+    pub(crate) async fn authed_empty(
+        &self,
+        token: &str,
+        method: reqwest::Method,
+        route: &str,
+        query: &[(&str, &str)],
+        body: Option<serde_json::Value>,
+    ) -> Result<(), AgentError> {
+        let mut req = self.authed_request(token, method, route, query)?;
+        if let Some(body) = body {
+            req = req.json(&body);
+        }
+        let resp = req.send().await.map_err(net)?;
+        if resp.status().is_success() {
+            // Drain a small body so the connection can be reused; its content is not used.
+            let _ = read_capped(resp, MAX_JSON_BODY).await;
+            return Ok(());
+        }
+        Err(error_of(resp).await)
+    }
+
+    /// A signed-in GET of raw bytes (a preview or a thumbnail), refused when longer than `max`.
+    pub(crate) async fn authed_bytes(
+        &self,
+        token: &str,
+        route: &str,
+        query: &[(&str, &str)],
+        max: usize,
+    ) -> Result<Vec<u8>, AgentError> {
+        let resp = self
+            .authed_request(token, reqwest::Method::GET, route, query)?
+            .send()
+            .await
+            .map_err(net)?;
+        if !resp.status().is_success() {
+            return Err(error_of(resp).await);
+        }
+        read_capped(resp, max).await
+    }
+
+    /// A signed-in PUT of raw bytes whose answer is JSON (saving a text file).
+    pub(crate) async fn authed_put<T: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        route: &str,
+        query: &[(&str, &str)],
+        body: Vec<u8>,
+    ) -> Result<T, AgentError> {
+        let resp = self
+            .authed_request(token, reqwest::Method::PUT, route, query)?
+            .header("Content-Type", "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+            .map_err(net)?;
+        parse(resp).await
+    }
+}
+// ---- end feature:file-ops ----
+
 // ---- feature:app-catalog ----
 impl AgentClient {
     /// One authenticated JSON call for feature modules (`path` is under `/v1`, built by the caller
@@ -846,6 +930,9 @@ impl AgentClient {
 pub struct GeneratedCode {
     pub pairing_code: String,
     pub expires_in_seconds: u64,
+    /// What the phone's scanner reads (address, Tailscale address, certificate fingerprint and
+    /// the code). It carries the live code, so it is redacted in `Debug` like the code itself.
+    pub qr_payload: serde_json::Value,
 }
 
 // Not derived: a `{:?}` in a log line or a test failure must not print a live pairing code.

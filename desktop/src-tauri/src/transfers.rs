@@ -26,12 +26,15 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime};
-use tokio::sync::{watch, Semaphore};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::{watch, Notify, OwnedSemaphorePermit, Semaphore};
 
-/// How many transfers move data at the same time.
+/// How many transfers move data at the same time unless the person chose another number.
 pub const PARALLEL: usize = 2;
+/// The most the person can choose.
+pub const MAX_PARALLEL: usize = 8;
 
 const DEFAULT_CHUNK: usize = 8 << 20;
 // The most an agent may ask for per chunk: a larger answer would make this side allocate it whole.
@@ -119,10 +122,87 @@ pub enum Direction {
 pub enum State {
     Queued,
     Running,
+    /// Stopped by the user; the part file or upload session is kept so a resume continues from it.
+    Paused,
+    /// The name is taken at the destination and the person has to say what to do. The transfer holds
+    /// no slot while it waits.
+    Conflict,
     Done,
     Failed,
     Cancelled,
 }
+
+/// What a name that is already taken at the destination looks like, for the question to the person.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictView {
+    pub is_dir: bool,
+    pub size: u64,
+    /// Milliseconds since 1970 when this computer knows it (a name taken in the downloads folder).
+    pub modified_ms: Option<u64>,
+    /// The agent's own text for the time (a name taken on the computer), empty when unknown.
+    pub modified_text: String,
+}
+
+/// What the person (or the saved preference) decided for a name that is taken.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resolution {
+    /// Put the new file in place of the old one.
+    Replace,
+    /// Keep both: the new file gets `name (1)` and so on.
+    Both,
+    /// Leave the old one and do not transfer.
+    Skip,
+}
+
+impl Resolution {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "replace" => Some(Self::Replace),
+            "keep" => Some(Self::Both),
+            "skip" => Some(Self::Skip),
+            _ => None,
+        }
+    }
+}
+
+/// What to do when a name is taken and nobody has said yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Policy {
+    Ask,
+    Do(Resolution),
+}
+
+impl Policy {
+    pub fn parse(s: &str) -> Option<Self> {
+        if s == "ask" {
+            return Some(Self::Ask);
+        }
+        Resolution::parse(s).map(Self::Do)
+    }
+
+    fn code(self) -> u8 {
+        match self {
+            Self::Ask => 0,
+            Self::Do(Resolution::Replace) => 1,
+            Self::Do(Resolution::Both) => 2,
+            Self::Do(Resolution::Skip) => 3,
+        }
+    }
+
+    fn from_code(c: u8) -> Self {
+        match c {
+            0 => Self::Ask,
+            1 => Self::Do(Resolution::Replace),
+            3 => Self::Do(Resolution::Skip),
+            _ => Self::Do(Resolution::Both),
+        }
+    }
+}
+
+/// The text a transfer ends with when the person (or the preference) chose to leave the old file.
+/// The window shows such a transfer as skipped, not as failed.
+pub const SKIPPED: &str = "Skipped: a file with this name already exists";
 
 /// What the window shows for one transfer.
 #[derive(Clone, Debug, Serialize)]
@@ -143,11 +223,15 @@ pub struct TransferView {
     pub error: String,
     /// The agent confirmed the content is intact (a matching SHA-256).
     pub verified: bool,
+    /// The saved host (`host:port`) the transfer belongs to.
+    pub host: String,
+    /// Set while the state is `conflict`: what already has the name.
+    pub conflict: Option<ConflictView>,
 }
 
 enum Kind {
     Download { part: PathBuf, name: String },
-    Upload { src: PathBuf, remote_path: String },
+    Upload { src: PathBuf },
 }
 
 /// The same file, as far as a retry can tell.
@@ -185,6 +269,14 @@ struct Item {
     fingerprint: String,
     kind: Kind,
     resume: Mutex<Resume>,
+    /// Set with the stop signal when the user pauses, so the stop keeps what was transferred.
+    pausing: AtomicBool,
+    /// What the person chose for a taken name; it holds for every later attempt of this transfer.
+    resolution: Mutex<Option<Resolution>>,
+    /// Wakes a transfer that waits in the `conflict` state.
+    decided: Notify,
+    /// The place in the line of running transfers. Given up while a question is open.
+    slot: Mutex<Option<Slot>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -208,9 +300,73 @@ impl Item {
     }
 }
 
+/// A running place. When the person lowered the number of parallel transfers while all places were
+/// in use, the next place given back is dropped instead of returned.
+struct Slot {
+    permit: Option<OwnedSemaphorePermit>,
+    inner: Arc<Inner>,
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let Some(permit) = self.permit.take() else {
+            return;
+        };
+        // Pay one unit of debt if any is owed; the update retries when another place is given back at
+        // the same moment, so two releases can never both miss the same debt.
+        if self
+            .inner
+            .debt
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| d.checked_sub(1))
+            .is_ok()
+        {
+            permit.forget();
+        }
+    }
+}
+
+/// What the person chose in the settings, read while a transfer runs.
+struct Prefs {
+    /// 0 is no limit; bytes per second.
+    limit_bps: AtomicU64,
+    policy: AtomicU8,
+    verify: AtomicBool,
+}
+
+/// One speed limit for all transfers together: each piece of data reserves its time on the line.
+struct Limiter {
+    next_free: Mutex<Instant>,
+}
+
+impl Limiter {
+    /// Waits until `bytes` may go by at `bps`. A line that was idle does not save up more than a
+    /// quarter of a second.
+    async fn take(&self, bps: u64, bytes: usize) {
+        if bps == 0 || bytes == 0 {
+            return;
+        }
+        let wait_until = {
+            let mut next = lock(&self.next_free);
+            let now = Instant::now();
+            let start = (*next).max(now.checked_sub(Duration::from_millis(250)).unwrap_or(now));
+            *next = start + Duration::from_secs_f64(bytes as f64 / bps as f64);
+            start
+        };
+        let now = Instant::now();
+        if wait_until > now {
+            tokio::time::sleep(wait_until - now).await;
+        }
+    }
+}
+
 struct Inner {
     opts: Options,
     slots: Arc<Semaphore>,
+    /// How many places exist (running transfers plus free places), after the last change.
+    places: Mutex<usize>,
+    debt: AtomicUsize,
+    prefs: Prefs,
+    limiter: Limiter,
     items: Mutex<Vec<Arc<Item>>>,
 }
 
@@ -227,13 +383,100 @@ impl Default for Transfers {
 
 impl Transfers {
     pub fn with_options(opts: Options) -> Self {
+        let parallel = opts.parallel.clamp(1, MAX_PARALLEL);
         Self {
             inner: Arc::new(Inner {
-                slots: Arc::new(Semaphore::new(opts.parallel.max(1))),
+                slots: Arc::new(Semaphore::new(parallel)),
+                places: Mutex::new(parallel),
+                debt: AtomicUsize::new(0),
+                prefs: Prefs {
+                    limit_bps: AtomicU64::new(0),
+                    // Without a window's preference a taken name keeps both files, as it always did.
+                    policy: AtomicU8::new(Policy::Do(Resolution::Both).code()),
+                    verify: AtomicBool::new(true),
+                },
+                limiter: Limiter {
+                    next_free: Mutex::new(Instant::now()),
+                },
                 opts,
                 items: Mutex::new(Vec::new()),
             }),
         }
+    }
+
+    /// Applies the settings. They count for transfers already running too: the speed limit at the
+    /// next piece of data, the number of parallel transfers as places come free.
+    pub fn set_prefs(
+        &self,
+        parallel: usize,
+        limit_bytes_per_sec: u64,
+        policy: Policy,
+        verify: bool,
+    ) {
+        let inner = &self.inner;
+        inner
+            .prefs
+            .limit_bps
+            .store(limit_bytes_per_sec, Ordering::SeqCst);
+        inner.prefs.policy.store(policy.code(), Ordering::SeqCst);
+        inner.prefs.verify.store(verify, Ordering::SeqCst);
+        let want = parallel.clamp(1, MAX_PARALLEL);
+        let mut places = lock(&inner.places);
+        if want > *places {
+            // First cancel what is still owed from an earlier cut, then add the rest.
+            let mut add = want - *places;
+            loop {
+                let owed = inner.debt.load(Ordering::SeqCst);
+                let pay = owed.min(add);
+                if pay == 0
+                    || inner
+                        .debt
+                        .compare_exchange(owed, owed - pay, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                {
+                    add -= pay;
+                    break;
+                }
+            }
+            if add > 0 {
+                inner.slots.add_permits(add);
+            }
+        } else if want < *places {
+            let cut = *places - want;
+            let taken = inner.slots.forget_permits(cut);
+            inner.debt.fetch_add(cut - taken, Ordering::SeqCst);
+        }
+        *places = want;
+    }
+
+    /// How many transfers move data now.
+    pub fn running_count(&self) -> usize {
+        lock(&self.inner.items)
+            .iter()
+            .filter(|i| lock(&i.view).state == State::Running)
+            .count()
+    }
+
+    /// Pauses every running or waiting transfer, keeping what each has. Returns how many.
+    pub fn pause_all(&self) -> usize {
+        let ids: Vec<String> = self
+            .list()
+            .into_iter()
+            .filter(|v| matches!(v.state, State::Running | State::Queued))
+            .map(|v| v.id)
+            .collect();
+        ids.iter().filter(|id| self.pause(id).is_ok()).count()
+    }
+
+    /// The person's answer to a transfer in the `conflict` state.
+    pub fn resolve(&self, id: &str, how: Resolution) -> Result<(), String> {
+        let item = self.find(id)?;
+        if item.snapshot().state != State::Conflict {
+            return Err("that transfer is not waiting for an answer".into());
+        }
+        *lock(&item.resolution) = Some(how);
+        item.decided.notify_one();
+        Ok(())
     }
 
     /// Queues a download of `remote_path` into `ctx.download_dir`. Needs a tokio runtime.
@@ -261,6 +504,8 @@ impl Transfers {
             total: 0,
             error: String::new(),
             verified: false,
+            host: host.clone(),
+            conflict: None,
         };
         self.add(
             ctx,
@@ -304,13 +549,10 @@ impl Transfers {
             total: ident.size,
             error: String::new(),
             verified: false,
+            host: host.clone(),
+            conflict: None,
         };
-        self.add(
-            ctx,
-            (host, fingerprint),
-            Kind::Upload { src, remote_path },
-            view,
-        );
+        self.add(ctx, (host, fingerprint), Kind::Upload { src }, view);
         Ok(id)
     }
 
@@ -324,6 +566,10 @@ impl Transfers {
             fingerprint,
             kind,
             resume: Mutex::new(Resume::default()),
+            pausing: AtomicBool::new(false),
+            resolution: Mutex::new(None),
+            decided: Notify::new(),
+            slot: Mutex::new(None),
         });
         lock(&self.inner.items).push(item.clone());
         tokio::spawn(run(self.inner.clone(), item, rx));
@@ -356,10 +602,12 @@ impl Transfers {
         let item = self.find(id)?;
         let state = item.snapshot().state;
         match state {
-            State::Queued | State::Running => {
+            State::Queued | State::Running | State::Conflict => {
+                // A pause that was asked for but not yet seen must not turn this cancel into a pause.
+                item.pausing.store(false, Ordering::SeqCst);
                 lock(&item.cancel).send_replace(true);
             }
-            State::Failed => {
+            State::Failed | State::Paused => {
                 item.update(|v| {
                     v.state = State::Cancelled;
                     v.error.clear();
@@ -379,18 +627,35 @@ impl Transfers {
         Ok(())
     }
 
-    /// Starts a failed or cancelled transfer again. A download continues from what it already has;
+    /// Stops a waiting or running transfer without throwing away what it has: a download keeps its
+    /// part file, an upload keeps its session. `retry` continues it.
+    pub fn pause(&self, id: &str) -> Result<(), String> {
+        let item = self.find(id)?;
+        let state = item.snapshot().state;
+        match state {
+            State::Queued | State::Running => {
+                item.pausing.store(true, Ordering::SeqCst);
+                lock(&item.cancel).send_replace(true);
+                Ok(())
+            }
+            State::Paused => Ok(()),
+            _ => Err("that transfer cannot be paused now".into()),
+        }
+    }
+
+    /// Starts a failed, paused or cancelled transfer again. A download continues from what it already has;
     /// an upload sends only the chunks the agent does not have.
     pub fn retry(&self, id: &str) -> Result<(), String> {
         let item = self.find(id)?;
         {
             let mut v = lock(&item.view);
-            if !matches!(v.state, State::Failed | State::Cancelled) {
+            if !matches!(v.state, State::Failed | State::Paused | State::Cancelled) {
                 return Err("that transfer cannot be retried now".into());
             }
             v.state = State::Queued;
             v.error.clear();
         }
+        item.pausing.store(false, Ordering::SeqCst);
         let (tx, rx) = watch::channel(false);
         *lock(&item.cancel) = tx;
         tokio::spawn(run(self.inner.clone(), item, rx));
@@ -414,29 +679,60 @@ async fn wait_cancel(rx: &mut watch::Receiver<bool>) {
     }
 }
 
+/// Waits for a running place, unless the transfer is stopped first.
+async fn take_place(inner: &Arc<Inner>, item: &Item, cancel: &mut watch::Receiver<bool>) -> bool {
+    let permit = tokio::select! {
+        s = inner.slots.clone().acquire_owned() => s.ok(),
+        _ = wait_cancel(cancel) => None,
+    };
+    match permit {
+        Some(permit) => {
+            *lock(&item.slot) = Some(Slot {
+                permit: Some(permit),
+                inner: inner.clone(),
+            });
+            true
+        }
+        None => false,
+    }
+}
+
 /// One attempt at a transfer, from waiting for a slot to its end state.
 async fn run(inner: Arc<Inner>, item: Arc<Item>, mut cancel: watch::Receiver<bool>) {
-    let slot = tokio::select! {
-        s = inner.slots.clone().acquire_owned() => s.ok(),
-        _ = wait_cancel(&mut cancel) => None,
-    };
-    let Some(_slot) = slot else {
-        cleanup_cancelled(&item).await;
+    if !take_place(&inner, &item, &mut cancel).await {
+        stop(&item).await;
         return;
-    };
+    }
     item.update(|v| {
         v.state = State::Running;
         v.error.clear();
+        v.conflict = None;
     });
     let direction = item.snapshot().direction;
     let outcome = tokio::select! {
-        r = work(&inner.opts, &item) => Some(r),
+        r = work(&inner, &item) => Some(r),
         _ = wait_cancel(&mut cancel) => None,
     };
+    drop(lock(&item.slot).take());
     match outcome {
         Some(Ok(())) => {
             item.update(|v| v.state = State::Done);
             applog::info(&format!("{direction:?} finished"));
+        }
+        Some(Err(msg)) if msg == SKIPPED => {
+            discard_local(&item);
+            let session = lock(&item.resume).session.take();
+            if let Some(session) = session {
+                if let Ok(conn) = conn_for(&item).await {
+                    delete_session(&conn, &session.id).await;
+                }
+            }
+            item.update(|v| {
+                v.state = State::Cancelled;
+                v.error = SKIPPED.to_string();
+                v.conflict = None;
+            });
+            applog::info("transfer skipped");
         }
         Some(Err(msg)) => {
             // The message can carry the request URL (with the remote path) or a local path; the log feeds the
@@ -447,14 +743,75 @@ async fn run(inner: Arc<Inner>, item: Arc<Item>, mut cancel: watch::Receiver<boo
                 v.error = msg;
             });
         }
-        None => cleanup_cancelled(&item).await,
+        None => stop(&item).await,
     }
 }
 
-async fn work(opts: &Options, item: &Item) -> Result<(), String> {
+/// Settles a taken name: by the answer already given for this transfer, else by the saved choice,
+/// else by asking the person. While the question is open the transfer gives up its running place,
+/// so it does not hold up the others.
+async fn settle_conflict(
+    inner: &Arc<Inner>,
+    item: &Item,
+    existing: ConflictView,
+) -> Result<Resolution, String> {
+    if let Some(how) = *lock(&item.resolution) {
+        return Ok(how);
+    }
+    let how = match Policy::from_code(inner.prefs.policy.load(Ordering::SeqCst)) {
+        Policy::Do(how) => how,
+        Policy::Ask => {
+            drop(lock(&item.slot).take());
+            item.update(|v| {
+                v.state = State::Conflict;
+                v.conflict = Some(existing);
+                v.error.clear();
+            });
+            let how = loop {
+                item.decided.notified().await;
+                if let Some(how) = *lock(&item.resolution) {
+                    break how;
+                }
+            };
+            item.update(|v| {
+                v.state = State::Queued;
+                v.conflict = None;
+            });
+            let permit = inner
+                .slots
+                .clone()
+                .acquire_owned()
+                .await
+                .map_err(|_| "the transfer list was closed".to_string())?;
+            *lock(&item.slot) = Some(Slot {
+                permit: Some(permit),
+                inner: inner.clone(),
+            });
+            item.update(|v| v.state = State::Running);
+            how
+        }
+    };
+    *lock(&item.resolution) = Some(how);
+    Ok(how)
+}
+
+/// The end of an attempt that was told to stop: a pause keeps the partial work, a cancel removes it.
+async fn stop(item: &Item) {
+    if item.pausing.swap(false, Ordering::SeqCst) {
+        item.update(|v| {
+            v.state = State::Paused;
+            v.error.clear();
+        });
+        applog::info("transfer paused");
+    } else {
+        cleanup_cancelled(item).await;
+    }
+}
+
+async fn work(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
     match &item.kind {
-        Kind::Download { .. } => download(opts, item).await,
-        Kind::Upload { .. } => upload(opts, item).await,
+        Kind::Download { .. } => download(inner, item).await,
+        Kind::Upload { .. } => upload(inner, item).await,
     }
 }
 
@@ -678,6 +1035,19 @@ pub fn publish_no_clobber(part: &Path, dir: &Path, name: &str) -> std::io::Resul
     ))
 }
 
+/// Puts the finished part file at `dir/name` in place of what is there. A folder is never replaced.
+/// The rename is one step, so the old file is never missing for a moment.
+pub fn replace_file(part: &Path, dir: &Path, name: &str) -> std::io::Result<PathBuf> {
+    let target = dir.join(name);
+    if let Ok(m) = std::fs::symlink_metadata(&target) {
+        if m.is_dir() {
+            return Err(std::io::Error::other("a folder has that name"));
+        }
+    }
+    std::fs::rename(part, &target)?;
+    Ok(target)
+}
+
 fn copy_exclusive(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut src = File::open(from)?;
     let mut dst = std::fs::OpenOptions::new()
@@ -893,6 +1263,7 @@ fn part_len(part: &Path) -> Result<u64, String> {
 }
 
 /// Writes a response body to the part file as it arrives, so a dropped connection keeps what came.
+#[allow(clippy::too_many_arguments)]
 async fn append_body(
     mut resp: reqwest::Response,
     part: &Path,
@@ -901,10 +1272,14 @@ async fn append_body(
     from: u64,
     total: u64,
     item: &Item,
+    inner: &Inner,
 ) -> Result<(), String> {
     let mut file = open_part(part, truncate)?;
     let mut written = 0u64;
     while let Some(chunk) = resp.chunk().await.map_err(net)? {
+        // The speed limit is kept by reading no faster: the connection itself slows the agent down.
+        let limit = inner.prefs.limit_bps.load(Ordering::Relaxed);
+        inner.limiter.take(limit, chunk.len()).await;
         // Check before writing: bytes past the asked-for range must never reach the part file.
         if written + chunk.len() as u64 > expect {
             return Err("unexpected response: the agent sent more than was asked for".into());
@@ -950,10 +1325,34 @@ async fn remote_checksum(
         .map(|s| s.checksum)
 }
 
-async fn download(opts: &Options, item: &Item) -> Result<(), String> {
+async fn download(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
+    let opts = &inner.opts;
     let Kind::Download { part, name } = &item.kind else {
         return Err("internal: not a download".into());
     };
+    // A name that is taken in the downloads folder is settled before any data moves.
+    let taken = item.ctx.download_dir.join(name);
+    let how = match std::fs::symlink_metadata(&taken) {
+        Ok(m) => {
+            let modified_ms = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64);
+            let existing = ConflictView {
+                is_dir: m.is_dir(),
+                size: m.len(),
+                modified_ms,
+                modified_text: String::new(),
+            };
+            match settle_conflict(inner, item, existing).await? {
+                Resolution::Skip => return Err(SKIPPED.into()),
+                how => Some(how),
+            }
+        }
+        Err(_) => *lock(&item.resolution),
+    };
+    let verify = inner.prefs.verify.load(Ordering::SeqCst);
     let conn = conn_for(item).await?;
     let client = client_for(&conn)?;
     let (http, base) = client.transport();
@@ -999,7 +1398,17 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
                 }
                 total = Some(size);
                 item.set_progress(offset, size);
-                append_body(resp, part, false, last - first + 1, offset, size, item).await?;
+                append_body(
+                    resp,
+                    part,
+                    false,
+                    last - first + 1,
+                    offset,
+                    size,
+                    item,
+                    inner,
+                )
+                .await?;
             }
             200 => {
                 // The agent ignored the range: it sent the whole file (an empty one, always).
@@ -1008,7 +1417,7 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
                     .ok_or("unexpected response: no length")?;
                 total = Some(size);
                 item.set_progress(0, size);
-                append_body(resp, part, true, size, 0, size, item).await?;
+                append_body(resp, part, true, size, 0, size, item, inner).await?;
                 if size == 0 {
                     break;
                 }
@@ -1031,27 +1440,34 @@ async fn download(opts: &Options, item: &Item) -> Result<(), String> {
     // Whole. Compare with what the agent has before the file gets a real name.
     let size = total.unwrap_or(0);
     item.set_progress(size, size);
-    let local = {
-        let part = part.clone();
-        blocking(move || {
-            File::open(&part)
-                .and_then(hash_reader)
-                .map_err(|e| format!("cannot read {}: {e}", part.display()))
-        })
-        .await?
-    };
-    let verified = match remote_checksum(http, base, &conn, &remote).await {
-        Some(sum) if sum.eq_ignore_ascii_case(&local) => true,
-        Some(_) => {
-            let _ = std::fs::remove_file(part);
-            return Err("The downloaded copy does not match the file on the computer. It was discarded; start it again.".into());
+    let verified = if verify {
+        let local = {
+            let part = part.clone();
+            blocking(move || {
+                File::open(&part)
+                    .and_then(hash_reader)
+                    .map_err(|e| format!("cannot read {}: {e}", part.display()))
+            })
+            .await?
+        };
+        match remote_checksum(http, base, &conn, &remote).await {
+            Some(sum) if sum.eq_ignore_ascii_case(&local) => true,
+            Some(_) => {
+                let _ = std::fs::remove_file(part);
+                return Err("The downloaded copy does not match the file on the computer. It was discarded; start it again.".into());
+            }
+            None => false,
         }
-        None => false,
+    } else {
+        false
     };
     let (part, dir, name) = (part.clone(), item.ctx.download_dir.clone(), name.clone());
     let final_path = blocking(move || {
-        publish_no_clobber(&part, &dir, &name)
-            .map_err(|e| format!("the downloaded file could not be put in place: {e}"))
+        let placed = match how {
+            Some(Resolution::Replace) => replace_file(&part, &dir, &name),
+            _ => publish_no_clobber(&part, &dir, &name),
+        };
+        placed.map_err(|e| format!("the downloaded file could not be put in place: {e}"))
     })
     .await?;
     item.update(|v| {
@@ -1096,11 +1512,63 @@ fn authed(rb: reqwest::RequestBuilder, conn: &Conn) -> reqwest::RequestBuilder {
         .header("X-RFE-Client-Version", CLIENT_VERSION)
 }
 
-async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
-    let Kind::Upload { src, remote_path } = &item.kind else {
+/// `name (1)`-style numbering for a path on the computer, in the style of the path's own separators.
+fn numbered_remote(path: &str, n: u32) -> String {
+    match path.rfind(['/', '\\']) {
+        Some(i) => format!("{}{}", &path[..=i], numbered_name(&path[i + 1..], n)),
+        None => numbered_name(path, n),
+    }
+}
+
+/// What the agent says about the entry already at `path`; blanks where it does not say.
+async fn remote_existing(
+    http: &reqwest::Client,
+    base: &str,
+    conn: &Conn,
+    path: &str,
+) -> ConflictView {
+    #[derive(Deserialize, Default)]
+    #[serde(rename_all = "camelCase", default)]
+    struct Meta {
+        size: i64,
+        modified: String,
+        is_dir: bool,
+    }
+    let blank = ConflictView {
+        is_dir: false,
+        size: 0,
+        modified_ms: None,
+        modified_text: String::new(),
+    };
+    let Ok(resp) = authed(http.get(format!("{base}/fs/meta")), conn)
+        .query(&[("path", path)])
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await
+    else {
+        return blank;
+    };
+    if !resp.status().is_success() {
+        return blank;
+    }
+    match read_json::<Meta>(resp, MAX_JSON_BODY).await {
+        Ok(m) => ConflictView {
+            is_dir: m.is_dir,
+            size: m.size.max(0) as u64,
+            modified_ms: None,
+            modified_text: m.modified,
+        },
+        Err(_) => blank,
+    }
+}
+
+async fn upload(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
+    let opts = &inner.opts;
+    let Kind::Upload { src, .. } = &item.kind else {
         return Err("internal: not an upload".into());
     };
-    let conn = conn_for(item).await?;
+    let mut remote_path = item.snapshot().remote_path;
+    let mut conn = conn_for(item).await?;
     let client = client_for(&conn)?;
     let (http, base) = client.transport();
 
@@ -1176,24 +1644,64 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
                 })
                 .await?
             };
-            let resp = authed(http.post(format!("{base}/transfers")), &conn)
-                .json(&serde_json::json!({
-                    "path": remote_path,
-                    "size": size,
-                    "sha256": sha256,
-                    "chunkSize": opts.chunk_size,
-                    "overwrite": false,
-                }))
-                .timeout(Duration::from_secs(60))
-                .send()
-                .await
-                .map_err(net)?;
-            if resp.status().as_u16() != 201 {
-                return Err(refused(resp).await);
-            }
-            let body: SessionBody = read_json(resp, MAX_JSON_BODY)
-                .await
-                .map_err(|e| e.to_string())?;
+            // With a small limit the chunks are small too, so the data moves evenly and not in
+            // bursts of seconds. The chunk size is fixed when the session opens.
+            let limit = inner.prefs.limit_bps.load(Ordering::SeqCst);
+            let chunk_size = if limit == 0 {
+                opts.chunk_size
+            } else {
+                ((limit / 4) as usize).clamp(256 << 10, opts.chunk_size)
+            };
+            let mut how = *lock(&item.resolution);
+            let mut copy = 0u32;
+            let body = loop {
+                let resp = authed(http.post(format!("{base}/transfers")), &conn)
+                    .json(&serde_json::json!({
+                        "path": remote_path,
+                        "size": size,
+                        "sha256": sha256,
+                        "chunkSize": chunk_size,
+                        "overwrite": how == Some(Resolution::Replace),
+                    }))
+                    .timeout(Duration::from_secs(60))
+                    .send()
+                    .await
+                    .map_err(net)?;
+                if resp.status().as_u16() == 201 {
+                    break read_json::<SessionBody>(resp, MAX_JSON_BODY)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                let e = response_error(resp).await;
+                if !matches!(&e, AgentError::Server { code, .. } if code == "CONFLICT") {
+                    return Err(describe(&e));
+                }
+                // The name is taken on the computer.
+                let existing = remote_existing(http, base, &conn, &remote_path).await;
+                match settle_conflict(inner, item, existing).await? {
+                    Resolution::Skip => return Err(SKIPPED.into()),
+                    Resolution::Replace => how = Some(Resolution::Replace),
+                    Resolution::Both => {
+                        how = Some(Resolution::Both);
+                        copy += 1;
+                        if copy > 1000 {
+                            return Err("every numbered name on the computer is taken".into());
+                        }
+                        let base_path = item.snapshot().remote_path;
+                        remote_path = numbered_remote(&base_path, copy);
+                        let shown = remote_path.clone();
+                        item.update(|v| {
+                            v.name = shown
+                                .rsplit(['/', '\\'])
+                                .next()
+                                .unwrap_or_default()
+                                .to_string();
+                        });
+                    }
+                }
+                // The answer may have taken a while: use the login as it is now.
+                conn = conn_for(item).await?;
+            };
             if bad_session(&body, size) {
                 return Err(
                     "unexpected response: the agent sent a session this app cannot use".into(),
@@ -1237,6 +1745,9 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
         };
         let mut damaged = 0;
         loop {
+            // The speed limit: this piece reserves its time on the shared line first.
+            let limit = inner.prefs.limit_bps.load(Ordering::Relaxed);
+            inner.limiter.take(limit, len).await;
             let resp = authed(
                 http.put(format!("{base}/transfers/{}/chunks/{n}", session.id)),
                 &conn,
@@ -1283,6 +1794,12 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
             // The agent closed this session; the next attempt must open a new one.
             lock(&item.resume).session = None;
         }
+        if matches!(&e, AgentError::Server { code, .. } if code == "CONFLICT") {
+            // Something took the name while the file was on its way. Retire the session, so the
+            // next attempt opens a new one and settles the name by the conflict choice again.
+            lock(&item.resume).session = None;
+            delete_session(&conn, &session.id).await;
+        }
         return Err(describe(&e));
     }
     #[derive(Deserialize, Default)]
@@ -1298,9 +1815,11 @@ async fn upload(opts: &Options, item: &Item) -> Result<(), String> {
 
 // ---- the app's side: credentials and the downloads folder ----
 
-/// The folder every download goes to: the user's download folder (the XDG one on Linux) plus
-/// `RFE Desktop`. Fixed: no command takes a destination.
-pub fn download_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+/// The file that remembers the folder the person chose for downloads, in the app's data folder.
+const FOLDER_FILE: &str = "download-folder.txt";
+
+/// The default folder: the user's download folder (the XDG one on Linux) plus `RFE Desktop`.
+fn default_download_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let paths = app.path();
     let base = paths
@@ -1310,14 +1829,79 @@ pub fn download_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(base.join(FOLDER_NAME))
 }
 
+/// The folder every download goes to: the one the person chose in the system's folder dialog (the
+/// core keeps it, the window cannot name a path), or the default one. No command takes a
+/// destination from the window.
+pub fn download_folder(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    if let Ok(dir) = app.path().app_data_dir() {
+        if let Ok(text) = std::fs::read_to_string(dir.join(FOLDER_FILE)) {
+            let chosen = PathBuf::from(text.trim());
+            if chosen.is_absolute() && chosen.is_dir() {
+                return Ok(chosen);
+            }
+        }
+    }
+    default_download_folder(app)
+}
+
+/// Where this download goes: the usual folder, or (when the window asks to ask) one the person
+/// picks now in the system's folder dialog.
+async fn download_target(app: &tauri::AppHandle, ask_where: bool) -> Result<PathBuf, String> {
+    if !ask_where {
+        return download_folder(app);
+    }
+    let start = download_folder(app).ok().map(|p| p.display().to_string());
+    match crate::native::pick_folder(app.clone(), Some("Save to…".into()), start).await? {
+        Some(p) if std::path::Path::new(&p).is_absolute() => Ok(PathBuf::from(p)),
+        _ => Err("No folder was chosen, so nothing was downloaded.".into()),
+    }
+}
+
+/// Lets the person choose the folder downloads go to, and remembers it. Returns the new folder, or
+/// nothing when they cancelled.
+#[tauri::command]
+pub async fn choose_download_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri::Manager;
+    let start = download_folder(&app).ok().map(|p| p.display().to_string());
+    let Some(p) =
+        crate::native::pick_folder(app.clone(), Some("Folder for downloads".into()), start).await?
+    else {
+        return Ok(None);
+    };
+    let chosen = PathBuf::from(&p);
+    if !chosen.is_absolute() || !chosen.is_dir() {
+        return Err("That is not a folder on this computer.".into());
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(FOLDER_FILE), p.as_bytes())
+        .map_err(|e| format!("Could not remember the folder: {e}"))?;
+    Ok(Some(p))
+}
+
+/// Goes back to the default downloads folder.
+#[tauri::command]
+pub async fn reset_download_folder(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    if let Ok(dir) = app.path().app_data_dir() {
+        let _ = std::fs::remove_file(dir.join(FOLDER_FILE));
+    }
+    Ok(download_folder(&app)?.display().to_string())
+}
+
 /// Credentials from the saved login: the keystore holds the token, `state.json` the agent's address
 /// and the certificate the user trusted.
-pub fn saved_login(data_dir: PathBuf) -> Creds {
+/// `host` scopes the login to one saved host (`host:port`); `None` is the active session. The
+/// transfer keeps it, so switching the active host never sends a transfer to another agent.
+pub fn saved_login(data_dir: PathBuf, host: Option<String>) -> Creds {
     use crate::secrets::{Offloaded, OsKeystore};
     Arc::new(move || {
         let dir = data_dir.clone();
+        let host = host.clone();
         Box::pin(async move {
             let saved = Offloaded::new(OsKeystore::new())
+                .scoped(host)
                 .run(move |s| crate::flows::load_saved(&dir, s))
                 .await?;
             if saved.token.is_empty() || saved.host.is_empty() {
@@ -1332,34 +1916,210 @@ pub fn saved_login(data_dir: PathBuf) -> Creds {
     })
 }
 
-fn app_ctx(app: &tauri::AppHandle) -> Result<Ctx, String> {
+fn app_ctx(app: &tauri::AppHandle, host: Option<String>) -> Result<Ctx, String> {
     use tauri::Manager;
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     Ok(Ctx {
-        creds: saved_login(data_dir),
+        creds: saved_login(data_dir, host),
         download_dir: download_folder(app)?,
     })
+}
+
+/// Like `app_ctx`, with the folder for this one download.
+fn app_ctx_in(
+    app: &tauri::AppHandle,
+    host: Option<String>,
+    folder: PathBuf,
+) -> Result<Ctx, String> {
+    let mut ctx = app_ctx(app, host)?;
+    ctx.download_dir = folder;
+    Ok(ctx)
 }
 
 #[tauri::command]
 pub async fn transfer_download(
     app: tauri::AppHandle,
     state: tauri::State<'_, Transfers>,
+    host: Option<String>,
     remote_path: String,
+    ask_where: Option<bool>,
 ) -> Result<String, String> {
-    state.start_download(app_ctx(&app)?, &remote_path).await
+    let folder = download_target(&app, ask_where.unwrap_or(false)).await?;
+    state
+        .start_download(app_ctx_in(&app, host, folder)?, &remote_path)
+        .await
 }
 
 #[tauri::command]
 pub async fn transfer_upload(
     app: tauri::AppHandle,
     state: tauri::State<'_, Transfers>,
+    host: Option<String>,
     local_path: String,
     remote_dir: String,
 ) -> Result<String, String> {
     state
-        .start_upload(app_ctx(&app)?, &local_path, &remote_dir)
+        .start_upload(app_ctx(&app, host)?, &local_path, &remote_dir)
         .await
+}
+
+/// Uploads a folder (or one file) from this computer: the folder's own tree is made on the
+/// computer first, then every file in it is queued. Returns the ids of the queued uploads.
+#[tauri::command]
+pub async fn transfer_upload_tree(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Transfers>,
+    host: Option<String>,
+    local_path: String,
+    remote_dir: String,
+) -> Result<Vec<String>, String> {
+    validate_remote(
+        &remote_dir,
+        "enter the folder on the computer to upload into",
+    )?;
+    let lp = local_path.clone();
+    let items = tokio::task::spawn_blocking(move || crate::local::walk(&lp))
+        .await
+        .map_err(|e| e.to_string())??;
+    if items.is_empty() {
+        return Err("that folder holds no files to upload".into());
+    }
+    let dir = {
+        use tauri::Manager;
+        app.path().app_data_dir().map_err(|e| e.to_string())?
+    };
+    let store =
+        crate::secrets::Offloaded::new(crate::secrets::OsKeystore::new()).scoped(host.clone());
+    // Each folder of the tree, shallowest first, made once. One that already exists is fine.
+    let mut made: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (_, rel) in &items {
+        let Some((parent, _)) = rel.rsplit_once('/') else {
+            continue;
+        };
+        let mut acc = String::new();
+        for step in parent.split('/') {
+            let up = if acc.is_empty() {
+                remote_dir.clone()
+            } else {
+                join_remote(&remote_dir, &acc)
+            };
+            if !acc.is_empty() {
+                acc.push('/');
+            }
+            acc.push_str(step);
+            if made.insert(acc.clone()) {
+                let _ = crate::files::create_folder(&dir, &store, &up, step).await;
+            }
+        }
+    }
+    let mut ids = Vec::with_capacity(items.len());
+    for (path, rel) in items {
+        let target = match rel.rsplit_once('/') {
+            Some((parent, _)) => join_remote(&remote_dir, parent),
+            None => remote_dir.clone(),
+        };
+        let id = state
+            .start_upload(
+                app_ctx(&app, host.clone())?,
+                &path.to_string_lossy(),
+                &target,
+            )
+            .await?;
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
+/// Downloads a folder (or one file) from the computer, keeping its tree under the downloads
+/// folder. Returns the ids of the queued downloads.
+#[tauri::command]
+pub async fn transfer_download_tree(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Transfers>,
+    host: Option<String>,
+    remote_path: String,
+    is_dir: bool,
+    ask_where: Option<bool>,
+) -> Result<Vec<String>, String> {
+    validate_remote(&remote_path, "enter the path of the file on the computer")?;
+    let base = download_target(&app, ask_where.unwrap_or(false)).await?;
+    if !is_dir {
+        let id = state
+            .start_download(app_ctx_in(&app, host, base)?, &remote_path)
+            .await?;
+        return Ok(vec![id]);
+    }
+    let dir = {
+        use tauri::Manager;
+        app.path().app_data_dir().map_err(|e| e.to_string())?
+    };
+    let store =
+        crate::secrets::Offloaded::new(crate::secrets::OsKeystore::new()).scoped(host.clone());
+    let top = safe_name(&remote_path);
+    // (remote folder, its path under the downloads folder)
+    let mut stack = vec![(remote_path.clone(), top)];
+    let mut ids = Vec::new();
+    let mut folders = 0usize;
+    while let Some((folder, rel)) = stack.pop() {
+        let mut cursor: Option<String> = None;
+        loop {
+            let page = crate::files::list(&dir, &store, &folder, cursor.as_deref(), Some(1000))
+                .await
+                .map_err(|e| crate::files::user_message(&e))?;
+            for e in page.entries {
+                if e.is_dir {
+                    // A link to a folder may point back up the tree: it is not followed.
+                    if !e.is_symlink {
+                        stack.push((e.path.clone(), format!("{rel}/{}", safe_name(&e.path))));
+                    }
+                } else {
+                    let ctx = app_ctx_in(&app, host.clone(), base.join(&rel))?;
+                    ids.push(state.start_download(ctx, &e.path).await?);
+                }
+            }
+            match page.next_cursor {
+                Some(c) => cursor = Some(c),
+                None => break,
+            }
+        }
+        folders += 1;
+        if folders > 20_000 {
+            return Err("that folder holds too many files to download at once".into());
+        }
+        if ids.len() > 50_000 {
+            return Err("that folder holds too many files to download at once".into());
+        }
+    }
+    if ids.is_empty() {
+        return Err("that folder holds no files to download".into());
+    }
+    Ok(ids)
+}
+
+/// The settings that change how transfers run. `limit_mbps` is millions of bytes per second, 0 for no
+/// limit; `on_conflict` is `ask`, `replace`, `keep` or `skip`.
+#[tauri::command]
+pub async fn transfer_set_prefs(
+    state: tauri::State<'_, Transfers>,
+    parallel: usize,
+    limit_mbps: u64,
+    on_conflict: String,
+    verify: bool,
+) -> Result<(), String> {
+    let policy = Policy::parse(&on_conflict).ok_or("that is not a way to settle a taken name")?;
+    state.set_prefs(parallel, limit_mbps.min(10_000) * 1_000_000, policy, verify);
+    Ok(())
+}
+
+/// The answer to a transfer that waits in the `conflict` state: `replace`, `keep` or `skip`.
+#[tauri::command]
+pub async fn transfer_resolve(
+    state: tauri::State<'_, Transfers>,
+    id: String,
+    how: String,
+) -> Result<(), String> {
+    let how = Resolution::parse(&how).ok_or("that is not a way to settle a taken name")?;
+    state.resolve(&id, how)
 }
 
 #[tauri::command]
@@ -1372,6 +2132,11 @@ pub async fn transfer_list(
 #[tauri::command]
 pub async fn transfer_cancel(state: tauri::State<'_, Transfers>, id: String) -> Result<(), String> {
     state.cancel(&id)
+}
+
+#[tauri::command]
+pub async fn transfer_pause(state: tauri::State<'_, Transfers>, id: String) -> Result<(), String> {
+    state.pause(&id)
 }
 
 #[tauri::command]

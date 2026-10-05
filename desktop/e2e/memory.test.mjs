@@ -53,15 +53,7 @@ function appProcesses() {
 test("memory after sign-in stays in budget", async () => {
   resetAppState();
   app = await App.start();
-  await app.fill("#host", agent.host);
-  await app.click('#connect-form button[type="submit"]');
-  await waitFor("trust", () => app.visible("#step-trust"));
-  await app.click("#trust");
-  await waitFor("login", () => app.visible("#step-login"));
-  await app.fill("#username", agent.user);
-  await app.fill("#password", agent.password);
-  await app.click('#login-form button[type="submit"]');
-  await waitFor("devices", () => app.visible("#step-devices"));
+  await app.signInAccount(agent, "mem-pc");
   await new Promise((r) => setTimeout(r, 2000));
   const procs = appProcesses();
   let total = 0;
@@ -91,18 +83,29 @@ test("memory after sign-in stays in budget", async () => {
   // within about 10 MB); the check is a ceiling, which a real leak (a listener or node per round)
   // would pass within a few hundred rounds.
   const sum = () => appProcesses().filter((p) => !/^(tauri-driver|WebKitWebDriver)/.test(p.comm)).reduce((a, p) => a + p.mb, 0);
+  const pass = async () => {
+    await app.go("servers");
+    await waitFor("the server card", () => app.has(/mem-pc/, "#stage"));
+    await app.go("devices");
+    await waitFor("the device list", () => app.has(/RFE Desktop/, "#stage"));
+    await app.go("settings");
+    await waitFor("settings", () => app.has(/Download folder/, "#stage"));
+    await app.go("files");
+    await waitFor("the listing", () => app.visible("[data-rows]"));
+  };
+  // WebKit keeps decoded images, layout and script caches of the screens it has shown. Measured over
+  // 400 rounds (E2E_TRACE=1 prints it): +40 MB after 40 rounds, +65 after 200, +78 after 400, so it
+  // levels off; a leak per round would keep climbing. The ceiling leaves room for that plateau.
+  await pass();
+  await new Promise((r) => setTimeout(r, 2000));
   const idle = sum();
   const rounds = Number(process.env.E2E_ROUNDS || 120);
   for (let i = 0; i < rounds; i++) {
-    await app.click("#refresh");
-    await app.click("#open-settings");
-    await waitFor("settings", () => app.visible("#step-settings"));
-    await app.click("#make-diagnostics");
-    await app.click("#settings-back");
-    await waitFor("devices", () => app.visible("#step-devices"));
+    await pass();
+    if (process.env.E2E_TRACE && i % 40 === 39) console.log(`  round ${i + 1}: ${sum().toFixed(1)} MB`);
   }
   await new Promise((r) => setTimeout(r, 2000));
   const used = sum();
-  console.log(`  after ${rounds} rounds of refresh + settings + report: ${idle.toFixed(1)} -> ${used.toFixed(1)} MB`);
-  assert.ok(used < idle + 60, `grew by ${(used - idle).toFixed(1)} MB over ${rounds} rounds`);
+  console.log(`  after ${rounds} rounds of Servers, Devices, Settings and Files: ${idle.toFixed(1)} -> ${used.toFixed(1)} MB`);
+  assert.ok(used < idle + 100, `grew by ${(used - idle).toFixed(1)} MB over ${rounds} rounds`);
 });

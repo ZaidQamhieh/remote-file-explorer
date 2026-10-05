@@ -253,9 +253,12 @@ async fn answer_inner(
 }
 
 #[tauri::command]
-pub async fn list_pair_requests(app: tauri::AppHandle) -> Result<Inbox, String> {
+pub async fn list_pair_requests(
+    app: tauri::AppHandle,
+    host: Option<String>,
+) -> Result<Inbox, String> {
     let dir = crate::data_dir(&app)?;
-    load(&dir, &crate::keystore())
+    load(&dir, &crate::keystore().scoped(host))
         .await
         .map_err(|e| e.to_string())
 }
@@ -263,11 +266,12 @@ pub async fn list_pair_requests(app: tauri::AppHandle) -> Result<Inbox, String> 
 #[tauri::command]
 pub async fn answer_pair_request(
     app: tauri::AppHandle,
+    host: Option<String>,
     id: String,
     approve: bool,
 ) -> Result<Answer, String> {
     let dir = crate::data_dir(&app)?;
-    answer(&dir, &crate::keystore(), &id, approve)
+    answer(&dir, &crate::keystore().scoped(host), &id, approve)
         .await
         .map_err(|e| e.to_string())
 }

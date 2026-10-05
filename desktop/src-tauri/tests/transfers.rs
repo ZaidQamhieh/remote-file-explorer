@@ -5,11 +5,13 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{agent_bin, cli, free_port, identity, Raw};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, AgentClient};
 use rfe_desktop_lib::transfers::{
-    numbered_name, publish_no_clobber, safe_name, transfer_message, Conn, Ctx, Options, State,
-    TransferView, Transfers, PARALLEL, TRANSFER_CODES,
+    numbered_name, publish_no_clobber, safe_name, transfer_message, Conn, Ctx, Options, Policy,
+    Resolution, State, TransferView, Transfers, PARALLEL, SKIPPED, TRANSFER_CODES,
 };
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
@@ -685,6 +687,166 @@ async fn cancelling_an_upload_leaves_nothing_on_the_agent() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pausing_a_download_keeps_what_arrived_and_resuming_finishes_it() {
+    let rig = Rig::new().await;
+    let data = pattern(8 * MIB);
+    std::fs::write(rig.remote("slow.bin"), &data).unwrap();
+    rig.throttle(MIB as u64).await;
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    let id = t
+        .start_download(
+            Ctx::fixed(rig.conn(), folder.clone()),
+            &rig.remote("slow.bin"),
+        )
+        .await
+        .unwrap();
+    wait_for(&t, &id, "bytes to arrive", |v| v.done > 0).await;
+
+    t.pause(&id).unwrap();
+    let paused = wait_for(&t, &id, "the pause", |v| v.state == State::Paused).await;
+    assert!(paused.error.is_empty(), "{paused:?}");
+    assert!(
+        paused.done > 0 && paused.done < data.len() as u64,
+        "{paused:?}"
+    );
+    // The hidden part file stays and holds what arrived; nothing has the real name yet.
+    let kept = names_in(&folder);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert!(kept[0].starts_with(".rfe-") && kept[0].ends_with(".part"));
+    // A paused transfer stays paused: nothing keeps writing.
+    let size = std::fs::metadata(folder.join(&kept[0])).unwrap().len();
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert_eq!(
+        std::fs::metadata(folder.join(&kept[0])).unwrap().len(),
+        size
+    );
+    assert_eq!(t.get(&id).unwrap().state, State::Paused);
+    // Pausing it again is not an error.
+    t.pause(&id).unwrap();
+
+    rig.throttle(0).await;
+    t.retry(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(
+        sha256_file(&folder.join("slow.bin")),
+        hex::encode(Sha256::digest(&data))
+    );
+    assert_eq!(names_in(&folder), ["slow.bin"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cancelling_a_paused_download_discards_what_was_kept() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("slow.bin"), pattern(8 * MIB)).unwrap();
+    rig.throttle(MIB as u64).await;
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    let id = t
+        .start_download(
+            Ctx::fixed(rig.conn(), folder.clone()),
+            &rig.remote("slow.bin"),
+        )
+        .await
+        .unwrap();
+    wait_for(&t, &id, "bytes to arrive", |v| v.done > 0).await;
+    t.pause(&id).unwrap();
+    wait_for(&t, &id, "the pause", |v| v.state == State::Paused).await;
+    assert_eq!(names_in(&folder).len(), 1, "the part file is kept");
+
+    t.cancel(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Cancelled, "{v:?}");
+    assert!(names_in(&folder).is_empty(), "{:?}", names_in(&folder));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_cancel_right_after_a_pause_is_a_cancel_and_keeps_nothing() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("slow.bin"), pattern(8 * MIB)).unwrap();
+    rig.throttle(MIB as u64).await;
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    let id = t
+        .start_download(
+            Ctx::fixed(rig.conn(), folder.clone()),
+            &rig.remote("slow.bin"),
+        )
+        .await
+        .unwrap();
+    wait_for(&t, &id, "bytes to arrive", |v| v.done > 0).await;
+    // Both are asked for before the runner looks at either.
+    t.pause(&id).unwrap();
+    t.cancel(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Cancelled, "{v:?}");
+    assert!(names_in(&folder).is_empty(), "{:?}", names_in(&folder));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pausing_an_upload_keeps_its_session_and_resuming_sends_only_what_is_missing() {
+    let rig = Rig::new().await;
+    let src = TempDir::new().unwrap();
+    let local = src.path().join("slow.bin");
+    let data = pattern(8 * MIB);
+    std::fs::write(&local, &data).unwrap();
+    rig.throttle(MIB as u64).await;
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    let id = t
+        .start_upload(
+            Ctx::fixed(rig.conn(), folder),
+            local.to_str().unwrap(),
+            rig.root(),
+        )
+        .await
+        .unwrap();
+    wait_for(&t, &id, "a chunk to be stored", |v| v.done > 0).await;
+
+    t.pause(&id).unwrap();
+    let paused = wait_for(&t, &id, "the pause", |v| v.state == State::Paused).await;
+    assert!(
+        paused.done > 0 && paused.done < data.len() as u64,
+        "{paused:?}"
+    );
+    assert!(
+        !rig.temp_files().is_empty(),
+        "the agent keeps the temporary file of the paused upload"
+    );
+    assert!(!rig.roots.path().join("slow.bin").exists());
+
+    rig.throttle(0).await;
+    t.retry(&id).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(
+        sha256_file(&rig.roots.path().join("slow.bin")),
+        hex::encode(Sha256::digest(&data))
+    );
+    assert!(rig.temp_files().is_empty(), "{:?}", rig.temp_files());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_finished_transfer_cannot_be_paused() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("small.bin"), pattern(1000)).unwrap();
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    let id = t
+        .start_download(Ctx::fixed(rig.conn(), folder), &rig.remote("small.bin"))
+        .await
+        .unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(
+        t.pause(&id).unwrap_err(),
+        "that transfer cannot be paused now"
+    );
+    assert!(t.pause("no-such-id").is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn only_two_transfers_run_at_once_and_the_rest_wait() {
     let rig = Rig::new().await;
     for i in 0..4 {
@@ -843,7 +1005,7 @@ async fn a_path_that_climbs_out_of_the_agents_folders_is_refused_and_writes_noth
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn an_upload_never_replaces_a_file_on_the_agent() {
+async fn an_upload_with_no_preference_never_replaces_a_file_on_the_agent() {
     let rig = Rig::new().await;
     std::fs::write(rig.remote("taken.txt"), "original").unwrap();
     let src = TempDir::new().unwrap();
@@ -860,11 +1022,16 @@ async fn an_upload_never_replaces_a_file_on_the_agent() {
         .await
         .unwrap();
     let v = finished(&t, &id).await;
-    assert_eq!(v.state, State::Failed, "{v:?}");
-    assert_eq!(v.error, transfer_message("CONFLICT").unwrap());
+    // Nothing chose to replace it: the old file stays and the new one gets the next number.
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(v.name, "taken (1).txt");
     assert_eq!(
         std::fs::read_to_string(rig.remote("taken.txt")).unwrap(),
         "original"
+    );
+    assert_eq!(
+        std::fs::read_to_string(rig.remote("taken (1).txt")).unwrap(),
+        "new"
     );
 }
 
@@ -1065,7 +1232,7 @@ fn every_transfer_message_is_in_the_user_guide() {
         );
     }
     let code = std::fs::read_to_string(root.join("src/transfers.rs")).unwrap();
-    let ui = std::fs::read_to_string(root.join("../ui/app.js")).unwrap();
+    let ui = ui::js();
     let flat = |s: &str| {
         s.split_whitespace()
             .collect::<Vec<_>>()
@@ -1105,7 +1272,10 @@ fn every_transfer_message_is_in_the_user_guide() {
         "Waiting for a free slot",
         "Verified by the computer",
     ] {
-        assert!(ui.contains(stem), "{stem:?} is no longer in app.js");
+        assert!(
+            ui.contains(stem),
+            "{stem:?} is no longer in the window scripts"
+        );
         assert!(
             guide.contains(stem),
             "user-guide.md does not explain {stem:?}"
@@ -1157,4 +1327,297 @@ async fn a_transfer_never_runs_against_another_agent_after_a_switch() {
     let v = finished(&t, &id).await;
     assert_eq!(v.state, State::Done, "{v:?}");
     assert_eq!(std::fs::read(folder.join("f.txt")).unwrap(), b"hello");
+}
+
+// ---- the settings: a taken name, the speed limit, how many run at once, checksums ----
+
+fn ask() -> Policy {
+    Policy::Ask
+}
+
+fn pol(r: Resolution) -> Policy {
+    Policy::Do(r)
+}
+
+async fn download_of(t: &Transfers, rig: &Rig, folder: &Path, name: &str) -> String {
+    t.start_download(
+        Ctx::fixed(rig.conn(), folder.to_path_buf()),
+        &rig.remote(name),
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_taken_download_name_follows_the_saved_choice() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("a.txt"), b"new").unwrap();
+    let (_base, folder) = dirs();
+    std::fs::create_dir_all(&folder).unwrap();
+    let t = Transfers::with_options(small());
+
+    // Keep both is what the core does with no preference at all.
+    std::fs::write(folder.join("a.txt"), b"old").unwrap();
+    let id = download_of(&t, &rig, &folder, "a.txt").await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    assert_eq!(names_in(&folder), ["a (1).txt", "a.txt"]);
+    assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"old");
+
+    t.set_prefs(2, 0, pol(Resolution::Replace), true);
+    let id = download_of(&t, &rig, &folder, "a.txt").await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"new");
+    assert_eq!(
+        names_in(&folder),
+        ["a (1).txt", "a.txt"],
+        "no part file stays"
+    );
+
+    std::fs::write(folder.join("a.txt"), b"mine").unwrap();
+    t.set_prefs(2, 0, pol(Resolution::Skip), true);
+    let id = download_of(&t, &rig, &folder, "a.txt").await;
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Cancelled, "{v:?}");
+    assert_eq!(v.error, SKIPPED);
+    assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"mine");
+    assert_eq!(names_in(&folder), ["a (1).txt", "a.txt"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_taken_download_name_waits_for_an_answer_and_holds_no_place() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("a.txt"), b"new").unwrap();
+    std::fs::write(rig.remote("b.txt"), b"bee").unwrap();
+    let (_base, folder) = dirs();
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("a.txt"), b"old").unwrap();
+    let t = Transfers::with_options(small());
+    // One place only: a question that kept it would hold up b.txt for good.
+    t.set_prefs(1, 0, ask(), true);
+
+    let a = download_of(&t, &rig, &folder, "a.txt").await;
+    let v = wait_for(&t, &a, "the question", |v| v.state == State::Conflict).await;
+    let c = v.conflict.expect("what holds the name");
+    assert_eq!((c.is_dir, c.size), (false, 3));
+    assert!(c.modified_ms.is_some());
+
+    let b = download_of(&t, &rig, &folder, "b.txt").await;
+    assert_eq!(finished(&t, &b).await.state, State::Done);
+    assert_eq!(t.get(&a).unwrap().state, State::Conflict, "still waiting");
+
+    assert!(
+        t.resolve(&b, Resolution::Skip).is_err(),
+        "nothing to answer"
+    );
+    t.resolve(&a, Resolution::Replace).unwrap();
+    let v = finished(&t, &a).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert!(v.conflict.is_none());
+    assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"new");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unanswered_question_can_be_cancelled_and_skip_leaves_the_old_file() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("a.txt"), b"new").unwrap();
+    let (_base, folder) = dirs();
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("a.txt"), b"old").unwrap();
+    let t = Transfers::with_options(small());
+    t.set_prefs(2, 0, ask(), true);
+
+    let a = download_of(&t, &rig, &folder, "a.txt").await;
+    wait_for(&t, &a, "the question", |v| v.state == State::Conflict).await;
+    t.cancel(&a).unwrap();
+    assert_eq!(finished(&t, &a).await.state, State::Cancelled);
+
+    let b = download_of(&t, &rig, &folder, "a.txt").await;
+    wait_for(&t, &b, "the question", |v| v.state == State::Conflict).await;
+    t.resolve(&b, Resolution::Skip).unwrap();
+    let v = finished(&t, &b).await;
+    assert_eq!((v.state, v.error.as_str()), (State::Cancelled, SKIPPED));
+    assert_eq!(std::fs::read(folder.join("a.txt")).unwrap(), b"old");
+    assert_eq!(names_in(&folder), ["a.txt"]);
+}
+
+async fn upload_of(t: &Transfers, rig: &Rig, local: &Path) -> String {
+    t.start_upload(
+        Ctx::fixed(rig.conn(), PathBuf::from("/unused")),
+        local.to_str().unwrap(),
+        rig.root(),
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_taken_upload_name_follows_the_saved_choice() {
+    let rig = Rig::new().await;
+    let src = TempDir::new().unwrap();
+    let local = src.path().join("up.txt");
+    std::fs::write(&local, b"fresh").unwrap();
+    std::fs::write(rig.remote("up.txt"), b"old").unwrap();
+    let t = Transfers::with_options(small());
+
+    t.set_prefs(2, 0, pol(Resolution::Both), true);
+    let id = upload_of(&t, &rig, &local).await;
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert_eq!(v.name, "up (1).txt");
+    assert_eq!(std::fs::read(rig.remote("up.txt")).unwrap(), b"old");
+    assert_eq!(std::fs::read(rig.remote("up (1).txt")).unwrap(), b"fresh");
+
+    // The second copy goes to the next free number.
+    let id = upload_of(&t, &rig, &local).await;
+    let v = finished(&t, &id).await;
+    assert_eq!((v.state, v.name.as_str()), (State::Done, "up (2).txt"));
+
+    t.set_prefs(2, 0, pol(Resolution::Replace), true);
+    let id = upload_of(&t, &rig, &local).await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    assert_eq!(std::fs::read(rig.remote("up.txt")).unwrap(), b"fresh");
+
+    std::fs::write(rig.remote("up.txt"), b"theirs").unwrap();
+    t.set_prefs(2, 0, pol(Resolution::Skip), true);
+    let id = upload_of(&t, &rig, &local).await;
+    let v = finished(&t, &id).await;
+    assert_eq!((v.state, v.error.as_str()), (State::Cancelled, SKIPPED));
+    assert_eq!(std::fs::read(rig.remote("up.txt")).unwrap(), b"theirs");
+    assert!(rig.temp_files().is_empty(), "{:?}", rig.temp_files());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_taken_upload_name_waits_for_an_answer() {
+    let rig = Rig::new().await;
+    let src = TempDir::new().unwrap();
+    let local = src.path().join("up.txt");
+    std::fs::write(&local, b"fresh").unwrap();
+    std::fs::write(rig.remote("up.txt"), b"older").unwrap();
+    let t = Transfers::with_options(small());
+    t.set_prefs(2, 0, ask(), true);
+
+    let id = upload_of(&t, &rig, &local).await;
+    let v = wait_for(&t, &id, "the question", |v| v.state == State::Conflict).await;
+    let c = v.conflict.expect("what holds the name");
+    assert_eq!((c.is_dir, c.size), (false, 5));
+    assert!(
+        !c.modified_text.is_empty(),
+        "the agent says when it changed"
+    );
+
+    t.resolve(&id, Resolution::Both).unwrap();
+    let v = finished(&t, &id).await;
+    assert_eq!(
+        (v.state, v.name.as_str()),
+        (State::Done, "up (1).txt"),
+        "{v:?}"
+    );
+    assert_eq!(std::fs::read(rig.remote("up.txt")).unwrap(), b"older");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_speed_limit_holds_for_downloads_and_uploads_and_can_be_lifted() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("slow.bin"), pattern(3 * MIB)).unwrap();
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    t.set_prefs(2, 1_000_000, pol(Resolution::Both), true);
+
+    let began = Instant::now();
+    let id = download_of(&t, &rig, &folder, "slow.bin").await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    let took = began.elapsed();
+    // 3 MiB is 3.1 million bytes: at a million a second it cannot take less than about 2.5 s.
+    assert!(
+        took >= Duration::from_millis(2400),
+        "downloaded in {took:?}"
+    );
+
+    let src = TempDir::new().unwrap();
+    let local = src.path().join("slowup.bin");
+    std::fs::write(&local, pattern(3 * MIB)).unwrap();
+    let began = Instant::now();
+    let id = upload_of(&t, &rig, &local).await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    let took = began.elapsed();
+    assert!(took >= Duration::from_millis(2400), "uploaded in {took:?}");
+
+    // Lifted, the next one is quick again.
+    t.set_prefs(2, 0, pol(Resolution::Both), true);
+    let began = Instant::now();
+    let id = download_of(&t, &rig, &folder, "slow.bin").await;
+    assert_eq!(finished(&t, &id).await.state, State::Done);
+    assert!(began.elapsed() < Duration::from_millis(2400));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_number_of_parallel_transfers_follows_the_setting_even_while_running() {
+    let rig = Rig::new().await;
+    for i in 0..6 {
+        std::fs::write(rig.remote(&format!("f{i}.bin")), pattern(MIB)).unwrap();
+    }
+    rig.throttle((MIB / 2) as u64).await;
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    t.set_prefs(4, 0, pol(Resolution::Both), true);
+    let mut ids = vec![];
+    for i in 0..6 {
+        ids.push(download_of(&t, &rig, &folder, &format!("f{i}.bin")).await);
+    }
+    let count = |t: &Transfers| {
+        t.list()
+            .iter()
+            .filter(|v| v.state == State::Running)
+            .count()
+    };
+    let end = Instant::now() + Duration::from_secs(30);
+    while count(&t) < 4 {
+        assert!(
+            Instant::now() < end,
+            "four should run together: {:?}",
+            t.list()
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // Cut to one while four run: no new one starts until fewer than one run.
+    t.set_prefs(1, 0, pol(Resolution::Both), true);
+    let mut peak_after = 0;
+    let end = Instant::now() + Duration::from_secs(120);
+    let mut settled = false;
+    loop {
+        let all = t.list();
+        let running = all.iter().filter(|v| v.state == State::Running).count();
+        if running <= 1 {
+            settled = true;
+        }
+        if settled {
+            peak_after = peak_after.max(running);
+        }
+        if all.iter().all(|v| v.state == State::Done) {
+            break;
+        }
+        assert!(Instant::now() < end, "timed out: {all:?}");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        settled && peak_after <= 1,
+        "peak {peak_after} after the cut"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn checksum_checking_can_be_turned_off_for_downloads() {
+    let rig = Rig::new().await;
+    std::fs::write(rig.remote("c.bin"), pattern(MIB)).unwrap();
+    let (_base, folder) = dirs();
+    let t = Transfers::with_options(small());
+    t.set_prefs(2, 0, pol(Resolution::Both), false);
+    let id = download_of(&t, &rig, &folder, "c.bin").await;
+    let v = finished(&t, &id).await;
+    assert_eq!(v.state, State::Done, "{v:?}");
+    assert!(!v.verified, "nothing was compared");
+    assert_eq!(
+        sha256_file(&folder.join("c.bin")),
+        hex::encode(Sha256::digest(pattern(MIB)))
+    );
 }

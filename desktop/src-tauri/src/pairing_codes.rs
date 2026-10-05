@@ -23,6 +23,9 @@ pub struct CodeView {
     /// Empty unless `status` is `"ok"`.
     pub code: String,
     pub expires_in_seconds: u64,
+    /// The text the phone's QR scanner reads (JSON); carries the live code, so it is redacted in
+    /// `Debug` and never logged. Empty unless `status` is `"ok"`.
+    pub qr: String,
 }
 
 // Not derived: a `{:?}` in a log line or a test failure must not print a live pairing code.
@@ -39,6 +42,7 @@ impl std::fmt::Debug for CodeView {
                 },
             )
             .field("expires_in_seconds", &self.expires_in_seconds)
+            .field("qr", &if self.qr.is_empty() { "" } else { "<redacted>" })
             .finish()
     }
 }
@@ -47,7 +51,24 @@ impl std::fmt::Debug for CodeView {
 /// result (`forbidden`), not an error, so the window can explain it; every other failure is an
 /// error whose text is shown as it is.
 pub async fn generate(dir: &Path, store: &Offloaded) -> Result<CodeView, AgentError> {
-    let r = generate_inner(dir, store).await;
+    generate_for(dir, store, TTL_SECONDS).await
+}
+
+/// The lifetimes the settings offer, in seconds: two, five and ten minutes.
+pub const LIFETIMES: [u64; 3] = [120, 300, 600];
+
+/// Like `generate`, with a lifetime from [`LIFETIMES`]; anything else is the default.
+pub async fn generate_for(
+    dir: &Path,
+    store: &Offloaded,
+    ttl_seconds: u64,
+) -> Result<CodeView, AgentError> {
+    let ttl = if LIFETIMES.contains(&ttl_seconds) {
+        ttl_seconds
+    } else {
+        TTL_SECONDS
+    };
+    let r = generate_inner(dir, store, ttl).await;
     match &r {
         Ok(v) if v.status == "ok" => applog::info("pairing code generation: ok"),
         Ok(_) => {
@@ -58,7 +79,11 @@ pub async fn generate(dir: &Path, store: &Offloaded) -> Result<CodeView, AgentEr
     r
 }
 
-async fn generate_inner(dir: &Path, store: &Offloaded) -> Result<CodeView, AgentError> {
+async fn generate_inner(
+    dir: &Path,
+    store: &Offloaded,
+    ttl_seconds: u64,
+) -> Result<CodeView, AgentError> {
     let saved = {
         let dir = dir.to_path_buf();
         store
@@ -82,7 +107,7 @@ async fn generate_inner(dir: &Path, store: &Offloaded) -> Result<CodeView, Agent
             ))
         })?;
     let made = AgentClient::pinned(&saved.host, &pinned)?
-        .generate_pairing_code(&saved.token, TTL_SECONDS)
+        .generate_pairing_code(&saved.token, ttl_seconds)
         .await;
     match made {
         Ok(g) if g.pairing_code.is_empty() => Err(AgentError::Local(
@@ -90,16 +115,24 @@ async fn generate_inner(dir: &Path, store: &Offloaded) -> Result<CodeView, Agent
         )),
         Ok(g) => {
             applog::register_secret(&g.pairing_code);
+            let qr = if g.qr_payload.is_null() {
+                String::new()
+            } else {
+                g.qr_payload.to_string()
+            };
+            applog::register_secret(&qr);
             Ok(CodeView {
                 status: "ok",
                 code: g.pairing_code,
                 expires_in_seconds: g.expires_in_seconds,
+                qr,
             })
         }
         Err(AgentError::Server { status: 403, .. }) => Ok(CodeView {
             status: "forbidden",
             code: String::new(),
             expires_in_seconds: 0,
+            qr: String::new(),
         }),
         Err(e) => {
             if let AgentError::Server { status: 401, .. } = &e {

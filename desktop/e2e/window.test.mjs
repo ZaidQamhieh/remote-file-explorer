@@ -8,7 +8,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { App, waitFor, resetAppState } from "./lib.mjs";
+import { App, resetAppState } from "./lib.mjs";
 
 let app;
 after(async () => {
@@ -46,10 +46,7 @@ test("a second launch is handed over to the running window and exits", async () 
   assert.equal(appPids().length, 1, "still one app window process");
 
   // The first window noticed: its own log (in the diagnostics report) says so, and it still answers.
-  await app.click("#open-settings");
-  await waitFor("settings", () => app.visible("#step-settings"));
-  await app.click("#make-diagnostics");
-  await waitFor("the report", async () => (await app.value("#diagnostics")).length > 0);
-  assert.match(await app.value("#diagnostics"), /second launch was handed over/);
-  await app.click("#settings-back");
+  const report = await app.script("return window.__TAURI__.core.invoke('diagnostics');");
+  assert.match(report, /second launch was handed over/);
+  assert.ok(await app.visible("#rail .dest"), "the window still answers");
 });

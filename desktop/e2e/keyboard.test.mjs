@@ -1,6 +1,6 @@
 // Keyboard only, in the real window: every sign-in route and the main actions are reached and used
-// with Tab, Shift+Tab, Enter and Space, and the order Tab takes through a screen is recorded and
-// checked (it is the reading order; every stop shows a focus outline). Prints each screen's order.
+// with Tab, Shift+Tab, Enter, Space and Escape, and the order Tab takes through a screen is recorded
+// and checked (it is the reading order; every stop shows a focus outline). Prints each order.
 //
 //   desktop/e2e/run.sh
 
@@ -10,11 +10,13 @@ import { App, Agent, waitFor, resetAppState, KEYS } from "./lib.mjs";
 
 let a;
 let b;
+let c;
 let app;
 
 before(async () => {
   a = await Agent.start("owner", "e2e-keyboard-a");
   b = await Agent.start("owner", "e2e-keyboard-b");
+  c = await Agent.start("owner", "e2e-keyboard-c");
   resetAppState();
   app = await App.start();
 });
@@ -23,6 +25,7 @@ after(async () => {
   if (app) await app.end();
   a?.stop();
   b?.stop();
+  c?.stop();
 });
 
 // What a screen reader would call the focused control, and whether it shows a focus outline.
@@ -32,14 +35,28 @@ const focusInfo = () =>
     if (!e || e === document.body) return null;
     const cs = getComputedStyle(e);
     const name = e.id || e.getAttribute("aria-label") || (e.textContent || "").trim().slice(0, 40) || e.tagName;
-    return { name, outline: cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0, tag: e.tagName };
+    // The search box shows its focus as the primary-colour border of the bar around it (:focus-within).
+    const ring = (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || (e.closest(".sbar") && getComputedStyle(e.closest(".sbar")).borderTopColor !== "rgba(0, 0, 0, 0)");
+    return { name, outline: !!ring, tag: e.tagName };
   `);
+
+async function waitForFocusChange(before, ms = 600) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const f = await focusInfo();
+    if ((f && f.name) !== before) return;
+    await new Promise((r) => setTimeout(r, 15));
+  }
+}
 
 async function tabTo(id, max = 60) {
   for (let i = 0; i < max; i++) {
     const f = await focusInfo();
     if (f && f.name === id) return;
     await app.press(KEYS.tab);
+    // The press returns before the webview has moved focus; reading too early can see a stale
+    // stop, and a slow frame can fold two presses into one. Wait for focus to leave this stop.
+    await waitForFocusChange(f && f.name);
   }
   throw new Error(`Tab never reached ${id}; the last stop was ${JSON.stringify(await focusInfo())}`);
 }
@@ -49,7 +66,10 @@ async function tabOrder(max = 80) {
   await app.script("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0);");
   const stops = [];
   for (let i = 0; i < max; i++) {
+    const before = stops.length ? stops[stops.length - 1].name : null;
     await app.press(KEYS.tab);
+    // The press returns before the webview has moved focus (see tabTo): wait for it to leave the last stop.
+    await waitForFocusChange(before);
     const f = await focusInfo();
     if (!f) break;
     if (stops.some((s) => s.name === f.name && s.tag === f.tag) && stops.length > 2) break;
@@ -70,105 +90,129 @@ function checkOrder(screen, stops, mustInclude) {
 
 const press = async (keys) => app.press(keys);
 
-async function connectKeyboard(agent) {
-  await app.script("document.querySelector('#host').focus(); document.querySelector('#host').select();");
-  await press(agent.host + KEYS.enter);
-  await waitFor("the trust step", () => app.visible("#step-trust"));
-  await tabTo("trust");
+async function openNewConnection() {
+  await app.skipWelcome();
+  await app.script("document.querySelector('#rail [data-new]').focus();");
   await press(KEYS.enter);
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
+  await waitFor("the connection dialog", () => app.visible("#sh"));
 }
 
-test("connect screen: tab order, outlines, and Find agents with the keyboard", async () => {
-  await app.script("document.querySelector('#host').focus();");
-  checkOrder("connect", await tabOrder(), ["host", "Check certificate", "discover"]);
-  await tabTo("discover");
+/** New connection by keyboard, then the trust dialog's button by Tab and Enter. */
+async function connectKeyboard(agent, name) {
+  await openNewConnection();
+  await app.script("document.querySelector('#sn').focus();");
+  await press(name);
+  await app.fill("#sh", agent.host.split(":")[0]);
+  await app.fill("#sp", agent.host.split(":")[1]);
+  await app.script("document.querySelector('#sn').focus();");
   await press(KEYS.enter);
-  await waitFor("the discovery status", async () => (await app.text("#discover-status")).length > 0, 20000);
+  await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  await press(KEYS.enter);
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+}
+
+test("the rail and the top bar: tab order and outlines", async () => {
+  await app.skipWelcome();
+  await app.script("document.activeElement && document.activeElement.blur();");
+  checkOrder("rail", await tabOrder(40), ["New connection", "Files", "Servers", "Devices", "Transfers", "Search", "Tools", "History", "Settings"]);
 });
 
-test("sign in with an account, then sign out, by keyboard", async () => {
-  await connectKeyboard(a);
-  checkOrder("sign-in", await tabOrder(), ["username", "password", "Sign in", "login-back", "use-code", "use-approval", "reset-key"]);
-  await app.script("document.querySelector('#username').focus();");
-  await press(a.user + KEYS.tab + a.password + KEYS.enter);
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  assert.equal((await focusInfo()).name, "title-devices", "focus lands on the new screen's heading");
-  checkOrder("devices", await tabOrder(), ["open-settings", "open-transfers", "sign-out", "refresh", "open-apps", "open-health", "open-pairing"]);
+test("the welcome closes with Escape and the New connection dialog is keyboard friendly", async () => {
+  await openNewConnection();
+  assert.equal((await focusInfo()).name, "sn", "the dialog starts in its first field");
+  checkOrder("new connection", await tabOrder(20), ["sn", "sh", "sp", "Connect"]);
+  await press(KEYS.escape);
+  await waitFor("the dialog to close", async () => !(await app.visible("#sh")));
+});
 
-  await tabTo("sign-out");
-  await press(KEYS.enter);
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
+test("sign in with an account by keyboard", async () => {
+  await connectKeyboard(a, "kb-a");
+  assert.equal((await focusInfo()).name, "siu", "sign-in starts in the username field");
+  checkOrder("sign-in", await tabOrder(20), ["Account", "Pairing code", "Ask the PC", "siu", "sip", "Not now", "Sign in"]);
+  await app.script("document.querySelector('#siu').focus();");
+  await press(a.user + KEYS.tab + a.password + KEYS.enter);
+  await waitFor("the dialog to close", async () => !(await app.visible("#siu")));
+  await waitFor("the listing", () => app.visible("[data-rows]"));
 });
 
 test("pair with a code by keyboard", async () => {
-  await connectKeyboard(b);
-  await tabTo("use-code");
+  await connectKeyboard(b, "kb-b");
+  await app.script("document.querySelector('[data-m=\"code\"]').focus();");
   await press(KEYS.enter);
-  await waitFor("the code form", () => app.visible("#pair-form"));
-  assert.equal((await focusInfo()).name, "pairing-code", "focus goes to the code field");
+  await waitFor("the code field", () => app.visible("#sic"));
+  assert.equal((await focusInfo()).name, "sic", "focus goes to the code field");
   await press(b.pairCode() + KEYS.enter);
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  await tabTo("refresh");
-  await press(KEYS.enter);
-  await tabTo("sign-out");
-  await press(KEYS.enter);
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
+  await waitFor("the dialog to close", async () => !(await app.visible("#sic")), 20000);
+  assert.match(await app.snacks(), /Signed in to kb-b/);
 });
 
 test("approve on the PC by keyboard, cancel by keyboard, then approve", async () => {
-  await connectKeyboard(a);
-  await tabTo("use-approval");
+  await connectKeyboard(c, "kb-c");
+  await app.script("document.querySelector('[data-m=\"ask\"]').focus();");
   await press(KEYS.enter);
-  await waitFor("the approve step", () => app.visible("#step-approve"));
-  await tabTo("approve-cancel");
+  await app.script("document.querySelector('.dlg [data-id=\"go\"]').focus();");
   await press(KEYS.enter);
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-
-  await tabTo("use-approval");
+  await waitFor("a match code", async () => (await app.text(".dlg .pcode")).trim().length >= 6);
+  await press(KEYS.escape);
+  await waitFor("the dialog to close", async () => !(await app.visible(".dlg")));
+  await app.go("servers");
+  await app.clickInCard("kb-c", "Sign in");
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  await app.script("document.querySelector('[data-m=\"ask\"]').focus();");
   await press(KEYS.enter);
-  await waitFor("the approve step", () => app.visible("#step-approve"));
-  await waitFor("a match code", async () => (await app.text("#match-code")).trim().length >= 6);
-  const code = (await app.text("#match-code")).trim();
-  a.answerPairRequest("accept", a.pairRequestId(code));
-  await waitFor("the device list", () => app.visible("#step-devices"), 30000);
+  await app.script("document.querySelector('.dlg [data-id=\"go\"]').focus();");
+  await press(KEYS.enter);
+  await waitFor("a match code", async () => (await app.text(".dlg .pcode")).trim().length >= 6);
+  const code = (await app.text(".dlg .pcode")).trim();
+  c.answerPairRequest("accept", c.pairRequestId(code));
+  await waitFor("the dialog to close", async () => !(await app.visible(".dlg")), 30000);
 });
 
-test("settings: every control is reachable, and Forget needs two presses by keyboard", async () => {
-  await tabTo("open-settings");
-  await press(KEYS.enter);
-  await waitFor("settings", () => app.visible("#step-settings"));
-  const stops = await tabOrder(120);
-  checkOrder("settings", stops, ["check-keystore", "log-level", "make-diagnostics", "settings-back"]);
+test("settings: every control is reachable by keyboard", async () => {
+  await app.go("settings");
+  await waitFor("settings", () => app.has(/Download folder/, "#stage"));
+  await app.script("document.activeElement && document.activeElement.blur(); document.querySelector('#stage').scrollTo(0, 0);");
+  const stops = await tabOrder(80);
+  console.log(`tab order, settings: ${stops.map((s) => s.name).join(" > ")}`);
+  const names = stops.map((s) => s.name);
+  for (const want of ["Change…", "Reset", "Reconnect automatically"]) assert.ok(names.includes(want), `Tab never reaches ${want}: ${names.join(", ")}`);
+  assert.deepEqual(stops.filter((s) => !s.outline).map((s) => s.name), [], "settings: these stops show no focus outline");
+});
 
-  // The first press on a Forget button only arms it.
-  const forget = stops.find((s) => /^Forget/.test(s.name));
-  assert.ok(forget, "a Forget button is in the tab order: " + stops.map((s) => s.name).join(", "));
-  await tabTo(forget.name);
+test("a switch is toggled with Space", async () => {
+  await tabTo("Reconnect automatically");
+  const state = () => app.script("return document.activeElement.getAttribute('aria-checked');");
+  const before = await state();
   await press(KEYS.space);
-  const armed = await focusInfo();
-  assert.match(armed.name, /Press again to confirm/, "the armed button says so: " + armed.name);
-  await tabTo("settings-back");
-  await press(KEYS.enter);
-  await waitFor("devices", () => app.visible("#step-devices"));
-  assert.match(await app.text("#session-text"), /owner|Paired/, "still signed in: Forget was not confirmed");
+  await waitFor("the switch to flip", async () => (await state()) !== before);
+  await press(KEYS.space);
+  await waitFor("the switch to flip back", async () => (await state()) === before);
 });
 
-test("the devices table actions are reachable and need two presses by keyboard", async () => {
-  // An approved device is an ordinary one with no actions; sign in with the account for an admin view.
-  await tabTo("sign-out");
+test("a menu opens with Enter, moves with the arrows and closes with Escape", async () => {
+  await app.go("devices");
+  await waitFor("the device list", () => app.has(/RFE Desktop\s+This app/, "#stage"));
+  await app.script("document.querySelector('#stage [aria-label^=\"More for RFE Desktop\"]').focus();");
   await press(KEYS.enter);
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
-  await connectKeyboard(a);
-  await app.script("document.querySelector('#username').focus();");
-  await press(a.user + KEYS.tab + a.password + KEYS.enter);
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  await app.script("document.querySelector('#refresh').focus();");
-  await tabTo("Revoke RFE Desktop (this computer)");
+  await waitFor("the menu", () => app.visible(".menu"));
+  assert.equal(await app.script("return document.activeElement.classList.contains('mi');"), true, "focus moves into the menu");
+  const first = await app.script("return document.activeElement.innerText.trim();");
+  await press(KEYS.down);
+  assert.notEqual(await app.script("return document.activeElement.innerText.trim();"), first, "the arrow moves to the next item");
+  await press(KEYS.escape);
+  await waitFor("the menu to close", async () => !(await app.visible(".menu")));
+  assert.match(await app.script("return document.activeElement.getAttribute('aria-label') || '';"), /^More for RFE Desktop/, "focus goes back to the button that opened it");
+});
+
+test("Revoke on this computer asks first, by keyboard", async () => {
+  await app.script("document.querySelector('#stage [aria-label^=\"More for RFE Desktop\"]').focus();");
   await press(KEYS.enter);
-  const armed = await focusInfo();
-  assert.match(armed.name, /Press the button again to sign this computer out/, armed.name);
-  // Not confirmed: leave it by tabbing elsewhere and pressing nothing else.
-  await app.script("document.querySelector('#refresh').focus();");
-  assert.equal(await app.visible("#step-devices"), true);
+  await waitFor("the menu", () => app.visible(".menu"));
+  await app.script("[...document.querySelectorAll('.menu .mi')].find((x) => /Revoke access/.test(x.innerText)).focus();");
+  await press(KEYS.enter);
+  await waitFor("the confirmation", () => app.visible(".dlg"));
+  assert.match(await app.text(".dlg"), /This is the sign-in this app uses/);
+  await press(KEYS.escape);
+  await waitFor("the dialog to close", async () => !(await app.visible(".dlg")));
+  assert.ok(await app.has(/RFE Desktop\s+This app/, "#stage"), "still signed in: nothing was revoked");
 });

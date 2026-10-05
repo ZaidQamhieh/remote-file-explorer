@@ -1,7 +1,7 @@
-// The sign-in side of the app in the real window: the list of trusted agents (two pins, the two-click
-// Forget, the signed-in marker), pairing with a code, approving on the PC (the match code the window
-// shows is the one the agent shows its owner), a login the agent revoked, and the two-click "Create a
-// new device key". Screenshots go to E2E_SHOTS when it is set.
+// The sign-in side of the app in the real window: two servers pinned and kept, Forget, pairing with a
+// code, approving on the PC (the match code the window shows is the one the agent shows its owner), a
+// login the agent revoked, and the two-step "Create a new device key". Screenshots go to E2E_SHOTS
+// when it is set.
 //
 //   desktop/e2e/run.sh            SCALE=2 desktop/e2e/run.sh
 
@@ -11,12 +11,13 @@ import { App, Agent, waitFor, sleep, resetAppState } from "./lib.mjs";
 
 let a;
 let b;
-let left; // the agent whose pin survived the Forget test
+let c; // a third agent: the first two are used by the sign-in tests
 let app;
 
 before(async () => {
   a = await Agent.start("owner", "e2e-password-a");
   b = await Agent.start("owner", "e2e-password-b");
+  c = await Agent.start("owner", "e2e-password-c");
   resetAppState();
   app = await App.start();
 });
@@ -25,181 +26,122 @@ after(async () => {
   if (app) await app.end();
   a?.stop();
   b?.stop();
+  c?.stop();
 });
 
-// A failure says which screen the window was on and what it said, which is most of the diagnosis.
-async function where() {
-  return app.req("POST", "/execute/async", { args: [], script:
-    "const done = arguments[arguments.length - 1]; const on = [...document.querySelectorAll('main > section')].filter((e) => !e.hidden).map((e) => e.id); const m = document.querySelector('#message'); const t = on.join(',') + ' | ' + (m.hidden ? '' : m.textContent); Promise.all([window.__TAURI__.core.invoke('saved_agent'), window.__TAURI__.core.invoke('list_pins')]).then(([s, p]) => done(t + ' | saved=' + JSON.stringify(s) + ' pins=' + JSON.stringify(p)), (e) => done(t + ' | ' + e));" });
-}
+// A failure says what the window showed, which is most of the diagnosis.
 const step = (name, fn) =>
   test(name, async () => {
     try {
       await fn();
     } catch (e) {
-      e.message += `  [window: ${await where().catch(() => "?")}]`;
-      await app.shot(`failed-${name.slice(0, 20).replace(/\W+/g, "-")}.png`).catch(() => {});
+      const seen = await app.script("return document.body.innerText.slice(0, 600);").catch(() => "?");
+      e.message += `\n[window] ${seen.replace(/\n+/g, " | ")}\n[snacks] ${await app.snacks().catch(() => "?")}`;
       throw e;
     }
   });
 
-const errorShown = () =>
-  app.script("const m = document.querySelector('#message'); return !m.hidden && m.classList.contains('error') ? m.textContent : '';");
-const messageShown = () => app.script("const m = document.querySelector('#message'); return m.hidden ? '' : m.textContent;");
+const cards = () => app.rows("#sgrid .scard, #sgrid [data-sa='more']");
 
-async function connectAndTrust(agent) {
-  await app.fill("#host", agent.host);
-  await app.click('#connect-form button[type="submit"]');
-  await waitFor("the trust step", () => app.visible("#step-trust"));
-  await app.click("#trust");
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-}
-
-async function signInAccount(agent) {
-  await app.fill("#username", agent.user);
-  await app.fill("#password", agent.password);
-  await app.click('#login-form button[type="submit"]');
-  await waitFor("the device list", () => app.visible("#step-devices"));
-}
-
-const pinRows = () => app.rows("#pins tr");
-
-step("trusted agents: two pins are listed and Forget needs a second press", async () => {
-  await connectAndTrust(a);
-  await signInAccount(a);
-  await app.click("#sign-out");
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
-  // A certificate is only remembered once a sign-in succeeded on it, so B is signed in to as well.
-  await connectAndTrust(b);
-  await signInAccount(b);
-  await app.click("#sign-out");
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
-  await waitFor("two pins", async () => (await pinRows()) === 2);
-  const list = await app.text("#pins");
-  assert.ok(list.includes(a.host) && list.includes(b.host), list);
-  assert.equal(await app.visible("#pins-block"), true);
-  await app.shot("7-trusted-agents.png");
-
-  // The first press only arms the button; nothing is forgotten yet.
-  const forget = "#pins tr:first-child button";
-  assert.equal((await app.text(forget)).trim(), "Forget");
-  await app.click(forget);
-  assert.equal((await app.text(forget)).trim(), "Forget?");
-  assert.equal(await pinRows(), 2);
-  await app.shot("7-forget-armed.png");
-  await app.click(forget);
-  await waitFor("one pin left", async () => (await pinRows()) === 1);
-  assert.equal(await errorShown(), "");
+step("two servers are kept, each with its own pin and login", async () => {
+  await app.signInAccount(a, "server-a");
+  await app.signInAccount(b, "server-b");
+  await app.go("servers");
+  await waitFor("two cards", async () => (await app.rows("#sgrid [data-sa='more']")) === 2);
+  const text = await app.text("#sgrid");
+  assert.ok(text.includes("server-a") && text.includes("server-b"), text);
+  await app.shot("7-servers.png");
+  assert.match(a.devices(), /RFE Desktop/);
+  assert.match(b.devices(), /RFE Desktop/);
 });
 
-step("the signed-in marker and the stronger Forget show on the agent in use", async () => {
-  // One pin is left (B or A); sign in to whatever is left and look at it in Settings.
-  left = (await app.text("#pins")).includes(a.host) ? a : b;
-  await connectAndTrust(left);
-  await signInAccount(left);
-  await app.click("#open-settings");
-  await waitFor("settings", () => app.visible("#step-settings"));
-  await waitFor("the pin list", async () => (await app.rows("#settings-pins tr")) === 1);
-  assert.match(await app.text("#settings-pins"), /\(signed in\)/);
-  const forget = "#settings-pins tr button";
-  await app.click(forget);
-  assert.match(await app.text(forget), /Forget and sign out\?/);
-  await app.shot("7-settings-pins-armed.png");
-  // Not confirmed: leave it as it is, and go back signed in.
-  await app.click("#settings-back");
-  await waitFor("devices", () => app.visible("#step-devices"));
-  assert.match(await app.text("#session-text"), /owner/);
-});
-
-step("saved hosts: a second agent keeps the first one's login, and switching works", async () => {
-  const other = left === a ? b : a;
-  await app.click("#open-hosts");
-  await waitFor("settings", () => app.visible("#step-settings"));
-  await app.click("#hosts-add");
-  await waitFor("the connect screen", async () => /new host's address/.test(await messageShown()));
-  await connectAndTrust(other);
-  await signInAccount(other);
-  await app.click("#open-hosts");
-  await waitFor("two hosts", async () => (await app.rows("#hosts-list tr")) === 2);
-  const list = await app.text("#hosts-list");
-  assert.ok(list.includes(a.host) && list.includes(b.host), list);
-  assert.match(list, /in use/);
-  await app.shot("7-saved-hosts.png");
-
-  // The other agent is parked, not signed out: switching needs no password.
-  await app.click('#hosts-list button[aria-label^="Switch to"]');
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  assert.ok((await app.text("#session-text")).includes(left.host), await app.text("#session-text"));
-  assert.equal(await errorShown(), "");
+step("Forget asks first, and only the second step removes the server", async () => {
+  await app.click("#sgrid [data-sa='more']");
+  await app.clickMenu("Forget server");
+  await waitFor("the confirmation", () => app.visible(".dlg.danger"));
+  assert.match(await app.text(".dlg h2"), /^Forget /);
+  await app.shot("7-forget-asked.png");
+  await app.clickLabel("Cancel");
+  assert.equal(await app.rows("#sgrid [data-sa='more']"), 2, "cancelling forgets nothing");
+  await app.click("#sgrid [data-sa='more']");
+  await app.clickMenu("Forget server");
+  await waitFor("the confirmation", () => app.visible(".dlg.danger"));
+  await app.clickLabel("Forget");
+  await waitFor("one server left", async () => (await app.rows("#sgrid [data-sa='more']")) === 1);
 });
 
 step("pair with a one-time code", async () => {
-  await app.click("#sign-out");
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
-  await connectAndTrust(b);
-  await app.click("#use-code");
-  await waitFor("the code form", () => app.visible("#pair-form"));
-  await app.fill("#pairing-code", b.pairCode());
+  await app.click("#rail [data-new]");
+  await waitFor("the connection dialog", () => app.visible("#sh"));
+  await app.click('.dlg [data-fx="conn.tab|code"]');
+  await waitFor("the code form", () => app.visible("#pcc"));
+  await app.fill("#pcn", "paired-a");
+  await app.fill("#pch", a.host);
+  const code = a.pairCode();
+  await app.fill("#pcc", code);
+  assert.equal((await app.value("#pcc")).replace(/\s/g, ""), code, "the field takes the agent's own code format");
   await app.shot("7-pairing-code-form.png");
-  await app.click('#pair-form button[type="submit"]');
-  await waitFor("the device list", () => app.visible("#step-devices"));
-  assert.match(await app.text("#session-text"), /Paired with/);
-  assert.match(await app.text("#devices"), /this computer/);
-  // A code makes an ordinary device: it sees only itself, and the window says why.
-  assert.equal(await app.visible("#devices-note"), true);
+  await app.clickLabel("Continue");
+  await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  await app.clickLabel("They match: trust");
+  await waitFor("signed in with the code", async () => /Signed in to paired-a|Paired/.test(await app.snacks()), 20000);
+  await app.go("devices");
+  await waitFor("this app on Devices", () => app.has(/RFE Desktop\s+This app/, "#stage"));
   await app.shot("7-paired-with-code.png");
 });
 
 step("approve on the PC: the match code is the one the agent shows its owner", async () => {
-  await app.click("#sign-out");
-  await waitFor("the connect screen", () => app.visible("#step-connect"));
-  await connectAndTrust(a);
-  await app.click("#use-approval");
-  await waitFor("the approve step", () => app.visible("#step-approve"));
-  await waitFor("the match code", async () => (await app.text("#match-code")).trim().length >= 6);
-  const shown = (await app.text("#match-code")).trim();
-  const onPc = a.pairRequests();
+  await app.addServer(c, "approved-c");
+  await app.clickLabel("They match: trust");
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  await app.click('.dlg [data-m="ask"]');
+  await app.clickLabel("Ask for approval");
+  await waitFor("the match code", async () => (await app.text(".dlg .pcode")).trim().length >= 6);
+  const shown = (await app.text(".dlg .pcode")).trim();
+  const onPc = c.pairRequests();
   assert.ok(onPc.includes(shown), `window: ${shown}; agent: ${onPc}`);
   await app.shot("7-approve-on-pc.png");
 
-  // Cancel only stops waiting: the window is back at sign-in. (The agent has no call to withdraw a
-  // request, so it stays on the PC's list until it expires; nobody is collecting it.)
-  await app.click("#approve-cancel");
-  await waitFor("the sign-in step", () => app.visible("#step-login"));
-
-  // Again, and this time the owner accepts the new request (matched by its code, as the owner would).
-  await app.click("#use-approval");
-  await waitFor("the approve step", () => app.visible("#step-approve"));
+  // Not now only stops waiting; then ask again and let the owner accept the new request.
+  await app.clickLabel("Not now");
+  await waitFor("the dialog to close", async () => !(await app.visible(".dlg")));
+  await app.go("servers");
+  await app.clickInCard("approved-c", "Sign in");
+  await waitFor("the sign-in dialog", () => app.visible("#siu"));
+  await app.click('.dlg [data-m="ask"]');
+  await app.clickLabel("Ask for approval");
   await waitFor("a new match code", async () => {
-    const code = (await app.text("#match-code")).trim();
+    const code = (await app.text(".dlg .pcode")).trim();
     return code.length >= 6 && code !== shown;
   });
-  const second = (await app.text("#match-code")).trim();
-  a.answerPairRequest("accept", a.pairRequestId(second));
-  await waitFor("the device list", () => app.visible("#step-devices"), 30000);
-  assert.equal(await errorShown(), "");
+  const second = (await app.text(".dlg .pcode")).trim();
+  c.answerPairRequest("accept", c.pairRequestId(second));
+  await waitFor("the sign-in to finish", async () => !(await app.visible(".dlg")), 30000);
+  assert.match(await app.snacks(), /Signed in to approved-c/);
 });
 
-step("a login the agent revoked sends the window back to sign-in with the reason", async () => {
-  // Signed in through approval: its device id is in the agent's list; revoke every active device.
-  const rows = a.devices().split("\n").filter((l) => /RFE Desktop/.test(l));
-  assert.ok(rows.length >= 1, a.devices());
-  for (const line of rows) a.revoke(line.trim().split(/\s+/)[0]);
-  await app.click("#refresh");
-  await waitFor("the sign-in step", () => app.visible("#step-login"), 20000);
-  assert.notEqual(await messageShown(), "", "the window says why");
+step("a login the agent revoked sends the window back to sign-in", async () => {
+  const rows = c.devices().split("\n").filter((l) => /RFE Desktop/.test(l));
+  assert.ok(rows.length >= 1, c.devices());
+  for (const line of rows) c.revoke(line.trim().split(/\s+/)[0]);
+  // The window finds out by itself (its periodic check gets a 401) and asks for a sign-in again.
+  await app.go("servers");
+  await waitFor("the revoked server asks for a sign-in", () => app.script("const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b').textContent.trim() === 'approved-c'); return !!c && /not signed in/.test(c.innerText);"), 40000);
   await app.shot("7-login-revoked.png");
 });
 
-step("Create a new device key needs two presses", async () => {
-  const link = "#reset-key";
-  assert.match((await app.text(link)).trim(), /^Create a new device key/);
-  await app.click(link);
-  assert.match((await app.text(link)).trim(), /^Click again/);
-  await app.shot("7-reset-key-armed.png");
-  await app.click(link);
-  await waitFor("the note", async () => /A new device key will be created/.test(await messageShown()));
-  assert.equal(await errorShown(), "");
+step("Create a new device key needs a confirmation", async () => {
+  await app.go("settings");
+  await waitFor("settings", () => app.has(/Device key/, "#stage"));
+  await app.clickLabel("New key…", "#stage");
+  await waitFor("the confirmation", () => app.visible(".dlg.danger"));
+  assert.match(await app.text(".dlg h2"), /Create a new device key/);
+  await app.shot("7-reset-key-asked.png");
+  await app.clickLabel("Cancel");
+  assert.doesNotMatch(await app.snacks(), /new device key will be created/);
+  await app.clickLabel("New key…", "#stage");
+  await waitFor("the confirmation", () => app.visible(".dlg.danger"));
+  await app.clickLabel("Create a new device key");
+  await waitFor("the note", async () => /A new device key will be created/.test(await app.snacks()));
   await sleep(200);
-  await app.shot("7-reset-key-done.png");
 });

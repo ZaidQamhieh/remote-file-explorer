@@ -1,8 +1,10 @@
 //! The audit and logs screen's messages are explained in the user guide, and are really in the app.
 
+#[path = "support/ui.rs"]
+mod ui;
 use std::path::Path;
 
-/// Stems of what this feature shows that the agent did not word, from `src/audit.rs` and `ui/app.js`.
+/// Stems of what this feature shows that the agent did not word, from `src/audit.rs` and `ui/*.js`.
 const MESSAGES: &[&str] = &[
     "This login cannot read the audit log or the agent log.",
     "The audit log is empty.",
@@ -21,7 +23,7 @@ fn read(rel: &str) -> String {
 #[test]
 fn every_message_of_the_audit_screen_is_in_the_guide_and_in_the_app() {
     let guide = read("../docs/user-guide.md");
-    let code = format!("{}{}", read("src/audit.rs"), read("../ui/app.js"));
+    let code = format!("{}{}", read("src/audit.rs"), ui::js());
     for stem in MESSAGES {
         assert!(
             guide.contains(stem),

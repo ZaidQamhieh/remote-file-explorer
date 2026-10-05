@@ -22,7 +22,7 @@
     const raw = typeof e === 'string' ? e : (e && e.message) || String(e);
     const m = /\(([A-Z][A-Z_]+)\)$/.exec(raw);
     const err = new Error(raw.replace(/^The agent says: /, '').replace(/ \([A-Z][A-Z_]+\)$/, ''));
-    err.code = m ? m[1] : /not signed in/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|connect|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
+    err.code = m ? m[1] : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|connect|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
     err.raw = raw;
     return err;
   }
@@ -119,7 +119,8 @@
   function list(host, path) {
     const c = cached(host, path);
     if (c && c.state === 'loaded') return c.items;
-    if (!c || c.state === 'error') load(host, path).catch(() => {});
+    /* A folder that failed is not asked again here: a failed load announces itself, and reading it again would loop. It is read again on Refresh, on opening it, or when the server is back. */
+    if (!c) load(host, path).catch(() => {});
     return null;
   }
   const listState = (host, path) => { const c = cached(host, path); return c ? c.state : 'none'; };
@@ -152,6 +153,8 @@
         } else { const page = await call('local_list', { path }); items = page.entries.map(entryNode); }
       } else {
         const s = server(host);
+        /* "/" means the server's list of places or a real folder, depending on its roots: they are known before it is read. */
+        if (s && path === '/' && !s.roots.length) await loadRoots(s).catch(() => {});
         if (s && s.virtualRoot && path === s.virtualRoot) {
           items = (s.roots || []).map((r) => ({ n: r.label || baseOf(r.path), t: 'dir', b: 0, mod: 0, perm: 'drwxr-xr-x', own: '', path: r.path, mime: '', link: false, to: '', cc: null, root: true, total: r.totalBytes, free: r.freeBytes }));
         } else {
@@ -317,6 +320,7 @@
       s.metrics = snap.metrics || null; s.metricsForbidden = !!snap.metricsForbidden; s.statusNote = snap.statusNote || ''; s.metricsNote = snap.metricsNote || '';
       s.lastSeen = now(); s.reachable = true; s.signedIn = true;
       const was = s.state; setState(s, 'online');
+      if (was !== 'online') { const dirs = dirsOf(s.id); for (const k of Object.keys(dirs)) if (dirs[k].state === 'error') delete dirs[k]; } /* folders that failed while it was away are read again */
       if (was !== 'online') { log('conn', 'Connected to ' + s.name + ' · ' + s.latency + ' ms'); if (settings.notifyDone && was !== 'connecting' ) note('ok', s.name + ' is back'); resumeHost(s.id); if (!s.roots.length) loadRoots(s).catch(() => {}); }
     } catch (e) {
       if (s.userOff) return;
@@ -339,6 +343,8 @@
     // With roots set on the agent, or on a drive-lettered system, "/" is a list of those places.
     const first = s.roots[0] && s.roots[0].path;
     s.virtualRoot = s.roots.length && (r.source === 'roots' || (first && parsePath(first).sep === '\\') || s.roots.length > 1 && !s.roots.some((x) => x.path === '/')) ? '/' : null;
+    /* A folder asked for before the places were known (the first "/" of a server that shows only its allowed folders) failed; it is read again now. */
+    const dirs = dirsOf(s.id); for (const k of Object.keys(dirs)) if (dirs[k].state === 'error') { delete dirs[k]; emit('fs', { host: s.id, dir: k }); }
     emit('servers', s);
   }
   const start = (id) => { if (id === LOCAL) return LOCAL_START.path || '/'; const s = server(id); if (!s) return '/'; if (s.last) return s.last; const r = s.roots && s.roots[0]; if (s.virtualRoot) return s.virtualRoot; return r ? r.path : '/'; };
@@ -473,8 +479,8 @@
         const nowMs = now(); const was = t.state;
         if (was === 'paused' && (st === 'running' || st === 'queued') && nowMs - (t.pauseAt || 0) < 3000) st = 'paused'; /* the core is still stopping it */
         if (was === 'waiting' && (st === 'running' || st === 'queued' || st === 'paused')) st = 'waiting'; /* the server is away: it is held until it is back */
-        /* The core finished stopping a transfer that the window has already asked to start again (a reconnect that came while it was stopping): start it again. */
-        if (st === 'paused' && (was === 'queued' || was === 'running') && nowMs - (t.autoRetryAt || 0) > 1500) { t.autoRetryAt = nowMs; retryRust(t); st = 'queued'; }
+        /* The core finished stopping a transfer that the window has already asked to start again (a reconnect that came while it was stopping): start it again. Only for a short while after a reconnect, so a Pause all from the tray stays paused. */
+        if (st === 'paused' && (was === 'queued' || was === 'running') && nowMs - (t.resumedAt || 0) < 20000 && nowMs - (t.autoRetryAt || 0) > 1500) { t.autoRetryAt = nowMs; retryRust(t); st = 'queued'; }
         if (t.lastAt) { const dt = (nowMs - t.lastAt) / 1000; if (dt > 0.2) { const inst = Math.max(0, (done - t.lastDone) / dt); t.speed = t.speed ? t.speed * 0.6 + inst * 0.4 : inst; t.lastDone = done; t.lastAt = nowMs; } } else { t.lastDone = done; t.lastAt = nowMs; }
         t.done = done; if (tot) t.bytes = Math.max(tot, done, 1); t.files = vs.length; t.verified = vs.every((v) => v.verified);
         if (st === 'running' && !t.startedAt) t.startedAt = nowMs;
@@ -505,7 +511,7 @@
   }
   function resumeHost(hostId) {
     let any = false;
-    for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) retryRust(t); else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; if (!t.starting) startTask(t); } any = true; }
+    for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) { t.resumedAt = now(); retryRust(t); } else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; if (!t.starting) startTask(t); } any = true; }
     if (any) emit('transfers');
   }
   async function retryRust(t) { t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); for (const id of t.rids) { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } } pollTransfers(); }

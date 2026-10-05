@@ -51,6 +51,10 @@ pub(crate) fn encode_mime(path: &str, bytes: &[u8]) -> String {
         "image/jpeg"
     } else if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         "image/png"
+    } else if bytes.starts_with(b"GIF8") {
+        "image/gif"
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml"
     } else if lower.ends_with(".webp") || bytes.get(8..12) == Some(b"WEBP") {
         "image/webp"
     } else {

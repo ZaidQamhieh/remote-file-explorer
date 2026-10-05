@@ -2016,9 +2016,7 @@ pub async fn transfer_upload_tree(
             .is_err()
         {
             // Already there is fine; anything else (a file in the way, no right to write) is not.
-            let there = crate::files::list(&dir, &store, &up, None, Some(1000)).await;
-            let is_folder =
-                matches!(&there, Ok(p) if p.entries.iter().any(|e| e.name == step && e.is_dir));
+            let is_folder = folder_exists(&dir, &store, &up, step).await;
             if !is_folder {
                 return Err(format!("cannot make the folder {step} on the computer"));
             }
@@ -2044,6 +2042,31 @@ pub async fn transfer_upload_tree(
     }
     .await;
     settle_queued(&state, queued, ids)
+}
+
+/// Whether `up` holds a folder named `step`, reading its pages in turn: a folder of thousands of
+/// entries does not fit in the first one.
+async fn folder_exists(
+    dir: &Path,
+    store: &crate::secrets::Offloaded,
+    up: &str,
+    step: &str,
+) -> bool {
+    let mut cursor: Option<String> = None;
+    for _ in 0..500 {
+        let Ok(page) = crate::files::list(dir, store, up, cursor.as_deref(), Some(1000)).await
+        else {
+            return false;
+        };
+        if page.entries.iter().any(|e| e.name == step && e.is_dir) {
+            return true;
+        }
+        match page.next_cursor {
+            Some(c) if !c.is_empty() => cursor = Some(c),
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// The ids of a tree that was queued, or its error. When queuing stopped half way, what was already

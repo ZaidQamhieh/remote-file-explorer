@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const E = Engine, U = E.util, S = E.settings, R = RFE;
-  const A = (window.A = { E, U, S, state: { view: 'files', sideTab: 'details', sheetOpen: true, sheetTab: 'active', q: '', histFilter: 'all', drag: null } });
+  const A = (window.A = { E, U, S, state: { view: 'files', sideTab: 'details', sheetOpen: window.innerHeight >= 820, sheetTab: 'active', q: '', histFilter: 'all', drag: null } });
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,7 +13,7 @@
   A.hostName = hostName;
   const ago = (ms) => { const s = Math.max(0, Math.round((E.now() - ms) / 1000)); if (s < 5) return 'just now'; if (s < 60) return s + ' s ago'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; return Math.floor(s / 3600) + ' h ago'; };
   A.ago = ago;
-  const hl = (name, q) => { if (!q) return esc(name); const i = name.toLowerCase().indexOf(q.toLowerCase()); if (i < 0) return esc(name); return esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length)); };
+  const hl = (name, q) => { const i = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1; return '<span data-nolocal>' + (i < 0 ? esc(name) : esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length))) + '</span>'; };
   A.hl = hl;
   const itemSize = (n) => (n.t === 'dir' ? (n.cc == null && !n.kids ? '—' : E.fs.itemCount(n) + (E.fs.itemCount(n) === 1 ? ' item' : ' items')) : U.fmtBytes(n.b));
   A.itemSize = itemSize;
@@ -97,7 +97,7 @@
   A.confirmDelete = (host, dir, names, after) => {
     const nodes = names.map((n) => E.fs.get(host, U.join(dir, n))).filter(Boolean);
     const tot = nodes.reduce((a, n) => { const t = E.fs.total(n); return { b: a.b + t.bytes, f: a.f + t.files }; }, { b: 0, f: 0 });
-    const lst = nodes.slice(0, 50).map((n) => '<li>' + fic(n) + '<span class="trunc">' + esc(n.n) + '</span><small>' + itemSize(n) + '</small></li>').join('');
+    const lst = nodes.slice(0, 50).map((n) => '<li>' + fic(n) + '<span class="trunc" data-nolocal>' + esc(n.n) + '</span><small>' + itemSize(n) + '</small></li>').join('');
     A.dialog({
       icon: 'trash', cls: 'danger', title: names.length === 1 ? 'Delete “' + (names[0].length > 30 ? names[0].slice(0, 30) + '…' : names[0]) + '”?' : 'Delete ' + names.length + ' items?',
       body: '<div>' + (host === 'local' ? 'These will be deleted from this computer for good.' : (S.trash === false ? 'These will be deleted from <b>' + esc(hostName(host)) + '</b> for good.' : 'These move to Trash on <b>' + esc(hostName(host)) + '</b> and can be restored from Tools → Trash.')) + ' ' + tot.f.toLocaleString() + ' file' + (tot.f === 1 ? '' : 's') + ', ' + U.fmtBytes(tot.b) + '.</div><ul class="names">' + lst + '</ul>',
@@ -179,7 +179,7 @@
       if (st === 'lost') return head + wrap('bad', 'wifi-off', 'Connection lost', 'Lost the connection to <b>' + esc(s.name) + '</b> ' + Math.round((E.now() - s.lostAt) / 1000) + ' s ago. ' + (S.autoReconnect ? 'Reconnecting in <b>' + Math.max(0, Math.ceil(s.retryIn)) + ' s</b>.' : 'Auto-reconnect is off.') + ' Transfers to this server are paused and will resume.', B('retry', 'Retry now', 'f', 'refresh') + B('servers', 'Servers', 'tx', 'server'));
       if (st === 'offline') return head + wrap('bad', 'power', 'Server offline', 'Host did not answer on <b>' + esc(s.host) + ':' + s.port + '</b>. Check that it is powered on and on this network. Last seen ' + (s.lastSeen ? ago(s.lastSeen) : 'never') + '.', B('retry', 'Try again', 'f', 'refresh') + B('diagnose', 'Diagnose', 'tx', 'activity') + B('edit', 'Edit connection', 'tx', 'edit'));
       if (st === 'connecting') return head + '<div class="es"><div class="conncard">' + A.serverCard(s).replace(/data-sa="(\w+)" data-id="[^"]*"/g, 'data-act="$1"').replace(/<button class="ib sm" data-act="more"[^>]*>.*?<\/button>/, '') + '</div></div>';
-      if (st === 'trust') return head + wrap('warn', 'shield', 'Trust this server?', 'First connection to <b>' + esc(s.name) + '</b>. Compare this fingerprint with <span class="mono">rfe-agent --fingerprint</span> on that machine.', B('cancel', 'Cancel', 'tx') + B('trust', 'Trust and connect', 'f', 'shield-check'), '<div class="fp">SHA-256 ' + esc(s.fp) + '</div>');
+      if (st === 'trust') return head + wrap('warn', 'shield', 'Check this server’s key', 'First connection to <b>' + esc(s.name) + '</b>. Nothing is sent until you have compared its key with the one on that computer.', B('cancel', 'Cancel', 'tx') + B('trust', 'Review key…', 'f', 'shield-check'));
       return head + wrap('', 'plug', 'Not connected', '<b>' + esc(hostName(this.host)) + '</b> · ' + esc(s ? s.host : '') + '. Connect to browse and transfer files.', B('connect', 'Connect', 'f', 'plug') + B('servers', 'Servers', 'tx', 'server'));
     }
     renderActions() {
@@ -192,7 +192,7 @@
     renderFoot() {
       const f = $('.pfoot', this.el); if (!f) return; const sel = this.selected(); const sv = E.server(this.host); const cp = E.fs.cached(this.host, this.path); const ro = A.readOnlyNote(this.host); const free = this.host !== 'local' && sv && sv.disk[1] > 0 ? U.fmtBytes((sv.disk[1] - sv.disk[0]) * 1e9) + ' free' : '';
       const bytes = sel.reduce((a, n) => a + (n.t === 'dir' ? 0 : n.b), 0);
-      f.innerHTML = '<span><b>' + this.items.length.toLocaleString() + '</b> ' + (this.q || this.filter !== 'all' ? 'of ' + this.total.toLocaleString() + ' ' : '') + 'items</span>' + (sel.length ? '<span><b>' + sel.length + '</b> selected' + (bytes ? ' · ' + U.fmtBytes(bytes) : '') + '</span>' : '') + '<span class="sp"></span>' + (cp && cp.more ? '<span class="ro">' + ic('alert-circle') + 'The agent lists more items than are shown.</span>' : '') + (ro ? '<span class="ro">' + ic('lock') + esc(ro) + '</span>' : '') + '<span>' + free + '</span>';
+      f.innerHTML = '<span><b>' + this.items.length.toLocaleString() + '</b> ' + (this.q || this.filter !== 'all' ? 'of ' + this.total.toLocaleString() + ' ' : '') + (this.items.length === 1 && !this.q && this.filter === 'all' ? 'item' : 'items') + '</span>' + (sel.length ? '<span><b>' + sel.length + '</b> selected' + (bytes ? ' · ' + U.fmtBytes(bytes) : '') + '</span>' : '') + '<span class="sp"></span>' + (cp && cp.more ? '<span class="ro">' + ic('alert-circle') + 'The agent lists more items than are shown.</span>' : '') + (ro ? '<span class="ro">' + ic('lock') + esc(ro) + '</span>' : '') + '<span>' + free + '</span>';
     }
     renderRows() {
       const rows = $('[data-rows]', this.el); if (!rows) return; const vs = $('.vs', rows);
@@ -344,7 +344,7 @@
         case 'mode': this.mode = this.mode === 'list' ? 'grid' : 'list'; this.render(); break;
         case 'sortmenu': { const r = e.target.closest('button').getBoundingClientRect(); const mk = (k, l) => ({ icon: this.sort.key === k ? 'check' : '', label: l, sub: this.sort.key === k ? (this.sort.dir === 1 ? 'A→Z' : 'Z→A') : '', onClick: () => { this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); } }); A.menu(r.left, r.bottom + 4, [mk('name', 'Name'), mk('size', 'Size'), mk('mod', 'Modified'), mk('kind', 'Type')]); break; }
         case 'retry': E.retryNow(this.host); break; case 'connect': E.connect(this.host); break; case 'cancel': E.cancelConnect(this.host); break;
-        case 'trust': E.trust(this.host); break; case 'servers': A.go('servers'); break; case 'edit': A.serverDialog(E.server(this.host)); break;
+        case 'trust': { const ts = E.server(this.host); if (ts) A.trustDialog(ts); break; } case 'servers': A.go('servers'); break; case 'edit': A.serverDialog(E.server(this.host)); break;
       }
     }
   }
@@ -402,7 +402,7 @@
   A.card = (t) => {
     const up = t.dir === 'up'; const sv = hostName(t.host); const route = up ? 'This computer → ' + sv : sv + ' → This computer'; const where = up ? t.dstDir : t.dstDir;
     const icn = (n) => '<div class="ico">' + ic(n) + '</div>';
-    const head = (i, extra) => '<div class="r1">' + icn(i) + '<div class="nm"><b title="' + esc(t.name) + '">' + esc(t.name) + (t.isDir ? ' <span style="font-weight:400;color:var(--on-var)">· ' + t.files + ' files</span>' : '') + '</b><small>' + esc(route) + ' · ' + esc(where) + '</small></div>' + (extra || '') + '</div>';
+    const head = (i, extra) => '<div class="r1">' + icn(i) + '<div class="nm"><b data-nolocal title="' + esc(t.name) + '">' + esc(t.name) + (t.isDir ? ' <span style="font-weight:400;color:var(--on-var)">· ' + t.files + ' files</span>' : '') + '</b><small>' + esc(route) + ' · ' + esc(where) + '</small></div>' + (extra || '') + '</div>';
     const x = (act, i, title) => '<button class="ib sm" data-t="' + act + '" title="' + title + '" aria-label="' + title + '">' + ic(i) + '</button>';
     const stats = '<div class="st"><span><b data-f="pct"></b> · <span data-f="done"></span> of ' + U.fmtBytes(t.bytes) + '</span><span><b data-f="speed"></b> · <span data-f="eta"></span></span></div>';
     const B = (a, l, k) => '<button class="btn sm ' + (k || '') + '" data-t="' + a + '">' + l + '</button>';
@@ -414,7 +414,7 @@
       case 'conflict': cls = 'warn'; c = head('alert') + '<div class="msg">' + esc(t.msg) + (t.conflict ? ' (' + (t.conflict.dir ? 'folder' : U.fmtBytes(t.conflict.size)) + (t.conflict.mod ? ', ' + U.fmtDate(t.conflict.mod) : '') + ')' : '') + '. Yours is ' + U.fmtBytes(t.bytes) + '.</div><div class="ac">' + B('replace', 'Replace', 'f') + B('keep', 'Keep both') + B('skip', 'Skip') + '<label class="all"><input type="checkbox" data-all> Apply to all</label></div>'; break;
       case 'waiting': cls = 'warn'; c = head('wifi-off', x('cancel', 'x', 'Cancel')) + '<div class="lin"><i></i></div><div class="msg">' + esc(t.msg) + '. Will resume automatically when ' + esc(sv) + ' is back.</div><div class="ac">' + B('servers', 'Servers') + '</div>'; break;
       case 'failed': cls = 'bad'; c = head(/Permission/.test(t.msg) ? 'lock' : 'alert-circle') + '<div class="msg">' + esc(t.msg) + '</div><div class="ac">' + B('retry', 'Retry', 'f') + B('dismiss', 'Dismiss') + '</div>'; break;
-      case 'done': cls += ' done'; c = head('check-circle', x('dismiss', 'x', 'Dismiss')) + '<div class="st"><span>' + U.fmtBytes(t.bytes) + ' · ' + U.fmtDur((t.finishedAt - t.startedAt) / 1000) + (t.verified ? ' · Verified by the computer' : '') + '</span><span>' + ago(t.finishedAt) + '</span></div><div class="ac">' + B('reveal', 'Show in folder') + '</div>'; break;
+      case 'done': cls += ' done'; c = head('check-circle', x('dismiss', 'x', 'Dismiss')) + '<div class="st"><span>' + U.fmtBytes(t.bytes) + ' · ' + U.fmtDur((t.finishedAt - (t.startedAt || t.queuedAt)) / 1000) + (t.verified ? ' · Verified by the computer' : '') + '</span><span>' + ago(t.finishedAt) + '</span></div><div class="ac">' + B('reveal', 'Show in folder') + '</div>'; break;
     }
     return '<div class="card ' + cls + '" data-tid="' + t.id + '" data-st="' + t.state + '">' + c + '</div>';
   };

@@ -217,6 +217,26 @@ test("a health answer that arrives after Disconnect does not bring the server ba
   assert.equal(calls.filter(([c]) => c === "transfer_retry").length, 0);
 });
 
+test("a folder that failed before the server's places were known is read again once they are", async () => {
+  const { E } = await boot({ files_list: () => Promise.reject("path is outside allowed root: /") });
+  await E.fs.load(HOST, "/srv/x").catch(() => {});
+  assert.equal(E.fs.state(HOST, "/srv/x"), "error");
+  await E.loadRoots(E.server(HOST));
+  assert.equal(E.fs.state(HOST, "/srv/x"), "none");
+});
+
+test("a login the agent no longer accepts sends the server back to sign-in", async () => {
+  const { E } = await boot();
+  E.setInvoke(async (cmd) => {
+    if (cmd === "agent_health") return Promise.reject("The agent no longer accepts this login. Sign in again.");
+    return null;
+  });
+  const s = E.server(HOST);
+  await E.check(s);
+  assert.equal(s.state, "login");
+  assert.equal(s.signedIn, false);
+});
+
 test("a server disconnected while a transfer is being set up has it paused when the core answers", async () => {
   let release;
   const { E, calls } = await boot({
@@ -299,10 +319,32 @@ test("a reconnect that came while the core was still stopping a transfer starts 
   await until(() => tasks[0].rids.length, "the core to take it");
   await E.pollTransfers();
   tasks[0].state = "queued"; /* the window has asked to start it again; the core is still stopping */
+  tasks[0].resumedAt = Date.now(); /* by a reconnect, just now */
   views.r1.state = "paused"; /* ...and now it has stopped */
   await E.pollTransfers();
   await until(() => retries > 0, "the automatic retry");
   assert.notEqual(tasks[0].state, "paused");
+});
+
+test("a Pause all from the tray stays paused: the window does not start it again", async () => {
+  const views = { r1: { id: "r1", direction: "download", state: "running", name: "big.bin", remotePath: "/srv/big.bin", localPath: "", done: 5, total: 10, error: "", verified: false, host: HOST } };
+  let retries = 0;
+  const { E } = await boot({
+    files_list: () => ({ entries: [entry("big.bin", { size: 10 })], nextCursor: null }),
+    transfer_download_tree: () => ["r1"],
+    transfer_list: () => Object.values(views),
+    transfer_retry: () => { retries++; },
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["big.bin"] });
+  await until(() => tasks[0].rids.length, "the core to take it");
+  await E.pollTransfers();
+  views.r1.state = "paused"; /* the tray paused it in the core; the window did not ask */
+  await E.pollTransfers();
+  await new Promise((r) => setTimeout(r, 300));
+  await E.pollTransfers();
+  assert.equal(retries, 0);
+  assert.equal(tasks[0].state, "paused");
 });
 
 test("searching this computer asks the core and returns what it found", async () => {

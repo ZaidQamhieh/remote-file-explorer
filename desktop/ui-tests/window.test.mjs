@@ -233,6 +233,15 @@ test("the language switch translates the labels and flips the layout for Arabic"
   done();
 });
 
+test("the language switch leaves the names of the user's own files alone", async () => {
+  const { d, A, done } = await open("settings");
+  const box = d.createElement("div"); box.innerHTML = '<b>' + A.hl("Settings", "") + '</b>'; d.body.appendChild(box);
+  A.S.lang = "de"; A.applyLang(); await sleep(50);
+  assert.equal(text(box), "Settings");
+  A.S.lang = "en"; A.applyLang();
+  done();
+});
+
 test("opening an entry goes to its own path, not to its label (a root named Documents lives elsewhere)", async () => {
   const { A, E, errs, done } = await open();
   await E.fs.load(NAS, "/srv");

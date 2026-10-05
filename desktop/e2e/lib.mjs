@@ -165,6 +165,12 @@ export class App {
     }
   }
 
+  /** In the trust dialog: tick that the fingerprints were compared, then trust. */
+  async confirmTrust() {
+    await this.script("document.getElementById('tfm').click();");
+    await this.clickLabel("They match: trust");
+  }
+
   /** New connection -> Manual: types the address, compares nothing, stops at the trust dialog. */
   async addServer(agent, name) {
     await this.skipWelcome();
@@ -180,7 +186,7 @@ export class App {
   /** The whole account sign-in, from the New connection dialog to the signed-in folder list. */
   async signInAccount(agent, name) {
     await this.addServer(agent, name);
-    await this.clickLabel("They match: trust");
+    await this.confirmTrust();
     await waitFor("the sign-in dialog", () => this.visible("#siu"));
     await this.fill("#siu", agent.user);
     await this.fill("#sip", agent.password);

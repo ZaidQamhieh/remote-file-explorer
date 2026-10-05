@@ -21,6 +21,11 @@ struct Site {
 type Release<'a> = (&'a str, bool, bool, Vec<(&'a str, Vec<u8>)>);
 
 fn site(releases: &[Release<'_>]) -> Site {
+    site_with(releases, vec![])
+}
+
+/// `site`, plus more bodies served at exact request paths.
+fn site_with(releases: &[Release<'_>], extra: Vec<(String, Vec<u8>)>) -> Site {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let mut routes: HashMap<String, Vec<u8>> = HashMap::new();
@@ -33,6 +38,7 @@ fn site(releases: &[Release<'_>]) -> Site {
         }
     }
     routes.insert("/list".into(), serde_json::to_vec(&list).unwrap());
+    routes.extend(extra);
     let hits = Arc::new(Mutex::new(Vec::new()));
     let seen = hits.clone();
     std::thread::spawn(move || {
@@ -294,4 +300,27 @@ async fn a_package_that_is_not_listed_or_not_a_package_is_refused() {
         "nothing was fetched"
     );
     assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none());
+}
+
+#[tokio::test]
+async fn a_page_full_of_other_products_releases_does_not_hide_the_desktop_ones() {
+    /* The agent and the phone app publish into the same list: 50 of them can come first. */
+    let others: Vec<serde_json::Value> = (0..50)
+        .map(|i| release("http://x", &format!("agent-v1.{i}.0"), false, false, &[]))
+        .collect();
+    let mine = vec![release("http://x", "desktop-v1.1.0", false, false, &[])];
+    let s = site_with(
+        &[],
+        vec![
+            ("/p".into(), serde_json::to_vec(&others).unwrap()),
+            ("/p?page=2".into(), serde_json::to_vec(&mine).unwrap()),
+        ],
+    );
+    let v = check_at(&format!("{}/p", s.base), "1.0.0", false, false)
+        .await
+        .unwrap();
+    assert_eq!(v.latest, "1.1.0");
+    assert!(v.available);
+    let hits = s.hits.lock().unwrap().clone();
+    assert_eq!(hits, ["/p", "/p?page=2"]);
 }

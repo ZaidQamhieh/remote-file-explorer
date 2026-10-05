@@ -22,6 +22,8 @@ button{cursor:pointer}
 .app{display:grid;grid-template-columns:88px 1fr;height:100vh;min-width:1100px}
 /* rail */
 .rail{display:flex;flex-direction:column;align-items:center;padding:14px 0 18px;gap:6px}
+/* A rail taller than the window scrolls by itself instead of making the whole window scroll. */
+.rail{min-height:0;overflow:hidden auto;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}.app{overflow:hidden}
 .rail .rmenu{width:48px;height:48px;display:grid;place-items:center;border-radius:24px;color:var(--on-var)}
 .rail .fab{width:56px;height:56px;border-radius:16px;background:var(--pc);color:var(--on-pc);display:grid;place-items:center;margin:4px 0 14px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .rail .fab:hover{box-shadow:0 3px 8px rgba(0,0,0,.25)}.rail .fab .ic{font-size:24px}
@@ -48,7 +50,7 @@ button{cursor:pointer}
 .srv{height:40px;border-radius:12px;border:1px solid var(--outline);padding:0 10px 0 12px;display:inline-flex;align-items:center;gap:8px;font-weight:500;color:var(--on-surface);white-space:nowrap}
 .srv:hover{background:var(--hover)}
 .srv .dot{width:8px;height:8px;border-radius:4px;background:var(--ok-dot);flex:none}
-.srv .dot.lost,.srv .dot.offline{background:var(--err)}.srv .dot.connecting,.srv .dot.trust{background:var(--amber-dot);animation:pulse 1s infinite}.srv .dot.disconnected{background:var(--outline)}
+.srv .dot.lost,.srv .dot.offline{background:var(--err)}.srv .dot.connecting,.srv .dot.trust{background:var(--amber-dot);animation:pulse 1s infinite}.srv .dot.disconnected{background:var(--outline)}.srv .dot.refused{background:var(--err)}.srv .dot.login{background:var(--amber-dot)}
 .srv small{color:var(--on-var);font-weight:400}
 .srv .ic{font-size:18px;color:var(--on-var)}
 .top .sp{flex:1}

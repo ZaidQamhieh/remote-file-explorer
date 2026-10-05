@@ -83,7 +83,7 @@ step("pair with a one-time code", async () => {
   await app.shot("7-pairing-code-form.png");
   await app.clickLabel("Continue");
   await waitFor("the trust dialog", () => app.visible(".fpfull"));
-  await app.clickLabel("They match: trust");
+  await app.confirmTrust();
   await waitFor("signed in with the code", async () => /Signed in to paired-a|Paired/.test(await app.snacks()), 20000);
   await app.go("devices");
   await waitFor("this app on Devices", () => app.has(/RFE Desktop\s+This app/, "#stage"));
@@ -92,7 +92,7 @@ step("pair with a one-time code", async () => {
 
 step("approve on the PC: the match code is the one the agent shows its owner", async () => {
   await app.addServer(c, "approved-c");
-  await app.clickLabel("They match: trust");
+  await app.confirmTrust();
   await waitFor("the sign-in dialog", () => app.visible("#siu"));
   await app.click('.dlg [data-m="ask"]');
   await app.clickLabel("Ask for approval");
@@ -126,7 +126,7 @@ step("a login the agent revoked sends the window back to sign-in", async () => {
   for (const line of rows) c.revoke(line.trim().split(/\s+/)[0]);
   // The window finds out by itself (its periodic check gets a 401) and asks for a sign-in again.
   await app.go("servers");
-  await waitFor("the revoked server asks for a sign-in", () => app.script("const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b').textContent.trim() === 'approved-c'); return !!c && /not signed in/.test(c.innerText);"), 40000);
+  await waitFor("the revoked server asks for a sign-in", () => app.script("const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b').textContent.trim() === 'approved-c'); return !!c && /not signed in|no longer accepts this login/.test(c.innerText);"), 40000);
   await app.shot("7-login-revoked.png");
 });
 

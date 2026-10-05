@@ -317,6 +317,19 @@ const PROGRAMS: &[&str] = &[
     "desktop", "lnk", "app", "command", "pif", "reg", "dll",
 ];
 
+/// Extensions of plain data. A file system without permissions (FAT, exFAT, some network shares) shows
+/// every file as executable, so the executable bit alone must not stop a photo or a document from opening.
+const DATA: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "tif", "tiff", "mp3", "flac", "wav",
+    "ogg", "m4a", "aac", "mp4", "mkv", "mov", "avi", "webm", "m4v", "pdf", "txt", "md", "csv",
+    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "zip", "7z", "rar",
+    "tar", "gz",
+];
+
+fn starts_program(ext: &str, exec_bit: bool) -> bool {
+    PROGRAMS.contains(&ext) || (exec_bit && !DATA.contains(&ext))
+}
+
 /// Opens a file or folder on this computer with the system's default app.
 pub fn open(path: &str) -> Result<(), String> {
     let p = check(path)?;
@@ -327,7 +340,7 @@ pub fn open(path: &str) -> Result<(), String> {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if PROGRAMS.contains(&ext.as_str()) || is_executable(&meta) {
+        if starts_program(&ext, is_executable(&meta)) {
             return Err("This file would start a program, so it is not opened from here.".into());
         }
     }
@@ -623,6 +636,24 @@ mod tests {
         assert_eq!(rfc3339(0), "1970-01-01T00:00:00Z");
         assert_eq!(rfc3339(1_791_900_000), "2026-10-13T14:00:00Z");
         assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
+    }
+
+    #[test]
+    fn the_executable_bit_alone_does_not_block_a_document() {
+        assert!(starts_program("sh", false));
+        assert!(starts_program("", true));
+        assert!(starts_program("bin", true));
+        assert!(!starts_program("jpg", true));
+        assert!(!starts_program("pdf", true));
+        assert!(!starts_program("txt", false));
+    }
+
+    #[test]
+    fn thumbnails_name_gif_and_svg_images() {
+        let mime = |p: &str, b: &[u8]| crate::fileops::encode_mime(p, b);
+        assert!(mime("a.gif", b"GIF89a..").starts_with("data:image/gif;"));
+        assert!(mime("a.svg", b"<svg/>").starts_with("data:image/svg+xml;"));
+        assert!(mime("a.png", &[0x89, b'P', b'N', b'G']).starts_with("data:image/png;"));
     }
 
     #[test]

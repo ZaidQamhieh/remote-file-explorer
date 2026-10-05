@@ -25,7 +25,7 @@ test("no Secret Service: the window opens and sign-in says what is missing", { s
   resetAppState();
   app = await App.start();
   await app.addServer(agent, "no-keystore-pc");
-  await app.clickLabel("They match: trust");
+  await app.confirmTrust();
   await waitFor("the sign-in dialog", () => app.visible("#siu"));
   await app.fill("#siu", agent.user);
   await app.fill("#sip", agent.password);

@@ -202,6 +202,53 @@ async fn capped(mut resp: reqwest::Response, max: usize) -> Result<Vec<u8>, Stri
     Ok(out)
 }
 
+/// How many releases one page of the list holds (the `per_page` of `RELEASES_URL`).
+const PAGE: usize = 50;
+/// How many pages are read while none of their releases is one this app wants.
+const MAX_PAGES: usize = 4;
+
+/// Reads the list of releases at `url`. The project's other products (the agent, the phone app)
+/// publish releases into the same list, so when a whole page holds none that `wanted` accepts,
+/// the next page is read too, up to `MAX_PAGES`.
+async fn releases(
+    url: &str,
+    wanted: impl Fn(&ApiRelease) -> bool,
+) -> Result<Vec<ApiRelease>, String> {
+    let http = client()?;
+    let mut all: Vec<ApiRelease> = Vec::new();
+    for page in 1..=MAX_PAGES {
+        let at = if page == 1 {
+            url.to_string()
+        } else {
+            format!(
+                "{url}{}page={page}",
+                if url.contains('?') { '&' } else { '?' }
+            )
+        };
+        let resp = http
+            .get(&at)
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(offline)?;
+        if !resp.status().is_success() {
+            return Err(format!(
+                "GitHub answered {} when asked for the releases.",
+                resp.status().as_u16()
+            ));
+        }
+        let list: Vec<ApiRelease> = serde_json::from_slice(&capped(resp, MAX_LIST).await?)
+            .map_err(|_| "GitHub's list of releases could not be read".to_string())?;
+        let full = list.len() >= PAGE;
+        let found = list.iter().any(&wanted);
+        all.extend(list);
+        if found || !full {
+            break;
+        }
+    }
+    Ok(all)
+}
+
 /// Reads the list of releases at `url` and says whether one is newer than `current`.
 pub async fn check_at(
     url: &str,
@@ -210,20 +257,7 @@ pub async fn check_at(
     appimage: bool,
 ) -> Result<UpdateView, String> {
     let me = Version::parse(current).ok_or("this app's own version is not readable")?;
-    let resp = client()?
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await
-        .map_err(offline)?;
-    if !resp.status().is_success() {
-        return Err(format!(
-            "GitHub answered {} when asked for the releases.",
-            resp.status().as_u16()
-        ));
-    }
-    let list: Vec<ApiRelease> = serde_json::from_slice(&capped(resp, MAX_LIST).await?)
-        .map_err(|_| "GitHub's list of releases could not be read".to_string())?;
+    let list = releases(url, |r| !r.draft && r.tag_name.starts_with(TAG_PREFIX)).await?;
     let mut best: Option<(Version, &ApiRelease)> = None;
     for r in &list {
         let Some(v) = r.tag_name.strip_prefix(TAG_PREFIX).and_then(Version::parse) else {
@@ -288,21 +322,8 @@ pub async fn download_at(
     dir: &Path,
 ) -> Result<PathBuf, String> {
     let http = client()?;
-    let resp = http
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await
-        .map_err(offline)?;
-    if !resp.status().is_success() {
-        return Err(format!(
-            "GitHub answered {} when asked for the releases.",
-            resp.status().as_u16()
-        ));
-    }
-    let list: Vec<ApiRelease> = serde_json::from_slice(&capped(resp, MAX_LIST).await?)
-        .map_err(|_| "GitHub's list of releases could not be read".to_string())?;
     let want = format!("{TAG_PREFIX}{tag_version}");
+    let list = releases(url, |r| !r.draft && r.tag_name == want).await?;
     let release = list
         .iter()
         .find(|r| r.tag_name == want && !r.draft)

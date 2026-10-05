@@ -108,6 +108,9 @@ async function connectKeyboard(agent, name) {
   await app.script("document.querySelector('#sn').focus();");
   await press(KEYS.enter);
   await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  // The key is trusted only after the box is ticked: Space on the box, then Enter.
+  await app.script("document.getElementById('tfm').focus();");
+  await press(KEYS.space);
   await press(KEYS.enter);
   await waitFor("the sign-in dialog", () => app.visible("#siu"));
 }

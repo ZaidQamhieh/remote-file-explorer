@@ -38,9 +38,9 @@ Until then, build it yourself: [README.md](../README.md).
 
 The window has a rail on the left (**Files**, **Servers**, **Devices**, **Transfers**, **Search**, **Tools**,
 **History**, **Settings**, and the **New connection** button above them), a search box and a few buttons
-along the top, and the page in the middle. On **Files** the middle holds two lists side by side: the
-folder of the server you are working on and **Local files** (this computer); drag items from one to the
-other to upload or download. A strip at the bottom shows what is being transferred. The window is at
+along the top, and the page in the middle. On **Files** the middle holds the folder of the server you are
+working on, and a side panel with two tabs, **Details** and **Local files** (this computer); drag items
+from one to the other to upload or download. A strip at the bottom shows what is being transferred. The window is at
 least 1100 by 700 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
 choose in **Settings**) and remembers its size and position. Starting the app a second time does not open
 a second copy: the first window is brought forward. Press `/` to search, `Ctrl+K` for the command
@@ -216,9 +216,9 @@ clipboard.
 <!-- feature:file-browser -->
 ## Files
 
-**Files** shows two lists side by side. The left one is the folder of the server you are working on
-(choose it from the **Browse on** menu in the top bar, or open a server from **Servers**); the right one
-is **Local files** on this computer. A server that is not connected shows its state and the button that
+**Files** shows the folder of the server you are working on (choose it from the **Browse on** menu in the
+top bar, or open a server from **Servers**) and, in the side panel, a **Local files** tab for this
+computer. A server that is not connected shows its state and the button that
 fixes it (Connect, Retry, Trust, Sign in); a login that may not open any folder shows "No folder is open
 to this login".
 

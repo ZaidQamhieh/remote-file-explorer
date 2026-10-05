@@ -42,7 +42,7 @@ test("first run: address, compare fingerprint, trust, sign in, devices, sign out
   await waitFor("the trust dialog", () => app.visible(".fpfull"));
   assert.equal(norm(await app.text(".fpfull")), agent.fingerprint(), "the window shows the agent's own fingerprint");
   await app.shot("3-trust.png");
-  await app.clickLabel("They match: trust");
+  await app.confirmTrust();
 
   await waitFor("the sign-in dialog", () => app.visible("#siu"));
   await app.fill("#siu", agent.user);
@@ -80,6 +80,8 @@ test("keyboard only: the whole sign-in without touching the mouse", async () => 
   await app.script("document.querySelector('#sh').focus();");
   await app.press(KEYS.enter);
   await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  await app.script("document.querySelector('#tfm').focus();");
+  await app.press(KEYS.space);
   await app.press(KEYS.enter);
   await waitFor("the sign-in dialog", () => app.visible("#siu"));
   assert.equal(await app.focused(), "siu", "sign-in starts in the username field");

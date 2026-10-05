@@ -348,7 +348,7 @@ test("the side panel is dragged to the size wanted, or folded away, and the tran
   assert.equal(d.querySelector("#side").style.display, "none");
   fire(grip, "pointerdown", 500, 300); fire(grip, "pointerup", 500, 300);
   assert.equal(hidden(), false, "a click on the edge brings it back");
-  const btn = d.querySelector("#btnSide"); assert.ok(btn, "a button for it in the top bar");
+  const btn = d.querySelector("#btnSide"); assert.ok(btn, "a button for it in the side panel header");
   btn.click(); assert.equal(hidden(), true, "the button hides it");
   assert.equal(btn.getAttribute("aria-pressed"), "false");
   btn.click(); assert.equal(hidden(), false);

@@ -321,22 +321,34 @@ test("one click opens a folder, the round icon only selects, and Two clicks in S
   done();
 });
 
-test("the side panel and the transfers strip are dragged to the size wanted, within limits", async () => {
+test("the side panel and the transfers strip are dragged to the size wanted, or folded away", async () => {
   const { w, d, A, errs, done } = await open();
   const fire = (el, type, x, y) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
   const main = d.querySelector("#main"); const grip = d.querySelector("#rszSide");
+  const hidden = () => main.classList.contains("sidehid");
+  assert.equal(main.style.getPropertyValue("--sidew"), "21.00rem", "sizes are in rem, so they follow the window's scale");
   fire(grip, "pointerdown", 1000, 300); fire(grip, "pointermove", 900, 300); fire(grip, "pointerup", 900, 300);
-  assert.equal(main.style.getPropertyValue("--sidew"), "472px", "100px to the left makes it 100px wider");
+  assert.equal(main.style.getPropertyValue("--sidew"), "27.25rem", "100px to the left makes it 6.25 rem wider (16 px a rem here)");
   fire(grip, "pointerdown", 900, 300); fire(grip, "pointermove", -4000, 300); fire(grip, "pointerup", -4000, 300);
-  assert.equal(main.style.getPropertyValue("--sidew"), "640px", "not wider than the limit");
+  assert.equal(main.style.getPropertyValue("--sidew"), "40.00rem", "not wider than the limit");
+  fire(grip, "pointerdown", 0, 300); fire(grip, "pointermove", 140, 300); fire(grip, "pointerup", 140, 300);
+  assert.equal(main.style.getPropertyValue("--sidew"), "31.25rem", "narrower again");
   fire(grip, "pointerdown", 0, 300); fire(grip, "pointermove", 5000, 300); fire(grip, "pointerup", 5000, 300);
-  assert.equal(main.style.getPropertyValue("--sidew"), "300px", "not narrower than the limit");
+  assert.equal(hidden(), true, "dragged narrow enough it folds away");
+  assert.equal(d.querySelector("#side").style.display, "none");
+  fire(grip, "pointerdown", 500, 300); fire(grip, "pointerup", 500, 300);
+  assert.equal(hidden(), false, "a click on the edge brings it back");
+  const btn = d.querySelector("#btnSide"); assert.ok(btn, "a button for it in the top bar");
+  btn.click(); assert.equal(hidden(), true, "the button hides it");
+  assert.equal(btn.getAttribute("aria-pressed"), "false");
+  btn.click(); assert.equal(hidden(), false);
   A.state.sheetOpen = true; A.renderAll();
   const hdl = () => d.querySelector("[data-hdl]");
+  assert.equal(main.style.getPropertyValue("--sheet"), "15.75rem");
   fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 500); fire(hdl(), "pointerup", 500, 500);
-  assert.equal(main.style.getPropertyValue("--sheet"), "352px", "100px up makes the strip 100px taller");
+  assert.equal(main.style.getPropertyValue("--sheet"), "22.00rem", "100px up makes the strip 6.25 rem taller");
   fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 1500); fire(hdl(), "pointerup", 500, 1500);
-  assert.equal(main.style.getPropertyValue("--sheet"), "66px", "dragged down far enough it folds away");
+  assert.equal(main.style.getPropertyValue("--sheet"), "4.00rem", "dragged down far enough it folds to its header");
   assert.equal(A.state.sheetOpen, false);
   fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointerup", 500, 600);
   assert.equal(A.state.sheetOpen, true, "a click opens it again");
@@ -382,5 +394,26 @@ test("one click opens a file only when there is something to show; any other fil
 test("the transfers strip starts folded and keeps the way it was left", async () => {
   const { A, done } = await open();
   assert.equal(A.state.sheetOpen, false);
+  done();
+});
+
+test("every length in the stylesheet is in rem, so the page scales with the window", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../ui/app.css", import.meta.url), "utf8");
+  const root = css.match(/html\{--ui:1;font-size:([^}]*)\}/);
+  assert.ok(root && /vw/.test(root[1]) && /vh/.test(root[1]) && /clamp\(calc\(16px/.test(root[1]), "the root size follows the window: " + (root && root[1]));
+  const rest = css.replace(root[0], "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const big = [...rest.matchAll(/(?<![\w.#-])(\d*\.?\d+)px/g)].filter((m) => +m[1] > 1.5).map((m) => m[0]);
+  assert.deepEqual(big, [], "no fixed pixel sizes beyond hairlines");
+});
+
+test("Interface size multiplies the window's own scale and asks the core for a matching smallest window", async () => {
+  const { w, d, A, errs, done } = await open();
+  A.S.uiSize = 115; A.applyZoom();
+  assert.equal(d.documentElement.style.getPropertyValue("--ui"), "1.15");
+  A.S.uiSize = 400; A.applyZoom();
+  assert.equal(d.documentElement.style.getPropertyValue("--ui"), "1.3", "never beyond 130%");
+  A.S.uiSize = 100; A.applyZoom();
+  assert.deepEqual(errs, []);
   done();
 });

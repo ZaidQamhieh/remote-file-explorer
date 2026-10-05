@@ -164,7 +164,7 @@
   const ALGOS = [['sha256', 'SHA-256'], ['sha1', 'SHA-1'], ['md5', 'MD5']];
   function checksumDialog(pane, n) {
     let algo = 'sha256'; let value = ''; let err = '';
-    const d = A.dialog({ icon: 'hash', title: 'Checksum', width: 520, body: '<div class="fxkv"><b>' + esc(n.n) + '</b><small>' + U.fmtBytes(n.b) + '</small></div><div class="seg" id="ckalg" style="margin:0 0 12px">' + ALGOS.map((a) => '<button data-v="' + a[0] + '" class="' + (a[0] === algo ? 'on' : '') + '">' + a[1] + '</button>').join('') + '</div><div class="fxhash"><small id="cklab">SHA-256</small><code id="ckval">Computing…</code></div><div class="hint" style="margin:12px 0 0">Computed on the server by <span class="mono">rfe-agent</span>. Compare it with the value the publisher lists.</div>',
+    const d = A.dialog({ icon: 'hash', title: 'Checksum', width: 520, body: '<div class="fxkv"><b>' + esc(n.n) + '</b><small>' + U.fmtBytes(n.b) + '</small></div><div class="seg" id="ckalg" style="margin:0 0 .75rem">' + ALGOS.map((a) => '<button data-v="' + a[0] + '" class="' + (a[0] === algo ? 'on' : '') + '">' + a[1] + '</button>').join('') + '</div><div class="fxhash"><small id="cklab">SHA-256</small><code id="ckval">Computing…</code></div><div class="hint" style="margin:.75rem 0 0">Computed on the server by <span class="mono">rfe-agent</span>. Compare it with the value the publisher lists.</div>',
       actions: [{ label: 'Close', kind: 'tx' }, { id: 'copy', label: 'Copy', kind: 'f', icon: 'copy', cb: () => { if (value) { A.copy(value); A.snack('Checksum copied'); } return false; } }],
       onOpen: (ctl) => {
         const run = () => {
@@ -182,7 +182,7 @@
     const calc = () => s.map((n, i) => { const m = /^(.*?)(\.[^.]+)?$/.exec(n.n); return pat.replace(/\{name\}/g, m[1]).replace(/\{n\}/g, String(start + i).padStart(2, '0')).replace(/\{ext\}/g, (m[2] || '').slice(1)) + (/\{ext\}/.test(pat) ? '' : m[2] || ''); });
     A.dialog({
       icon: 'edit', title: 'Rename ' + s.length + ' items', width: 520,
-      body: '<div class="fld"><label>Pattern</label><input id="brp" value="' + pat + '" spellcheck="false"><span class="err" id="bre"></span></div><div class="hint" style="margin:0 0 10px"><span class="mono">{name}</span> original name · <span class="mono">{n}</span> counter · <span class="mono">{ext}</span> extension</div><div class="fxbr" id="brl"></div>',
+      body: '<div class="fld"><label>Pattern</label><input id="brp" value="' + pat + '" spellcheck="false"><span class="err" id="bre"></span></div><div class="hint" style="margin:0 0 .625rem"><span class="mono">{name}</span> original name · <span class="mono">{n}</span> counter · <span class="mono">{ext}</span> extension</div><div class="fxbr" id="brl"></div>',
       enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Rename', kind: 'f', icon: 'edit', cb: (ctl) => {
         const out = calc(); const set = new Set(out); const err = $('#bre', ctl.el);
         if (set.size !== out.length) { err.textContent = 'Names would collide'; return false; }
@@ -265,7 +265,7 @@
   function pairInner() {
     const s = pairSrv(); const p = X.pair; const ms = p.exp - Date.now(); const dead = !!p.code && ms <= 0; const q = qrObj();
     const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" data-fx="pair.srv|' + x.id + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
-    const head = '<div class="fxh"><span class="fxi">' + ic('phone') + '</span><div><b>Pair a phone</b><small>RFE for Android → Add computer → Scan QR</small></div></div>';
+    const head = '<div class="fxh"><span class="fxi">' + ic('phone') + '</span><div><b>Pair a phone</b></div></div>';
     if (!s) return head + '<div class="fxempty">' + ic('server', { size: 40 }) + '<b>No connected server</b><span>Connect a server first. Its agent makes the pairing code.</span></div>';
     if (p.err) return head + chips + '<div class="fxempty">' + ic('shield', { size: 40 }) + '<b>No code</b><span>' + esc(p.err) + '</span></div><div class="pbtns"><button class="btn t sm" data-fx="pair.new">' + ic('refresh') + 'Try again</button></div>';
     if (!p.code) return head + chips + '<div class="fxempty">' + ic('refresh', { size: 40 }) + '<b>' + (p.busy ? 'Asking ' + esc(s.name) + '…' : 'No code yet') + '</b><span>The agent makes a one-time code that works for ' + Math.round(life() / 60000) + ' minutes.</span></div>';
@@ -273,7 +273,7 @@
     return head + chips +
       '<div class="qrwrap"><div class="qrbox' + (dead ? ' dead' : '') + '" id="pairQR">' + A.qrSvg(p.qr, { px: 212, fg: '#0b1110', bg: '#ffffff', border: 2, label: 'Pairing QR code for ' + s.name }) + (dead ? '<div class="qrx"><b>This pairing code has expired</b><button class="btn f sm" data-fx="pair.new">' + ic('refresh') + 'New code</button></div>' : '') + '</div></div>' +
       '<div class="pcode"><span id="pairCode" aria-label="Pairing code">' + esc(p.code.slice(0, 4) + ' ' + p.code.slice(4)) + '</span><button class="ib sm" data-fx="pair.copycode" title="Copy code" aria-label="Copy code">' + ic('copy') + '</button></div>' +
-      '<div class="ptimer"><div class="bar"><i id="pairBar" style="width:' + Math.max(0, Math.min(100, ms / life() * 100)) + '%"></i></div><small id="pairT">' + (dead ? 'Expired' : 'Expires in ' + mmss(ms) + ' · works once') + '</small></div>' +
+      '<div class="ptimer"><div class="bar"><i id="pairBar" style="width:' + Math.max(0, Math.min(100, ms / life() * 100)) + '%"></i></div><small id="pairT">' + (dead ? 'Expired' : 'Expires in ' + mmss(ms)) + '</small></div>' +
       (addrs.length ? addrs.map((a) => '<div class="paddr"><span>' + ic(a[0] === 'LAN' ? 'wifi' : 'globe') + '<code>' + esc(a[1]) + '</code></span></div>').join('') : '') +
       '<div class="paddr"><span class="fp">SHA-256 ' + esc(s.fp.slice(0, 23)) + '…</span></div>' +
       '<div class="pbtns"><button class="btn t sm" data-fx="pair.new">' + ic('refresh') + 'New code</button><button class="btn sm" data-fx="pair.link">' + ic('copy') + 'Copy code data</button><button class="btn sm" data-fx="pair.save">' + ic('download') + 'Save QR</button></div>';
@@ -282,7 +282,7 @@
   function refreshPair() { $$('.fxpair').forEach((el) => { el.innerHTML = pairInner(); }); }
   setInterval(() => {
     if (!X.pair.code) return; const ms = X.pair.exp - Date.now(); const t = $('#pairT'); if (!t) return;
-    if (ms <= 0) { if (!$('#pairQR.dead')) refreshPair(); return; } t.textContent = 'Expires in ' + mmss(ms) + ' · works once'; const b = $('#pairBar'); if (b) b.style.width = Math.max(0, ms / life() * 100) + '%';
+    if (ms <= 0) { if (!$('#pairQR.dead')) refreshPair(); return; } t.textContent = 'Expires in ' + mmss(ms); const b = $('#pairBar'); if (b) b.style.width = Math.max(0, ms / life() * 100) + '%';
   }, 1000);
   /* A card is shown: make sure there is a code for it. */
   A.ensureCode = () => { const s = pairSrv(); if (s && (!X.pair.code || X.pair.exp - Date.now() <= 0) && !X.pair.busy && !X.pair.err) newCode(true); };
@@ -316,7 +316,7 @@
     const cur = Object.assign({}, a); const patch = {};
     A.dialog({
       icon: 'shield-check', title: d.name + ' permissions', width: 480,
-      body: '<div class="sr" style="padding:6px 0"><div class="l"><b>Browse files</b><small>Always on while paired</small></div><button class="sw on" disabled aria-checked="true"></button></div>' + GRANTS.map((c) => '<div class="sr" style="padding:6px 0"><div class="l"><b>' + c[1] + '</b><small>' + c[2] + '</small></div><button class="sw' + (cur[c[0]] ? ' on' : '') + '" data-c="' + c[0] + '" role="switch" aria-checked="' + !!cur[c[0]] + '" aria-label="' + c[1] + '"></button></div>').join('') + '<div class="sr" style="padding:6px 0"><div class="l"><b>Read-only</b><small>Blocks every change, whatever else is on</small></div><button class="sw' + (cur.readOnly ? ' on' : '') + '" data-c="readOnly" role="switch" aria-checked="' + !!cur.readOnly + '" aria-label="Read-only"></button></div>' + (a.jailRoot ? '<div class="hint" style="margin:8px 0 0">Limited to <span class="mono">' + esc(a.jailRoot) + '</span></div>' : ''),
+      body: '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Browse files</b><small>Always on while paired</small></div><button class="sw on" disabled aria-checked="true"></button></div>' + GRANTS.map((c) => '<div class="sr" style="padding:.375rem 0"><div class="l"><b>' + c[1] + '</b><small>' + c[2] + '</small></div><button class="sw' + (cur[c[0]] ? ' on' : '') + '" data-c="' + c[0] + '" role="switch" aria-checked="' + !!cur[c[0]] + '" aria-label="' + c[1] + '"></button></div>').join('') + '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Read-only</b><small>Blocks every change, whatever else is on</small></div><button class="sw' + (cur.readOnly ? ' on' : '') + '" data-c="readOnly" role="switch" aria-checked="' + !!cur.readOnly + '" aria-label="Read-only"></button></div>' + (a.jailRoot ? '<div class="hint" style="margin:.5rem 0 0">Limited to <span class="mono">' + esc(a.jailRoot) + '</span></div>' : ''),
       actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Save', kind: 'f', icon: 'check', cb: () => {
         if (!Object.keys(patch).length) return;
         E.call('set_device_access', { host: s.id, id: d.id, patch, confirmSelf: !!d.current }).then(() => { audit(d.name + ' permissions changed on ' + s.name); A.snack('Saved the access of ' + d.name); A.loadDevices(); }).catch(fail);
@@ -328,7 +328,7 @@
     const s = E.server(q.host);
     A.dialog({
       icon: 'phone', title: 'Accept ' + q.label + '?', width: 460,
-      body: '<p class="fxp">' + esc(q.label) + ' (' + esc(q.address || 'unknown address') + ') asked to pair with ' + esc(s ? s.name : q.host) + '. Accept only if the code matches the one shown on the device asking.</p><div class="pcode" style="margin:10px 0"><span>' + esc(q.matchCode) + '</span></div>' + (q.replaces ? '<div class="hint" style="margin:0">Approving replaces the paired device “' + esc(q.replaces) + '”.</div>' : '') + '<div class="hint" style="margin:8px 0 0">An approved device starts with browse access only. Change what it may do under Permissions.</div>',
+      body: '<p class="fxp">' + esc(q.label) + ' (' + esc(q.address || 'unknown address') + ') asked to pair with ' + esc(s ? s.name : q.host) + '. Accept only if the code matches the one shown on the device asking.</p><div class="pcode" style="margin:.625rem 0"><span>' + esc(q.matchCode) + '</span></div>' + (q.replaces ? '<div class="hint" style="margin:0">Approving replaces the paired device “' + esc(q.replaces) + '”.</div>' : '') + '<div class="hint" style="margin:.5rem 0 0">An approved device starts with browse access only. Change what it may do under Permissions.</div>',
       enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Accept', kind: 'f', icon: 'check', cb: () => answer(q, true) }]
     });
   }

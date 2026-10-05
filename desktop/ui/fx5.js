@@ -120,10 +120,10 @@
   const se2 = A.settingsExtra;
   A.settingsExtra = (k) => {
     let h = se2(k); const row = k.row, seg = k.seg, sw = k.sw;
-    const grp = '<div class="sg"><h4>Language and accessibility</h4>' + row('Language', 'Menus and messages. Names and paths are never translated.', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
-      row('Reduce motion', 'Turns off animations and transitions', sw('reduceMotion')) + row('High contrast', 'Stronger borders and text colors', sw('highContrast')) + '</div>';
+    const grp = '<div class="sg"><h4>Language and accessibility</h4>' + row('Language', '', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
+      row('Reduce motion', '', sw('reduceMotion')) + row('High contrast', '', sw('highContrast')) + '</div>';
     h = h.replace('<div class="sg"><h4>Security</h4>', grp + '<div class="sg"><h4>Security</h4>');
-    h = h.replace('<div class="sg"><h4>About</h4>', '<div class="sg"><h4>About</h4>' + row('Welcome tour', 'Show the first-run introduction again', '<button class="btn" data-sx="welcome">Show again</button>'));
+    h = h.replace('<div class="sg"><h4>About</h4>', '<div class="sg"><h4>About</h4>' + row('Welcome tour', '', '<button class="btn" data-sx="welcome">Show again</button>'));
     return h;
   };
   const sa2 = A.settingsAction;
@@ -143,7 +143,7 @@
       actions: [{ label: 'Close', kind: 'tx' }, { id: 'rep', label: 'Report a problem', kind: 'tx', icon: 'alert', cb: () => { setTimeout(A.reportDialog, 0); } }, { id: 'cp', label: 'Copy diagnostics', kind: 'f', icon: 'copy', cb: async () => { await copy(await diagText(), 'Diagnostics copied. No passwords or keys are included.'); return false; } }] });
   };
   A.reportDialog = () => {
-    A.dialog({ icon: 'alert', title: 'Report a problem', width: 520, noFocus: true, body: '<p class="fxp" style="margin-top:0">Describe what happened. Nothing is sent from here: you copy the report and paste it into the issue tracker.</p><div class="fld"><label for="rpt">What went wrong?</label><textarea id="rpt" rows="5" style="width:100%;border:1px solid var(--outline);border-radius:12px;padding:10px;background:var(--surface);color:var(--on-surface);font:inherit"></textarea></div><label class="fxck"><input type="checkbox" id="rpd" checked> Include diagnostics (versions, servers and their state, no passwords)</label>',
+    A.dialog({ icon: 'alert', title: 'Report a problem', width: 520, noFocus: true, body: '<p class="fxp" style="margin-top:0">Describe what happened. Nothing is sent from here: you copy the report and paste it into the issue tracker.</p><div class="fld"><label for="rpt">What went wrong?</label><textarea id="rpt" rows="5" style="width:100%;border:1px solid var(--outline);border-radius:.75rem;padding:.625rem;background:var(--surface);color:var(--on-surface);font:inherit"></textarea></div><label class="fxck"><input type="checkbox" id="rpd" checked> Include diagnostics (versions, servers and their state, no passwords)</label>',
       actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Copy report', kind: 'f', icon: 'copy', cb: async (c) => { const t = $('#rpt', c.el).value.trim(); if (!t) { $('#rpt', c.el).focus(); A.snack('Describe the problem first', { error: true }); return false; } await copy(t + ($('#rpd', c.el).checked ? '\n\n' + await diagText() : ''), 'Report copied. Paste it into a new issue.'); } }] });
   };
 
@@ -152,7 +152,7 @@
   A.afterPage = function (v) {
     if (apPrev) apPrev.apply(this, arguments);
     if (v === 'devices' && E.servers.length && E.servers.every((s) => s.state !== 'online')) {
-      const stg = $('#stage'); if (!$('.nopc', stg)) { const b = document.createElement('div'); b.className = 'hint bad nopc'; b.setAttribute('role', 'alert'); b.style.margin = '0 0 14px'; b.innerHTML = ic('alert-circle') + '<span><b>No computer is online</b><br>Phones can only pair while a computer is connected. Existing pairings keep working when it comes back.</span><button class="btn sm" style="margin-left:auto" data-go-servers="1">Go to Servers</button>'; $('.ps', stg).after(b); b.querySelector('button').addEventListener('click', () => A.go('servers')); }
+      const stg = $('#stage'); if (!$('.nopc', stg)) { const b = document.createElement('div'); b.className = 'hint bad nopc'; b.setAttribute('role', 'alert'); b.style.margin = '0 0 .875rem'; b.innerHTML = ic('alert-circle') + '<span><b>No computer is online</b><br>Phones can only pair while a computer is connected. Existing pairings keep working when it comes back.</span><button class="btn sm" style="margin-left:auto" data-go-servers="1">Go to Servers</button>'; $('.ps', stg).after(b); b.querySelector('button').addEventListener('click', () => A.go('servers')); }
     }
     fixSw(); if (S.lang !== 'en') walk($('#stage'));
   };

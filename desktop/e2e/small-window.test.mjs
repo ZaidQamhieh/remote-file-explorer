@@ -41,7 +41,7 @@ const VIEWS = [
   ["files", /./],
   ["servers", /small-pc/],
   ["devices", /Paired devices/],
-  ["transfers", /Everything moving between/],
+  ["transfers", /Transfers/],
   ["search", /Search/],
   ["tools", /Tools/],
   ["history", /History/],

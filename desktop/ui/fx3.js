@@ -47,7 +47,7 @@
     };
     const guard = () => { if (!dirty) return true; if ($('.eddc', ctl.el)) return false; const bar = document.createElement('div'); bar.className = 'eddc'; bar.innerHTML = ic('alert-circle') + '<span>Discard your unsaved changes?</span><button class="btn sm e" data-d="1">Discard</button><button class="btn sm" data-d="0">Keep editing</button>'; $('.db', ctl.el).prepend(bar); bar.addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (!b) return; if (b.dataset.d === '1') { dirty = false; ctl.close(); } else bar.remove(); }); return false; };
     ctl = A.dialog({ title: n.n, width: 880, cls: 'fxed', modal: true, noFocus: true, beforeClose: guard,
-      body: '<div class="edhd">' + fic(n) + '<span class="mono">' + esc(host === 'local' ? '' : A.hostName(host) + ':') + esc(full) + '</span><span class="sp"></span><label class="fxck" style="margin:0"><input type="checkbox" id="edw" checked> Wrap lines</label></div>' + (ro ? '<div class="hint" style="margin:8px 0 0">' + ic('lock') + '<span>' + (big ? 'This file is ' + U.fmtBytes(n.b) + ', too large to edit here (limit 1 MB).' : host === 'local' ? 'Files on this computer open read-only here. Edit them in your own editor.' : 'You can read this file but not change it: this device may not modify files on ' + esc(A.hostName(host)) + '.') + '</span></div>' : '') + '<textarea class="fxta" spellcheck="false" aria-label="File contents" readonly></textarea><div class="edst" role="status"></div>',
+      body: '<div class="edhd">' + fic(n) + '<span class="mono">' + esc(host === 'local' ? '' : A.hostName(host) + ':') + esc(full) + '</span><span class="sp"></span><label class="fxck" style="margin:0"><input type="checkbox" id="edw" checked> Wrap lines</label></div>' + (ro ? '<div class="hint" style="margin:.5rem 0 0">' + ic('lock') + '<span>' + (big ? 'This file is ' + U.fmtBytes(n.b) + ', too large to edit here (limit 1 MB).' : host === 'local' ? 'Files on this computer open read-only here. Edit them in your own editor.' : 'You can read this file but not change it: this device may not modify files on ' + esc(A.hostName(host)) + '.') + '</span></div>' : '') + '<textarea class="fxta" spellcheck="false" aria-label="File contents" readonly></textarea><div class="edst" role="status"></div>',
       actions: [{ label: 'Close', kind: 'tx', cb: () => (guard() ? undefined : false) }, { id: 'save', label: 'Save', kind: 'f', icon: 'check', cb: (c) => doSave(c) }],
       onOpen: (c) => { ctl = c; const ta = $('.fxta', c.el); ta.value = ''; stat();
         ta.addEventListener('input', () => { dirty = ta.value !== orig; stat(); }); ['keyup', 'click'].forEach((ev) => ta.addEventListener(ev, stat));
@@ -109,7 +109,7 @@
       return r;
     }
     const why = AUDIO.test(n.n) || k === 'audio' ? 'The app does not play audio.' : k === 'video' ? 'The app does not play video.' : PDF.test(n.n) ? 'The app does not render PDFs.' : 'The app has no preview for this type.';
-    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:12px"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:12px">Download it, then open it from the folder it lands in.</div>');
+    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:.75rem"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:.75rem">Download it, then open it from the folder it lands in.</div>');
     r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="open"]')) E.call('local_open', { path: pathOf(dir, n) }).catch(fail); });
     return r;
   }
@@ -155,7 +155,8 @@
   A.recordQuery = (q) => { X3.recentQ = [q].concat(X3.recentQ.filter((x) => x !== q)).slice(0, 8); keepSearches(); };
   A.searchExtra = () => {
     const rec = X3.recentQ.map((q) => '<button class="chip" data-fx="q.run|' + esc(q) + '">' + ic('clock') + esc(q) + '</button>').join(''); const sv = X3.saved.map((s, i) => '<span class="chip on svq"><button data-fx="q.save.run|' + i + '">' + ic('star') + esc(s.q) + '</button><button data-fx="q.save.rm|' + i + '" aria-label="Remove saved search ' + esc(s.q) + '">' + ic('x') + '</button></span>').join('');
-    return '<div class="qlists"><div><small>Saved searches</small><div class="chips" style="padding:6px 0">' + (sv || '<span class="fxsub">Star a search to keep it here.</span>') + '</div></div><div><small>Recent</small><div class="chips" style="padding:6px 0">' + (rec || '<span class="fxsub">Nothing yet.</span>') + '</div></div></div>';
+    if (!sv && !rec) return '';
+    return '<div class="qlists">' + (sv ? '<div><small>Saved</small><div class="chips" style="padding:.375rem 0">' + sv + '</div></div>' : '') + (rec ? '<div><small>Recent</small><div class="chips" style="padding:.375rem 0">' + rec + '</div></div>' : '') + '</div>';
   };
   A.searchSave = (sr) => { const on = X3.saved.some((s) => s.q === sr.q); return ' <button class="ib" data-fx="q.save|' + esc(sr.q) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Remove from saved searches' : 'Save this search') + '" title="' + (on ? 'Saved' : 'Save this search') + '" style="vertical-align:middle">' + ic('star') + '</button>'; };
   const runSaved = (s) => { st.scope = s.scope || 'server'; st.sfilter = s.filter || 'all'; A.runQuery(s.q); };
@@ -171,7 +172,7 @@
   }
 
   const se0 = A.settingsExtra;
-  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + k.row('Show hidden files', 'Names that start with a dot. Shortcut Ctrl+H', k.sw('showHidden')));
+  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + k.row('Show hidden files', '', k.sw('showHidden')));
 
   /* ================= palette ================= */
   A.paletteExtra.push((C) => {

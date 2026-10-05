@@ -3,6 +3,9 @@
   'use strict';
   const E = Engine, U = E.util, S = E.settings, R = RFE;
   const A = (window.A = { E, U, S, state: { view: 'files', sideTab: 'details', sheetOpen: false, sheetTab: 'active', q: '', histFilter: 'all', drag: null } });
+  /* One rem on screen, as a multiple of 16 px: the page scales with the window, so measurements in px are taken against it. */
+  let unit = 0; A.u = () => unit || (unit = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16); A.uReset = () => { unit = 0; };
+  addEventListener('resize', A.uReset);
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -31,7 +34,7 @@
   A.dialog = (o) => {
     closeMenus();
     const sc = document.createElement('div'); sc.className = 'scrim';
-    const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); d.style.setProperty('--w', (o.width || 480) + 'px');
+    const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
     d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
     d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2>' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
     const df = $('.df', d);
@@ -114,7 +117,8 @@
     }
     get path() { return this.paths[this.host] || E.start(this.host); }
     set path(p) { this.paths[this.host] = p; }
-    get rh() { return this.compact ? Math.min(40, this.o.rh || 40) : parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rh')) || 46; }
+    get rhb() { return this.compact ? Math.min(40, this.o.rh || 40) : Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rh')) * 16) || 46; } /* a row's height at the base size, in px */
+    get rh() { return this.rhb * A.u(); } /* and as it is on screen now */
     online() { return E.connected(this.host); }
     refreshItems() {
       const on = this.online(); const l = on ? E.fs.list(this.host, this.path) : null; const stt = on ? E.fs.state(this.host, this.path) : 'none';
@@ -164,7 +168,7 @@
       const F = [['all', 'All'], ['folders', 'Folders'], ['packages', 'Packages'], ['media', 'Media'], ['archives', 'Archives'], ['big', 'Over 100 MB']];
       const chips = '<div class="chips">' + (this.compact ? '' : F.map((f) => '<button class="chip' + (this.filter === f[0] ? ' on' : '') + '" data-filter="' + f[0] + '">' + (this.filter === f[0] ? ic('check') : '') + f[1] + '</button>').join('')) + '<span class="sp"></span><label class="mini">' + ic('filter') + '<input data-q placeholder="Filter this folder" value="' + esc(this.q) + '" aria-label="Filter this folder"></label>' + (this.compact ? '' : '<button class="chip" data-act="sortmenu">' + ic('sort') + { name: 'Name', size: 'Size', mod: 'Modified', kind: 'Type' }[this.sort.key] + '</button><button class="chip" data-act="mode" title="List or grid">' + ic(this.mode === 'list' ? 'list' : 'grid') + (this.mode === 'list' ? 'List' : 'Grid') + '</button>') + '</div>';
       const arrow = (k) => (this.sort.key === k ? ic(this.sort.dir === 1 ? 'arrow-up' : 'arrow-down') : '');
-      const cols = '<div class="cols"><span></span><span data-sort="name">Name ' + arrow('name') + '</span><span class="r" data-sort="size">Size ' + arrow('size') + '</span><span class="hm" data-sort="mod" style="padding-left:16px">Modified ' + arrow('mod') + '</span><span class="hm">Permissions</span><span class="hm"></span></div>';
+      const cols = '<div class="cols"><span></span><span data-sort="name">Name ' + arrow('name') + '</span><span class="r" data-sort="size">Size ' + arrow('size') + '</span><span class="hm" data-sort="mod" style="padding-left:1rem">Modified ' + arrow('mod') + '</span><span class="hm">Permissions</span><span class="hm"></span></div>';
       el.innerHTML = head + chips + (this.mode === 'list' ? cols : '') + '<div class="rows' + (this.mode === 'grid' ? ' grid' : '') + '" data-rows tabindex="0" aria-label="Files"><div class="vs"></div></div><div class="pfoot"></div>';
       this.renderRows(); this.renderActions(); this.renderFoot();
       const rows = $('[data-rows]', el); rows.scrollTop = this.scroll;
@@ -209,17 +213,17 @@
       }
       if (this.mode === 'grid') {
         rows.classList.add('grid'); vs.style.height = 'auto'; const cap = this.items.slice(0, 600);
-        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:12px;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString() + '. Use the list view for the full folder.</div>' : '');
+        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString() + '. Use the list view for the full folder.</div>' : '');
         return;
       }
-      rows.classList.remove('grid'); const rh = this.rh; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rh + 'px';
+      rows.classList.remove('grid'); const rh = this.rh, rb = this.rhb; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rb / 16 + 'rem';
       const st = rows.scrollTop, vh = rows.clientHeight || 600; const a = Math.max(0, Math.floor(st / rh) - 6), b = Math.min(n + off, Math.ceil((st + vh) / rh) + 6);
       let h = '';
       for (let r = a; r < b; r++) {
-        if (this.creating && r === 0) { h += '<div class="li" style="top:0;height:' + rh + 'px"><div class="lead">' + ic('folder-plus') + '</div><div class="t newrow"><input class="rn" data-new value="New folder" spellcheck="false" aria-label="New folder name"><span class="rerr" data-err></span></div></div>'; continue; }
+        if (this.creating && r === 0) { h += '<div class="li" style="top:0;height:' + rb / 16 + 'rem"><div class="lead">' + ic('folder-plus') + '</div><div class="t newrow"><input class="rn" data-new value="New folder" spellcheck="false" aria-label="New folder name"><span class="rerr" data-err></span></div></div>'; continue; }
         const i = r - off; const it = this.items[i]; const sel = this.sel.has(it.n); const rn = this.renaming === it.n;
         const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
-        h += '<div class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rh + 'px;height:' + rh + 'px" role="row" aria-selected="' + sel + '"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
+        h += '<div class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem" role="row" aria-selected="' + sel + '"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
       }
       vs.innerHTML = h;
       const inp = $('input.rn', vs); if (inp && !inp._f) { inp._f = 1; inp.focus(); const dot = inp.value.lastIndexOf('.'); inp.setSelectionRange(0, this.renaming && dot > 0 && !(E.fs.get(this.host, U.join(this.path, this.renaming)) || {}).kids ? dot : inp.value.length); }
@@ -310,7 +314,7 @@
         if (!this.sel.has(it.n)) { this.sel = new Set([it.n]); this.selChanged(); }
         const names = this.selected().map((x) => x.n); A.state.drag = { pane: this.id, host: this.host, dir: this.path, names };
         e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/x-rfe', JSON.stringify(A.state.drag)); e.dataTransfer.setData('text/plain', names.join('\n'));
-        const g = document.createElement('div'); g.style.cssText = 'position:fixed;left:-300px;top:0;padding:8px 14px;border-radius:20px;background:var(--primary);color:var(--on-primary);font:500 13px var(--font)'; g.textContent = names.length === 1 ? names[0] : names.length + ' items'; document.body.appendChild(g); e.dataTransfer.setDragImage(g, 10, 10); setTimeout(() => g.remove(), 0);
+        const g = document.createElement('div'); g.style.cssText = 'position:fixed;left:-18.75rem;top:0;padding:.5rem .875rem;border-radius:1.25rem;background:var(--primary);color:var(--on-primary);font:500 .8125rem var(--font)'; g.textContent = names.length === 1 ? names[0] : names.length + ' items'; document.body.appendChild(g); e.dataTransfer.setDragImage(g, 10, 10); setTimeout(() => g.remove(), 0);
       });
       el.addEventListener('dragend', () => { A.state.drag = null; this.clearDrop(); });
       el.addEventListener('dragover', (e) => {
@@ -356,9 +360,9 @@
   /* The folder's path beside its name is dropped when there is no room for all of it (a clipped path is worse than none). */
   Pane.prototype.fit = function () {
     if (!this.el) return;
-    this.el.classList.toggle('narrow', this.el.clientWidth > 0 && this.el.clientWidth < 700); /* too little room for every column: the names come first */
+    this.el.classList.toggle('narrow', this.el.clientWidth > 0 && this.el.clientWidth < 43.75 * 16 * A.u()); /* too little room for every column: the names come first */
     const c = this.el.querySelector('.crumb'); if (!c || c.querySelector('input')) return;
-    c.classList.remove('off'); if (c.scrollWidth > c.clientWidth + 1 || c.clientWidth < 140) c.classList.add('off');
+    c.classList.remove('off'); if (c.scrollWidth > c.clientWidth + 1 || c.clientWidth < 8.75 * 16 * A.u()) c.classList.add('off');
   };
   const renderOnce = Pane.prototype.render; Pane.prototype.render = function (...a) { const v = renderOnce.apply(this, a); this.fit(); return v; };
   A.Pane = Pane;
@@ -382,7 +386,7 @@
     else if (n.content) body = '<div class="pv"><pre>' + esc(n.content) + '</pre></div>';
     else body = '<div class="pv nop">' + ic('file') + '<b>No preview for this type</b>' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b) + '</div>';
     A.dialog({
-      title: n.n, width: 620, body: body + '<div style="margin-top:10px;color:var(--on-var);font-size:13px">' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b) + ' · ' + U.fmtDate(n.mod) + ' · <span class="mono">' + esc(U.join(dir, n.n)) + '</span></div>',
+      title: n.n, width: 620, body: body + '<div style="margin-top:.625rem;color:var(--on-var);font-size:.8125rem">' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b) + ' · ' + U.fmtDate(n.mod) + ' · <span class="mono">' + esc(U.join(dir, n.n)) + '</span></div>',
       actions: [{ label: 'Close' }].concat(E.fs.canRead(n) || true ? [{ label: host === 'local' ? 'Upload' : 'Download', kind: 'f', icon: host === 'local' ? 'upload' : 'download', cb: () => { A.transferNames(host, dir, [n.n]); } }] : [])
     });
   };

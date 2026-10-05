@@ -41,11 +41,12 @@ The window has a rail on the left (**Files**, **Servers**, **Devices**, **Transf
 along the top, and the page in the middle. On **Files** the middle holds the folder of the server you are
 working on, and a side panel with two tabs, **Details** and **Local files** (this computer); drag items
 from one to the other to upload or download. A strip at the bottom shows what is being transferred; it stays folded to its header until a transfer
-starts (drag its top handle to fold or unfold it). The button at the top of the rail shows the names
-beside the icons: beside the page from 1280 pixels wide, over it (closed with `Esc` or a click elsewhere)
-in a narrower window. Drag the left edge of the side panel to make it wider or narrower (300 to 640
-pixels), and the strip's top handle to make it taller; arrow keys move either handle, and a double click
-on the side panel's handle restores its width. The list always keeps room for its names. The window is at
+starts (drag its top handle to any height, drag it down to fold it, or click the handle). The button at the top of the rail shows the names
+beside the icons: beside the page from a wide window, over it (closed with `Esc` or a click elsewhere)
+in a narrower one. Drag the handle between the list and the side panel to make the panel wider or
+narrower; drag it far enough and the panel folds away, and the same handle (or the panel button in the top bar) brings it
+back. Arrow keys move either handle, `Enter` folds or opens it, and a double click on the side panel's handle restores
+its width. The list always keeps room for its names. The window is at
 least 1100 by 700 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
 choose in **Settings**) and remembers its size and position. Starting the app a second time does not open
 a second copy: the first window is brought forward. Press `/` to search, `Ctrl+K` for the command
@@ -179,9 +180,10 @@ and **Back up…** and **Restore…** for the app's own settings (a file you cho
 token or key). **Troubleshooting** has the log detail, **Agent log**, **Check the keystore** and **Device
 key**. **About** has the version, **Details**, **Report a problem** and **Check for updates**.
 
-- **Interface size** (Auto, 100%, 115%, 130% or 150%) makes the whole window bigger or smaller, like a
-  browser's zoom; the smallest window grows with it so nothing is cramped. **Auto** picks a size from the
-  size of the screen: 100% up to 1999 pixels wide, 115% from 2000, 125% from 2400 and 150% from 3000.
+- **Interface size** (90%, 100%, 115% or 130%) makes the whole window smaller or bigger on top of the scale
+  the window already has: everything is drawn in units that grow with the window, from the smallest size
+  (1100 by 700) up, so a larger or higher-resolution screen shows larger text and controls without any
+  setting. The smallest window grows with the size you pick.
 - **Open files and folders** decides what a click does. **One click** (the default) opens a folder and
   shows a file that has something to show (a picture, text, or the list inside an archive); any other
   file is only selected, and its details appear in the side panel. The round icon at the left of a
@@ -432,7 +434,6 @@ Messages from this app:
 | This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
 | This pairing code has expired. Generate a new one. | The code's 10 minutes are up and it was removed from the window. Press **Generate a code**. |
 | unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |
-| No pairing requests are waiting. | Nobody is asking to be paired right now. The list fills in by itself while the screen is open. |
 | This login cannot answer pairing requests. | This computer was paired with a code or approved on the PC, and the agent lets only an account answer. Sign out and sign in with the account, or use `rfe-agent pair accept` or `reject` on the PC. |
 | This agent is too old to list pairing requests | Answering from the window needs `agent-v1.43.0-rc.1` or newer. Update the agent, or answer on the PC. |
 | The agent holds at most 3 waiting requests. | Shown when three are waiting: a fourth is refused (the device asking sees that the PC is busy) until you answer one or one expires. |

@@ -61,6 +61,7 @@
     'x-circle': '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
     grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    panel: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
     columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
     sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
@@ -120,7 +121,7 @@
     o = o || {};
     const sw = o.sw || 1.7;
     const cls = 'ic' + (o.cls ? ' ' + o.cls : '');
-    const st = o.size ? ` style="width:${o.size}px;height:${o.size}px"` : '';
+    const st = o.size ? ` style="width:${o.size / 16}rem;height:${o.size / 16}rem"` : '';
     return `<svg class="${cls}" data-i="${name}"${st} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.file}</svg>`;
   };
 

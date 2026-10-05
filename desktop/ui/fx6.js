@@ -49,7 +49,7 @@
     const kv = (k, val) => '<div class="kv2"><div><b>' + k + '</b><small>' + val + '</small></div></div>';
     const draw = (c, snap) => {
       const h = snap.health || {}, st0 = snap.status, m = snap.metrics;
-      const note = (txt) => '<div class="hint" style="margin:8px 0 0">' + txt + '</div>';
+      const note = (txt) => '<div class="hint" style="margin:.5rem 0 0">' + txt + '</div>';
       $('.db', c.el).innerHTML = kv('Agent', esc(h.name || s.name) + ' · ' + (h.version ? 'rfe-agent ' + esc(h.version) : NR)) + kv('System', h.os ? esc(h.os) : NR) + kv('Platform', st0 && st0.platform ? esc(st0.platform) : NR) +
         kv('Uptime', st0 ? v(st0.uptimeSeconds, (x) => U.fmtDur(x)) : NR) + kv('Reachable at', [h.address && 'LAN ' + esc(h.address), h.tailscaleAddress && 'Tailscale ' + esc(h.tailscaleAddress), h.macAddress && 'MAC ' + esc(h.macAddress)].filter(Boolean).join(' · ') || NR) +
         kv('Changes', h.readOnly ? 'The agent is read-only' : 'Allowed') + kv('Disk', st0 && st0.totalBytes ? U.fmtBytes(st0.totalBytes - (st0.freeBytes || 0)) + ' used of ' + U.fmtBytes(st0.totalBytes) : NR) +
@@ -70,7 +70,7 @@
     E.call('agent_log', { host: s.id }).then((r) => {
       const lines = r.lines || [];
       A.dialog({ icon: 'activity', title: 'Agent log of ' + s.name, width: 720, noFocus: true,
-        body: r.forbidden ? '<div class="fxsub">This login cannot read the audit log or the agent log. Sign in as the owner of the computer.</div>' : '<div class="fld"><input id="lgf" placeholder="Filter the log" spellcheck="false" aria-label="Filter the log"></div><div id="lgb" class="codev" style="max-height:340px;overflow:auto"></div>',
+        body: r.forbidden ? '<div class="fxsub">This login cannot read the audit log or the agent log. Sign in as the owner of the computer.</div>' : '<div class="fld"><input id="lgf" placeholder="Filter the log" spellcheck="false" aria-label="Filter the log"></div><div id="lgb" class="codev" style="max-height:21.25rem;overflow:auto"></div>',
         actions: [{ label: 'Close', kind: 'f' }],
         onOpen: (c) => { if (r.forbidden) return; const draw = () => { const q = $('#lgf', c.el).value.trim().toLowerCase(); const m = lines.filter((l) => !q || (l.ts + ' ' + l.message).toLowerCase().includes(q)); $('#lgb', c.el).innerHTML = m.length ? m.map((l) => '<div class="evrow"><small class="mono">' + esc(l.ts) + '</small><span>' + esc(l.message) + '</span></div>').join('') : '<div class="fxsub">' + (lines.length ? 'No log line matches these filters.' : "The agent's log is empty.") + '</div>'; }; $('#lgf', c.el).addEventListener('input', draw); draw(); } });
     }).catch(fail);
@@ -84,10 +84,10 @@
   const se0 = A.settingsExtra;
   A.settingsExtra = (k) => {
     const h = se0(k); const lv = T.level || 'info';
-    const grp = '<div class="sg"><h4>Troubleshooting</h4>' + k.row('Log detail', 'What the app records for the diagnostics report. Never passwords or keys.', '<div class="seg">' + [['error', 'Errors'], ['info', 'Normal'], ['debug', 'Detailed']].map((o) => '<button data-sx="loglevel:' + o[0] + '" class="' + (lv === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>') +
-      k.row('Agent log', 'Recent lines of the log of the connected computer', '<button class="btn" data-sx="agentlog">View</button>') +
-      k.row('Check the keystore', 'Saves, reads back and removes a test secret in the system keystore', '<button class="btn" data-sx="keystore">Check</button>') +
-      k.row('Device key', 'Identifies this computer to your servers', '<button class="btn" data-sx="devkey">New key…</button>') + '</div>';
+    const grp = '<div class="sg"><h4>Troubleshooting</h4>' + k.row('Log detail', '', '<div class="seg">' + [['error', 'Errors'], ['info', 'Normal'], ['debug', 'Detailed']].map((o) => '<button data-sx="loglevel:' + o[0] + '" class="' + (lv === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>') +
+      k.row('Agent log', '', '<button class="btn" data-sx="agentlog">View</button>') +
+      k.row('Check the keystore', '', '<button class="btn" data-sx="keystore">Check</button>') +
+      k.row('Device key', '', '<button class="btn" data-sx="devkey">New key…</button>') + '</div>';
     return h.replace('<div class="sg"><h4>About</h4>', grp + '<div class="sg"><h4>About</h4>');
   };
   const sa0 = A.settingsAction;
@@ -134,10 +134,10 @@
     const noTray = D.tray === false;
     const desktop = '<div class="sg"><h4>Desktop</h4>' +
       row('Close to the system tray', noTray ? 'This system shows no tray icon, so closing the window closes the app' : 'Closing the window keeps transfers running in the tray', noTray ? '<button class="sw" disabled role="switch" aria-checked="false" aria-label="closeToTray"></button>' : sw('closeToTray')) +
-      row('Start RFE when I sign in', 'Starts hidden in the tray', sw('startLogin')) +
-      row('Desktop notifications', 'Shown by your operating system when this window is not in front', sw('desktopNotif')) +
-      (S.desktopNotif ? row('New device requests', 'A device is waiting for approval', sw('nPair')) + row('Updates', 'A new version is available', sw('nUpdate')) : '') +
-      row('Try it', 'Shows how a notification looks', '<button class="btn" data-sx="notif">' + ic('bell') + 'Test notification</button>') + '</div>';
+      row('Start RFE when I sign in', '', sw('startLogin')) +
+      row('Desktop notifications', '', sw('desktopNotif')) +
+      (S.desktopNotif ? row('New device requests', '', sw('nPair')) + row('Updates', '', sw('nUpdate')) : '') +
+      row('Try it', '', '<button class="btn" data-sx="notif">' + ic('bell') + 'Test notification</button>') + '</div>';
     return h.replace('<div class="sg"><h4>Files</h4>', desktop + '<div class="sg"><h4>Files</h4>');
   };
   const sa1 = A.settingsAction;
@@ -166,8 +166,8 @@
         (UP.saved ? '<div class="fxsub" role="status">Saved and checked: <span class="mono">' + esc(UP.saved) + '</span>. Install it with your package manager (for a .deb: <span class="mono">sudo apt install ./the-file.deb</span>) or run the AppImage. RFE never installs it for you.</div>' : '');
     } else main = '';
     body.innerHTML = main +
-      '<div class="sr" style="padding:12px 0 0"><div class="l"><b>Update channel</b><small>Beta also offers pre-releases and may be less stable</small></div><div class="seg">' + [['stable', 'Stable'], ['beta', 'Beta']].map((o) => '<button data-uc="' + o[0] + '" class="' + (S.channel === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>' +
-      '<div class="sr" style="padding:8px 0 0"><div class="l"><b>Check automatically</b><small>Once a day while the app runs. Nothing is installed without you.</small></div><button class="sw' + (S.autoUpdate ? ' on' : '') + '" data-ua="1" role="switch" aria-checked="' + !!S.autoUpdate + '" aria-label="Check automatically"></button></div>';
+      '<div class="sr" style="padding:.75rem 0 0"><div class="l"><b>Update channel</b><small>Beta also offers pre-releases and may be less stable</small></div><div class="seg">' + [['stable', 'Stable'], ['beta', 'Beta']].map((o) => '<button data-uc="' + o[0] + '" class="' + (S.channel === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>' +
+      '<div class="sr" style="padding:.5rem 0 0"><div class="l"><b>Check automatically</b><small>Once a day while the app runs. Nothing is installed without you.</small></div><button class="sw' + (S.autoUpdate ? ' on' : '') + '" data-ua="1" role="switch" aria-checked="' + !!S.autoUpdate + '" aria-label="Check automatically"></button></div>';
     const go = $('[data-id="go"]', c.el); if (go) { go.hidden = !(r && r.available && r.package && !UP.saved); go.disabled = UP.dl; }
     const again = $('[data-id="again"]', c.el); if (again) again.disabled = UP.busy || UP.dl;
     const show = $('[data-id="show"]', c.el); if (show) show.hidden = !UP.saved;

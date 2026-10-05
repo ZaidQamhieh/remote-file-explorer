@@ -34,7 +34,8 @@ after(async () => {
 
 const path = () => app.script("return A.mainPane.path;");
 const cssVar = (n) => app.script("return document.getElementById('main').style.getPropertyValue(arguments[0]);", [n]);
-const px = async (n) => parseInt(await cssVar(n), 10);
+const rem = async (n) => parseFloat(await cssVar(n));
+const remPx = () => app.script("return parseFloat(getComputedStyle(document.documentElement).fontSize);");
 
 test("one click on a folder opens it", async () => {
   await app.click('[data-rows] .li[data-i="0"]');
@@ -56,31 +57,42 @@ test("the round icon selects without opening", async () => {
   await app.script("A.mainPane.sel.clear(); A.mainPane.selChanged();");
 });
 
-test("the side panel is dragged wider and narrower, within limits", async () => {
-  const w0 = await px("--sidew");
-  assert.equal(w0, 372);
+test("the side panel is dragged wider and narrower, within limits, and folds away", async () => {
+  const w0 = await rem("--sidew");
+  const u = await remPx();
+  assert.equal(w0, 21);
   await app.drag("#rszSide", -120, 0);
-  const w1 = await px("--sidew");
-  assert.ok(w1 >= w0 + 90 && w1 <= w0 + 150, "wider by about 120: " + w1);
-  await app.drag("#rszSide", -500, 0);
-  assert.equal(await px("--sidew"), 640, "stops at the limit");
-  await app.drag("#rszSide", 600, 0);
-  assert.equal(await px("--sidew"), 300, "stops at the other limit");
+  const w1 = await rem("--sidew");
+  assert.ok(Math.abs((w1 - w0) * u - 120) < 12, "wider by about 120 px: " + w1);
   const real = await app.script("return document.getElementById('side').getBoundingClientRect().width;");
-  assert.ok(Math.abs(real - 300) < 2, "the panel really is that wide: " + real);
-  await app.script("A.S.sideW = 372; window.dispatchEvent(new Event('resize'));");
+  assert.ok(Math.abs(real - w1 * u) < 2, "the panel really is that wide: " + real);
+  await app.drag("#rszSide", -500, 0);
+  const wMax = await rem("--sidew");
+  assert.ok(wMax > w1 + 2, "wider still: " + wMax);
+  const rows = await app.script("return document.querySelector('[data-rows]').clientWidth / parseFloat(getComputedStyle(document.documentElement).fontSize);");
+  assert.ok(rows >= 33, "the list keeps its room: " + rows + " rem");
+  await app.drag("#rszSide", 700, 0);
+  assert.equal(await app.script("return document.getElementById('main').classList.contains('sidehid');"), true, "folds away when dragged narrow");
+  await app.shot("9-side-hidden.png");
+  await app.click("#rszSide");
+  await waitFor("the panel to come back", async () => !(await app.script("return document.getElementById('main').classList.contains('sidehid');")));
+  await app.click("#btnSide");
+  assert.equal(await app.script("return document.getElementById('main').classList.contains('sidehid');"), true, "the button hides it");
+  await app.click("#btnSide");
+  await app.script("A.S.sideR = 21; window.dispatchEvent(new Event('resize'));");
 });
 
 test("the transfers strip is dragged taller and folds away when dragged down", async () => {
   await app.script("A.state.sheetOpen = true; A.renderAll();");
-  const h0 = await px("--sheet");
-  await app.drag("[data-hdl]", 0, -100);
-  const h1 = await px("--sheet");
-  assert.ok(h1 >= h0 + 70 && h1 <= h0 + 130, "taller by about 100: " + h1);
-  await app.drag("[data-hdl]", 0, 300);
-  assert.equal(await px("--sheet"), 66, "folded");
+  const u = await remPx();
+  const h0 = await rem("--sheet");
+  await app.drag("[data-hdl]", 0, -40);
+  const h1 = await rem("--sheet");
+  assert.ok(Math.abs((h1 - h0) * u - 40) < 8, "taller by about 40 px: " + h1);
+  await app.drag("[data-hdl]", 0, 230);
+  assert.equal(await rem("--sheet"), 4, "folded to its header");
   await app.click("[data-hdl]");
-  await waitFor("it opens again", async () => (await px("--sheet")) > 100);
+  await waitFor("it opens again", async () => (await rem("--sheet")) > 6);
 });
 
 test("the menu button puts the labels beside the icons and back", async () => {
@@ -93,18 +105,30 @@ test("the menu button puts the labels beside the icons and back", async () => {
   assert.equal(await app.script("return document.getElementById('app').classList.contains('wide');"), false);
 });
 
-test("a bigger interface size makes the page bigger and keeps the layout whole", async () => {
-  const before = await app.script("return window.innerWidth;");
+test("a bigger interface size scales everything and keeps the layout whole", async () => {
+  await app.setRect({ x: 0, y: 0, width: 1500, height: 960 });
+  await sleep(600);
+  const u0 = await remPx();
   await app.script("A.S.uiSize = 130; A.applyZoom();");
-  await waitFor("the zoom", async () => (await app.script("return window.innerWidth;")) < before * 0.9);
-  const after = await app.script("return window.innerWidth;");
-  assert.ok(after >= 1100 - 2, "at least the layout's width in CSS pixels: " + after);
-  const sideways = await app.script("const de = document.documentElement; return de.scrollWidth > de.clientWidth + 1;");
-  assert.equal(sideways, false, "no sideways scroll");
+  await waitFor("the scale", async () => (await remPx()) > u0 * 1.1);
+  const sideways = await app.script("const de = document.documentElement; return de.scrollWidth > de.clientWidth + 1 || de.scrollHeight > de.clientHeight + 1;");
+  assert.equal(sideways, false, "no scroll");
   await app.shot("9-size-130.png");
-  await app.script("A.S.uiSize = 'auto'; A.applyZoom();");
   await app.script("A.S.uiSize = 100; A.applyZoom();");
-  await waitFor("back to normal", async () => (await app.script("return window.innerWidth;")) >= before - 2);
+  await waitFor("back to normal", async () => Math.abs((await remPx()) - u0) < 0.2);
+  await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
+});
+
+test("the page scales with the window: 16 px at the smallest, bigger as the window grows", async () => {
+  const want = { "1100x700": 16, "1440x900": 18.1, "1920x1080": 20, "2560x1440": 23.8 };
+  for (const [size, px] of Object.entries(want)) {
+    const [width, height] = size.split("x").map(Number);
+    await app.setRect({ x: 0, y: 0, width, height });
+    await sleep(700);
+    const u = await remPx();
+    assert.ok(Math.abs(u - px) < 0.6, `${size}: one rem is ${u} px, expected about ${px}`);
+  }
+  await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 
 test("both panels dragged to their limits at the smallest window still leave a usable list", async () => {
@@ -120,7 +144,7 @@ test("both panels dragged to their limits at the smallest window still leave a u
   const nameW = await app.script("const n = document.querySelector('[data-rows] .li'); return n ? n.children[1].getBoundingClientRect().width : 0;");
   assert.ok(nameW >= 120, "the names column keeps room: " + nameW);
   await app.shot("9-limits-1100x700.png");
-  await app.script("A.S.sideW = 372; A.S.sheetH = 252; A.state.sheetOpen = false; window.dispatchEvent(new Event('resize'));");
+  await app.script("A.S.sideR = 21; A.S.sheetR = 15.75; A.state.sheetOpen = false; window.dispatchEvent(new Event('resize'));");
   await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 
@@ -135,26 +159,7 @@ test("a narrow window gets the drawer: the labels over the page, closed by Escap
   await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 
-test("at 125 percent on a big screen the real window is bigger, whole and in proportion", async () => {
-  await app.setRect({ x: 0, y: 0, width: 2560, height: 1300 });
-  await sleep(600);
-  const css0 = await app.script("return window.innerWidth;");
-  await app.script("A.S.uiSize = 125; A.applyZoom();");
-  await waitFor("the zoom", async () => (await app.script("return window.innerWidth;")) < css0 * 0.85);
-  for (const view of ["files", "tools", "settings", "servers"]) {
-    // The driver's pointer coordinates do not follow the page zoom, so the page is moved by script here.
-    await app.script("A.go(arguments[0]);", [view]);
-    await waitFor(`${view} to draw`, () => app.has({ files: /Name/, tools: /Favorites/, settings: /Interface size/, servers: /Servers/ }[view], "#stage"));
-    await sleep(700);
-    await app.shot(`9-zoom125-${view}-2560x1300.png`);
-    const sideways = await app.script("const de = document.documentElement; return de.scrollWidth > de.clientWidth + 1 || de.scrollHeight > de.clientHeight + 1;");
-    assert.equal(sideways, false, `${view}: the page scrolls at 125 percent`);
-  }
-  await app.script("A.S.uiSize = 100; A.applyZoom(); A.go('files');");
-  await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
-});
-
-const SIZES = [[1100, 700], [1440, 900], [2000, 1100], [2560, 1300]];
+const SIZES = [[1100, 700], [1440, 900], [1920, 1080], [2560, 1440]];
 for (const view of ["files", "tools"]) {
   test(`${view} at every size`, async () => {
     await app.go(view);

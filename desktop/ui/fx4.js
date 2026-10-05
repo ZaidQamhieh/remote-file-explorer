@@ -51,8 +51,8 @@
     if (ap0) ap0.apply(this, arguments);
     if (v === 'transfers') {
       const j = A.journal.mem || jread(); const stg = $('#stage'); const n = unfinished().length;
-      const card = document.createElement('div'); card.className = 'fxc jcard'; card.innerHTML = '<div class="fxh"><span class="fxi">' + ic('database') + '</span><div><b>Transfer journal</b><small>' + (n ? plural(n, 'unfinished transfer is', 'unfinished transfers are') + ' noted, so the next start can queue ' + (n === 1 ? 'it' : 'them') + ' again.' : 'Nothing unfinished. Running transfers are noted here in case the app is closed.') + '</small></div>' + (j && j.tasks.length ? '<button class="btn sm" style="margin-left:auto" data-fx="journal.clear">Clear journal</button>' : '') + '</div>';
-      stg.appendChild(card);
+      const show = n || (j && j.tasks.length); const card = document.createElement('div'); card.className = 'fxc jcard'; card.innerHTML = '<div class="fxh"><span class="fxi">' + ic('database') + '</span><div><b>Transfer journal</b><small>' + plural(n, 'unfinished transfer', 'unfinished transfers') + '</small></div>' + (j && j.tasks.length ? '<button class="btn sm" style="margin-left:auto" data-fx="journal.clear">Clear journal</button>' : '') + '</div>';
+      if (show) stg.appendChild(card);
     }
     if (v === 'devices') {
       $$('.dvrow').forEach((r) => { const b = r.querySelector('[data-fx^="dev.perm|"],[data-fx^="dev.menu|"]'); if (!b) return; const id = b.dataset.fx.split('|')[1]; const d = document.createElement('button'); d.className = 'btn sm tx'; d.dataset.fx = 'dev.details|' + id; d.textContent = 'Details'; b.parentNode.insertBefore(d, b.parentNode.firstChild); });
@@ -79,7 +79,7 @@
     const acts = E.history.filter((h) => h.kind === 'audit' && h.text.includes(d.name)).slice(0, 5);
     const on = (k) => (a ? (a[k] ? '<span class="tag ok">Allowed</span>' : '<span class="tag">Not allowed</span>') : '<span class="tag">Unknown</span>');
     A.dialog({ icon: 'phone', title: d.name, width: 560, noFocus: true,
-      body: '<div class="tags" style="margin:0 0 12px"><span class="tag ' + (!d.revoked && d.last && E.now() - d.last < 120000 ? 'ok' : '') + '">' + (d.revoked ? 'Revoked' : d.last && E.now() - d.last < 120000 ? 'Online now' : d.last ? 'Last seen ' + rel(d.last) : 'Never seen') + '</span>' + (d.ver ? '<span class="tag">' + esc(d.ver) + '</span>' : '') + (d.addr ? '<span class="tag">' + esc(d.addr) + '</span>' : '') + '</div>' +
+      body: '<div class="tags" style="margin:0 0 .75rem"><span class="tag ' + (!d.revoked && d.last && E.now() - d.last < 120000 ? 'ok' : '') + '">' + (d.revoked ? 'Revoked' : d.last && E.now() - d.last < 120000 ? 'Online now' : d.last ? 'Last seen ' + rel(d.last) : 'Never seen') + '</span>' + (d.ver ? '<span class="tag">' + esc(d.ver) + '</span>' : '') + (d.addr ? '<span class="tag">' + esc(d.addr) + '</span>' : '') + '</div>' +
         '<div class="kv2"><div><b>Device id</b><small class="mono">' + esc(d.id) + '</small></div></div><div class="kv2"><div><b>Paired</b><small>' + (d.paired ? U.fmtDate(d.paired) + ' · ' + rel(d.paired) : 'Unknown') + (d.viaLogin ? ' · signed in with an account' : ' · paired with a code') + '</small></div></div>' +
         '<h4 class="dsh">What it can do</h4><table class="capm"><tbody><tr><td>Browse and preview</td><td><span class="tag ok">Allowed</span></td></tr>' + [['download', 'Download files'], ['upload', 'Upload files'], ['modify', 'Rename and move'], ['delete', 'Delete'], ['share', 'Make share links'], ['viewApps', 'See apps'], ['launchApps', 'Launch apps']].map((r) => '<tr><td>' + r[1] + '</td><td>' + on(r[0]) + '</td></tr>').join('') + (a && a.readOnly ? '<tr><td>Read-only</td><td><span class="tag warn">On</span></td></tr>' : '') + '</tbody></table>' +
         (a ? '<h4 class="dsh">Folder limit</h4><div class="fld"><input id="dvj" value="' + esc(a.jailRoot || '') + '" placeholder="No limit: all of the roots the server allows" spellcheck="false"><span class="err" id="dvje"></span></div><div class="fxsub">The device can only open this folder and what is inside it. Leave it empty for no limit.</div>' : '') +
@@ -193,8 +193,8 @@
   const se1 = A.settingsExtra;
   A.settingsExtra = (k) => {
     let h = se1(k); const row = k.row, sw = k.sw;
-    const backup = '<div class="sg"><h4>Backup</h4>' + row('Back up settings', 'One encrypted file with your settings, favorites and sync rules', '<button class="btn" data-sx="backup">' + ic('lock') + 'Back up…</button>') + row('Restore settings', 'From a backup file', '<button class="btn" data-sx="restore">' + ic('upload') + 'Restore…</button>') + '</div>';
-    h = h.replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + row('Ask where to save downloads', 'Opens the system’s folder dialog for each download', sw('askSave')));
+    const backup = '<div class="sg"><h4>Backup</h4>' + row('Back up settings', '', '<button class="btn" data-sx="backup">' + ic('lock') + 'Back up…</button>') + row('Restore settings', '', '<button class="btn" data-sx="restore">' + ic('upload') + 'Restore…</button>') + '</div>';
+    h = h.replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + row('Ask where to save downloads', '', sw('askSave')));
     h = h.replace('<div class="sg"><h4>About</h4>', backup + '<div class="sg"><h4>About</h4>');
     return h;
   };

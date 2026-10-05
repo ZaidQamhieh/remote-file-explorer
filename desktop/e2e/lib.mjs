@@ -43,8 +43,6 @@ export class App {
     const v = await call("POST", "/session", { capabilities: caps });
     const app = new App(v.sessionId);
     await waitFor("the window", () => app.visible("#rail .dest"));
-    // WebDriver clicks land off target under the page zoom that "Auto" picks on a big screen: pin 100% (layout tests set their own).
-    if (process.env.RFE_E2E_ZOOM !== "auto") await app.script("A.S.uiSize = 100; A.applyZoom();");
     return app;
   }
 
@@ -121,14 +119,26 @@ export class App {
 
   /** Presses a button of the Servers card of the server with this name. */
   async clickInCard(name, label) {
-    const ok = await this.script(
-      `document.querySelectorAll('[data-e2e-scope]').forEach((x) => x.removeAttribute('data-e2e-scope'));
-       const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b') && x.querySelector('b').textContent.trim() === arguments[0]);
-       if (!c) return false; c.setAttribute('data-e2e-scope', '1'); return true;`,
-      [name]
-    );
-    if (!ok) throw new Error(`no server card named ${name}`);
-    await this.clickLabel(label, "[data-e2e-scope]");
+    // The card is found again on every try: a state change redraws it and would drop a mark set earlier.
+    await waitFor(`the "${label}" button of ${name}`, async () => {
+      const ok = await this.script(
+        `const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b') && x.querySelector('b').textContent.trim() === arguments[0]);
+         if (!c) return false;
+         const b = [...c.querySelectorAll('button')].find((x) => x.textContent.trim() === arguments[1] && !x.disabled && x.offsetParent !== null);
+         if (!b) return false; b.setAttribute('data-e2e', '1'); return true;`,
+        [name, label]
+      );
+      if (!ok) return false;
+      try {
+        await this.req("POST", `/element/${await this.find('[data-e2e="1"]')}/click`, {});
+        return true;
+      } catch (e) {
+        if (/not interactable|stale element|intercepted|no such element/.test(e.message)) return false;
+        throw e;
+      } finally {
+        await this.script("document.querySelectorAll('[data-e2e]').forEach((x) => x.removeAttribute('data-e2e'));");
+      }
+    });
   }
 
   /** Presses the item of the open menu with this label. */

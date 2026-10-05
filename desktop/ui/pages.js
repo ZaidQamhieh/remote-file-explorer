@@ -6,13 +6,13 @@
   try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* storage unavailable */ }
   st.sheetOpen = S.sheetPref === 'open'; /* the strip starts folded; it opens when a transfer is queued, or as it was left */
   const save = () => { if (/[?&]thumb=1/.test(location.search)) return; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
-  /* The interface size: the page is zoomed by the core, and the smallest window grows with it. "Auto" follows the size of the screen. */
-  const zoomFor = () => {
-    if (S.uiSize && S.uiSize !== 'auto') return Math.min(1.5, Math.max(1, +S.uiSize / 100)) || 1;
-    const w = Math.max(screen.width || 0, 0); return w >= 3000 ? 1.5 : w >= 2400 ? 1.25 : w >= 2000 ? 1.15 : 1;
+  /* The page scales with the window by itself (the root size in app.css). Interface size multiplies that, and the smallest window grows with it. */
+  let scaleNow = 1;
+  A.applyZoom = () => {
+    const m = Math.min(1.3, Math.max(0.9, (+S.uiSize || 100) / 100));
+    document.documentElement.style.setProperty('--ui', String(m)); A.uReset();
+    if (m !== scaleNow) { scaleNow = m; E.call('desktop_set_scale', { scale: m }).catch(() => { scaleNow = 0; }); }
   };
-  let zoomNow = 1; /* 100% is the window's own size: nothing to ask the core for */
-  A.applyZoom = () => { const z = zoomFor(); if (z === zoomNow) return; zoomNow = z; E.call('desktop_set_zoom', { zoom: z }).catch(() => { zoomNow = 0; }); };
   const applyTheme = () => {
     const dark = S.theme === 'dark' || (S.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.density = S.density === 'compact' ? 'compact' : 'comfortable';
@@ -47,40 +47,48 @@
   };
   function layout() {
     const m = $('#main'); m.classList.toggle('nosid', st.view !== 'files'); m.classList.toggle('nosheet', st.view === 'transfers');
-    m.style.setProperty('--sheet', (st.sheetOpen ? clamp(S.sheetH || 252, SHEET_MIN, sheetMax()) : 66) + 'px');
-    m.style.setProperty('--sidew', clamp(S.sideW || 372, SIDE_MIN, sideMax()) + 'px');
-    $('#side').style.display = st.view === 'files' ? '' : 'none';
-    $('#app').classList.toggle('wide', !!S.railWide && innerWidth >= WIDE_MIN);
-    $('#app').classList.toggle('drawer', !!st.drawer && innerWidth < WIDE_MIN);
+    m.classList.toggle('sidehid', st.view === 'files' && !!S.sideHide);
+    m.style.setProperty('--sheet', sheetNow().toFixed(2) + 'rem'); m.style.setProperty('--sidew', sideNow().toFixed(2) + 'rem');
+    $('#side').style.display = st.view === 'files' && !S.sideHide ? '' : 'none'; $('#sheet').classList.toggle('min', !st.sheetOpen);
+    $('#app').classList.toggle('wide', !!S.railWide && remW() >= WIDE_MIN);
+    $('#app').classList.toggle('drawer', !!st.drawer && remW() < WIDE_MIN);
+    const b = $('#btnSide'); if (b) { b.hidden = st.view !== 'files'; b.setAttribute('aria-pressed', String(!S.sideHide)); b.title = S.sideHide ? 'Show details' : 'Hide details'; }
   }
-  /* ---------- sizes: the side panel and the transfers strip are dragged to the size wanted, within limits ---------- */
-  const SIDE_MIN = 300, SIDE_MAX = 640, SHEET_MIN = 150, WIDE_MIN = 1280;
+  /* ---------- sizes, in rem so they scale with the window: the side panel and the transfers strip are dragged to the size wanted, or folded away ---------- */
+  const SIDE_MIN = 18, SIDE_HIDE = 12, SIDE_DEF = 21, SHEET_MIN = 9, SHEET_FOLD = 4, SHEET_HIDE = 6.5, SHEET_DEF = 15.75, WIDE_MIN = 75;
+  /* The list always keeps room: about 34 rem across and 26 rem high (its header, four rows and its footer). */
+  const LIST_W = 34, LIST_H = 26;
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-  /* The list always keeps room: about 460 px across and 420 px high (its header, four rows and its footer). */
-  const LIST_W = 460, LIST_H = 420;
-  function sideMax() { const w = $('#main') ? $('#main').clientWidth : 0; return Math.max(SIDE_MIN, Math.min(SIDE_MAX, w ? w - 32 - LIST_W : SIDE_MAX)); }
-  function sheetMax() { const h = $('#main') ? $('#main').clientHeight : 0; return Math.max(SHEET_MIN, h ? h - 72 - LIST_H : 400); }
-  /* Runs `move(dx, dy)` while the pointer is down on `el`, then `end(moved)`. */
+  const remPx = () => 16 * A.u();
+  const remW = () => innerWidth / remPx();
+  const sideMax = () => { const m = $('#main'); const w = m ? m.clientWidth / remPx() : 0; return w ? Math.max(SIDE_MIN, Math.min(w * 0.6, w - 1.5 - LIST_W)) : 40; };
+  const sheetMax = () => { const m = $('#main'); const h = m ? m.clientHeight / remPx() : 0; return h ? Math.max(SHEET_MIN, h - 5.25 - LIST_H) : 25; };
+  const sideNow = () => clamp(S.sideR || SIDE_DEF, SIDE_MIN, sideMax());
+  const sheetNow = () => (st.sheetOpen ? clamp(S.sheetR || SHEET_DEF, SHEET_MIN, sheetMax()) : SHEET_FOLD);
+  /* Runs `move(dx, dy)` (in px) while the pointer is down on `el`, then `end(moved)`. */
   function dragging(el, e, move, end) {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault(); const x0 = e.clientX, y0 = e.clientY; let moved = false;
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
     const onMove = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; if (!moved && Math.abs(dx) + Math.abs(dy) > 3) moved = true; if (moved) move(dx, dy); };
-    const onUp = () => { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp); document.body.classList.remove('resizing'); end(moved); };
-    el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp); document.body.classList.add('resizing');
+    const onUp = () => { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp); document.body.classList.remove('resizing'); document.body.style.cursor = ''; end(moved); };
+    el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp); document.body.classList.add('resizing'); document.body.style.cursor = getComputedStyle(el).cursor;
   }
-  function setSideW(w) { S.sideW = clamp(Math.round(w), SIDE_MIN, sideMax()); $('#main').style.setProperty('--sidew', S.sideW + 'px'); }
-  function setSheetH(h) { S.sheetH = clamp(Math.round(h), SHEET_MIN, sheetMax()); st.sheetOpen = true; $('#main').style.setProperty('--sheet', S.sheetH + 'px'); }
-  $('#rszSide').addEventListener('pointerdown', (e) => {
-    const w0 = clamp(S.sideW || 372, SIDE_MIN, sideMax()); const dir = document.documentElement.dir === 'rtl' ? -1 : 1;
-    dragging($('#rszSide'), e, (dx) => setSideW(w0 - dir * dx), () => { save(); A.mainPane.render && A.mainPane.render(); });
+  const refit = () => { [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); A.mainPane.render && A.mainPane.render(); };
+  A.toggleSide = () => { S.sideHide = !S.sideHide; save(); layout(); refit(); };
+  const grip = $('#rszSide');
+  grip.addEventListener('pointerdown', (e) => {
+    const w0 = S.sideHide ? 0 : sideNow(); const dir = document.documentElement.dir === 'rtl' ? -1 : 1;
+    dragging(grip, e, (dx) => { const want = w0 - dir * dx / remPx(); S.sideHide = want < SIDE_HIDE; if (!S.sideHide) S.sideR = clamp(want, SIDE_MIN, sideMax()); layout(); }, (moved) => { if (!moved) S.sideHide = !S.sideHide; save(); layout(); refit(); });
   });
-  $('#rszSide').addEventListener('keydown', (e) => {
-    const k = e.key === 'ArrowLeft' ? 24 : e.key === 'ArrowRight' ? -24 : 0; if (!k && e.key !== 'Home') return; e.preventDefault();
-    if (e.key === 'Home') { S.sideW = 372; layout(); } else setSideW((S.sideW || 372) + k); save(); A.mainPane.render && A.mainPane.render();
+  grip.addEventListener('keydown', (e) => {
+    const k = { ArrowLeft: 1.5, ArrowRight: -1.5 }[e.key]; if (!k && e.key !== 'Home' && e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault();
+    if (e.key === 'Enter' || e.key === ' ') S.sideHide = !S.sideHide; else if (e.key === 'Home') { S.sideR = SIDE_DEF; S.sideHide = false; } else { const was = S.sideHide ? 0 : sideNow(); const want = was + k; S.sideHide = want < SIDE_HIDE; if (!S.sideHide) S.sideR = clamp(want, SIDE_MIN, sideMax()); }
+    save(); layout(); refit();
   });
-  $('#rszSide').addEventListener('dblclick', () => { S.sideW = 372; layout(); save(); });
-  addEventListener('resize', () => { layout(); renderRail(); [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); });
+  grip.addEventListener('dblclick', () => { S.sideR = SIDE_DEF; S.sideHide = false; save(); layout(); refit(); });
+  let lastUnit = 0;
+  addEventListener('resize', () => { layout(); renderRail(); const u = A.u(); if (u !== lastUnit) { lastUnit = u; refit(); } else [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); });
   function renderAll() { layout(); renderRail(); renderChip(); renderStage(); renderSide(); renderSheet(true); }
   A.renderAll = renderAll;
   A.renderRail = () => renderRail(); /* A control that redraws the page keeps the keyboard focus: the same switch or segment button gets it back. */
@@ -98,7 +106,7 @@
   function renderRail() {
     const c = counts(); const bad = E.servers.some((s) => s.state === 'lost' || s.state === 'offline' || s.state === 'trust' || s.state === 'refused');
     const D = (v, i, l, extra) => '<button class="dest' + (st.view === v ? ' on' : '') + '" data-go="' + v + '" aria-label="' + l + '"><div class="pill">' + ic(i) + (extra || '') + '</div>' + l + '</button>';
-    const wide = innerWidth >= WIDE_MIN ? !!S.railWide : !!st.drawer;
+    const wide = remW() >= WIDE_MIN ? !!S.railWide : !!st.drawer;
     $('#rail').innerHTML = '<button class="rmenu" data-menu="1" title="' + (wide ? 'Hide the labels' : 'Show the labels') + '" aria-label="Menu" aria-expanded="' + wide + '">' + ic('menu') + '</button><button class="fab" data-new="1" title="New connection" aria-label="New connection">' + ic('plug') + '<span class="fl">New connection</span></button>' +
       D('files', 'folder', 'Files') + D('servers', 'server', 'Servers', bad ? '<i class="dt"></i>' : '') + D('devices', 'phone', 'Devices', A.X && A.X.inbox && A.X.inbox.length ? '<i class="bg">' + A.X.inbox.length + '</i>' : '') +
       D('transfers', 'swap', 'Transfers', c.attn ? '<i class="bg">' + c.attn + '</i>' : c.active + c.queued ? '<i class="bg pri">' + (c.active + c.queued) + '</i>' : '') +
@@ -108,7 +116,7 @@
     e.railHandled = true; /* the page-wide click that closes the drawer must not see this one */
     const b = e.target.closest('[data-go]'); if (b) { st.drawer = false; layout(); A.go(b.dataset.go); } else if (e.target.closest('[data-new]')) { st.drawer = false; layout(); A.serverDialog(); }
     else if (e.target.closest('[data-menu]')) {
-      if (innerWidth >= WIDE_MIN) { S.railWide = !S.railWide; save(); } else st.drawer = !st.drawer;
+      if (remW() >= WIDE_MIN) { S.railWide = !S.railWide; save(); } else st.drawer = !st.drawer;
       layout(); renderRail(); A.mainPane.render && A.mainPane.render(); const m = $('#rail [data-menu]'); if (m) m.focus();
     }
   });
@@ -119,18 +127,19 @@
 
   /* ---------- top bar ---------- */
   function buildTop() {
-    $('#top').innerHTML = '<label class="sbar">' + ic('search') + '<input id="q" placeholder="Search files on this server" aria-label="Search" autocomplete="off"><kbd>/</kbd></label><button class="srv" id="chip" aria-haspopup="menu"></button><span class="sp"></span><button class="ib" id="btnRefresh" title="Refresh (F5)" aria-label="Refresh">' + ic('refresh') + '</button><button class="ib" id="btnQR" title="Pair a phone (QR)" aria-label="Pair a phone">' + ic('qr') + '</button><button class="ib" id="btnTheme" title="Theme" aria-label="Theme">' + ic('sun') + '</button><button class="ib" id="btnPal" title="Command palette (Ctrl+K)" aria-label="Command palette">' + ic('command') + '</button><button class="ib" id="btnBell" title="Notifications" aria-label="Notifications">' + ic('bell') + '<i class="bd" id="bd" hidden></i></button><button class="av" id="btnAv" aria-label="Account">Z</button>';
+    $('#top').innerHTML = '<label class="sbar">' + ic('search') + '<input id="q" placeholder="Search files on this server" aria-label="Search" autocomplete="off"><kbd>/</kbd></label><button class="srv" id="chip" aria-haspopup="menu"></button><span class="sp"></span><button class="ib" id="btnSide" aria-label="Details panel" aria-pressed="true">' + ic('panel') + '</button><button class="ib" id="btnRefresh" title="Refresh (F5)" aria-label="Refresh">' + ic('refresh') + '</button><button class="ib" id="btnQR" title="Pair a phone (QR)" aria-label="Pair a phone">' + ic('qr') + '</button><button class="ib" id="btnTheme" title="Theme" aria-label="Theme">' + ic('sun') + '</button><button class="ib" id="btnPal" title="Command palette (Ctrl+K)" aria-label="Command palette">' + ic('command') + '</button><button class="ib" id="btnBell" title="Notifications" aria-label="Notifications">' + ic('bell') + '<i class="bd" id="bd" hidden></i></button><button class="av" id="btnAv" aria-label="Account">Z</button>';
     const q = $('#q'); let tm;
     q.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => runQuery(q.value), 280); });
     q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(tm); runQuery(q.value); } if (e.key === 'Escape') { q.value = ''; q.blur(); runQuery(''); } });
     $('#chip').addEventListener('click', (e) => serverMenu(e.currentTarget));
+    $('#btnSide').addEventListener('click', () => A.toggleSide());
     $('#btnRefresh').addEventListener('click', () => (st.view === 'files' ? A.mainPane.refresh(true) : A.go('files')));
     $('#btnPal').addEventListener('click', () => palette());
     $('#btnQR').addEventListener('click', () => A.pairDialog && A.pairDialog());
     $('#btnTheme').addEventListener('click', (e) => themeMenu(e.currentTarget));
     syncThemeBtn();
     $('#btnBell').addEventListener('click', (e) => bellMenu(e.currentTarget));
-    $('#btnAv').addEventListener('click', (e) => { const r = e.currentTarget.getBoundingClientRect(); A.menu(r.right - 224, r.bottom + 6, [{ head: (() => { const sv = E.server(A.mainPane.host); return sv && sv.signedIn && sv.user ? sv.user + '@' + sv.name : 'Not signed in'; })() }, { icon: 'phone', label: 'Pair a phone', onClick: () => A.pairDialog && A.pairDialog() }, { icon: 'user', label: 'Accounts…', onClick: () => A.accountsDialog && A.accountsDialog() }, { icon: 'gear', label: 'Settings', onClick: () => A.go('settings') }, { icon: 'keyboard', label: 'Keyboard shortcuts', onClick: shortcutsDialog }]); });
+    $('#btnAv').addEventListener('click', (e) => { const r = e.currentTarget.getBoundingClientRect(); A.menu(r.right - 224 * A.u(), r.bottom + 6, [{ head: (() => { const sv = E.server(A.mainPane.host); return sv && sv.signedIn && sv.user ? sv.user + '@' + sv.name : 'Not signed in'; })() }, { icon: 'phone', label: 'Pair a phone', onClick: () => A.pairDialog && A.pairDialog() }, { icon: 'user', label: 'Accounts…', onClick: () => A.accountsDialog && A.accountsDialog() }, { icon: 'gear', label: 'Settings', onClick: () => A.go('settings') }, { icon: 'keyboard', label: 'Keyboard shortcuts', onClick: shortcutsDialog }]); });
   }
   function runQuery(v) {
     st.q = v.trim(); if (st.q && A.recordQuery) A.recordQuery(st.q);
@@ -172,7 +181,7 @@
   /* ---------- side (details + local) ---------- */
   function renderSide() {
     const side = $('#side'); if (st.view !== 'files') return;
-    side.innerHTML = '<div class="stabs2" role="tablist"><button role="tab" data-tab="details" class="' + (st.sideTab === 'details' ? 'on' : '') + '">Details</button><button role="tab" data-tab="local" class="' + (st.sideTab === 'local' ? 'on' : '') + '">Local files</button></div><div class="sbody"><div class="detail" id="detail"' + (st.sideTab === 'details' ? '' : ' hidden') + '></div><div id="localWrap" style="display:' + (st.sideTab === 'local' ? 'flex' : 'none') + ';flex-direction:column;flex:1;min-height:0"><div id="paneLocal" style="display:flex;flex-direction:column;flex:1;min-height:0"></div><div class="da" id="localFoot" style="border-top:1px solid var(--outline-var);padding-top:12px"></div></div></div>';
+    side.innerHTML = '<div class="stabs2" role="tablist"><button role="tab" data-tab="details" class="' + (st.sideTab === 'details' ? 'on' : '') + '">Details</button><button role="tab" data-tab="local" class="' + (st.sideTab === 'local' ? 'on' : '') + '">Local files</button></div><div class="sbody"><div class="detail" id="detail"' + (st.sideTab === 'details' ? '' : ' hidden') + '></div><div id="localWrap" style="display:' + (st.sideTab === 'local' ? 'flex' : 'none') + ';flex-direction:column;flex:1;min-height:0"><div id="paneLocal" style="display:flex;flex-direction:column;flex:1;min-height:0"></div><div class="da" id="localFoot" style="border-top:1px solid var(--outline-var);padding-top:.75rem"></div></div></div>';
     A.localPane.mount($('#paneLocal')); renderDetail(); renderLocalFooter();
   }
   $('#side').addEventListener('click', (e) => {
@@ -188,11 +197,11 @@
   });
   function renderLocalFooter() {
     const f = $('#localFoot'); if (!f) return; const sel = A.localPane.selected(); const m = A.mainPane; const ok = m.host !== 'local' && E.connected(m.host);
-    f.innerHTML = sel.length ? '<button class="btn f" data-do="uploadsel"' + (ok ? '' : ' disabled') + '>' + ic('upload') + 'Upload ' + sel.length + ' to ' + esc(A.hostName(m.host)) + '</button><span style="color:var(--on-var);font-size:12.5px;align-self:center">' + (ok ? 'into ' + esc(m.path) : 'connect a server first') + '</span>' : '<div style="color:var(--on-var);font-size:13px;display:flex;gap:8px;align-items:center">' + ic('info') + 'Select files here, then upload. Or drag them onto the file list.</div>';
+    f.innerHTML = sel.length ? '<button class="btn f" data-do="uploadsel"' + (ok ? '' : ' disabled') + '>' + ic('upload') + 'Upload ' + sel.length + ' to ' + esc(A.hostName(m.host)) + '</button><span style="color:var(--on-var);font-size:.7812rem;align-self:center">' + (ok ? 'into ' + esc(m.path) : 'connect a server first') + '</span>' : '<div style="color:var(--on-var);font-size:.8125rem;display:flex;gap:.5rem;align-items:center">' + ic('info') + 'Select files here, then upload. Or drag them onto the file list.</div>';
   }
   function renderDetail() {
     const d = $('#detail'); if (!d) return; const p = A.mainPane;
-    if (!p.online()) { d.innerHTML = '<div class="dd" style="padding-top:24px;color:var(--on-var)">' + ic('plug', { size: 40 }) + '<h3 style="margin-top:10px;color:var(--on-surface)">' + esc(A.hostName(p.host)) + '</h3><p>Not connected. Details appear here once you connect.</p></div>'; return; }
+    if (!p.online()) { d.innerHTML = '<div class="dd" style="padding-top:1.5rem;color:var(--on-var)">' + ic('plug', { size: 40 }) + '<h3 style="margin-top:.625rem;color:var(--on-surface)">' + esc(A.hostName(p.host)) + '</h3><p>Not connected. Details appear here once you connect.</p></div>'; return; }
     const sel = p.selected(); const dir = E.fs.get(p.host, p.path);
     const remote = p.host !== 'local'; const kv = (rows) => '<dl class="kv">' + rows.map((r) => '<dt>' + r[0] + '</dt><dd class="' + (r[2] || '') + '">' + r[1] + '</dd>').join('') + '</dl>';
     if (sel.length === 0 && !dir) {
@@ -200,16 +209,16 @@
       return;
     }
     if (sel.length === 0) {
-      d.innerHTML = A.previewHTML(p.host, p.path, dir) + '<div class="dd"><h3 data-nolocal>' + esc(U.baseOf(p.path) || A.hostName(p.host)) + '</h3><div class="sub">' + E.fs.itemCount(dir).toLocaleString() + (E.fs.itemCount(dir) === 1 ? ' item' : ' items') + ' · folder</div>' + kv([['Modified', U.fmtDate(dir.mod)], ['Permissions', esc(dir.perm) + ' ' + esc(dir.own), 'mono'], ['Location', esc(p.path), 'mono'], ['Server', esc(A.hostName(p.host)) + (remote ? ' · ' + E.server(p.host).latency + ' ms' : '')]]) + '</div><div class="hint">' + ic('info') + '<span>Select a file to preview it. Drag files here from the Local files tab to ' + (remote ? 'upload' : 'copy') + '.</span></div><div class="da"><button class="btn t" data-do="newfolder">' + ic('folder-plus') + 'New folder</button>' + (remote ? '<button class="btn" data-do="upload">' + ic('upload') + 'Upload files</button>' : '') + '</div>';
+      d.innerHTML = A.previewHTML(p.host, p.path, dir) + '<div class="dd"><h3 data-nolocal>' + esc(U.baseOf(p.path) || A.hostName(p.host)) + '</h3><div class="sub">' + E.fs.itemCount(dir).toLocaleString() + (E.fs.itemCount(dir) === 1 ? ' item' : ' items') + ' · folder</div>' + kv([['Modified', U.fmtDate(dir.mod)], ['Permissions', esc(dir.perm) + ' ' + esc(dir.own), 'mono'], ['Location', esc(p.path), 'mono'], ['Server', esc(A.hostName(p.host)) + (remote ? ' · ' + E.server(p.host).latency + ' ms' : '')]]) + '</div><div class="da"><button class="btn t" data-do="newfolder">' + ic('folder-plus') + 'New folder</button>' + (remote ? '<button class="btn" data-do="upload">' + ic('upload') + 'Upload files</button>' : '') + '</div>';
       return;
     }
     if (sel.length === 1) {
       const n = sel[0]; const k = U.kindOf(n); const full = U.join(p.path, n.n); const t = n.t === 'dir' ? E.fs.total(n) : null;
-      d.innerHTML = A.previewHTML(p.host, p.path, n) + '<div class="dd"><h3 data-nolocal>' + esc(n.n) + '</h3><div class="sub">' + U.KINDS[k] + (n.t === 'dir' ? (n.cc == null && !n.kids ? '' : ' · ' + E.fs.itemCount(n).toLocaleString() + (E.fs.itemCount(n) === 1 ? ' item' : ' items')) : ' · ' + U.fmtBytes(n.b)) + '</div>' + (!E.fs.canRead(n) ? '<div class="hint" style="margin:0 0 10px;background:var(--warn-c);color:var(--on-warn-c)">' + ic('lock') + '<span>Owned by <b>' + esc(n.own) + '</b>, mode ' + U.permOctal(n.perm) + '. You can’t read this file; downloads will fail.</span></div>' : '') + kv([['Modified', U.fmtDate(n.mod)], ['Permissions', esc(n.perm) + ' ' + esc(n.own), 'mono'], ['Location', esc(full), 'mono']].concat(t ? [['Contents', t.files.toLocaleString() + ' files, ' + t.dirs + ' folders · ' + U.fmtBytes(t.bytes)]] : []).concat(remote ? [['Download to', esc(S.downloadDir) + ' <a data-do="settings">Change</a>']] : [])) + '</div><div class="da"><button class="btn f" data-do="download">' + ic(remote ? 'download' : 'upload') + (remote ? 'Download' : 'Upload') + '</button>' + (n.t === 'file' ? '<button class="btn" data-do="preview">' + ic('eye') + 'Preview</button>' : '') + '<button class="btn" data-do="rename">' + ic('edit') + 'Rename</button><button class="btn e" data-do="delete" aria-label="Delete">' + ic('trash') + '</button></div>';
+      d.innerHTML = A.previewHTML(p.host, p.path, n) + '<div class="dd"><h3 data-nolocal>' + esc(n.n) + '</h3><div class="sub">' + U.KINDS[k] + (n.t === 'dir' ? (n.cc == null && !n.kids ? '' : ' · ' + E.fs.itemCount(n).toLocaleString() + (E.fs.itemCount(n) === 1 ? ' item' : ' items')) : ' · ' + U.fmtBytes(n.b)) + '</div>' + (!E.fs.canRead(n) ? '<div class="hint" style="margin:0 0 .625rem;background:var(--warn-c);color:var(--on-warn-c)">' + ic('lock') + '<span>Owned by <b>' + esc(n.own) + '</b>, mode ' + U.permOctal(n.perm) + '. You can’t read this file; downloads will fail.</span></div>' : '') + kv([['Modified', U.fmtDate(n.mod)], ['Permissions', esc(n.perm) + ' ' + esc(n.own), 'mono'], ['Location', esc(full), 'mono']].concat(t ? [['Contents', t.files.toLocaleString() + ' files, ' + t.dirs + ' folders · ' + U.fmtBytes(t.bytes)]] : []).concat(remote ? [['Download to', esc(S.downloadDir) + ' <a data-do="settings">Change</a>']] : [])) + '</div><div class="da"><button class="btn f" data-do="download">' + ic(remote ? 'download' : 'upload') + (remote ? 'Download' : 'Upload') + '</button>' + (n.t === 'file' ? '<button class="btn" data-do="preview">' + ic('eye') + 'Preview</button>' : '') + '<button class="btn" data-do="rename">' + ic('edit') + 'Rename</button><button class="btn e" data-do="delete" aria-label="Delete">' + ic('trash') + '</button></div>';
       return;
     }
     const tot = sel.reduce((a, n) => a + E.fs.total(n).bytes, 0);
-    d.innerHTML = '<div class="dprev">' + ic('copy', { size: 56 }) + '</div><div class="dd"><h3>' + sel.length + ' items selected</h3><div class="sub">' + U.fmtBytes(tot) + ' total</div><ul class="names" style="list-style:none;margin:0;padding:0">' + sel.slice(0, 8).map((n) => '<li style="display:flex;gap:8px;padding:3px 0;align-items:center">' + fic(n) + '<span class="trunc">' + esc(n.n) + '</span></li>').join('') + (sel.length > 8 ? '<li style="color:var(--on-var)">and ' + (sel.length - 8) + ' more</li>' : '') + '</ul></div><div class="da"><button class="btn f" data-do="download">' + ic(remote ? 'download' : 'upload') + (remote ? 'Download' : 'Upload') + '</button><button class="btn e" data-do="delete">' + ic('trash') + 'Delete</button></div>';
+    d.innerHTML = '<div class="dprev">' + ic('copy', { size: 56 }) + '</div><div class="dd"><h3>' + sel.length + ' items selected</h3><div class="sub">' + U.fmtBytes(tot) + ' total</div><ul class="names" style="list-style:none;margin:0;padding:0">' + sel.slice(0, 8).map((n) => '<li style="display:flex;gap:.5rem;padding:.1875rem 0;align-items:center">' + fic(n) + '<span class="trunc">' + esc(n.n) + '</span></li>').join('') + (sel.length > 8 ? '<li style="color:var(--on-var)">and ' + (sel.length - 8) + ' more</li>' : '') + '</ul></div><div class="da"><button class="btn f" data-do="download">' + ic(remote ? 'download' : 'upload') + (remote ? 'Download' : 'Upload') + '</button><button class="btn e" data-do="delete">' + ic('trash') + 'Delete</button></div>';
   }
 
   /* ---------- sheet ---------- */
@@ -224,24 +233,21 @@
     const list = E.tasks.filter((t) => A.groupOf(t) === st.sheetTab).sort((a, b) => a.queuedAt - b.queuedAt);
     const anyRun = E.tasks.some((t) => t.state === 'running' || t.state === 'queued'), anyPaused = E.tasks.some((t) => t.state === 'paused');
     sh.classList.toggle('min', !st.sheetOpen); $('#main').classList.toggle('noconn', !(A.mainPane.host !== 'local' && E.connected(A.mainPane.host)));
-    sh.innerHTML = '<button class="efab" data-efab="1"' + (A.mainPane.host === 'local' || !E.connected(A.mainPane.host) ? ' disabled title="Open a connected server first, then upload into it"' : '') + '>' + ic('upload') + 'Upload</button><div class="hdl" data-hdl="1" tabindex="0" title="' + (st.sheetOpen ? 'Drag to resize, click to collapse' : 'Click to expand') + '" role="button" aria-label="Toggle transfers"></div><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '<span class="sp"></span><div class="tot"><span id="tot"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? (st.view === 'files' ? 'No transfers running. Drag files onto the list, or press Upload.' : 'No transfers running.') : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div>';
+    sh.innerHTML = '<button class="efab" data-efab="1"' + (A.mainPane.host === 'local' || !E.connected(A.mainPane.host) ? ' disabled title="Open a connected server first, then upload into it"' : '') + '>' + ic('upload') + 'Upload</button><div class="hdl" data-hdl="1" tabindex="0" title="' + (st.sheetOpen ? 'Drag to resize, click to collapse' : 'Click to expand') + '" role="button" aria-label="Toggle transfers"></div><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '<span class="sp"></span><div class="tot"><span id="tot"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? 'No transfers' : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div>';
     A.patchCards(sh); updateTotals();
   }
   function updateTotals() { const t = $('#tot'); if (!t) return; const sp = E.totalSpeed(); const n = E.tasks.filter((x) => x.state === 'running').length; t.textContent = n ? U.fmtSpeed(sp) + ' total · ' + n + ' running' : 'Idle'; }
-  /* The strip is dragged by its top handle; a click without moving still opens or closes it. */
+  /* The strip is dragged by its top handle to any height, folded to its header by dragging it down; a click opens or folds it. */
+  const stripKeep = () => { S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); refit(); };
   $('#sheet').addEventListener('pointerdown', (e) => {
     const h = e.target.closest('[data-hdl]'); if (!h) return;
-    const h0 = st.sheetOpen ? clamp(S.sheetH || 252, SHEET_MIN, sheetMax()) : 66; let want = h0;
-    dragging(h, e, (dx, dy) => { want = h0 - dy; if (want >= 100) setSheetH(want); else { st.sheetOpen = false; $('#main').style.setProperty('--sheet', '66px'); } }, (moved) => {
-      if (!moved) st.sheetOpen = !st.sheetOpen;
-      S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save();
-      layout(); renderSheet(true);
-    });
+    const h0 = sheetNow();
+    dragging(h, e, (dx, dy) => { const want = h0 - dy / remPx(); if (want < SHEET_HIDE) st.sheetOpen = false; else { st.sheetOpen = true; S.sheetR = clamp(want, SHEET_MIN, sheetMax()); } layout(); }, (moved) => { if (!moved) st.sheetOpen = !st.sheetOpen; stripKeep(); });
   });
   $('#sheet').addEventListener('keydown', (e) => {
     if (!e.target.closest('[data-hdl]')) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st.sheetOpen = !st.sheetOpen; S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); setSheetH((st.sheetOpen ? S.sheetH || 252 : 66) + (e.key === 'ArrowUp' ? 32 : -32)); S.sheetPref = 'open'; save(); layout(); renderSheet(true); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st.sheetOpen = !st.sheetOpen; stripKeep(); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const want = sheetNow() + (e.key === 'ArrowUp' ? 2 : -2); if (want < SHEET_HIDE) st.sheetOpen = false; else { st.sheetOpen = true; S.sheetR = clamp(want, SHEET_MIN, sheetMax()); } stripKeep(); }
   });
   $('#sheet').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (sa) { ({ pauseall: E.pauseAll, resumeall: E.resumeAll, clear: E.clearDone })[sa.dataset.sa](); return; }
@@ -287,7 +293,7 @@
   A.serverCard = serverCard;
   function pageServers() {
     const on = E.servers.filter((s) => s.state === 'online').length;
-    $('#stage').innerHTML = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected · browsing <b>' + esc(A.hostName(A.mainPane.host)) + '</b>' + (E.servers.length ? '' : '. No host is saved yet.') + '</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<div class="sc add" data-sa="add" role="button" tabindex="0">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Host, key and fingerprint</span></div></div>';
+    $('#stage').innerHTML = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<div class="sc add" data-sa="add" role="button" tabindex="0">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Host, key and fingerprint</span></div></div>';
   }
   $('#stage').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (!sa || st.view !== 'servers') return; const id = sa.dataset.id; const s = id && E.server(id);
@@ -308,7 +314,7 @@
     const edit = !!s; const v = s || { name: '', host: '', port: 7443 };
     const d = A.dialog({
       icon: 'plug', title: edit ? 'Edit ' + s.name : 'New connection', width: 520, enter: 'ok',
-      body: (edit || !A.connTabs ? '' : A.connTabs('manual')) + '<div class="fld"><label>Name</label><input id="sn" value="' + esc(v.name) + '" placeholder="e.g. render-farm" spellcheck="false"><span class="err" id="sne"></span></div><div class="fld two"><div class="fld" style="margin:0"><label>Host or address</label><input id="sh" value="' + esc(v.host) + '"' + (edit ? ' disabled' : '') + ' placeholder="100.64.0.12 or host.example.com" spellcheck="false"><span class="err" id="she"></span></div><div class="fld" style="margin:0"><label>Port</label><input id="sp" value="' + v.port + '"' + (edit ? ' disabled' : '') + ' inputmode="numeric"></div></div><div style="color:var(--on-var);font-size:12.5px">' + (edit ? 'The address belongs to the trusted key. To use another address, add a new connection.' : "Type the new host's address. Your current login stays saved. " + 'The app reads the server’s certificate fingerprint first and sends no password until you confirm it.') + '</div>',
+      body: (edit || !A.connTabs ? '' : A.connTabs('manual')) + '<div class="fld"><label>Name</label><input id="sn" value="' + esc(v.name) + '" placeholder="e.g. render-farm" spellcheck="false"><span class="err" id="sne"></span></div><div class="fld two"><div class="fld" style="margin:0"><label>Host or address</label><input id="sh" value="' + esc(v.host) + '"' + (edit ? ' disabled' : '') + ' placeholder="100.64.0.12 or host.example.com" spellcheck="false"><span class="err" id="she"></span></div><div class="fld" style="margin:0"><label>Port</label><input id="sp" value="' + v.port + '"' + (edit ? ' disabled' : '') + ' inputmode="numeric"></div></div><div style="color:var(--on-var);font-size:.7812rem">' + (edit ? 'The address belongs to the trusted key. To use another address, add a new connection.' : "Type the new host's address. Your current login stays saved. " + 'The app reads the server’s certificate fingerprint first and sends no password until you confirm it.') + '</div>',
       actions: [{ label: 'Cancel' }, { id: 'ok', label: edit ? 'Save' : 'Connect', kind: 'f', icon: edit ? 'check' : 'plug', cb: (ctl) => {
         const g = (i) => $(i, ctl.el); const host = g('#sh').value.trim(), port = parseInt(g('#sp').value, 10) || 7443; const name = g('#sn').value.trim() || host; let bad = false;
         g('#sne').textContent = ''; g('#she').textContent = '';
@@ -325,10 +331,10 @@
   /* ---------- transfers page ---------- */
   function pageTransfers() {
     const c = counts(); const T = E.tasks; const sec = (k, title, hint) => { const l = T.filter((t) => A.groupOf(t) === k).sort((a, b) => a.queuedAt - b.queuedAt); return l.length ? '<div class="sec">' + title + ' <b>' + l.length + '</b></div><div class="grid3 cwide">' + l.map(A.card).join('') + '</div>' : ''; };
-    const moved = E.history.filter((h) => h.ok).length; const sessionBytes = T.filter((t) => t.state === 'done').reduce((a, t) => a + t.bytes, 0) + T.filter((t) => t.state === 'running').reduce((a, t) => a + t.done, 0);
-    $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1"><h2 class="pt">Transfers</h2><p class="ps" style="margin:0 0 14px">Everything moving between this computer and your servers.</p></div><button class="btn" data-pa="pauseall"' + (T.length ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button><button class="btn" data-pa="resumeall"' + (T.length ? '' : ' disabled') + '>' + ic('play') + 'Resume all</button><button class="btn" data-pa="retryfailed"' + (T.length ? '' : ' disabled') + '>' + ic('retry') + 'Retry failed</button><button class="btn tx" data-pa="clear">Clear completed</button></div>' +
-      '<div class="sum"><div><b id="sumSpeed">' + U.fmtSpeed(E.totalSpeed()) + '</b><small>current speed</small></div><div><b>' + c.active + '</b><small>active</small></div><div><b>' + c.queued + '</b><small>queued</small></div><div><b style="color:' + (c.attn ? 'var(--err)' : 'inherit') + '">' + c.attn + '</b><small>need attention</small></div><div><b>' + c.done + '</b><small>completed</small></div><div><b>' + U.fmtBytes(sessionBytes) + '</b><small>moved this session</small></div></div>' +
-      (T.length ? sec('attn', 'Needs attention') + sec('active', 'Active') + sec('queued', 'Queued') + sec('done', 'Completed') : '<div class="es" style="min-height:300px"><div class="box"><div class="ico">' + ic('swap') + '</div><h3>No transfers yet</h3><p>Drag files between Local files and a server, or use Upload and Download. ' + moved + ' earlier transfer' + (moved === 1 ? '' : 's') + ' in History.</p><div class="row"><button class="btn f" data-pa="files">' + ic('folder') + 'Go to files</button></div></div></div>');
+    const sessionBytes = T.filter((t) => t.state === 'done').reduce((a, t) => a + t.bytes, 0) + T.filter((t) => t.state === 'running').reduce((a, t) => a + t.done, 0);
+    $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap"><div style="flex:1"><h2 class="pt">Transfers</h2></div><button class="btn" data-pa="pauseall"' + (T.length ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button><button class="btn" data-pa="resumeall"' + (T.length ? '' : ' disabled') + '>' + ic('play') + 'Resume all</button><button class="btn" data-pa="retryfailed"' + (T.length ? '' : ' disabled') + '>' + ic('retry') + 'Retry failed</button><button class="btn tx" data-pa="clear">Clear completed</button></div>' +
+      (T.length ? '<div class="sum"><div><b id="sumSpeed">' + U.fmtSpeed(E.totalSpeed()) + '</b><small>current speed</small></div><div><b>' + c.active + '</b><small>active</small></div><div><b>' + c.queued + '</b><small>queued</small></div><div><b style="color:' + (c.attn ? 'var(--err)' : 'inherit') + '">' + c.attn + '</b><small>need attention</small></div><div><b>' + c.done + '</b><small>completed</small></div><div><b>' + U.fmtBytes(sessionBytes) + '</b><small>moved this session</small></div></div>' : '') +
+      (T.length ? sec('attn', 'Needs attention') + sec('active', 'Active') + sec('queued', 'Queued') + sec('done', 'Completed') : '<div class="es" style="min-height:18.75rem"><div class="box"><div class="ico">' + ic('swap') + '</div><h3>No transfers</h3><div class="row"><button class="btn f" data-pa="files">' + ic('folder') + 'Go to files</button></div></div></div>');
     A.patchCards($('#stage'));
   }
   $('#stage').addEventListener('click', (e) => {
@@ -350,17 +356,17 @@
   }
   function pageSearch() {
     const sr = A.searchRun;
-    if (!sr) { $('#stage').innerHTML = '<h2 class="pt">Search</h2><p class="ps">Type in the search bar above. Searches run live over the whole folder tree, including very large folders.</p><div class="es" style="min-height:320px"><div class="box"><div class="ico">' + ic('search') + '</div><h3>Search a server</h3><p>Try <span class="mono">keystore</span>, <span class="mono">release</span> or <span class="mono">frame_0042</span>. Press <span class="kbd">/</span> to focus the search bar.</p>' + (A.searchExtra ? A.searchExtra() : '') + '</div></div>'; return; }
+    if (!sr) { $('#stage').innerHTML = '<h2 class="pt">Search</h2><div class="es" style="min-height:20rem"><div class="box"><div class="ico">' + ic('search') + '</div><h3>Search ' + esc(A.hostName(A.mainPane.host)) + '</h3>' + (A.searchExtra ? A.searchExtra() : '') + '</div></div>'; return; }
     const chip = (k, l, cur, key) => '<button class="chip' + (cur === k ? ' on' : '') + '" data-sf="' + key + ':' + k + '">' + (cur === k ? ic('check') : '') + l + '</button>';
-    $('#stage').innerHTML = '<h2 class="pt">Results for “' + esc(sr.q) + '”' + (A.searchSave ? A.searchSave(sr) : '') + '</h2><div class="chips" style="padding:8px 0 0">' + chip('server', 'This server', sr.scope, 'scope') + chip('all', 'All connected servers', sr.scope, 'scope') + chip('local', 'This computer', sr.scope, 'scope') + '<span style="width:12px"></span>' + [['all', 'Everything'], ['folders', 'Folders'], ['packages', 'Packages'], ['media', 'Media'], ['archives', 'Archives'], ['big', 'Over 100 MB']].map((f) => chip(f[0], f[1], sr.filter, 'filter')).join('') + '</div><div class="prog" id="sprog"></div><div id="sres"></div>';
+    $('#stage').innerHTML = '<h2 class="pt">Results for “' + esc(sr.q) + '”' + (A.searchSave ? A.searchSave(sr) : '') + '</h2><div class="chips" style="padding:.5rem 0 0">' + chip('server', 'This server', sr.scope, 'scope') + chip('all', 'All connected servers', sr.scope, 'scope') + chip('local', 'This computer', sr.scope, 'scope') + '<span style="width:.75rem"></span>' + [['all', 'Everything'], ['folders', 'Folders'], ['packages', 'Packages'], ['media', 'Media'], ['archives', 'Archives'], ['big', 'Over 100 MB']].map((f) => chip(f[0], f[1], sr.filter, 'filter')).join('') + '</div><div class="prog" id="sprog"></div><div id="sres"></div>';
     updateSearch();
   }
   function updateSearch() {
     const sr = A.searchRun; if (!sr || st.view !== 'search') return; const pg = $('#sprog'), rs = $('#sres'); if (!pg) return;
     const where = sr.hosts.map(A.hostName).join(', ');
     pg.innerHTML = sr.skipped.length && !sr.hosts.length ? ic('wifi-off') + '<span>' + esc(sr.skipped.map(A.hostName).join(', ')) + ' is not connected, so it can’t be searched.</span>' : (sr.done ? ic('check-circle') + '<span><b>' + sr.results.length + (sr.results.length >= 400 ? '+' : '') + '</b> result' + (sr.results.length === 1 ? '' : 's') + ' · scanned ' + sr.scanned.toLocaleString() + ' items on ' + esc(where) + '</span>' : '<div class="lin ind"><i></i></div><span>Searching ' + esc(where) + '… <b>' + sr.scanned.toLocaleString() + '</b> items scanned · <b>' + sr.results.length + '</b> found</span>') + (sr.skipped.length && sr.hosts.length ? '<span>· skipped ' + esc(sr.skipped.map(A.hostName).join(', ')) + ' (not connected)</span>' : '');
-    if (!sr.results.length) { rs.innerHTML = sr.done ? '<div class="es" style="min-height:240px"><div class="box"><div class="ico">' + ic('search') + '</div><h3>No matches</h3><p>Nothing named like “' + esc(sr.q) + '” in ' + esc(where || 'the selected scope') + '.</p></div></div>' : ''; return; }
-    rs.innerHTML = sr.results.slice(0, 200).map((r, i) => '<div class="res" data-ri="' + i + '"><div class="lead">' + fic(r.node) + '</div><div style="min-width:0"><b>' + A.hl(r.node.n, sr.q) + (!E.fs.canRead(r.node) ? '<span style="font-size:11.5px;color:var(--warn);background:var(--warn-c);border-radius:8px;padding:0 7px;margin-left:8px">' + esc(r.node.own) + ' only</span>' : '') + '</b><small>' + esc(r.dir) + '</small></div><div class="sv"><i></i>' + esc(A.hostName(r.host)) + '</div><div style="color:var(--on-var);font-size:13px">' + U.fmtDate(r.node.mod) + '</div><div style="text-align:right;color:var(--on-var);font-size:13px">' + A.itemSize(r.node) + '</div></div>').join('') + (sr.results.length > 200 ? '<div style="padding:12px;color:var(--on-var)">Showing the first 200 results. Narrow the search to see more.</div>' : '');
+    if (!sr.results.length) { rs.innerHTML = sr.done ? '<div class="es" style="min-height:15rem"><div class="box"><div class="ico">' + ic('search') + '</div><h3>No matches</h3><p>Nothing named like “' + esc(sr.q) + '” in ' + esc(where || 'the selected scope') + '.</p></div></div>' : ''; return; }
+    rs.innerHTML = sr.results.slice(0, 200).map((r, i) => '<div class="res" data-ri="' + i + '"><div class="lead">' + fic(r.node) + '</div><div style="min-width:0"><b>' + A.hl(r.node.n, sr.q) + (!E.fs.canRead(r.node) ? '<span style="font-size:.7188rem;color:var(--warn);background:var(--warn-c);border-radius:.5rem;padding:0 .4375rem;margin-left:.5rem">' + esc(r.node.own) + ' only</span>' : '') + '</b><small>' + esc(r.dir) + '</small></div><div class="sv"><i></i>' + esc(A.hostName(r.host)) + '</div><div style="color:var(--on-var);font-size:.8125rem">' + U.fmtDate(r.node.mod) + '</div><div style="text-align:right;color:var(--on-var);font-size:.8125rem">' + A.itemSize(r.node) + '</div></div>').join('') + (sr.results.length > 200 ? '<div style="padding:.75rem;color:var(--on-var)">Showing the first 200 results. Narrow the search to see more.</div>' : '');
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'search') return; const sf = e.target.closest('[data-sf]');
@@ -377,8 +383,8 @@
   function pageHistory() {
     const F = [['all', 'All'], ['transfer', 'Transfers'], ['conn', 'Connections'], ['audit', 'Security'], ['err', 'Errors']]; const f = st.histFilter;
     const rows = E.history.filter((h) => f === 'all' || (f === 'err' ? h.error : f === 'transfer' ? h.kind === 'transfer' || h.kind === 'queue' : h.kind === f));
-    $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><h2 class="pt">History</h2><p class="ps" style="margin:0 0 6px">Transfers and connection events from this session.</p></div><button class="btn tx" data-hc="1">Clear history</button></div><div class="chips" style="padding:6px 0 10px">' + F.map((x) => '<button class="chip' + (f === x[0] ? ' on' : '') + '" data-hf="' + x[0] + '">' + (f === x[0] ? ic('check') : '') + x[1] + '</button>').join('') + '</div>' +
-      (rows.length ? rows.slice(0, 200).map((h) => '<div class="hrow ' + (h.error ? 'err' : h.ok ? 'ok' : '') + '"><div class="gi">' + ic(h.error ? 'alert-circle' : h.kind === 'audit' ? 'shield-check' : h.kind === 'conn' ? 'plug' : h.kind === 'queue' ? 'clock' : h.dir === 'up' ? 'upload' : h.dir === 'down' ? 'download' : 'check-circle') + '</div><div>' + esc(h.text) + (h.host ? '<br><small>' + esc(A.hostName(h.host)) + '</small>' : '') + '</div><time>' + U.fmtTime(h.at) + '</time></div>').join('') : '<div class="es" style="min-height:280px"><div class="box"><div class="ico">' + ic('history') + '</div><h3>Nothing here yet</h3><p>' + (f === 'audit' ? (A.X.auditDenied && A.X.auditDenied.size ? 'This login cannot read the audit log or the agent log.' : 'The audit log is empty.') : E.history.length ? 'No loaded event matches these filters.' : 'Finished and failed transfers, connections and drops are listed here.') + '</p></div></div>');
+    $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:.625rem"><div style="flex:1"><h2 class="pt">History</h2></div><button class="btn tx" data-hc="1">Clear history</button></div><div class="chips" style="padding:.375rem 0 .625rem">' + F.map((x) => '<button class="chip' + (f === x[0] ? ' on' : '') + '" data-hf="' + x[0] + '">' + (f === x[0] ? ic('check') : '') + x[1] + '</button>').join('') + '</div>' +
+      (rows.length ? rows.slice(0, 200).map((h) => '<div class="hrow ' + (h.error ? 'err' : h.ok ? 'ok' : '') + '"><div class="gi">' + ic(h.error ? 'alert-circle' : h.kind === 'audit' ? 'shield-check' : h.kind === 'conn' ? 'plug' : h.kind === 'queue' ? 'clock' : h.dir === 'up' ? 'upload' : h.dir === 'down' ? 'download' : 'check-circle') + '</div><div>' + esc(h.text) + (h.host ? '<br><small>' + esc(A.hostName(h.host)) + '</small>' : '') + '</div><time>' + U.fmtTime(h.at) + '</time></div>').join('') : '<div class="es" style="min-height:17.5rem"><div class="box"><div class="ico">' + ic('history') + '</div><h3>Nothing here yet</h3><p>' + (f === 'audit' ? (A.X.auditDenied && A.X.auditDenied.size ? 'This login cannot read the audit log or the agent log.' : 'The audit log is empty.') : E.history.length ? 'No loaded event matches these filters.' : 'Finished and failed transfers, connections and drops are listed here.') + '</p></div></div>');
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'history') return; const hf = e.target.closest('[data-hf]'); if (hf) { st.histFilter = hf.dataset.hf; pageHistory(); } else if (e.target.closest('[data-hc]')) { E.history.length = 0; E.emit('history'); }
@@ -389,10 +395,10 @@
     const seg = (key, opts) => '<div class="seg" data-set="' + key + '">' + opts.map((o) => '<button data-v="' + o[0] + '" class="' + (String(S[key]) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>';
     const sw = (key) => '<button class="sw' + (S[key] ? ' on' : '') + '" data-sw="' + key + '" role="switch" aria-checked="' + !!S[key] + '" aria-label="' + key + '"></button>';
     const row = (t, s, c) => '<div class="sr"><div class="l"><b>' + t + '</b>' + (s ? '<small>' + s + '</small>' : '') + '</div>' + c + '</div>';
-    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><p class="ps">Changes apply immediately and are kept on this computer.</p><div class="setg">' +
-      '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', 'How many files move at once', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', 'Shared across running transfers', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25'], [50, '50']])) + row('When a name already exists', 'Applies to new transfers', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', 'Compare SHA-256 after each download', sw('verify')) + row('Download folder', 'Downloads are saved here.<br><span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:8px"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
-      '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', 'Retries every 8 seconds and resumes transfers when the server is back', sw('autoReconnect')) + row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', 'Failed transfers and lost connections', sw('notifyErrors')) + '</div>' +
-      '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', 'Compact fits more rows', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + row('Interface size', 'Makes everything bigger. Auto follows your screen', seg('uiSize', [['auto', 'Auto'], [100, '100%'], [115, '115%'], [130, '130%'], [150, '150%']])) + row('Open files and folders', 'One click opens. The round icon, Ctrl and Shift select', seg('openMode', [['single', 'One click'], ['double', 'Two clicks']])) + '</div>' +
+    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><div class="setg">' +
+      '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', '', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', '', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25'], [50, '50']])) + row('When a name already exists', '', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', '', sw('verify')) + row('Download folder', '<span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:.5rem"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
+      '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', '', sw('autoReconnect')) + row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', '', sw('notifyErrors')) + '</div>' +
+      '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', '', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + row('Interface size', '', seg('uiSize', [[90, '90%'], [100, '100%'], [115, '115%'], [130, '130%']])) + row('Open files and folders', '', seg('openMode', [['single', 'One click'], ['double', 'Two clicks']])) + '</div>' +
       (A.settingsExtra ? A.settingsExtra({ row, seg, sw }) : '') +
       '<div class="sg"><h4>Help</h4><div class="sr"><div class="l"><b>Keyboard shortcuts</b><small>Press <span class="kbd">Ctrl</span> <span class="kbd">K</span> for everything</small></div><button class="btn" data-sx="keys">' + ic('keyboard') + 'Show</button></div></div></div>';
   }
@@ -404,7 +410,7 @@
   });
   function shortcutsDialog() {
     const k = [['Ctrl K', 'Command palette'], ['/', 'Focus search'], ['Enter', 'Open folder or preview file'], ['Backspace', 'Up one folder'], ['Alt ← →', 'Back / forward'], ['F2', 'Rename'], ['Del', 'Delete'], ['Ctrl A', 'Select all'], ['Ctrl D', 'Download selection'], ['Ctrl U', 'Upload from Local files'], ['Ctrl ⇧ N', 'New folder'], ['F5', 'Refresh'], ['Ctrl L', 'Edit path'], ['Esc', 'Clear selection / close']];
-    A.dialog({ icon: 'keyboard', title: 'Keyboard shortcuts', width: 520, body: '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px">' + k.map((r) => '<span class="kbd">' + r[0] + '</span><span>' + r[1] + '</span>').join('') + '</div>', actions: [{ label: 'Close', kind: 'f' }] });
+    A.dialog({ icon: 'keyboard', title: 'Keyboard shortcuts', width: 520, body: '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem 1.25rem">' + k.map((r) => '<span class="kbd">' + r[0] + '</span><span>' + r[1] + '</span>').join('') + '</div>', actions: [{ label: 'Close', kind: 'f' }] });
   }
 
   /* ---------- command palette ---------- */

@@ -43,7 +43,7 @@ test("files: the agent's folder lists its contents", async () => {
 
 test("servers", () => visit("servers", /screens-pc/));
 test("devices", () => visit("devices", /Paired devices/));
-test("transfers", () => visit("transfers", /Everything moving between/));
+test("transfers", () => visit("transfers", /Transfers/));
 test("search", () => visit("search", /Search/));
 test("tools", () => visit("tools", /Tools/));
 test("history", () => visit("history", /History/));

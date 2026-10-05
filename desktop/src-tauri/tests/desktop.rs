@@ -75,3 +75,41 @@ fn autostart_refuses_a_program_it_cannot_name_in_full() {
     assert!(e.contains("cannot find where"), "{e}");
     assert!(!autostart_is_on(config.path()));
 }
+
+#[test]
+fn searching_this_computer_matches_names_in_any_case_and_follows_no_links() {
+    use rfe_desktop_lib::local::search;
+    let root = TempDir::new().unwrap();
+    let p = root.path();
+    std::fs::create_dir_all(p.join("a/deep")).unwrap();
+    std::fs::write(p.join("a/Report.TXT"), "x").unwrap();
+    std::fs::write(p.join("a/deep/report-2.md"), "x").unwrap();
+    std::fs::write(p.join("a/deep/photo.png"), vec![0u8; 2048]).unwrap();
+    std::fs::create_dir(p.join("reports")).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(p, p.join("a/loop")).unwrap();
+    let r = p.to_str().unwrap();
+    let names = |hits: Vec<rfe_desktop_lib::files::FileEntry>| {
+        let mut n: Vec<String> = hits.into_iter().map(|e| e.name).collect();
+        n.sort();
+        n
+    };
+    assert_eq!(
+        names(search(r, "REPORT", 50, &[], 0).unwrap()),
+        ["Report.TXT", "report-2.md", "reports"]
+    );
+    assert_eq!(
+        names(search(r, "report", 50, &["folder".into()], 0).unwrap()),
+        ["reports"]
+    );
+    assert_eq!(
+        names(search(r, "o", 50, &["image".into()], 1024).unwrap()),
+        ["photo.png"]
+    );
+    assert_eq!(search(r, "report", 1, &[], 0).unwrap().len(), 1);
+    assert!(search(r, "nothing-like-this", 50, &[], 0)
+        .unwrap()
+        .is_empty());
+    assert!(search(r, "  ", 50, &[], 0).is_err());
+    assert!(search("relative/path", "a", 50, &[], 0).is_err());
+}

@@ -15,28 +15,32 @@
   const jread = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
   const jwrite = (v) => { if (THUMB) return; try { if (v) localStorage.setItem(KEY, JSON.stringify(v)); else localStorage.removeItem(KEY); } catch (e) { /* ignore */ } };
   const unfinished = () => E.tasks.filter((t) => X4.mine.has(t.id) && ['queued', 'running', 'paused', 'failed', 'waiting'].includes(t.state));
-  const jsnap = () => { const l = unfinished(); return l.length ? { at: Date.now(), tasks: l.map((t) => ({ dir: t.dir, host: t.host, name: t.name, srcDir: t.srcDir, dstDir: t.dstDir, bytes: t.bytes, done: t.done })) } : null; };
-  A.journal = { read: jread, snap: jsnap, write: jwrite, mem: null };
+  /* Entries that "Queue again" could not queue stay in the journal until they are queued or discarded. */
+  const jsnap = () => { const l = unfinished().map((t) => ({ dir: t.dir, host: t.host, name: t.name, srcDir: t.srcDir, dstDir: t.dstDir, bytes: t.bytes, done: t.done })); const kept = (A.journal && A.journal.retained) || []; const all = l.concat(kept.filter((k) => !l.some((x) => x.dir === k.dir && x.host === k.host && x.srcDir === k.srcDir && x.name === k.name))); return all.length ? { at: Date.now(), tasks: all } : null; };
+  A.journal = { read: jread, snap: jsnap, write: jwrite, mem: null, retained: [] };
   const keep = () => { const j = jsnap(); A.journal.mem = j; jwrite(j); };
   const eDq = A.doEnqueue;
   /* "Ask where to save" and "Save as…" make the core open the system's folder dialog for this download. */
   A.doEnqueue = function (dir, host, srcDir, dstDir, names, o) {
     o = o || {};
     if (dir === 'down' && (o.askWhere || (S.askSave && !o._picked))) o = Object.assign({}, o, { askWhere: true });
-    const r = eDq.call(this, dir, host, srcDir, dstDir, names, o); if (r && r.tasks) r.tasks.forEach((t) => X4.mine.add(t.id)); keep(); return r;
+    const r = eDq.call(this, dir, host, srcDir, dstDir, names, o); if (r && r.tasks) r.tasks.forEach((t) => X4.mine.add(t.id)); keep();
+    /* The core saves every download in the one folder chosen in Settings; a window cannot name another. Say so rather than let the file turn up elsewhere. */
+    if (dir === 'down' && dstDir && r && r.tasks && r.tasks.length && !o.askWhere && U.norm(dstDir) !== U.norm(A.downloadDir())) A.snack('Downloads are saved in ' + A.downloadDir() + '. Change that folder in Settings.');
+    return r;
   };
   let jt = 0; E.on((t) => { if (t === 'tick' || t === 'transfers') { if (Date.now() - jt > 1500) { jt = Date.now(); keep(); } } });
   window.addEventListener('beforeunload', keep);
   const resumeDialog = (j) => {
     A.dialog({ icon: 'refresh', title: 'Queue unfinished transfers again?', width: 520, body: '<p class="fxp" style="margin-top:0">RFE was closed while ' + plural(j.tasks.length, 'transfer was', 'transfers were') + ' still going. Queue them again to carry on: a download continues from what it already has, an upload sends only what the server is missing.</p>' + j.tasks.map((t) => '<div class="lrow"><div class="gi">' + ic(t.dir === 'up' ? 'upload' : 'download') + '</div><div class="dm"><b>' + esc(t.name) + '</b><small>' + (t.dir === 'up' ? 'to ' : 'from ') + esc(A.hostName(t.host)) + ' · ' + fmtB(t.done) + ' of ' + fmtB(t.bytes) + ' done</small></div></div>').join(''),
-      actions: [{ label: 'Discard', kind: 'tx', cb: () => { jwrite(null); A.journal.mem = null; audit('Discarded ' + plural(j.tasks.length, 'unfinished transfer', 'unfinished transfers')); } }, { id: 'go', label: 'Queue again', kind: 'f', icon: 'play', cb: () => {
+      actions: [{ label: 'Discard', kind: 'tx', cb: () => { jwrite(null); A.journal.mem = null; A.journal.retained = []; audit('Discarded ' + plural(j.tasks.length, 'unfinished transfer', 'unfinished transfers')); } }, { id: 'go', label: 'Queue again', kind: 'f', icon: 'play', cb: () => {
         // The folders the transfers came from are not listed after a restart: list them first, because a
         // transfer is queued from what the listing holds. What cannot be queued stays in the journal.
         const where = new Map(); j.tasks.forEach((t) => { const h = t.dir === 'up' ? 'local' : t.host; where.set(h + '\n' + t.srcDir, [h, t.srcDir]); });
         Promise.allSettled([...where.values()].map((w) => E.fs.load(w[0], w[1]))).then(() => {
           let n = 0; const left = [];
           j.tasks.forEach((t) => { const r = E.enqueue({ dir: t.dir, host: t.host, srcDir: t.srcDir, dstDir: t.dstDir, names: [t.name] }); if (r && r.tasks && r.tasks.length) { n++; X4.mine.add(r.tasks[0].id); } else left.push(t); });
-          const rest = left.length ? { at: j.at, tasks: left } : null; jwrite(rest); A.journal.mem = rest;
+          A.journal.retained = left; const rest = left.length ? { at: j.at, tasks: left } : null; jwrite(rest); A.journal.mem = rest;
           A.snack(n ? 'Queued ' + plural(n, 'transfer', 'transfers') + (left.length ? '. ' + plural(left.length, 'could not be queued and stays', 'could not be queued and stay') + ' noted.' : '') : 'Could not queue them. Connect to the server first.', n ? undefined : { error: true });
         });
       } }] });

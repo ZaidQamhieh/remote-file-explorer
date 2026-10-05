@@ -26,7 +26,7 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{watch, Notify, OwnedSemaphorePermit, Semaphore};
@@ -271,6 +271,8 @@ struct Item {
     resume: Mutex<Resume>,
     /// Set with the stop signal when the user pauses, so the stop keeps what was transferred.
     pausing: AtomicBool,
+    /// A cancel was asked for: whatever else is pending, the attempt ends as a cancel.
+    cancelling: AtomicBool,
     /// What the person chose for a taken name; it holds for every later attempt of this transfer.
     resolution: Mutex<Option<Resolution>>,
     /// Wakes a transfer that waits in the `conflict` state.
@@ -312,15 +314,15 @@ impl Drop for Slot {
         let Some(permit) = self.permit.take() else {
             return;
         };
-        // Pay one unit of debt if any is owed; the update retries when another place is given back at
-        // the same moment, so two releases can never both miss the same debt.
-        if self
-            .inner
-            .debt
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |d| d.checked_sub(1))
-            .is_ok()
-        {
+        // Pay one unit of debt if any is owed. The debt is kept under a lock that the settings change
+        // also holds while it takes places away, so a place given back can never slip past a cut.
+        let mut owed = lock(&self.inner.debt);
+        if *owed > 0 {
+            *owed -= 1;
             permit.forget();
+        } else {
+            // Returned while the lock is still held, for the same reason.
+            drop(permit);
         }
     }
 }
@@ -364,7 +366,7 @@ struct Inner {
     slots: Arc<Semaphore>,
     /// How many places exist (running transfers plus free places), after the last change.
     places: Mutex<usize>,
-    debt: AtomicUsize,
+    debt: Mutex<usize>,
     prefs: Prefs,
     limiter: Limiter,
     items: Mutex<Vec<Arc<Item>>>,
@@ -388,7 +390,7 @@ impl Transfers {
             inner: Arc::new(Inner {
                 slots: Arc::new(Semaphore::new(parallel)),
                 places: Mutex::new(parallel),
-                debt: AtomicUsize::new(0),
+                debt: Mutex::new(0),
                 prefs: Prefs {
                     limit_bps: AtomicU64::new(0),
                     // Without a window's preference a taken name keeps both files, as it always did.
@@ -425,26 +427,20 @@ impl Transfers {
         if want > *places {
             // First cancel what is still owed from an earlier cut, then add the rest.
             let mut add = want - *places;
-            loop {
-                let owed = inner.debt.load(Ordering::SeqCst);
-                let pay = owed.min(add);
-                if pay == 0
-                    || inner
-                        .debt
-                        .compare_exchange(owed, owed - pay, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                {
-                    add -= pay;
-                    break;
-                }
+            {
+                let mut owed = lock(&inner.debt);
+                let pay = (*owed).min(add);
+                *owed -= pay;
+                add -= pay;
             }
             if add > 0 {
                 inner.slots.add_permits(add);
             }
         } else if want < *places {
             let cut = *places - want;
+            let mut owed = lock(&inner.debt);
             let taken = inner.slots.forget_permits(cut);
-            inner.debt.fetch_add(cut - taken, Ordering::SeqCst);
+            *owed += cut - taken;
         }
         *places = want;
     }
@@ -567,6 +563,7 @@ impl Transfers {
             kind,
             resume: Mutex::new(Resume::default()),
             pausing: AtomicBool::new(false),
+            cancelling: AtomicBool::new(false),
             resolution: Mutex::new(None),
             decided: Notify::new(),
             slot: Mutex::new(None),
@@ -604,6 +601,7 @@ impl Transfers {
         match state {
             State::Queued | State::Running | State::Conflict => {
                 // A pause that was asked for but not yet seen must not turn this cancel into a pause.
+                item.cancelling.store(true, Ordering::SeqCst);
                 item.pausing.store(false, Ordering::SeqCst);
                 lock(&item.cancel).send_replace(true);
             }
@@ -656,6 +654,7 @@ impl Transfers {
             v.error.clear();
         }
         item.pausing.store(false, Ordering::SeqCst);
+        item.cancelling.store(false, Ordering::SeqCst);
         let (tx, rx) = watch::channel(false);
         *lock(&item.cancel) = tx;
         tokio::spawn(run(self.inner.clone(), item, rx));
@@ -797,7 +796,10 @@ async fn settle_conflict(
 
 /// The end of an attempt that was told to stop: a pause keeps the partial work, a cancel removes it.
 async fn stop(item: &Item) {
-    if item.pausing.swap(false, Ordering::SeqCst) {
+    // A cancel wins over a pause, however the two were ordered against the end of the attempt.
+    let paused =
+        item.pausing.swap(false, Ordering::SeqCst) && !item.cancelling.load(Ordering::SeqCst);
+    if paused {
         item.update(|v| {
             v.state = State::Paused;
             v.error.clear();
@@ -1978,7 +1980,7 @@ pub async fn transfer_upload_tree(
         "enter the folder on the computer to upload into",
     )?;
     let lp = local_path.clone();
-    let items = tokio::task::spawn_blocking(move || crate::local::walk(&lp))
+    let (items, folders) = tokio::task::spawn_blocking(move || crate::local::walk_all(&lp))
         .await
         .map_err(|e| e.to_string())??;
     if items.is_empty() {
@@ -1990,44 +1992,52 @@ pub async fn transfer_upload_tree(
     };
     let store =
         crate::secrets::Offloaded::new(crate::secrets::OsKeystore::new()).scoped(host.clone());
-    // Each folder of the tree, shallowest first, made once. One that already exists is fine.
-    let mut made: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for (_, rel) in &items {
-        let Some((parent, _)) = rel.rsplit_once('/') else {
-            continue;
+    // Each folder of the tree, empty ones too, shallowest first. One that already exists is fine.
+    for rel in &folders {
+        let (up, step) = match rel.rsplit_once('/') {
+            Some((parent, step)) => (join_remote(&remote_dir, parent), step),
+            None => (remote_dir.clone(), rel.as_str()),
         };
-        let mut acc = String::new();
-        for step in parent.split('/') {
-            let up = if acc.is_empty() {
-                remote_dir.clone()
-            } else {
-                join_remote(&remote_dir, &acc)
-            };
-            if !acc.is_empty() {
-                acc.push('/');
-            }
-            acc.push_str(step);
-            if made.insert(acc.clone()) {
-                let _ = crate::files::create_folder(&dir, &store, &up, step).await;
-            }
-        }
+        let _ = crate::files::create_folder(&dir, &store, &up, step).await;
     }
     let mut ids = Vec::with_capacity(items.len());
-    for (path, rel) in items {
-        let target = match rel.rsplit_once('/') {
-            Some((parent, _)) => join_remote(&remote_dir, parent),
-            None => remote_dir.clone(),
-        };
-        let id = state
-            .start_upload(
-                app_ctx(&app, host.clone())?,
-                &path.to_string_lossy(),
-                &target,
-            )
-            .await?;
-        ids.push(id);
+    let queued: Result<(), String> = async {
+        for (path, rel) in items {
+            let target = match rel.rsplit_once('/') {
+                Some((parent, _)) => join_remote(&remote_dir, parent),
+                None => remote_dir.clone(),
+            };
+            let id = state
+                .start_upload(
+                    app_ctx(&app, host.clone())?,
+                    &path.to_string_lossy(),
+                    &target,
+                )
+                .await?;
+            ids.push(id);
+        }
+        Ok(())
     }
-    Ok(ids)
+    .await;
+    settle_queued(&state, queued, ids)
+}
+
+/// The ids of a tree that was queued, or its error. When queuing stopped half way, what was already
+/// started is cancelled: the window gets no ids for it, so it could never be shown or cancelled.
+fn settle_queued(
+    state: &Transfers,
+    queued: Result<(), String>,
+    ids: Vec<String>,
+) -> Result<Vec<String>, String> {
+    match queued {
+        Ok(()) => Ok(ids),
+        Err(e) => {
+            for id in &ids {
+                let _ = state.cancel(id);
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Downloads a folder (or one file) from the computer, keeping its tree under the downloads
@@ -2059,37 +2069,43 @@ pub async fn transfer_download_tree(
     // (remote folder, its path under the downloads folder)
     let mut stack = vec![(remote_path.clone(), top)];
     let mut ids = Vec::new();
-    let mut folders = 0usize;
-    while let Some((folder, rel)) = stack.pop() {
-        let mut cursor: Option<String> = None;
-        loop {
-            let page = crate::files::list(&dir, &store, &folder, cursor.as_deref(), Some(1000))
-                .await
-                .map_err(|e| crate::files::user_message(&e))?;
-            for e in page.entries {
-                if e.is_dir {
-                    // A link to a folder may point back up the tree: it is not followed.
-                    if !e.is_symlink {
-                        stack.push((e.path.clone(), format!("{rel}/{}", safe_name(&e.path))));
+    let queued: Result<(), String> = async {
+        let mut folders = 0usize;
+        while let Some((folder, rel)) = stack.pop() {
+            // The folder is made even when nothing is in it.
+            let here = base.join(&rel);
+            std::fs::create_dir_all(&here)
+                .map_err(|e| format!("cannot create {}: {e}", here.display()))?;
+            let mut cursor: Option<String> = None;
+            loop {
+                let page = crate::files::list(&dir, &store, &folder, cursor.as_deref(), Some(1000))
+                    .await
+                    .map_err(|e| crate::files::user_message(&e))?;
+                for e in page.entries {
+                    if e.is_dir {
+                        // A link to a folder may point back up the tree: it is not followed.
+                        if !e.is_symlink {
+                            stack.push((e.path.clone(), format!("{rel}/{}", safe_name(&e.path))));
+                        }
+                    } else {
+                        let ctx = app_ctx_in(&app, host.clone(), here.clone())?;
+                        ids.push(state.start_download(ctx, &e.path).await?);
                     }
-                } else {
-                    let ctx = app_ctx_in(&app, host.clone(), base.join(&rel))?;
-                    ids.push(state.start_download(ctx, &e.path).await?);
+                }
+                match page.next_cursor {
+                    Some(c) => cursor = Some(c),
+                    None => break,
                 }
             }
-            match page.next_cursor {
-                Some(c) => cursor = Some(c),
-                None => break,
+            folders += 1;
+            if folders > 20_000 || ids.len() > 50_000 {
+                return Err("that folder holds too many files to download at once".into());
             }
         }
-        folders += 1;
-        if folders > 20_000 {
-            return Err("that folder holds too many files to download at once".into());
-        }
-        if ids.len() > 50_000 {
-            return Err("that folder holds too many files to download at once".into());
-        }
+        Ok(())
     }
+    .await;
+    let ids = settle_queued(&state, queued, ids)?;
     if ids.is_empty() {
         return Err("that folder holds no files to download".into());
     }

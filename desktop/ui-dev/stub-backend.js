@@ -67,6 +67,11 @@
       while (stack.length && out.length < (options.limit || 100)) { const [p, n] = stack.pop(); if (!n) continue; if (p !== '/' && n.n.toLowerCase().includes(q)) out.push(entry(n, p)); if (n.t === 'dir') for (const k of Sim.fs.kidsOf(n)) stack.push([J(p, k.n), k]); }
       return delay(out, 30);
     },
+    local_search({ query, limit }) {
+      const out = []; const q = query.toLowerCase(); const stack = [['/', Sim.fs.get('local', '/')]];
+      while (stack.length && out.length < (limit || 100)) { const [p, n] = stack.pop(); if (!n) continue; if (p !== '/' && n.n.toLowerCase().includes(q)) out.push(entry(n, p)); if (n.t === 'dir') for (const k of Sim.fs.kidsOf(n)) stack.push([J(p, k.n), k]); }
+      return delay(out, 10);
+    },
     files_recent() { return delay([{ name: 'notes.txt', path: '/srv/notes.txt', isDir: false, size: 10, modified: iso(Date.now() - 600e3), mode: '-rw-r--r--' }], 5); },
     files_read_text({ host, path }) { const n = node(simHost(host), path); if (!n || n.t === 'dir') return err('this file is not text, or is too large to open here'); return delay({ path, text: n.content == null ? '' : n.content, modified: iso(n.mod), size: (n.content || '').length }, 5); },
     files_write_text({ host, path, text }) { const n = node(simHost(host), path); if (n) { n.content = text; n.b = text.length; n.mod = Date.now(); } return delay(entry(n, path), 5); },

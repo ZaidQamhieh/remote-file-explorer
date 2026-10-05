@@ -135,7 +135,7 @@
     back() { if (this.hist.length) { this.fwd.push(this.path); this.go(this.hist.pop(), { push: false }); } }
     forward() { if (this.fwd.length) { this.hist.push(this.path); this.go(this.fwd.pop(), { push: false }); } }
     setHost(h) { this.host = h; this.hist = []; this.fwd = []; this.sel.clear(); this.anchor = -1; this.q = ''; this.renaming = null; this.creating = false; this.scroll = 0; this.loadSim(); if (this.o.onNav) this.o.onNav(this); }
-    refresh(spin) { if (spin && this.o.onSpin) this.o.onSpin(); this.refreshItems(); this.render(); }
+    refresh(spin) { if (spin && this.o.onSpin) this.o.onSpin(); this.refreshItems(); this.render(); if (spin && this.online()) E.fs.refresh(this.host, this.path).catch(() => {}); /* read the folder again, not the copy kept */ }
     open(n) { if (n.t === 'dir') this.go(n.path || U.join(this.path, n.n)); else this.preview(n); }
     selChanged() { this.renderRows(); this.renderActions(); this.renderFoot(); if (this.o.onSelect) this.o.onSelect(this); }
     /* ----- render ----- */
@@ -147,7 +147,8 @@
     crumbs() {
       const sg = U.segs(this.path); const root = this.host === 'local' ? 'This computer' : hostName(this.host);
       if (this.editPath) return '<input class="pathin" value="' + esc(this.path) + '" spellcheck="false" aria-label="Path">';
-      let parts = [{ n: root, p: '/' }].concat(sg.map((s, i) => ({ n: s, p: '/' + sg.slice(0, i + 1).join('/') })));
+      const top = U.upTo(this.path, 0); /* a drive or share root (C:\\, \\\\nas\\data\\) is a step of its own; '/' is the root crumb */
+      let parts = [{ n: root, p: '/' }].concat(top !== '/' ? [{ n: top, p: top }] : [], sg.map((s, i) => ({ n: s, p: U.upTo(this.path, i + 1) })));
       let pre = '';
       const max = this.compact ? 3 : 6;
       if (parts.length > max) { pre = '<span class="c" data-p="' + esc(parts[parts.length - max - 1].p) + '" title="Show hidden path">…</span><i>' + ic('chevron-right') + '</i>'; parts = parts.slice(-max); }

@@ -408,38 +408,181 @@ pub fn save_text(dir: &str, name: &str, body: &str) -> Result<String, String> {
 /// Every file under `path` (or `path` itself when it is a file), with its path relative to the
 /// parent of `path`, for uploading a folder. Links are not followed, so a loop cannot run forever.
 pub fn walk(path: &str) -> Result<Vec<(PathBuf, String)>, String> {
+    walk_all(path).map(|(files, _)| files)
+}
+
+/// Like [`walk`], and also every folder under `path` (the folder itself included) as a path relative
+/// to the parent of `path`, so an empty folder can be made on the other side too.
+/// The files of a tree (path, relative path) and its folders (relative paths).
+pub type Tree = (Vec<(PathBuf, String)>, Vec<String>);
+
+pub fn walk_all(path: &str) -> Result<Tree, String> {
     let root = check(path)?;
     let base = root
         .parent()
         .ok_or_else(|| "pick a folder or a file, not the root".to_string())?
         .to_path_buf();
-    let mut out = Vec::new();
+    let relative = |p: &Path| -> Result<String, String> {
+        Ok(p.strip_prefix(&base)
+            .map_err(|e| e.to_string())?
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/"))
+    };
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
     let mut stack = vec![root];
     while let Some(p) = stack.pop() {
         let meta = std::fs::symlink_metadata(&p)
             .map_err(|e| format!("cannot read {}: {e}", p.display()))?;
         if meta.is_dir() {
+            dirs.push(relative(&p)?);
             let rd =
                 std::fs::read_dir(&p).map_err(|e| format!("cannot open {}: {e}", p.display()))?;
             for item in rd.flatten() {
                 stack.push(item.path());
             }
         } else if meta.is_file() {
-            let rel = p
-                .strip_prefix(&base)
-                .map_err(|e| e.to_string())?
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join("/");
-            out.push((p, rel));
+            let rel = relative(&p)?;
+            files.push((p, rel));
         }
-        if out.len() > MAX_ENTRIES {
+        if files.len() + dirs.len() > MAX_ENTRIES {
             return Err("that folder holds too many files to upload at once".into());
         }
     }
-    out.sort_by(|a, b| a.1.cmp(&b.1));
+    files.sort_by(|a, b| a.1.cmp(&b.1));
+    // Shallowest first, so a parent is made before what is inside it.
+    dirs.sort_by(|a, b| (a.matches('/').count(), a).cmp(&(b.matches('/').count(), b)));
+    Ok((files, dirs))
+}
+
+const SEARCH_VISITS: usize = 200_000;
+
+/// The kind a search type names, by the file's extension.
+fn is_type(kind: &str, name: &str, is_dir: bool) -> bool {
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+    let ext = ext.as_deref().unwrap_or("");
+    match kind {
+        "folder" => is_dir,
+        "image" => {
+            !is_dir
+                && matches!(
+                    ext,
+                    "png"
+                        | "jpg"
+                        | "jpeg"
+                        | "gif"
+                        | "webp"
+                        | "bmp"
+                        | "svg"
+                        | "heic"
+                        | "tif"
+                        | "tiff"
+                )
+        }
+        "video" => !is_dir && matches!(ext, "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv"),
+        "audio" => {
+            !is_dir && matches!(ext, "mp3" | "flac" | "wav" | "ogg" | "m4a" | "opus" | "aac")
+        }
+        "archive" => {
+            !is_dir
+                && matches!(
+                    ext,
+                    "zip" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "zst" | "7z" | "rar"
+                )
+        }
+        _ => false,
+    }
+}
+
+/// Entries under `root` whose name contains `query` (any case), breadth first. Links to folders are
+/// not followed, and the walk stops after a fixed number of entries, so it always ends.
+pub fn search(
+    root: &str,
+    query: &str,
+    limit: usize,
+    types: &[String],
+    min_size: u64,
+) -> Result<Vec<FileEntry>, String> {
+    let root = check(root)?;
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Err("type something to search for".into());
+    }
+    let limit = limit.clamp(1, 1000);
+    let mut out = Vec::new();
+    let mut queue = std::collections::VecDeque::from([root]);
+    let mut visited = 0usize;
+    while let Some(dir) = queue.pop_front() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for item in rd.flatten() {
+            visited += 1;
+            if visited > SEARCH_VISITS {
+                return Ok(out);
+            }
+            let p = item.path();
+            let Ok(lmeta) = std::fs::symlink_metadata(&p) else {
+                continue;
+            };
+            let link = lmeta.file_type().is_symlink();
+            let name = item.file_name().to_string_lossy().into_owned();
+            let (meta, is_dir) = match std::fs::metadata(&p) {
+                Ok(m) => {
+                    let d = m.is_dir();
+                    (m, d)
+                }
+                Err(_) => (lmeta, false),
+            };
+            if is_dir && !link {
+                queue.push_back(p.clone());
+            }
+            if !name.to_lowercase().contains(&needle) {
+                continue;
+            }
+            if !types.is_empty() && !types.iter().any(|t| is_type(t, &name, is_dir)) {
+                continue;
+            }
+            if min_size > 0 && (is_dir || meta.len() < min_size) {
+                continue;
+            }
+            out.push(entry(&p, &meta, is_dir, link));
+            if out.len() >= limit {
+                return Ok(out);
+            }
+        }
+    }
     Ok(out)
+}
+
+/// Searches this computer from `root` (the home folder when the window names none).
+#[tauri::command]
+pub async fn local_search(
+    app: tauri::AppHandle,
+    query: String,
+    limit: Option<usize>,
+    types: Option<Vec<String>>,
+    min_size: Option<u64>,
+    root: Option<String>,
+) -> Result<Vec<FileEntry>, String> {
+    use tauri::Manager;
+    let root = match root.filter(|r| !r.is_empty() && r != "/") {
+        Some(r) => r,
+        None => text(&app.path().home_dir().map_err(|e| e.to_string())?),
+    };
+    tokio::task::spawn_blocking(move || {
+        search(
+            &root,
+            &query,
+            limit.unwrap_or(200),
+            &types.unwrap_or_default(),
+            min_size.unwrap_or(0),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

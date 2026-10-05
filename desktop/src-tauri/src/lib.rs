@@ -490,6 +490,7 @@ pub fn run() {
             transfers::transfer_download_tree,
             local::local_places,
             local::local_list,
+            local::local_search,
             local::local_create_folder,
             local::local_rename,
             local::local_delete,

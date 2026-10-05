@@ -44,7 +44,8 @@ async function waitForFocusChange(before, ms = 600) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     const f = await focusInfo();
-    if ((f && f.name) !== before) return;
+    // No focus yet is a state too: from it, wait until something takes the focus.
+    if ((f ? f.name : null) !== (before ?? null)) return;
     await new Promise((r) => setTimeout(r, 15));
   }
 }

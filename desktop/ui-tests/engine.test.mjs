@@ -197,6 +197,54 @@ test("disconnecting a server pauses its transfers in the core and keeps them wai
   assert.equal(tasks[0].state, "waiting");
 });
 
+test("a health answer that arrives after Disconnect does not bring the server back or restart its transfers", async () => {
+  let release;
+  const { E, calls } = await boot();
+  E.setInvoke(async (cmd, args) => {
+    calls.push([cmd, args]);
+    if (cmd === "agent_health") return new Promise((r) => { release = () => r(HEALTH); });
+    if (cmd === "transfer_list") return [];
+    return null;
+  });
+  const s = E.server(HOST);
+  const pending = E.check(s);
+  await until(() => release, "the health read to start");
+  E.disconnect(HOST);
+  release();
+  await pending;
+  await sleep(20);
+  assert.equal(s.state, "disconnected");
+  assert.equal(calls.filter(([c]) => c === "transfer_retry").length, 0);
+});
+
+test("a server disconnected while a transfer is being set up has it paused when the core answers", async () => {
+  let release;
+  const { E, calls } = await boot({
+    files_list: () => ({ entries: [entry("big.bin", { size: 10 })], nextCursor: null }),
+    transfer_download_tree: () => new Promise((r) => { release = r; }),
+    transfer_pause: () => {},
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["big.bin"] });
+  await until(() => release, "the core to be asked");
+  E.disconnect(HOST);
+  assert.equal(tasks[0].state, "waiting");
+  release(["r5"]);
+  await until(() => calls.some(([c]) => c === "transfer_pause"), "the pause");
+  assert.deepEqual(calls.filter(([c]) => c === "transfer_pause").map(([, a]) => a), [{ id: "r5" }]);
+});
+
+test("searching this computer asks the core and returns what it found", async () => {
+  const { E, calls } = await boot({
+    local_search: () => [{ name: "report.txt", path: "/home/u/report.txt", isDir: false, size: 3, mimeType: "", mode: "-rw-r--r--", modified: "2026-01-02T03:04:05Z" }],
+  });
+  const s = E.makeSearch(["local"], "report", {});
+  await until(() => s.step(), "the search");
+  assert.equal(s.results.length, 1);
+  assert.equal(s.results[0].path, "/home/u/report.txt");
+  assert.equal(calls.filter(([c]) => c === "local_search").length, 1);
+});
+
 test("a transfer the core refuses fails with the core's words", async () => {
   const { E } = await boot({
     files_list: () => ({ entries: [entry("big.bin")], nextCursor: null }),

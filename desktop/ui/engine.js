@@ -143,7 +143,12 @@
       if (host === LOCAL) {
         if (isRoot(path) && path === '/' ) {
           const places = await call('local_places'); items = places.map((pl) => ({ n: pl.label, t: 'dir', b: 0, mod: 0, perm: 'drwxr-xr-x', own: '', path: pl.path, mime: '', link: false, to: '', cc: null, place: pl.kind }));
-          if (!places.some((p2) => p2.path === '/')) { /* virtual */ }
+          /* Where "/" is a real folder (Linux, macOS) its own entries follow the places, so "Computer" is not a row that opens itself. */
+          if (places.some((p2) => p2.path === '/')) {
+            items = items.filter((it) => it.path !== '/');
+            const page = await call('local_list', { path: '/' }).catch(() => ({ entries: [] }));
+            items = items.concat(page.entries.map(entryNode));
+          }
         } else { const page = await call('local_list', { path }); items = page.entries.map(entryNode); }
       } else {
         const s = server(host);
@@ -255,8 +260,13 @@
     o = o || {}; const res = []; let pending = 0; let scanned = 0; let err = null;
     const types = o.types || (o.filter === 'folders' ? ['folder'] : o.filter === 'media' ? ['image', 'video', 'audio'] : o.filter === 'archives' ? ['archive'] : undefined);
     for (const h of hostIds) {
-      if (h === LOCAL) continue;
       pending++;
+      if (h === LOCAL) {
+        call('local_search', { query: q, limit: o.max || 200, types: types || [], minSize: o.minSize || (o.filter === 'big' ? 100e6 : null), root: o.root || null })
+          .then((rows) => { for (const e of rows) { const node = entryNode(e); res.push({ host: h, dir: parentOf(e.path), node, path: e.path }); } scanned += rows.length; })
+          .catch((e) => { err = e; }).then(() => { pending--; emit('search'); });
+        continue;
+      }
       call('files_search', { host: h, options: { query: q, limit: o.max || 200, types: types || [], minSize: o.minSize || (o.filter === 'big' ? 100e6 : null), root: o.root || null } })
         .then((rows) => { for (const e of rows) { const node = entryNode(e); res.push({ host: h, dir: parentOf(e.path), node, path: e.path }); } scanned += rows.length; })
         .catch((e) => { err = e; }).then(() => { pending--; emit('search'); });
@@ -297,6 +307,7 @@
     s.checking = true; const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     try {
       const snap = await call('agent_health', { host: s.id });
+      if (s.userOff) return; /* disconnected while the answer was on its way: it is not a reconnect */
       const ms = Math.max(1, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0));
       s.latency = ms; s.base = s.base ? Math.round(s.base * 0.7 + ms * 0.3) : ms; s.hist.push(ms); if (s.hist.length > 40) s.hist.shift();
       const h = snap.health || {}; if (h.os) s.os = h.os; if (h.version) s.agent = h.version; if (h.name) s.agentName = h.name; if (h.macAddress) s.mac = h.macAddress;
@@ -308,6 +319,7 @@
       const was = s.state; setState(s, 'online');
       if (was !== 'online') { log('conn', 'Connected to ' + s.name + ' · ' + s.latency + ' ms'); if (settings.notifyDone && was !== 'connecting' ) note('ok', s.name + ' is back'); resumeHost(s.id); if (!s.roots.length) loadRoots(s).catch(() => {}); }
     } catch (e) {
+      if (s.userOff) return;
       s.error = e.message;
       if (e.code === 'UNAUTHORIZED') { s.signedIn = false; setState(s, 'login', e.message); }
       else if (e.code === 'CERT') { await flagCert(s).catch(() => {}); }
@@ -433,7 +445,9 @@
         ? await call('transfer_upload_tree', { host: t.host, localPath: t.srcPath, remoteDir: t.dstDir })
         : await call('transfer_download_tree', { host: t.host, remotePath: t.srcPath, isDir: t.isDir, askWhere: !!t.askWhere });
       if (t.state === 'cancelled') { for (const id of ids) call('transfer_cancel', { id }).catch(() => {}); return; } /* cancelled while it was being set up */
-      t.rids = ids; t.files = ids.length; for (const id of ids) byRemote[id] = t; t.started = true; pollTransfers();
+      t.rids = ids; t.files = ids.length; for (const id of ids) byRemote[id] = t; t.started = true;
+      if (t.held) for (const id of ids) call('transfer_pause', { id }).catch(() => {}); /* the server went away while it was being set up */
+      pollTransfers();
     } catch (e) { failTask(t, e.message); }
   }
   function failTask(t, msg, fix) { t.state = 'failed'; t.msg = msg; t.fix = fix || null; t.speed = 0; t.finishedAt = now(); log('transfer', t.name + ' failed: ' + msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + msg); emit('transfers'); }
@@ -471,12 +485,18 @@
   }
   function suspendHost(hostId, why) {
     let any = false;
-    for (const t of tasks) if (t.host === hostId && (t.state === 'running' || t.state === 'queued') && t.started) { t.state = 'waiting'; t.speed = 0; t.msg = why + (t.done && t.bytes ? ' at ' + Math.floor(t.done / t.bytes * 100) + '%' : ''); any = true; for (const rid of t.rids) call('transfer_pause', { id: rid }).catch(() => {}); /* stop sending, keep what is done */ }
+    for (const t of tasks) {
+      if (t.host !== hostId || !['running', 'queued', 'conflict'].includes(t.state)) continue;
+      t.held = true; /* stopped in the core, so it is started again when the server is back */
+      if (t.state !== 'conflict') { t.state = 'waiting'; t.speed = 0; t.msg = why + (t.done && t.bytes ? ' at ' + Math.floor(t.done / t.bytes * 100) + '%' : ''); any = true; }
+      /* Stop sending, keep what is done. A folder in conflict may still have children running. */
+      for (const rid of t.rids) call('transfer_pause', { id: rid }).catch(() => {});
+    }
     if (any) emit('transfers');
   }
   function resumeHost(hostId) {
     let any = false;
-    for (const t of tasks) if (t.host === hostId && t.state === 'waiting') { retryRust(t); any = true; }
+    for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) retryRust(t); else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; } any = true; }
     if (any) emit('transfers');
   }
   async function retryRust(t) { t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); for (const id of t.rids) { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } } pollTransfers(); }

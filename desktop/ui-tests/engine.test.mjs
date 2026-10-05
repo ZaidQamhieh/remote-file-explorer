@@ -234,6 +234,26 @@ test("a server disconnected while a transfer is being set up has it paused when 
   assert.deepEqual(calls.filter(([c]) => c === "transfer_pause").map(([, a]) => a), [{ id: "r5" }]);
 });
 
+test("a conflict is not answered while its server is disconnected", async () => {
+  const views = { r1: { id: "r1", direction: "upload", state: "conflict", name: "big.bin", remotePath: "/srv/big.bin", localPath: "", done: 0, total: 10, error: "", verified: false, host: HOST, conflict: { size: 5, modifiedMs: 0, isDir: false } } };
+  const { E, calls } = await boot({
+    files_list: () => ({ entries: [entry("big.bin", { size: 10 })], nextCursor: null }),
+    transfer_download_tree: () => ["r1"],
+    transfer_list: () => Object.values(views),
+    transfer_pause: () => {},
+    transfer_resolve: () => {},
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["big.bin"] });
+  await until(() => tasks[0].rids.length, "the core to take the transfer");
+  await E.pollTransfers();
+  assert.equal(tasks[0].state, "conflict");
+  E.disconnect(HOST);
+  await E.resolve(tasks[0].id, "replace");
+  assert.equal(calls.filter(([c]) => c === "transfer_resolve").length, 0, "nothing is sent to a server that is away");
+  assert.equal(tasks[0].state, "conflict");
+});
+
 test("searching this computer asks the core and returns what it found", async () => {
   const { E, calls } = await boot({
     local_search: () => [{ name: "report.txt", path: "/home/u/report.txt", isDir: false, size: 3, mimeType: "", mode: "-rw-r--r--", modified: "2026-01-02T03:04:05Z" }],

@@ -59,7 +59,7 @@
     }
     if (v === 'history' && st.histFilter === 'audit') { auditTools(); A.syncAudit(); }
   };
-  H['journal.clear'] = () => { jwrite(null); A.journal.mem = null; X4.mine.clear(); A.snack('Journal cleared'); if (st.view === 'transfers') A.go('transfers'); };
+  H['journal.clear'] = () => { jwrite(null); A.journal.mem = null; A.journal.retained = []; X4.mine.clear(); A.snack('Journal cleared'); if (st.view === 'transfers') A.go('transfers'); };
 
   /* ================= the servers' security log, merged into History ================= */
   /* The agents record sign-ins, pairings, device changes and share links. They are shown next to what this app did. */
@@ -214,7 +214,7 @@
   });
   document.addEventListener('DOMContentLoaded', () => {
     if (THUMB || new URLSearchParams(location.search).get('demo')) return;
-    const j = jread(); if (j && j.tasks && j.tasks.length) setTimeout(() => resumeDialog(j), 1200);
+    const j = jread(); if (j && j.tasks && j.tasks.length) { A.journal.retained = j.tasks.slice(); /* kept until the person answers */ setTimeout(() => resumeDialog(j), 1200); }
   });
   A.fx4 = { X4, strength, toCSV, auditRows, snapshot, applySnapshot, unfinished, keep, jsnap };
 })();

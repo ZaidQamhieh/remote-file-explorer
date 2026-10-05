@@ -520,7 +520,7 @@
   /* The answer to a name that is taken: how is 'replace', 'keep' or 'skip'. `all` answers every waiting transfer. */
   async function resolve(id, how, all) {
     const wait = all ? tasks.filter((x) => x.state === 'conflict') : [taskById(id)].filter(Boolean);
-    for (const t of wait) { if (t.state !== 'conflict') continue; t.state = 'queued'; t.msg = ''; for (const rid of t.conflictRids || []) { try { await call('transfer_resolve', { id: rid, how }); } catch (e) { /* answered or gone */ } } }
+    for (const t of wait) { if (t.state !== 'conflict') continue; if (!connected(t.host)) { note('error', 'Connect to ' + (server(t.host) ? server(t.host).name : 'the server') + ' first, then answer.'); continue; } t.state = 'queued'; t.msg = ''; for (const rid of t.conflictRids || []) { try { await call('transfer_resolve', { id: rid, how }); } catch (e) { /* answered or gone */ } } }
     emit('transfers'); pollTransfers();
   }
   /* Tells the core the settings that change how transfers run. */

@@ -93,7 +93,7 @@
     transfer_upload_tree({ host, localPath, remoteDir }) { return startX(host, 'upload', localPath, remoteDir, false); },
     transfer_download_tree({ host, remotePath, isDir }) { return startX(host, 'download', remotePath, '', isDir); },
     transfer_list() { stepX(); return state.xfers.map((x) => ({ id: x.id, direction: x.direction, state: x.state, name: x.name, remotePath: x.remotePath, localPath: x.localPath, done: Math.round(x.done), total: x.total, error: x.error, verified: x.state === 'done', host: x.host, conflict: x.conflict || null })); },
-    desktop_set_prefs(p) { state.desktop = Object.assign({}, p); return null; }, desktop_has_tray() { return true; }, desktop_autostart_state() { return !!state.autostart; },
+    desktop_set_prefs(p) { state.desktop = Object.assign({}, p); return null; }, desktop_has_tray() { return true; }, desktop_set_zoom({ zoom }) { return zoom; }, desktop_autostart_state() { return !!state.autostart; },
     desktop_set_autostart({ on }) { state.autostart = !!on; return state.autostart; }, desktop_notify(n) { (state.notified = state.notified || []).push(n); return true; },
     update_check({ channel }) { return delay({ current: '1.0.0', latest: channel === 'beta' ? '1.2.0-rc.1' : '1.1.0', available: true, prerelease: channel === 'beta', notes: ['Faster folders', 'A fix'], page: 'https://github.com/x/y/releases', package: { name: 'RFE-Desktop_1.1.0_amd64.deb', size: 8800000 } }, 20); },
     update_download({ version, name }) { return delay('/home/zaid/Downloads/RFE Desktop/' + name, 20); },

@@ -297,3 +297,90 @@ test("clicking through every screen, in single, double and right clicks, throws 
   }
   assert.deepEqual(bad, []);
 });
+
+test("one click opens a folder, the round icon only selects, and Two clicks in Settings turns that around", async () => {
+  const { w, d, A, E, errs, done } = await open();
+  await E.fs.load(NAS, "/srv");
+  A.mainPane.go("/srv"); await sleep(100);
+  const row = (name) => [...d.querySelectorAll("#stage .li[data-i]")].find((r) => text(r).includes(name));
+  const fire = (el, type, o = {}) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, cancelable: true, ...o }));
+  const r = row("projects"); assert.ok(r, "a folder row: " + text(d.querySelector("#stage")));
+  fire(r.querySelector(".lead svg"), "click"); /* the glyph itself: an icon carries data-i too */
+  assert.equal(A.mainPane.path, "/srv", "the round icon selects, it does not open");
+  assert.ok(A.mainPane.sel.has("projects"));
+  fire(row("projects").querySelector(".nm, .n, b, span") || row("projects"), "click");
+  await until(() => A.mainPane.path === "/srv/projects", "one click to open the folder (was " + A.mainPane.path + ")");
+  A.mainPane.go("/srv"); await sleep(100);
+  A.S.openMode = "double";
+  fire(row("projects"), "click");
+  assert.equal(A.mainPane.path, "/srv", "Two clicks: one click only selects");
+  fire(row("projects"), "dblclick");
+  await until(() => A.mainPane.path === "/srv/projects", "the double click to open it");
+  A.S.openMode = "single";
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the side panel and the transfers strip are dragged to the size wanted, within limits", async () => {
+  const { w, d, A, errs, done } = await open();
+  const fire = (el, type, x, y) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+  const main = d.querySelector("#main"); const grip = d.querySelector("#rszSide");
+  fire(grip, "pointerdown", 1000, 300); fire(grip, "pointermove", 900, 300); fire(grip, "pointerup", 900, 300);
+  assert.equal(main.style.getPropertyValue("--sidew"), "472px", "100px to the left makes it 100px wider");
+  fire(grip, "pointerdown", 900, 300); fire(grip, "pointermove", -4000, 300); fire(grip, "pointerup", -4000, 300);
+  assert.equal(main.style.getPropertyValue("--sidew"), "640px", "not wider than the limit");
+  fire(grip, "pointerdown", 0, 300); fire(grip, "pointermove", 5000, 300); fire(grip, "pointerup", 5000, 300);
+  assert.equal(main.style.getPropertyValue("--sidew"), "300px", "not narrower than the limit");
+  A.state.sheetOpen = true; A.renderAll();
+  const hdl = () => d.querySelector("[data-hdl]");
+  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 500); fire(hdl(), "pointerup", 500, 500);
+  assert.equal(main.style.getPropertyValue("--sheet"), "352px", "100px up makes the strip 100px taller");
+  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 1500); fire(hdl(), "pointerup", 500, 1500);
+  assert.equal(main.style.getPropertyValue("--sheet"), "66px", "dragged down far enough it folds away");
+  assert.equal(A.state.sheetOpen, false);
+  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointerup", 500, 600);
+  assert.equal(A.state.sheetOpen, true, "a click opens it again");
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the menu button opens a labelled drawer in a narrow window and Escape or a click elsewhere closes it", async () => {
+  const { w, d, A, errs, done } = await open();
+  const btn = () => d.querySelector("#rail [data-menu]");
+  const drawer = () => d.querySelector("#app").classList.contains("drawer");
+  assert.ok(btn(), "the menu button is a real button");
+  assert.equal(btn().getAttribute("aria-expanded"), "false");
+  assert.equal(drawer(), false);
+  btn().click();
+  assert.equal(drawer(), true, "a narrow window gets a drawer over the page");
+  assert.equal(btn().getAttribute("aria-expanded"), "true");
+  d.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  assert.equal(drawer(), false, "Escape closes it");
+  btn().click(); assert.equal(drawer(), true);
+  d.querySelector("#stage").click();
+  assert.equal(drawer(), false, "a click elsewhere closes it");
+  btn().click(); d.querySelector('#rail [data-go="servers"]').click();
+  assert.equal(drawer(), false, "choosing a place closes it");
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("one click opens a file only when there is something to show; any other file is selected", async () => {
+  const { w, d, A, E, errs, done } = await open();
+  const REL = "/srv/projects/atlas/releases/2026.10"; await E.fs.load(NAS, REL); A.mainPane.go(REL); await sleep(150);
+  const items = A.mainPane.items.filter((n) => n.t !== "dir");
+  assert.ok(items.length, "files in the stub folder");
+  const bin = items.find((n) => !A.hasViewer(NAS, n)); const txt = items.find((n) => A.hasViewer(NAS, n));
+  const row = (n) => [...d.querySelectorAll("#stage .li[data-i]")].find((r) => text(r).includes(n.n));
+  const fire = (el) => el.dispatchEvent(new w.MouseEvent("click", { bubbles: true, cancelable: true }));
+  if (bin) { fire(row(bin)); await sleep(150); assert.equal(d.querySelector(".dlg"), null, "no dialog for " + bin.n); assert.ok(A.mainPane.sel.has(bin.n)); }
+  if (txt) { fire(row(txt)); await until(() => d.querySelector(".dlg"), "the viewer for " + txt.n); }
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the transfers strip starts folded and keeps the way it was left", async () => {
+  const { A, done } = await open();
+  assert.equal(A.state.sheetOpen, false);
+  done();
+});

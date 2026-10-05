@@ -510,6 +510,7 @@ pub fn run() {
             transfers::transfer_folder,
             desktop::desktop_set_prefs,
             desktop::desktop_has_tray,
+            desktop::desktop_set_zoom,
             desktop::desktop_notify,
             desktop::desktop_autostart_state,
             desktop::desktop_set_autostart,

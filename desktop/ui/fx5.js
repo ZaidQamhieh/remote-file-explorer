@@ -88,7 +88,6 @@
 
   /* ================= accessibility ================= */
   const applyA11y = () => {
-    const z = +S.textSize || 100; root.style.setProperty('--zf', String(z / 100)); root.classList.toggle('zoomed', z !== 100);
     root.classList.toggle('rmotion', !!S.reduceMotion); if (!THUMB) root.classList.toggle('nofx', !!S.reduceMotion);
     if (S.highContrast) root.setAttribute('data-contrast', 'high'); else root.removeAttribute('data-contrast');
   };
@@ -122,7 +121,7 @@
   A.settingsExtra = (k) => {
     let h = se2(k); const row = k.row, seg = k.seg, sw = k.sw;
     const grp = '<div class="sg"><h4>Language and accessibility</h4>' + row('Language', 'Menus and messages. Names and paths are never translated.', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
-      row('Text size', 'Scales the whole app', seg('textSize', [[90, '90%'], [100, '100%'], [115, '115%'], [130, '130%']])) + row('Reduce motion', 'Turns off animations and transitions', sw('reduceMotion')) + row('High contrast', 'Stronger borders and text colors', sw('highContrast')) + '</div>';
+      row('Reduce motion', 'Turns off animations and transitions', sw('reduceMotion')) + row('High contrast', 'Stronger borders and text colors', sw('highContrast')) + '</div>';
     h = h.replace('<div class="sg"><h4>Security</h4>', grp + '<div class="sg"><h4>Security</h4>');
     h = h.replace('<div class="sg"><h4>About</h4>', '<div class="sg"><h4>About</h4>' + row('Welcome tour', 'Show the first-run introduction again', '<button class="btn" data-sx="welcome">Show again</button>'));
     return h;

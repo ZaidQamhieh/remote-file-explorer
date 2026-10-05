@@ -43,6 +43,8 @@ export class App {
     const v = await call("POST", "/session", { capabilities: caps });
     const app = new App(v.sessionId);
     await waitFor("the window", () => app.visible("#rail .dest"));
+    // WebDriver clicks land off target under the page zoom that "Auto" picks on a big screen: pin 100% (layout tests set their own).
+    if (process.env.RFE_E2E_ZOOM !== "auto") await app.script("A.S.uiSize = 100; A.applyZoom();");
     return app;
   }
 
@@ -226,6 +228,30 @@ export class App {
     const actions = [];
     for (const ch of keys) actions.push({ type: "keyDown", value: ch }, { type: "keyUp", value: ch });
     await this.req("POST", "/actions", { actions: [{ type: "key", id: "kbd", actions }] });
+  }
+
+  /** Presses on the middle of `css`, moves the pointer by (dx, dy) in steps and lets go: a real drag. */
+  async drag(css, dx, dy) {
+    const id = await this.find(css);
+    const steps = 6;
+    const moves = [];
+    for (let i = 1; i <= steps; i++) moves.push({ type: "pointerMove", duration: 30, origin: "pointer", x: Math.round(dx / steps), y: Math.round(dy / steps) });
+    try {
+      await this.req("POST", "/actions", {
+        actions: [{
+          type: "pointer", id: "mouse", parameters: { pointerType: "mouse" },
+          actions: [
+            { type: "pointerMove", duration: 0, origin: { "element-6066-11e4-a52e-4f735466cecf": id }, x: 0, y: 0 },
+            { type: "pointerDown", button: 0 },
+            ...moves,
+            { type: "pointerUp", button: 0 },
+          ],
+        }],
+      });
+    } finally {
+      // A drag that failed half way must not leave the button held for the next test.
+      await this.req("DELETE", "/actions").catch(() => {});
+    }
   }
 
   async focused() {

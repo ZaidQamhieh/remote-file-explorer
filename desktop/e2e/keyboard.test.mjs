@@ -215,6 +215,7 @@ test("Revoke on this computer asks first, by keyboard", async () => {
   await app.script("[...document.querySelectorAll('.menu .mi')].find((x) => /Revoke access/.test(x.innerText)).focus();");
   await press(KEYS.enter);
   await waitFor("the confirmation", () => app.visible(".dlg"));
+  await waitFor("the confirmation text", async () => /This is the sign-in this app uses/.test(await app.text(".dlg")));
   assert.match(await app.text(".dlg"), /This is the sign-in this app uses/);
   await press(KEYS.escape);
   await waitFor("the dialog to close", async () => !(await app.visible(".dlg")));

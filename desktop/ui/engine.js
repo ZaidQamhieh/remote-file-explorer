@@ -82,7 +82,7 @@
   const sizeOf = (n) => (n.t === 'dir' ? 0 : n.b);
 
   /* ---------- state ---------- */
-  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'light', density: 'comfortable', notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
+  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'light', density: 'comfortable', openMode: 'single', uiSize: 'auto', railWide: false, sideW: 372, sheetH: 252, notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
   let servers = [], tasks = [], history = [], notes = [], listeners = [];
   const emit = (type, data) => { for (const l of listeners.slice()) { try { l(type, data); } catch (e) { if (typeof console !== 'undefined') console.error(e); } } };
   const note = (kind, text) => { const n = { id: nid('n'), at: now(), kind, text, read: false }; notes.unshift(n); if (notes.length > 60) notes.pop(); emit('notify', n); };

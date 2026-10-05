@@ -81,6 +81,8 @@
   };
   const AUDIO = /\.(mp3|wav|flac|ogg|m4a|opus|aac)$/i, PDF = /\.pdf$/i, CSV = /\.(csv|tsv)$/i, MD = /\.(md|markdown)$/i, JSN = /\.json$/i, ARC = /\.(zip|tar|tgz|7z|rar|zst|gz|xz)$/i;
   const IMG = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+  /* Whether a click on the file shows something worth opening: a picture, text, or the list inside an archive. */
+  A.hasViewer = (host, n) => { if (!E.fs.canRead(n)) return false; const k = U.kindOf(n); return IMG.test(n.n) || k === 'image' || isText(n) || (ARC.test(n.n) && host !== 'local'); };
   const nop = (icon, title, text, extra) => '<div class="pv nop">' + ic(icon) + '<b>' + title + '</b>' + text + (extra || '') + '</div>';
 
   /* What the preview body shows once the file is read; the dialog is already open with "Loading…". */

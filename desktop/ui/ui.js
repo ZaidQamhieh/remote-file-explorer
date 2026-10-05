@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const E = Engine, U = E.util, S = E.settings, R = RFE;
-  const A = (window.A = { E, U, S, state: { view: 'files', sideTab: 'details', sheetOpen: window.innerHeight >= 820, sheetTab: 'active', q: '', histFilter: 'all', drag: null } });
+  const A = (window.A = { E, U, S, state: { view: 'files', sideTab: 'details', sheetOpen: false, sheetTab: 'active', q: '', histFilter: 'all', drag: null } });
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -209,7 +209,7 @@
       }
       if (this.mode === 'grid') {
         rows.classList.add('grid'); vs.style.height = 'auto'; const cap = this.items.slice(0, 600);
-        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:12px;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString() + '. Use the list view for the full folder.</div>' : '');
+        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:12px;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString() + '. Use the list view for the full folder.</div>' : '');
         return;
       }
       rows.classList.remove('grid'); const rh = this.rh; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rh + 'px';
@@ -219,7 +219,7 @@
         if (this.creating && r === 0) { h += '<div class="li" style="top:0;height:' + rh + 'px"><div class="lead">' + ic('folder-plus') + '</div><div class="t newrow"><input class="rn" data-new value="New folder" spellcheck="false" aria-label="New folder name"><span class="rerr" data-err></span></div></div>'; continue; }
         const i = r - off; const it = this.items[i]; const sel = this.sel.has(it.n); const rn = this.renaming === it.n;
         const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
-        h += '<div class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rh + 'px;height:' + rh + 'px" role="row" aria-selected="' + sel + '"><div class="lead" data-lead>' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
+        h += '<div class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rh + 'px;height:' + rh + 'px" role="row" aria-selected="' + sel + '"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
       }
       vs.innerHTML = h;
       const inp = $('input.rn', vs); if (inp && !inp._f) { inp._f = 1; inp.focus(); const dot = inp.value.lastIndexOf('.'); inp.setSelectionRange(0, this.renaming && dot > 0 && !(E.fs.get(this.host, U.join(this.path, this.renaming)) || {}).kids ? dot : inp.value.length); }
@@ -267,7 +267,7 @@
       ];
     }
     bind(el) {
-      const idx = (t) => { const r = t.closest('[data-i]'); return r ? +r.dataset.i : -1; };
+      const idx = (t) => { const r = t.closest('[data-i]:not(svg)'); return r ? +r.dataset.i : -1; };
       el.addEventListener('click', (e) => {
         const t = e.target;
         const act = t.closest('[data-act]'); if (act) { this.act(act.dataset.act, e); return; }
@@ -276,13 +276,18 @@
         const f = t.closest('[data-filter]'); if (f) { this.filter = f.dataset.filter; this.refreshItems(); this.sel.clear(); this.render(); if (this.o.onSelect) this.o.onSelect(this); return; }
         const so = t.closest('[data-sort]'); if (so) { const k = so.dataset.sort; this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); return; }
         if (t.closest('input')) return;
-        const row = t.closest('[data-i]');
-        if (row) { const lead = t.closest('[data-lead]'); this.selectIdx(+row.dataset.i, lead ? { lead: true } : e); }
+        const row = t.closest('[data-i]:not(svg)');
+        if (row) {
+          const lead = t.closest('[data-lead]'); const i = +row.dataset.i; const keys = e.shiftKey || e.ctrlKey || e.metaKey;
+          /* One click opens (a folder goes in, a file is previewed); the round icon, Ctrl and Shift select. "Two clicks" in Settings turns that around. */
+          if (lead || keys || S.openMode === 'double') this.selectIdx(i, lead ? { lead: true } : e);
+          else { this.selectIdx(i, e); const it = this.items[i]; if (it && this.renaming == null && (it.t === 'dir' || !A.hasViewer || A.hasViewer(this.host, it))) this.open(it); }
+        }
         else if (t.closest('[data-rows]')) { if (this.sel.size) { this.sel.clear(); this.selChanged(); } }
       });
-      el.addEventListener('dblclick', (e) => { const row = e.target.closest('[data-i]'); if (row && !e.target.closest('input,button')) { const it = this.items[+row.dataset.i]; if (it) this.open(it); } });
+      el.addEventListener('dblclick', (e) => { if (S.openMode !== 'double') return; const row = e.target.closest('[data-i]:not(svg)'); if (row && !e.target.closest('input,button')) { const it = this.items[+row.dataset.i]; if (it) this.open(it); } });
       el.addEventListener('contextmenu', (e) => {
-        if (!e.target.closest('[data-rows]')) return; e.preventDefault(); const row = e.target.closest('[data-i]');
+        if (!e.target.closest('[data-rows]')) return; e.preventDefault(); const row = e.target.closest('[data-i]:not(svg)');
         if (row) { const it = this.items[+row.dataset.i]; if (!this.sel.has(it.n)) { this.sel = new Set([it.n]); this.anchor = +row.dataset.i; this.selChanged(); } }
         else if (this.sel.size) { this.sel.clear(); this.selChanged(); }
         A.setActive(this); A.menu(e.clientX, e.clientY, this.ctxItems(!!row));
@@ -301,7 +306,7 @@
       el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderRows(); }); } }, true);
       /* drag and drop */
       el.addEventListener('dragstart', (e) => {
-        const row = e.target.closest('[data-i]'); if (!row) return; const it = this.items[+row.dataset.i]; if (!it) return;
+        const row = e.target.closest('[data-i]:not(svg)'); if (!row) return; const it = this.items[+row.dataset.i]; if (!it) return;
         if (!this.sel.has(it.n)) { this.sel = new Set([it.n]); this.selChanged(); }
         const names = this.selected().map((x) => x.n); A.state.drag = { pane: this.id, host: this.host, dir: this.path, names };
         e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/x-rfe', JSON.stringify(A.state.drag)); e.dataTransfer.setData('text/plain', names.join('\n'));
@@ -348,6 +353,14 @@
       }
     }
   }
+  /* The folder's path beside its name is dropped when there is no room for all of it (a clipped path is worse than none). */
+  Pane.prototype.fit = function () {
+    if (!this.el) return;
+    this.el.classList.toggle('narrow', this.el.clientWidth > 0 && this.el.clientWidth < 700); /* too little room for every column: the names come first */
+    const c = this.el.querySelector('.crumb'); if (!c || c.querySelector('input')) return;
+    c.classList.remove('off'); if (c.scrollWidth > c.clientWidth + 1 || c.clientWidth < 140) c.classList.add('off');
+  };
+  const renderOnce = Pane.prototype.render; Pane.prototype.render = function (...a) { const v = renderOnce.apply(this, a); this.fit(); return v; };
   A.Pane = Pane;
 
   /* ---------- previews ---------- */

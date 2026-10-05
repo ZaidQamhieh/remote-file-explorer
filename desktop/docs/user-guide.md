@@ -40,7 +40,12 @@ The window has a rail on the left (**Files**, **Servers**, **Devices**, **Transf
 **History**, **Settings**, and the **New connection** button above them), a search box and a few buttons
 along the top, and the page in the middle. On **Files** the middle holds the folder of the server you are
 working on, and a side panel with two tabs, **Details** and **Local files** (this computer); drag items
-from one to the other to upload or download. A strip at the bottom shows what is being transferred. The window is at
+from one to the other to upload or download. A strip at the bottom shows what is being transferred; it stays folded to its header until a transfer
+starts (drag its top handle to fold or unfold it). The button at the top of the rail shows the names
+beside the icons: beside the page from 1280 pixels wide, over it (closed with `Esc` or a click elsewhere)
+in a narrower window. Drag the left edge of the side panel to make it wider or narrower (300 to 640
+pixels), and the strip's top handle to make it taller; arrow keys move either handle, and a double click
+on the side panel's handle restores its width. The list always keeps room for its names. The window is at
 least 1100 by 700 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
 choose in **Settings**) and remembers its size and position. Starting the app a second time does not open
 a second copy: the first window is brought forward. Press `/` to search, `Ctrl+K` for the command
@@ -164,7 +169,8 @@ expires.
 limit, what to do when a name already exists, the checksum check and the download folder (**Change…**
 opens the system's folder chooser, **Reset** returns to the default); see **Transfers** below for what each
 does. **Connection** has automatic reconnection and the notifications inside the app. **Appearance** has
-the theme, row density, language, text size, reduced motion and high contrast. **Security** has
+the theme, row density, **Interface size**, **Open files and folders**, language, reduced motion and high
+contrast. **Security** has
 **Approve new devices here**, the **Pairing code lifetime**, the list of pinned certificates and **Sign
 out all phones**. **Desktop** has **Close to the system tray**, **Start RFE when I sign in**, **Desktop
 notifications** and a **Test notification** button. **Files** has **Move deleted items to Trash**, how
@@ -173,6 +179,14 @@ and **Back up…** and **Restore…** for the app's own settings (a file you cho
 token or key). **Troubleshooting** has the log detail, **Agent log**, **Check the keystore** and **Device
 key**. **About** has the version, **Details**, **Report a problem** and **Check for updates**.
 
+- **Interface size** (Auto, 100%, 115%, 130% or 150%) makes the whole window bigger or smaller, like a
+  browser's zoom; the smallest window grows with it so nothing is cramped. **Auto** picks a size from the
+  size of the screen: 100% up to 1999 pixels wide, 115% from 2000, 125% from 2400 and 150% from 3000.
+- **Open files and folders** decides what a click does. **One click** (the default) opens a folder and
+  shows a file that has something to show (a picture, text, or the list inside an archive); any other
+  file is only selected, and its details appear in the side panel. The round icon at the left of a
+  row, `Ctrl` and `Shift` select without opening. **Two clicks** makes a single click select and a double
+  click open, as in most file managers.
 - **Approve new devices here** decides whether this app asks you when a new device wants to join. Off, the
   request is not shown here; it still waits on the computer until someone answers it there. The app never
   approves a device by itself.

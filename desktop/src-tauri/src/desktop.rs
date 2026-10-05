@@ -166,6 +166,31 @@ pub fn desktop_set_prefs(
     state.notifications.store(notifications, Ordering::SeqCst);
 }
 
+/// The smallest layout the window is built for, in CSS pixels at 100% (`tauri.conf.json` has the same).
+const MIN_WIDTH: f64 = 1100.0;
+const MIN_HEIGHT: f64 = 700.0;
+
+/// The zoom a size is clamped to: the interface sizes the window offers run from 100% to 150%.
+pub fn clamp_zoom(zoom: f64) -> f64 {
+    if zoom.is_finite() {
+        zoom.clamp(1.0, 1.5)
+    } else {
+        1.0
+    }
+}
+
+/// Makes the whole page bigger or smaller (the interface size in Settings). The smallest window grows
+/// with it, so the layout always has the room it was drawn for.
+#[tauri::command]
+pub fn desktop_set_zoom(window: tauri::WebviewWindow, zoom: f64) -> Result<f64, String> {
+    let z = clamp_zoom(zoom);
+    window.set_zoom(z).map_err(|e| e.to_string())?;
+    window
+        .set_min_size(Some(tauri::LogicalSize::new(MIN_WIDTH * z, MIN_HEIGHT * z)))
+        .map_err(|e| e.to_string())?;
+    Ok(z)
+}
+
 #[tauri::command]
 pub fn desktop_has_tray(state: tauri::State<'_, Desktop>) -> bool {
     state.tray.load(Ordering::SeqCst)
@@ -309,4 +334,18 @@ pub fn on_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) 
 /// Brings the window forward when a second copy of the program is started.
 pub fn show_for_second_start(app: &AppHandle) {
     show_main(app);
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use super::clamp_zoom;
+
+    #[test]
+    fn the_interface_size_stays_between_100_and_150_percent() {
+        assert_eq!(clamp_zoom(1.25), 1.25);
+        assert_eq!(clamp_zoom(0.2), 1.0);
+        assert_eq!(clamp_zoom(9.0), 1.5);
+        assert_eq!(clamp_zoom(f64::NAN), 1.0);
+        assert_eq!(clamp_zoom(f64::INFINITY), 1.0);
+    }
 }

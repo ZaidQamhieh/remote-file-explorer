@@ -40,6 +40,7 @@ test("first run: address, compare fingerprint, trust, sign in, devices, sign out
   await app.clickLabel("Connect");
 
   await waitFor("the trust dialog", () => app.visible(".fpfull"));
+  await waitFor("the fingerprint to be filled in", async () => norm(await app.text(".fpfull")).length >= 64);
   assert.equal(norm(await app.text(".fpfull")), agent.fingerprint(), "the window shows the agent's own fingerprint");
   await app.shot("3-trust.png");
   await app.confirmTrust();

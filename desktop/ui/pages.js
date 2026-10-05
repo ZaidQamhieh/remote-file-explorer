@@ -4,7 +4,15 @@
   const A = window.A, E = A.E, U = A.U, S = A.S, $ = A.$, $$ = A.$$, esc = A.esc, ic = A.ic, fic = A.fic, st = A.state, Pane = A.Pane;
   const KEY = 'rfe-tonal-settings-v1';
   try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* storage unavailable */ }
+  st.sheetOpen = S.sheetPref === 'open'; /* the strip starts folded; it opens when a transfer is queued, or as it was left */
   const save = () => { if (/[?&]thumb=1/.test(location.search)) return; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
+  /* The interface size: the page is zoomed by the core, and the smallest window grows with it. "Auto" follows the size of the screen. */
+  const zoomFor = () => {
+    if (S.uiSize && S.uiSize !== 'auto') return Math.min(1.5, Math.max(1, +S.uiSize / 100)) || 1;
+    const w = Math.max(screen.width || 0, 0); return w >= 3000 ? 1.5 : w >= 2400 ? 1.25 : w >= 2000 ? 1.15 : 1;
+  };
+  let zoomNow = 1; /* 100% is the window's own size: nothing to ask the core for */
+  A.applyZoom = () => { const z = zoomFor(); if (z === zoomNow) return; zoomNow = z; E.call('desktop_set_zoom', { zoom: z }).catch(() => { zoomNow = 0; }); };
   const applyTheme = () => {
     const dark = S.theme === 'dark' || (S.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.density = S.density === 'compact' ? 'compact' : 'comfortable';
@@ -39,8 +47,40 @@
   };
   function layout() {
     const m = $('#main'); m.classList.toggle('nosid', st.view !== 'files'); m.classList.toggle('nosheet', st.view === 'transfers');
-    m.style.setProperty('--sheet', st.sheetOpen ? '252px' : '66px'); $('#side').style.display = st.view === 'files' ? '' : 'none';
+    m.style.setProperty('--sheet', (st.sheetOpen ? clamp(S.sheetH || 252, SHEET_MIN, sheetMax()) : 66) + 'px');
+    m.style.setProperty('--sidew', clamp(S.sideW || 372, SIDE_MIN, sideMax()) + 'px');
+    $('#side').style.display = st.view === 'files' ? '' : 'none';
+    $('#app').classList.toggle('wide', !!S.railWide && innerWidth >= WIDE_MIN);
+    $('#app').classList.toggle('drawer', !!st.drawer && innerWidth < WIDE_MIN);
   }
+  /* ---------- sizes: the side panel and the transfers strip are dragged to the size wanted, within limits ---------- */
+  const SIDE_MIN = 300, SIDE_MAX = 640, SHEET_MIN = 150, WIDE_MIN = 1280;
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  /* The list always keeps room: about 460 px across and 420 px high (its header, four rows and its footer). */
+  const LIST_W = 460, LIST_H = 420;
+  function sideMax() { const w = $('#main') ? $('#main').clientWidth : 0; return Math.max(SIDE_MIN, Math.min(SIDE_MAX, w ? w - 32 - LIST_W : SIDE_MAX)); }
+  function sheetMax() { const h = $('#main') ? $('#main').clientHeight : 0; return Math.max(SHEET_MIN, h ? h - 72 - LIST_H : 400); }
+  /* Runs `move(dx, dy)` while the pointer is down on `el`, then `end(moved)`. */
+  function dragging(el, e, move, end) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault(); const x0 = e.clientX, y0 = e.clientY; let moved = false;
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+    const onMove = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; if (!moved && Math.abs(dx) + Math.abs(dy) > 3) moved = true; if (moved) move(dx, dy); };
+    const onUp = () => { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp); document.body.classList.remove('resizing'); end(moved); };
+    el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp); document.body.classList.add('resizing');
+  }
+  function setSideW(w) { S.sideW = clamp(Math.round(w), SIDE_MIN, sideMax()); $('#main').style.setProperty('--sidew', S.sideW + 'px'); }
+  function setSheetH(h) { S.sheetH = clamp(Math.round(h), SHEET_MIN, sheetMax()); st.sheetOpen = true; $('#main').style.setProperty('--sheet', S.sheetH + 'px'); }
+  $('#rszSide').addEventListener('pointerdown', (e) => {
+    const w0 = clamp(S.sideW || 372, SIDE_MIN, sideMax()); const dir = document.documentElement.dir === 'rtl' ? -1 : 1;
+    dragging($('#rszSide'), e, (dx) => setSideW(w0 - dir * dx), () => { save(); A.mainPane.render && A.mainPane.render(); });
+  });
+  $('#rszSide').addEventListener('keydown', (e) => {
+    const k = e.key === 'ArrowLeft' ? 24 : e.key === 'ArrowRight' ? -24 : 0; if (!k && e.key !== 'Home') return; e.preventDefault();
+    if (e.key === 'Home') { S.sideW = 372; layout(); } else setSideW((S.sideW || 372) + k); save(); A.mainPane.render && A.mainPane.render();
+  });
+  $('#rszSide').addEventListener('dblclick', () => { S.sideW = 372; layout(); save(); });
+  addEventListener('resize', () => { layout(); renderRail(); [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); });
   function renderAll() { layout(); renderRail(); renderChip(); renderStage(); renderSide(); renderSheet(true); }
   A.renderAll = renderAll;
   A.renderRail = () => renderRail(); /* A control that redraws the page keeps the keyboard focus: the same switch or segment button gets it back. */
@@ -58,12 +98,24 @@
   function renderRail() {
     const c = counts(); const bad = E.servers.some((s) => s.state === 'lost' || s.state === 'offline' || s.state === 'trust' || s.state === 'refused');
     const D = (v, i, l, extra) => '<button class="dest' + (st.view === v ? ' on' : '') + '" data-go="' + v + '" aria-label="' + l + '"><div class="pill">' + ic(i) + (extra || '') + '</div>' + l + '</button>';
-    $('#rail').innerHTML = '<div class="rmenu" title="RFE">' + ic('list') + '</div><button class="fab" data-new="1" title="New connection" aria-label="New connection">' + ic('plug') + '</button>' +
+    const wide = innerWidth >= WIDE_MIN ? !!S.railWide : !!st.drawer;
+    $('#rail').innerHTML = '<button class="rmenu" data-menu="1" title="' + (wide ? 'Hide the labels' : 'Show the labels') + '" aria-label="Menu" aria-expanded="' + wide + '">' + ic('menu') + '</button><button class="fab" data-new="1" title="New connection" aria-label="New connection">' + ic('plug') + '<span class="fl">New connection</span></button>' +
       D('files', 'folder', 'Files') + D('servers', 'server', 'Servers', bad ? '<i class="dt"></i>' : '') + D('devices', 'phone', 'Devices', A.X && A.X.inbox && A.X.inbox.length ? '<i class="bg">' + A.X.inbox.length + '</i>' : '') +
       D('transfers', 'swap', 'Transfers', c.attn ? '<i class="bg">' + c.attn + '</i>' : c.active + c.queued ? '<i class="bg pri">' + (c.active + c.queued) + '</i>' : '') +
       D('search', 'search', 'Search') + D('tools', 'layers', 'Tools') + D('history', 'history', 'History') + '<div class="sp"></div>' + D('settings', 'gear', 'Settings');
   }
-  $('#rail').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) A.go(b.dataset.go); else if (e.target.closest('[data-new]')) A.serverDialog(); });
+  $('#rail').addEventListener('click', (e) => {
+    e.railHandled = true; /* the page-wide click that closes the drawer must not see this one */
+    const b = e.target.closest('[data-go]'); if (b) { st.drawer = false; layout(); A.go(b.dataset.go); } else if (e.target.closest('[data-new]')) { st.drawer = false; layout(); A.serverDialog(); }
+    else if (e.target.closest('[data-menu]')) {
+      if (innerWidth >= WIDE_MIN) { S.railWide = !S.railWide; save(); } else st.drawer = !st.drawer;
+      layout(); renderRail(); A.mainPane.render && A.mainPane.render(); const m = $('#rail [data-menu]'); if (m) m.focus();
+    }
+  });
+  /* The drawer (a window under 1280 px) closes with Escape or a click anywhere else. */
+  const closeDrawer = () => { if (!st.drawer) return; st.drawer = false; layout(); renderRail(); };
+  document.addEventListener('click', (e) => { if (st.drawer && !e.railHandled && !e.target.closest('#rail')) closeDrawer(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.drawer) { closeDrawer(); const m = $('#rail [data-menu]'); if (m) m.focus(); } });
 
   /* ---------- top bar ---------- */
   function buildTop() {
@@ -172,15 +224,29 @@
     const list = E.tasks.filter((t) => A.groupOf(t) === st.sheetTab).sort((a, b) => a.queuedAt - b.queuedAt);
     const anyRun = E.tasks.some((t) => t.state === 'running' || t.state === 'queued'), anyPaused = E.tasks.some((t) => t.state === 'paused');
     sh.classList.toggle('min', !st.sheetOpen); $('#main').classList.toggle('noconn', !(A.mainPane.host !== 'local' && E.connected(A.mainPane.host)));
-    sh.innerHTML = '<button class="efab" data-efab="1">' + ic('upload') + 'Upload</button><div class="hdl" data-hdl="1" title="' + (st.sheetOpen ? 'Collapse' : 'Expand') + '" role="button" aria-label="Toggle transfers"></div><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '<span class="sp"></span><div class="tot"><span id="tot"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? (st.view === 'files' ? 'No transfers running. Drag files onto the list, or press Upload.' : 'No transfers running.') : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div>';
+    sh.innerHTML = '<button class="efab" data-efab="1"' + (A.mainPane.host === 'local' || !E.connected(A.mainPane.host) ? ' disabled title="Open a connected server first, then upload into it"' : '') + '>' + ic('upload') + 'Upload</button><div class="hdl" data-hdl="1" tabindex="0" title="' + (st.sheetOpen ? 'Drag to resize, click to collapse' : 'Click to expand') + '" role="button" aria-label="Toggle transfers"></div><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '<span class="sp"></span><div class="tot"><span id="tot"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? (st.view === 'files' ? 'No transfers running. Drag files onto the list, or press Upload.' : 'No transfers running.') : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div>';
     A.patchCards(sh); updateTotals();
   }
   function updateTotals() { const t = $('#tot'); if (!t) return; const sp = E.totalSpeed(); const n = E.tasks.filter((x) => x.state === 'running').length; t.textContent = n ? U.fmtSpeed(sp) + ' total · ' + n + ' running' : 'Idle'; }
+  /* The strip is dragged by its top handle; a click without moving still opens or closes it. */
+  $('#sheet').addEventListener('pointerdown', (e) => {
+    const h = e.target.closest('[data-hdl]'); if (!h) return;
+    const h0 = st.sheetOpen ? clamp(S.sheetH || 252, SHEET_MIN, sheetMax()) : 66; let want = h0;
+    dragging(h, e, (dx, dy) => { want = h0 - dy; if (want >= 100) setSheetH(want); else { st.sheetOpen = false; $('#main').style.setProperty('--sheet', '66px'); } }, (moved) => {
+      if (!moved) st.sheetOpen = !st.sheetOpen;
+      S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save();
+      layout(); renderSheet(true);
+    });
+  });
+  $('#sheet').addEventListener('keydown', (e) => {
+    if (!e.target.closest('[data-hdl]')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st.sheetOpen = !st.sheetOpen; S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); setSheetH((st.sheetOpen ? S.sheetH || 252 : 66) + (e.key === 'ArrowUp' ? 32 : -32)); S.sheetPref = 'open'; save(); layout(); renderSheet(true); }
+  });
   $('#sheet').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (sa) { ({ pauseall: E.pauseAll, resumeall: E.resumeAll, clear: E.clearDone })[sa.dataset.sa](); return; }
     const tb = e.target.closest('[data-stab]'); if (tb) { st.sheetTab = tb.dataset.stab; st.sheetOpen = true; renderSheet(true); return; }
-    if (e.target.closest('[data-hdl]')) { st.sheetOpen = !st.sheetOpen; renderSheet(true); return; }
-    if (e.target.closest('[data-efab]')) { uploadFab(); return; }
+    if (e.target.closest('[data-efab]:not([disabled])')) { uploadFab(); return; }
     A.cardClick(e);
   });
   function uploadFab() {
@@ -326,13 +392,13 @@
     $('#stage').innerHTML = '<h2 class="pt">Settings</h2><p class="ps">Changes apply immediately and are kept on this computer.</p><div class="setg">' +
       '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', 'How many files move at once', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', 'Shared across running transfers', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25'], [50, '50']])) + row('When a name already exists', 'Applies to new transfers', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', 'Compare SHA-256 after each download', sw('verify')) + row('Download folder', 'Downloads are saved here.<br><span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:8px"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
       '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', 'Retries every 8 seconds and resumes transfers when the server is back', sw('autoReconnect')) + row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', 'Failed transfers and lost connections', sw('notifyErrors')) + '</div>' +
-      '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', 'Compact fits more rows', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + '</div>' +
+      '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', 'Compact fits more rows', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + row('Interface size', 'Makes everything bigger. Auto follows your screen', seg('uiSize', [['auto', 'Auto'], [100, '100%'], [115, '115%'], [130, '130%'], [150, '150%']])) + row('Open files and folders', 'One click opens. The round icon, Ctrl and Shift select', seg('openMode', [['single', 'One click'], ['double', 'Two clicks']])) + '</div>' +
       (A.settingsExtra ? A.settingsExtra({ row, seg, sw }) : '') +
       '<div class="sg"><h4>Help</h4><div class="sr"><div class="l"><b>Keyboard shortcuts</b><small>Press <span class="kbd">Ctrl</span> <span class="kbd">K</span> for everything</small></div><button class="btn" data-sx="keys">' + ic('keyboard') + 'Show</button></div></div></div>';
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'settings') return;
-    const sg = e.target.closest('[data-set] button'); if (sg) { const k = sg.closest('[data-set]').dataset.set; let v = sg.dataset.v; if (!isNaN(+v) && v !== '') v = +v; S[k] = v; save(); applyTheme(); if (k === 'parallel' || k === 'limit' || k === 'onConflict') E.pushPrefs(); A.pageSettings(); if (k === 'density') { A.mainPane.render(); A.localPane.render(); } return; }
+    const sg = e.target.closest('[data-set] button'); if (sg) { const k = sg.closest('[data-set]').dataset.set; let v = sg.dataset.v; if (!isNaN(+v) && v !== '') v = +v; S[k] = v; save(); applyTheme(); if (k === 'uiSize') A.applyZoom(); if (k === 'parallel' || k === 'limit' || k === 'onConflict') E.pushPrefs(); A.pageSettings(); if (k === 'density') { A.mainPane.render(); A.localPane.render(); } return; }
     const sw = e.target.closest('[data-sw]'); if (sw) { S[sw.dataset.sw] = !S[sw.dataset.sw]; save(); if (sw.dataset.sw === 'verify') E.pushPrefs(); A.pageSettings(); if (A.onSwitch) A.onSwitch(sw.dataset.sw); return; }
     const sx = e.target.closest('[data-sx]'); if (sx) { const a = sx.dataset.sx; if (A.settingsAction && A.settingsAction(a)) return; if (a === 'keys') shortcutsDialog(); }
   });
@@ -363,7 +429,7 @@
     const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); sc.remove(); document.removeEventListener('keydown', key, true); } else if (e.key === 'ArrowDown') { e.preventDefault(); hi = Math.min(shown.length - 1, hi + 1); draw(); } else if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, hi - 1); draw(); } else if (e.key === 'Enter') { e.preventDefault(); if (shown[hi]) run(shown[hi]); } };
     document.addEventListener('keydown', key, true);
     sc.addEventListener('mousedown', (e) => { if (e.target === sc) { sc.remove(); document.removeEventListener('keydown', key, true); } });
-    $('#pl', sc).addEventListener('click', (e) => { const it = e.target.closest('[data-i]'); if (it) run(shown[+it.dataset.i]); });
+    $('#pl', sc).addEventListener('click', (e) => { const it = e.target.closest('[data-i]:not(svg)'); if (it) run(shown[+it.dataset.i]); });
     $('#pq', sc).addEventListener('input', (e) => { const w = e.target.value.toLowerCase().split(/\s+/).filter(Boolean); shown = cmds.filter((c) => w.every((x) => (c.label + ' ' + (c.sub || '')).toLowerCase().includes(x))); hi = 0; draw(); });
     draw(); $('#pq', sc).focus();
   }
@@ -423,6 +489,7 @@
   buildTop(); renderAll(); updateBell();
   /* later scripts (features, fx*) extend A: start once they have all run */
   const boot = () => E.init().then(() => {
+    A.applyZoom();
     const first = E.servers.find((x) => x.signedIn) || E.servers[0];
     A.mainPane.setHost(q.get('host') || (first ? first.id : 'local'));
     renderAll();

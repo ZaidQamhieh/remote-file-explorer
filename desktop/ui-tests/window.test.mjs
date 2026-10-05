@@ -70,9 +70,12 @@ test("every screen draws with its heading and no script error", async () => {
   done();
 });
 
+const tab = async (d, name) => { d.querySelector('[data-snav="' + name + '"]').click(); await sleep(40); };
+const allTabs = async (d) => { let s = ""; for (const n of [...d.querySelectorAll("[data-snav]")].map((b) => b.dataset.snav)) { await tab(d, n); s += " " + text(d.querySelector("#stage")); } return s; };
+
 test("Settings offers only what the core honours", async () => {
   const { d, A, done } = await open("settings");
-  const s = text(d.querySelector("#stage"));
+  const s = await allTabs(d);
   for (const want of ["Parallel transfers", "Speed limit", "When a name already exists", "Verify checksums", "Download folder", "Reconnect automatically", "Troubleshooting", "Language", "Back up settings", "Show hidden files", "Pinned certificates"]) assert.ok(s.includes(want), want);
   for (const gone of ["Simulate", "Demo", "Reset demo data"]) assert.ok(!s.includes(gone), gone + " is gone");
   A.go("files"); done();
@@ -81,6 +84,7 @@ test("Settings offers only what the core honours", async () => {
 test("the transfer settings reach the core, and a taken name asks, then follows the answer", async () => {
   const { d, A, E, errs, done } = await open("settings");
   const W = d.defaultView;
+  await tab(d, "Transfers");
   const click = (sel) => d.querySelector(sel).click();
   click('[data-set="parallel"] [data-v="3"]'); await sleep(50);
   click('[data-set="limit"] [data-v="25"]'); await sleep(50);
@@ -117,8 +121,10 @@ test("the transfer settings reach the core, and a taken name asks, then follows 
 test("the security and file settings change what the core is asked to do", async () => {
   const { d, A, E, errs, done } = await open("settings");
   const W = d.defaultView;
-  const s = text(d.querySelector("#stage"));
+  await tab(d, "Security");
+  const s = text(d.querySelector("#stage")) + (await (async () => { await tab(d, "Files"); return text(d.querySelector("#stage")); })());
   for (const want of ["Approve new devices here", "Pairing code lifetime", "Sign out all phones", "Move deleted items to Trash", "Keep items in Trash for"]) assert.ok(s.includes(want), want);
+  await tab(d, "Security");
   d.querySelector('[data-set="pairLife"] [data-v="2"]').click(); await sleep(50);
   assert.equal(A.S.pairLife, 2);
   // With Trash turned off a delete is permanent: the core is told so.
@@ -130,6 +136,7 @@ test("the security and file settings change what the core is asked to do", async
   assert.ok(items.length >= 2, "two files to delete");
   await E.fs.remove(NAS, DIR, [items[0].n]);
   assert.equal(seen[0].permanent, false, "by default a delete goes to the Trash");
+  await tab(d, "Files");
   d.querySelector('[data-sw="trash"]').click(); await sleep(50);
   assert.equal(A.S.trash, false);
   await E.fs.remove(NAS, DIR, [items[1].n]);
@@ -141,8 +148,9 @@ test("the security and file settings change what the core is asked to do", async
 test("the desktop settings reach the core, and the update check offers a checked download", async () => {
   const { d, A, E, errs, done } = await open("settings");
   const W = d.defaultView; const SB = W.StubBackend;
+  await tab(d, "Desktop");
   const s = text(d.querySelector("#stage"));
-  for (const want of ["Close to the system tray", "Start RFE when I sign in", "Desktop notifications", "Test notification", "Check for updates"]) assert.ok(s.includes(want), want);
+  for (const want of ["Close to the system tray", "Start RFE when I sign in", "Desktop notifications", "Test notification"]) assert.ok(s.includes(want), want);
   d.querySelector('[data-sw="closeToTray"]').click(); await sleep(50);
   assert.equal(SB.state.desktop.closeToTray, true, "the core is told to hide the window on close");
   d.querySelector('[data-sw="startLogin"]').click(); await sleep(80);
@@ -153,6 +161,7 @@ test("the desktop settings reach the core, and the update check offers a checked
   d.querySelector('[data-sx="notif"]').click(); await sleep(50);
   assert.equal(SB.state.notified.at(-1).kind, "test");
   // The update dialog.
+  await tab(d, "About"); assert.ok(text(d.querySelector("#stage")).includes("Check for updates"));
   d.querySelector('[data-sx="update"]').click(); await sleep(250);
   const dlg = text(d.querySelector(".dlg"));
   assert.match(dlg, /1\.1\.0 available/); assert.match(dlg, /Faster folders/); assert.match(dlg, /RFE-Desktop_1\.1\.0_amd64\.deb/);
@@ -310,6 +319,7 @@ test("one click opens a folder, the round icon only selects, and Two clicks in S
   assert.ok(A.mainPane.sel.has("projects"));
   fire(row("projects").querySelector(".nm, .n, b, span") || row("projects"), "click");
   await until(() => A.mainPane.path === "/srv/projects", "one click to open the folder (was " + A.mainPane.path + ")");
+  assert.equal(A.mainPane.sel.size, 0, "a click only opens: nothing is selected");
   A.mainPane.go("/srv"); await sleep(100);
   A.S.openMode = "double";
   fire(row("projects"), "click");
@@ -321,7 +331,7 @@ test("one click opens a folder, the round icon only selects, and Two clicks in S
   done();
 });
 
-test("the side panel and the transfers strip are dragged to the size wanted, or folded away", async () => {
+test("the side panel is dragged to the size wanted, or folded away, and the transfers open from a pill or the top bar", async () => {
   const { w, d, A, errs, done } = await open();
   const fire = (el, type, x, y) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
   const main = d.querySelector("#main"); const grip = d.querySelector("#rszSide");
@@ -342,16 +352,16 @@ test("the side panel and the transfers strip are dragged to the size wanted, or 
   btn.click(); assert.equal(hidden(), true, "the button hides it");
   assert.equal(btn.getAttribute("aria-pressed"), "false");
   btn.click(); assert.equal(hidden(), false);
-  A.state.sheetOpen = true; A.renderAll();
-  const hdl = () => d.querySelector("[data-hdl]");
-  assert.equal(main.style.getPropertyValue("--sheet"), "15.75rem");
-  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 500); fire(hdl(), "pointerup", 500, 500);
-  assert.equal(main.style.getPropertyValue("--sheet"), "22.00rem", "100px up makes the strip 6.25 rem taller");
-  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointermove", 500, 1500); fire(hdl(), "pointerup", 500, 1500);
-  assert.equal(main.style.getPropertyValue("--sheet"), "4.00rem", "dragged down far enough it folds to its header");
-  assert.equal(A.state.sheetOpen, false);
-  fire(hdl(), "pointerdown", 500, 600); fire(hdl(), "pointerup", 500, 600);
-  assert.equal(A.state.sheetOpen, true, "a click opens it again");
+  A.state.sheetOpen = false; A.renderAll();
+  const sheet = d.querySelector("#sheet"), pill = () => d.querySelector("#spill"), top = d.querySelector("#btnXfer");
+  assert.ok(pill() && top, "a pill for the transfers and a button for them in the top bar");
+  assert.equal(sheet.classList.contains("min"), true, "folded: only the pill shows");
+  assert.equal(main.style.getPropertyValue("--sheet"), "", "the transfers take no room from the page");
+  pill().click(); assert.equal(sheet.classList.contains("min"), false, "the pill opens the list");
+  assert.equal(top.getAttribute("aria-pressed"), "true");
+  top.click(); assert.equal(sheet.classList.contains("min"), true, "the top bar button folds it");
+  assert.equal(top.getAttribute("aria-pressed"), "false");
+  top.click(); assert.equal(A.state.sheetOpen, true, "and opens it again");
   assert.deepEqual(errs, []);
   done();
 });
@@ -386,7 +396,7 @@ test("one click opens a file only when there is something to show; any other fil
   const row = (n) => [...d.querySelectorAll("#stage .li[data-i]")].find((r) => text(r).includes(n.n));
   const fire = (el) => el.dispatchEvent(new w.MouseEvent("click", { bubbles: true, cancelable: true }));
   if (bin) { fire(row(bin)); await sleep(150); assert.equal(d.querySelector(".dlg"), null, "no dialog for " + bin.n); assert.ok(A.mainPane.sel.has(bin.n)); }
-  if (txt) { fire(row(txt)); await until(() => d.querySelector(".dlg"), "the viewer for " + txt.n); }
+  if (txt) { A.mainPane.sel.clear(); fire(row(txt)); await until(() => d.querySelector(".dlg"), "the viewer for " + txt.n); assert.equal(A.mainPane.sel.has(txt.n), false, "opening a file does not select it"); }
   assert.deepEqual(errs, []);
   done();
 });

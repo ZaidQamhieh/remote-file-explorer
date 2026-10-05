@@ -13,7 +13,7 @@
 
   /* ================= adding a computer ================= */
   A.connTabs = (cur) => '<div class="seg fxtabs" role="tablist" aria-label="How to add a computer">' + [['manual', 'Manual'], ['code', 'Pairing code'], ['disc', 'Find on network']].map((t) => '<button role="tab" aria-selected="' + (cur === t[0]) + '" data-fx="conn.tab|' + t[0] + '" class="' + (cur === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('') + '</div>';
-  H['conn.tab'] = (tab, a2, b) => { if (b.classList.contains('on')) return; closeTop(); setTimeout(() => (tab === 'manual' ? A.serverDialog() : tab === 'code' ? codeDialog() : discDialog()), 0); };
+  H['conn.tab'] = (tab, a2, b) => { if (b.classList.contains('on')) return; const dl = b.closest('.dlg'); A.dialogFrom = dl ? dl.getBoundingClientRect() : null; closeTop(); (tab === 'manual' ? A.serverDialog() : tab === 'code' ? codeDialog() : discDialog()); A.dialogFrom = null; };
   /* The trust and sign-in dialogs follow a connection the user started here, one step after the other. */
   A.watchConnect = (id) => { X2.auto[id] = true; };
   const addAndOpen = (o, code) => {

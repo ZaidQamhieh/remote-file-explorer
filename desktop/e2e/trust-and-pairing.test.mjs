@@ -132,7 +132,9 @@ step("a login the agent revoked sends the window back to sign-in", async () => {
 
 step("Create a new device key needs a confirmation", async () => {
   await app.go("settings");
-  await waitFor("settings", () => app.has(/Device key/, "#stage"));
+  await waitFor("settings", () => app.has(/Appearance/, "#stage"));
+  await app.clickLabel("Troubleshooting", ".setn");
+  await waitFor("the troubleshooting section", () => app.has(/Device key/, "#stage"));
   await app.clickLabel("New key…", "#stage");
   await waitFor("the confirmation", () => app.visible(".dlg.danger"));
   assert.match(await app.text(".dlg h2"), /Create a new device key/);

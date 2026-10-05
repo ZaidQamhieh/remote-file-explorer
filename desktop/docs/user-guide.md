@@ -40,8 +40,9 @@ The window has a rail on the left (**Files**, **Servers**, **Devices**, **Transf
 **History**, **Settings**, and the **New connection** button above them), a search box and a few buttons
 along the top, and the page in the middle. On **Files** the middle holds the folder of the server you are
 working on, and a side panel with two tabs, **Details** and **Local files** (this computer); drag items
-from one to the other to upload or download. A strip at the bottom shows what is being transferred; it stays folded to its header until a transfer
-starts (drag its top handle to any height, drag it down to fold it, or click the handle). The button at the top of the rail shows the names
+from one to the other to upload or download. A **Transfers** pill at the bottom right shows what is being transferred: a ring that fills as files move, and
+the number waiting. Click the pill, or the transfers button in the top bar, to open the list above it and again to fold it
+away; it opens by itself when a transfer starts. The button at the top of the rail shows the names
 beside the icons: beside the page from a wide window, over it (closed with `Esc` or a click elsewhere)
 in a narrower one. Drag the handle between the list and the side panel to make the panel wider or
 narrower; drag it far enough and the panel folds away, and the same handle (or the panel button in the top bar) brings it
@@ -166,19 +167,21 @@ expires.
 
 ## Settings
 
-**Settings** has one page of groups. **Transfers** holds the number of parallel transfers, the speed
-limit, what to do when a name already exists, the checksum check and the download folder (**Change…**
-opens the system's folder chooser, **Reset** returns to the default); see **Transfers** below for what each
-does. **Connection** has automatic reconnection and the notifications inside the app. **Appearance** has
-the theme, row density, **Interface size**, **Open files and folders**, language, reduced motion and high
-contrast. **Security** has
-**Approve new devices here**, the **Pairing code lifetime**, the list of pinned certificates and **Sign
-out all phones**. **Desktop** has **Close to the system tray**, **Start RFE when I sign in**, **Desktop
-notifications** and a **Test notification** button. **Files** has **Move deleted items to Trash**, how
-long to **Keep items in Trash**, the choice to be asked where each download goes, to show hidden files,
-and **Back up…** and **Restore…** for the app's own settings (a file you choose; it holds no password,
-token or key). **Troubleshooting** has the log detail, **Agent log**, **Check the keystore** and **Device
-key**. **About** has the version, **Details**, **Report a problem** and **Check for updates**.
+**Settings** lists its sections on the left, in this order, and shows the one you choose on the right
+(the window remembers which while it is open). **Appearance** has the theme, row density, **Interface size**
+and **Open files and folders**. **Language and accessibility** has the language, reduced motion and high
+contrast. **Transfers** holds the number of parallel transfers, the speed limit, what to do when a name
+already exists, the checksum check and the download folder (**Change…** opens the system's folder chooser,
+**Reset** returns to the default); see **Transfers** below for what each does. **Connection** has automatic
+reconnection and the notifications inside the app. **Files** has **Move deleted items to Trash**, how long to
+**Keep items in Trash**, the choice to be asked where each download goes and to show hidden files.
+**Security** has **Approve new devices here**, the **Pairing code lifetime**, the list of pinned
+certificates and **Sign out all phones**. **Desktop** has **Close to the system tray**, **Start RFE when I
+sign in**, **Desktop notifications** and a **Test notification** button. **Backup** has **Back up…** and
+**Restore…** for the app's own settings (a file you choose; it holds no password, token or key).
+**Troubleshooting** has the log detail, **Agent log**, **Check the keystore** and **Device key**. **Help**
+shows the keyboard shortcuts. **About** has the version, **Details**, **Report a problem**, **Check for
+updates** and the welcome tour.
 
 - **Interface size** (90%, 100%, 115% or 130%) makes the whole window smaller or bigger on top of the scale
   the window already has: everything is drawn in units that grow with the window, from the smallest size
@@ -655,8 +658,8 @@ tables above.
 ## Transfers
 
 **Transfers** shows every upload and download as a card with a progress bar, grouped as **Needs
-attention**, **Active**, **Queued** and **Completed**, with the current speed and totals above. A strip
-at the bottom of **Files** shows the same cards while you browse. Everything is done by the app's core
+attention**, **Active**, **Queued** and **Completed**, with the current speed and totals above. The
+**Transfers** pill on the other pages shows the same cards while you browse. Everything is done by the app's core
 over the same pinned connection as the rest; the window only shows the progress.
 
 - **Download:** select files in a server's list and press **Download** (or `Ctrl+D`), or drag them onto

@@ -47,7 +47,7 @@ test("transfers", () => visit("transfers", /Transfers/));
 test("search", () => visit("search", /Search/));
 test("tools", () => visit("tools", /Tools/));
 test("history", () => visit("history", /History/));
-test("settings", () => visit("settings", /Download folder/));
+test("settings", () => visit("settings", /Theme/));
 
 test("pair a phone: a code is generated and shown on Devices", async () => {
   await app.go("devices");

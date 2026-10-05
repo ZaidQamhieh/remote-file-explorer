@@ -114,6 +114,7 @@
   A.a11yFix = () => { let n = 0; tieLabels(); A.a11yAudit().forEach((b) => { const svg = b.querySelector('svg[data-i]'); const key = b.dataset.act || b.dataset.pa || b.dataset.bk || (svg && svg.dataset.i) || ''; let nm = NAME_OF[key] || NAME_OF[(svg && svg.dataset.i) || ''] || ''; if (!nm && b.classList.contains('sw')) nm = (b.dataset.sw || b.dataset.sw2 || 'Toggle').replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, (c) => c.toUpperCase()); if (!nm && key) nm = key.replace(/[-_.]/g, ' ').replace(/^./, (c) => c.toUpperCase()); if (nm) { b.setAttribute('aria-label', nm); n++; } }); return n; };
   new MutationObserver(() => { clearTimeout(A.a11yT); A.a11yT = setTimeout(() => { A.a11yFix(); }, 120); }).observe(document.body, { childList: true, subtree: true });
   /* switches get readable names */
+  A.fixSw = () => fixSw();
   const fixSw = () => $$('.sw[role="switch"]').forEach((b) => { const row = b.closest('.sr'); const l = row && $('.l b', row); if (l && (!b.getAttribute('aria-label') || b.getAttribute('aria-label') === b.dataset.sw)) b.setAttribute('aria-label', l.textContent); });
 
   /* ================= settings group ================= */

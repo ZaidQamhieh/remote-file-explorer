@@ -56,7 +56,7 @@
   };
   /* what a tab needs from the servers is asked for when it opens, and again when it is older than half a minute */
   const WANT = { trash: () => E.now() - X.trashAt > STALE && A.loadTrash(), share: () => E.now() - X.sharesAt > STALE && A.loadShares(), apps: () => loadApps(), store: () => loadBig() };
-  H['tool.tab'] = (k) => { X.tool = k; A.pageTools(); if (WANT[k]) WANT[k](); };
+  H['tool.tab'] = (k) => { X.tool = k; A.pageTools(); A.ease($('#toolBody'), { y: .375, ms: 200 }); if (WANT[k]) WANT[k](); };
   A.toolOpened = () => { if (WANT[X.tool]) WANT[X.tool](); };
   const empty = (icn, t, s) => '<div class="fxempty">' + ic(icn, { size: 40 }) + '<b>' + t + '</b>' + (s ? '<span>' + s + '</span>' : '') + '</div>';
   const head = (icn, t, s, right) => '<div class="fxh"><span class="fxi">' + ic(icn) + '</span><div><b>' + t + '</b>' + (s ? '<small>' + s + '</small>' : '') + '</div>' + (right ? '<div style="margin-left:auto;display:flex;gap:.5rem">' + right + '</div>' : '') + '</div>';

@@ -89,7 +89,7 @@ test("memory after sign-in stays in budget", async () => {
     await app.go("devices");
     await waitFor("the device list", () => app.has(/RFE Desktop/, "#stage"));
     await app.go("settings");
-    await waitFor("settings", () => app.has(/Download folder/, "#stage"));
+    await waitFor("settings", () => app.has(/Theme/, "#stage"));
     await app.go("files");
     await waitFor("the listing", () => app.visible("[data-rows]"));
   };

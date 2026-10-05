@@ -43,28 +43,27 @@
   /* ---------- routing / layout ---------- */
   A.go = (v) => {
     if (st.view === v && v !== 'files') { renderStage(); return; }
-    st.view = v; closePop(); renderAll(); if (v === 'tools' && A.toolOpened) A.toolOpened();
+    st.view = v; closePop(); renderAll(); A.ease($('#stage')); if (v === 'tools' && A.toolOpened) A.toolOpened();
   };
   function layout() {
     const m = $('#main'); m.classList.toggle('nosid', st.view !== 'files'); m.classList.toggle('nosheet', st.view === 'transfers');
     m.classList.toggle('sidehid', st.view === 'files' && !!S.sideHide);
-    m.style.setProperty('--sheet', sheetNow().toFixed(2) + 'rem'); m.style.setProperty('--sidew', sideNow().toFixed(2) + 'rem');
+    m.style.setProperty('--sidew', sideNow().toFixed(2) + 'rem');
     $('#side').style.display = st.view === 'files' && !S.sideHide ? '' : 'none'; $('#sheet').classList.toggle('min', !st.sheetOpen);
+    const bx = $('#btnXfer'); if (bx) { bx.hidden = st.view === 'transfers'; bx.setAttribute('aria-pressed', String(!!st.sheetOpen)); bx.title = st.sheetOpen ? 'Hide transfers' : 'Show transfers'; }
     $('#app').classList.toggle('wide', !!S.railWide && remW() >= WIDE_MIN);
     $('#app').classList.toggle('drawer', !!st.drawer && remW() < WIDE_MIN);
     const b = $('#btnSide'); if (b) { b.hidden = st.view !== 'files'; b.setAttribute('aria-pressed', String(!S.sideHide)); b.title = S.sideHide ? 'Show details' : 'Hide details'; }
   }
   /* ---------- sizes, in rem so they scale with the window: the side panel and the transfers strip are dragged to the size wanted, or folded away ---------- */
-  const SIDE_MIN = 18, SIDE_HIDE = 12, SIDE_DEF = 21, SHEET_MIN = 9, SHEET_FOLD = 4, SHEET_HIDE = 6.5, SHEET_DEF = 15.75, WIDE_MIN = 75;
+  const SIDE_MIN = 18, SIDE_HIDE = 12, SIDE_DEF = 21, WIDE_MIN = 75;
   /* The list always keeps room: about 34 rem across and 26 rem high (its header, four rows and its footer). */
-  const LIST_W = 34, LIST_H = 26;
+  const LIST_W = 34;
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   const remPx = () => 16 * A.u();
   const remW = () => innerWidth / remPx();
   const sideMax = () => { const m = $('#main'); const w = m ? m.clientWidth / remPx() : 0; return w ? Math.max(SIDE_MIN, Math.min(w * 0.6, w - 1.5 - LIST_W)) : 40; };
-  const sheetMax = () => { const m = $('#main'); const h = m ? m.clientHeight / remPx() : 0; return h ? Math.max(SHEET_MIN, h - 5.25 - LIST_H) : 25; };
   const sideNow = () => clamp(S.sideR || SIDE_DEF, SIDE_MIN, sideMax());
-  const sheetNow = () => (st.sheetOpen ? clamp(S.sheetR || SHEET_DEF, SHEET_MIN, sheetMax()) : SHEET_FOLD);
   /* Runs `move(dx, dy)` (in px) while the pointer is down on `el`, then `end(moved)`. */
   function dragging(el, e, move, end) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -127,7 +126,7 @@
 
   /* ---------- top bar ---------- */
   function buildTop() {
-    $('#top').innerHTML = '<label class="sbar">' + ic('search') + '<input id="q" placeholder="Search files on this server" aria-label="Search" autocomplete="off"><kbd>/</kbd></label><button class="srv" id="chip" aria-haspopup="menu"></button><span class="sp"></span><button class="ib" id="btnSide" aria-label="Details panel" aria-pressed="true">' + ic('panel') + '</button><button class="ib" id="btnRefresh" title="Refresh (F5)" aria-label="Refresh">' + ic('refresh') + '</button><button class="ib" id="btnQR" title="Pair a phone (QR)" aria-label="Pair a phone">' + ic('qr') + '</button><button class="ib" id="btnTheme" title="Theme" aria-label="Theme">' + ic('sun') + '</button><button class="ib" id="btnPal" title="Command palette (Ctrl+K)" aria-label="Command palette">' + ic('command') + '</button><button class="ib" id="btnBell" title="Notifications" aria-label="Notifications">' + ic('bell') + '<i class="bd" id="bd" hidden></i></button><button class="av" id="btnAv" aria-label="Account">Z</button>';
+    $('#top').innerHTML = '<label class="sbar">' + ic('search') + '<input id="q" placeholder="Search files on this server" aria-label="Search" autocomplete="off"><kbd>/</kbd></label><button class="srv" id="chip" aria-haspopup="menu"></button><span class="sp"></span><button class="ib" id="btnSide" aria-label="Details panel" aria-pressed="true">' + ic('panel') + '</button><button class="ib" id="btnRefresh" title="Refresh (F5)" aria-label="Refresh">' + ic('refresh') + '</button><button class="ib" id="btnQR" title="Pair a phone (QR)" aria-label="Pair a phone">' + ic('qr') + '</button><button class="ib" id="btnTheme" title="Theme" aria-label="Theme">' + ic('sun') + '</button><button class="ib" id="btnPal" title="Command palette (Ctrl+K)" aria-label="Command palette">' + ic('command') + '</button><button class="ib" id="btnXfer" aria-label="Transfers" aria-pressed="false">' + ic('swap') + '<i class="bd ok" id="bdx" hidden></i></button><button class="ib" id="btnBell" title="Notifications" aria-label="Notifications">' + ic('bell') + '<i class="bd" id="bd" hidden></i></button><button class="av" id="btnAv" aria-label="Account">Z</button>';
     const q = $('#q'); let tm;
     q.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => runQuery(q.value), 280); });
     q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(tm); runQuery(q.value); } if (e.key === 'Escape') { q.value = ''; q.blur(); runQuery(''); } });
@@ -139,6 +138,7 @@
     $('#btnTheme').addEventListener('click', (e) => themeMenu(e.currentTarget));
     syncThemeBtn();
     $('#btnBell').addEventListener('click', (e) => bellMenu(e.currentTarget));
+    $('#btnXfer').addEventListener('click', () => A.toggleTransfers());
     $('#btnAv').addEventListener('click', (e) => { const r = e.currentTarget.getBoundingClientRect(); A.menu(r.right - 224 * A.u(), r.bottom + 6, [{ head: (() => { const sv = E.server(A.mainPane.host); return sv && sv.signedIn && sv.user ? sv.user + '@' + sv.name : 'Not signed in'; })() }, { icon: 'phone', label: 'Pair a phone', onClick: () => A.pairDialog && A.pairDialog() }, { icon: 'user', label: 'Accounts…', onClick: () => A.accountsDialog && A.accountsDialog() }, { icon: 'gear', label: 'Settings', onClick: () => A.go('settings') }, { icon: 'keyboard', label: 'Keyboard shortcuts', onClick: shortcutsDialog }]); });
   }
   function runQuery(v) {
@@ -185,7 +185,7 @@
     A.localPane.mount($('#paneLocal')); renderDetail(); renderLocalFooter();
   }
   $('#side').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-tab]'); if (t) { st.sideTab = t.dataset.tab; renderSide(); return; }
+    const t = e.target.closest('[data-tab]'); if (t) { st.sideTab = t.dataset.tab; renderSide(); A.ease($('#side .sbody'), { y: .375, ms: 200 }); return; }
     const a = e.target.closest('[data-do]'); if (!a) return; const p = A.mainPane; const sel = p.selected();
     switch (a.dataset.do) {
       case 'download': p.transfer(); break; case 'rename': p.startRename(sel[0]); break; case 'delete': p.del(); break;
@@ -233,24 +233,24 @@
     const list = E.tasks.filter((t) => A.groupOf(t) === st.sheetTab).sort((a, b) => a.queuedAt - b.queuedAt);
     const anyRun = E.tasks.some((t) => t.state === 'running' || t.state === 'queued'), anyPaused = E.tasks.some((t) => t.state === 'paused');
     sh.classList.toggle('min', !st.sheetOpen); $('#main').classList.toggle('noconn', !(A.mainPane.host !== 'local' && E.connected(A.mainPane.host)));
-    sh.innerHTML = '<button class="efab" data-efab="1"' + (A.mainPane.host === 'local' || !E.connected(A.mainPane.host) ? ' disabled title="Open a connected server first, then upload into it"' : '') + '>' + ic('upload') + 'Upload</button><div class="hdl" data-hdl="1" tabindex="0" title="' + (st.sheetOpen ? 'Drag to resize, click to collapse' : 'Click to expand') + '" role="button" aria-label="Toggle transfers"></div><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '<span class="sp"></span><div class="tot"><span id="tot"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? 'No transfers' : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div>';
+    const up = A.mainPane.host === 'local' || !E.connected(A.mainPane.host);
+    sh.innerHTML = '<div class="spop" role="dialog" aria-label="Transfers"><div class="stabs" role="tablist">' + tab('active', 'Active', c.active) + tab('attn', 'Needs attention', c.attn, true) + tab('queued', 'Queued', c.queued) + tab('done', 'Done', c.done) + '</div><div class="cards">' + (list.length ? list.map(A.card).join('') : '<div class="none">' + ic(st.sheetTab === 'attn' ? 'check-circle' : 'swap', { size: 22 }) + (st.sheetTab === 'active' ? 'No transfers' : st.sheetTab === 'attn' ? 'Nothing needs your attention.' : st.sheetTab === 'queued' ? 'Nothing is waiting in the queue.' : 'Completed transfers show up here.') + '</div>') + '</div><div class="sfoot"><span id="tot"></span><span class="sp"></span>' + (anyRun || !anyPaused ? '<button class="btn sm" data-sa="pauseall"' + (anyRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button>' : '<button class="btn sm" data-sa="resumeall">' + ic('play') + 'Resume all</button>') + (c.done ? '<button class="btn sm tx" data-sa="clear">Clear done</button>' : '') + '</div></div>' +
+      '<div class="sdock"><button class="efab" data-efab="1"' + (up ? ' disabled title="Open a connected server first, then upload into it"' : '') + '>' + ic('upload') + 'Upload</button><button class="spill" id="spill" data-pill="1" aria-expanded="' + !!st.sheetOpen + '" aria-label="Transfers"><span class="ring" id="spr"></span><span id="spt">Transfers</span></button></div>';
     A.patchCards(sh); updateTotals();
   }
-  function updateTotals() { const t = $('#tot'); if (!t) return; const sp = E.totalSpeed(); const n = E.tasks.filter((x) => x.state === 'running').length; t.textContent = n ? U.fmtSpeed(sp) + ' total · ' + n + ' running' : 'Idle'; }
-  /* The strip is dragged by its top handle to any height, folded to its header by dragging it down; a click opens or folds it. */
-  const stripKeep = () => { S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); refit(); };
-  $('#sheet').addEventListener('pointerdown', (e) => {
-    const h = e.target.closest('[data-hdl]'); if (!h) return;
-    const h0 = sheetNow();
-    dragging(h, e, (dx, dy) => { const want = h0 - dy / remPx(); if (want < SHEET_HIDE) st.sheetOpen = false; else { st.sheetOpen = true; S.sheetR = clamp(want, SHEET_MIN, sheetMax()); } layout(); }, (moved) => { if (!moved) st.sheetOpen = !st.sheetOpen; stripKeep(); });
-  });
-  $('#sheet').addEventListener('keydown', (e) => {
-    if (!e.target.closest('[data-hdl]')) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st.sheetOpen = !st.sheetOpen; stripKeep(); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const want = sheetNow() + (e.key === 'ArrowUp' ? 2 : -2); if (want < SHEET_HIDE) st.sheetOpen = false; else { st.sheetOpen = true; S.sheetR = clamp(want, SHEET_MIN, sheetMax()); } stripKeep(); }
-  });
+  function updateTotals() { const t = $('#tot'); if (!t) return; const sp = E.totalSpeed(); const n = E.tasks.filter((x) => x.state === 'running').length; t.textContent = n ? U.fmtSpeed(sp) + ' total · ' + n + ' running' : 'Idle'; pillUpdate(); }
+  function pillUpdate() {
+    const c = counts(), live = E.tasks.filter((x) => x.state === 'running' || x.state === 'paused' || x.state === 'waiting');
+    const b = live.reduce((a, x) => a + (x.bytes || 0), 0), d = live.reduce((a, x) => a + (x.done || 0), 0), p = b ? Math.min(100, d / b * 100) : 0;
+    const pl = $('#spill'); if (pl) { pl.classList.toggle('busy', c.active > 0); pl.classList.toggle('attn', c.attn > 0); $('#spr').style.setProperty('--p', p.toFixed(1)); $('#spr').classList.toggle('idle', !c.active); $('#spr').innerHTML = c.active ? String(Math.round(p)) : ic('swap'); $('#spt').textContent = c.active ? 'Transfers ' + (c.active + c.queued) : c.attn ? 'Needs attention ' + c.attn : 'Transfers'; }
+    const bx = $('#bdx'); if (bx) { const n = c.active + c.queued + c.attn; bx.hidden = !n; bx.textContent = n; bx.classList.toggle('ok', !c.attn); }
+  }
+  /* Transfers float in a pill at the bottom right; the pill and the top-bar button open and fold the list above it. */
+  const stripKeep = () => { S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); };
+  A.toggleTransfers = () => { st.sheetOpen = !st.sheetOpen; stripKeep(); if (st.sheetOpen) A.ease($('#sheet .spop'), { y: .5, ms: 180 }); };
   $('#sheet').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (sa) { ({ pauseall: E.pauseAll, resumeall: E.resumeAll, clear: E.clearDone })[sa.dataset.sa](); return; }
+    if (e.target.closest('[data-pill]')) { A.toggleTransfers(); return; }
     const tb = e.target.closest('[data-stab]'); if (tb) { st.sheetTab = tb.dataset.stab; st.sheetOpen = true; renderSheet(true); return; }
     if (e.target.closest('[data-efab]:not([disabled])')) { uploadFab(); return; }
     A.cardClick(e);
@@ -395,15 +395,25 @@
     const seg = (key, opts) => '<div class="seg" data-set="' + key + '">' + opts.map((o) => '<button data-v="' + o[0] + '" class="' + (String(S[key]) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>';
     const sw = (key) => '<button class="sw' + (S[key] ? ' on' : '') + '" data-sw="' + key + '" role="switch" aria-checked="' + !!S[key] + '" aria-label="' + key + '"></button>';
     const row = (t, s, c) => '<div class="sr"><div class="l"><b>' + t + '</b>' + (s ? '<small>' + s + '</small>' : '') + '</div>' + c + '</div>';
-    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><div class="setg">' +
+    const body = 
       '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', '', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', '', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25'], [50, '50']])) + row('When a name already exists', '', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', '', sw('verify')) + row('Download folder', '<span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:.5rem"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
       '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', '', sw('autoReconnect')) + row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', '', sw('notifyErrors')) + '</div>' +
       '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', '', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + row('Interface size', '', seg('uiSize', [[90, '90%'], [100, '100%'], [115, '115%'], [130, '130%']])) + row('Open files and folders', '', seg('openMode', [['single', 'One click'], ['double', 'Two clicks']])) + '</div>' +
       (A.settingsExtra ? A.settingsExtra({ row, seg, sw }) : '') +
-      '<div class="sg"><h4>Help</h4><div class="sr"><div class="l"><b>Keyboard shortcuts</b><small>Press <span class="kbd">Ctrl</span> <span class="kbd">K</span> for everything</small></div><button class="btn" data-sx="keys">' + ic('keyboard') + 'Show</button></div></div></div>';
+      '<div class="sg"><h4>Help</h4><div class="sr"><div class="l"><b>Keyboard shortcuts</b><small>Press <span class="kbd">Ctrl</span> <span class="kbd">K</span> for everything</small></div><button class="btn" data-sx="keys">' + ic('keyboard') + 'Show</button></div></div>';
+    const ORDER = ['Appearance', 'Language and accessibility', 'Transfers', 'Connection', 'Files', 'Security', 'Desktop', 'Backup', 'Troubleshooting', 'Help', 'About'];
+    const groups = body.split('<div class="sg"><h4>').slice(1).map((g) => { const i = g.indexOf('</h4>'); return { name: g.slice(0, i), html: g.slice(i + 5) }; });
+    groups.sort((a, b) => { const x = ORDER.indexOf(a.name), y = ORDER.indexOf(b.name); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+    if (!groups.some((g) => g.name === st.setTab)) st.setTab = groups[0].name;
+    const cur = groups.find((g) => g.name === st.setTab);
+    const prev = $('#stage .setp'), keep = prev ? prev.scrollTop : 0;
+    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><div class="setl"><nav class="setn" aria-label="Settings sections">' + groups.map((g) => '<button data-snav="' + esc(g.name) + '" class="' + (g.name === cur.name ? 'on' : '') + '">' + esc(g.name) + '</button>').join('') + '</nav><section class="sg setp"><h4>' + esc(cur.name) + '</h4>' + cur.html + '</section></div>';
+    const np = $('#stage .setp'); if (np && keep) np.scrollTop = keep;
+    if (A.fixSw) A.fixSw();
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'settings') return;
+    const stab = e.target.closest('[data-snav]'); if (stab) { st.setTab = stab.dataset.snav; A.pageSettings(); if (A.applyLang) A.applyLang(); A.ease($('#stage .setp'), { y: .25, ms: 160 }); return; }
     const sg = e.target.closest('[data-set] button'); if (sg) { const k = sg.closest('[data-set]').dataset.set; let v = sg.dataset.v; if (!isNaN(+v) && v !== '') v = +v; S[k] = v; save(); applyTheme(); if (k === 'uiSize') A.applyZoom(); if (k === 'parallel' || k === 'limit' || k === 'onConflict') E.pushPrefs(); A.pageSettings(); if (k === 'density') { A.mainPane.render(); A.localPane.render(); } return; }
     const sw = e.target.closest('[data-sw]'); if (sw) { S[sw.dataset.sw] = !S[sw.dataset.sw]; save(); if (sw.dataset.sw === 'verify') E.pushPrefs(); A.pageSettings(); if (A.onSwitch) A.onSwitch(sw.dataset.sw); return; }
     const sx = e.target.closest('[data-sx]'); if (sx) { const a = sx.dataset.sx; if (A.settingsAction && A.settingsAction(a)) return; if (a === 'keys') shortcutsDialog(); }

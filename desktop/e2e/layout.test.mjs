@@ -82,17 +82,19 @@ test("the side panel is dragged wider and narrower, within limits, and folds awa
   await app.script("A.S.sideR = 21; window.dispatchEvent(new Event('resize'));");
 });
 
-test("the transfers strip is dragged taller and folds away when dragged down", async () => {
-  await app.script("A.state.sheetOpen = true; A.renderAll();");
-  const u = await remPx();
-  const h0 = await rem("--sheet");
-  await app.drag("[data-hdl]", 0, -40);
-  const h1 = await rem("--sheet");
-  assert.ok(Math.abs((h1 - h0) * u - 40) < 8, "taller by about 40 px: " + h1);
-  await app.drag("[data-hdl]", 0, 230);
-  assert.equal(await rem("--sheet"), 4, "folded to its header");
-  await app.click("[data-hdl]");
-  await waitFor("it opens again", async () => (await rem("--sheet")) > 6);
+test("transfers float in a pill and open and fold from the pill or the top bar", async () => {
+  await app.script("A.state.sheetOpen = false; A.renderAll();");
+  const open = () => app.script("return !document.getElementById('sheet').classList.contains('min') && document.querySelector('#sheet .spop').offsetHeight > 0;");
+  assert.equal(await open(), false, "folded to the pill");
+  const r = await app.script("const p = document.getElementById('spill').getBoundingClientRect(), m = document.getElementById('main').getBoundingClientRect(); return [p.bottom <= m.bottom, p.right <= m.right];");
+  assert.deepEqual(r, [true, true], "the pill sits inside the window");
+  await app.click("#spill");
+  await waitFor("the pill opens the list", open);
+  await app.click("#btnXfer");
+  await waitFor("the top bar button folds it", async () => !(await open()));
+  await app.click("#btnXfer");
+  await waitFor("and opens it again", open);
+  await app.click("#spill");
 });
 
 test("the menu button puts the labels beside the icons and back", async () => {
@@ -136,7 +138,6 @@ test("both panels dragged to their limits at the smallest window still leave a u
   await app.setRect({ x: 0, y: 0, width: 1100, height: 700 });
   await sleep(700);
   await app.script("A.state.sheetOpen = true; A.renderAll();");
-  await app.drag("[data-hdl]", 0, -250);
   await app.drag("#rszSide", -300, 0);
   const box = await app.script("const r = document.querySelector('[data-rows]'); return [r.clientWidth, r.clientHeight];");
   assert.ok(box[1] >= 150, "the list is tall enough for rows: " + box);
@@ -144,7 +145,7 @@ test("both panels dragged to their limits at the smallest window still leave a u
   const nameW = await app.script("const n = document.querySelector('[data-rows] .li'); return n ? n.children[1].getBoundingClientRect().width : 0;");
   assert.ok(nameW >= 120, "the names column keeps room: " + nameW);
   await app.shot("9-limits-1100x700.png");
-  await app.script("A.S.sideR = 21; A.S.sheetR = 15.75; A.state.sheetOpen = false; window.dispatchEvent(new Event('resize'));");
+  await app.script("A.S.sideR = 21; A.state.sheetOpen = false; window.dispatchEvent(new Event('resize'));");
   await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 

@@ -6,7 +6,7 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { App, Agent, waitFor, resetAppState, KEYS } from "./lib.mjs";
+import { App, Agent, waitFor, sleep, resetAppState, KEYS } from "./lib.mjs";
 
 let a;
 let b;
@@ -174,16 +174,25 @@ test("approve on the PC by keyboard, cancel by keyboard, then approve", async ()
 
 test("settings: every control is reachable by keyboard", async () => {
   await app.go("settings");
-  await waitFor("settings", () => app.has(/Download folder/, "#stage"));
-  await app.script("document.activeElement && document.activeElement.blur(); document.querySelector('#stage').scrollTo(0, 0);");
-  const stops = await tabOrder(80);
-  console.log(`tab order, settings: ${stops.map((s) => s.name).join(" > ")}`);
+  await waitFor("settings", () => app.has(/Theme/, "#stage"));
+  const stops = [];
+  for (const tab of ["Transfers", "Connection", "Appearance", "Files", "Security", "Desktop", "Backup", "Troubleshooting"]) {
+    await app.clickLabel(tab, ".setn");
+    await sleep(350); /* the accessible names are filled in a moment after a page is drawn */
+    await app.script("document.activeElement && document.activeElement.blur(); document.querySelector('#stage').scrollTo(0, 0);");
+    const got = await tabOrder(80);
+    console.log(`tab order, settings, ${tab}: ${got.map((s) => s.name).join(" > ")}`);
+    stops.push(...got);
+  }
   const names = stops.map((s) => s.name);
   for (const want of ["Change…", "Reset", "Reconnect automatically"]) assert.ok(names.includes(want), `Tab never reaches ${want}: ${names.join(", ")}`);
   assert.deepEqual(stops.filter((s) => !s.outline).map((s) => s.name), [], "settings: these stops show no focus outline");
 });
 
 test("a switch is toggled with Space", async () => {
+  await app.clickLabel("Connection", ".setn");
+  await sleep(350);
+  await app.script("document.activeElement && document.activeElement.blur();");
   await tabTo("Reconnect automatically");
   const state = () => app.script("return document.activeElement.getAttribute('aria-checked');");
   const before = await state();

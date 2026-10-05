@@ -45,7 +45,7 @@ const VIEWS = [
   ["search", /Search/],
   ["tools", /Tools/],
   ["history", /History/],
-  ["settings", /Download folder/],
+  ["settings", /Theme/],
 ];
 
 test("the window cannot be made smaller than 1100x700", async () => {

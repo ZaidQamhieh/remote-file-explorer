@@ -31,6 +31,8 @@
     el.addEventListener('click', (e) => { const t = e.target.closest('a'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
     layer().appendChild(el); snackTimer = setTimeout(() => el.remove(), o.timeout || 6000);
   };
+  /* A short fade-and-rise for content that has just been swapped in. */
+  A.ease = (el, o) => { if (el && el.animate) el.animate([{ opacity: 0, transform: 'translateY(' + ((o && o.y) || .5) + 'rem)' }, { opacity: 1, transform: 'none' }], { duration: (o && o.ms) || 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); };
   A.dialog = (o) => {
     closeMenus();
     const sc = document.createElement('div'); sc.className = 'scrim';
@@ -61,6 +63,14 @@
     document.addEventListener('keydown', onKey, true);
     sc.addEventListener('mousedown', (e) => { if (e.target === sc && !o.modal) { if (o.beforeClose && o.beforeClose() === false) return; close(); } });
     sc.appendChild(d); layer().appendChild(sc);
+    /* Switching between sibling dialogs (the tabs of "add a computer") morphs the open one into the next instead of closing and reopening. */
+    const from = A.dialogFrom; A.dialogFrom = null;
+    if (from && d.animate) {
+      sc.classList.add('still'); const to = d.getBoundingClientRect(); d.style.overflow = 'hidden';
+      const done = () => { d.style.overflow = ''; };
+      const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done;
+      [...d.querySelectorAll('h2,.di,.db > :not(.fxtabs),.df')].forEach((el, i) => el.animate([{ opacity: 0, transform: 'translateY(.5rem)' }, { opacity: 1, transform: 'none' }], { duration: 240, delay: 40 + Math.min(i, 6) * 25, easing: 'ease-out', fill: 'backwards' }));
+    }
     if (o.onOpen) o.onOpen(ctl);
     const f = $('input,select', d); if (f && !o.noFocus) { f.focus(); if (f.select && f.type === 'text') f.select(); }
     return ctl;
@@ -283,9 +293,9 @@
         const row = t.closest('[data-i]:not(svg)');
         if (row) {
           const lead = t.closest('[data-lead]'); const i = +row.dataset.i; const keys = e.shiftKey || e.ctrlKey || e.metaKey;
-          /* One click opens (a folder goes in, a file is previewed); the round icon, Ctrl and Shift select. "Two clicks" in Settings turns that around. */
+          /* One click only opens (a folder goes in, a file is previewed, nothing gets selected); the round icon, Ctrl and Shift select. "Two clicks" in Settings turns that around. */
           if (lead || keys || S.openMode === 'double') this.selectIdx(i, lead ? { lead: true } : e);
-          else { this.selectIdx(i, e); const it = this.items[i]; if (it && this.renaming == null && (it.t === 'dir' || !A.hasViewer || A.hasViewer(this.host, it))) this.open(it); }
+          else { const it = this.items[i]; if (it && this.renaming == null && (it.t === 'dir' || !A.hasViewer || A.hasViewer(this.host, it))) this.open(it); else this.selectIdx(i, e); } /* it opens and nothing is selected; only a file with nothing to show is selected */
         }
         else if (t.closest('[data-rows]')) { if (this.sel.size) { this.sel.clear(); this.selChanged(); } }
       });

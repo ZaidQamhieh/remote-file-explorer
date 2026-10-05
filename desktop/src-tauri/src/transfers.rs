@@ -273,6 +273,9 @@ struct Item {
     pausing: AtomicBool,
     /// A cancel was asked for: whatever else is pending, the attempt ends as a cancel.
     cancelling: AtomicBool,
+    /// Held while a cancel or the end of an attempt decides between Paused and Cancelled, so the two
+    /// can never both win.
+    decide: Mutex<()>,
     /// What the person chose for a taken name; it holds for every later attempt of this transfer.
     resolution: Mutex<Option<Resolution>>,
     /// Wakes a transfer that waits in the `conflict` state.
@@ -564,6 +567,7 @@ impl Transfers {
             resume: Mutex::new(Resume::default()),
             pausing: AtomicBool::new(false),
             cancelling: AtomicBool::new(false),
+            decide: Mutex::new(()),
             resolution: Mutex::new(None),
             decided: Notify::new(),
             slot: Mutex::new(None),
@@ -597,6 +601,7 @@ impl Transfers {
     /// and an upload's session on the computer are removed; a finished transfer is left alone.
     pub fn cancel(&self, id: &str) -> Result<(), String> {
         let item = self.find(id)?;
+        let _deciding = lock(&item.decide);
         let state = item.snapshot().state;
         match state {
             State::Queued | State::Running | State::Conflict => {
@@ -796,14 +801,22 @@ async fn settle_conflict(
 
 /// The end of an attempt that was told to stop: a pause keeps the partial work, a cancel removes it.
 async fn stop(item: &Item) {
-    // A cancel wins over a pause, however the two were ordered against the end of the attempt.
-    let paused =
-        item.pausing.swap(false, Ordering::SeqCst) && !item.cancelling.load(Ordering::SeqCst);
+    // A cancel wins over a pause, however the two were ordered against the end of the attempt. The
+    // choice and the Paused state are published under the lock `cancel` takes, so a cancel either
+    // comes first (and is seen here) or comes after (and finds the transfer Paused and discards it).
+    let paused = {
+        let _deciding = lock(&item.decide);
+        let paused =
+            item.pausing.swap(false, Ordering::SeqCst) && !item.cancelling.load(Ordering::SeqCst);
+        if paused {
+            item.update(|v| {
+                v.state = State::Paused;
+                v.error.clear();
+            });
+        }
+        paused
+    };
     if paused {
-        item.update(|v| {
-            v.state = State::Paused;
-            v.error.clear();
-        });
         applog::info("transfer paused");
     } else {
         cleanup_cancelled(item).await;
@@ -1983,7 +1996,7 @@ pub async fn transfer_upload_tree(
     let (items, folders) = tokio::task::spawn_blocking(move || crate::local::walk_all(&lp))
         .await
         .map_err(|e| e.to_string())??;
-    if items.is_empty() {
+    if items.is_empty() && folders.is_empty() {
         return Err("that folder holds no files to upload".into());
     }
     let dir = {
@@ -1998,7 +2011,18 @@ pub async fn transfer_upload_tree(
             Some((parent, step)) => (join_remote(&remote_dir, parent), step),
             None => (remote_dir.clone(), rel.as_str()),
         };
-        let _ = crate::files::create_folder(&dir, &store, &up, step).await;
+        if crate::files::create_folder(&dir, &store, &up, step)
+            .await
+            .is_err()
+        {
+            // Already there is fine; anything else (a file in the way, no right to write) is not.
+            let there = crate::files::list(&dir, &store, &up, None, Some(1000)).await;
+            let is_folder =
+                matches!(&there, Ok(p) if p.entries.iter().any(|e| e.name == step && e.is_dir));
+            if !is_folder {
+                return Err(format!("cannot make the folder {step} on the computer"));
+            }
+        }
     }
     let mut ids = Vec::with_capacity(items.len());
     let queued: Result<(), String> = async {
@@ -2105,11 +2129,8 @@ pub async fn transfer_download_tree(
         Ok(())
     }
     .await;
-    let ids = settle_queued(&state, queued, ids)?;
-    if ids.is_empty() {
-        return Err("that folder holds no files to download".into());
-    }
-    Ok(ids)
+    // A folder with nothing in it is still a folder: it was made, and there is nothing to follow.
+    settle_queued(&state, queued, ids)
 }
 
 /// The settings that change how transfers run. `limit_mbps` is millions of bytes per second, 0 for no

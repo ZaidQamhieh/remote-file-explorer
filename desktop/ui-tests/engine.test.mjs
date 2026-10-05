@@ -254,6 +254,57 @@ test("a conflict is not answered while its server is disconnected", async () => 
   assert.equal(tasks[0].state, "conflict");
 });
 
+test("a setup that failed while the server was away starts again when it is back", async () => {
+  let n = 0; let fail;
+  const { E } = await boot({
+    files_list: () => ({ entries: [entry("dir", { isDir: true })], nextCursor: null }),
+    transfer_download_tree: () => { n++; if (n === 1) return new Promise((_, rej) => { fail = rej; }); return ["r1"]; },
+    transfer_pause: () => {},
+    transfer_list: () => [],
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["dir"] });
+  await until(() => fail, "the first setup");
+  E.disconnect(HOST);
+  fail(new Error("Could not reach the computer"));
+  await until(() => !tasks[0].starting, "the setup to end");
+  assert.equal(tasks[0].state, "waiting", "not failed: the server was away");
+  await E.connect(HOST);
+  await until(() => n === 2, "the setup to run again");
+  await until(() => tasks[0].rids.length === 1, "the second setup to finish");
+});
+
+test("a folder with nothing in it is done at once", async () => {
+  const { E } = await boot({
+    files_list: () => ({ entries: [entry("empty", { isDir: true })], nextCursor: null }),
+    transfer_download_tree: () => [],
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["empty"] });
+  await until(() => tasks[0].state === "done", "the folder to count as done");
+});
+
+test("a reconnect that came while the core was still stopping a transfer starts it once the core has stopped", async () => {
+  const views = { r1: { id: "r1", direction: "download", state: "running", name: "big.bin", remotePath: "/srv/big.bin", localPath: "", done: 5, total: 10, error: "", verified: false, host: HOST } };
+  let retries = 0;
+  const { E } = await boot({
+    files_list: () => ({ entries: [entry("big.bin", { size: 10 })], nextCursor: null }),
+    transfer_download_tree: () => ["r1"],
+    transfer_list: () => Object.values(views),
+    transfer_pause: () => {},
+    transfer_retry: ({ id }) => { retries++; if (views[id].state === "paused") views[id].state = "running"; },
+  });
+  await E.fs.load(HOST, "/srv");
+  const { tasks } = E.enqueue({ dir: "down", host: HOST, srcDir: "/srv", dstDir: "", names: ["big.bin"] });
+  await until(() => tasks[0].rids.length, "the core to take it");
+  await E.pollTransfers();
+  tasks[0].state = "queued"; /* the window has asked to start it again; the core is still stopping */
+  views.r1.state = "paused"; /* ...and now it has stopped */
+  await E.pollTransfers();
+  await until(() => retries > 0, "the automatic retry");
+  assert.notEqual(tasks[0].state, "paused");
+});
+
 test("searching this computer asks the core and returns what it found", async () => {
   const { E, calls } = await boot({
     local_search: () => [{ name: "report.txt", path: "/home/u/report.txt", isDir: false, size: 3, mimeType: "", mode: "-rw-r--r--", modified: "2026-01-02T03:04:05Z" }],

@@ -440,15 +440,22 @@
     return { tasks: out };
   }
   async function startTask(t) {
+    t.starting = true;
     try {
       const ids = t.dir === 'up'
         ? await call('transfer_upload_tree', { host: t.host, localPath: t.srcPath, remoteDir: t.dstDir })
         : await call('transfer_download_tree', { host: t.host, remotePath: t.srcPath, isDir: t.isDir, askWhere: !!t.askWhere });
       if (t.state === 'cancelled') { for (const id of ids) call('transfer_cancel', { id }).catch(() => {}); return; } /* cancelled while it was being set up */
+      if (!ids.length) { /* a folder with nothing in it: the folders were made, there is nothing to send */
+        t.state = 'done'; t.done = t.bytes; t.speed = 0; t.finishedAt = now(); t.started = true; log('transfer', (t.dir === 'up' ? 'Uploaded ' : 'Downloaded ') + t.name + ' (empty folder)', { tid: t.id, ok: true, dir: t.dir, host: t.host }); emit('transfers'); return;
+      }
       t.rids = ids; t.files = ids.length; for (const id of ids) byRemote[id] = t; t.started = true;
       if (t.held) for (const id of ids) call('transfer_pause', { id }).catch(() => {}); /* the server went away while it was being set up */
       pollTransfers();
-    } catch (e) { failTask(t, e.message); }
+    } catch (e) {
+      if (t.held && t.state === 'waiting') { t.msg = 'Waiting for ' + (server(t.host) ? server(t.host).name : 'the server'); emit('transfers'); } /* it starts again when the server is back */
+      else failTask(t, e.message);
+    } finally { t.starting = false; }
   }
   function failTask(t, msg, fix) { t.state = 'failed'; t.msg = msg; t.fix = fix || null; t.speed = 0; t.finishedAt = now(); log('transfer', t.name + ' failed: ' + msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + msg); emit('transfers'); }
   let polling = false;
@@ -466,6 +473,8 @@
         const nowMs = now(); const was = t.state;
         if (was === 'paused' && (st === 'running' || st === 'queued') && nowMs - (t.pauseAt || 0) < 3000) st = 'paused'; /* the core is still stopping it */
         if (was === 'waiting' && (st === 'running' || st === 'queued' || st === 'paused')) st = 'waiting'; /* the server is away: it is held until it is back */
+        /* The core finished stopping a transfer that the window has already asked to start again (a reconnect that came while it was stopping): start it again. */
+        if (st === 'paused' && (was === 'queued' || was === 'running') && nowMs - (t.autoRetryAt || 0) > 1500) { t.autoRetryAt = nowMs; retryRust(t); st = 'queued'; }
         if (t.lastAt) { const dt = (nowMs - t.lastAt) / 1000; if (dt > 0.2) { const inst = Math.max(0, (done - t.lastDone) / dt); t.speed = t.speed ? t.speed * 0.6 + inst * 0.4 : inst; t.lastDone = done; t.lastAt = nowMs; } } else { t.lastDone = done; t.lastAt = nowMs; }
         t.done = done; if (tot) t.bytes = Math.max(tot, done, 1); t.files = vs.length; t.verified = vs.every((v) => v.verified);
         if (st === 'running' && !t.startedAt) t.startedAt = nowMs;
@@ -496,7 +505,7 @@
   }
   function resumeHost(hostId) {
     let any = false;
-    for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) retryRust(t); else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; } any = true; }
+    for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) retryRust(t); else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; if (!t.starting) startTask(t); } any = true; }
     if (any) emit('transfers');
   }
   async function retryRust(t) { t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); for (const id of t.rids) { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } } pollTransfers(); }

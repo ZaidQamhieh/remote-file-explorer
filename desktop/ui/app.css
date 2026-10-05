@@ -41,20 +41,22 @@ button{cursor:pointer}
 .main{--gap:.75rem;display:grid;grid-template-columns:minmax(0,1fr) var(--sidew,23.25rem);grid-template-rows:4.5rem minmax(0,1fr);min-height:0;min-width:0;padding:0 var(--gap) var(--gap) 0;gap:0 var(--gap);position:relative}
 .main.nosid,.main.sidehid{grid-template-columns:minmax(0,1fr)}
 .main.sidehid .side{display:none}
-.top{grid-column:1/-1;display:flex;align-items:center;gap:.875rem;min-width:0}
-.sbar{flex:0 1 40rem;height:3rem;border-radius:1.5rem;background:var(--sc-high);display:flex;align-items:center;gap:.75rem;padding:0 .5rem 0 1rem;color:var(--on-var);border:.125rem solid transparent}
-.sbar:focus-within{background:var(--sc);border-color:var(--primary)}
+.top{grid-column:1/-1;display:flex;align-items:center;gap:.75rem;min-width:0;align-self:center;height:3.5rem;padding:0 .75rem;background:var(--sc-low);border:1px solid var(--outline-var);border-radius:.9rem;box-shadow:0 .25rem .875rem rgba(0,0,0,.16)}
+.sbar{flex:1 1 auto;height:2.5rem;border-radius:.6rem;background:var(--surface);box-shadow:inset 0 .0625rem .1875rem rgba(0,0,0,.2);display:flex;align-items:center;gap:.75rem;padding:0 .625rem 0 .875rem;color:var(--on-var);border:.125rem solid transparent}
+.sbar:focus-within{background:var(--surface);border-color:var(--primary)}
 .sbar .ic{font-size:1.375rem}
 .sbar input{flex:1;border:0;background:none;font-size:.9375rem;color:var(--on-surface);min-width:0}
 .sbar input::placeholder{color:var(--on-var)}
 .sbar kbd{font:.6875rem var(--mono);border:1px solid var(--outline-var);border-radius:.25rem;padding:0 .375rem;color:var(--on-var)}
-.srv{height:2.5rem;border-radius:.75rem;border:1px solid var(--outline);padding:0 .625rem 0 .75rem;display:inline-flex;align-items:center;gap:.5rem;font-weight:500;color:var(--on-surface);white-space:nowrap}
+.srv{height:2.5rem;border-radius:.6rem;border:1px solid transparent;background:var(--sc-high);padding:0 .625rem 0 .75rem;display:inline-flex;align-items:center;gap:.5rem;font-weight:500;color:var(--on-surface);white-space:nowrap}
 .srv:hover{background:var(--hover)}
 .srv .dot{width:.5rem;height:.5rem;border-radius:.25rem;background:var(--ok-dot);flex:none}
 .srv .dot.lost,.srv .dot.offline{background:var(--err)}.srv .dot.connecting,.srv .dot.trust{background:var(--amber-dot);animation:pulse 1s infinite}.srv .dot.disconnected{background:var(--outline)}.srv .dot.refused{background:var(--err)}.srv .dot.login{background:var(--amber-dot)}
 .srv small{color:var(--on-var);font-weight:400}
 .srv .ic{font-size:1.125rem;color:var(--on-var)}
-.top .sp{flex:1}
+.top .sp{flex:0 0 0}
+.srv .sig{display:flex;align-items:flex-end;gap:.125rem;height:.9rem}.srv .sig i{width:.1875rem;background:var(--ok-dot);border-radius:.0625rem}.srv .sig i:nth-child(1){height:30%}.srv .sig i:nth-child(2){height:55%}.srv .sig i:nth-child(3){height:80%}.srv .sig i:nth-child(4){height:100%}.srv .sig i.off{background:var(--outline-var)}
+.top .ib{width:2.25rem;height:2.25rem;border-radius:.6rem}.top .av{width:2.25rem;height:2.25rem}
 .ib{width:2.5rem;height:2.5rem;border-radius:1.25rem;display:inline-grid;place-items:center;color:var(--on-var);position:relative;flex:none}
 .ib:hover{background:var(--hover)}.ib .ic{font-size:1.375rem}.ib.sm{width:2rem;height:2rem}.ib.sm .ic{font-size:1.125rem}
 .ib .bd{position:absolute;top:.25rem;right:.25rem;min-width:1rem;height:1rem;border-radius:.5rem;background:var(--err);color:#fff;font-size:.6875rem;display:grid;place-items:center;padding:0 .25rem}
@@ -658,7 +660,7 @@ body.resizing{cursor:col-resize;user-select:none}
 .seg button:hover{background:var(--hover)}.seg button.on:hover{filter:brightness(.97)}
 .sw:hover{box-shadow:0 0 0 .3125rem var(--hover)}
 .fld input:hover,.fld select:hover,.sr input.tx:hover,.crumb input:hover{border-color:var(--on-surface)}
-.sbar:hover{background:var(--sc)}
+.sbar:hover{background:var(--surface);box-shadow:inset 0 .0625rem .1875rem rgba(0,0,0,.2),0 0 0 .0625rem var(--outline)}
 a:hover,.kv a:hover{text-decoration:underline}
 .ib.sm:hover,.ib:hover{background:var(--hover)}
 /* the grips of the panels */

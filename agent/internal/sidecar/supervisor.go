@@ -33,6 +33,7 @@ type Supervisor struct {
 	stats supStats
 	stop  chan struct{}
 	done  chan struct{}
+	run   sync.Once // set by Run; Stop closes done itself when Run never started the loop
 }
 
 // NewSupervisor creates a supervisor; Run starts it. onReady, when set, runs (in the supervisor goroutine's
@@ -49,7 +50,7 @@ func NewSupervisor(cfg Config, onReady func(*Client)) *Supervisor {
 
 // Run supervises until Stop. It returns immediately; work happens in a goroutine.
 func (s *Supervisor) Run() {
-	go s.loop()
+	s.run.Do(func() { go s.loop() })
 }
 
 // Client returns the live sidecar, or ErrUnavailable.
@@ -191,6 +192,7 @@ func (s *Supervisor) Stop() {
 	default:
 		close(s.stop)
 	}
+	s.run.Do(func() { close(s.done) }) // Run was never called: there is no loop to wait for
 	<-s.done
 	unregister(s)
 	s.mu.Lock()

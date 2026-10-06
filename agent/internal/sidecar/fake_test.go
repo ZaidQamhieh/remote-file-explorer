@@ -67,6 +67,9 @@ func fakeMain(mode string) {
 			reply(map[string]any{"ok": false, "code": "BAD_REQUEST", "message": "nope"}, nil)
 		case "body":
 			reply(map[string]any{"ok": true}, []byte(strings.Repeat("x", 1<<20)))
+		case "replyexit":
+			reply(map[string]any{"ok": true, "text": "bye"}, nil)
+			os.Exit(0)
 		case "crash":
 			os.Exit(3)
 		case "cancel":

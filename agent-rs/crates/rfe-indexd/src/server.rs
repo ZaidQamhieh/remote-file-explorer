@@ -243,6 +243,23 @@ fn live_stats(state: &State) -> Value {
     })
 }
 
+/// Clears `building` if a build panics, so the sidecar does not answer BUSY to every later build. `release` clears it
+/// on the normal paths and disarms the guard, so it can never clear the flag of a build that started afterwards.
+struct BuildingGuard<'a>(&'a AtomicBool);
+
+impl BuildingGuard<'_> {
+    fn release(self) {
+        self.0.store(false, Ordering::Release);
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for BuildingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// A full walk. Pending change events are dropped when it starts (the walk reads the disk afresh) and events that
 /// arrive during it are applied to its result afterwards.
 fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResult {
@@ -253,6 +270,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
         }
         state.events.clear();
     }
+    let guard = BuildingGuard(&state.building);
     let idx = Index::build(
         &req.roots,
         Limits {
@@ -262,7 +280,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
         cancel,
     );
     if cancel.load(Ordering::Relaxed) {
-        state.building.store(false, Ordering::Release);
+        guard.release();
         return Err((code::CANCELED, "build canceled".into()));
     }
     let s = idx.stats;
@@ -277,7 +295,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
     *state.last_build.lock().unwrap() = Some(req.clone());
     *state.index.write().unwrap() = Some(idx);
     state.resync.store(false, Ordering::Release);
-    state.building.store(false, Ordering::Release);
+    guard.release();
     if !state.applier_started.swap(true, Ordering::AcqRel) {
         let st = Arc::clone(state);
         std::thread::spawn(move || applier(st));

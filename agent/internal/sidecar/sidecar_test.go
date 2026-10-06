@@ -222,3 +222,30 @@ func TestReadFrameDoesNotTrustDeclaredLength(t *testing.T) {
 		t.Fatalf("err = %v, want unexpected EOF", err)
 	}
 }
+
+// A reply written just before the sidecar exits must still reach the caller: Wait may not close the pipe early.
+func TestReplyBeforeExitIsDelivered(t *testing.T) {
+	for i := 0; i < 30; i++ {
+		c, err := Start(fakeCfg("ok"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var resp struct{ Text string }
+		if err := c.Call(context.Background(), "replyexit", struct{}{}, &resp); err != nil || resp.Text != "bye" {
+			_ = c.Close()
+			t.Fatalf("run %d: %v %q", i, err, resp.Text)
+		}
+		_ = c.Close()
+	}
+}
+
+func TestStopWithoutRunReturns(t *testing.T) {
+	s := NewSupervisor(fakeCfg("ok"), nil)
+	done := make(chan struct{})
+	go func() { s.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop blocked although Run was never called")
+	}
+}

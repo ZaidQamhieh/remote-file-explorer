@@ -200,8 +200,15 @@ func Start(cfg Config) (*Client, error) {
 		_ = cmd.Wait()
 		return nil, fmt.Errorf("sidecar %s handshake: no hello within %v", cfg.Name, helloTimeout)
 	}
-	go c.readLoop(br)
+	// Wait closes the stdout pipe, so it may only run once readLoop has drained it; otherwise a reply sent just
+	// before the sidecar exits can be lost. readLoop ends on EOF, which the process exit produces.
+	readDone := make(chan struct{})
 	go func() {
+		c.readLoop(br)
+		close(readDone)
+	}()
+	go func() {
+		<-readDone
 		err := cmd.Wait()
 		c.fail(fmt.Errorf("process exited: %v", err))
 	}()

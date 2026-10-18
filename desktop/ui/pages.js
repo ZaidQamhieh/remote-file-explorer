@@ -412,18 +412,19 @@
 
   /* ---------- settings ---------- */
   function pageSettings() {
-    const seg = (key, opts) => '<div class="seg" data-set="' + key + '">' + opts.map((o) => '<button data-v="' + o[0] + '" class="' + (String(S[key]) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>';
+    const seg = (key, opts) => '<div class="seg" data-set="' + key + '">' + opts.map((o) => '<button data-v="' + o[0] + '" class="' + (String(S[key]) === String(o[0]) ? 'on' : '') + '" aria-pressed="' + (String(S[key]) === String(o[0])) + '">' + o[1] + '</button>').join('') + '</div>';
     const sw = (key) => '<button class="sw' + (S[key] ? ' on' : '') + '" data-sw="' + key + '" role="switch" aria-checked="' + !!S[key] + '" aria-label="' + key + '"></button>';
     const row = (t, s, c) => '<div class="sr"><div class="l"><b>' + t + '</b>' + (s ? '<small>' + s + '</small>' : '') + '</div>' + c + '</div>';
     const body = 
-      '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', '', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', '', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25'], [50, '50']])) + row('When a name already exists', '', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', '', sw('verify')) + row('Download folder', '<span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:.5rem"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
-      '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', '', sw('autoReconnect')) + row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', '', sw('notifyErrors')) + '</div>' +
+      '<div class="sg"><h4>Transfers</h4>' + row('Parallel transfers', 'How many files move at the same time.', seg('parallel', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])) + row('Speed limit', 'Caps the total speed of all transfers.', seg('limit', [[0, 'None'], [10, '10 MB/s'], [25, '25 MB/s'], [50, '50 MB/s']])) + row('When a name already exists', 'What happens when a file with the same name is already there.', seg('onConflict', [['ask', 'Ask'], ['replace', 'Replace'], ['keep', 'Keep both'], ['skip', 'Skip']])) + row('Verify checksums', '', sw('verify')) + row('Download folder', '<span class="mono">' + esc(A.downloadDir()) + '</span>', '<span style="display:flex;gap:.5rem"><button class="btn" data-sx="dlfolder">' + ic('folder-open') + 'Change…</button><button class="btn tx" data-sx="dlreset">Reset</button></span>') + '</div>' +
+      '<div class="sg"><h4>Connection</h4>' + row('Reconnect automatically', 'Try again by itself when a server goes away.', sw('autoReconnect')) + row('Notify when a transfer finishes', 'Shown only while Desktop notifications are on (Desktop section).', sw('notifyDone')) + row('Notify about errors', 'Shown only while Desktop notifications are on (Desktop section).', sw('notifyErrors')) + '</div>' +
       '<div class="sg"><h4>Appearance</h4>' + row('Theme', '', seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']])) + row('Row density', '', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])) + row('Interface size', '', seg('uiSize', [[90, '90%'], [100, '100%'], [115, '115%'], [130, '130%']])) + row('Open files and folders', '', seg('openMode', [['single', 'One click'], ['double', 'Two clicks']])) + '</div>' +
       (A.settingsExtra ? A.settingsExtra({ row, seg, sw }) : '') +
       '<div class="sg"><h4>Help</h4><div class="sr"><div class="l"><b>Keyboard shortcuts</b><small>Press <span class="kbd">Ctrl</span> <span class="kbd">K</span> for everything</small></div><button class="btn" data-sx="keys">' + ic('keyboard') + 'Show</button></div></div>';
     const ORDER = ['Appearance', 'Language and accessibility', 'Transfers', 'Connection', 'Files', 'Security', 'Desktop', 'Backup', 'Troubleshooting', 'Help', 'About'];
     const groups = body.split('<div class="sg"><h4>').slice(1).map((g) => { const i = g.indexOf('</h4>'); return { name: g.slice(0, i), html: g.slice(i + 5) }; });
     groups.sort((a, b) => { const x = ORDER.indexOf(a.name), y = ORDER.indexOf(b.name); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+    if (!st.setTab && S.setTab) st.setTab = S.setTab;
     if (!groups.some((g) => g.name === st.setTab)) st.setTab = groups[0].name;
     const cur = groups.find((g) => g.name === st.setTab);
     const prev = $('#stage .setp'), keep = prev ? prev.scrollTop : 0;
@@ -433,13 +434,13 @@
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'settings') return;
-    const stab = e.target.closest('[data-snav]'); if (stab) { st.setTab = stab.dataset.snav; A.pageSettings(); if (A.applyLang) A.applyLang(); return; }
+    const stab = e.target.closest('[data-snav]'); if (stab) { st.setTab = stab.dataset.snav; S.setTab = st.setTab; save(); A.pageSettings(); const sp = $('#stage .setp'); if (sp) sp.scrollTop = 0; if (A.applyLang) A.applyLang(); return; }
     const sg = e.target.closest('[data-set] button'); if (sg) { const k = sg.closest('[data-set]').dataset.set; let v = sg.dataset.v; if (!isNaN(+v) && v !== '') v = +v; S[k] = v; save(); applyTheme(); if (k === 'uiSize') A.applyZoom(); if (k === 'parallel' || k === 'limit' || k === 'onConflict') E.pushPrefs(); A.pageSettings(); if (k === 'density') { A.mainPane.render(); A.localPane.render(); } return; }
     const sw = e.target.closest('[data-sw]'); if (sw) { S[sw.dataset.sw] = !S[sw.dataset.sw]; save(); if (sw.dataset.sw === 'verify') E.pushPrefs(); A.pageSettings(); if (A.onSwitch) A.onSwitch(sw.dataset.sw); return; }
     const sx = e.target.closest('[data-sx]'); if (sx) { const a = sx.dataset.sx; if (A.settingsAction && A.settingsAction(a)) return; if (a === 'keys') shortcutsDialog(); }
   });
   function shortcutsDialog() {
-    const k = [['Ctrl K', 'Command palette'], ['/', 'Focus search'], ['Enter', 'Open folder or preview file'], ['Backspace', 'Up one folder'], ['Alt ← →', 'Back / forward'], ['F2', 'Rename'], ['Del', 'Delete'], ['Ctrl A', 'Select all'], ['Ctrl D', 'Download selection'], ['Ctrl U', 'Upload from Local files'], ['Ctrl ⇧ N', 'New folder'], ['F5', 'Refresh'], ['Ctrl L', 'Edit path'], ['Esc', 'Clear selection / close']];
+    const k = [['Ctrl K', 'Command palette'], ['/', 'Focus search'], ['Enter', 'Open folder or preview file'], ['Backspace', 'Up one folder'], ['Alt ← →', 'Back / forward'], ['F2', 'Rename'], ['Del', 'Delete'], ['Ctrl A', 'Select all'], ['Ctrl D', 'Download selection'], ['Ctrl U', 'Upload from Local files'], ['Ctrl ⇧ N', 'New folder'], ['F5', 'Refresh'], ['Ctrl L', 'Edit path'], ['F1 or ?', 'This list'], ['⇧ Arrow', 'Extend the selection'], ['Esc', 'Clear selection / close']];
     A.dialog({ icon: 'keyboard', title: 'Keyboard shortcuts', width: 520, body: '<div style="display:grid;grid-template-columns:auto 1fr;gap:.5rem 1.25rem">' + k.map((r) => '<span class="kbd">' + r[0] + '</span><span>' + r[1] + '</span>').join('') + '</div>', actions: [{ label: 'Close', kind: 'f' }] });
   }
 
@@ -480,6 +481,7 @@
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
+    if ((e.key === '?' || e.key === 'F1') && !typing) { e.preventDefault(); shortcutsDialog(); return; }
     if (typing) return;
     /* A focused button, tab or switch keeps its own Enter, Space and Backspace: the file keys work only in the list or on the page itself. */
     if (['Enter', 'Backspace', 'Delete', 'F2'].includes(e.key) && t.closest && t.closest('button,[role=switch],[role=tab],[role=menuitem],a[href],select,summary') && !t.closest('[data-rows]')) return;

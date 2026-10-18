@@ -87,7 +87,7 @@
     const grp = '<div class="sg"><h4>Troubleshooting</h4>' + k.row('Log detail', '', '<div class="seg">' + [['error', 'Errors'], ['info', 'Normal'], ['debug', 'Detailed']].map((o) => '<button data-sx="loglevel:' + o[0] + '" class="' + (lv === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>') +
       k.row('Agent log', '', '<button class="btn" data-sx="agentlog">View</button>') +
       k.row('Check the keystore', '', '<button class="btn" data-sx="keystore">Check</button>') +
-      k.row('Device key', '', '<button class="btn" data-sx="devkey">New key…</button>') + '</div>';
+      k.row('Device key', '', '<button class="btn e" data-sx="devkey">New key…</button>') + '</div>';
     return h.replace('<div class="sg"><h4>About</h4>', grp + '<div class="sg"><h4>About</h4>');
   };
   const sa0 = A.settingsAction;

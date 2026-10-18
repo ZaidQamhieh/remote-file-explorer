@@ -482,6 +482,18 @@ test("a scrolling file list drops its hover fades while it moves, and gets them 
   done();
 });
 
+test("switching pages never blanks or slides the page card: the card stays, its content dips softly", async () => {
+  const { d, A, errs, done } = await open();
+  const calls = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
+  proto.animate = function (k) { calls.push({ el: this, k }); return { cancel() {}, finish() {} }; };
+  for (const v of ["servers", "transfers", "files", "settings"]) { calls.length = 0; A.go(v); await sleep(30);
+    assert.ok(!calls.some((c) => c.el.id === "stage"), "the page card itself is animated on " + v);
+    for (const c of calls) for (const f of c.k) { assert.ok(!f.transform, "a slide on " + v); assert.ok(f.opacity === undefined || f.opacity >= 0.4, "fades from blank on " + v + ": " + f.opacity); } }
+  proto.animate = was;
+  assert.deepEqual(errs, []);
+  done();
+});
+
 test("reduced motion: the entrance animations and fades are switched off, and the fade-and-rise helper does nothing", async () => {
   const { w, d, A, done } = await open();
   assert.match(sheet(d), /prefers-reduced-motion:\s*reduce[^]*transition-duration/);

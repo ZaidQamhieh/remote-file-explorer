@@ -35,7 +35,8 @@
     layer().appendChild(el); snackTimer = setTimeout(() => el.remove(), o.timeout || 6000);
   };
   /* A short fade-and-rise for content that has just been swapped in. */
-  A.ease = (el, o) => { if (el && el.animate && !(matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches)) el.animate([{ opacity: 0, transform: 'translateY(' + ((o && o.y) || .5) + 'rem)' }, { opacity: 1, transform: 'none' }], { duration: (o && o.ms) || 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); };
+  /* A soft dip, not a blank-and-slide: content that swaps in place must never vanish for a frame or move. */
+  A.ease = (el, o) => { if (el && el.animate && !(matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches)) el.animate([{ opacity: .45 }, { opacity: 1 }], { duration: Math.min((o && o.ms) || 150, 150), easing: 'ease-out' }); };
   A.dialog = (o) => {
     closeMenus();
     const sc = document.createElement('div'); sc.className = 'scrim';

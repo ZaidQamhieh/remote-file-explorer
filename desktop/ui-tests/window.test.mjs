@@ -505,13 +505,26 @@ test("pop-ups appear in full on their first frame: no entrance animation on a di
   done();
 });
 
-test("reduced motion: the entrance animations and fades are switched off, and the fade-and-rise helper does nothing", async () => {
-  const { w, d, A, done } = await open();
+test("the refresh button turns once, slowly and smoothly, and is not a fast linear whirl", async () => {
+  const { d, done } = await open();
+  const r = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((x) => x.selectorText === ".ib.spin .ic").map((x) => x.cssText).join(" ");
+  const m = /animation:\s*spin\s+([\d.]+)s\s+([^;}]*)/.exec(r); assert.ok(m, "no spin rule: " + r);
+  assert.ok(+m[1] >= 1, "one turn takes " + m[1] + " s, too fast");
+  assert.ok(!/linear/.test(m[2]) && !/infinite/.test(m[2]), "it must ease and run once: " + m[2]);
+  done();
+});
+
+test("reduced motion: the transitions are switched off; tab switches in the side panel, Settings and Tools never fade", async () => {
+  const { d, A, done } = await open();
   assert.match(sheet(d), /prefers-reduced-motion:\s*reduce[^]*transition-duration/);
-  const el = d.createElement("div"); let played = 0; el.animate = () => { played++; };
-  A.ease(el); assert.equal(played, 1, "ease does not play normally");
-  w.matchMedia = (q) => ({ matches: /reduced-motion/.test(q), addEventListener() {}, addListener() {} });
-  A.ease(el); assert.equal(played, 1, "ease plays with reduced motion on");
+  assert.equal(A.ease, undefined, "the fade helper is back");
+  const hit = []; const proto = d.defaultView.Element.prototype; const was = proto.animate; proto.animate = function () { hit.push(this); return { cancel() {}, finish() {} }; };
+  A.go("files"); await sleep(30); hit.length = 0;
+  for (const t of d.querySelectorAll("#side [data-tab]")) { t.click(); await sleep(30); }
+  A.go("settings"); await sleep(30); hit.length = 0;
+  for (const t of d.querySelectorAll("#stage [data-snav]")) { t.click(); await sleep(30); }
+  proto.animate = was;
+  assert.equal(hit.length, 0, "a tab switch animated: " + hit.map((e) => e.className || e.tagName).join(", "));
   done();
 });
 

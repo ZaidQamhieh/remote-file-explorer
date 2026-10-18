@@ -32,7 +32,7 @@
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'system') { applyTheme(); syncThemeBtn(); } });
 
   /* ---------- panes ---------- */
-  A.mainPane = new Pane('main', null, { onNav: () => { renderDetail(); renderChip(); }, onSelect: () => renderDetail(), onSpin: () => { const b = $('#btnRefresh'); if (b) { b.classList.add('spin'); setTimeout(() => b.classList.remove('spin'), 700); } } });
+  A.mainPane = new Pane('main', null, { onNav: () => { renderDetail(); renderChip(); }, onSelect: () => renderDetail(), onSpin: () => { const b = $('#btnRefresh'); if (b) { b.classList.add('spin'); setTimeout(() => b.classList.remove('spin'), 1200); } } });
   A.localPane = new Pane('local', 'local', { compact: true, rh: 40, onSelect: () => renderLocalFooter(), onNav: () => renderLocalFooter() });
   A.activePane = A.mainPane;
   A.setActive = (p) => { A.activePane = p; };
@@ -200,7 +200,7 @@
     A.localPane.mount($('#paneLocal')); renderDetail(); renderLocalFooter();
   }
   $('#side').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-tab]'); if (t) { st.sideTab = t.dataset.tab; renderSide(); A.ease($('#side .sbody'), { y: .375, ms: 200 }); return; }
+    const t = e.target.closest('[data-tab]'); if (t) { st.sideTab = t.dataset.tab; renderSide(); return; }
     const a = e.target.closest('[data-do]'); if (!a) return; const p = A.mainPane; const sel = p.selected();
     switch (a.dataset.do) {
       case 'download': p.transfer(); break; case 'rename': p.startRename(sel[0]); break; case 'delete': p.del(); break;
@@ -262,7 +262,7 @@
   }
   /* Transfers float in a pill at the bottom right; the pill and the top-bar button open and fold the list above it. */
   const stripKeep = () => { S.sheetPref = st.sheetOpen ? 'open' : 'closed'; save(); layout(); renderSheet(true); };
-  A.toggleTransfers = () => { st.sheetOpen = !st.sheetOpen; stripKeep(); if (st.sheetOpen) A.ease($('#sheet .spop'), { y: .5, ms: 180 }); };
+  A.toggleTransfers = () => { st.sheetOpen = !st.sheetOpen; stripKeep(); };
   $('#sheet').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (sa) { ({ pauseall: E.pauseAll, resumeall: E.resumeAll, clear: E.clearDone })[sa.dataset.sa](); return; }
     if (e.target.closest('[data-pill]')) { A.toggleTransfers(); return; }
@@ -433,7 +433,7 @@
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'settings') return;
-    const stab = e.target.closest('[data-snav]'); if (stab) { st.setTab = stab.dataset.snav; A.pageSettings(); if (A.applyLang) A.applyLang(); A.ease($('#stage .setp'), { y: .25, ms: 160 }); return; }
+    const stab = e.target.closest('[data-snav]'); if (stab) { st.setTab = stab.dataset.snav; A.pageSettings(); if (A.applyLang) A.applyLang(); return; }
     const sg = e.target.closest('[data-set] button'); if (sg) { const k = sg.closest('[data-set]').dataset.set; let v = sg.dataset.v; if (!isNaN(+v) && v !== '') v = +v; S[k] = v; save(); applyTheme(); if (k === 'uiSize') A.applyZoom(); if (k === 'parallel' || k === 'limit' || k === 'onConflict') E.pushPrefs(); A.pageSettings(); if (k === 'density') { A.mainPane.render(); A.localPane.render(); } return; }
     const sw = e.target.closest('[data-sw]'); if (sw) { S[sw.dataset.sw] = !S[sw.dataset.sw]; save(); if (sw.dataset.sw === 'verify') E.pushPrefs(); A.pageSettings(); if (A.onSwitch) A.onSwitch(sw.dataset.sw); return; }
     const sx = e.target.closest('[data-sx]'); if (sx) { const a = sx.dataset.sx; if (A.settingsAction && A.settingsAction(a)) return; if (a === 'keys') shortcutsDialog(); }

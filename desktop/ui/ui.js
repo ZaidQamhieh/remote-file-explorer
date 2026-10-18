@@ -35,8 +35,6 @@
     layer().appendChild(el); snackTimer = setTimeout(() => el.remove(), o.timeout || 6000);
   };
   /* A short fade-and-rise for content that has just been swapped in. */
-  /* A soft dip, not a blank-and-slide: content that swaps in place must never vanish for a frame or move. */
-  A.ease = (el, o) => { if (el && el.animate && !(matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches)) el.animate([{ opacity: .45 }, { opacity: 1 }], { duration: Math.min((o && o.ms) || 150, 150), easing: 'ease-out' }); };
   A.dialog = (o) => {
     closeMenus();
     /* The tabs of "add a computer" are one dialog: the open backdrop stays and only the box in it is swapped, in one step, so no frame is ever drawn without it. */

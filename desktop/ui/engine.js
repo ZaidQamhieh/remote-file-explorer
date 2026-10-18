@@ -22,7 +22,7 @@
     const raw = typeof e === 'string' ? e : (e && e.message) || String(e);
     const m = /\(([A-Z][A-Z_]+)\)$/.exec(raw);
     const err = new Error(raw.replace(/^The agent says: /, '').replace(/ \([A-Z][A-Z_]+\)$/, ''));
-    err.code = m ? m[1] : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|connect|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
+    err.code = m ? m[1] : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|could not connect|cannot connect|cannot reach|connection (?:refused|reset|closed|failed)|connect error|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
     err.raw = raw;
     return err;
   }
@@ -32,7 +32,9 @@
   const now = () => Date.now();
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const p2 = (n) => String(n).padStart(2, '0');
-  const fmtDate = (ms) => { if (!ms) return '—'; const d = new Date(ms); const base = MON[d.getMonth()] + ' ' + d.getDate(); return d.getFullYear() === new Date().getFullYear() ? base + ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : base + ', ' + d.getFullYear(); };
+  /* The language of the window (set with the language choice); dates and numbers follow it. English keeps its short fixed form. */
+  const lang = () => (typeof document !== 'undefined' && document.documentElement.lang) || 'en';
+  const fmtDate = (ms) => { if (!ms) return '—'; const d = new Date(ms); if (!/^en/.test(lang())) { const y = d.getFullYear() === new Date().getFullYear(); try { return new Intl.DateTimeFormat(lang(), y ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(d); } catch (x) { /* fall through to the English form */ } } const base = MON[d.getMonth()] + ' ' + d.getDate(); return d.getFullYear() === new Date().getFullYear() ? base + ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : base + ', ' + d.getFullYear(); };
   const fmtTime = (ms) => { const d = new Date(ms); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); };
   const fmtBytes = (b) => {
     if (!isFinite(b) || b < 0) return '—';
@@ -586,7 +588,7 @@
     makeSearch, enqueue, pause, resumeTask, cancel, dismiss, retry, resolve, pushPrefs, pauseAll, resumeAll, clearDone, retryFailed, task: taskById, eta, ACTIVE, pollTransfers,
     totalSpeed: () => running().reduce((a, t) => a + t.speed, 0),
     note, log, emit,
-    util: { fmtBytes, fmtDate, fmtTime, fmtDur, fmtSpeed, norm, join, parentOf, baseOf, segs, upTo, isRoot, kindOf, KINDS, permOctal, sizeOf, fmtFp, viaOf, splitAddr, parsePath }
+    util: { fmtBytes, lang, fmtDate, fmtTime, fmtDur, fmtSpeed, norm, join, parentOf, baseOf, segs, upTo, isRoot, kindOf, KINDS, permOctal, sizeOf, fmtFp, viaOf, splitAddr, parsePath }
   };
   return api;
 });

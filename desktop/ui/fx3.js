@@ -77,7 +77,7 @@
   const numbered = (html) => { const ls = html.split('\n'); return '<div class="codev"><div class="ln">' + ls.map((_, i) => i + 1).join('\n') + '</div><pre>' + html + '</pre></div>'; };
   const csvTable = (n, raw) => {
     const sep = /\.tsv$/i.test(n.n) ? '\t' : ','; const rows = raw.trim().split('\n').map((r) => r.split(sep)); const head = rows[0] || [], body = rows.slice(1, 15);
-    return '<div class="csvv"><table><thead><tr><th>#</th>' + head.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' + body.map((r, i) => '<tr><td>' + (i + 1) + '</td>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><div class="pvnote">Showing the first ' + body.length + ' of ' + Math.max(0, rows.length - 1).toLocaleString() + ' rows</div>';
+    return '<div class="csvv"><table><thead><tr><th>#</th>' + head.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' + body.map((r, i) => '<tr><td>' + (i + 1) + '</td>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><div class="pvnote">Showing the first ' + body.length + ' of ' + Math.max(0, rows.length - 1).toLocaleString(U.lang()) + ' rows</div>';
   };
   const AUDIO = /\.(mp3|wav|flac|ogg|m4a|opus|aac)$/i, PDF = /\.pdf$/i, CSV = /\.(csv|tsv)$/i, MD = /\.(md|markdown)$/i, JSN = /\.json$/i, ARC = /\.(zip|tar|tgz|7z|rar|zst|gz|xz)$/i;
   const IMG = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;

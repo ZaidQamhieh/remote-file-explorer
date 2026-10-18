@@ -53,8 +53,15 @@
       if (err) { el.innerHTML = '<div class="hint bad">' + ic('alert-circle') + '<span>' + esc(err) + '</span></div>'; return; }
       el.innerHTML = found.length ? '<div class="fxsub" style="margin-bottom:.375rem">Found ' + found.length + (found.length === 1 ? ' computer' : ' computers') + ' running rfe-agent on this network.</div>' + found.map((f, i) => { const saved = E.servers.some((s) => s.addr === f.hostport); return '<div class="lrow"><div class="gi">' + ic('server') + '</div><div class="dm"><b>' + esc(f.name) + '</b><small>' + esc(f.hostport) + (f.version ? ' · agent ' + esc(f.version) : '') + '</small></div>' + (saved ? '<span class="tag">Saved</span>' : '<button class="btn sm f" data-fx="disc.add|' + i + '">Add</button>') + '</div>'; }).join('') : empty('search', 'Nothing found', 'No computer announced rfe-agent. It must be on the same Wi-Fi or cable network. For Tailscale machines use a pairing code or the address.');
     };
-    const scan = (c) => { found = null; err = ''; body(c); E.call('discover_agents').then((l) => { found = l; }).catch((e) => { found = []; err = e.message; }).then(() => { if (c.el.isConnected) body(c); }); };
-    A.dialog({ icon: 'plug', cls: 'conn', title: 'New connection', width: 520, body: A.connTabs('disc') + '<div class="fxdisc"></div><p class="fxp" style="margin-top:.75rem">Only computers on the same Wi-Fi or cable network appear. Listing a computer does not trust it: you still compare its certificate.</p>', actions: [{ label: 'Cancel', kind: 'tx' }, { label: 'Scan again', kind: 't', icon: 'refresh', cb: (c) => { scan(c); return false; } }], noFocus: true,
+    let scanId = 0;
+    const scan = (c) => {
+      const mine = ++scanId; found = null; err = ''; body(c);
+      const btn = c.btn && c.btn.scan; if (btn) btn.disabled = true;
+      /* An older scan that answers late must not overwrite a newer one; no answer for 10 s is reported. */
+      const slow = new Promise((_, no) => setTimeout(() => no(new Error('No answer after 10 seconds. Check that the computer is on this network, or use a pairing code or an address.')), 10000));
+      Promise.race([E.call('discover_agents'), slow]).then((l) => { if (mine === scanId) found = l; }).catch((e) => { if (mine === scanId) { found = []; err = e.message; } }).then(() => { if (mine !== scanId) return; if (btn) btn.disabled = false; if (c.el.isConnected) body(c); });
+    };
+    A.dialog({ icon: 'plug', cls: 'conn', title: 'New connection', width: 520, body: A.connTabs('disc') + '<div class="fxdisc"></div><p class="fxp" style="margin-top:.75rem">Only computers on the same Wi-Fi or cable network appear. Listing a computer does not trust it: you still compare its certificate.</p>', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'scan', label: 'Scan again', kind: 't', icon: 'refresh', cb: (c) => { scan(c); return false; } }], noFocus: true,
       onOpen: (c) => { scan(c); c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-fx^="disc.add"]'); if (!b) return; const f = found[+b.dataset.fx.split('|')[1]]; c.close(); addAndOpen({ name: f.name, host: f.hostport }); }); } });
   }
   const empty = (icn, t, s) => '<div class="fxempty">' + ic(icn, { size: 40 }) + '<b>' + t + '</b><span>' + s + '</span></div>';

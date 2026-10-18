@@ -53,9 +53,9 @@
   const IDX = { de: 1, es: 2, ar: 3 }; const MAP = { de: {}, es: {}, ar: {} };
   D.forEach((r) => { Object.keys(IDX).forEach((l) => { MAP[l][r[0]] = r[IDX[l]]; }); });
   const RX = {
-    de: [[/^(\d+) items?$/, '$1 Elemente'], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
-    es: [[/^(\d+) items?$/, '$1 elementos'], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
-    ar: [[/^(\d+) items?$/, '$1 عنصر'], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
+    de: [[/^(\d+) items?$/, (m, n) => n + (+n === 1 ? ' Element' : ' Elemente')], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
+    es: [[/^(\d+) items?$/, (m, n) => n + (+n === 1 ? ' elemento' : ' elementos')], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
+    ar: [[/^(\d+) items?$/, (m, n) => (+n === 1 ? 'عنصر واحد' : +n === 2 ? 'عنصران' : +n >= 3 && +n <= 10 ? n + ' عناصر' : n + ' عنصرًا')], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
   };
   const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } return r === undefined ? s : s.replace(t, r); };
   const SKIP = 'script,style,textarea,input,select,.mono,code,pre,[data-nolocal],.crumb,.codev,.csvv,.fp,.hrow time';

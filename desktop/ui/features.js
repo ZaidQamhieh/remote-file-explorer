@@ -250,7 +250,11 @@
   };
 
   /* ---------- pairing a phone ---------- */
-  const pairSrv = () => { let s = E.server(X.pair.host); if (!s || s.state !== 'online') { s = online()[0] || null; if ((s && s.id) !== X.pair.host) { X.pair.host = s ? s.id : null; X.pair.code = ''; X.devices = []; X.devAt = 0; } } return s; };
+  const pairSrv = () => {
+    /* The Devices page follows the server chosen in the top bar; a pick made in the pairing card holds until the top bar changes. */
+    const mh = A.mainPane && A.mainPane.host; const ms = mh && mh !== 'local' ? E.server(mh) : null;
+    if (mh !== X.pair.lastMain) { X.pair.lastMain = mh; if (ms && ms.state === 'online' && X.pair.host !== ms.id) { X.pair.host = ms.id; X.pair.code = ''; X.devices = []; X.devAt = 0; } }
+    let s = E.server(X.pair.host); if (!s || s.state !== 'online') { s = online()[0] || null; if ((s && s.id) !== X.pair.host) { X.pair.host = s ? s.id : null; X.pair.code = ''; X.devices = []; X.devAt = 0; } } return s; };
   A.pairServer = pairSrv;
   const qrObj = () => { try { return JSON.parse(X.pair.qr || '{}'); } catch (e) { return {}; } };
   const life = () => X.pair.life || 600000;

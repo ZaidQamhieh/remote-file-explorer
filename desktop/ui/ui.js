@@ -19,7 +19,7 @@
   A.hostName = hostName;
   const ago = (ms) => { const s = Math.max(0, Math.round((E.now() - ms) / 1000)); if (s < 5) return 'just now'; if (s < 60) return s + ' s ago'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' d ago'; };
   A.ago = ago;
-  const hl = (name, q) => { const i = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1; return '<span data-nolocal>' + (i < 0 ? esc(name) : esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length))) + '</span>'; };
+  const hl = (name, q) => { const i = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1; return '<span data-nolocal dir="auto" title="' + esc(name) + '">' + (i < 0 ? esc(name) : esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length))) + '</span>'; };
   A.hl = hl;
   const itemSize = (n) => (n.t === 'dir' ? (n.cc == null && !n.kids ? '—' : E.fs.itemCount(n) + (E.fs.itemCount(n) === 1 ? ' item' : ' items')) : U.fmtBytes(n.b));
   A.itemSize = itemSize;
@@ -116,7 +116,7 @@
     const lst = nodes.slice(0, 50).map((n) => '<li>' + fic(n) + '<span class="trunc" data-nolocal>' + esc(n.n) + '</span><small>' + itemSize(n) + '</small></li>').join('');
     A.dialog({
       icon: 'trash', cls: 'danger', title: names.length === 1 ? 'Delete “' + (names[0].length > 30 ? names[0].slice(0, 30) + '…' : names[0]) + '”?' : 'Delete ' + names.length + ' items?',
-      body: '<div>' + (host === 'local' ? 'These will be deleted from this computer for good.' : (S.trash === false ? 'These will be deleted from <b>' + esc(hostName(host)) + '</b> for good.' : 'These move to Trash on <b>' + esc(hostName(host)) + '</b> and can be restored from Tools → Trash.')) + ' ' + tot.f.toLocaleString() + ' file' + (tot.f === 1 ? '' : 's') + ', ' + U.fmtBytes(tot.b) + '.</div><ul class="names">' + lst + '</ul>',
+      body: '<div>' + (host === 'local' ? 'These will be deleted from this computer for good.' : (S.trash === false ? 'These will be deleted from <b>' + esc(hostName(host)) + '</b> for good.' : 'These move to Trash on <b>' + esc(hostName(host)) + '</b> and can be restored from Tools → Trash.')) + ' ' + tot.f.toLocaleString(U.lang()) + ' file' + (tot.f === 1 ? '' : 's') + ', ' + U.fmtBytes(tot.b) + '.</div><ul class="names">' + lst + '</ul>',
       enter: 'del', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'del', label: host === 'local' || S.trash === false ? 'Delete' : 'Move to Trash', kind: 'ed', icon: 'trash', cb: async () => { try { const rem = await E.fs.remove(host, dir, names); A.snack((host === 'local' || S.trash === false ? 'Deleted ' : 'Moved to Trash: ') + rem.length + (rem.length === 1 ? ' item' : ' items'), host === 'local' || S.trash === false ? {} : { action: 'Undo', onAction: async () => { try { await E.fs.restore(host, dir, rem); A.snack('Restored'); } catch (e) { A.snack(e.message, { error: true }); } } }); if (after) after(); } catch (e) { A.snack(e.message, { error: true }); } } }]
     });
   };
@@ -210,7 +210,7 @@
     renderFoot() {
       const f = $('.pfoot', this.el); if (!f) return; const sel = this.selected(); const sv = E.server(this.host); const cp = E.fs.cached(this.host, this.path); const ro = A.readOnlyNote(this.host); const free = this.host !== 'local' && sv && sv.disk[1] > 0 ? U.fmtBytes((sv.disk[1] - sv.disk[0]) * 1e9) + ' free' : '';
       const bytes = sel.reduce((a, n) => a + (n.t === 'dir' ? 0 : n.b), 0);
-      f.innerHTML = '<span><b>' + this.items.length.toLocaleString() + '</b> ' + (this.q || this.filter !== 'all' ? 'of ' + this.total.toLocaleString() + ' ' : '') + (this.items.length === 1 && !this.q && this.filter === 'all' ? 'item' : 'items') + '</span>' + (sel.length ? '<span><b>' + sel.length + '</b> selected' + (bytes ? ' · ' + U.fmtBytes(bytes) : '') + '</span>' : '') + '<span class="sp"></span>' + (cp && cp.more ? '<span class="ro">' + ic('alert-circle') + 'The agent lists more items than are shown.</span>' : '') + (ro ? '<span class="ro">' + ic('lock') + esc(ro) + '</span>' : '') + '<span>' + free + '</span>';
+      f.innerHTML = '<span><b>' + this.items.length.toLocaleString(U.lang()) + '</b> ' + (this.q || this.filter !== 'all' ? 'of ' + this.total.toLocaleString(U.lang()) + ' ' : '') + (this.items.length === 1 && !this.q && this.filter === 'all' ? 'item' : 'items') + '</span>' + (sel.length ? '<span><b>' + sel.length + '</b> selected' + (bytes ? ' · ' + U.fmtBytes(bytes) : '') + '</span>' : '') + '<span class="sp"></span>' + (cp && cp.more ? '<span class="ro">' + ic('alert-circle') + 'The agent lists more items than are shown.</span>' : '') + (ro ? '<span class="ro">' + ic('lock') + esc(ro) + '</span>' : '') + '<span>' + free + '</span>';
     }
     renderRows() {
       const rows = $('[data-rows]', this.el); if (!rows) return; const vs = $('.vs', rows);
@@ -227,7 +227,7 @@
       }
       if (this.mode === 'grid') {
         rows.classList.add('grid'); vs.style.height = 'auto'; const cap = this.items.slice(0, 600);
-        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString() + '. Use the list view for the full folder.</div>' : '');
+        vs.innerHTML = cap.map((it, i) => '<div class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString(U.lang()) + '. Use the list view for the full folder.</div>' : '');
         return;
       }
       rows.classList.remove('grid'); const rh = this.rh, rb = this.rhb; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rb / 16 + 'rem';
@@ -251,14 +251,15 @@
       else { this.sel.clear(); this.sel.add(it.n); this.anchor = i; }
       this.selChanged();
     }
-    selectAll() { this.sel = new Set(this.items.map((x) => x.n)); this.selChanged(); }
+    selectAll() { const l = this.mode === 'grid' ? this.items.slice(0, 600) : this.items; /* the grid draws at most 600 tiles: only what is shown is selected */ this.sel = new Set(l.map((x) => x.n)); this.selChanged(); }
     startRename(n) { if (!n) return; this.renaming = n.n; if (this.mode !== 'list') { this.mode = 'list'; this.render(); } else this.renderRows(); } /* the grid draws no input, so renaming shows the list */
     startNew() { this.creating = true; this.mode = 'list'; this.q = ''; this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
     async commitRename(inp) {
+      if (this.renameBusy) return; /* a second Enter while the first is still being sent */
       const old = this.renaming; const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);
       if (v === old) { this.renaming = null; this.renderRows(); return; }
-      try { await E.fs.rename(this.host, this.path, old, v); this.renaming = null; this.sel = new Set([v]); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); A.snack('Renamed to “' + v + '”'); }
-      catch (e) { err.textContent = e.message; inp.style.borderColor = 'var(--err)'; inp.focus(); }
+      this.renameBusy = true; try { await E.fs.rename(this.host, this.path, old, v); this.renaming = null; this.sel = new Set([v]); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); A.snack('Renamed to “' + v + '”'); }
+      catch (e) { err.textContent = e.message; inp.style.borderColor = 'var(--err)'; inp.focus(); } finally { this.renameBusy = false; }
     }
     async commitNew(inp) {
       const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);

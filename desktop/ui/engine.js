@@ -547,7 +547,7 @@
   /* Tells the core the settings that change how transfers run. */
   async function pushPrefs() { try { await call('transfer_set_prefs', { parallel: +settings.parallel || 2, limitMbps: +settings.limit || 0, onConflict: settings.onConflict || 'keep', verify: settings.verify !== false }); } catch (e) { /* the core says nothing here; the next change tries again */ } }
   function pauseAll() { for (const t of tasks) if (t.state === 'running' || t.state === 'queued') { if (t.rids.length) pause(t.id); else { t.held = true; t.state = 'paused'; t.pauseAt = now(); emit('transfers'); } } } /* a task not started yet is held and paused when it starts */
-  function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'failed' || t.state === 'paused') retry(t.id); }
+  function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'paused') retry(t.id); }
   async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done' || tasks[i].state === 'cancelled') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
   function retryFailed() { for (const t of tasks) if (t.state === 'failed') retry(t.id); }
   const eta = (t) => (t.speed > 0 ? (t.bytes - t.done) / t.speed : Infinity);

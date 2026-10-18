@@ -208,7 +208,7 @@
     switch (a.dataset.do) {
       case 'download': p.transfer(); break; case 'rename': p.startRename(sel[0]); break; case 'delete': p.del(); break;
       case 'preview': p.preview(sel[0]); break; case 'newfolder': p.startNew(); break;
-      case 'upload': st.sideTab = 'local'; renderSide(); break;
+      case 'upload': uploadFab(); break;
       case 'uploadsel': A.localPane.transfer(); break;
       case 'settings': A.go('settings'); break;
     }
@@ -356,7 +356,7 @@
   /* ---------- transfers page ---------- */
   function pageTransfers() {
     const c = counts(); const T = E.tasks; const sec = (k, title, hint) => { const l = T.filter((t) => A.groupOf(t) === k).sort((a, b) => a.queuedAt - b.queuedAt); return l.length ? '<div class="sec">' + title + ' <b>' + l.length + '</b></div><div class="grid3 cwide">' + l.map(A.card).join('') + '</div>' : ''; };
-    const nRun = T.filter((t) => t.state === 'running' || t.state === 'queued').length, nPaused = T.filter((t) => t.state === 'paused').length, nFail = T.filter((t) => t.state === 'failed').length; const sessionBytes = T.filter((t) => t.state === 'done').reduce((a, t) => a + t.bytes, 0) + T.filter((t) => t.state === 'running').reduce((a, t) => a + t.done, 0);
+    const nRun = T.filter((t) => t.state === 'running' || t.state === 'queued').length, nPaused = T.filter((t) => t.state === 'paused' || t.state === 'waiting').length, nFail = T.filter((t) => t.state === 'failed').length; const sessionBytes = T.filter((t) => t.state === 'done').reduce((a, t) => a + t.bytes, 0) + T.filter((t) => t.state === 'running').reduce((a, t) => a + t.done, 0);
     $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:.625rem;flex-wrap:wrap"><div style="flex:1"><h2 class="pt">Transfers</h2></div><button class="btn" data-pa="pauseall"' + (T.length ? '' : ' hidden') + (nRun ? '' : ' disabled') + '>' + ic('pause') + 'Pause all</button><button class="btn" data-pa="resumeall"' + (T.length ? '' : ' hidden') + (nPaused ? '' : ' disabled') + '>' + ic('play') + 'Resume all</button><button class="btn" data-pa="retryfailed"' + (T.length ? '' : ' hidden') + (nFail ? '' : ' disabled') + '>' + ic('retry') + 'Retry failed</button><button class="btn tx" data-pa="clear"' + (T.length ? '' : ' hidden') + (c.done ? '' : ' disabled') + '>Clear completed</button></div>' +
       (T.length ? '<div class="sum"><div><b id="sumSpeed">' + U.fmtSpeed(E.totalSpeed()) + '</b><small>current speed</small></div><div><b>' + c.active + '</b><small>active</small></div><div><b>' + c.queued + '</b><small>queued</small></div><div><b style="color:' + (c.attn ? 'var(--err)' : 'inherit') + '">' + c.attn + '</b><small>need attention</small></div><div><b>' + c.done + '</b><small>completed</small></div><div><b>' + U.fmtBytes(sessionBytes) + '</b><small>moved this session</small></div></div>' : '') +
       (T.length ? sec('attn', 'Needs attention') + sec('active', 'Active') + sec('queued', 'Queued') + sec('done', 'Completed') : '<div class="es" style="min-height:18.75rem"><div class="box"><div class="ico">' + ic('swap') + '</div><h3>No transfers</h3><div class="row"><button class="btn f" data-pa="files">' + ic('folder') + 'Go to files</button></div></div></div>');

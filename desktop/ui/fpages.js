@@ -233,7 +233,7 @@
     'app.run': (id) => {
       const s = E.server(X.appHost); const app = ((X.apps[s.id] || {}).cat || { apps: [] }).apps.find((x) => x.id === id); if (!app) return;
       A.dialog({ icon: 'zap', title: 'Launch “' + app.name + '” on ' + s.name + '?', width: 480, body: '<div>' + esc(app.description || '') + '</div><div class="hint" style="margin-top:.75rem">It starts on ' + esc(s.name) + ', for the user the agent runs as. Needs the “Launch apps” grant. The launch is recorded in the security log.</div>', enter: 'go',
-        actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Launch', kind: 'f', icon: 'play', cb: () => { E.call('launch_host_app', { host: s.id, id }).then(() => { audit('App “' + app.name + '” started on ' + s.name); A.snack('Started “' + app.name + '” on ' + s.name); }).catch(fail); } }] });
+        actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Launch', kind: 'f', icon: 'play', cb: () => { if (S.busyApp) return; S.busyApp = s.id + id; A.pageTools(); E.call('launch_host_app', { host: s.id, id }).finally(() => { S.busyApp = null; A.pageTools(); }).then(() => { audit('App “' + app.name + '” started on ' + s.name); A.snack('Started “' + app.name + '” on ' + s.name); }).catch(fail); } }] });
     }
   });
 

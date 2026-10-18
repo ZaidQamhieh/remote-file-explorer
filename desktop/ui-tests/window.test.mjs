@@ -493,6 +493,18 @@ test("switching pages swaps the content at once: no fade, dip or slide", async (
   done();
 });
 
+test("pop-ups appear in full on their first frame: no entrance animation on a dialog, backdrop, menu or snackbar", async () => {
+  const { d, done } = await open();
+  const rules = [...d.styleSheets].flatMap((s) => [...s.cssRules]);
+  for (const sel of [".scrim", ".dlg", ".menu", ".snack"]) {
+    const bad = rules.filter((r) => r.selectorText === sel && /animation(-name)?\s*:\s*(?!none)[a-z]/i.test(r.cssText) && !/spin|pulse|ind\b/.test(r.cssText));
+    assert.equal(bad.length, 0, sel + " still has an entrance animation: " + bad.map((r) => r.cssText.slice(0, 80)).join(" | "));
+  }
+  const keys = rules.filter((r) => r.type === 7).map((r) => r.name);
+  for (const k of ["fin", "dlgin", "snin", "snackin"]) assert.ok(!keys.includes(k), "keyframes " + k + " is left behind");
+  done();
+});
+
 test("reduced motion: the entrance animations and fades are switched off, and the fade-and-rise helper does nothing", async () => {
   const { w, d, A, done } = await open();
   assert.match(sheet(d), /prefers-reduced-motion:\s*reduce[^]*transition-duration/);

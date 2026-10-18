@@ -250,14 +250,12 @@ button{cursor:pointer}
 .cwide .card{width:auto}
 /* snack, dialog, menu */
 .layer{position:fixed;inset:0;pointer-events:none;z-index:50}
-.snack{position:absolute;left:7rem;bottom:1.5rem;width:30rem;max-width:calc(100vw - 8.75rem);min-height:3rem;background:var(--snack);color:var(--snack-on);border-radius:.375rem;display:flex;align-items:center;gap:.75rem;padding:.375rem .5rem .375rem 1rem;box-shadow:0 .1875rem .5rem rgba(0,0,0,.3);pointer-events:auto;animation:snin .18s ease-out}
-@keyframes snin{from{transform:translateY(.75rem);opacity:0}}
+.snack{position:absolute;left:7rem;bottom:1.5rem;width:30rem;max-width:calc(100vw - 8.75rem);min-height:3rem;background:var(--snack);color:var(--snack-on);border-radius:.375rem;display:flex;align-items:center;gap:.75rem;padding:.375rem .5rem .375rem 1rem;box-shadow:0 .1875rem .5rem rgba(0,0,0,.3);pointer-events:auto}
 .snack span{flex:1;font-size:.875rem}
 .snack a{color:var(--snack-link);font-weight:500;padding:.5rem .625rem;border-radius:1rem;cursor:pointer}
 .snack a:hover{background:rgba(127,127,127,.2)}
 .snack.err .ic{color:#ffb4a9}
-.scrim{position:absolute;inset:0;background:var(--scrim);display:grid;place-items:center;pointer-events:auto;animation:fin .15s}
-@keyframes fin{from{opacity:0}}
+.scrim{position:absolute;inset:0;background:var(--scrim);display:grid;place-items:center;pointer-events:auto}
 .dlg{background:var(--sc-low);border-radius:1.75rem;min-width:26.25rem;max-width:40rem;width:var(--w,30rem);padding:1.5rem;box-shadow:0 .5rem 1.75rem rgba(0,0,0,.35);display:flex;flex-direction:column;gap:.875rem;max-height:calc(100vh - 5rem)}
 .dlg .di{width:2rem;height:2rem;color:var(--primary);font-size:1.75rem}
 .dlg.danger .di{color:var(--err)}
@@ -278,7 +276,7 @@ button{cursor:pointer}
 .seg button{flex:1;padding:0 .875rem;font-weight:500;font-size:.8125rem;color:var(--on-surface);border-right:1px solid var(--outline);display:flex;align-items:center;justify-content:center;gap:.375rem;white-space:nowrap}
 .seg button:last-child{border-right:0}.seg button.on{background:var(--sec-c);color:var(--on-sec-c)}
 .seg button .ic{font-size:.9375rem}
-.menu{position:absolute;min-width:14rem;background:var(--sc-high);border-radius:.75rem;padding:.5rem 0;box-shadow:0 .25rem .875rem rgba(0,0,0,.28);pointer-events:auto;max-height:calc(100vh - 1.5rem);overflow:auto;animation:fin .1s}
+.menu{position:absolute;min-width:14rem;background:var(--sc-high);border-radius:.75rem;padding:.5rem 0;box-shadow:0 .25rem .875rem rgba(0,0,0,.28);pointer-events:auto;max-height:calc(100vh - 1.5rem);overflow:auto}
 .menu .mi{height:2.75rem;padding:0 1rem;display:flex;align-items:center;gap:.875rem;color:var(--on-surface);cursor:pointer;white-space:nowrap}
 .menu .mi:hover,.menu .mi.hi{background:var(--hover)}
 .menu .mi:focus{background:var(--hover);outline:.125rem solid var(--primary);outline-offset:-.125rem}
@@ -674,8 +672,7 @@ a:hover,.kv a:hover{text-decoration:underline}
 .bulk .btn:not(:disabled):hover{color:var(--snack-on);border-color:var(--snack-on)}.bulk .btn.f:not(:disabled):hover{color:var(--snack);border-color:transparent}
 
 /* ---- things arrive instead of appearing: dialogs rise in, the panels glide when they fold or unfold ---- */
-.dlg{animation:dlgin .24s cubic-bezier(.2,.8,.2,1)}
-@keyframes dlgin{from{opacity:0;transform:translateY(1rem) scale(.97)}}
+/* Pop-ups (dialogs, menus, snackbars) appear in full on the first frame: an entrance that starts at opacity 0 is a blank frame the eye reads as a delay and a flash. */
 .scrim.still,.scrim.still .dlg{animation:none}
 .dlg.conn{min-height:min(41rem,calc(100vh - 5rem))}.dlg.conn .db{flex:1}
 .scrim.top{height:100%;align-items:start;padding-top:max(2rem,calc((100vh - 42rem) / 2))}
@@ -684,8 +681,6 @@ body.resizing .main{transition:none}
 [data-rows].scrolling .li,[data-rows].scrolling .li .lead{transition:none}
 html.winsize *,html.winsize *::before,html.winsize *::after{transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important}.dlg,.scrim,.snack,.menu{animation:none}}
-.snack{animation:snackin .22s cubic-bezier(.2,.8,.2,1)}
-@keyframes snackin{from{opacity:0;transform:translateY(.75rem)}}
 .side,.sheet{transition:opacity .18s ease}
 /* Tools: the cards share one height, and an empty card centres its message while a full one lists from the top */
 .tgrid>.fxc{display:flex;flex-direction:column;min-height:12rem}.tgrid>.fxc.wide{min-height:9rem}

@@ -142,7 +142,7 @@
   };
   const sa1 = A.settingsAction;
   A.settingsAction = (a) => {
-    if (a === 'notif') { E.call('desktop_notify', { kind: 'test', title: 'Transfer finished', body: 'atlas-2.0.0-release.apk was saved to Downloads' }).then((shown) => { if (!shown) A.snack('The notification was not shown'); }).catch(fail); return true; }
+    if (a === 'notif') { E.call('desktop_notify', { kind: 'test', title: 'RFE test notification', body: 'Notifications work. Finished transfers and new device requests appear like this.' }).then((shown) => { if (!shown) A.snack('The notification was not shown'); }).catch(fail); return true; }
     if (a === 'update') { A.updateDialog(); return true; }
     return sa1(a);
   };

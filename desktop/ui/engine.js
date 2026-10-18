@@ -42,7 +42,7 @@
     return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + u[i];
   };
   const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + 'h ' + p2(Math.floor((s % 3600) / 60)) + 'm'; if (s >= 60) return Math.floor(s / 60) + 'm ' + p2(s % 60) + 's'; return s + 's'; };
-  const fmtSpeed = (bps) => (bps / 1e6).toFixed(1) + ' MB/s';
+  const fmtSpeed = (bps) => (bps >= 1e6 ? (bps / 1e6).toFixed(1) + ' MB/s' : bps >= 1e3 ? Math.round(bps / 1e3) + ' KB/s' : Math.round(bps) + ' B/s');
   let uid = 0;
   const nid = (p) => p + (++uid);
 
@@ -190,7 +190,7 @@
     emit('fs', { host, dir: norm(dir) }); return out;
   }
   const bad = (msg, code) => Object.assign(new Error(msg), { code: code || 'EINVAL' });
-  const validName = (name) => { if (!name || !name.trim()) throw bad('Name can’t be empty'); if (/[\/\\\0]/.test(name)) throw bad('Names can’t contain “/”'); if (name === '.' || name === '..') throw bad('Reserved name'); if (name.length > 255) throw bad('Name too long'); if (name.trim() !== name) throw bad('A name can’t start or end with a space'); };
+  const validName = (name) => { if (!name || !name.trim()) throw bad('Name can’t be empty'); if (/[\/\\\0]/.test(name)) throw bad('A name can’t contain / or \\'); if (name === '.' || name === '..') throw bad('“.” and “..” are taken; choose another name'); if (name.length > 255) throw bad('A name can be at most 255 characters'); if (name.trim() !== name) throw bad('A name can’t start or end with a space'); };
   const uniqueName = (host, dir, name) => {
     const m = /^(.*?)(\.[^.]*)?$/.exec(name); let i = 1, c;
     do { c = m[1] + ' (' + i + ')' + (m[2] || ''); i++; } while (exists(host, dir, c)); return c;
@@ -489,7 +489,7 @@
           log('transfer', 'Skipped ' + t.name + ' (already exists)', { tid: t.id, dir: t.dir, host: t.host }); changed = true; continue;
         }
         if (st === 'conflict') { const c = cv.conflict || {}; t.state = 'conflict'; t.speed = 0; t.conflict = { size: c.size || 0, mod: c.modifiedMs || Date.parse(c.modifiedText || '') || 0, dir: !!c.isDir }; t.msg = 'A ' + (c.isDir ? 'folder' : 'file') + ' with this name already exists'; }
-        else if (st === 'failed') { const f = vs.find((v) => v.state === 'failed'); t.state = 'failed'; t.msg = f.error || 'Failed'; t.speed = 0; if (was !== 'failed') { t.finishedAt = nowMs; log('transfer', t.name + ' failed: ' + t.msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + t.msg); } }
+        else if (st === 'failed') { const f = vs.find((v) => v.state === 'failed'); const nf = vs.filter((v) => v.state === 'failed').length; t.state = 'failed'; t.msg = (nf > 1 ? nf + ' of ' + vs.length + ' files failed. First: ' : '') + (f.error || 'Failed'); t.speed = 0; if (was !== 'failed') { t.finishedAt = nowMs; log('transfer', t.name + ' failed: ' + t.msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + t.msg); } }
         else if (st === 'done') { t.state = 'done'; t.done = t.bytes; t.speed = 0; if (was !== 'done') { t.finishedAt = nowMs; t.savedAs = vs.length === 1 ? vs[0].name : t.name; if (t.dir === 'down') { const lp = (vs.find((v) => v.localPath) || {}).localPath; if (lp && vs.length === 1) { t.savedPath = lp; t.dstDir = parentOf(lp); } } log('transfer', (t.dir === 'up' ? 'Uploaded ' : 'Downloaded ') + t.name + ' · ' + fmtBytes(t.bytes) + ' in ' + fmtDur((t.finishedAt - (t.startedAt || t.queuedAt)) / 1000), { tid: t.id, ok: true, dir: t.dir, host: t.host }); if (settings.notifyDone) note('ok', t.name + ' ' + (t.dir === 'up' ? 'uploaded' : 'downloaded')); if (t.dir === 'up') refresh(t.host, t.dstDir).catch(() => {}); else refresh(LOCAL, t.dstDir).catch(() => {}); } }
         else if (st === 'cancelled') t.state = 'cancelled';
         else t.state = st;

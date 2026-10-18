@@ -17,7 +17,7 @@
   A.$ = $; A.$$ = $$; A.esc = esc; A.ic = ic; A.fic = fic;
   const hostName = (h) => (h === 'local' ? 'This computer' : (E.server(h) || { name: h }).name);
   A.hostName = hostName;
-  const ago = (ms) => { const s = Math.max(0, Math.round((E.now() - ms) / 1000)); if (s < 5) return 'just now'; if (s < 60) return s + ' s ago'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; return Math.floor(s / 3600) + ' h ago'; };
+  const ago = (ms) => { const s = Math.max(0, Math.round((E.now() - ms) / 1000)); if (s < 5) return 'just now'; if (s < 60) return s + ' s ago'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' d ago'; };
   A.ago = ago;
   const hl = (name, q) => { const i = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1; return '<span data-nolocal>' + (i < 0 ? esc(name) : esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length))) + '</span>'; };
   A.hl = hl;

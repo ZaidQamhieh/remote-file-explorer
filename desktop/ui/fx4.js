@@ -216,7 +216,7 @@
   /* ================= palette, boot ================= */
   A.paletteExtra.push((C) => {
     C('lock', 'Back up settings…', A.backupDialog); C('upload', 'Restore settings…', () => A.restoreDialog());
-    C('upload', 'Upload files…', () => A.chooseAndUpload(), 'Ctrl+U'); C('download', 'Export security log (CSV)', () => A.exportAuditCSV());
+    C('upload', 'Upload files…', () => A.chooseAndUpload()); C('download', 'Export security log (CSV)', () => A.exportAuditCSV());
   });
   document.addEventListener('DOMContentLoaded', () => {
     if (THUMB || new URLSearchParams(location.search).get('demo')) return;

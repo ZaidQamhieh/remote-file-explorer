@@ -43,7 +43,8 @@
     do { v /= 1000; i++; } while (v >= 1000 && i < 3);
     return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + u[i];
   };
-  const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + 'h ' + p2(Math.floor((s % 3600) / 60)) + 'm'; if (s >= 60) return Math.floor(s / 60) + 'm ' + p2(s % 60) + 's'; return s + 's'; };
+  /* Same style as the ages ("5 min ago"): a number, a space, the unit. */
+  const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + ' h ' + Math.floor((s % 3600) / 60) + ' min'; if (s >= 60) return Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; return s + ' s'; };
   const fmtSpeed = (bps) => (bps >= 1e6 ? (bps / 1e6).toFixed(1) + ' MB/s' : bps >= 1e3 ? Math.round(bps / 1e3) + ' KB/s' : Math.round(bps) + ' B/s');
   let uid = 0;
   const nid = (p) => p + (++uid);

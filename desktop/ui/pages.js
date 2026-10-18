@@ -522,7 +522,7 @@
     if (type === 'tick') {
       renderSheet(); if (st.view === 'transfers') { A.patchCards($('#stage')); const s = $('#sumSpeed'); if (s) s.textContent = U.fmtSpeed(E.totalSpeed()); }
       const nowMs = performance.now(); if (nowMs - lastSlow > 900) { lastSlow = nowMs; if (st.view === 'servers') pageServers(); const h = A.mainPane.host; if (st.view === 'files' && h !== 'local' && !E.connected(h) && A.mainPane.el && A.mainPane.el.isConnected) A.mainPane.render(); renderChip(); }
-    } else if (type === 'notify') { sched('bell'); if (data.kind === 'error') A.snack(data.text, /denied|owned by/i.test(data.text) ? { error: true, action: 'Transfers', onAction: () => A.go('transfers') } : { error: true, action: 'Servers', onAction: () => A.go('servers') }); }
+    } else if (type === 'notify') { sched('bell'); if (data.kind === 'error') A.snack(data.text, /connect|reach|offline|lost|network|certificate|fingerprint|sign|login|key|timed out/i.test(data.text) ? { error: true, action: 'Servers', onAction: () => A.go('servers') } : { error: true, action: 'Transfers', onAction: () => A.go('transfers') }); }
     else sched(type === 'latency' ? 'servers' : type);
   });
   addEventListener('beforeunload', save);

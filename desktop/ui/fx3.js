@@ -107,18 +107,18 @@
     if (ARC.test(n.n) && !(isText(n) && !ARC.test(n.n))) {
       if (host === 'local') { r.html = nop('archive', 'No preview for archives on this computer', U.fmtBytes(n.b)); return r; }
       const ents = await E.call('files_archive_list', { host, path: pathOf(dir, n), limit: 200 });
-      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + ' entries</b><span>' + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
+      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + ' entries</b><span>' + (ents.length >= 200 ? 'at least ' : '') + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
       r.arc = true; return r;
     }
     if (isText(n)) {
-      if (n.b > MAX_TEXT) { r.html = nop('file', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 1 MB text preview limit. Download it to read it.'); return r; }
+      if (n.b > MAX_TEXT) { r.html = nop('file', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 1 MB text preview limit.', host === 'local' ? '' : '<div style="margin-top:.75rem"><button class="btn sm f" data-pvx="dl">' + ic('download') + 'Download to read it</button></div>'); r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="dl"]')) { A.transferNames(host, dir, [n.n]); c.close(); } }); return r; }
       const t = await readText(host, dir, n); const txt = t.text; r.edit = true;
       r.html = MD.test(n.n) ? '<div class="mdv">' + mdHTML(txt) + '</div>' : CSV.test(n.n) ? csvTable(n, txt) : JSN.test(n.n) ? numbered(jsonHTML(txt)) : numbered(esc(txt));
       return r;
     }
     const why = AUDIO.test(n.n) || k === 'audio' ? 'The app does not play audio.' : k === 'video' ? 'The app does not play video.' : PDF.test(n.n) ? 'The app does not render PDFs.' : 'The app has no preview for this type.';
-    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:.75rem"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:.75rem">Download it, then open it from the folder it lands in.</div>');
-    r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="open"]')) E.call('local_open', { path: pathOf(dir, n) }).catch(fail); });
+    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:.75rem"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:.75rem"><button class="btn sm f" data-pvx="dl">' + ic('download') + 'Download to open it</button></div>');
+    r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="open"]')) E.call('local_open', { path: pathOf(dir, n) }).catch(fail); else if (e.target.closest('[data-pvx="dl"]')) { A.transferNames(host, dir, [n.n]); c.close(); } });
     return r;
   }
   function showPreview(host, dir, n) {

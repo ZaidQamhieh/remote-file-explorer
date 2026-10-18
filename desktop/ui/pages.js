@@ -74,7 +74,20 @@
     el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp); document.body.classList.add('resizing'); document.body.style.cursor = getComputedStyle(el).cursor;
   }
   const refit = () => { [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); A.mainPane.render && A.mainPane.render(); };
-  A.toggleSide = () => { S.sideHide = !S.sideHide; save(); layout(); refit(); };
+  /* The columns cannot interpolate between one track and two, so the panel itself carries the motion: it slides in, and on the way out a copy of it fades away where it stood. */
+  A.toggleSide = () => {
+    const side = $('#side'); const calm = matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches; let ghost = null;
+    if (!S.sideHide && !calm && side.animate && side.isConnected) {
+      const r = side.getBoundingClientRect(); ghost = side.cloneNode(true);
+      for (const e of [ghost, ...ghost.querySelectorAll('*')]) for (const a of [...e.attributes]) if (a.name === 'id' || a.name.startsWith('data-')) e.removeAttribute(a.name);
+      ghost.setAttribute('aria-hidden', 'true'); ghost.inert = true;
+      Object.assign(ghost.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', margin: '0', pointerEvents: 'none', zIndex: '5' });
+      document.body.appendChild(ghost);
+    }
+    S.sideHide = !S.sideHide; save(); layout(); refit();
+    if (ghost) { const a = ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(1.5rem)' }], { duration: 160, easing: 'ease-in' }); const gone = () => ghost.remove(); a.onfinish = gone; a.oncancel = gone; setTimeout(gone, 500); }
+    else if (!S.sideHide && !calm && side.animate) side.animate([{ opacity: 0, transform: 'translateX(1.5rem)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  };
   const grip = $('#rszSide');
   grip.addEventListener('pointerdown', (e) => {
     const w0 = S.sideHide ? 0 : sideNow(); const dir = document.documentElement.dir === 'rtl' ? -1 : 1;

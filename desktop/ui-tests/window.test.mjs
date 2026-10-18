@@ -517,3 +517,22 @@ test("the indeterminate bar moves by transform, not by a layout property", async
   assert.doesNotMatch(kf.cssText, /left/);
   done();
 });
+
+test("folding the details panel moves it instead of snapping: it slides in, and a copy fades out where it stood", async () => {
+  const { w, d, A, errs, done } = await open();
+  A.go("files"); await sleep(200);
+  const calls = [];
+  const orig = w.HTMLElement.prototype.animate;
+  w.HTMLElement.prototype.animate = function (kf, o) { calls.push([this.id || this.getAttribute("aria-hidden") || this.className, kf[0].opacity, kf[1].opacity]); return { onfinish: null, oncancel: null }; };
+  A.toggleSide(); await sleep(30);
+  const ghost = d.querySelector('body > [aria-hidden="true"].side, body > aside[aria-hidden="true"]');
+  assert.ok(ghost, "no copy of the panel left to fade out");
+  assert.equal(ghost.querySelectorAll("[id],[data-rows]").length, 0, "the copy keeps ids or list hooks");
+  assert.equal(ghost.inert, true);
+  assert.ok(calls.some((c) => c[1] === 1 && c[2] === 0), "the copy does not fade out");
+  A.toggleSide(); await sleep(30);
+  assert.ok(calls.some((c) => c[1] === 0 && c[2] === 1), "the panel does not slide in");
+  w.HTMLElement.prototype.animate = orig;
+  assert.deepEqual(errs, []);
+  done();
+});

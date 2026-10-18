@@ -88,12 +88,20 @@
   /* What the preview body shows once the file is read; the dialog is already open with "Loading…". */
   async function build(host, dir, n) {
     const k = U.kindOf(n); const r = { html: '', init: null };
-    if (!E.fs.canRead(n)) { r.html = nop('lock', 'Can’t read this file', 'It has mode ' + U.permOctal(n.perm) + ' on the server. Ask the owner, or request access.'); return r; }
+    if (!E.fs.canRead(n)) { r.html = nop('lock', 'Can’t read this file', 'It has mode ' + U.permOctal(n.perm) + ' on the server. Ask the owner of the file to change it.'); return r; }
     if (IMG.test(n.n) || k === 'image') {
       if (n.b > 8 << 20 && host === 'local') { r.html = nop('image', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 8 MB preview limit.'); return r; }
       const src = host === 'local' ? await E.call('local_read_image', { path: pathOf(dir, n) }) : await E.call('files_thumb', { host, path: pathOf(dir, n), size: 1024 });
       r.html = '<div class="imgv"><div class="canvas" id="imC"><div class="im" id="imI"><img alt="' + esc(n.n) + '" id="imG"></div></div><div class="imc"><button class="ib sm" data-im="out" aria-label="Zoom out">' + ic('minus') + '</button><span id="imZ">Fit</span><button class="ib sm" data-im="in" aria-label="Zoom in">' + ic('plus') + '</button><button class="btn sm tx" data-im="fit">Fit</button><button class="btn sm tx" data-im="100">100%</button></div></div><div class="pvnote" id="imN">' + U.fmtBytes(n.b) + '</div>';
-      r.init = (c) => { const g = $('#imG', c.el); g.addEventListener('load', () => { $('#imN', c.el).textContent = g.naturalWidth + ' × ' + g.naturalHeight + ' px · ' + U.fmtBytes(n.b) + (host === 'local' ? '' : ' · preview'); }); g.src = src; let z = 1; const set = (v, lab) => { z = Math.max(0.25, Math.min(4, v)); $('#imI', c.el).style.transform = 'scale(' + z + ')'; $('#imZ', c.el).textContent = lab || Math.round(z * 100) + '%'; }; c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-im]'); if (!b) return; const a = b.dataset.im; if (a === 'in') set(z * 1.25); else if (a === 'out') set(z / 1.25); else if (a === 'fit') set(1, 'Fit'); else set(1.6, '100%'); }); };
+      r.init = (c) => {
+        const g = $('#imG', c.el); let z = 1, fitW = 0;
+        /* "Fit" is the picture scaled to the box; "100%" is its real pixel size; the box scrolls when it is larger. */
+        const set = (v, lab) => { z = Math.max(0.25, Math.min(16, v)); if (fitW) g.style.width = (fitW * z) + 'px'; $('#imZ', c.el).textContent = lab || Math.round(z * fitW / g.naturalWidth * 100) + '%'; };
+        g.addEventListener('load', () => { const cv = $('#imC', c.el); fitW = Math.max(1, Math.min(g.naturalWidth, g.naturalWidth * Math.min(cv.clientWidth / g.naturalWidth, cv.clientHeight / g.naturalHeight))); set(1, 'Fit'); $('#imN', c.el).textContent = g.naturalWidth + ' × ' + g.naturalHeight + ' px · ' + U.fmtBytes(n.b) + (host === 'local' ? '' : ' · ' + g.naturalWidth + ' px preview of the original'); });
+        g.addEventListener('error', () => { $('.pvbody', c.el).innerHTML = nop('image', 'Could not load this picture', 'The file may be damaged or not an image this app can show.'); });
+        g.src = src;
+        c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-im]'); if (!b) return; const a = b.dataset.im; if (a === 'in') set(z * 1.25); else if (a === 'out') set(z / 1.25); else if (a === 'fit') set(1, 'Fit'); else set(g.naturalWidth / fitW, '100%'); });
+      };
       return r;
     }
     if (ARC.test(n.n) && !(isText(n) && !ARC.test(n.n))) {
@@ -125,6 +133,8 @@
     const ctl = A.dialog({ title: n.n, width: 780, cls: 'fxpv', body: nav + '<div class="pvbody"><div class="pv nop"><span class="spin">' + ic('spinner') + '</span><b>Loading…</b></div></div><div class="pvmeta">' + U.KINDS[U.kindOf(n)] + ' · ' + U.fmtBytes(n.b) + ' · modified ' + U.fmtDate(n.mod) + (n.own ? ' · ' + esc(n.own) : '') + ' · ' + esc(n.perm) + '</div>', actions: acts, noFocus: true, onClose: () => { if (ctl && ctl.onGone) ctl.onGone(); },
       onOpen: (c) => {
         c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-pn]'); if (!b || b.disabled) return; const nx = sib[i + +b.dataset.pn]; if (!nx) return; c.close(); showPreview(host, dir, nx); });
+        const kn = (e) => { if (!c.el.isConnected) { document.removeEventListener('keydown', kn); return; } if (e.target.matches && e.target.matches('input,textarea,select')) return; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const b = $('[data-pn="' + (e.key === 'ArrowLeft' ? -1 : 1) + '"]', c.el); if (b && !b.disabled) { e.preventDefault(); b.click(); } } };
+        document.addEventListener('keydown', kn);
         build(host, dir, n).then((r) => { if (!c.el.isConnected) return; $('.pvbody', c.el).innerHTML = r.html; if (r.init) r.init(c); }).catch((e) => { if (c.el.isConnected) $('.pvbody', c.el).innerHTML = nop('alert-circle', 'Could not show this file', esc(e.message)); });
       } });
     return ctl;

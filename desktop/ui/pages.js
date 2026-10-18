@@ -295,7 +295,12 @@
   A.serverCard = serverCard;
   function pageServers() {
     const on = E.servers.filter((s) => s.state === 'online').length;
-    $('#stage').innerHTML = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<div class="sc add" data-sa="add" role="button" tabindex="0">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Host, key and fingerprint</span></div></div>';
+    const stage = $('#stage'); const html = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<div class="sc add" data-sa="add" role="button" tabindex="0">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Host, key and fingerprint</span></div></div>';
+    /* This runs on every tick: an unchanged page is left alone, and a rebuilt one gives focus back to the same control, so a press or a Tab stop is not lost. */
+    if (stage.querySelector('#sgrid') && stage._sv === html) return;
+    const at = document.activeElement; const key = at && stage.contains(at) ? [at.dataset.sa, at.dataset.id || at.dataset.sid] : null;
+    stage.innerHTML = html; stage._sv = html;
+    if (key && key[0]) { const back = [...stage.querySelectorAll('[data-sa]')].find((x) => x.dataset.sa === key[0] && (x.dataset.id || x.dataset.sid) === key[1]); if (back) back.focus({ preventScroll: true }); }
   }
   $('#stage').addEventListener('click', (e) => {
     const sa = e.target.closest('[data-sa]'); if (!sa || st.view !== 'servers') return; const id = sa.dataset.id; const s = id && E.server(id);

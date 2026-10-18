@@ -6,6 +6,9 @@
   /* One rem on screen, as a multiple of 16 px: the page scales with the window, so measurements in px are taken against it. */
   let unit = 0; A.u = () => unit || (unit = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16); A.uReset = () => { unit = 0; };
   addEventListener('resize', A.uReset);
+  /* The root size follows the window, so a resize changes every rem length at once; transitions would play that change as a lag. */
+  let resizeIdle = 0;
+  addEventListener('resize', () => { document.documentElement.classList.add('winsize'); clearTimeout(resizeIdle); resizeIdle = setTimeout(() => document.documentElement.classList.remove('winsize'), 200); });
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -32,7 +35,7 @@
     layer().appendChild(el); snackTimer = setTimeout(() => el.remove(), o.timeout || 6000);
   };
   /* A short fade-and-rise for content that has just been swapped in. */
-  A.ease = (el, o) => { if (el && el.animate) el.animate([{ opacity: 0, transform: 'translateY(' + ((o && o.y) || .5) + 'rem)' }, { opacity: 1, transform: 'none' }], { duration: (o && o.ms) || 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); };
+  A.ease = (el, o) => { if (el && el.animate && !(matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches)) el.animate([{ opacity: 0, transform: 'translateY(' + ((o && o.y) || .5) + 'rem)' }, { opacity: 1, transform: 'none' }], { duration: (o && o.ms) || 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); };
   A.dialog = (o) => {
     closeMenus();
     const sc = document.createElement('div'); sc.className = 'scrim';

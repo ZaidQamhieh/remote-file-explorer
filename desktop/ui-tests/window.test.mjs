@@ -440,3 +440,30 @@ test("a host address with markup in it cannot break out of a card attribute", as
   assert.deepEqual(errs, []);
   done();
 });
+
+test("a window resize switches transitions off while it lasts, so the layout does not lag behind the new root size", async () => {
+  const { w, d, done } = await open();
+  const html = d.documentElement;
+  assert.ok(!html.classList.contains("winsize"));
+  w.dispatchEvent(new w.Event("resize"));
+  assert.ok(html.classList.contains("winsize"), "no guard while resizing");
+  await sleep(300);
+  assert.ok(!html.classList.contains("winsize"), "the guard stays on after the resize stopped");
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).map((r) => r.cssText).join("\n");
+  assert.match(css, /html\.winsize[^{]*\{[^}]*transition:\s*none/);
+  done();
+});
+
+test("the Servers page keeps keyboard focus on the same control when a tick rebuilds it", async () => {
+  const { d, A, E, done } = await open();
+  A.go("servers"); await sleep(150);
+  const target = d.querySelector('#stage [data-sa="open"]');
+  const id = target.dataset.id;
+  target.focus();
+  assert.equal(d.activeElement, target);
+  const s = E.server(id); s.latency += 7; s.lastSeen += 1; E.emit("servers", s); await sleep(60);
+  const now = d.querySelector('#stage [data-sa="open"][data-id="' + id.replace(/"/g, '\\"') + '"]');
+  assert.ok(now, "the card is still drawn");
+  assert.equal(d.activeElement, now, "focus was lost in the rebuild");
+  done();
+});

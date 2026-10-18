@@ -39,14 +39,16 @@
   A.ease = (el, o) => { if (el && el.animate && !(matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches)) el.animate([{ opacity: .45 }, { opacity: 1 }], { duration: Math.min((o && o.ms) || 150, 150), easing: 'ease-out' }); };
   A.dialog = (o) => {
     closeMenus();
-    const sc = document.createElement('div'); sc.className = 'scrim';
+    /* The tabs of "add a computer" are one dialog: the open backdrop stays and only the box in it is swapped, in one step, so no frame is ever drawn without it. */
+    const reuse = A.dialogReuse && A.dialogReuse.sc.isConnected ? A.dialogReuse : null; A.dialogReuse = null;
+    const sc = reuse ? reuse.sc : document.createElement('div'); if (!reuse) sc.className = 'scrim';
     const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); if (/\bconn\b/.test(o.cls || '')) sc.classList.add('top'); /* the add-a-computer tabs share one top edge, so the tab bar stays put while the box changes height */ d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
     d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
     d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2>' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
     const df = $('.df', d);
-    const opener = document.activeElement;
+    const opener = reuse ? reuse.opener : document.activeElement;
     const close = () => { sc.remove(); document.removeEventListener('keydown', onKey, true); if (o.onClose) o.onClose(); if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function' && !$('.scrim .dlg')) opener.focus(); };
-    const ctl = { el: d, close, btn: {} };
+    const ctl = { el: d, sc, opener, close, btn: {}, retire: () => { document.removeEventListener('keydown', onKey, true); sc.removeEventListener('mousedown', onDown); if (o.onClose) o.onClose(); } };
     for (const a of o.actions || []) {
       const b = document.createElement('button'); b.className = 'btn ' + (a.kind || 'tx'); b.innerHTML = (a.icon ? ic(a.icon) : '') + esc(a.label); if (a.id) { b.dataset.id = a.id; ctl.btn[a.id] = b; }
       b.addEventListener('click', () => { const r = a.cb ? a.cb(ctl) : undefined; if (r !== false) close(); }); df.appendChild(b);
@@ -65,17 +67,10 @@
       else if (e.key === 'Enter' && o.enter && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('.menu')) { const b = $('[data-id="' + o.enter + '"]', d); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
     };
     document.addEventListener('keydown', onKey, true);
-    sc.addEventListener('mousedown', (e) => { if (e.target === sc && !o.modal) { if (o.beforeClose && o.beforeClose() === false) return; close(); } });
-    sc.appendChild(d); layer().appendChild(sc);
-    /* Switching between sibling dialogs (the tabs of "add a computer") morphs the open one into the next instead of closing and reopening. */
-    const from = A.dialogFrom; A.dialogFrom = null;
-    if (from && d.animate) {
-      sc.classList.add('still'); const to = d.getBoundingClientRect(); d.style.overflow = 'hidden';
-      const done = () => { d.style.overflow = ''; };
-      const same = Math.abs(from.width - to.width) < 1 && Math.abs(from.height - to.height) < 1;
-      if (same) done(); else { const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done; }
-      [...d.querySelectorAll('.db > :not(.fxtabs)')].forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out', fill: 'backwards' }));
-    }
+    sc._ctl = ctl;
+    const onDown = (e) => { if (e.target === sc && !o.modal) { if (o.beforeClose && o.beforeClose() === false) return; close(); } };
+    sc.addEventListener('mousedown', onDown);
+    if (reuse) { reuse.retire(); sc.classList.add('still'); sc.replaceChild(d, reuse.el); } else { sc.appendChild(d); layer().appendChild(sc); }
     if (o.onOpen) o.onOpen(ctl);
     const f = $('input,select', d); if (f && !o.noFocus) { f.focus(); if (f.select && f.type === 'text') f.select(); }
     return ctl;

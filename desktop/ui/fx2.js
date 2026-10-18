@@ -6,14 +6,13 @@
   const X2 = A.X2 = { auto: {}, code: {}, found: null };
   A.fx2 = {};
   const THUMB = /[?&](thumb|selftest)=1/.test(location.search);
-  const closeTop = () => { const df = $$('.scrim .df').pop(); const b = df && $('.btn', df); if (b) b.click(); };
   const fld = (id, label, val, ph, o) => { o = o || {}; return '<div class="fld"' + (o.style ? ' style="' + o.style + '"' : '') + '><label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + (o.type || 'text') + '" value="' + esc(val || '') + '" placeholder="' + esc(ph || '') + '" spellcheck="false" autocomplete="off"' + (o.max ? ' maxlength="' + o.max + '"' : '') + (o.mode ? ' inputmode="' + o.mode + '"' : '') + '><span class="err" id="' + id + 'e"></span></div>'; };
   const setErr = (ctl, id, m) => { const e = $('#' + id + 'e', ctl.el); if (e) e.textContent = m || ''; const i = $('#' + id, ctl.el); if (i) i.style.borderColor = m ? 'var(--err)' : ''; return !m; };
   const fail = (e) => A.snack((e && e.message) || String(e), { error: true });
 
   /* ================= adding a computer ================= */
   A.connTabs = (cur) => '<div class="seg fxtabs" role="tablist" aria-label="How to add a computer">' + [['manual', 'Manual'], ['code', 'Pairing code'], ['disc', 'Find on network']].map((t) => '<button role="tab" aria-selected="' + (cur === t[0]) + '" data-fx="conn.tab|' + t[0] + '" class="' + (cur === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('') + '</div>';
-  H['conn.tab'] = (tab, a2, b) => { if (b.classList.contains('on')) return; const dl = b.closest('.dlg'); A.dialogFrom = dl ? dl.getBoundingClientRect() : null; closeTop(); (tab === 'manual' ? A.serverDialog() : tab === 'code' ? codeDialog() : discDialog()); A.dialogFrom = null; };
+  H['conn.tab'] = (tab, a2, b) => { if (b.classList.contains('on')) return; const sc = b.closest('.scrim'); A.dialogReuse = sc && sc._ctl ? sc._ctl : null; (tab === 'manual' ? A.serverDialog() : tab === 'code' ? codeDialog() : discDialog()); A.dialogReuse = null; };
   /* The trust and sign-in dialogs follow a connection the user started here, one step after the other. */
   A.watchConnect = (id) => { X2.auto[id] = true; };
   const addAndOpen = (o, code) => {
@@ -34,7 +33,7 @@
   }
   function codeDialog() {
     A.dialog({
-      icon: 'plug', cls: 'conn', title: 'Add with a pairing code', width: 520,
+      icon: 'plug', cls: 'conn', title: 'New connection', width: 520,
       body: A.connTabs('code') + '<p class="fxp">On the other computer open <b>Devices → Pair a phone</b> in RFE, or run <span class="mono">rfe-agent pair</span>. Enter the address it shows and the 8-character code.</p>' + fld('pcn', 'Name', '', 'e.g. render-farm') + fld('pch', 'Address', '', '100.64.0.12:7443 or host.example.com', {}) + fld('pcc', 'Pairing code', '', 'ABCD 2345', { max: 9 }) + '<div class="hint" style="margin:0">' + ic('shield-check') + '<span>You still compare the server’s certificate fingerprint before the code is sent. The code works once and expires after a few minutes.</span></div>',
       enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Continue', kind: 'f', icon: 'plug', cb: (c) => {
         const g = (i) => $('#' + i, c.el).value.trim(); const name = g('pcn'), host = g('pch'), code = g('pcc').replace(/\s/g, '').toUpperCase(); let ok = true;
@@ -55,7 +54,7 @@
       el.innerHTML = found.length ? '<div class="fxsub" style="margin-bottom:.375rem">Found ' + found.length + (found.length === 1 ? ' computer' : ' computers') + ' running rfe-agent on this network.</div>' + found.map((f, i) => { const saved = E.servers.some((s) => s.addr === f.hostport); return '<div class="lrow"><div class="gi">' + ic('server') + '</div><div class="dm"><b>' + esc(f.name) + '</b><small>' + esc(f.hostport) + (f.version ? ' · agent ' + esc(f.version) : '') + '</small></div>' + (saved ? '<span class="tag">Saved</span>' : '<button class="btn sm f" data-fx="disc.add|' + i + '">Add</button>') + '</div>'; }).join('') : empty('search', 'Nothing found', 'No computer announced rfe-agent. It must be on the same Wi-Fi or cable network. For Tailscale machines use a pairing code or the address.');
     };
     const scan = (c) => { found = null; err = ''; body(c); E.call('discover_agents').then((l) => { found = l; }).catch((e) => { found = []; err = e.message; }).then(() => { if (c.el.isConnected) body(c); }); };
-    A.dialog({ icon: 'search', cls: 'conn', title: 'Find on network', width: 520, body: A.connTabs('disc') + '<div class="fxdisc"></div><p class="fxp" style="margin-top:.75rem">Only computers on the same Wi-Fi or cable network appear. Listing a computer does not trust it: you still compare its certificate.</p>', actions: [{ label: 'Close', kind: 'tx' }, { label: 'Scan again', kind: 't', icon: 'refresh', cb: (c) => { scan(c); return false; } }], noFocus: true,
+    A.dialog({ icon: 'plug', cls: 'conn', title: 'New connection', width: 520, body: A.connTabs('disc') + '<div class="fxdisc"></div><p class="fxp" style="margin-top:.75rem">Only computers on the same Wi-Fi or cable network appear. Listing a computer does not trust it: you still compare its certificate.</p>', actions: [{ label: 'Cancel', kind: 'tx' }, { label: 'Scan again', kind: 't', icon: 'refresh', cb: (c) => { scan(c); return false; } }], noFocus: true,
       onOpen: (c) => { scan(c); c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-fx^="disc.add"]'); if (!b) return; const f = found[+b.dataset.fx.split('|')[1]]; c.close(); addAndOpen({ name: f.name, host: f.hostport }); }); } });
   }
   const empty = (icn, t, s) => '<div class="fxempty">' + ic(icn, { size: 40 }) + '<b>' + t + '</b><span>' + s + '</span></div>';

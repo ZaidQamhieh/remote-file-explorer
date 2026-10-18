@@ -482,13 +482,12 @@ test("a scrolling file list drops its hover fades while it moves, and gets them 
   done();
 });
 
-test("switching pages never blanks or slides the page card: the card stays, its content dips softly", async () => {
+test("switching pages swaps the content at once: no fade, dip or slide", async () => {
   const { d, A, errs, done } = await open();
   const calls = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
   proto.animate = function (k) { calls.push({ el: this, k }); return { cancel() {}, finish() {} }; };
   for (const v of ["servers", "transfers", "files", "settings"]) { calls.length = 0; A.go(v); await sleep(30);
-    assert.ok(!calls.some((c) => c.el.id === "stage"), "the page card itself is animated on " + v);
-    for (const c of calls) for (const f of c.k) { assert.ok(!f.transform, "a slide on " + v); assert.ok(f.opacity === undefined || f.opacity >= 0.4, "fades from blank on " + v + ": " + f.opacity); } }
+    assert.equal(calls.length, 0, "a page switch to " + v + " animated " + calls.map((c) => c.el.id || c.el.className).join(", ")); }
   proto.animate = was;
   assert.deepEqual(errs, []);
   done();
@@ -549,7 +548,7 @@ test("folding the details panel moves it instead of snapping: it slides in, and 
   done();
 });
 
-test("switching add-a-computer tabs fades only the pane: header, tab bar and footer never blink", async () => {
+test("switching add-a-computer tabs swaps the contents at once: nothing fades or blinks", async () => {
   const { d, errs, done } = await open();
   d.querySelector(".fab").click(); await sleep(150);
   const hit = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
@@ -557,9 +556,20 @@ test("switching add-a-computer tabs fades only the pane: header, tab bar and foo
   d.querySelector('.dlg [data-fx^="conn.tab|code"]').click(); await sleep(50);
   proto.animate = was;
   const dlg = d.querySelector(".dlg");
-  const bad = hit.filter((el) => el === dlg || el.matches("h2,.di,.df,.fxtabs") || !el.closest(".db"));
-  assert.equal(bad.length, 0, "animated chrome: " + bad.map((e) => e.className || e.tagName).join(", "));
-  assert.ok(hit.some((el) => dlg.contains(el) && el.closest(".db")), "the pane should still fade in");
+  assert.equal(hit.length, 0, "a tab switch animated: " + hit.map((e) => e.className || e.tagName).join(", "));
+  assert.ok(dlg.querySelector(".fxtabs"), "the dialog still has its tab bar");
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the add-a-computer tabs are one dialog: the backdrop node is never removed and Escape still closes once", async () => {
+  const { w, d, errs, done } = await open();
+  d.querySelector(".fab").click(); await sleep(150);
+  const sc = d.querySelector(".scrim"); const removed = []; const mo = new w.MutationObserver((l) => l.forEach((r) => r.removedNodes.forEach((n) => removed.push(n)))); mo.observe(sc.parentNode, { childList: true });
+  for (const next of ["code", "disc", "manual", "disc"]) { d.querySelector('.dlg [data-fx^="conn.tab|' + next + '"]').click(); await sleep(60); assert.equal(d.querySelector(".scrim"), sc, "the backdrop was replaced on " + next); assert.equal(d.querySelectorAll(".scrim").length, 1); assert.equal(d.querySelectorAll(".scrim .dlg").length, 1); }
+  assert.equal(removed.length, 0, "the backdrop left the page during a switch");
+  d.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await sleep(60);
+  assert.equal(d.querySelectorAll(".scrim").length, 0, "Escape did not close the dialog after switching");
   assert.deepEqual(errs, []);
   done();
 });

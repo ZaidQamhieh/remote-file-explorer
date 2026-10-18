@@ -43,7 +43,7 @@
   /* ---------- routing / layout ---------- */
   A.go = (v) => {
     if (st.view === v && v !== 'files') { renderStage(); return; }
-    st.view = v; closePop(); renderAll(); [...$('#stage').children].forEach((c) => A.ease(c)); /* the card keeps its place; only what is on it eases in */ if (v === 'tools' && A.toolOpened) A.toolOpened();
+    st.view = v; closePop(); renderAll(); if (v === 'tools' && A.toolOpened) A.toolOpened();
   };
   function layout() {
     const m = $('#main'); m.classList.toggle('nosid', st.view !== 'files'); m.classList.toggle('nosheet', st.view === 'transfers');

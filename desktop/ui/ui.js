@@ -320,7 +320,7 @@
         const t = e.target; if (t.matches && t.matches('.pathin')) { setTimeout(() => { if (this.editPath) { this.editPath = false; this.render(); } }, 120); }
         if (t.matches && t.matches('input.rn')) setTimeout(() => { if (document.activeElement !== t && (this.renaming || this.creating)) { this.renaming = null; this.creating = false; this.renderRows(); } }, 150);
       });
-      el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderRows(); }); } }, true);
+      el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; /* rows slide under a still pointer: no hover fades while it moves */ e.target.classList.add('scrolling'); clearTimeout(this._scEnd); const rows = e.target; this._scEnd = setTimeout(() => rows.classList.remove('scrolling'), 140); if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderRows(); }); } }, true);
       /* drag and drop */
       el.addEventListener('dragstart', (e) => {
         const row = e.target.closest('[data-i]:not(svg)'); if (!row) return; const it = this.items[+row.dataset.i]; if (!it) return;

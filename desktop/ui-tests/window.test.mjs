@@ -467,3 +467,35 @@ test("the Servers page keeps keyboard focus on the same control when a tick rebu
   assert.equal(d.activeElement, now, "focus was lost in the rebuild");
   done();
 });
+
+const sheet = (d) => [...d.styleSheets].flatMap((s) => [...s.cssRules]).map((r) => r.cssText).join("\n");
+
+test("a scrolling file list drops its hover fades while it moves, and gets them back after", async () => {
+  const { w, d, A, done } = await open();
+  A.go("files"); await sleep(200);
+  const rows = d.querySelector("[data-rows]");
+  rows.dispatchEvent(new w.Event("scroll"));
+  assert.ok(rows.classList.contains("scrolling"), "no guard while scrolling");
+  await sleep(300);
+  assert.ok(!rows.classList.contains("scrolling"), "the guard stays on after the scroll stopped");
+  assert.match(sheet(d), /\[data-rows\]\.scrolling \.li[^{]*\{[^}]*transition:\s*none/);
+  done();
+});
+
+test("reduced motion: the entrance animations and fades are switched off, and the fade-and-rise helper does nothing", async () => {
+  const { w, d, A, done } = await open();
+  assert.match(sheet(d), /prefers-reduced-motion:\s*reduce[^]*transition-duration/);
+  const el = d.createElement("div"); let played = 0; el.animate = () => { played++; };
+  A.ease(el); assert.equal(played, 1, "ease does not play normally");
+  w.matchMedia = (q) => ({ matches: /reduced-motion/.test(q), addEventListener() {}, addListener() {} });
+  A.ease(el); assert.equal(played, 1, "ease plays with reduced motion on");
+  done();
+});
+
+test("the switch knob transitions only the properties it changes", async () => {
+  const { d, done } = await open();
+  const rule = [...d.styleSheets].flatMap((s) => [...s.cssRules]).find((r) => r.selectorText === ".sw::after");
+  assert.ok(rule, "rule found");
+  assert.doesNotMatch(rule.cssText, /transition:\s*all/);
+  done();
+});

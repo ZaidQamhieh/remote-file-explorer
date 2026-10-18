@@ -51,7 +51,7 @@ button{cursor:pointer}
 .srv{height:2.5rem;border-radius:.6rem;border:1px solid transparent;background:var(--sc-high);padding:0 .625rem 0 .75rem;display:inline-flex;align-items:center;gap:.5rem;font-weight:500;color:var(--on-surface);white-space:nowrap}
 .srv:hover{background:var(--hover)}
 .srv .dot{width:.5rem;height:.5rem;border-radius:.25rem;background:var(--ok-dot);flex:none}
-.srv .dot.lost,.srv .dot.offline{background:var(--err)}.srv .dot.connecting,.srv .dot.trust{background:var(--amber-dot);animation:pulse 1s infinite}.srv .dot.disconnected{background:var(--outline)}.srv .dot.refused{background:var(--err)}.srv .dot.login{background:var(--amber-dot)}
+.srv .dot.lost,.srv .dot.offline,.srv .dot.refused{background:var(--err)}.srv .dot.connecting,.srv .dot.trust,.srv .dot.login{background:var(--amber-dot);animation:pulse 1s infinite}.srv .dot.disconnected{background:var(--outline)}.srv .dot.refused{background:var(--err)}.srv .dot.login{background:var(--amber-dot)}
 .srv small{color:var(--on-var);font-weight:400}
 .srv .ic{font-size:1.125rem;color:var(--on-var)}
 .top .sp{flex:0 0 0}
@@ -318,6 +318,8 @@ button{cursor:pointer}
 .chipst.online{background:color-mix(in srgb,var(--ok-dot) 20%,var(--surface));color:var(--ok)}
 .chipst.lost,.chipst.offline{background:var(--err-c);color:var(--on-err-c)}.chipst.lost i,.chipst.offline i{background:var(--err)}
 .chipst.connecting,.chipst.trust{background:var(--warn-c);color:var(--on-warn-c)}.chipst.connecting i,.chipst.trust i{background:var(--amber-dot);animation:pulse 1s infinite}
+.chipst.login{background:var(--warn-c);color:var(--on-warn-c)}.chipst.login i{background:var(--amber-dot)}
+.chipst.refused{background:var(--err-c);color:var(--on-err-c)}.chipst.refused i{background:var(--err)}
 .chipst.disconnected i{background:var(--outline)}
 .sc .meta{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:.5rem;font-size:.8125rem}
 .sc .meta small{display:block;color:var(--on-var);font-size:.6875rem;text-transform:uppercase;letter-spacing:.05em}
@@ -331,7 +333,7 @@ button{cursor:pointer}
 .sc .note .ic{font-size:1rem;margin-top:.125rem;flex:none}
 .sc .note.w{background:var(--warn-bg);border:1px solid var(--warn-bd)}.sc .note.e{background:var(--err-bg);border:1px solid var(--err-bd)}
 .sc .ac{display:flex;gap:.5rem;margin-top:auto}
-.sc.add{border-style:dashed;align-items:center;justify-content:center;color:var(--primary);cursor:pointer;gap:.375rem}
+.sc.add{font:inherit;text-align:center;border-style:dashed;align-items:center;justify-content:center;color:var(--primary);cursor:pointer;gap:.375rem}
 .sc.add:hover{background:var(--hover)}.sc.add .ic{font-size:1.875rem}
 .sum{display:flex;gap:.75rem;margin:0 0 1.125rem;flex-wrap:wrap}
 .sum div{background:var(--surface);border:1px solid var(--outline-var);border-radius:.875rem;padding:.625rem 1.125rem;min-width:8.75rem}

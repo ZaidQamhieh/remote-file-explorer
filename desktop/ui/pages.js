@@ -159,7 +159,7 @@
   A.runQuery = (v) => { const q = $('#q'); if (q) q.value = v; runQuery(v); };
   function renderChip() {
     const h = A.mainPane.host; const s = E.server(h) || { name: 'No server', state: 'disconnected', latency: 0, via: '' }; const chip = $('#chip'); if (!chip) return;
-    const state = h === 'local' ? 'online' : s.state; const lat = h === 'local' ? 'local files' : state === 'online' ? s.latency + ' ms · ' + s.via : state === 'lost' ? 'connection lost' : state === 'offline' ? 'offline' : state === 'connecting' ? 'connecting…' : state === 'trust' ? 'verify key' : state === 'refused' ? 'key changed' : 'not connected';
+    const state = h === 'local' ? 'online' : s.state; const lat = h === 'local' ? 'local files' : state === 'online' ? s.latency + ' ms · ' + s.via : state === 'lost' ? 'connection lost' : state === 'offline' ? 'offline' : state === 'connecting' ? 'connecting…' : state === 'trust' ? 'verify key' : state === 'refused' ? 'key changed' : state === 'login' ? 'sign in needed' : 'not connected';
     const L = +s.latency || 0, bars = state !== 'online' ? 0 : h === 'local' ? 4 : L < 30 ? 4 : L < 80 ? 3 : L < 200 ? 2 : 1;
     chip.innerHTML = '<i class="dot ' + state + '"></i>' + esc(A.hostName(h)) + (bars ? '<span class="sig" aria-hidden="true">' + [1, 2, 3, 4].map((n) => '<i' + (n > bars ? ' class="off"' : '') + '></i>').join('') + '</span>' : '') + '<small>' + esc(lat) + '</small>' + ic('chevron-down');
     const q = $('#q'); if (q) q.placeholder = 'Search in ' + (h === 'local' ? 'this computer' : s.name);
@@ -167,7 +167,7 @@
   function serverMenu(btn) {
     const r = btn.getBoundingClientRect();
     const dotc = (s) => (s === 'online' ? 'var(--ok-dot)' : s === 'lost' || s === 'offline' || s === 'refused' ? 'var(--err)' : s === 'disconnected' ? 'var(--outline)' : 'var(--amber-dot)');
-    const items = [{ head: 'Browse on' }, { dot: 'var(--primary)', label: 'This computer', sub: 'local', onClick: () => A.setMainHost('local') }, '-'].concat(E.servers.map((s) => ({ dot: dotc(s.state), label: s.name, sub: s.state === 'online' ? s.latency + ' ms' : s.state, onClick: () => { if (st.view !== 'files') A.go('files'); A.setMainHost(s.id); if (s.state === 'disconnected') E.connect(s.id); } })), '-', { icon: 'server', label: 'Manage servers…', onClick: () => A.go('servers') }, { icon: 'plus', label: 'New connection…', onClick: () => A.serverDialog() });
+    const items = [{ head: 'Browse on' }, { dot: 'var(--primary)', label: 'This computer', sub: 'local', onClick: () => A.setMainHost('local') }, '-'].concat(E.servers.map((s) => ({ dot: dotc(s.state), label: s.name, sub: s.state === 'online' ? s.latency + ' ms' : (STL[s.state] || s.state).toLowerCase(), onClick: () => { if (st.view !== 'files') A.go('files'); A.setMainHost(s.id); if (s.state === 'disconnected') E.connect(s.id); } })), '-', { icon: 'server', label: 'Manage servers…', onClick: () => A.go('servers') }, { icon: 'plus', label: 'New connection…', onClick: () => A.serverDialog() });
     A.menu(r.left, r.bottom + 6, items.concat(A.favItems ? A.favItems() : []));
   }
   let popOpen = null;
@@ -293,7 +293,7 @@
     else if (s.state === 'lost') { note = '<div class="note w">' + ic('wifi-off') + '<span>Lost ' + Math.round((E.now() - s.lostAt) / 1000) + ' s ago. ' + (S.autoReconnect ? 'Retrying in ' + Math.max(0, Math.ceil(s.retryIn)) + ' s. Transfers are paused.' : 'Auto-reconnect is off.') + '</span></div>'; act = B('retry', 'Retry now', 'f', 'refresh') + B('edit', 'Edit', ''); }
     else if (s.state === 'offline') { note = '<div class="note e">' + ic('alert-circle') + '<span>' + esc(s.error || 'Host did not answer on ' + s.host + ':' + s.port) + '. Last seen ' + (s.lastSeen ? A.ago(s.lastSeen) : 'never') + '.</span></div>'; act = B('retry', 'Try again', 'f', 'refresh') + B('edit', 'Edit', ''); }
     else if (s.state === 'connecting') { note = '<div class="note w">' + ic('spinner') + '<span>Contacting ' + esc(s.host) + '…</span></div>'; act = B('cancel', 'Cancel', ''); }
-    else if (s.state === 'login') { note = '<div class="note w">' + ic('user') + '<span>' + esc(s.msg || 'Signed out on this host. Sign in to continue.') + '</span></div>'; act = B('signin', 'Sign in', 'f', 'user') + B('cancel', 'Cancel', ''); }
+    else if (s.state === 'login') { note = '<div class="note w">' + ic('user') + '<span>' + esc(s.msg && !/^not signed in/i.test(s.msg) ? s.msg : 'This server no longer accepts this computer’s login. Sign in again, or ask its owner.') + '</span></div>'; act = B('signin', 'Sign in', 'f', 'user') + B('cancel', 'Disconnect', ''); }
     else if (s.state === 'trust') { note = '<div class="note w">' + ic('shield') + '<span>Unknown host key. Review it and compare it with the one on the server before you trust it.</span></div>'; act = B('trust', 'Review key…', 'f', 'shield-check') + B('cancel', 'Cancel', ''); }
     else if (s.state === 'refused') { note = '<div class="note e">' + ic('shield') + '<span>The certificate changed. Connection refused to protect your files.</span></div>'; act = B('reverify', 'Review…', 'f', 'shield-check') + B('diag', 'Diagnose', ''); }
     else act = B('connect', 'Connect', 'f', 'plug') + B('edit', 'Edit', '');
@@ -306,7 +306,7 @@
   A.serverCard = serverCard;
   function pageServers() {
     const on = E.servers.filter((s) => s.state === 'online').length;
-    const stage = $('#stage'); const html = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<div class="sc add" data-sa="add" role="button" tabindex="0">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Host, key and fingerprint</span></div></div>';
+    const stage = $('#stage'); const html = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<button type="button" class="sc add" data-sa="add">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Address, key and fingerprint</span></button></div>';
     /* This runs on every tick: an unchanged page is left alone, and a rebuilt one gives focus back to the same control, so a press or a Tab stop is not lost. */
     if (stage.querySelector('#sgrid') && stage._sv === html) return;
     const at = document.activeElement; const key = at && stage.contains(at) ? [at.dataset.sa, at.dataset.id || at.dataset.sid] : null;

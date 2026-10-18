@@ -30,7 +30,7 @@
         : X.devices.length ? X.devices.map(row).join('') : '<div class="fxempty">' + ic('phone', { size: 40 }) + '<b>' + (X.devBusy ? 'Loading…' : 'No paired devices') + '</b></div>';
     const nOn = X.devices.filter(isOnline).length;
     const ev = (X.audit || []).slice(0, 4).map((h) => '<div class="evrow">' + ic('shield-check') + '<span>' + esc(h.text) + '</span><small>' + rel(h.at) + '</small></div>').join('');
-    stage().innerHTML = '<h2 class="pt">Devices</h2>' + (s ? '<p class="ps">' + esc(s.name) + '</p>' : '') + '<div class="dvg">' + left1 + '<div class="dvr">' + pend + inboxNote + ctl +
+    stage().innerHTML = '<h2 class="pt">Devices</h2>' + (s ? '<p class="ps">Showing devices paired with <b>' + esc(s.name) + '</b>. Pick another server in the pairing card.</p>' : '') + '<div class="dvg">' + left1 + '<div class="dvr">' + pend + inboxNote + ctl +
       '<div class="fxc"><div class="fxh"><span class="fxi">' + ic('shield-check') + '</span><div><b>Paired devices</b><small>' + nOn + ' of ' + X.devices.length + ' online' + (X.devForbidden && X.devices.length ? ' · permissions need the owner sign-in' : '') + '</small></div></div>' + list + '</div>' +
       '' + (ev || X.auditErr ? '<div class="fxc"><div class="fxh"><div><b>Security events</b></div><button class="btn tx sm" style="margin-left:auto" data-fx="hist.audit">View all</button></div>' + (ev || '<div class="fxempty"><span>' + esc(X.auditErr) + '</span></div>') + '</div>' : '') + '</div></div>';
     if (s && E.now() - X.devAt > STALE && !X.devBusy) A.loadDevices();
@@ -117,11 +117,16 @@
   Object.assign(H, {
     'store.host': (id) => { X.storeHost = id; X.dupes = null; X.big = null; A.pageTools(); loadBig(); }, 'store.show': (p) => A.openPath(X.storeHost, p, true), 'big.scan': () => loadBig(),
     'dup.scan': () => findDupes(X.storeHost),
-    'dup.clean': async (gi) => {
-      const g = X.dupes[+gi]; if (!g) return; let n = 0;
-      for (const f of g.slice(1)) { try { await E.call('files_trash', { host: X.storeHost, path: f.path }); n++; E.fs.drop(X.storeHost, U.parentOf(f.path)); } catch (e) { fail(e); break; } }
-      if (n) { audit('Moved ' + plural(n, 'duplicate', 'duplicates') + ' to Trash on ' + hostLabel(X.storeHost)); A.snack('Moved ' + plural(n, 'duplicate', 'duplicates') + ' to Trash'); X.trashAt = 0; }
-      X.dupes.splice(+gi, 1); A.pageTools();
+    'dup.clean': (gi) => {
+      const g = X.dupes[+gi]; if (!g) return; const older = g.slice(1);
+      /* Same name and size is not proof the content is the same, so the paths are listed first. */
+      A.dialog({ icon: 'trash', cls: 'danger', title: 'Move ' + plural(older.length, 'copy', 'copies') + ' to Trash?', width: 520, body: 'These files have the same name and size as ' + esc(g[0].path) + '. Their content was not compared.<ul class="legend" style="margin-top:.625rem">' + older.map((f) => '<li class="mono">' + esc(f.path) + '</li>').join('') + '</ul>', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Move to Trash', kind: 'ed', icon: 'trash', cb: async (c) => {
+        c.btn.go.disabled = true; let n = 0; const left = [];
+        for (const f of older) { try { await E.call('files_trash', { host: X.storeHost, path: f.path }); n++; E.fs.drop(X.storeHost, U.parentOf(f.path)); } catch (e) { fail(e); left.push(f); } }
+        if (n) { audit('Moved ' + plural(n, 'duplicate', 'duplicates') + ' to Trash on ' + hostLabel(X.storeHost)); A.snack('Moved ' + plural(n, 'duplicate', 'duplicates') + ' to Trash', { action: 'Show Trash', onAction: () => A.go('tools') }); X.trashAt = 0; }
+        if (left.length) X.dupes[+gi] = [g[0]].concat(left); else X.dupes.splice(+gi, 1);
+        c.close(); A.pageTools(); return false;
+      } }] });
     }
   });
 
@@ -140,7 +145,7 @@
     'trash.pick': (k) => { X.trashSel.has(k) ? X.trashSel.delete(k) : X.trashSel.add(k); A.pageTools(); },
     'trash.all': () => { const rows = A.trashRows(); if (rows.every((r) => X.trashSel.has(r.k))) X.trashSel.clear(); else rows.forEach((r) => X.trashSel.add(r.k)); A.pageTools(); },
     'trash.restore': () => F.restoreRows(selRows()),
-    'trash.purge': () => { const r = selRows(); if (!r.length) return; A.dialog({ icon: 'trash', cls: 'danger', title: 'Delete ' + plural(r.length, 'item', 'items') + ' forever?', body: 'This can’t be undone.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Delete forever', kind: 'ed', icon: 'trash', cb: () => F.purgeRows(r) }] }); },
+    'trash.purge': () => { const r = selRows(); if (!r.length) return; A.dialog({ icon: 'trash', cls: 'danger', title: 'Delete ' + plural(r.length, 'item', 'items') + ' forever?', body: [...new Set(r.map((x) => hostLabel(x.t.host)))].join(', ') + ': these ' + plural(r.length, 'item', 'items') + ' will be deleted forever. This can’t be undone.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Delete forever', kind: 'ed', icon: 'trash', cb: () => F.purgeRows(r) }] }); },
     'trash.empty': () => { const r = A.trashRows(); if (!r.length) { A.snack('Trash is already empty'); return; } A.dialog({ icon: 'trash', cls: 'danger', title: 'Empty Trash?', body: plural(r.length, 'item', 'items') + ' (' + U.fmtBytes(r.reduce((a, x) => a + x.n.b, 0)) + ') on ' + [...new Set(r.map((x) => hostLabel(x.t.host)))].join(', ') + ' will be deleted forever.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Empty Trash', kind: 'ed', icon: 'trash', cb: () => F.purgeRows(r) }] }); }
   });
 
@@ -150,7 +155,7 @@
     return '<div class="fxc">' + head('link', 'Share links', 'Temporary download links for single files', '<button class="btn sm f" data-fx="share.new">' + ic('plus') + 'New link from selection</button>') + errLine(X.sharesErr) + (rows || (X.sharesBusy && !X.sharesAt ? empty('link', 'Loading…', '') : empty('link', 'No links yet', 'Right-click a file in Files and choose “Share link…”. The server keeps only a hash of each link, so a link can be turned off here but not shown again.'))) + '</div>';
   }
   Object.assign(H, {
-    'share.revoke': (i) => { const s = X.shares[+i]; if (!s) return; E.call('share_revoke_link', { host: s.host, tokenHash: s.hash }).then(() => { audit('Share link for ' + s.name + (s.exp > E.now() ? ' turned off' : ' removed')); A.snack((s.exp > E.now() ? 'Turned off the link for ' : 'Removed ') + s.name); X.shares.splice(+i, 1); A.pageTools(); }).catch(fail); },
+    'share.revoke': (i) => { const s = X.shares[+i]; if (!s) return; const go = () => E.call('share_revoke_link', { host: s.host, tokenHash: s.hash }).then(() => { audit('Share link for ' + s.name + (s.exp > E.now() ? ' turned off' : ' removed')); A.snack((s.exp > E.now() ? 'Turned off the link for ' : 'Removed ') + s.name); X.shares.splice(+i, 1); A.pageTools(); }).catch(fail); if (s.exp > E.now()) A.dialog({ icon: 'link', cls: 'danger', title: 'Turn off this link?', body: 'Anyone with the link for ' + esc(s.name) + ' will no longer be able to download it. A link can’t be shown again once made.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Turn off', kind: 'ed', cb: () => { go(); } }] }); else go(); },
     'share.new': () => { const m = A.mainPane; const s = m.selected(); if (!m.online() || m.host === 'local' || s.length !== 1 || s[0].t !== 'file') { A.snack('Select one file on a connected server in Files first.', { error: true, action: 'Open Files', onAction: () => A.go('files') }); return; } A.shareDialog(m.host, m.path, s[0]); }
   });
 
@@ -172,14 +177,18 @@
     } catch (e) { fail(e); }
   }
   Object.assign(H, {
-    'sync.run': (id) => runRule(X.rules.find((r) => r.id === id)), 'sync.del': (id) => { X.rules = X.rules.filter((r) => r.id !== id); F.persist(); A.pageTools(); },
+    'sync.run': (id) => runRule(X.rules.find((r) => r.id === id)), 'sync.del': (id) => { const gone = X.rules.find((r) => r.id === id); const at = X.rules.indexOf(gone); X.rules = X.rules.filter((r) => r.id !== id); F.persist(); A.pageTools(); if (gone) A.snack('Removed the rule “' + gone.name + '”', { action: 'Undo', onAction: () => { X.rules.splice(Math.min(at, X.rules.length), 0, gone); F.persist(); A.pageTools(); } }); },
     'sync.new': () => {
       let dir = 'up'; const on = online(); if (!on.length) { A.snack('Connect a server first.', { error: true }); return; }
       A.dialog({ icon: 'refresh', title: 'New sync rule', width: 520, body: '<div class="fld"><label>Name</label><input id="srn" placeholder="e.g. Release builds" spellcheck="false"></div><div class="fld"><label>Server</label><select id="srh">' + on.map((s) => '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>').join('') + '</select></div><div class="fld two"><div class="fld" style="margin:0"><label>This computer</label><input id="srl" value="' + esc(E.settings.downloadDir || (E.local && E.local.path) || '') + '" spellcheck="false"></div><div class="fld" style="margin:0"><label>On the server</label><input id="srr" value="/" spellcheck="false"></div></div><div class="fld"><label>Direction</label><div class="seg"><button data-d="up" class="on">This computer → server</button><button data-d="down">Server → this computer</button></div></div><span class="err" id="sre"></span>', enter: 'go',
         actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Create rule', kind: 'f', cb: (c) => {
           const g = (i) => $(i, c.el).value.trim(); const name = g('#srn') || 'Untitled rule', host = g('#srh'), local = U.norm(g('#srl')), remote = U.norm(g('#srr'));
-          Promise.all([E.fs.load('local', local), E.fs.load(host, remote)]).then(() => { X.rules.push({ id: 'r' + Date.now().toString(36), name, local, host, remote, dir, last: 0, ids: [] }); F.persist(); A.snack('Rule “' + name + '” created'); A.pageTools(); })
-            .catch((e) => { A.snack('That folder can’t be opened: ' + e.message, { error: true }); });
+          let er = $('#sre', c.el); if (!er) { er = document.createElement('div'); er.id = 'sre'; er.className = 'hint bad'; er.setAttribute('role', 'alert'); $('.db', c.el).appendChild(er); } er.textContent = '';
+          const lab = c.btn.go.textContent; c.btn.go.disabled = true; c.btn.go.textContent = 'Checking…';
+          const chk = (h, p, what) => E.fs.load(h, p).catch((e) => { throw new Error(what + ' folder ' + p + ' can’t be opened: ' + e.message); });
+          Promise.all([chk('local', local, 'The computer'), chk(host, remote, 'The server')]).then(() => { X.rules.push({ id: 'r' + Date.now().toString(36), name, local, host, remote, dir, last: 0, ids: [] }); F.persist(); A.snack('Rule “' + name + '” created'); c.close(); A.pageTools(); })
+            .catch((e) => { er.textContent = e.message; c.btn.go.disabled = false; c.btn.go.textContent = lab; });
+          return false;
         } }],
         onOpen: (c) => c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) { dir = b.dataset.d; $$('[data-d]', c.el).forEach((x) => x.classList.toggle('on', x === b)); } }) });
     }

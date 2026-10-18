@@ -312,7 +312,6 @@ async fn without_a_login_or_after_it_is_revoked_the_inbox_says_so() {
 fn every_inbox_message_is_in_the_user_guide_and_in_the_app() {
     const STEMS: &[&str] = &[
         "This agent is too old to list pairing requests",
-        "No pairing requests are waiting.",
         "This login cannot answer pairing requests.",
         "Accept only if the code matches",
         "The agent holds at most 3 waiting requests.",

@@ -433,7 +433,6 @@ Messages from this app:
 | `hosts.json` was written by a newer version of this app | A newer app wrote the list. Update this app, or delete `hosts.json` to start over as above. |
 | Signed out on this host. Sign in to continue. | You switched to a host that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
 | Type the new host's address. Your current login stays saved. | Shown when you press Add another host. Nothing was changed on the host you were using. |
-| No host is saved yet. | The list is empty: connect to an agent from the first screen. |
 | This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
 | This pairing code has expired. Generate a new one. | The code's 10 minutes are up and it was removed from the window. Press **Generate a code**. |
 | unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |

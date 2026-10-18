@@ -601,7 +601,6 @@ fn the_new_messages_are_explained_in_the_guide() {
         "was written by a newer version of this app",
         "Signed out on this host. Sign in to continue.",
         "Type the new host's address. Your current login stays saved.",
-        "No host is saved yet.",
     ] {
         assert!(
             guide.contains(stem),

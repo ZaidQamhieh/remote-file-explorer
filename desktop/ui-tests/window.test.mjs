@@ -499,3 +499,21 @@ test("the switch knob transitions only the properties it changes", async () => {
   assert.doesNotMatch(rule.cssText, /transition:\s*all/);
   done();
 });
+
+test("the loading skeleton waits before it appears, so a fast folder load does not flash it", async () => {
+  const { d, done } = await open();
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".skel").map((r) => r.cssText).join(" ");
+  assert.ok(css, ".skel rule found");
+  assert.match(css, /opacity:\s*0/);
+  assert.match(css, /animation:[^;]*skelin[^;]*\.15s/);
+  done();
+});
+
+test("the indeterminate bar moves by transform, not by a layout property", async () => {
+  const { d, done } = await open();
+  const kf = [...d.styleSheets].flatMap((s) => [...s.cssRules]).find((r) => r.name === "ind");
+  assert.ok(kf, "keyframes found");
+  assert.match(kf.cssText, /transform/);
+  assert.doesNotMatch(kf.cssText, /left/);
+  done();
+});

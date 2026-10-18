@@ -162,6 +162,7 @@ button{cursor:pointer}
 .es .steps div.c .ic{animation:spin 1s linear infinite;color:var(--primary)}
 .es .fp{font:.75rem/1.6 var(--mono);background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:.625rem;padding:.625rem .75rem;margin:0 0 1rem;word-break:break-all;text-align:left}
 .skel{padding:.5rem 1.25rem;display:grid;gap:.625rem}
+.skel{opacity:0;animation:skelin .12s ease .15s forwards}@keyframes skelin{to{opacity:1}}
 .skel i{display:block;height:1.75rem;border-radius:.625rem;background:linear-gradient(90deg,var(--sc-high),var(--sc),var(--sc-high));background-size:200% 100%;animation:shim 1.1s linear infinite}
 @keyframes shim{to{background-position:-200% 0}}
 /* side */
@@ -354,7 +355,7 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 .prog{display:flex;align-items:center;gap:.75rem;color:var(--on-var);margin:.5rem 0 .875rem;font-size:.8125rem}
 .prog .lin{flex:1;max-width:20rem}
 .prog .lin.ind i{width:30%;animation:ind 1.1s ease-in-out infinite}
-@keyframes ind{0%{left:-30%}100%{left:100%}}
+@keyframes ind{0%{transform:translateX(-100%)}100%{transform:translateX(333.33%)}}
 .setl{display:grid;grid-template-columns:13rem minmax(0,44rem);gap:1.5rem;align-items:start}
 .setn{display:flex;flex-direction:column;gap:.125rem;position:sticky;top:0}
 .setn button{height:2.5rem;padding:0 1rem;border:0;border-radius:1.25rem;background:none;color:var(--on-surface);font:inherit;text-align:left;cursor:pointer}

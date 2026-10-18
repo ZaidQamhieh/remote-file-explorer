@@ -322,7 +322,7 @@
       });
       el.addEventListener('focusout', (e) => {
         const t = e.target; if (t.matches && t.matches('.pathin')) { setTimeout(() => { if (this.editPath) { this.editPath = false; this.render(); } }, 120); }
-        if (t.matches && t.matches('input.rn')) setTimeout(() => { if (document.activeElement !== t && (this.renaming || this.creating)) { this.renaming = null; this.creating = false; this.renderRows(); } }, 150);
+        if (t.matches && t.matches('input.rn')) setTimeout(() => { if (document.activeElement === t || !(this.renaming || this.creating)) return; /* clicking away keeps what was typed; an empty or unchanged name just closes the box */ const v = t.value.trim(); if (t.isConnected && v && !this.renameBusy && (this.creating || v !== this.renaming)) { this.creating ? this.commitNew(t) : this.commitRename(t); return; } this.renaming = null; this.creating = false; this.renderRows(); }, 150);
       });
       el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; /* rows slide under a still pointer: no hover fades while it moves */ e.target.classList.add('scrolling'); clearTimeout(this._scEnd); const rows = e.target; this._scEnd = setTimeout(() => rows.classList.remove('scrolling'), 140); if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderRows(); }); } }, true);
       /* drag and drop */

@@ -22,7 +22,7 @@
     const raw = typeof e === 'string' ? e : (e && e.message) || String(e);
     const m = /\(([A-Z][A-Z_]+)\)$/.exec(raw);
     const err = new Error(raw.replace(/^The agent says: /, '').replace(/ \([A-Z][A-Z_]+\)$/, ''));
-    err.code = m ? m[1] : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|could not connect|cannot connect|cannot reach|connection (?:refused|reset|closed|failed)|connect error|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
+    err.code = m ? m[1] : /too old/i.test(raw) ? 'INCOMPATIBLE' : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|could not connect|cannot connect|cannot reach|connection (?:refused|reset|closed|failed)|connect error|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
     err.raw = raw;
     return err;
   }
@@ -321,12 +321,12 @@
       if (snap.status) { s.uptime = snap.status.uptimeSeconds || 0; s.platform = snap.status.platform || ''; }
       s.metrics = snap.metrics || null; s.metricsForbidden = !!snap.metricsForbidden; s.statusNote = snap.statusNote || ''; s.metricsNote = snap.metricsNote || '';
       s.lastSeen = now(); s.reachable = true; s.signedIn = true;
-      const was = s.state; setState(s, 'online');
+      const was = s.state; s.incompatible = false; setState(s, 'online');
       if (was !== 'online') { const dirs = dirsOf(s.id); for (const k of Object.keys(dirs)) if (dirs[k].state === 'error') delete dirs[k]; } /* folders that failed while it was away are read again */
       if (was !== 'online') { log('conn', 'Connected to ' + s.name + ' · ' + s.latency + ' ms'); if (settings.notifyDone && was !== 'connecting' ) note('ok', s.name + ' is back'); resumeHost(s.id); if (!s.roots.length) loadRoots(s).catch(() => {}); }
     } catch (e) {
       if (s.userOff) return;
-      s.error = e.message;
+      s.error = e.message; s.incompatible = e.code === 'INCOMPATIBLE'; /* an agent older than this app needs: shown as such, not as a dead address */
       if (e.code === 'UNAUTHORIZED') { s.signedIn = false; setState(s, 'login', e.message); }
       else if (e.code === 'CERT') { await flagCert(s).catch(() => {}); }
       else if (s.state === 'online' || s.state === 'lost') {

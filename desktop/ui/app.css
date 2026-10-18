@@ -681,7 +681,7 @@ body.resizing .main{transition:none}
 [data-rows].scrolling .li,[data-rows].scrolling .li .lead{transition:none}
 html.winsize *,html.winsize *::before,html.winsize *::after{transition:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important}.dlg,.scrim,.snack,.menu{animation:none}}
-.side,.sheet{transition:opacity .18s ease}
+
 /* Tools: the cards share one height, and an empty card centres its message while a full one lists from the top */
 .tgrid>.fxc{display:flex;flex-direction:column;min-height:12rem}.tgrid>.fxc.wide{min-height:9rem}
 .tgrid>.fxc>.fxempty{margin:auto;padding:.5rem}

@@ -554,20 +554,18 @@ test("the indeterminate bar moves by transform, not by a layout property", async
   done();
 });
 
-test("folding the details panel moves it instead of snapping: it slides in, and a copy fades out where it stood", async () => {
+test("folding the details panel slides it in by transform only: never faded, no copy left behind", async () => {
   const { w, d, A, errs, done } = await open();
   A.go("files"); await sleep(200);
   const calls = [];
   const orig = w.HTMLElement.prototype.animate;
-  w.HTMLElement.prototype.animate = function (kf, o) { calls.push([this.id || this.getAttribute("aria-hidden") || this.className, kf[0].opacity, kf[1].opacity]); return { onfinish: null, oncancel: null }; };
+  w.HTMLElement.prototype.animate = function (kf, o) { calls.push(kf); return { onfinish: null, oncancel: null }; };
   A.toggleSide(); await sleep(30);
-  const ghost = d.querySelector('body > [aria-hidden="true"].side, body > aside[aria-hidden="true"]');
-  assert.ok(ghost, "no copy of the panel left to fade out");
-  assert.equal(ghost.querySelectorAll("[id],[data-rows]").length, 0, "the copy keeps ids or list hooks");
-  assert.equal(ghost.inert, true);
-  assert.ok(calls.some((c) => c[1] === 1 && c[2] === 0), "the copy does not fade out");
+  assert.equal(d.querySelectorAll('body > [aria-hidden="true"]').length, 0, "a copy of the panel is left on the page");
   A.toggleSide(); await sleep(30);
-  assert.ok(calls.some((c) => c[1] === 0 && c[2] === 1), "the panel does not slide in");
+  assert.ok(calls.some((k) => k[0].transform && k[0].opacity === undefined), "the panel does not slide in");
+  assert.ok(!calls.some((k) => k.some((f) => f.opacity !== undefined && +f.opacity < 1)), "the panel fades");
+  assert.doesNotMatch([...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => /^\.side,\.sheet|^\.side$|^\.sheet$/.test(r.selectorText || "")).map((r) => r.cssText).join(" "), /transition:\s*opacity/);
   w.HTMLElement.prototype.animate = orig;
   assert.deepEqual(errs, []);
   done();

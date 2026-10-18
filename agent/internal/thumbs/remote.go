@@ -13,10 +13,15 @@ import (
 
 // Remote renders a thumbnail somewhere else (the rfe-thumbd sidecar). The returned errors tell the renderer what
 // to do next: errRemoteUnsupported means "this process cannot decode it, try the built-in decoder", ErrNotSupported
-// means "nobody can", and anything else is a sidecar failure that also falls back to the built-in decoder.
+// means "nobody can", and a sidecar that is merely not running also falls back to the built-in decoder. A render failure (INTERNAL) or an
+// open breaker is a final error: it never falls back.
 type Remote interface {
 	Render(ctx context.Context, source []byte, maxSize int) ([]byte, error)
 }
+
+// errRemoteFailed means the sidecar's decoder failed or panicked on this input. The built-in decoder would run the
+// same untrusted bytes unsandboxed, so the render fails instead.
+var errRemoteFailed = errors.New("thumbnail sidecar failed to render this file")
 
 var errRemoteUnsupported = errors.New("remote renderer cannot decode this source")
 
@@ -36,21 +41,27 @@ func (r SidecarRemote) Render(ctx context.Context, source []byte, maxSize int) (
 	var resp renderResp
 	jpeg, err := r.Sup.CallBody(ctx, "thumb.render", map[string]int{"maxSize": maxSize}, source, &resp)
 	if err != nil {
-		var re *sidecar.RemoteError
-		if errors.As(err, &re) {
-			switch re.Code {
-			case "NOT_SUPPORTED":
-				return nil, errRemoteUnsupported
-			case "TOO_LARGE":
-				return nil, fmt.Errorf("%w: %s", ErrNotSupported, re.Message)
-			}
-		}
-		return nil, err
+		return nil, mapRemoteError(err)
 	}
 	if len(jpeg) < 4 || jpeg[0] != 0xff || jpeg[1] != 0xd8 {
 		return nil, errors.New("sidecar returned something that is not a JPEG")
 	}
 	return jpeg, nil
+}
+
+func mapRemoteError(err error) error {
+	var re *sidecar.RemoteError
+	if errors.As(err, &re) {
+		switch re.Code {
+		case "NOT_SUPPORTED":
+			return errRemoteUnsupported
+		case "TOO_LARGE":
+			return fmt.Errorf("%w: %s", ErrNotSupported, re.Message)
+		case "INTERNAL":
+			return fmt.Errorf("%w: %s", errRemoteFailed, re.Message)
+		}
+	}
+	return err
 }
 
 // renderWithRemote tries the remote renderer and reports whether it produced the result (or a final error). When
@@ -100,6 +111,13 @@ func (rn *Renderer) renderWithRemote(ctx context.Context, f *os.File, size int64
 			return nil, true, fmt.Errorf("%w: the thumbnail sidecar crashed on this file twice", ErrNotSupported)
 		}
 		return nil, true, fmt.Errorf("thumbnail sidecar was interrupted: %w", err)
+	case errors.Is(err, errRemoteFailed):
+		sidecar.Note("thumbd.render-failed")
+		return nil, true, err
+	case errors.Is(err, sidecar.ErrBreakerOpen):
+		// Repeated start failures: the sidecar is untrustworthy right now, not merely absent.
+		sidecar.Note("thumbd.breaker-open-refused")
+		return nil, true, fmt.Errorf("thumbnail sidecar is unavailable: %w", err)
 	default:
 		// Not running, refused or misbehaving: this render ran in-process instead.
 		sidecar.Note("thumbd.fallback")

@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -57,14 +58,21 @@ func (s *Supervisor) Client() (*Client, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.client == nil {
-		return nil, ErrUnavailable
+		return nil, s.unavailable()
 	}
 	select {
 	case <-s.client.Done():
-		return nil, ErrUnavailable
+		return nil, s.unavailable()
 	default:
 	}
 	return s.client, nil
+}
+
+func (s *Supervisor) unavailable() error {
+	if s.stats.breakerOpen.Load() {
+		return fmt.Errorf("%w: %w", ErrUnavailable, ErrBreakerOpen)
+	}
+	return ErrUnavailable
 }
 
 // Call runs op on the live sidecar.

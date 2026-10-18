@@ -36,6 +36,10 @@ const (
 // ErrUnavailable means no healthy sidecar could take the call; callers use their own implementation.
 var ErrUnavailable = errors.New("sidecar unavailable")
 
+// ErrBreakerOpen (always joined with ErrUnavailable) means repeated start failures opened the supervisor's breaker.
+// A caller that parses untrusted input must not treat it as "the sidecar is simply absent" and decode in-process.
+var ErrBreakerOpen = errors.New("sidecar breaker open")
+
 // ErrInterrupted (always joined with ErrUnavailable) means the sidecar died or was killed while this request was
 // in flight, as opposed to being down before the call. A caller that parses untrusted input uses it to tell "the
 // sidecar is not running" from "this input may have crashed it".

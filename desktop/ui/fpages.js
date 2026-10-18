@@ -54,6 +54,14 @@
     const body = M[t] ? M[t]() : A.toolBodies[t] ? A.toolBodies[t]() : tFav();
     stage().innerHTML = '<h2 class="pt">Tools</h2><div class="chips" style="padding:0 0 .875rem" role="tablist">' + TABS().map((x) => '<button class="chip' + (t === x[0] ? ' on' : '') + '" role="tab" aria-selected="' + (t === x[0]) + '" data-fx="tool.tab|' + x[0] + '">' + ic(x[1]) + x[2] + (x[3] ? ' <b class="cnt">' + x[3] + '</b>' : '') + '</button>').join('') + '</div><div id="toolBody">' + body + '</div>';
   };
+  /* The device list is redrawn on every poll too: the focused control is found again by its label or data attributes. */
+  const pageDevices0 = A.pageDevices;
+  A.pageDevices = () => {
+    const a = document.activeElement; let sel = '';
+    if (a && a !== document.body && stage().contains(a)) { const q = (v) => String(v).replace(/"/g, '\\"'); if (a.getAttribute('aria-label')) sel = '[aria-label="' + q(a.getAttribute('aria-label')) + '"]'; else if (a.getAttribute('data-fx')) sel = '[data-fx="' + q(a.getAttribute('data-fx')) + '"]'; else if (a.id) sel = '#' + a.id; }
+    pageDevices0();
+    if (sel) { const n = stage().querySelector(sel); if (n && document.activeElement !== n) n.focus({ preventScroll: true }); }
+  };
   /* The page is drawn again on every click and every poll: the control that had the focus is found again so the keyboard keeps its place. */
   const pageTools0 = A.pageTools;
   A.pageTools = () => {

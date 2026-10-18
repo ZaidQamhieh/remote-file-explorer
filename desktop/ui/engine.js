@@ -84,7 +84,7 @@
   const sizeOf = (n) => (n.t === 'dir' ? 0 : n.b);
 
   /* ---------- state ---------- */
-  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'light', density: 'comfortable', openMode: 'single', uiSize: 100, railWide: false, sideR: 21, sideHide: false, sheetR: 15.75, notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
+  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'system', density: 'comfortable', openMode: 'single', uiSize: 100, railWide: false, sideR: 21, sideHide: false, sheetR: 15.75, notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
   let servers = [], tasks = [], history = [], notes = [], listeners = [];
   const emit = (type, data) => { for (const l of listeners.slice()) { try { l(type, data); } catch (e) { if (typeof console !== 'undefined') console.error(e); } } };
   const note = (kind, text) => { const n = { id: nid('n'), at: now(), kind, text, read: false }; notes.unshift(n); if (notes.length > 60) notes.pop(); emit('notify', n); };
@@ -516,12 +516,12 @@
     for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) { t.resumedAt = now(); retryRust(t); } else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; if (!t.starting) startTask(t); } any = true; }
     if (any) emit('transfers');
   }
-  async function retryRust(t) { t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); for (const id of t.rids) { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } } pollTransfers(); }
+  async function retryRust(t) { t.held = false; t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); await Promise.all(t.rids.map(async (id) => { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } })); pollTransfers(); }
   async function pause(id) {
     const t = taskById(id); if (!t || !['running', 'queued'].includes(t.state)) return;
     if (!t.rids.length) throw bad('Wait until the transfer has started, then pause it.', 'EINVAL');
     t.state = 'paused'; t.speed = 0; t.pauseAt = now(); emit('transfers');
-    for (const rid of t.rids) { try { await call('transfer_pause', { id: rid }); } catch (e) { /* finished meanwhile */ } }
+    await Promise.all(t.rids.map(async (rid) => { try { await call('transfer_pause', { id: rid }); } catch (e) { /* finished meanwhile */ } })); /* all files at once, so the button does not flip while it waits */
     log('transfer', 'Paused ' + t.name, { tid: t.id, dir: t.dir, host: t.host }); pollTransfers();
   }
   function resumeTask(id) { const t = taskById(id); if (t) retryRust(t); }
@@ -543,7 +543,7 @@
   }
   /* Tells the core the settings that change how transfers run. */
   async function pushPrefs() { try { await call('transfer_set_prefs', { parallel: +settings.parallel || 2, limitMbps: +settings.limit || 0, onConflict: settings.onConflict || 'keep', verify: settings.verify !== false }); } catch (e) { /* the core says nothing here; the next change tries again */ } }
-  function pauseAll() { for (const t of tasks) if ((t.state === 'running' || t.state === 'queued') && t.rids.length) pause(t.id); }
+  function pauseAll() { for (const t of tasks) if (t.state === 'running' || t.state === 'queued') { if (t.rids.length) pause(t.id); else { t.held = true; t.state = 'paused'; t.pauseAt = now(); emit('transfers'); } } } /* a task not started yet is held and paused when it starts */
   function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'failed' || t.state === 'paused') retry(t.id); }
   async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done' || tasks[i].state === 'cancelled') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
   function retryFailed() { for (const t of tasks) if (t.state === 'failed') retry(t.id); }

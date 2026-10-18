@@ -6,7 +6,7 @@
     const root = document.documentElement;
   const q0 = new URLSearchParams(location.search);
   ['lang', 'zoom', 'contrast'].forEach((k) => { if (q0.get(k)) S[k === 'contrast' ? 'highContrast' : k === 'zoom' ? 'textSize' : 'lang'] = k === 'contrast' ? q0.get(k) === 'high' : k === 'zoom' ? +q0.get(k) : q0.get(k); });
-  if (S.lang === undefined) S.lang = 'en'; if (S.textSize === undefined) S.textSize = 100; if (S.reduceMotion === undefined) S.reduceMotion = false; if (S.highContrast === undefined) S.highContrast = false;
+  if (S.lang === undefined) S.lang = 'en'; if (S.textSize === undefined) S.textSize = 100; if (S.reduceMotion === undefined) S.reduceMotion = false; if (S.highContrast === undefined) S.highContrast = !!(window.matchMedia && matchMedia('(prefers-contrast: more)').matches); /* follows the system until the owner chooses */
 
   /* ================= localization ================= */
   const LANGS = [['en', 'English'], ['de', 'Deutsch'], ['es', 'Español'], ['ar', 'العربية']];
@@ -121,10 +121,10 @@
   const se2 = A.settingsExtra;
   A.settingsExtra = (k) => {
     let h = se2(k); const row = k.row, seg = k.seg, sw = k.sw;
-    const grp = '<div class="sg"><h4>Language and accessibility</h4>' + row('Language', '', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
+    const grp = '<div class="sg"><h3>Language and accessibility</h3>' + row('Language', '', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
       row('Reduce motion', '', sw('reduceMotion')) + row('High contrast', '', sw('highContrast')) + '</div>';
-    h = h.replace('<div class="sg"><h4>Security</h4>', grp + '<div class="sg"><h4>Security</h4>');
-    h = h.replace('<div class="sg"><h4>About</h4>', '<div class="sg"><h4>About</h4>' + row('Welcome tour', '', '<button class="btn" data-sx="welcome">Show again</button>'));
+    h = h.replace('<div class="sg"><h3>Security</h3>', grp + '<div class="sg"><h3>Security</h3>');
+    h = h.replace('<div class="sg"><h3>About</h3>', '<div class="sg"><h3>About</h3>' + row('Welcome tour', '', '<button class="btn" data-sx="welcome">Show again</button>'));
     return h;
   };
   const sa2 = A.settingsAction;

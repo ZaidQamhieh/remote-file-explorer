@@ -182,7 +182,7 @@
   }
 
   const se0 = A.settingsExtra;
-  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + k.row('Show hidden files', '', k.sw('showHidden')));
+  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h3>Files</h3>', '<div class="sg"><h3>Files</h3>' + k.row('Show hidden files', '', k.sw('showHidden')));
 
   /* ================= palette ================= */
   A.paletteExtra.push((C) => {

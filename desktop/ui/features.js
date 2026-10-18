@@ -271,7 +271,7 @@
   A.pairNewCode = newCode;
   function pairInner() {
     const s = pairSrv(); const p = X.pair; const ms = p.exp - Date.now(); const dead = !!p.code && ms <= 0; const q = qrObj();
-    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" data-fx="pair.srv|' + esc(x.id) + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
+    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" aria-pressed="' + !!(s && x.id === s.id) + '" data-fx="pair.srv|' + esc(x.id) + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
     const head = '<div class="fxh"><span class="fxi">' + ic('phone') + '</span><div><b>Pair a phone</b></div></div>';
     if (!s) return head + '<div class="fxempty">' + ic('server', { size: 40 }) + '<b>No connected server</b><span>Connect a server first. Its agent makes the pairing code.</span></div>';
     if (p.err) return head + chips + '<div class="fxempty">' + ic('shield', { size: 40 }) + '<b>No code</b><span>' + esc(p.err) + '</span></div><div class="pbtns"><button class="btn t sm" data-fx="pair.new">' + ic('refresh') + 'Try again</button></div>';
@@ -354,7 +354,7 @@
     'pair.save': () => { const s = pairSrv(); let svg; try { svg = QR.svg(X.pair.qr, { px: 512, border: 4 }); } catch (e) { fail(e); return; } A.saveLocal('rfe-pairing-' + s.name.replace(/[^\w.-]+/g, '-') + '.svg', svg).then((r) => A.snack('Saved ' + r.name + ' to ' + r.dir, { action: 'Show', onAction: () => A.openPath('local', r.path, true) })).catch(fail); },
     'pair.srv': (id) => { X.pair.host = id; X.pair.code = ''; X.pair.err = ''; X.devices = []; X.devAt = 0; refreshPair(); newCode(true); A.loadDevices(); },
     'dev.approve': (i) => approveDialog(X.inbox[+i || 0]),
-    'dev.deny': (i) => { const q = X.inbox[+i || 0]; if (q) answer(q, false); },
+    'dev.deny': (i) => { const q = X.inbox[+i || 0]; if (!q) return; A.dialog({ icon: 'phone', cls: 'danger', title: 'Deny ' + q.label + '?', body: 'It will have to ask again with a new code or request.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Deny', kind: 'ed', cb: () => { answer(q, false); } }] }); },
     'dev.perm': (id) => { const d = X.devices.find((x) => x.id === id); if (d) accessDialog(d); },
     'dev.revoke': (id) => {
       const d = X.devices.find((x) => x.id === id); const s = pairSrv(); if (!d) return;

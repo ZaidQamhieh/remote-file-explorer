@@ -69,11 +69,12 @@
 
   /* ================= trust and sign-in ================= */
   /* The fingerprint is shown whole, in groups, so it can be compared with the one the server prints. */
-  const fpBlock = (fp) => '<code class="fpfull">' + esc(fp || '') + '</code>';
+  /* Grouped by 8 bytes: it may wrap between groups, never inside a byte. The text itself is unchanged. */
+  const fpBlock = (fp) => { const b = String(fp || '').split(':'); const g = []; for (let i = 0; i < b.length; i += 8) g.push('<span class="fpg">' + esc(b.slice(i, i + 8).join(':') + (i + 8 < b.length ? ':' : '')) + '</span>'); return '<code class="fpfull">' + g.join('') + '</code>'; };
   A.trustDialog = (s) => {
     A.dialog({ icon: 'shield', title: 'Trust ' + s.name + '?', width: 540, modal: true, enter: 'go',
       body: '<p class="fxp" style="margin-top:0">This is the first time RFE connects to <b>' + esc(s.name) + '</b> (<span class="mono">' + esc(s.addr) + '</span>). Its certificate has this SHA-256 fingerprint:</p><div class="fpdiff one"><div class="new"><small>Presented by the server</small>' + fpBlock(s.fp) + '</div></div><p class="fxp">On that computer run <span class="mono">rfe-agent status</span> and compare it with the fingerprint it prints. If they differ, someone may be intercepting the connection. Nothing is sent to the server until you trust it.</p><label class="fxck"><input type="checkbox" id="tfm"> I compared this fingerprint with the one on that computer and they match</label>',
-      actions: [{ label: 'Cancel', kind: 'tx', cb: () => { E.cancelConnect(s.id); delete X2.auto[s.id]; } }, { id: 'go', label: 'They match: trust', kind: 'f', icon: 'shield-check', cb: () => { const box = document.getElementById('tfm'); if (!box || !box.checked) { A.snack('Tick the box to confirm you compared the fingerprints.', { error: true }); return false; } X2.auto[s.id] = true; E.trust(s.id); } }] });
+      actions: [{ label: 'Cancel', kind: 'tx', cb: () => { E.cancelConnect(s.id); delete X2.auto[s.id]; } }, { id: 'go', label: 'They match: trust', kind: 'f', icon: 'shield-check', cb: () => { const box = document.getElementById('tfm'); if (!box || !box.checked) { const d = document.querySelector('.dlg .db'); let er = d && d.querySelector('#tfe'); if (d && !er) { er = document.createElement('div'); er.id = 'tfe'; er.className = 'hint bad'; er.setAttribute('role', 'alert'); d.appendChild(er); } if (er) er.textContent = 'Tick the box to confirm you compared the fingerprints.'; A.snack('Tick the box to confirm you compared the fingerprints.', { error: true }); return false; } X2.auto[s.id] = true; E.trust(s.id); } }] });
   };
   A.signInDialog = (s, o) => {
     o = o || {}; let mode = o.mode || 'in'; let timer = null; let wait = null; let busy = false; let msg = o.error || '';
@@ -85,7 +86,7 @@
       let b;
       if (mode === 'in') b = '<p class="fxp">Sign in to <b>' + esc(s.name) + '</b> with the account made on that computer (<span class="mono">rfe-agent adduser</span>).</p>' + fld('siu', 'Username', s.user || '', '') + fld('sip', 'Password', '', '', { type: 'password' }) + '<div class="fxsub">The password goes to the server only over the connection pinned to the fingerprint you compared.</div>';
       else if (mode === 'code') b = '<p class="fxp">Enter the 8-character pairing code from <b>Devices → Pair a phone</b> on ' + esc(s.name) + ', or from <span class="mono">rfe-agent pair</span>.</p>' + fld('sic', 'Pairing code', o.code || '', 'ABCD 2345', { max: 9 });
-      else if (wait) b = '<div class="fxwait"><span class="spin">' + ic('spinner') + '</span><b>Waiting for approval…</b><small>On ' + esc(s.name) + ' open <b>Devices</b> and approve this computer. It must show this code:</small></div><div class="pcode" style="margin:.625rem 0"><span>' + esc(wait.matchCode) + '</span></div>';
+      else if (wait) b = '<div class="fxwait"><span class="spin">' + ic('spinner') + '</span><b>Waiting for approval…</b><small>On ' + esc(s.name) + ' open <b>Devices</b> and approve this computer. It must show this code:</small></div><div class="pcode" style="margin:.625rem 0"><span>' + esc(wait.matchCode) + '</span></div><div><button type="button" class="btn sm tx" data-pcopy="1">' + ic('copy') + 'Copy code</button></div>';
       else b = '<p class="fxp">No password needed: ' + esc(s.name) + ' shows a request, and someone at that computer approves it. A new device starts with browse access only.</p>';
       $('.db', c.el).innerHTML = tabs + b + err;
       const go = $('[data-id="go"]', c.el); if (go) { go.style.display = mode === 'ask' && wait ? 'none' : ''; go.lastChild && (go.lastChild.textContent = mode === 'ask' ? 'Ask for approval' : mode === 'code' ? 'Pair' : 'Sign in'); go.disabled = busy; }
@@ -109,7 +110,7 @@
           }
           draw(c); return false;
         } }],
-      onOpen: (c) => { draw(c); c.el.addEventListener('click', (e) => { const m = e.target.closest('[data-m]'); if (m && !busy) { stop(); mode = m.dataset.m; msg = ''; draw(c); const nf = mode === 'ask' ? $('[data-id="go"]', c.el) : $(mode === 'code' ? '#sic' : '#siu', c.el); if (nf) nf.focus(); } }); const i = $(mode === 'code' ? '#sic' : '#siu', c.el); if (i) i.focus(); } });
+      onOpen: (c) => { draw(c); c.el.addEventListener('click', (e) => { const cp = e.target.closest('[data-pcopy]'); if (cp && wait) { A.copy(wait.matchCode, 'Code copied'); return; } const m = e.target.closest('[data-m]'); if (m && !busy) { stop(); mode = m.dataset.m; msg = ''; draw(c); const nf = mode === 'ask' ? $('[data-id="go"]', c.el) : $(mode === 'code' ? '#sic' : '#siu', c.el); if (nf) nf.focus(); } }); const i = $(mode === 'code' ? '#sic' : '#siu', c.el); if (i) i.focus(); } });
   };
   A.accountsDialog = () => {
     const draw = (c) => { $('.db', c.el).innerHTML = E.servers.map((s) => '<div class="kv2"><div><b>' + esc(s.name) + '</b><small>' + (s.signedIn ? 'Signed in as <b>' + esc(s.user || 'this device') + '</b>' : 'Not signed in') + '</small></div>' + (s.signedIn ? '<button class="btn sm" data-so="' + esc(s.id) + '">Sign out</button>' : '<button class="btn sm f" data-si="' + esc(s.id) + '">Sign in…</button>') + '</div>').join('') || '<div class="fxempty"><span>No servers yet.</span></div>'; };

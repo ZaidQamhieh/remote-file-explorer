@@ -276,14 +276,16 @@
     async commitRename(inp) {
       if (this.renameBusy) return; /* a second Enter while the first is still being sent */
       const old = this.renaming; const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);
-      if (v === old) { this.renaming = null; this.renderRows(); return; }
+      if (!v || v === old) { this.renaming = null; this.renderRows(); return; }
       this.renameBusy = true; try { await E.fs.rename(this.host, this.path, old, v); this.renaming = null; this.sel = new Set([v]); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); A.snack('Renamed to “' + v + '”'); }
-      catch (e) { err.textContent = e.message; inp.style.borderColor = 'var(--err)'; inp.focus(); } finally { this.renameBusy = false; }
+      catch (e) { err.textContent = e.message; err.setAttribute('role', 'alert'); inp.setAttribute('aria-invalid', 'true'); inp.style.borderColor = 'var(--err)'; inp.focus(); } finally { this.renameBusy = false; }
     }
     async commitNew(inp) {
+      if (this.newBusy) return; /* a second Enter while the first is still being sent */
       const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);
-      try { await E.fs.mkdir(this.host, this.path, v); this.creating = false; this.sel = new Set([v]); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); A.snack('Created folder “' + v + '”'); }
-      catch (e) { err.textContent = e.message; inp.style.borderColor = 'var(--err)'; inp.focus(); }
+      if (!v) { this.creating = false; this.renderRows(); return; }
+      this.newBusy = true; try { await E.fs.mkdir(this.host, this.path, v); this.creating = false; this.sel = new Set([v]); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); A.snack('Created folder “' + v + '”'); }
+      catch (e) { err.textContent = e.message; err.setAttribute('role', 'alert'); inp.setAttribute('aria-invalid', 'true'); inp.style.borderColor = 'var(--err)'; inp.focus(); } finally { this.newBusy = false; }
     }
     preview(n) { A.previewDialog(this.host, this.path, n); }
     del() { const s = this.selected(); if (!s.length) return; A.confirmDelete(this.host, this.path, s.map((x) => x.n), () => { this.sel.clear(); this.refreshItems(); this.render(); if (this.o.onSelect) this.o.onSelect(this); }); }

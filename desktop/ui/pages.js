@@ -526,7 +526,7 @@
     const list = Array.from(t.parentNode.querySelectorAll('[role="tab"]')); const i = list.indexOf(t); if (i < 0) return;
     const j = k === 'Home' ? 0 : k === 'End' ? list.length - 1 : (i + (k === 'ArrowRight' ? 1 : -1) + list.length) % list.length;
     e.preventDefault(); const n = list[j]; const attr = Array.from(n.attributes).find((a) => a.name.startsWith('data-') && a.name !== 'data-i');
-    n.click(); setTimeout(() => { const q = attr ? document.querySelector('[role="tab"][' + attr.name + '="' + attr.value.replace(/"/g, '\\"') + '"]') : n; if (q) q.focus(); }, 0);
+    n.click(); const back = () => { const q = attr ? document.querySelector('[role="tab"][' + attr.name + '="' + attr.value.replace(/"/g, '\\"') + '"]') : n; if (q && document.activeElement !== q) q.focus(); }; back(); setTimeout(back, 0); setTimeout(back, 250);
   });
 
   /* ---------- engine events -> UI ---------- */

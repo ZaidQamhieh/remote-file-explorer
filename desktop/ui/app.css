@@ -560,7 +560,6 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 :focus-visible{outline:.1875rem solid var(--primary);outline-offset:.125rem}
 .snack :focus-visible,.bulk :focus-visible,.dohint :focus-visible{outline-color:var(--snack-on)}
 .seg button:focus-visible{outline-offset:-.1875rem}
-.fld input:focus-visible{outline:none}
 .sbar:focus-within :focus-visible{outline:none}
 .rmotion *,.rmotion *::before,.rmotion *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
 :root[data-contrast="high"]{--outline:#1a2120;--outline-var:#3b4644;--on-var:#10191a;--hover:rgba(0,0,0,.12)}
@@ -685,7 +684,8 @@ a:hover,.kv a:hover{text-decoration:underline}
 body.resizing .main{transition:none}
 [data-rows].scrolling .li,[data-rows].scrolling .li .lead{transition:none}
 html.winsize *,html.winsize *::before,html.winsize *::after{transition:none!important}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important}.dlg,.scrim,.snack,.menu{animation:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.001ms!important;animation-iteration-count:1!important}.dlg,.scrim,.snack,.menu{animation:none}.sc:hover,.spill:hover{transform:none}}
+@media (forced-colors:active){.sw,.sw::after{forced-color-adjust:none}.sw{border-color:CanvasText;background:Canvas}.sw::after{background:CanvasText}.sw.on{background:Highlight;border-color:Highlight}.sw.on::after{background:HighlightText}.chip.on,.seg button.on,.dest.on .pill{background:Highlight;color:HighlightText;forced-color-adjust:none}.bar i,.lin i{background:Highlight;forced-color-adjust:none}.dlg,.menu,.snack,.bulk,.pal,.ostoast{border:1px solid CanvasText}}
 
 /* Tools: the cards share one height, and an empty card centres its message while a full one lists from the top */
 .tgrid>.fxc{display:flex;flex-direction:column;min-height:12rem}.tgrid>.fxc.wide{min-height:9rem}

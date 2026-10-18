@@ -493,7 +493,7 @@
         else if (st === 'done') { t.state = 'done'; t.done = t.bytes; t.speed = 0; if (was !== 'done') { t.finishedAt = nowMs; t.savedAs = vs.length === 1 ? vs[0].name : t.name; if (t.dir === 'down') { const lp = (vs.find((v) => v.localPath) || {}).localPath; if (lp && vs.length === 1) { t.savedPath = lp; t.dstDir = parentOf(lp); } } log('transfer', (t.dir === 'up' ? 'Uploaded ' : 'Downloaded ') + t.name + ' · ' + fmtBytes(t.bytes) + ' in ' + fmtDur((t.finishedAt - (t.startedAt || t.queuedAt)) / 1000), { tid: t.id, ok: true, dir: t.dir, host: t.host }); if (settings.notifyDone) note('ok', t.name + ' ' + (t.dir === 'up' ? 'uploaded' : 'downloaded')); if (t.dir === 'up') refresh(t.host, t.dstDir).catch(() => {}); else refresh(LOCAL, t.dstDir).catch(() => {}); } }
         else if (st === 'cancelled') t.state = 'cancelled';
         else t.state = st;
-        if (t.state !== was || t.state === 'running') changed = true;
+        if (t.state !== was) changed = true; /* progress is drawn by the tick, not by a rebuild of the page on every poll */
       }
       if (changed) emit('transfers');
     } catch (e) { /* the next poll tries again */ } finally { polling = false; }
@@ -526,9 +526,10 @@
   async function cancel(id) {
     const t = taskById(id); if (!t) return;
     const was = t.state; t.state = 'cancelled'; t.speed = 0;
-    for (const rid of t.rids) { try { await call('transfer_cancel', { id: rid }); } catch (e) { /* already finished */ } delete byRemote[rid]; }
+    /* The card goes at once; the core is told about every file in parallel, not one after the other. */
+    const rids = t.rids.slice(); const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); emit('transfers');
+    await Promise.all(rids.map(async (rid) => { try { await call('transfer_cancel', { id: rid }); } catch (e) { /* already finished */ } delete byRemote[rid]; }));
     if (was !== 'failed') log('transfer', 'Cancelled ' + t.name, { tid: t.id, dir: t.dir, host: t.host });
-    const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); emit('transfers');
   }
   function dismiss(id) { const i = tasks.findIndex((t) => t.id === id); if (i >= 0 && !ACTIVE.includes(tasks[i].state)) { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); emit('transfers'); } }
   function retry(id) { const t = taskById(id); if (!t || (t.state !== 'failed' && t.state !== 'paused')) return; if (!t.rids.length) { t.state = 'queued'; t.msg = ''; startTask(t); emit('transfers'); } else retryRust(t); }
@@ -542,7 +543,7 @@
   async function pushPrefs() { try { await call('transfer_set_prefs', { parallel: +settings.parallel || 2, limitMbps: +settings.limit || 0, onConflict: settings.onConflict || 'keep', verify: settings.verify !== false }); } catch (e) { /* the core says nothing here; the next change tries again */ } }
   function pauseAll() { for (const t of tasks) if ((t.state === 'running' || t.state === 'queued') && t.rids.length) pause(t.id); }
   function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'failed' || t.state === 'paused') retry(t.id); }
-  async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
+  async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done' || tasks[i].state === 'cancelled') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
   function retryFailed() { for (const t of tasks) if (t.state === 'failed') retry(t.id); }
   const eta = (t) => (t.speed > 0 ? (t.bytes - t.done) / t.speed : Infinity);
 

@@ -45,8 +45,8 @@ impl std::fmt::Display for AgentError {
             AgentError::Network(m) if m.contains("fingerprint mismatch") => write!(
                 f,
                 "This agent's certificate is not the one you trusted ({m}). Do not sign in. If you \
-                 replaced or reinstalled the agent, forget it under Trusted agents and compare its \
-                 fingerprint again."
+                 replaced or reinstalled the agent, open Servers and choose Forget server on its card, \
+                 then add it again and compare its fingerprint."
             ),
             AgentError::Network(m) => write!(
                 f,

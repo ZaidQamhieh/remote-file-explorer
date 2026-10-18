@@ -54,6 +54,14 @@
     const body = M[t] ? M[t]() : A.toolBodies[t] ? A.toolBodies[t]() : tFav();
     stage().innerHTML = '<h2 class="pt">Tools</h2><div class="chips" style="padding:0 0 .875rem" role="tablist">' + TABS().map((x) => '<button class="chip' + (t === x[0] ? ' on' : '') + '" role="tab" aria-selected="' + (t === x[0]) + '" data-fx="tool.tab|' + x[0] + '">' + ic(x[1]) + x[2] + (x[3] ? ' <b class="cnt">' + x[3] + '</b>' : '') + '</button>').join('') + '</div><div id="toolBody">' + body + '</div>';
   };
+  /* The page is drawn again on every click and every poll: the control that had the focus is found again so the keyboard keeps its place. */
+  const pageTools0 = A.pageTools;
+  A.pageTools = () => {
+    const a = document.activeElement; let sel = '';
+    if (a && a !== document.body && stage().contains(a)) { if (a.getAttribute('data-fx')) sel = '[data-fx="' + a.getAttribute('data-fx').replace(/"/g, '\\"') + '"]'; else if (a.id) sel = '#' + a.id; }
+    pageTools0();
+    if (sel) { const n = stage().querySelector(sel); if (n && document.activeElement !== n) n.focus({ preventScroll: true }); }
+  };
   /* what a tab needs from the servers is asked for when it opens, and again when it is older than half a minute */
   const WANT = { trash: () => E.now() - X.trashAt > STALE && A.loadTrash(), share: () => E.now() - X.sharesAt > STALE && A.loadShares(), apps: () => loadApps(), store: () => loadBig() };
   H['tool.tab'] = (k) => { X.tool = k; A.pageTools(); if (WANT[k]) WANT[k](); };

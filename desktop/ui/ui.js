@@ -90,7 +90,7 @@
   A.menu = (x, y, items, o) => {
     o = o || {}; closeMenus();
     const m = document.createElement('div'); m.className = 'menu ' + (o.cls || ''); m.setAttribute('role', 'menu');
-    m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.head ? '<div class="mh">' + esc(it.head) + '</div>' : '<div class="mi ' + (it.danger ? 'danger ' : '') + (it.disabled ? 'dis' : '') + '" data-i="' + i + '" role="menuitem"' + (it.disabled ? ' aria-disabled="true"' : '') + '>' + (it.dot ? '<i class="sd" style="background:' + it.dot + '"></i>' : it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<kbd>' + esc(it.kbd) + '</kbd>' : '') + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div>').join('');
+    m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.head ? '<div class="mh">' + esc(it.head) + '</div>' : '<div class="mi ' + (it.danger ? 'danger ' : '') + (it.disabled ? 'dis' : '') + '" data-i="' + i + '" role="' + (it.radio === undefined ? 'menuitem' : 'menuitemradio') + '"' + (it.radio === undefined ? '' : ' aria-checked="' + !!it.radio + '"') + (it.disabled ? ' aria-disabled="true"' : '') + '>' + (it.dot ? '<i class="sd" style="background:' + it.dot + '"></i>' : it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<kbd>' + esc(it.kbd) + '</kbd>' : '') + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div>').join('');
     layer().appendChild(m);
     const r = m.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
     m.addEventListener('click', (e) => { const mi = e.target.closest('.mi'); if (!mi) return; const it = items[+mi.dataset.i]; closeMenus(); if (it && it.onClick) it.onClick(); });
@@ -389,7 +389,7 @@
         case 'download': this.transfer(); break;
         case 'clearfilter': this.q = ''; this.filter = 'all'; this.refreshItems(); this.render(); break;
         case 'mode': this.mode = this.mode === 'list' ? 'grid' : 'list'; this.render(); break;
-        case 'sortmenu': { const r = e.target.closest('button').getBoundingClientRect(); const mk = (k, l) => ({ icon: this.sort.key === k ? 'check' : '', label: l, sub: this.sort.key === k ? ({ size: ['Smallest first', 'Largest first'], mod: ['Oldest first', 'Newest first'] }[k] || ['A→Z', 'Z→A'])[this.sort.dir === 1 ? 0 : 1] : '', onClick: () => { this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); } }); A.menu(r.left, r.bottom + 4, [mk('name', 'Name'), mk('size', 'Size'), mk('mod', 'Modified'), mk('kind', 'Type')]); break; }
+        case 'sortmenu': { const r = e.target.closest('button').getBoundingClientRect(); const mk = (k, l) => ({ radio: this.sort.key === k, icon: this.sort.key === k ? 'check' : '', label: l, sub: this.sort.key === k ? ({ size: ['Smallest first', 'Largest first'], mod: ['Oldest first', 'Newest first'] }[k] || ['A→Z', 'Z→A'])[this.sort.dir === 1 ? 0 : 1] : '', onClick: () => { this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); } }); A.menu(r.left, r.bottom + 4, [mk('name', 'Name'), mk('size', 'Size'), mk('mod', 'Modified'), mk('kind', 'Type')]); break; }
         case 'retry': E.retryNow(this.host); break; case 'connect': E.connect(this.host); break; case 'cancel': E.cancelConnect(this.host); break;
         case 'trust': { const ts = E.server(this.host); if (ts) A.trustDialog(ts); break; } case 'servers': A.go('servers'); break; case 'edit': A.serverDialog(E.server(this.host)); break;
       }
@@ -487,7 +487,7 @@
   A.cardClick = (e, root) => {
     const b = e.target.closest('[data-t]'); if (!b) return; const card = b.closest('[data-tid]'); const id = card.dataset.tid; const t = E.task(id); const a = b.dataset.t;
     try {
-    if (a === 'pause') Promise.resolve(E.pause(id)).catch((err) => A.snack(err.message, { error: true })); else if (a === 'resume') E.resumeTask(id); else if (a === 'cancel') { E.cancel(id); A.snack('Cancelled “' + (t ? t.name : '') + '”'); }
+    if (a === 'pause') Promise.resolve(E.pause(id)).catch((err) => A.snack(err.message, { error: true })); else if (a === 'resume') E.resumeTask(id); else if (a === 'cancel') { const go = () => { E.cancel(id); A.snack('Cancelled “' + (t ? t.name : '') + '”'); }; if (t && t.done > 0 && t.state !== 'queued') A.dialog({ title: 'Cancel this transfer?', body: '<p>“' + esc(t.name) + '” is ' + Math.min(99, Math.floor(100 * t.done / Math.max(1, t.bytes))) + '% done. Cancelling stops it and keeps what was already copied.</p>', modal: true, actions: [{ id: 'k', label: 'Keep going', kind: 't', cb: (c) => c.close() }, { id: 'c', label: 'Cancel transfer', kind: 'f', cb: (c) => { c.close(); go(); } }] }); else go(); }
     else if (a === 'retry') E.retry(id);
     else if (a === 'replace' || a === 'keep' || a === 'skip') E.resolve(id, a, !!(card.querySelector('[data-all]') || {}).checked);
     else if (a === 'dismiss') E.dismiss(id); else if (a === 'servers') A.go('servers');

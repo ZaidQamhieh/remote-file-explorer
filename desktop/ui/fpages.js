@@ -185,8 +185,8 @@
           const g = (i) => $(i, c.el).value.trim(); const name = g('#srn') || 'Untitled rule', host = g('#srh'), local = U.norm(g('#srl')), remote = U.norm(g('#srr'));
           let er = $('#sre', c.el); if (!er) { er = document.createElement('div'); er.id = 'sre'; er.className = 'hint bad'; er.setAttribute('role', 'alert'); $('.db', c.el).appendChild(er); } er.textContent = '';
           const lab = c.btn.go.textContent; c.btn.go.disabled = true; c.btn.go.textContent = 'Checking…';
-          const chk = (h, p, what) => E.fs.load(h, p).catch((e) => { throw new Error(what + ' folder ' + p + ' can’t be opened: ' + e.message); });
-          Promise.all([chk('local', local, 'The computer'), chk(host, remote, 'The server')]).then(() => { X.rules.push({ id: 'r' + Date.now().toString(36), name, local, host, remote, dir, last: 0, ids: [] }); F.persist(); A.snack('Rule “' + name + '” created'); c.close(); A.pageTools(); })
+          const chk = (h, p, what) => E.fs.load(h, p).catch((e) => { throw new Error('That folder can’t be opened: ' + p + ' on ' + what + ' (' + e.message + ')'); });
+          Promise.all([chk('local', local, 'this computer'), chk(host, remote, 'the server')]).then(() => { X.rules.push({ id: 'r' + Date.now().toString(36), name, local, host, remote, dir, last: 0, ids: [] }); F.persist(); A.snack('Rule “' + name + '” created'); c.close(); A.pageTools(); })
             .catch((e) => { er.textContent = e.message; c.btn.go.disabled = false; c.btn.go.textContent = lab; });
           return false;
         } }],

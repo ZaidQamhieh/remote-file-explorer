@@ -277,7 +277,7 @@
   function serverCard(s) {
     const icn = /^(Windows|macOS|Darwin)/i.test(s.os) ? 'laptop' : /raspberry|arm/i.test(s.os) ? 'cpu' : 'server'; const hasDisk = s.disk[1] > 0; const used = hasDisk ? s.disk[0] / s.disk[1] : 0; const big = s.disk[1] >= 1000; const dsk = (v) => (big ? (v / 1000).toFixed(1) : v.toFixed(v < 10 ? 1 : 0));
     let note = '', act = '';
-    const B = (a, l, k, i) => '<button class="btn sm ' + k + '" data-sa="' + a + '" data-id="' + s.id + '">' + (i ? ic(i) : '') + l + '</button>';
+    const B = (a, l, k, i) => '<button class="btn sm ' + k + '" data-sa="' + a + '" data-id="' + esc(s.id) + '">' + (i ? ic(i) : '') + l + '</button>';
     if (s.state === 'online') act = B('open', 'Open', 'f', 'folder-open') + B('disconnect', 'Disconnect', '');
     else if (s.state === 'lost') { note = '<div class="note w">' + ic('wifi-off') + '<span>Lost ' + Math.round((E.now() - s.lostAt) / 1000) + ' s ago. ' + (S.autoReconnect ? 'Retrying in ' + Math.max(0, Math.ceil(s.retryIn)) + ' s. Transfers are paused.' : 'Auto-reconnect is off.') + '</span></div>'; act = B('retry', 'Retry now', 'f', 'refresh') + B('edit', 'Edit', ''); }
     else if (s.state === 'offline') { note = '<div class="note e">' + ic('alert-circle') + '<span>' + esc(s.error || 'Host did not answer on ' + s.host + ':' + s.port) + '. Last seen ' + (s.lastSeen ? A.ago(s.lastSeen) : 'never') + '.</span></div>'; act = B('retry', 'Try again', 'f', 'refresh') + B('edit', 'Edit', ''); }
@@ -286,11 +286,11 @@
     else if (s.state === 'trust') { note = '<div class="note w">' + ic('shield') + '<span>Unknown host key. Review it and compare it with the one on the server before you trust it.</span></div>'; act = B('trust', 'Review key…', 'f', 'shield-check') + B('cancel', 'Cancel', ''); }
     else if (s.state === 'refused') { note = '<div class="note e">' + ic('shield') + '<span>The certificate changed. Connection refused to protect your files.</span></div>'; act = B('reverify', 'Review…', 'f', 'shield-check') + B('diag', 'Diagnose', ''); }
     else act = B('connect', 'Connect', 'f', 'plug') + B('edit', 'Edit', '');
-    return '<div class="sc' + (A.mainPane.host === s.id ? ' sel' : '') + '" data-sid="' + s.id + '"><div class="h"><div class="gl">' + ic(icn) + '</div><div><b data-nolocal>' + esc(s.name) + '</b><small>' + esc(s.host) + ':' + s.port + '</small></div><span class="sp"></span><span class="chipst ' + s.state + '"><i></i>' + STL[s.state] + '</span></div>' +
+    return '<div class="sc' + (A.mainPane.host === s.id ? ' sel' : '') + '" data-sid="' + esc(s.id) + '"><div class="h"><div class="gl">' + ic(icn) + '</div><div><b data-nolocal>' + esc(s.name) + '</b><small>' + esc(s.host) + ':' + s.port + '</small></div><span class="sp"></span><span class="chipst ' + s.state + '"><i></i>' + STL[s.state] + '</span></div>' +
       '<div class="meta"><div><small>Route</small>' + esc(s.via) + '</div><div><small>System</small>' + esc(s.os) + '</div><div><small>Agent</small>' + esc(s.agent || '—') + '</div></div>' +
       '<div class="lat">' + spark(s.hist) + '<b>' + (s.state === 'online' ? s.latency + '<small> ms</small>' : '—') + '</b></div>' +
       '<div><div class="bar' + (used > 0.8 ? ' hi' : '') + '"><i style="width:' + (used * 100).toFixed(0) + '%"></i></div><div class="row2"><span>Storage</span><span>' + (hasDisk ? dsk(s.disk[0]) + (big ? ' TB' : ' GB') + ' of ' + dsk(s.disk[1]) + (big ? ' TB' : ' GB') : '—') + '</span></div></div>' + note +
-      '<div class="ac">' + act + '<button class="ib sm" data-sa="more" data-id="' + s.id + '" aria-label="More">' + ic('more-v') + '</button></div></div>';
+      '<div class="ac">' + act + '<button class="ib sm" data-sa="more" data-id="' + esc(s.id) + '" aria-label="More">' + ic('more-v') + '</button></div></div>';
   }
   A.serverCard = serverCard;
   function pageServers() {

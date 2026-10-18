@@ -427,3 +427,16 @@ test("Interface size multiplies the window's own scale and asks the core for a m
   assert.deepEqual(errs, []);
   done();
 });
+
+test("a host address with markup in it cannot break out of a card attribute", async () => {
+  const { d, A, E, errs, done } = await open();
+  const evil = 'x"><img id="injected" src=y onerror="1">.example:7443';
+  E.addServer({ host: evil, name: "evil" });
+  A.go("servers"); await sleep(150);
+  assert.equal(d.querySelector("#injected"), null, "the address became an element");
+  const card = [...d.querySelectorAll("[data-sid]")].find((c) => c.dataset.sid === evil.toLowerCase());
+  assert.ok(card, "the card keeps the whole address in data-sid");
+  for (const b of card.querySelectorAll("[data-id]")) assert.equal(b.dataset.id, evil.toLowerCase());
+  assert.deepEqual(errs, []);
+  done();
+});

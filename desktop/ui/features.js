@@ -264,7 +264,7 @@
   A.pairNewCode = newCode;
   function pairInner() {
     const s = pairSrv(); const p = X.pair; const ms = p.exp - Date.now(); const dead = !!p.code && ms <= 0; const q = qrObj();
-    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" data-fx="pair.srv|' + x.id + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
+    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" data-fx="pair.srv|' + esc(x.id) + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
     const head = '<div class="fxh"><span class="fxi">' + ic('phone') + '</span><div><b>Pair a phone</b></div></div>';
     if (!s) return head + '<div class="fxempty">' + ic('server', { size: 40 }) + '<b>No connected server</b><span>Connect a server first. Its agent makes the pairing code.</span></div>';
     if (p.err) return head + chips + '<div class="fxempty">' + ic('shield', { size: 40 }) + '<b>No code</b><span>' + esc(p.err) + '</span></div><div class="pbtns"><button class="btn t sm" data-fx="pair.new">' + ic('refresh') + 'Try again</button></div>';

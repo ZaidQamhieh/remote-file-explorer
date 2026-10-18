@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: agent/go.sum
 
       # Tauri 2 on Linux links against WebKitGTK; the tests build the whole crate, so the dev packages are needed.

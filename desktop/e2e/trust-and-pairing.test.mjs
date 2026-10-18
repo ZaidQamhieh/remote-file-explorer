@@ -126,7 +126,7 @@ step("a login the agent revoked sends the window back to sign-in", async () => {
   for (const line of rows) c.revoke(line.trim().split(/\s+/)[0]);
   // The window finds out by itself (its periodic check gets a 401) and asks for a sign-in again.
   await app.go("servers");
-  await waitFor("the revoked server asks for a sign-in", () => app.script("const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b').textContent.trim() === 'approved-c'); return !!c && /not signed in|no longer accepts this login|Signed out on this host/.test(c.innerText);"), 40000);
+  await waitFor("the revoked server asks for a sign-in", () => app.script("const c = [...document.querySelectorAll('.sc')].find((x) => x.querySelector('b').textContent.trim() === 'approved-c'); return !!c && /not signed in|no longer accepts this login|Signed out on this server/.test(c.innerText);"), 40000);
   await app.shot("7-login-revoked.png");
 });
 

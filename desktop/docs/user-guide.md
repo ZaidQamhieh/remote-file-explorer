@@ -425,14 +425,14 @@ Messages from this app:
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
-| this host is not in the saved list | The host was removed (perhaps from another window) before the action ran. Open Servers again. |
+| this server is not in the saved list | The server was removed (perhaps from another window) before the action ran. Open Servers again. |
 | enter a name for the host | The new name is empty. Type a name, or press Cancel. |
 | the name can be at most 64 characters | Use a shorter name. |
 | the name cannot contain control characters | The name has a line break or another control character. Type it again on one line. |
 | `hosts.json` is damaged (...); delete it to start over | The list of saved hosts cannot be read. Delete `hosts.json` (Settings shows the folder): the list is rebuilt from the agents you trusted, and every login stays where it is. Until then signing in to a second agent is refused so the list is not overwritten. |
 | `hosts.json` was written by a newer version of this app | A newer app wrote the list. Update this app, or delete `hosts.json` to start over as above. |
-| Signed out on this host. Sign in to continue. | You switched to a host that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
-| Type the new host's address. Your current login stays saved. | Shown when you press **Add a server**. Nothing was changed on the host you were using. |
+| Signed out on this server. Sign in to continue. | You switched to a server that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
+| Type the new server's address. Your current login stays saved. | Shown when you press **Add a server**. Nothing was changed on the server you were using. |
 | This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
 | This pairing code has expired. Generate a new one. | The code's lifetime (2, 5 or 10 minutes, set in Settings) is up and it was removed from the window. Press **New code**. |
 | unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |
@@ -565,17 +565,17 @@ Messages from the agent for these two screens:
 
 | The window says | Code | What to do |
 |---|---|---|
-| This computer is not allowed to see the host's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
-| This computer may see the host's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
-| That app is no longer in the host's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
-| The host has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
-| The host is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
+| This computer is not allowed to see the PC's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
+| This computer may see the PC's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
+| That app is no longer in the PC's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
+| The PC has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
+| The PC is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
 | Nobody is signed in to a graphical desktop on the host, so there is nowhere to open the app. Sign in at the PC, then try again. | `NO_INTERACTIVE_SESSION` | The agent only opens apps on a screen someone is signed in to. Sign in to the PC's desktop, then try again. |
-| The host's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
-| The host tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
+| The PC's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
+| The PC tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
 | Too many requests for the app list. Wait a minute, then refresh. | `APP_CATALOG_RATE_LIMITED` | The agent allows 60 list requests a minute per computer. Wait a minute. |
 | Too many app launches. The agent allows only a few per minute. Wait a minute, then try again. | `APP_LAUNCH_RATE_LIMITED` | The agent allows 5 launches a minute per computer. Wait a minute. |
-| The host's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
+| The PC's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
 | The agent refused the app id as malformed. This is a bug in the app. | `BAD_APP_ID` | The app sent an id the agent does not accept. This is a bug in the app. Report it with the log level set to Detailed. |
 
 Messages from this app:

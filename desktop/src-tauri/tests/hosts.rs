@@ -594,13 +594,13 @@ fn the_new_messages_are_explained_in_the_guide() {
         .replace("\\ ", "")
         .replace("\" \"", "");
     for stem in [
-        "this host is not in the saved list",
+        "this server is not in the saved list",
         "enter a name for the host",
         "the name can be at most",
         "the name cannot contain control characters",
         "was written by a newer version of this app",
-        "Signed out on this host. Sign in to continue.",
-        "Type the new host's address. Your current login stays saved.",
+        "Signed out on this server. Sign in to continue.",
+        "Type the new server's address. Your current login stays saved.",
     ] {
         assert!(
             guide.contains(stem),

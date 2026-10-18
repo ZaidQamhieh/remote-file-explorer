@@ -339,7 +339,7 @@ pub fn list(dir: &Path, store: &dyn SecretStore) -> Result<Vec<HostView>, String
     Ok(out)
 }
 
-const NOT_SAVED: &str = "this host is not in the saved list";
+const NOT_SAVED: &str = "this server is not in the saved list";
 
 /// Makes `key` the active host: its pin, account name, device id and login become the active
 /// session. The login of the host that was active is parked first, and nothing is lost if that

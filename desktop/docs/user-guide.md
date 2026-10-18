@@ -48,7 +48,7 @@ in a narrower one. Drag the handle between the list and the side panel to make t
 narrower; drag it far enough and the panel folds away, and the same handle (or the panel button in the top bar) brings it
 back. Arrow keys move either handle, `Enter` folds or opens it, and a double click on the side panel's handle restores
 its width. The list always keeps room for its names. The window is at
-least 1100 by 700 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
+least 900 by 600 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
 choose in **Settings**) and remembers its size and position. Starting the app a second time does not open
 a second copy: the first window is brought forward. Press `/` to search, `Ctrl+K` for the command
 palette, and `Esc` to close a dialog or menu. Every control can be reached with Tab, and menus move with
@@ -185,7 +185,7 @@ updates** and the welcome tour.
 
 - **Interface size** (90%, 100%, 115% or 130%) makes the whole window smaller or bigger on top of the scale
   the window already has: everything is drawn in units that grow with the window, from the smallest size
-  (1100 by 700) up, so a larger or higher-resolution screen shows larger text and controls without any
+  (900 by 600) up, so a larger or higher-resolution screen shows larger text and controls without any
   setting. The smallest window grows with the size you pick.
 - **Open files and folders** decides what a click does. **One click** (the default) opens a folder and
   shows a file that has something to show (a picture, text, or the list inside an archive); any other

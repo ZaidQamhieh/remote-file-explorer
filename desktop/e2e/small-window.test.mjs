@@ -1,8 +1,8 @@
-// Layout at the smallest size the window may have (1100x700), in every screen: nothing may need a
+// Layout at the smallest size the window may have (900x600), in every screen: nothing may need a
 // sideways scroll, in the page or in a table, and the window refuses to go smaller. The compositor's
 // scale option does not reach the WebKit window here (window.devicePixelRatio stays 1), so a 200%
 // display is checked as what it comes to in CSS pixels: 1280x800 screen -> a 640x400 request, which
-// the minimum size turns into 1100x700.
+// the minimum size turns into 900x600.
 //
 //   desktop/e2e/run.sh
 
@@ -48,12 +48,12 @@ const VIEWS = [
   ["settings", /Theme/],
 ];
 
-test("the window cannot be made smaller than 1100x700", async () => {
+test("the window cannot be made smaller than 900x600", async () => {
   const r = await app.rect();
   await app.setRect({ x: r.x, y: r.y, width: 640, height: 400 });
   await sleep(600);
   const size = await app.script("return [window.innerWidth, window.innerHeight];");
-  assert.ok(size[0] >= 1090 && size[1] >= 690, `the window shrank to ${size.join("x")}`);
+  assert.ok(size[0] >= 890 && size[1] >= 590, `the window shrank to ${size.join("x")}`);
 });
 
 test("every screen fits without a sideways scroll at the smallest size", async () => {
@@ -64,7 +64,7 @@ test("every screen fits without a sideways scroll at the smallest size", async (
     await sleep(900);
     const bad = await overflow();
     if (bad) problems.push(`${view}: ${bad}`);
-    await app.shot(`8-1100x700-${view}.png`);
+    await app.shot(`8-900x600-${view}.png`);
   }
   assert.deepEqual(problems, [], problems.join("\n"));
 });

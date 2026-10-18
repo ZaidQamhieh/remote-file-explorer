@@ -167,8 +167,8 @@ pub fn desktop_set_prefs(
 }
 
 /// The smallest layout the window is built for, in CSS pixels at 100% (`tauri.conf.json` has the same).
-const MIN_WIDTH: f64 = 1100.0;
-const MIN_HEIGHT: f64 = 700.0;
+const MIN_WIDTH: f64 = 900.0;
+const MIN_HEIGHT: f64 = 600.0;
 
 /// The scale a size is clamped to: the interface sizes the window offers run from 90% to 130%.
 pub fn clamp_scale(scale: f64) -> f64 {

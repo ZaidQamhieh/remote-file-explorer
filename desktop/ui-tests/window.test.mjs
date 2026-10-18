@@ -411,7 +411,7 @@ test("every length in the stylesheet is in rem, so the page scales with the wind
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("../ui/app.css", import.meta.url), "utf8");
   const root = css.match(/html\{--ui:1;font-size:([^}]*)\}/);
-  assert.ok(root && /vw/.test(root[1]) && /vh/.test(root[1]) && /clamp\(calc\((?:16px|1rem)/.test(root[1]), "the root size follows the window: " + (root && root[1]));
+  assert.ok(root && /vw/.test(root[1]) && /vh/.test(root[1]) && /clamp\(calc\((?:16px|1rem|\.818rem)/.test(root[1]), "the root size follows the window: " + (root && root[1]));
   const rest = css.replace(root[0], "").replace(/\/\*[\s\S]*?\*\//g, "");
   const big = [...rest.matchAll(/(?<![\w.#-])(\d*\.?\d+)px/g)].filter((m) => +m[1] > 1.5).map((m) => m[0]);
   assert.deepEqual(big, [], "no fixed pixel sizes beyond hairlines");

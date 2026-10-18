@@ -38,7 +38,7 @@
     el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
     /* It stays while the pointer or the keyboard is on it, and an Undo gets longer (WCAG 2.2.1). */
     const arm = () => { clearTimeout(el._t); el._t = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
-    if (keep) el.style.bottom = 'calc(5.5rem + 3.75rem)';
+    if (keep) el.style.bottom = 'calc(7.25rem + 3.75rem)';
     el.addEventListener('mouseenter', () => clearTimeout(el._t)); el.addEventListener('mouseleave', arm);
     el.addEventListener('focusin', () => clearTimeout(el._t)); el.addEventListener('focusout', arm);
     layer().appendChild(el); arm();

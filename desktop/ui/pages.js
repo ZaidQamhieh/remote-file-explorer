@@ -180,7 +180,7 @@
     const day0 = new Date().setHours(0, 0, 0, 0); const today = ns.filter((n) => n.at >= day0), earlier = ns.filter((n) => n.at < day0);
     const html = ns.length ? (today.length ? '<div class="mh">Today</div>' + today.map(ni).join('') : '') + (earlier.length ? '<div class="mh">Earlier</div>' + earlier.map(ni).join('') : '') : '<div role="listitem" class="ni">No notifications</div>';
     const unread = ns.some((n) => !n.read);
-    const m = A.menu(r.right - 380, r.bottom + 6, [], { cls: 'notif' }); m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Notifications'); m.innerHTML = '<div class="mh">Notifications</div><div role="list">' + html + '</div>' + (unread ? '<hr><div class="mi" data-clear="1" role="button" tabindex="0">' + ic('check') + '<span>Mark all as read</span></div>' : '');
+    const m = A.menu(Math.max(8, r.right - 380 * (parseFloat(getComputedStyle(document.documentElement).fontSize) / 16)), r.bottom + 6, [], { cls: 'notif' }); m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Notifications'); m.innerHTML = '<div class="mh">Notifications</div><div role="list">' + html + '</div>' + (unread ? '<hr><div class="mi" data-clear="1" role="button" tabindex="0">' + ic('check') + '<span>Mark all as read</span></div>' : '');
     const clr = $('[data-clear]', m); m.tabIndex = -1; (clr || m).focus();
     if (clr) clr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clr.click(); } });
     m.addEventListener('click', (e) => { if (e.target.closest('[data-clear]')) { E.notes.forEach((n) => (n.read = true)); updateBell(); A.closeMenus(); } });
@@ -289,7 +289,7 @@
     v.forEach((x, i) => { if (x == null) { pen = false; return; } const X = (i / (v.length - 1)) * w, Y = hh - 3 - ((x - mn) / (mx - mn || 1)) * (hh - 8); d += (pen ? 'L' : 'M') + X.toFixed(1) + ' ' + Y.toFixed(1); pen = true; });
     return '<svg viewBox="0 0 200 36" preserveAspectRatio="none"><path d="' + d + '" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linejoin="round"/></svg>';
   }
-  const STL = { login: 'Sign in', online: 'Connected', lost: 'Connection lost', offline: 'Offline', connecting: 'Connecting', trust: 'Verify key', refused: 'Key changed', disconnected: 'Not connected' };
+  const STL = { login: 'Signed out', online: 'Connected', lost: 'Connection lost', offline: 'Offline', connecting: 'Connecting', trust: 'Verify key', refused: 'Key changed', disconnected: 'Not connected' };
   function serverCard(s) {
     const icn = /^(Windows|macOS|Darwin)/i.test(s.os) ? 'laptop' : /raspberry|arm/i.test(s.os) ? 'cpu' : 'server'; const hasDisk = s.disk[1] > 0; const used = hasDisk ? s.disk[0] / s.disk[1] : 0; const big = s.disk[1] >= 1000; const dsk = (v) => (big ? (v / 1000).toFixed(1) : v.toFixed(v < 10 ? 1 : 0));
     let note = '', act = '';
@@ -381,7 +381,7 @@
   }
   function pageSearch() {
     const sr = A.searchRun;
-    if (!sr) { $('#stage').innerHTML = '<h2 class="pt">Search</h2><div class="es" style="min-height:20rem"><div class="box"><div class="ico">' + ic('search') + '</div><h3>Search ' + esc(A.hostName(A.mainPane.host)) + '</h3>' + (A.searchExtra ? A.searchExtra() : '') + '</div></div>'; return; }
+    if (!sr) { $('#stage').innerHTML = '<h2 class="pt">Search</h2><div class="es" style="min-height:20rem"><div class="box"><div class="ico">' + ic('search') + '</div><h3>Search ' + esc(A.hostName(A.mainPane.host)) + '</h3><p>Type in the search bar above, or press /.</p>' + (A.searchExtra ? A.searchExtra() : '') + '</div></div>'; return; }
     const chip = (k, l, cur, key) => '<button class="chip' + (cur === k ? ' on' : '') + '" data-sf="' + key + ':' + k + '">' + (cur === k ? ic('check') : '') + l + '</button>';
     $('#stage').innerHTML = '<h2 class="pt">Results for “' + esc(sr.q) + '”' + (A.searchSave ? A.searchSave(sr) : '') + '</h2><div class="chips" style="padding:.5rem 0 0">' + chip('server', 'This server', sr.scope, 'scope') + chip('all', 'All connected servers', sr.scope, 'scope') + chip('local', 'This computer', sr.scope, 'scope') + '<span style="width:.75rem"></span>' + [['all', 'Everything'], ['folders', 'Folders'], ['packages', 'Packages'], ['media', 'Media'], ['archives', 'Archives'], ['big', 'Over 100 MB']].map((f) => chip(f[0], f[1], sr.filter, 'filter')).join('') + '</div><div class="prog" id="sprog"></div><div id="sres"></div>';
     updateSearch();
@@ -412,7 +412,7 @@
     const F = [['all', 'All'], ['transfer', 'Transfers'], ['conn', 'Connections'], ['audit', 'Security'], ['err', 'Errors']]; const f = st.histFilter;
     const rows = E.history.filter((h) => f === 'all' || (f === 'err' ? h.error : f === 'transfer' ? h.kind === 'transfer' || h.kind === 'queue' : h.kind === f));
     $('#stage').innerHTML = '<div style="display:flex;align-items:center;gap:.625rem"><div style="flex:1"><h2 class="pt">History</h2></div><button class="btn tx" data-hc="1">Clear history</button></div><div class="chips" style="padding:.375rem 0 .625rem">' + F.map((x) => '<button class="chip' + (f === x[0] ? ' on' : '') + '" data-hf="' + x[0] + '">' + (f === x[0] ? ic('check') : '') + x[1] + '</button>').join('') + '</div>' +
-      (rows.length ? rows.slice(0, 200).map((h) => '<div class="hrow ' + (h.error ? 'err' : h.ok ? 'ok' : '') + '"><div class="gi">' + ic(h.error ? 'alert-circle' : h.kind === 'audit' ? 'shield-check' : h.kind === 'conn' ? 'plug' : h.kind === 'queue' ? 'clock' : h.dir === 'up' ? 'upload' : h.dir === 'down' ? 'download' : 'check-circle') + '</div><div>' + esc(h.text) + (h.host ? '<br><small>' + esc(A.hostName(h.host)) + '</small>' : '') + '</div><time>' + U.fmtTime(h.at) + '</time></div>').join('') : '<div class="es" style="min-height:17.5rem"><div class="box"><div class="ico">' + ic('history') + '</div><h3>Nothing here yet</h3><p>' + (f === 'audit' ? (A.X.auditDenied && A.X.auditDenied.size ? 'This login cannot read the audit log or the agent log.' : 'The audit log is empty.') : E.history.length ? 'No loaded event matches these filters.' : 'Finished and failed transfers, connections and drops are listed here.') + '</p></div></div>');
+      (rows.length ? rows.slice(0, 200).map((h) => '<div class="hrow ' + (h.error ? 'err' : h.ok ? 'ok' : '') + '"><div class="gi">' + ic(h.error ? 'alert-circle' : h.kind === 'audit' ? 'shield-check' : h.kind === 'conn' ? 'plug' : h.kind === 'queue' ? 'clock' : h.dir === 'up' ? 'upload' : h.dir === 'down' ? 'download' : 'check-circle') + '</div><div>' + esc(h.text) + (h.host ? '<br><small>' + esc(A.hostName(h.host)) + '</small>' : '') + '</div><time>' + (new Date(h.at).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0) ? U.fmtDate(h.at) + ' ' : '') + U.fmtTime(h.at) + '</time></div>').join('') : '<div class="es" style="min-height:17.5rem"><div class="box"><div class="ico">' + ic('history') + '</div><h3>Nothing here yet</h3><p>' + (f === 'audit' ? (A.X.auditDenied && A.X.auditDenied.size ? 'This login cannot read the audit log or the agent log.' : 'The audit log is empty.') : E.history.length ? 'No loaded event matches these filters.' : 'Finished and failed transfers, connections and drops are listed here.') + '</p></div></div>');
   }
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'history') return; const hf = e.target.closest('[data-hf]'); if (hf) { st.histFilter = hf.dataset.hf; pageHistory(); } else if (e.target.closest('[data-hc]')) { if (!E.history.length) return; A.dialog({ title: 'Clear history?', body: '<p>This removes all ' + E.history.length + ' entries from this window’s history. It cannot be undone.</p>', modal: true, actions: [{ id: 'k', label: 'Cancel', kind: 't', cb: (c) => c.close() }, { id: 'c', label: 'Clear history', kind: 'f', cb: (c) => { c.close(); E.history.length = 0; E.emit('history'); } }] }); }
@@ -505,7 +505,7 @@
     else if (mod && e.key.toLowerCase() === 'u') { e.preventDefault(); uploadFab(); }
     else if (mod && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); p.startNew(); }
     else if (mod && e.key.toLowerCase() === 'l') { e.preventDefault(); p.editPath = true; p.render(); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && p.mode === 'grid')) {
+    else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp' || ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && p.mode === 'grid')) && (e.target === document.body || (e.target.closest && e.target.closest('[data-rows]')))) {
       e.preventDefault(); const n = p.mode === 'grid' ? Math.min(p.items.length, 600) : p.items.length; if (!n) return;
       const step = e.key === 'ArrowDown' ? (p.mode === 'grid' ? p.cols() : 1) : e.key === 'ArrowUp' ? (p.mode === 'grid' ? -p.cols() : -1) : e.key === 'ArrowRight' ? 1 : -1;
       const from = e.shiftKey && p.lead >= 0 ? p.lead : p.cursor >= 0 ? p.cursor : p.anchor;
@@ -515,7 +515,7 @@
       if (rows && p.mode === 'list') { const rh = p.rh; if (i * rh < rows.scrollTop) rows.scrollTop = i * rh; else if ((i + 1) * rh > rows.scrollTop + rows.clientHeight) rows.scrollTop = (i + 1) * rh - rows.clientHeight; }
       else if (rows) { const t = rows.querySelector('[data-i="' + i + '"]'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'nearest' }); }
     }
-    else if (e.key === ' ' && p.cursor >= 0 && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') { e.preventDefault(); p.selectIdx(p.cursor, { ctrlKey: true, type: 'keydown' }); }
+    else if (e.key === ' ' && p.cursor >= 0 && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && (e.target === document.body || (e.target.closest && e.target.closest('[data-rows]')))) { e.preventDefault(); p.selectIdx(p.cursor, { ctrlKey: true, type: 'keydown' }); }
     else if (e.key === 'Escape') { if (p.sel.size) { p.sel.clear(); p.selChanged(); } }
   });
 

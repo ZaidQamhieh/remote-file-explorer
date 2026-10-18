@@ -35,7 +35,7 @@
     /* Announced through a live region that is always in the page: a region created together with its text is often not read. */
     const lr = document.getElementById(o.error ? 'liveA' : 'liveP'); if (lr) { lr.textContent = ''; setTimeout(() => { lr.textContent = msg + (o.action ? '. ' + o.action + ' is available' : ''); }, 60); }
     el.innerHTML = (o.error ? ic('alert-circle') : '') + '<span>' + esc(msg) + '</span>' + (o.action ? '<button type="button" class="sna" data-a="1">' + esc(o.action) + '</button>' : '') + '<button type="button" class="ib sm" data-x="1" aria-label="Dismiss">' + ic('x', { size: 18 }) + '</button>';
-    el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
+    el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); if (el.contains(document.activeElement)) { const rw = document.querySelector('[data-rows]'); if (rw) rw.focus({ preventScroll: true }); } el.remove(); });
     /* It stays while the pointer or the keyboard is on it, and an Undo gets longer (WCAG 2.2.1). */
     const arm = () => { clearTimeout(el._t); el._t = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
     if (keep) el.style.bottom = 'calc(7.25rem + 3.75rem)';
@@ -242,7 +242,7 @@
       }
       if (this.mode === 'grid') {
         rows.classList.add('grid'); vs.style.height = 'auto'; const cap = this.items.slice(0, 600);
-        vs.innerHTML = cap.map((it, i) => '<div role="row" id="' + this.rid(i) + '" aria-selected="' + this.sel.has(it.n) + '" class="tile' + (this.sel.has(it.n) ? ' sel' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString(U.lang()) + '. Use the list view for the full folder.</div>' : ''); this.activeDesc(rows);
+        vs.innerHTML = cap.map((it, i) => '<div role="row" id="' + this.rid(i) + '" aria-selected="' + this.sel.has(it.n) + '" class="tile' + (this.sel.has(it.n) ? ' sel' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead tabindex="-1" title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString(U.lang()) + '. Use the list view for the full folder.</div>' : ''); this.activeDesc(rows);
         return;
       }
       rows.classList.remove('grid'); const rh = this.rh, rb = this.rhb; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rb / 16 + 'rem';
@@ -254,7 +254,9 @@
         const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
         h += '<div role="row" id="' + this.rid(i) + '" aria-selected="' + !!sel + '" class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
       }
+      const edit = this._keepEdit ? $('input.rn', vs) : null; const editVal = edit ? edit.value : null; if (edit) edit._skip = true;
       vs.innerHTML = h; this.activeDesc(rows);
+      if (editVal !== null) { const ni = $('input.rn', vs); if (ni) { ni._f = 1; ni.value = editVal; ni.focus({ preventScroll: true }); ni.setSelectionRange(editVal.length, editVal.length); } }
       const inp = $('input.rn', vs); if (inp && !inp._f) { inp._f = 1; inp.focus(); const dot = inp.value.lastIndexOf('.'); inp.setSelectionRange(0, this.renaming && dot > 0 && !(E.fs.get(this.host, U.join(this.path, this.renaming)) || {}).kids ? dot : inp.value.length); }
     }
     /* ----- interactions ----- */
@@ -272,7 +274,7 @@
     }
     selectAll() { const l = this.mode === 'grid' ? this.items.slice(0, 600) : this.items; /* the grid draws at most 600 tiles: only what is shown is selected */ this.sel = new Set(l.map((x) => x.n)); this.selChanged(); }
     startRename(n) { if (!n) return; this.renaming = n.n; if (this.mode !== 'list') { this.mode = 'list'; this.render(); } else this.renderRows(); } /* the grid draws no input, so renaming shows the list */
-    startNew() { this.creating = true; this.mode = 'list'; this.q = ''; this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
+    startNew() { this.creating = true; this.mode = 'list'; this.q = ''; this.filter = 'all'; this.refreshItems(); this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
     async commitRename(inp) {
       if (this.renameBusy) return; /* a second Enter while the first is still being sent */
       const old = this.renaming; const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);
@@ -315,8 +317,8 @@
         const act = t.closest('[data-act]'); if (act) { this.act(act.dataset.act, e); return; }
         const q = t.closest('[data-q]'); if (q && q.tagName === 'BUTTON') { const i = idx(t); if (i >= 0) { if (!this.sel.has(this.items[i].n)) { this.sel = new Set([this.items[i].n]); this.selChanged(); } if (q.dataset.q === 'more') { const r = q.getBoundingClientRect(); A.menu(r.left - 150, r.bottom, this.ctxItems(true)); } else if (q.dataset.q === 'rename') this.startRename(this.items[i]); else this.transfer(); } return; }
         const c = t.closest('.crumb .c'); if (c) { this.go(c.dataset.p); return; }
-        const f = t.closest('[data-filter]'); if (f) { this.filter = f.dataset.filter; this.refreshItems(); this.sel.clear(); this.render(); if (this.o.onSelect) this.o.onSelect(this); return; }
-        const so = t.closest('[data-sort]'); if (so) { const k = so.dataset.sort; this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); return; }
+        const f = t.closest('[data-filter]'); if (f) { this.cursor = -1; this.anchor = -1; this.filter = f.dataset.filter; this.refreshItems(); this.sel.clear(); this.render(); if (this.o.onSelect) this.o.onSelect(this); return; }
+        const so = t.closest('[data-sort]'); if (so) { this.cursor = -1; this.anchor = -1; const k = so.dataset.sort; this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); return; }
         if (t.closest('input')) return;
         const row = t.closest('[data-i]:not(svg)');
         if (row) {
@@ -337,7 +339,7 @@
         A.setActive(this); A.menu(e.clientX, e.clientY, this.ctxItems(!!row));
       });
       el.addEventListener('mousedown', () => A.setActive(this), true);
-      el.addEventListener('input', (e) => { if (e.target.matches('[data-q]') && e.target.tagName === 'INPUT') { this.q = e.target.value; this.scroll = 0; const rows = $('[data-rows]', el); if (rows) rows.scrollTop = 0; this.refreshItems(); this.renderRows(); this.renderFoot(); } });
+      el.addEventListener('input', (e) => { if (e.target.matches('[data-q]') && e.target.tagName === 'INPUT') { this.cursor = -1; this.anchor = -1; this.q = e.target.value; this.scroll = 0; const rows = $('[data-rows]', el); if (rows) rows.scrollTop = 0; this.refreshItems(); this.renderRows(); this.renderFoot(); } });
       el.addEventListener('keydown', (e) => {
         const t = e.target;
         if (t.matches('input.rn')) { if (e.key === 'Enter') { e.preventDefault(); t.hasAttribute('data-new') ? this.commitNew(t) : this.commitRename(t); } else if (e.key === 'Escape') { e.stopPropagation(); this.renaming = null; this.creating = false; this.renderRows(); } return; }
@@ -345,9 +347,9 @@
       });
       el.addEventListener('focusout', (e) => {
         const t = e.target; if (t.matches && t.matches('.pathin')) { setTimeout(() => { if (this.editPath) { this.editPath = false; this.render(); } }, 120); }
-        if (t.matches && t.matches('input.rn')) setTimeout(() => { if (document.activeElement === t || !(this.renaming || this.creating)) return; /* clicking away keeps what was typed; an empty or unchanged name just closes the box */ const v = t.value.trim(); if (t.isConnected && v && !this.renameBusy && (this.creating || v !== this.renaming)) { this.creating ? this.commitNew(t) : this.commitRename(t); return; } this.renaming = null; this.creating = false; this.renderRows(); }, 150);
+        if (t.matches && t.matches('input.rn')) setTimeout(() => { if (t._skip || document.activeElement === t || !(this.renaming || this.creating)) return; /* clicking away keeps what was typed; an empty or unchanged name just closes the box */ const v = t.value.trim(); if (t.isConnected && v && !this.renameBusy && (this.creating || v !== this.renaming)) { this.creating ? this.commitNew(t) : this.commitRename(t); return; } this.renaming = null; this.creating = false; this.renderRows(); }, 150);
       });
-      el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; /* rows slide under a still pointer: no hover fades while it moves */ e.target.classList.add('scrolling'); clearTimeout(this._scEnd); const rows = e.target; this._scEnd = setTimeout(() => rows.classList.remove('scrolling'), 140); if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.renderRows(); }); } }, true);
+      el.addEventListener('scroll', (e) => { if (e.target.matches && e.target.matches('[data-rows]')) { this.scroll = e.target.scrollTop; /* rows slide under a still pointer: no hover fades while it moves */ e.target.classList.add('scrolling'); clearTimeout(this._scEnd); const rows = e.target; this._scEnd = setTimeout(() => rows.classList.remove('scrolling'), 140); if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this._keepEdit = true; try { this.renderRows(); } finally { this._keepEdit = false; } }); } }, true);
       /* drag and drop */
       el.addEventListener('dragstart', (e) => {
         const row = e.target.closest('[data-i]:not(svg)'); if (!row) return; const it = this.items[+row.dataset.i]; if (!it) return;

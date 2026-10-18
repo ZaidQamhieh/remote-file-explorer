@@ -519,11 +519,11 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 .aud .tm{display:flex;justify-content:space-between;width:100%;max-width:35rem;font:.75rem var(--mono);color:var(--on-var)}.aud .ctr{display:flex;gap:.875rem;align-items:center}
 .pbtn{width:3.5rem;height:3.5rem;border-radius:1.75rem;background:var(--primary);color:var(--on-primary);display:grid;place-items:center}.pbtn .ic{font-size:1.625rem}
 .vid{aspect-ratio:16/9;max-height:25rem;margin:0 auto;display:flex;flex-direction:column;justify-content:flex-end;border-radius:0}.vid .scr{flex:1;display:grid;place-items:center}.vc{display:flex;align-items:center;gap:.625rem;padding:.5rem .75rem;background:rgba(0,0,0,.55);color:#fff;font:.75rem var(--mono)}.vc .ib{color:#fff}.scrub{flex:1;height:.375rem;border-radius:.1875rem;background:rgba(255,255,255,.3);cursor:pointer;position:relative}.scrub i{position:absolute;inset:0 auto 0 0;width:0;background:#fff;border-radius:.1875rem}
-.imgv .canvas{height:22.5rem;overflow:auto;display:flex;background:linear-gradient(135deg,var(--a),var(--b));color:rgba(255,255,255,.85)}.imgv .im{margin:auto;flex:none}.imgv .im img{display:block;max-width:none}.imc{display:flex;align-items:center;gap:.375rem;justify-content:center;padding:.5rem;border-top:1px solid var(--outline-var)}.imc span{min-width:2.75rem;text-align:center;font:.75rem var(--mono)}
+.imgv .canvas{height:min(22.5rem,calc(min(58vh,32.5rem) - 5.5rem));overflow:auto;display:flex;background:linear-gradient(135deg,var(--a),var(--b));color:rgba(255,255,255,.85)}.imgv .im{margin:auto;flex:none}.imgv .im img{display:block;max-width:none}.imc{display:flex;align-items:center;gap:.375rem;justify-content:center;padding:.5rem;border-top:1px solid var(--outline-var)}.imc span{min-width:2.75rem;text-align:center;font:.75rem var(--mono)}
 .pdfv .pgc{display:flex;align-items:center;gap:.375rem;padding:.375rem .625rem;border-bottom:1px solid var(--outline-var);font-size:.8125rem}.pdfv .sp{flex:1}.pgw{padding:1.25rem;display:grid;place-items:start center;overflow:auto;height:23.75rem;background:var(--sc-high)}
 .pdfv .page{width:18.75rem;min-height:24.375rem;background:#fff;color:#222;padding:1.75rem 1.625rem;box-shadow:0 .125rem .625rem rgba(0,0,0,.25);transform-origin:top center}.page h3{font-size:1rem;margin:0 0 .25rem}.page h4{font-size:.8125rem;margin:0 0 .625rem}.page .sub{height:.375rem;width:40%;background:#cfd8d6;margin-bottom:1rem}.page .ln2{height:.3125rem;background:#dfe5e3;margin:.4375rem 0;border-radius:.125rem}.page .gap{height:.75rem}
 /* bulk bar */
-.bulk{position:absolute;left:50%;bottom:1.25rem;transform:translateX(-50%);display:flex;align-items:center;gap:.5rem;padding:.5rem .625rem .5rem 1.125rem;border-radius:1.75rem;background:var(--snack);color:var(--snack-on);box-shadow:0 .375rem 1.5rem rgba(0,0,0,.3);z-index:20;white-space:nowrap}
+.bulk{position:absolute;left:50%;bottom:1.25rem;transform:translateX(-50%);display:flex;align-items:center;gap:.5rem;padding:.5rem .625rem .5rem 1.125rem;border-radius:1.75rem;background:var(--snack);color:var(--snack-on);box-shadow:0 .375rem 1.5rem rgba(0,0,0,.3);z-index:20;white-space:nowrap;max-width:calc(100% - var(--sidew,23.25rem) - 2 * var(--gap));flex-wrap:wrap;justify-content:center}
 .bulk[hidden]{display:none}.bulk b{font-size:.8438rem}.bulk .sep{width:1px;height:1.25rem;background:currentColor;opacity:.25}
 .bulk .btn{background:transparent;color:var(--snack-on);border-color:rgba(127,127,127,.5)}.bulk .btn.f{background:var(--snack-link);color:var(--snack);border-color:transparent}.bulk .btn.e{color:var(--snack-danger)}.bulk .ib{color:var(--snack-on)}
 /* searches */
@@ -577,7 +577,7 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 [dir="rtl"] .bulk{left:auto;right:calc((100% - var(--sidew,23.25rem) - var(--gap))/2);transform:translateX(50%)}
 [dir="rtl"] .qdrop{left:0;right:0}
 [dir="rtl"] .main{padding:0 0 var(--gap) var(--gap)}
-[dir="rtl"] .snack{left:auto;right:1.5rem}
+[dir="rtl"] .snack{left:auto;right:7rem}
 [dir="rtl"] :is(b,small,span,td,th,time,p,h2,h3,i,em):not(.ic){unicode-bidi:plaintext}
 [dir="rtl"] .li > *{unicode-bidi:plaintext}
 [lang="de"] .dest,[lang="es"] .dest{font-size:.6562rem;letter-spacing:-.2px}

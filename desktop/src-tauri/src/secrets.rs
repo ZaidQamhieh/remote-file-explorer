@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -116,7 +117,8 @@ impl SecretStore for OsKeystore {
 /// Run on a runtime worker (or Tauri's main thread for a sync command) that stalls every other
 /// command, so async code goes through [`Offloaded::run`], which moves the call to a blocking
 /// thread and gives up waiting after a timeout. The blocked thread itself cannot be cancelled: if
-/// the user answers the prompt later, the call finishes and its result is dropped.
+/// the user answers the prompt later, the call finishes and its result is dropped. Calls run one at a
+/// time in the order made, and one that timed out while still queued never runs.
 ///
 /// It also implements [`SecretStore`] by calling straight through, for code that is already
 /// synchronous (tests, examples, `load_saved`).
@@ -125,6 +127,10 @@ pub struct Offloaded {
     inner: Arc<dyn SecretStore>,
     timeout: Duration,
     host: Option<String>,
+    /// Keystore calls run one at a time, in the order they were made. A call abandoned on timeout
+    /// stays on its blocked thread, so without this a later call could finish first and the stale
+    /// one would land after it (a token saved after "failed", or kept after "removed").
+    gate: Arc<Mutex<()>>,
 }
 
 /// The store a closure sees when its [`Offloaded`] is scoped to a host.
@@ -160,6 +166,7 @@ impl Offloaded {
             inner: Arc::new(store),
             timeout: Self::DEFAULT_TIMEOUT,
             host: None,
+            gate: Arc::new(Mutex::new(())),
         }
     }
 
@@ -184,14 +191,28 @@ impl Offloaded {
     {
         let store = Arc::clone(&self.inner);
         let host = self.host.clone();
-        let task = tokio::task::spawn_blocking(move || match &host {
-            Some(h) => f(&Scoped {
-                inner: &*store,
-                host: h,
-            }),
-            None => f(&*store),
+        let gate = Arc::clone(&self.gate);
+        let abandoned = Arc::new(AtomicBool::new(false));
+        let gave_up = Arc::clone(&abandoned);
+        let task = tokio::task::spawn_blocking(move || {
+            let _turn = gate.lock().unwrap_or_else(|e| e.into_inner());
+            if gave_up.load(Ordering::SeqCst) {
+                // The caller was already told this failed: do not run it now.
+                return Err("the OS keystore call was abandoned before it started".to_string());
+            }
+            match &host {
+                Some(h) => f(&Scoped {
+                    inner: &*store,
+                    host: h,
+                }),
+                None => f(&*store),
+            }
         });
-        match tokio::time::timeout(self.timeout, task).await {
+        let outcome = tokio::time::timeout(self.timeout, task).await;
+        if outcome.is_err() {
+            abandoned.store(true, Ordering::SeqCst);
+        }
+        match outcome {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(format!("the OS keystore call failed to run: {e}")),
             Err(_) => Err(format!(

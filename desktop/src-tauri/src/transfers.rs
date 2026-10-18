@@ -978,7 +978,8 @@ fn is_invisible(c: char) -> bool {
 /// A file name that is safe to create in the downloads folder, from whatever the remote path says:
 /// only the last component (split on `/` and `\`), no control or direction-changing characters, no
 /// leading dots (no hidden files, no `..`) and no trailing dots or spaces, at most 200 bytes with the
-/// extension kept. Never empty.
+/// extension kept. Characters Windows forbids (`<>:"|?*`) become `_` and a Windows device name gets a
+/// leading `_`. Never empty.
 pub fn safe_name(remote_path: &str) -> String {
     let last = remote_path
         .rsplit(['/', '\\'])
@@ -987,11 +988,18 @@ pub fn safe_name(remote_path: &str) -> String {
     let cleaned: String = last
         .chars()
         .filter(|c| !c.is_control() && !is_invisible(*c))
+        .map(|c| if "<>:\"|?*".contains(c) { '_' } else { c })
         .collect();
     let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
     if trimmed.is_empty() {
         return "download".to_string();
     }
+    let reserved = is_windows_device(trimmed);
+    let trimmed = &*if reserved {
+        format!("_{trimmed}")
+    } else {
+        trimmed.to_string()
+    };
     if trimmed.len() <= 200 {
         return trimmed.to_string();
     }
@@ -1003,6 +1011,16 @@ pub fn safe_name(remote_path: &str) -> String {
     }
     let short = stem[..end].trim_end_matches(|c: char| c == '.' || c.is_whitespace());
     format!("{}{ext}", if short.is_empty() { "download" } else { short })
+}
+
+/// A name Windows treats as a device (`CON`, `NUL.txt`, `COM1`...), whatever the extension or case.
+fn is_windows_device(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim_end();
+    let up = stem.to_ascii_uppercase();
+    matches!(up.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (up.len() == 4
+            && (up.starts_with("COM") || up.starts_with("LPT"))
+            && matches!(up.as_bytes()[3], b'1'..=b'9'))
 }
 
 fn split_ext(name: &str) -> (&str, &str) {
@@ -1123,8 +1141,15 @@ fn ident_of(m: &std::fs::Metadata) -> Ident {
         use std::os::unix::fs::MetadataExt;
         (m.dev(), m.ino())
     };
-    #[cfg(not(unix))]
-    let id = (0, 0);
+    // Windows has no stable inode: the creation and last-write stamps (100 ns ticks) stand in, so a
+    // file replaced between the check and the open does not compare equal.
+    #[cfg(windows)]
+    let id = {
+        use std::os::windows::fs::MetadataExt;
+        (m.creation_time(), m.last_write_time())
+    };
+    #[cfg(not(any(unix, windows)))]
+    let id = (u64::MAX, u64::MAX); // unknown platform: never claim two files are the same file
     Ident {
         size: m.len(),
         mtime: m.modified().ok(),

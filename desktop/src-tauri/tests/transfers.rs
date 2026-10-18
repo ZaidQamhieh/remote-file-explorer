@@ -1175,6 +1175,22 @@ fn safe_name_keeps_only_a_plain_last_component() {
 }
 
 #[test]
+fn safe_name_is_creatable_on_windows_too() {
+    let cases = [
+        ("a<b>c:d\"e|f?g*h.txt", "a_b_c_d_e_f_g_h.txt"),
+        ("/srv/CON", "_CON"),
+        ("/srv/nul.txt", "_nul.txt"),
+        ("/srv/Com1.tar.gz", "_Com1.tar.gz"),
+        ("/srv/LPT9", "_LPT9"),
+        ("/srv/console.txt", "console.txt"),
+        ("/srv/com10", "com10"),
+    ];
+    for (input, want) in cases {
+        assert_eq!(safe_name(input), want, "{input:?}");
+    }
+}
+
+#[test]
 fn safe_name_cuts_long_names_on_a_character_boundary_and_keeps_the_extension() {
     let long = format!("{}.tar", "\u{e9}".repeat(300));
     let got = safe_name(&long);

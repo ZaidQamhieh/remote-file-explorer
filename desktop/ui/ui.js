@@ -71,8 +71,9 @@
     if (from && d.animate) {
       sc.classList.add('still'); const to = d.getBoundingClientRect(); d.style.overflow = 'hidden';
       const done = () => { d.style.overflow = ''; };
-      const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done;
-      [...d.querySelectorAll('h2,.di,.db > :not(.fxtabs),.df')].forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out', fill: 'backwards' }));
+      const same = Math.abs(from.width - to.width) < 1 && Math.abs(from.height - to.height) < 1;
+      if (same) done(); else { const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done; }
+      [...d.querySelectorAll('.db > :not(.fxtabs)')].forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out', fill: 'backwards' }));
     }
     if (o.onOpen) o.onOpen(ctl);
     const f = $('input,select', d); if (f && !o.noFocus) { f.focus(); if (f.select && f.type === 'text') f.select(); }

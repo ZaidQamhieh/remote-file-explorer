@@ -537,6 +537,21 @@ test("folding the details panel moves it instead of snapping: it slides in, and 
   done();
 });
 
+test("switching add-a-computer tabs fades only the pane: header, tab bar and footer never blink", async () => {
+  const { d, errs, done } = await open();
+  d.querySelector(".fab").click(); await sleep(150);
+  const hit = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
+  proto.animate = function (k, o) { hit.push(this); return { cancel() {}, finish() {} }; };
+  d.querySelector('.dlg [data-fx^="conn.tab|code"]').click(); await sleep(50);
+  proto.animate = was;
+  const dlg = d.querySelector(".dlg");
+  const bad = hit.filter((el) => el === dlg || el.matches("h2,.di,.df,.fxtabs") || !el.closest(".db"));
+  assert.equal(bad.length, 0, "animated chrome: " + bad.map((e) => e.className || e.tagName).join(", "));
+  assert.ok(hit.some((el) => dlg.contains(el) && el.closest(".db")), "the pane should still fade in");
+  assert.deepEqual(errs, []);
+  done();
+});
+
 test("the add-a-computer tabs share one size, so switching never resizes the box", async () => {
   const { d, errs, done } = await open();
   const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".dlg.conn").map((r) => r.cssText).join(" ");

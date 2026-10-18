@@ -109,7 +109,7 @@ button{cursor:pointer}
 .pane.compact .cols .hm,.pane.compact .li .hm{display:none}
 .pane.narrow .cols,.pane.narrow .li{grid-template-columns:2.5rem 1fr 5.25rem;padding-right:.625rem}
 .pane.narrow .cols .hm,.pane.narrow .li .hm{display:none}
-.rows{flex:1;overflow:auto;position:relative;min-height:0;padding:0 .5rem}
+.rows{flex:1;overflow:auto;position:relative;min-height:0;padding:0 .5rem 4.5rem}
 .vs{position:relative;width:100%}
 .li{display:grid;grid-template-columns:2.75rem 1fr 6.25rem 9.375rem 7rem 5.75rem;align-items:center;padding:0 .75rem 0 .25rem;border-radius:.75rem;position:absolute;left:0;right:0;user-select:none;-webkit-user-select:none}
 .li:hover{background:var(--hover)}
@@ -707,3 +707,6 @@ html.winsize *,html.winsize *::before,html.winsize *::after{transition:none!impo
 
 .fxp .mono,.fxh small .mono{white-space:nowrap}
 .fpfull{word-break:normal;overflow-wrap:normal}.fpg{display:inline-block;white-space:nowrap}
+.dlg:focus-visible{outline:none}
+input::placeholder,textarea::placeholder{color:var(--outline)}
+.sbar input::placeholder{color:var(--on-var)}

@@ -98,8 +98,9 @@
   A.renderRail = () => renderRail(); /* A control that redraws the page keeps the keyboard focus: the same switch or segment button gets it back. */
   A.pageSettings = () => {
     const a = document.activeElement; const inSeg = a && a.closest && a.closest('[data-set]');
-    const sel = a && a.dataset && $('#stage').contains(a) ? (a.dataset.sw ? '[data-sw="' + a.dataset.sw + '"]' : a.dataset.sx ? '[data-sx="' + a.dataset.sx + '"]' : inSeg && a.dataset.v !== undefined ? '[data-set="' + inSeg.dataset.set + '"] [data-v="' + a.dataset.v + '"]' : '') : '';
+    const sel = a && a.dataset && $('#stage').contains(a) ? (a.dataset.sw ? '[data-sw="' + a.dataset.sw + '"]' : a.dataset.sx ? '[data-sx="' + a.dataset.sx + '"]' : a.dataset.snav ? '[data-snav="' + a.dataset.snav + '"]' : inSeg && a.dataset.v !== undefined ? '[data-set="' + inSeg.dataset.set + '"] [data-v="' + a.dataset.v + '"]' : '') : '';
     pageSettings();
+    document.querySelectorAll('#stage .seg[data-set]').forEach((g) => { const b = g.closest('.sr') && g.closest('.sr').querySelector('.l b'); g.setAttribute('role', 'group'); if (b) g.setAttribute('aria-label', b.textContent.trim()); });
     if (sel) { const n = $(sel, $('#stage')); if (n) n.focus(); }
   }; A.renderDetail = () => renderDetail();
 
@@ -225,7 +226,7 @@
       return;
     }
     if (sel.length === 0) {
-      d.innerHTML = A.previewHTML(p.host, p.path, dir) + '<div class="dd"><h3 data-nolocal>' + esc(U.baseOf(p.path) || A.hostName(p.host)) + '</h3><div class="sub">' + E.fs.itemCount(dir).toLocaleString(U.lang()) + (E.fs.itemCount(dir) === 1 ? ' item' : ' items') + ' · folder</div>' + kv([['Modified', U.fmtDate(dir.mod)], ['Permissions', esc(dir.perm) + ' ' + esc(dir.own), 'mono'], ['Location', esc(p.path), 'mono'], ['Server', esc(A.hostName(p.host)) + (remote ? ' · ' + E.server(p.host).latency + ' ms' : '')]]) + '</div><div class="da"><button class="btn t" data-do="newfolder">' + ic('folder-plus') + 'New folder</button>' + (remote ? '<button class="btn" data-do="upload">' + ic('upload') + 'Upload files</button>' : '') + '</div>';
+      d.innerHTML = A.previewHTML(p.host, p.path, dir) + '<div class="dd"><h3 data-nolocal>' + esc(U.isRoot && U.isRoot(p.path) ? A.hostName(p.host) : U.baseOf(p.path) || A.hostName(p.host)) + '</h3><div class="sub">' + E.fs.itemCount(dir).toLocaleString(U.lang()) + (E.fs.itemCount(dir) === 1 ? ' item' : ' items') + ' · folder</div>' + kv([['Modified', U.fmtDate(dir.mod)], ['Permissions', esc(dir.perm) + ' ' + esc(dir.own), 'mono'], ['Location', esc(p.path), 'mono'], ['Server', esc(A.hostName(p.host)) + (remote ? ' · ' + E.server(p.host).latency + ' ms' : '')]]) + '</div><div class="da"><button class="btn t" data-do="newfolder">' + ic('folder-plus') + 'New folder</button>' + (remote ? '<button class="btn" data-do="upload">' + ic('upload') + 'Upload files</button>' : '') + '</div>';
       return;
     }
     if (sel.length === 1) {
@@ -304,7 +305,7 @@
       '<div class="meta"><div><small>Route</small>' + esc(s.via) + '</div><div><small>System</small>' + esc(s.os) + '</div><div><small>Agent</small>' + esc(s.agent || '—') + '</div></div>' +
       '<div class="lat">' + spark(s.hist) + '<b>' + (s.state === 'online' ? s.latency + '<small> ms</small>' : '—') + '</b></div>' +
       '<div><div class="bar' + (used > 0.8 ? ' hi' : '') + '"><i style="width:' + (used * 100).toFixed(0) + '%"></i></div><div class="row2"><span>Storage</span><span>' + (hasDisk ? dsk(s.disk[0]) + (big ? ' TB' : ' GB') + ' of ' + dsk(s.disk[1]) + (big ? ' TB' : ' GB') : '—') + '</span></div></div>' + note +
-      '<div class="ac">' + act + '<button class="ib sm" data-sa="more" data-id="' + esc(s.id) + '" aria-label="More">' + ic('more-v') + '</button></div></div>';
+      '<div class="ac">' + act + '<button class="ib sm" data-sa="more" data-id="' + esc(s.id) + '" aria-label="More for ' + esc(s.name) + '">' + ic('more-v') + '</button></div></div>';
   }
   A.serverCard = serverCard;
   function pageServers() {
@@ -335,7 +336,7 @@
     const edit = !!s; const v = s || { name: '', host: '', port: 7443 };
     const d = A.dialog({
       icon: 'plug', cls: edit ? '' : 'conn', title: edit ? 'Edit ' + s.name : 'New connection', width: 520, enter: 'ok',
-      body: (edit || !A.connTabs ? '' : A.connTabs('manual')) + '<div class="fld"><label>Name</label><input id="sn" value="' + esc(v.name) + '" placeholder="e.g. render-farm" spellcheck="false"><span class="err" id="sne"></span></div><div class="fld two"><div class="fld" style="margin:0"><label>Host or address</label><input id="sh" value="' + esc(v.host) + '"' + (edit ? ' disabled' : '') + ' placeholder="100.64.0.12 or host.example.com" spellcheck="false"><span class="err" id="she"></span></div><div class="fld" style="margin:0"><label>Port</label><input id="sp" value="' + v.port + '"' + (edit ? ' disabled' : '') + ' inputmode="numeric"></div></div><div style="color:var(--on-var);font-size:.7812rem">' + (edit ? 'The address belongs to the trusted key. To use another address, add a new connection.' : "Type the new server's address. Your current login stays saved. " + 'The app reads the server’s certificate fingerprint first and sends no password until you confirm it.') + '</div>',
+      body: (edit || !A.connTabs ? '' : A.connTabs('manual')) + '<div class="fld"><label for="sn">Name</label><input id="sn" value="' + esc(v.name) + '" placeholder="e.g. render-farm" spellcheck="false"><span class="err" id="sne"></span></div><div class="fld two"><div class="fld" style="margin:0"><label for="sh">Host or address</label><input id="sh" value="' + esc(v.host) + '"' + (edit ? ' disabled' : '') + ' placeholder="100.64.0.12 or host.example.com" spellcheck="false"><span class="err" id="she"></span></div><div class="fld" style="margin:0"><label for="sp">Port</label><input id="sp" value="' + v.port + '"' + (edit ? ' disabled' : '') + ' inputmode="numeric"></div></div><div style="color:var(--on-var);font-size:.7812rem">' + (edit ? 'The address belongs to the trusted key. To use another address, add a new connection.' : "Type the new server's address. Your current login stays saved. " + 'The app reads the server’s certificate fingerprint first and sends no password until you confirm it.') + '</div>',
       actions: [{ label: 'Cancel' }, { id: 'ok', label: edit ? 'Save' : 'Connect', kind: 'f', icon: edit ? 'check' : 'plug', cb: (ctl) => {
         const g = (i) => $(i, ctl.el); const host = g('#sh').value.trim(), rawPort = g('#sp').value.trim(), port = rawPort ? Number(rawPort) : 7443; const name = g('#sn').value.trim() || host; let bad = false;
         g('#sne').textContent = ''; g('#she').textContent = '';
@@ -389,8 +390,11 @@
     const where = sr.hosts.map(A.hostName).join(', ');
     pg.innerHTML = sr.skipped.length && !sr.hosts.length ? ic('wifi-off') + '<span>' + esc(sr.skipped.map(A.hostName).join(', ')) + ' is not connected, so it can’t be searched.</span>' : (sr.done ? ic('check-circle') + '<span><b>' + sr.results.length + (sr.results.length >= 400 ? '+' : '') + '</b> result' + (sr.results.length === 1 ? '' : 's') + ' · scanned ' + sr.scanned.toLocaleString(U.lang()) + ' items on ' + esc(where) + '</span>' : '<div class="lin ind"><i></i></div><span>Searching ' + esc(where) + '… <b>' + sr.scanned.toLocaleString(U.lang()) + '</b> items scanned · <b>' + sr.results.length + '</b> found</span>') + (sr.skipped.length && sr.hosts.length ? '<span>· skipped ' + esc(sr.skipped.map(A.hostName).join(', ')) + ' (not connected)</span>' : '');
     if (!sr.results.length) { rs.innerHTML = sr.done ? '<div class="es" style="min-height:15rem"><div class="box"><div class="ico">' + ic('search') + '</div><h3>No matches</h3><p>Nothing named like “' + esc(sr.q) + '” in ' + esc(where || 'the selected scope') + '.</p></div></div>' : ''; return; }
-    rs.innerHTML = sr.results.slice(0, 200).map((r, i) => '<div class="res" data-ri="' + i + '"><div class="lead">' + fic(r.node) + '</div><div style="min-width:0"><b>' + A.hl(r.node.n, sr.q) + (!E.fs.canRead(r.node) ? '<span style="font-size:.7188rem;color:var(--warn);background:var(--warn-c);border-radius:.5rem;padding:0 .4375rem;margin-left:.5rem">' + esc(r.node.own) + ' only</span>' : '') + '</b><small>' + esc(r.dir) + '</small></div><div class="sv"><i></i>' + esc(A.hostName(r.host)) + '</div><div style="color:var(--on-var);font-size:.8125rem">' + U.fmtDate(r.node.mod) + '</div><div style="text-align:right;color:var(--on-var);font-size:.8125rem">' + A.itemSize(r.node) + '</div></div>').join('') + (sr.results.length > 200 ? '<div style="padding:.75rem;color:var(--on-var)">Showing the first 200 results. Narrow the search to see more.</div>' : '');
+    rs.innerHTML = sr.results.slice(0, 200).map((r, i) => '<div class="res" role="button" tabindex="0" data-ri="' + i + '"><div class="lead">' + fic(r.node) + '</div><div style="min-width:0"><b>' + A.hl(r.node.n, sr.q) + (!E.fs.canRead(r.node) ? '<span style="font-size:.7188rem;color:var(--warn);background:var(--warn-c);border-radius:.5rem;padding:0 .4375rem;margin-left:.5rem">' + esc(r.node.own) + ' only</span>' : '') + '</b><small>' + esc(r.dir) + '</small></div><div class="sv"><i></i>' + esc(A.hostName(r.host)) + '</div><div style="color:var(--on-var);font-size:.8125rem">' + U.fmtDate(r.node.mod) + '</div><div style="text-align:right;color:var(--on-var);font-size:.8125rem">' + A.itemSize(r.node) + '</div></div>').join('') + (sr.results.length > 200 ? '<div style="padding:.75rem;color:var(--on-var)">Showing the first 200 results. Narrow the search to see more.</div>' : '');
   }
+  $('#stage').addEventListener('keydown', (e) => {
+    if (st.view !== 'search' || (e.key !== 'Enter' && e.key !== ' ')) return; const r = e.target.closest && e.target.closest('[data-ri]'); if (!r || e.target !== r) return; e.preventDefault(); openResult(A.searchRun.results[+r.dataset.ri]);
+  });
   $('#stage').addEventListener('click', (e) => {
     if (st.view !== 'search') return; const sf = e.target.closest('[data-sf]');
     if (sf) { const [k, v] = sf.dataset.sf.split(':'); if (k === 'scope') st.scope = v; else st.sfilter = v; startSearch(); return; }
@@ -431,7 +435,7 @@
     if (!groups.some((g) => g.name === st.setTab)) st.setTab = groups[0].name;
     const cur = groups.find((g) => g.name === st.setTab);
     const prev = $('#stage .setp'), keep = prev ? prev.scrollTop : 0;
-    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><div class="setl"><nav class="setn" aria-label="Settings sections">' + groups.map((g) => '<button data-snav="' + esc(g.name) + '" class="' + (g.name === cur.name ? 'on' : '') + '">' + esc(g.name) + '</button>').join('') + '</nav><section class="sg setp"><h3>' + esc(cur.name) + '</h3>' + cur.html + '</section></div>';
+    $('#stage').innerHTML = '<h2 class="pt">Settings</h2><div class="setl"><nav class="setn" aria-label="Settings sections">' + groups.map((g) => '<button data-snav="' + esc(g.name) + '"' + (g.name === cur.name ? ' aria-current="true"' : '') + ' class="' + (g.name === cur.name ? 'on' : '') + '">' + esc(g.name) + '</button>').join('') + '</nav><section class="sg setp"><h3>' + esc(cur.name) + '</h3>' + cur.html + '</section></div>';
     const np = $('#stage .setp'); if (np && keep) np.scrollTop = keep;
     if (A.fixSw) A.fixSw();
   }
@@ -465,7 +469,7 @@
     const sc = d.el.parentNode; sc.innerHTML = '<div class="pal" role="dialog" aria-label="Command palette"><div class="in">' + ic('search') + '<input id="pq" placeholder="Type a command or server name" spellcheck="false" aria-label="Command" role="combobox" aria-expanded="true" aria-controls="pl" aria-autocomplete="list"></div><div class="lst" id="pl" role="listbox" aria-label="Commands"></div></div>';
     sc.style.placeItems = 'start center';
     const draw = () => { $('#pl', sc).innerHTML = shown.length ? shown.map((c, i) => '<div class="it' + (i === hi ? ' hi' : '') + '" data-i="' + i + '" id="pal' + i + '" role="option" aria-selected="' + (i === hi) + '">' + ic(c.icon) + '<span>' + esc(c.label) + '</span>' + (c.kbd ? '<kbd>' + esc(c.kbd) + '</kbd>' : c.sub ? '<small>' + esc(c.sub) + '</small>' : '') + '</div>').join('') : '<div class="none">No matching command</div>'; const h = $('.hi', sc); const q0 = $('#pq', sc); if (q0) { if (h) q0.setAttribute('aria-activedescendant', h.id); else q0.removeAttribute('aria-activedescendant'); } if (h) h.scrollIntoView({ block: 'nearest' }); };
-    const closePal = () => { sc.remove(); document.removeEventListener('keydown', key, true); if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function') opener.focus(); };
+    const closePal = () => { d.retire(); sc.remove(); document.removeEventListener('keydown', key, true); if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function') opener.focus(); };
     const run = (c) => { closePal(); c.run(); };
     const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePal(); } else if (e.key === 'ArrowDown') { e.preventDefault(); hi = Math.min(shown.length - 1, hi + 1); draw(); } else if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, hi - 1); draw(); } else if (e.key === 'Enter') { e.preventDefault(); if (shown[hi]) run(shown[hi]); } };
     document.addEventListener('keydown', key, true);
@@ -513,7 +517,7 @@
   const sched = (k) => { pend.add(k); if (!raf) raf = requestAnimationFrame(() => { raf = 0; const p = pend; pend = new Set(); p.forEach(flush); }); };
   function flush(k) {
     if (k === 'transfers') { renderSheet(); renderRail(); if (st.view === 'transfers') pageTransfers(); }
-    else if (k === 'servers') { renderChip(); renderRail(); for (const p of [A.mainPane, A.localPane]) if (p.host !== 'local' && p.el && p.el.isConnected) { p.refreshItems(); p.render(); } if (st.view === 'servers') pageServers(); renderDetail(); renderLocalFooter(); }
+    else if (k === 'servers') { renderChip(); renderRail(); for (const p of [A.mainPane, A.localPane]) if (p.host !== 'local' && p.el && p.el.isConnected && !p.renaming && !p.creating && !p.editPath) { p.refreshItems(); p.render(); } if (st.view === 'servers') pageServers(); renderDetail(); renderLocalFooter(); }
     else if (k === 'fs') { for (const p of [A.mainPane, A.localPane]) if (p.el && p.el.isConnected && !p.renaming && !p.creating && !p.editPath) { p.refreshItems(); p.renderRows(); p.renderFoot(); } renderDetail(); }
     else if (k === 'history') { if (st.view === 'history') pageHistory(); }
     else if (k === 'bell') updateBell();

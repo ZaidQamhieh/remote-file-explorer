@@ -97,7 +97,7 @@
         const g = $('#imG', c.el); let z = 1, fitW = 0;
         /* "Fit" is the picture scaled to the box; "100%" is its real pixel size; the box scrolls when it is larger. */
         const set = (v, lab) => { z = Math.max(0.25, Math.min(16, v)); if (fitW) g.style.width = (fitW * z) + 'px'; $('#imZ', c.el).textContent = lab || Math.round(z * fitW / g.naturalWidth * 100) + '%'; };
-        g.addEventListener('load', () => { const cv = $('#imC', c.el); fitW = Math.max(1, Math.min(g.naturalWidth, g.naturalWidth * Math.min(cv.clientWidth / g.naturalWidth, cv.clientHeight / g.naturalHeight))); set(1, 'Fit'); $('#imN', c.el).textContent = g.naturalWidth + ' × ' + g.naturalHeight + ' px · ' + U.fmtBytes(n.b) + (host === 'local' ? '' : ' · ' + g.naturalWidth + ' px preview of the original'); });
+        g.addEventListener('load', () => { const cv = $('#imC', c.el); fitW = Math.max(1, Math.min(g.naturalWidth, g.naturalWidth * Math.min(cv.clientWidth / g.naturalWidth, cv.clientHeight / g.naturalHeight))); set(1, 'Fit'); $('#imN', c.el).textContent = (host === 'local' ? '' : 'Preview ') + g.naturalWidth + ' × ' + g.naturalHeight + ' px · ' + U.fmtBytes(n.b) + (host === 'local' ? '' : ' (original)'); });
         g.addEventListener('error', () => { $('.pvbody', c.el).innerHTML = nop('image', 'Could not load this picture', 'The file may be damaged or not an image this app can show.'); });
         g.src = src;
         c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-im]'); if (!b) return; const a = b.dataset.im; if (a === 'in') set(z * 1.25); else if (a === 'out') set(z / 1.25); else if (a === 'fit') set(1, 'Fit'); else set(g.naturalWidth / fitW, '100%'); });
@@ -107,7 +107,7 @@
     if (ARC.test(n.n) && !(isText(n) && !ARC.test(n.n))) {
       if (host === 'local') { r.html = nop('archive', 'No preview for archives on this computer', U.fmtBytes(n.b)); return r; }
       const ents = await E.call('files_archive_list', { host, path: pathOf(dir, n), limit: 200 });
-      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + ' entries</b><span>' + (ents.length >= 200 ? 'at least ' : '') + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
+      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + (ents.length === 1 ? ' entry' : ' entries') + '</b><span>' + (ents.length >= 200 ? 'at least ' : '') + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
       r.arc = true; return r;
     }
     if (isText(n)) {

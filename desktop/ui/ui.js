@@ -57,15 +57,17 @@
       const b = document.createElement('button'); b.className = 'btn ' + (a.kind || 'tx'); b.innerHTML = (a.icon ? ic(a.icon) : '') + esc(a.label); if (a.id) { b.dataset.id = a.id; ctl.btn[a.id] = b; }
       b.addEventListener('click', () => { const r = a.cb ? a.cb(ctl) : undefined; if (r !== false) close(); }); df.appendChild(b);
     }
+    const isTop = () => { const all = layer().querySelectorAll('.scrim'); return all[all.length - 1] === sc; };
     const onKey = (e) => {
+      if (!isTop()) return;
       if (e.key === 'Escape') { e.stopPropagation(); if (o.beforeClose && o.beforeClose() === false) return; close(); }
-      else if (e.key === 'Tab' && sc.isConnected && layer().lastElementChild === sc) {
+      else if (e.key === 'Tab' && sc.isConnected) {
         /* The dialog is modal: Tab and Shift+Tab stay inside it. */
         const f = $$('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', d).filter((x) => x.offsetParent !== null);
         if (!f.length) { e.preventDefault(); return; }
         const at = document.activeElement;
         if (!d.contains(at)) { e.preventDefault(); f[0].focus(); }
-        else if (e.shiftKey && at === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (e.shiftKey && (at === f[0] || at === d)) { e.preventDefault(); f[f.length - 1].focus(); }
         else if (!e.shiftKey && at === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
       }
       else if (e.key === 'Enter' && o.enter && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('.menu')) { const b = $('[data-id="' + o.enter + '"]', d); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
@@ -85,7 +87,7 @@
   A.menu = (x, y, items, o) => {
     o = o || {}; closeMenus();
     const m = document.createElement('div'); m.className = 'menu ' + (o.cls || ''); m.setAttribute('role', 'menu');
-    m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.head ? '<div class="mh">' + esc(it.head) + '</div>' : '<div class="mi ' + (it.danger ? 'danger ' : '') + (it.disabled ? 'dis' : '') + '" data-i="' + i + '" role="menuitem">' + (it.dot ? '<i class="sd" style="background:' + it.dot + '"></i>' : it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<kbd>' + esc(it.kbd) + '</kbd>' : '') + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div>').join('');
+    m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.head ? '<div class="mh">' + esc(it.head) + '</div>' : '<div class="mi ' + (it.danger ? 'danger ' : '') + (it.disabled ? 'dis' : '') + '" data-i="' + i + '" role="menuitem"' + (it.disabled ? ' aria-disabled="true"' : '') + '>' + (it.dot ? '<i class="sd" style="background:' + it.dot + '"></i>' : it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<kbd>' + esc(it.kbd) + '</kbd>' : '') + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div>').join('');
     layer().appendChild(m);
     const r = m.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
     m.addEventListener('click', (e) => { const mi = e.target.closest('.mi'); if (!mi) return; const it = items[+mi.dataset.i]; closeMenus(); if (it && it.onClick) it.onClick(); });
@@ -217,7 +219,7 @@
     renderRows() {
       const rows = $('[data-rows]', this.el); if (!rows) return; const vs = $('.vs', rows);
       if (this.loading) { vs.style.height = 'auto'; vs.innerHTML = '<div class="skel">' + '<i></i>'.repeat(10) + '</div>'; return; }
-      if (this.missing) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('folder') + '</div><h3>' + (this.err && /denied|permission|forbidden/i.test(this.err.message || '') ? 'No access to this folder' : this.err && /network|connect|timed? ?out|offline/i.test(this.err.message || '') ? 'Can’t reach the server' : 'Can’t open this folder') + '</h3><p>' + esc(this.err && this.err.message || (this.path + ' no longer exists.')) + '</p><div class="row"><button class="btn f" data-act="up">Go up</button><button class="btn" data-act="refresh">Try again</button></div></div></div>'; return; }
+      if (this.missing) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('folder') + '</div><h3>' + (this.err && /denied|permission|forbidden/i.test(this.err.message || '') ? 'No access to this folder' : this.err && /network|connect|timed? ?out|offline/i.test(this.err.message || '') ? 'Can’t reach the server' : 'Can’t open this folder') + '</h3><p>' + esc(this.err && this.err.message || ('Could not list ' + this.path + '.')) + '</p><div class="row">' + (U.isRoot(this.path) ? '' : '<button class="btn f" data-act="up">Go up</button>') + '<button class="btn" data-act="refresh">Try again</button></div></div></div>'; return; }
       const n = this.items.length;
       const sv0 = E.server(this.host);
       if (!n && sv0 && this.host !== 'local' && sv0.accessDenied) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('lock') + '</div><h3>No folder is open to this login</h3><p>The agent shows this computer nothing to browse. Ask the owner of the PC to allow a folder for this login.</p><div class="row"><button class="btn tx" data-act="diagnose">' + ic('activity') + 'Diagnose</button></div></div></div>'; return; }
@@ -448,8 +450,8 @@
       case 'paused': cls += ' paused'; c = head('pause', x('resume', 'play', 'Resume') + x('cancel', 'x', 'Cancel')) + '<div class="lin"><i></i></div><div class="st"><span><b data-f="pct"></b> · paused</span><span><span data-f="done"></span> of ' + U.fmtBytes(t.bytes) + '</span></div>'; break;
       case 'queued': cls = 'q'; c = head('clock', x('cancel', 'x', 'Cancel')) + '<div class="msg" style="color:var(--on-var)">Waiting for a free slot · ' + U.fmtBytes(t.bytes) + '</div>'; break;
       case 'conflict': cls = 'warn'; c = head('alert') + '<div class="msg">' + (t.conflict && t.conflict.name && t.isDir ? '“' + esc(t.conflict.name) + '” already exists' + (t.conflict.more ? ' (and ' + t.conflict.more + ' more names are taken)' : '') : esc(t.msg)) + (t.conflict ? ' (' + (t.conflict.dir ? 'folder' : U.fmtBytes(t.conflict.size)) + (t.conflict.mod ? ', ' + U.fmtDate(t.conflict.mod) : '') + ')' : '') + '. Yours is ' + U.fmtBytes(t.conflict && t.conflict.mine ? t.conflict.mine : t.bytes) + '.</div><div class="ac">' + B('replace', 'Replace', 'f') + B('keep', 'Keep both') + B('skip', 'Skip') + B('cancel', 'Cancel') + '<label class="all"><input type="checkbox" data-all> Apply to all</label></div>'; break;
-      case 'waiting': cls = 'warn'; c = head('wifi-off', x('cancel', 'x', 'Cancel')) + '<div class="lin"><i></i></div><div class="msg">' + esc(t.msg) + '. Will resume automatically when ' + esc(sv) + ' is back.</div><div class="ac">' + B('servers', 'Servers') + '</div>'; break;
-      case 'failed': cls = 'bad'; c = head(/Permission/.test(t.msg) ? 'lock' : 'alert-circle') + '<div class="msg">' + esc(t.msg) + '</div><div class="ac">' + B('retry', 'Retry', 'f') + B('dismiss', 'Dismiss') + '</div>'; break;
+      case 'waiting': cls = 'warn'; c = head('wifi-off', x('cancel', 'x', 'Cancel')) + '<div class="lin"><i></i></div><div class="msg">' + esc(t.msg) + (S.autoReconnect === false ? '. Auto-reconnect is off: reconnect ' + esc(sv) + ' in Servers.' : '. Will resume automatically when ' + esc(sv) + ' is back.') + '</div><div class="ac">' + B('servers', 'Servers') + '</div>'; break;
+      case 'failed': cls = 'bad'; c = head(/Permission/.test(t.msg) ? 'lock' : 'alert-circle') + '<div class="msg">' + esc(t.msg) + '</div>' + (t.fix ? '<div class="msg" style="color:var(--on-var)">' + esc(t.fix) + '</div>' : '') + '<div class="ac">' + B('retry', 'Retry', 'f') + B('dismiss', 'Dismiss') + '</div>'; break;
       case 'cancelled': cls = 'q'; c = head('x', x('dismiss', 'x', 'Dismiss')) + '<div class="msg" style="color:var(--on-var)">Cancelled · ' + U.fmtBytes(t.done) + ' of ' + U.fmtBytes(t.bytes) + ' was transferred.</div>'; break;
       case 'done': cls += ' done'; c = head('check-circle', x('dismiss', 'x', 'Dismiss')) + '<div class="st"><span>' + U.fmtBytes(t.bytes) + ' · ' + U.fmtDur((t.finishedAt - (t.startedAt || t.queuedAt)) / 1000) + (t.verified ? ' · Verified by the computer' : '') + '</span><span>' + ago(t.finishedAt) + '</span></div><div class="ac">' + B('reveal', 'Show in folder') + '</div>'; break;
     }

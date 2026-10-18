@@ -41,7 +41,9 @@
     if (b < 1000) return b + ' B';
     const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; let v = b;
     do { v /= 1000; i++; } while (v >= 1000 && i < 3);
-    return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + u[i];
+    const f = (x) => (x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2));
+    if (parseFloat(f(v)) >= 1000 && i < 3) { v /= 1000; i++; }
+    return f(v) + ' ' + u[i];
   };
   /* Same style as the ages ("5 min ago"): a number, a space, the unit. */
   const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + ' h ' + Math.floor((s % 3600) / 60) + ' min'; if (s >= 60) return Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; return s + ' s'; };

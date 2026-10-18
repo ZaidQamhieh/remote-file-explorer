@@ -100,7 +100,7 @@
   /* dialogs: the title names the dialog; ui.js keeps Tab inside and gives focus back */
   const dlg0 = A.dialog;
   A.dialog = function (o) {
-    const c = dlg0.call(this, o); const d = c.el; d.setAttribute('aria-labelledby', 'dlgT'); const h = $('h2', d); if (h) h.id = 'dlgT'; d.tabIndex = -1;
+    const c = dlg0.call(this, o); const d = c.el; d.tabIndex = -1;
     if (!d.contains(document.activeElement)) d.focus({ preventScroll: true });
     return c;
   };

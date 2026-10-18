@@ -77,14 +77,14 @@
       actions: [{ label: 'Cancel', kind: 'tx', cb: () => { E.cancelConnect(s.id); delete X2.auto[s.id]; } }, { id: 'go', label: 'They match: trust', kind: 'f', icon: 'shield-check', cb: () => { const box = document.getElementById('tfm'); if (!box || !box.checked) { const d = document.querySelector('.dlg .db'); let er = d && d.querySelector('#tfe'); if (d && !er) { er = document.createElement('div'); er.id = 'tfe'; er.className = 'hint bad'; er.setAttribute('role', 'alert'); d.appendChild(er); } if (er) er.textContent = 'Tick the box to confirm you compared the fingerprints.'; A.snack('Tick the box to confirm you compared the fingerprints.', { error: true }); return false; } X2.auto[s.id] = true; E.trust(s.id); } }] });
   };
   A.signInDialog = (s, o) => {
-    o = o || {}; let mode = o.mode || 'in'; let timer = null; let wait = null; let busy = false; let msg = o.error || '';
+    o = o || {}; let mode = o.mode || 'in'; let timer = null; let wait = null; let busy = false; let msg = o.error || ''; let typedUser = null;
     const stop = () => { if (timer) { clearInterval(timer); timer = null; } if (wait) { wait = null; E.cancelApproval().catch(() => {}); } };
     const done = (c, how) => { stop(); audit('Signed in to ' + s.name + (s.user ? ' as ' + s.user : '') + ' (' + how + ')'); A.snack('Signed in to ' + s.name + (s.user ? ' as ' + s.user : '')); c.close(); if (A.mainPane.host == null || A.mainPane.host === 'local') A.setMainHost(s.id); A.renderAll(); };
     const draw = (c) => {
-      const tabs = '<div class="seg fxtabs" role="tablist">' + [['in', 'Account'], ['code', 'Pairing code'], ['ask', 'Ask the PC']].map((t) => '<button role="tab" data-m="' + t[0] + '" class="' + (mode === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('') + '</div>';
+      const tabs = '<div class="seg fxtabs" role="tablist" aria-label="Sign-in method">' + [['in', 'Account'], ['code', 'Pairing code'], ['ask', 'Ask the PC']].map((t) => '<button role="tab" aria-selected="' + (mode === t[0]) + '" data-m="' + t[0] + '" class="' + (mode === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('') + '</div>';
       const err = msg ? '<div class="hint bad" style="margin:.625rem 0 0">' + ic('alert-circle') + '<span>' + esc(msg) + '</span></div>' : '';
       let b;
-      if (mode === 'in') b = '<p class="fxp">Sign in to <b>' + esc(s.name) + '</b> with the account made on that computer (<span class="mono">rfe-agent adduser</span>).</p>' + fld('siu', 'Username', s.user || '', '') + fld('sip', 'Password', '', '', { type: 'password' }) + '<div class="fxsub">The password goes to the server only over the connection pinned to the fingerprint you compared.</div>';
+      if (mode === 'in') b = '<p class="fxp">Sign in to <b>' + esc(s.name) + '</b> with the account made on that computer (<span class="mono">rfe-agent adduser</span>).</p>' + fld('siu', 'Username', typedUser != null ? typedUser : s.user || '', '') + fld('sip', 'Password', '', '', { type: 'password' }) + '<div class="fxsub">The password goes to the server only over the connection pinned to the fingerprint you compared.</div>';
       else if (mode === 'code') b = '<p class="fxp">Enter the 8-character pairing code from <b>Devices → Pair a phone</b> on ' + esc(s.name) + ', or from <span class="mono">rfe-agent pair</span>.</p>' + fld('sic', 'Pairing code', o.code || '', 'ABCD 2345', { max: 9 });
       else if (wait) b = '<div class="fxwait"><span class="spin">' + ic('spinner') + '</span><b>Waiting for approval…</b><small>On ' + esc(s.name) + ' open <b>Devices</b> and approve this computer. It must show this code:</small></div><div class="pcode" style="margin:.625rem 0"><span>' + esc(wait.matchCode) + '</span></div><div><button type="button" class="btn sm tx" data-pcopy="1">' + ic('copy') + 'Copy code</button></div>';
       else b = '<p class="fxp">No password needed: ' + esc(s.name) + ' shows a request, and someone at that computer approves it. A new device starts with browse access only.</p>';
@@ -97,7 +97,7 @@
         { id: 'go', label: 'Sign in', kind: 'f', icon: 'user', cb: (c) => {
           msg = ''; busy = true;
           const finish = (p) => p.then(() => done(c, mode === 'code' ? 'pairing code' : 'password')).catch((e) => { msg = e.message; busy = false; if (c.el.isConnected) draw(c); });
-          if (mode === 'in') { const u = $('#siu', c.el).value.trim(), p = $('#sip', c.el).value; let ok = setErr(c, 'siu', u ? '' : 'Enter your username'); ok = setErr(c, 'sip', p ? '' : 'Enter your password') && ok; if (!ok) { busy = false; return false; } finish(E.signIn(s.id, u, p)); }
+          if (mode === 'in') { const u = $('#siu', c.el).value.trim(), p = $('#sip', c.el).value; typedUser = u; let ok = setErr(c, 'siu', u ? '' : 'Enter your username'); ok = setErr(c, 'sip', p ? '' : 'Enter your password') && ok; if (!ok) { busy = false; return false; } finish(E.signIn(s.id, u, p)); }
           else if (mode === 'code') { const code = $('#sic', c.el).value.replace(/\s/g, '').toUpperCase(); if (!setErr(c, 'sic', /^[2-9A-HJ-NP-Z]{8}$/.test(code.toUpperCase()) ? '' : 'The code is 8 letters and digits')) { busy = false; return false; } finish(E.signInWithCode(s.id, code)); }
           else {
             E.requestApproval(s.id).then((w) => {

@@ -99,7 +99,7 @@
     const s = pickHost('storeHost'); if (!s) return noServer();
     const on = online(); const gb = (v) => (v >= 1000 ? (v / 1000).toFixed(1) + ' TB' : v.toFixed(v < 10 ? 1 : 0) + ' GB');
     const done = E.tasks.filter((t) => t.state === 'done'); const upB = done.filter((t) => t.dir === 'up').reduce((a, t) => a + (t.bytes || 0), 0), dnB = done.filter((t) => t.dir === 'down').reduce((a, t) => a + (t.bytes || 0), 0);
-    const failed = E.tasks.filter((t) => t.state === 'failed').length + E.history.filter((h) => h.kind === 'transfer' && h.error).length;
+    const failed = E.tasks.filter((t) => t.state === 'failed').length + E.history.filter((h) => h.kind === 'transfer' && h.error && !(h.tid && E.task(h.tid))).length;
     const stat = (v, l, i) => '<div class="stat">' + ic(i) + '<b>' + v + '</b><small>' + l + '</small></div>';
     const roots = (s.roots || []).filter((r) => r.totalBytes > 0); const COL = ['var(--k-video)', 'var(--k-archive)', 'var(--k-pkg)', 'var(--k-doc)', 'var(--outline)'];
     const seg = roots.map((r, i) => '<i style="flex:' + Math.max(0.5, r.totalBytes - r.freeBytes) + ';background:' + COL[i % COL.length] + '" title="' + esc(r.label || r.path) + '"></i>').join('');
@@ -160,9 +160,9 @@
   });
 
   /* ---- backup & sync: one-way folder pairs, run by hand through the transfers ---- */
-  const ruleState = (r) => { const ids = r.ids || []; if (!ids.length) return 'idle'; const act = ids.some((id) => { const t = E.task(id); return t && !['done', 'failed'].includes(t.state); }); if (!act) { r.ids = []; r.last = E.now(); F.persist(); return 'idle'; } return 'running'; };
+  const ruleState = (r) => { const ids = r.ids || []; if (!ids.length) return 'idle'; const act = ids.some((id) => { const t = E.task(id); return t && !['done', 'failed'].includes(t.state); }); if (!act) { r.failed = ids.filter((id) => { const t = E.task(id); return t && t.state === 'failed'; }).length; r.ids = []; r.last = E.now(); F.persist(); return 'idle'; } return 'running'; };
   function tSync() {
-    const nFail = (r) => (r.ids || []).filter((id) => { const t = E.task(id); return t && t.state === 'failed'; }).length;
+    const nFail = (r) => r.failed || 0;
     const rules = X.rules.map((r) => { const s = ruleState(r); const sv = E.server(r.host); return '<div class="lrow"><div class="gi">' + ic(r.dir === 'up' ? 'upload' : 'download') + '</div><div class="dm"><b>' + esc(r.name) + '</b><small>' + esc(r.local) + ' ' + (r.dir === 'up' ? '→' : '←') + ' ' + esc(sv ? sv.name : r.host) + ':' + esc(r.remote) + '</small><small>' + (s === 'running' ? '<span class="tag pri">Syncing</span>' : r.last ? 'Last run ' + rel(r.last) + (nFail(r) ? ' · ' + plural(nFail(r), 'transfer', 'transfers') + ' failed, see Transfers' : '') : 'Never run') + '</small></div><button class="btn sm f" data-fx="sync.run|' + esc(r.id) + '"' + (s === 'running' ? ' disabled' : '') + '>' + ic('play') + 'Run now</button><button class="ib sm" data-fx="sync.del|' + esc(r.id) + '" aria-label="Delete rule">' + ic('trash') + '</button></div>'; }).join('');
     return '<div class="tgrid"><div class="fxc wide">' + head('refresh', 'Sync rules', 'One-way folder pairs. Run now copies only files that are new or different in size; nothing is deleted.', '<button class="btn sm f" data-fx="sync.new">' + ic('plus') + 'New rule</button>') + (rules || empty('refresh', 'No rules', 'Create a rule to keep a folder on this computer and a folder on a server in step.')) + '</div></div>';
   }

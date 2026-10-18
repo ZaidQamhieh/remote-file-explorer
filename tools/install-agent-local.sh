@@ -18,10 +18,16 @@ trap 'rm -rf "$tmp"' EXIT
 "$root/tools/package-agent.sh" "$goos" "$goarch" "$version" "$root/agent-rs/target/release" "$tmp/pkg.tar.gz" >/dev/null
 mkdir -p "$dest" "$tmp/x"
 tar -C "$tmp/x" -xzf "$tmp/pkg.tar.gz"
-# Move the whole set into place; the old rfe-agent is kept as rfe-agent.bak.
-[[ -f "$dest/rfe-agent" ]] && cp -f "$dest/rfe-agent" "$dest/rfe-agent.bak"
+# Stage the whole set beside the targets first, then rename each into place, so an interrupted run leaves no
+# half-written file; the old rfe-agent is kept as rfe-agent.bak.
+if [[ -f "$dest/rfe-agent" ]]; then
+  cp -f "$dest/rfe-agent" "$dest/.rfe-agent.bak.new"
+  mv -f "$dest/.rfe-agent.bak.new" "$dest/rfe-agent.bak"
+fi
 for f in "$tmp"/x/*; do
   install -m 755 "$f" "$dest/.$(basename "$f").new"
+done
+for f in "$tmp"/x/*; do
   mv -f "$dest/.$(basename "$f").new" "$dest/$(basename "$f")"
 done
 echo "installed $version to $dest:"

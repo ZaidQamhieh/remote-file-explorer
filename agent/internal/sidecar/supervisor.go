@@ -141,7 +141,6 @@ func (s *Supervisor) loop() {
 			backoff = min(backoff*2, s.maxBackoff)
 			continue
 		}
-		failures = 0
 		s.stats.breakerOpen.Store(false)
 		s.stats.starts.Add(1)
 		s.setClient(c)
@@ -161,6 +160,7 @@ func (s *Supervisor) loop() {
 		Note(s.cfg.Name + ".crash")
 		if time.Since(started) >= s.healthyAfter {
 			backoff = s.minBackoff
+			failures = 0 // only a run that stayed up clears the count; a start that dies at once does not
 		}
 		s.cfg.logf("sidecar %s: stopped, restarting in %v", s.cfg.Name, backoff)
 		if !s.sleep(backoff) {

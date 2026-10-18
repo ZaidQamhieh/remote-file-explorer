@@ -72,12 +72,17 @@
     /* Items older than the chosen number of days are removed for good as the Trash opens. */
     const cut = Date.now() - (+S.trashDays || 30) * 864e5; const stale = rows.filter((r) => r.at && r.at < cut);
     if (stale.length) {
-      const by = {}; stale.forEach((r) => { (by[r.host] = by[r.host] || []).push(r); }); let gone = 0;
-      for (const h of Object.keys(by)) {
-        try { await E.call('trash_empty_items', { host: h, ids: by[h].map((r) => r.id) }); gone += by[h].length; by[h].forEach((r) => rows.splice(rows.indexOf(r), 1)); }
-        catch (e) { errs.push(A.hostName(h) + ': ' + e.message); }
+      /* They are removed for good, so the person is asked first (once for each set of items), and what is older than the setting stays listed until they answer. */
+      const key = stale.map((r) => r.host + r.id).sort().join(','); const days = +S.trashDays || 30;
+      if (X.trashAsked !== key) {
+        X.trashAsked = key;
+        A.dialog({ icon: 'trash', title: 'Delete old items from Trash?', width: 460, modal: true, body: '<p>' + stale.length + (stale.length === 1 ? ' item has' : ' items have') + ' been in Trash longer than ' + days + ' days (your Keep items in Trash for setting). Deleting them cannot be undone.</p>',
+          actions: [{ id: 'k', label: 'Keep them', kind: 't', cb: (c) => c.close() }, { id: 'd', label: 'Delete ' + stale.length, kind: 'f', cb: async (c) => {
+            c.close(); const by = {}; stale.forEach((r) => { (by[r.host] = by[r.host] || []).push(r); }); let gone = 0; const bad = [];
+            for (const h of Object.keys(by)) { try { await E.call('trash_empty_items', { host: h, ids: by[h].map((r) => r.id) }); gone += by[h].length; } catch (e) { bad.push(A.hostName(h) + ': ' + e.message); } }
+            if (gone) A.snack('Removed ' + gone + (gone === 1 ? ' item' : ' items') + ' older than ' + days + ' days from Trash'); if (bad.length) A.snack(bad.join(' · '), { error: true });
+            X.trashAt = 0; if (A.state.view === 'tools') A.pageTools(); } }] });
       }
-      if (gone) A.snack('Removed ' + gone + (gone === 1 ? ' item' : ' items') + ' older than ' + (+S.trashDays || 30) + ' days from Trash');
     }
     rows.sort((a, b) => b.at - a.at); X.trash = rows; X.trashAt = E.now(); X.trashBusy = false; X.trashErr = errs.join(' · ');
     for (const k of [...X.trashSel]) if (!rows.some((r) => r.host + '~' + r.id === k)) X.trashSel.delete(k);

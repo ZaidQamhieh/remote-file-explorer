@@ -12,6 +12,7 @@
   const LANGS = [['en', 'English'], ['de', 'Deutsch'], ['es', 'Español'], ['ar', 'العربية']];
   /* [en, de, es, ar] */
   const D = [
+    ['folder', 'Ordner', 'carpeta', 'مجلد'], ['file', 'Datei', 'archivo', 'ملف'],
     ['Loading…', 'Wird geladen…', 'Cargando…', 'جارٍ التحميل…'], ['Too large to preview', 'Zu groß für die Vorschau', 'Demasiado grande para la vista previa', 'كبير جدًا للمعاينة'], ['No preview', 'Keine Vorschau', 'Sin vista previa', 'لا توجد معاينة'],
     ['Fit', 'Einpassen', 'Ajustar', 'ملاءمة'], ['Zoom in', 'Vergrößern', 'Acercar', 'تكبير'], ['Zoom out', 'Verkleinern', 'Alejar', 'تصغير'], ['Previous file', 'Vorherige Datei', 'Archivo anterior', 'الملف السابق'], ['Next file', 'Nächste Datei', 'Archivo siguiente', 'الملف التالي'],
     ['Download to read it', 'Zum Lesen herunterladen', 'Descargar para leerlo', 'نزّل للقراءة'], ['Download to open it', 'Zum Öffnen herunterladen', 'Descargar para abrirlo', 'نزّل للفتح'],
@@ -62,7 +63,7 @@
     es: [[/^([\d.,\u00a0\u202f\u066c\u0660-\u0669]+) items?$/, (m, n) => n + (cnt(n) === 1 ? ' elemento' : ' elementos')], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
     ar: [[/^([\d.,\u00a0\u202f\u066c\u0660-\u0669]+) items?$/, (m, n) => { const f = new Intl.PluralRules('ar').select(cnt(n)); return f === 'zero' ? 'لا عناصر' : f === 'one' ? 'عنصر واحد' : f === 'two' ? 'عنصران' : f === 'few' ? n + ' عناصر' : f === 'many' ? n + ' عنصرًا' : n + ' عنصر'; }], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
   };
-  const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } return r === undefined ? s : s.replace(t, r); };
+  const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } if (r === undefined && /^[\d.,\u00a0\u202f\u066c\u0660-\u0669]+ items? · /.test(t)) r = t.split(' · ').map((p) => tr(p, lang).trim()).join(' · '); return r === undefined ? s : s.replace(t, r); };
   const SKIP = 'script,style,textarea,input,select,.mono,code,pre,[data-nolocal],.crumb,.codev,.csvv,.fp,.hrow time';
   const recs = new WeakMap(); const arecs = new WeakMap(); let busy = false;
   function doText(n) {

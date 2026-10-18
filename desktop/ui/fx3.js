@@ -178,6 +178,16 @@
     sb.style.position = 'relative'; const dd = document.createElement('div'); dd.className = 'qdrop'; dd.hidden = true; dd.setAttribute('role', 'listbox'); sb.appendChild(dd); const inp = $('#q');
     const fill = () => { const v = inp.value.trim().toLowerCase(); const rec = X3.recentQ.filter((q) => !v || q.toLowerCase().includes(v)).slice(0, 5); const sv = X3.saved.filter((s) => !v || s.q.toLowerCase().includes(v)); dd.innerHTML = (sv.length ? '<small>Saved</small>' + sv.map((s) => '<div class="qi" role="option" data-q="' + esc(s.q) + '">' + ic('star') + esc(s.q) + '<small>' + (s.scope === 'all' ? 'all servers' : 'this server') + '</small></div>').join('') : '') + (rec.length ? '<small>Recent</small>' + rec.map((q) => '<div class="qi" role="option" data-q="' + esc(q) + '">' + ic('clock') + esc(q) + '</div>').join('') : ''); dd.hidden = !dd.innerHTML; };
     inp.addEventListener('focus', fill); inp.addEventListener('input', fill); inp.addEventListener('blur', () => setTimeout(() => { dd.hidden = true; }, 160)); inp.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+    /* The suggestions can be picked with the keyboard: Down and Up move through them, Enter runs the marked one. */
+    dd.id = 'qdrop'; inp.setAttribute('role', 'combobox'); inp.setAttribute('aria-controls', 'qdrop'); inp.setAttribute('aria-autocomplete', 'list'); let qa = -1;
+    const mark = () => { const its = $$('[data-q]', dd); its.forEach((x, i) => { x.id = 'qo' + i; x.setAttribute('aria-selected', String(i === qa)); x.classList.toggle('on', i === qa); }); if (qa >= 0 && its[qa]) inp.setAttribute('aria-activedescendant', its[qa].id); else inp.removeAttribute('aria-activedescendant'); inp.setAttribute('aria-expanded', String(!dd.hidden)); };
+    inp.addEventListener('input', () => { qa = -1; setTimeout(mark, 0); }); inp.addEventListener('focus', () => { qa = -1; setTimeout(mark, 0); });
+    inp.addEventListener('keydown', (e) => {
+      const its = $$('[data-q]', dd); if (dd.hidden || !its.length) { if (e.key === 'ArrowDown' && inp.value === '') { fill(); setTimeout(mark, 0); } return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); qa = e.key === 'ArrowDown' ? Math.min(its.length - 1, qa + 1) : Math.max(-1, qa - 1); mark(); }
+      else if (e.key === 'Enter' && qa >= 0 && its[qa]) { e.preventDefault(); e.stopImmediatePropagation(); const q = its[qa].dataset.q; dd.hidden = true; qa = -1; mark(); A.runQuery(q, true); }
+      else if (e.key === 'Escape') { qa = -1; mark(); }
+    }, true);
     dd.addEventListener('mousedown', (e) => { const it = e.target.closest('[data-q]'); if (it) { e.preventDefault(); dd.hidden = true; A.runQuery(it.dataset.q); } });
   }
 

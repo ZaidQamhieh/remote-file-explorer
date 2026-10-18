@@ -201,7 +201,7 @@ updates** and the welcome tour.
   was approved (not owner logins and not this app), after you confirm.
 - **Move deleted items to Trash** off makes a delete on a computer permanent (the agent's trash is
   skipped). **Keep items in Trash for** (7, 30 or 90 days): when you open **Tools → Trash**, items
-  deleted longer ago than that are removed for good, and the app says how many.
+  deleted longer ago than that are listed in a question ("Delete old items from Trash?"); if you agree they are removed for good and the app says how many, and if you keep them they stay until you empty them.
 - **Close to the system tray** hides the window instead of closing it, and transfers go on; the tray
   icon's menu has **Open RFE**, the number of running transfers, **Pause all transfers**, **Pair a
   phone…** and **Quit RFE**, and a click on the icon brings the window back. On a desktop with no tray
@@ -478,7 +478,7 @@ in [keystore.md](keystore.md).
 | Nothing to transfer | Nothing is selected, or the selection holds no files. |
 | Open the folder in Files to extract. | **Extract here** works on an archive you opened in **Files**. |
 | Trash is already empty | There is nothing in the agent's trash to restore or discard. |
-| Removed N items older than D days from Trash | You opened Trash and **Keep items in Trash for** removed the items deleted longer ago than that. |
+| Removed N items older than D days from Trash | You opened Trash, agreed to "Delete old items from Trash?" and **Keep items in Trash for** removed the items deleted longer ago than that. |
 | RFE starts hidden in the tray when you sign in | **Start RFE when I sign in** was switched on. |
 | RFE no longer starts when you sign in | It was switched off. |
 | The notification was not shown | **Test notification** was refused: notifications are not available in this session. |

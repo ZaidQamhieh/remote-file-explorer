@@ -136,7 +136,7 @@
       row('Close to the system tray', noTray ? 'This system shows no tray icon, so closing the window closes the app' : 'Closing the window keeps transfers running in the tray', noTray ? '<button class="sw" disabled role="switch" aria-checked="false" aria-label="closeToTray"></button>' : sw('closeToTray')) +
       row('Start RFE when I sign in', '', sw('startLogin')) +
       row('Desktop notifications', '', sw('desktopNotif')) +
-      (S.desktopNotif ? row('New device requests', '', sw('nPair')) + row('Updates', '', sw('nUpdate')) : '') +
+      (S.desktopNotif ? row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', '', sw('notifyErrors')) + row('New device requests', '', sw('nPair')) + row('Updates', '', sw('nUpdate')) : '') +
       row('Try it', '', '<button class="btn" data-sx="notif">' + ic('bell') + 'Test notification</button>') + '</div>';
     return h.replace('<div class="sg"><h3>Files</h3>', desktop + '<div class="sg"><h3>Files</h3>');
   };

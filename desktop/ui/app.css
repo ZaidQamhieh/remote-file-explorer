@@ -711,3 +711,4 @@ html.winsize *,html.winsize *::before,html.winsize *::after{transition:none!impo
 input::placeholder,textarea::placeholder{color:var(--outline)}
 .sbar input::placeholder{color:var(--on-var)}
 .li.cur,.tile.cur{outline:.125rem solid var(--primary);outline-offset:-.125rem}
+.qi.on{background:var(--hover);outline:.125rem solid var(--primary);outline-offset:-.125rem}

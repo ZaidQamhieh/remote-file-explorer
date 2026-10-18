@@ -30,9 +30,13 @@
   A.snack = (msg, o) => {
     o = o || {}; $('.snack', layer()) && $('.snack', layer()).remove(); clearTimeout(snackTimer);
     const el = document.createElement('div'); el.className = 'snack' + (o.error ? ' err' : ''); el.setAttribute('role', o.error ? 'alert' : 'status');
-    el.innerHTML = (o.error ? ic('alert-circle') : '') + '<span>' + esc(msg) + '</span>' + (o.action ? '<a data-a="1">' + esc(o.action) + '</a>' : '') + '<a data-x="1" class="ib sm" style="padding:0">' + ic('x', { size: 18 }) + '</a>';
-    el.addEventListener('click', (e) => { const t = e.target.closest('a'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
-    layer().appendChild(el); snackTimer = setTimeout(() => el.remove(), o.timeout || 6000);
+    el.innerHTML = (o.error ? ic('alert-circle') : '') + '<span>' + esc(msg) + '</span>' + (o.action ? '<button type="button" class="sna" data-a="1">' + esc(o.action) + '</button>' : '') + '<button type="button" class="ib sm" data-x="1" aria-label="Dismiss">' + ic('x', { size: 18 }) + '</button>';
+    el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
+    /* It stays while the pointer or the keyboard is on it, and an Undo gets longer (WCAG 2.2.1). */
+    const arm = () => { clearTimeout(snackTimer); snackTimer = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
+    el.addEventListener('mouseenter', () => clearTimeout(snackTimer)); el.addEventListener('mouseleave', arm);
+    el.addEventListener('focusin', () => clearTimeout(snackTimer)); el.addEventListener('focusout', arm);
+    layer().appendChild(el); arm();
   };
   /* A short fade-and-rise for content that has just been swapped in. */
   A.dialog = (o) => {
@@ -41,8 +45,8 @@
     const reuse = A.dialogReuse && A.dialogReuse.sc.isConnected ? A.dialogReuse : null; A.dialogReuse = null;
     const sc = reuse ? reuse.sc : document.createElement('div'); if (!reuse) sc.className = 'scrim';
     const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); if (/\bconn\b/.test(o.cls || '')) sc.classList.add('top'); /* the add-a-computer tabs share one top edge, so the tab bar stays put while the box changes height */ d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
-    d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
-    d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2>' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
+    d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); const hid = 'dlgh' + (A.dlgN = (A.dlgN || 0) + 1); d.setAttribute('aria-labelledby', hid);
+    d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2 id="' + hid + '">' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
     const df = $('.df', d);
     const opener = reuse ? reuse.opener : document.activeElement;
     const close = () => { sc.remove(); document.removeEventListener('keydown', onKey, true); if (o.onClose) o.onClose(); if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function' && !$('.scrim .dlg')) opener.focus(); };
@@ -71,6 +75,7 @@
     if (reuse) { reuse.retire(); sc.classList.add('still'); sc.replaceChild(d, reuse.el); } else { sc.appendChild(d); layer().appendChild(sc); }
     if (o.onOpen) o.onOpen(ctl);
     const f = $('input,select', d); if (f && !o.noFocus) { f.focus(); if (f.select && f.type === 'text') f.select(); }
+    else if (!o.noFocus) { const b = $('.df .btn.f, .df .btn.ed, .df .btn', d); if (b) b.focus(); }
     return ctl;
   };
   function closeMenus() { $$('.menu', layer()).forEach((m) => m.remove()); }
@@ -400,7 +405,7 @@
   };
 
   /* ---------- transfers glue ---------- */
-  A.copy = (text) => { try { navigator.clipboard.writeText(text); } catch (e) { /* ignore */ } A.snack('Copied path'); };
+  A.copy = async (text, msg) => { try { await navigator.clipboard.writeText(text); A.snack(msg || 'Copied path'); } catch (e) { A.snack('Could not copy. Select the text and press Ctrl+C.', { error: true }); } };
   A.transferNames = (host, dir, names) => {
     if (host === 'local') { const m = A.mainHost(); if (m === 'local') { A.snack('Pick a server first: switch the main view to a server.', { error: true }); return; } return A.doEnqueue('up', m, dir, A.mainPane.path, names); }
     return A.doEnqueue('down', host, dir, A.downloadDir(), names);

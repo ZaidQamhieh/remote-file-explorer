@@ -165,7 +165,7 @@
   function checksumDialog(pane, n) {
     let algo = 'sha256'; let value = ''; let err = '';
     const d = A.dialog({ icon: 'hash', title: 'Checksum', width: 520, body: '<div class="fxkv"><b>' + esc(n.n) + '</b><small>' + U.fmtBytes(n.b) + '</small></div><div class="seg" id="ckalg" style="margin:0 0 .75rem">' + ALGOS.map((a) => '<button data-v="' + a[0] + '" class="' + (a[0] === algo ? 'on' : '') + '">' + a[1] + '</button>').join('') + '</div><div class="fxhash"><small id="cklab">SHA-256</small><code id="ckval">Computing…</code></div><div class="hint" style="margin:.75rem 0 0">Computed on the server by <span class="mono">rfe-agent</span>. Compare it with the value the publisher lists.</div>',
-      actions: [{ label: 'Close', kind: 'tx' }, { id: 'copy', label: 'Copy', kind: 'f', icon: 'copy', cb: () => { if (value) { A.copy(value); A.snack('Checksum copied'); } return false; } }],
+      actions: [{ label: 'Close', kind: 'tx' }, { id: 'copy', label: 'Copy', kind: 'f', icon: 'copy', cb: () => { if (value) { A.copy(value, 'Checksum copied'); } return false; } }],
       onOpen: (ctl) => {
         const run = () => {
           value = ''; err = ''; const v = $('#ckval', ctl.el); v.textContent = 'Computing…'; $('#cklab', ctl.el).textContent = ALGOS.find((a) => a[0] === algo)[1]; if (ctl.btn.copy) ctl.btn.copy.disabled = true; const mine = algo;
@@ -220,7 +220,10 @@
     });
   }
   function shareResult(sh) {
-    A.dialog({ icon: 'check-circle', title: 'Link ready', width: 460, body: '<div class="qrwrap sm"><div class="qrbox">' + A.qrSvg(sh.url, { px: 168, fg: '#0b1110', bg: '#fff', border: 2 }) + '</div></div><div class="fxhash"><small>' + esc(sh.name) + ' · expires in ' + left(sh.exp - E.now()) + '</small><code>' + esc(sh.url) + '</code></div>', actions: [{ label: 'Done', kind: 'tx' }, { label: 'Copy link', kind: 'f', icon: 'copy', cb: () => { A.copy(sh.url); A.snack('Link copied'); return false; } }] });
+    /* The agent keeps only a hash of the link: closing before it is copied loses it, so the first close asks. */
+    let copied = false, warned = false;
+    const guard = () => { if (copied || warned) return undefined; warned = true; A.snack('This link can’t be shown again. Copy it, or press Done again to close.'); return false; };
+    A.dialog({ icon: 'check-circle', title: 'Link ready', width: 460, body: '<div class="qrwrap sm"><div class="qrbox">' + A.qrSvg(sh.url, { px: 168, fg: '#0b1110', bg: '#fff', border: 2 }) + '</div></div><div class="fxhash"><small>' + esc(sh.name) + ' · expires in ' + left(sh.exp - E.now()) + '</small><code>' + esc(sh.url) + '</code></div>', actions: [{ label: 'Done', kind: 'tx', cb: () => guard() }, { label: 'Copy link', kind: 'f', icon: 'copy', cb: () => { copied = true; A.copy(sh.url, 'Link copied'); return false; } }], beforeClose: () => guard() });
   }
   A.shareDialog = shareDialog; A.shareResult = shareResult;
 
@@ -343,7 +346,7 @@
 
   /* ---------- delegated actions ---------- */
   const H = {
-    'pair.new': () => newCode(), 'pair.link': () => { A.copy(X.pair.qr); A.snack('Pairing data copied'); }, 'pair.copycode': () => { A.copy(X.pair.code); A.snack('Code copied'); },
+    'pair.new': () => newCode(), 'pair.link': () => { A.copy(X.pair.qr, 'Pairing data copied'); }, 'pair.copycode': () => { A.copy(X.pair.code, 'Code copied'); },
     'pair.save': () => { const s = pairSrv(); let svg; try { svg = QR.svg(X.pair.qr, { px: 512, border: 4 }); } catch (e) { fail(e); return; } A.saveLocal('rfe-pairing-' + s.name.replace(/[^\w.-]+/g, '-') + '.svg', svg).then((r) => A.snack('Saved ' + r.name + ' to ' + r.dir, { action: 'Show', onAction: () => A.openPath('local', r.path, true) })).catch(fail); },
     'pair.srv': (id) => { X.pair.host = id; X.pair.code = ''; X.pair.err = ''; X.devices = []; X.devAt = 0; refreshPair(); newCode(true); A.loadDevices(); },
     'dev.approve': (i) => approveDialog(X.inbox[+i || 0]),

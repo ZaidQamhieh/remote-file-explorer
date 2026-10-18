@@ -51,7 +51,7 @@
     const sc = reuse ? reuse.sc : document.createElement('div'); if (!reuse) sc.className = 'scrim';
     const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); if (/\bconn\b/.test(o.cls || '')) sc.classList.add('top'); /* the add-a-computer tabs share one top edge, so the tab bar stays put while the box changes height */ d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
     d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); const hid = 'dlgh' + (A.dlgN = (A.dlgN || 0) + 1); d.setAttribute('aria-labelledby', hid);
-    d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2 id="' + hid + '">' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
+    d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2 id="' + hid + '"' + (o.nolocal ? ' data-nolocal' : '') + '>' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
     const df = $('.df', d);
     const opener = reuse ? reuse.opener : document.activeElement;
     const close = () => { sc.remove(); document.removeEventListener('keydown', onKey, true); if (o.onClose) o.onClose(); if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function' && !$('.scrim .dlg')) opener.focus(); };
@@ -251,8 +251,8 @@
       for (let r = a; r < b; r++) {
         if (this.creating && r === 0) { h += '<div class="li" style="top:0;height:' + rb / 16 + 'rem"><div class="lead">' + ic('folder-plus') + '</div><div class="t newrow"><input class="rn" data-new value="New folder" spellcheck="false" aria-label="New folder name"><span class="rerr" data-err></span></div></div>'; continue; }
         const i = r - off; const it = this.items[i]; const sel = this.sel.has(it.n); const rn = this.renaming === it.n;
-        const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
-        h += '<div role="row" id="' + this.rid(i) + '" aria-selected="' + !!sel + '" class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
+        const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t" role="gridcell"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
+        h += '<div role="row" id="' + this.rid(i) + '" aria-selected="' + !!sel + '" class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s" role="gridcell">' + itemSize(it) + '</div><div class="m hm" role="gridcell">' + U.fmtDate(it.mod) + '</div><div class="p hm" role="gridcell">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
       }
       const edit = this._keepEdit ? $('input.rn', vs) : null; const editVal = edit ? edit.value : null; if (edit) edit._skip = true;
       vs.innerHTML = h; this.activeDesc(rows);
@@ -404,7 +404,7 @@
     if (!this.el) return;
     this.el.classList.toggle('narrow', this.el.clientWidth > 0 && this.el.clientWidth < 43.75 * 16 * A.u()); /* too little room for every column: the names come first */
     const c = this.el.querySelector('.crumb'); if (!c || c.querySelector('input')) return;
-    c.classList.remove('off'); if (c.scrollWidth > c.clientWidth + 1 || c.clientWidth < 8.75 * 16 * A.u()) c.classList.add('off');
+    const h1 = this.el.querySelector('.lh h1'); c.classList.remove('off'); if (c.scrollWidth > c.clientWidth + 1 || c.clientWidth < 8.75 * 16 * A.u() || (h1 && h1.scrollWidth > h1.clientWidth + 1)) c.classList.add('off');
   };
   const renderOnce = Pane.prototype.render; Pane.prototype.render = function (...a) { const v = renderOnce.apply(this, a); this.fit(); return v; };
   A.Pane = Pane;

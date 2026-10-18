@@ -284,7 +284,7 @@
 
   /* ---------- servers page ---------- */
   function spark(h) {
-    const v = h.slice(-30); const w = 200, hh = 36; const nums = v.filter((x) => x != null); if (nums.length < 2) return '<svg viewBox="0 0 200 36"><line x1="0" y1="18" x2="200" y2="18" stroke="var(--outline-var)" stroke-dasharray="4 4"/></svg>';
+    const v = h.slice(-30); const w = 200, hh = 36; const nums = v.filter((x) => x != null); if (nums.length < 2) return '<svg viewBox="0 0 200 36" aria-hidden="true"></svg>';
     const mx = Math.max.apply(null, nums) + 2, mn = Math.min.apply(null, nums) - 2; let d = '', pen = false;
     v.forEach((x, i) => { if (x == null) { pen = false; return; } const X = (i / (v.length - 1)) * w, Y = hh - 3 - ((x - mn) / (mx - mn || 1)) * (hh - 8); d += (pen ? 'L' : 'M') + X.toFixed(1) + ' ' + Y.toFixed(1); pen = true; });
     return '<svg viewBox="0 0 200 36" preserveAspectRatio="none"><path d="' + d + '" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linejoin="round"/></svg>';
@@ -302,7 +302,7 @@
     else if (s.state === 'trust') { note = '<div class="note w">' + ic('shield') + '<span>Unknown server key. Review it and compare it with the one on the server before you trust it.</span></div>'; act = B('trust', 'Review key…', 'f', 'shield-check') + B('cancel', 'Cancel', ''); }
     else if (s.state === 'refused') { note = '<div class="note e">' + ic('shield') + '<span>The certificate changed. Connection refused to protect your files.</span></div>'; act = B('reverify', 'Review…', 'f', 'shield-check') + B('diag', 'Diagnose', ''); }
     else act = B('connect', 'Connect', 'f', 'plug') + B('edit', 'Edit', '');
-    return '<div class="sc' + (A.mainPane.host === s.id ? ' sel' : '') + '" data-sid="' + esc(s.id) + '"><div class="h"><div class="gl">' + ic(icn) + '</div><div><b data-nolocal>' + esc(s.name) + '</b><small>' + esc(s.host) + ':' + s.port + '</small></div><span class="sp"></span><span class="chipst ' + s.state + '"><i></i>' + STL[s.state] + '</span></div>' +
+    return '<div class="sc' + (A.mainPane.host === s.id ? ' sel' : '') + '"' + (A.mainPane.host === s.id ? ' aria-current="true"' : '') + ' data-sid="' + esc(s.id) + '"><div class="h"><div class="gl">' + ic(icn) + '</div><div><b data-nolocal>' + esc(s.name) + '</b><small>' + esc(s.host) + ':' + s.port + '</small></div><span class="sp"></span><span class="chipst ' + s.state + '"><i></i>' + STL[s.state] + '</span></div>' +
       '<div class="meta"><div><small>Route</small>' + esc(s.via) + '</div><div><small>System</small>' + esc(s.os) + '</div><div><small>Agent</small>' + esc(s.agent || '—') + '</div></div>' +
       '<div class="lat">' + spark(s.hist) + '<b>' + (s.state === 'online' ? s.latency + '<small> ms</small>' : '—') + '</b></div>' +
       '<div><div class="bar' + (used > 0.8 ? ' hi' : '') + '"><i style="width:' + (used * 100).toFixed(0) + '%"></i></div><div class="row2"><span>Storage</span><span>' + (hasDisk ? dsk(s.disk[0]) + (big ? ' TB' : ' GB') + ' of ' + dsk(s.disk[1]) + (big ? ' TB' : ' GB') : '—') + '</span></div></div>' + note +
@@ -311,7 +311,7 @@
   A.serverCard = serverCard;
   function pageServers() {
     const on = E.servers.filter((s) => s.state === 'online').length;
-    const stage = $('#stage'); const html = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<button type="button" class="sc add" data-sa="add">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Address, key and fingerprint</span></button></div>';
+    const stage = $('#stage'); const html = '<h2 class="pt">Servers</h2><p class="ps">' + E.servers.length + ' saved · ' + on + ' connected</p><div class="grid3" id="sgrid">' + E.servers.map(serverCard).join('') + '<button type="button" class="sc add" data-sa="add">' + ic('plus') + '<b>Add a server</b><span style="color:var(--on-var)">Address and port. You check its key next.</span></button></div>';
     /* This runs on every tick: an unchanged page is left alone, and a rebuilt one gives focus back to the same control, so a press or a Tab stop is not lost. */
     if (stage.querySelector('#sgrid') && stage._sv === html) return;
     const at = document.activeElement; const key = at && stage.contains(at) ? [at.dataset.sa, at.dataset.id || at.dataset.sid] : null;

@@ -76,7 +76,7 @@ button{cursor:pointer}
 .btn[disabled],.btn.dis{opacity:.38;pointer-events:none}
 /* stage */
 .stage{background:var(--sc-low);border-radius:1rem;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;position:relative}
-.stage.page{overflow:auto;padding:1.375rem 1.625rem 1.625rem;display:block}
+.stage.page{overflow:auto;padding:1.375rem 1.625rem 5.5rem;display:block}
 .stage h2.pt{margin:0 0 1.25rem;font:400 1.75rem var(--font)}.stage h2.pt:has(+ .ps){margin-bottom:.25rem}
 .stage .ps{color:var(--on-var);margin:0 0 1.25rem}
 /* pane */
@@ -712,3 +712,4 @@ input::placeholder,textarea::placeholder{color:var(--outline)}
 .sbar input::placeholder{color:var(--on-var)}
 .li.cur,.tile.cur{outline:.125rem solid var(--primary);outline-offset:-.125rem}
 .qi.on{background:var(--hover);outline:.125rem solid var(--primary);outline-offset:-.125rem}
+body:has(.app.drawer) .snack,body:has(.app.wide) .snack{left:16rem}

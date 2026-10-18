@@ -334,10 +334,12 @@
       icon: 'plug', cls: edit ? '' : 'conn', title: edit ? 'Edit ' + s.name : 'New connection', width: 520, enter: 'ok',
       body: (edit || !A.connTabs ? '' : A.connTabs('manual')) + '<div class="fld"><label>Name</label><input id="sn" value="' + esc(v.name) + '" placeholder="e.g. render-farm" spellcheck="false"><span class="err" id="sne"></span></div><div class="fld two"><div class="fld" style="margin:0"><label>Host or address</label><input id="sh" value="' + esc(v.host) + '"' + (edit ? ' disabled' : '') + ' placeholder="100.64.0.12 or host.example.com" spellcheck="false"><span class="err" id="she"></span></div><div class="fld" style="margin:0"><label>Port</label><input id="sp" value="' + v.port + '"' + (edit ? ' disabled' : '') + ' inputmode="numeric"></div></div><div style="color:var(--on-var);font-size:.7812rem">' + (edit ? 'The address belongs to the trusted key. To use another address, add a new connection.' : "Type the new host's address. Your current login stays saved. " + 'The app reads the server’s certificate fingerprint first and sends no password until you confirm it.') + '</div>',
       actions: [{ label: 'Cancel' }, { id: 'ok', label: edit ? 'Save' : 'Connect', kind: 'f', icon: edit ? 'check' : 'plug', cb: (ctl) => {
-        const g = (i) => $(i, ctl.el); const host = g('#sh').value.trim(), port = parseInt(g('#sp').value, 10) || 7443; const name = g('#sn').value.trim() || host; let bad = false;
+        const g = (i) => $(i, ctl.el); const host = g('#sh').value.trim(), rawPort = g('#sp').value.trim(), port = rawPort ? Number(rawPort) : 7443; const name = g('#sn').value.trim() || host; let bad = false;
         g('#sne').textContent = ''; g('#she').textContent = '';
         if (E.servers.some((x) => x.name.toLowerCase() === name.toLowerCase() && (!edit || x.id !== s.id))) { g('#sne').textContent = 'A server with this name already exists'; bad = true; }
         if (!host || /\s/.test(host)) { g('#she').textContent = 'Enter a host or IP address'; bad = true; }
+        let pe = $('#spe', ctl.el); if (!pe) { pe = document.createElement('span'); pe.className = 'err'; pe.id = 'spe'; g('#sp').parentNode.appendChild(pe); } pe.textContent = '';
+        if (!Number.isInteger(port) || port < 1 || port > 65535) { pe.textContent = 'Use a port from 1 to 65535'; bad = true; }
         if (bad) return false;
         if (edit) { E.updateServer(s.id, { name }).then(() => { A.snack('Saved ' + name); renderAll(); }).catch((e) => A.snack(e.message, { error: true })); }
         else A.addAndOpen({ name, host, port });

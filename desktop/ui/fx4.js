@@ -186,7 +186,13 @@
     const hint = document.createElement('div'); hint.className = 'dohint'; hint.hidden = true; hint.innerHTML = ic('upload') + 'Drop to upload to the open folder'; document.body.appendChild(hint);
     ev.listen('tauri://drag-enter', () => { if (st.view === 'files' && A.mainPane.host !== 'local') hint.hidden = false; });
     ev.listen('tauri://drag-leave', () => { hint.hidden = true; });
-    ev.listen('tauri://drag-drop', (e) => { hint.hidden = true; const paths = (e.payload && e.payload.paths) || []; if (paths.length) A.uploadPaths(paths); });
+    ev.listen('tauri://drag-drop', (e) => {
+      hint.hidden = true; const paths = (e.payload && e.payload.paths) || []; if (!paths.length || st.view !== 'files') return;
+      /* A drop on a folder row goes into that folder; anywhere else it goes to the open folder. */
+      const pos = e.payload.position; const m = A.mainPane; let dir = m.path;
+      if (pos) { const dpr = window.devicePixelRatio || 1; const row = document.elementFromPoint(pos.x / dpr, pos.y / dpr); const li = row && row.closest && row.closest('.li[data-i], .tile[data-i]'); const it = li && m.el && m.el.contains(li) ? m.items[+li.dataset.i] : null; if (it && it.t === 'dir') dir = U.join(m.path, it.n); }
+      A.uploadPaths(paths, m.host, dir);
+    });
   })();
 
   /* ================= settings ================= */

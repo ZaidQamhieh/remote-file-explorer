@@ -214,7 +214,7 @@
     renderRows() {
       const rows = $('[data-rows]', this.el); if (!rows) return; const vs = $('.vs', rows);
       if (this.loading) { vs.style.height = 'auto'; vs.innerHTML = '<div class="skel">' + '<i></i>'.repeat(10) + '</div>'; return; }
-      if (this.missing) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('folder') + '</div><h3>Can’t open this folder</h3><p>' + esc(this.err && this.err.message || (this.path + ' no longer exists.')) + '</p><div class="row"><button class="btn f" data-act="up">Go up</button></div></div></div>'; return; }
+      if (this.missing) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('folder') + '</div><h3>' + (this.err && /denied|permission|forbidden/i.test(this.err.message || '') ? 'No access to this folder' : this.err && /network|connect|timed? ?out|offline/i.test(this.err.message || '') ? 'Can’t reach the server' : 'Can’t open this folder') + '</h3><p>' + esc(this.err && this.err.message || (this.path + ' no longer exists.')) + '</p><div class="row"><button class="btn f" data-act="up">Go up</button><button class="btn" data-act="refresh">Try again</button></div></div></div>'; return; }
       const n = this.items.length;
       const sv0 = E.server(this.host);
       if (!n && sv0 && this.host !== 'local' && sv0.accessDenied) { vs.style.height = 'auto'; vs.innerHTML = '<div class="es warn"><div class="box"><div class="ico">' + ic('lock') + '</div><h3>No folder is open to this login</h3><p>The agent shows this computer nothing to browse. Ask the owner of the PC to allow a folder for this login.</p><div class="row"><button class="btn tx" data-act="diagnose">' + ic('activity') + 'Diagnose</button></div></div></div>'; return; }
@@ -251,7 +251,7 @@
       this.selChanged();
     }
     selectAll() { this.sel = new Set(this.items.map((x) => x.n)); this.selChanged(); }
-    startRename(n) { if (!n) return; this.renaming = n.n; this.renderRows(); }
+    startRename(n) { if (!n) return; this.renaming = n.n; if (this.mode !== 'list') { this.mode = 'list'; this.render(); } else this.renderRows(); } /* the grid draws no input, so renaming shows the list */
     startNew() { this.creating = true; this.mode = 'list'; this.q = ''; this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
     async commitRename(inp) {
       const old = this.renaming; const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);

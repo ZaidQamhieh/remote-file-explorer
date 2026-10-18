@@ -39,7 +39,7 @@
   A.dialog = (o) => {
     closeMenus();
     const sc = document.createElement('div'); sc.className = 'scrim';
-    const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
+    const d = document.createElement('div'); d.className = 'dlg ' + (o.cls || ''); if (/\bconn\b/.test(o.cls || '')) sc.classList.add('top'); /* the add-a-computer tabs share one top edge, so the tab bar stays put while the box changes height */ d.style.setProperty('--w', (o.width || 480) / 16 + 'rem');
     d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
     d.innerHTML = (o.icon ? '<span class="di">' + ic(o.icon) + '</span>' : '') + '<h2>' + esc(o.title) + '</h2><div class="db">' + (o.body || '') + '</div><div class="df"></div>';
     const df = $('.df', d);
@@ -71,8 +71,8 @@
     if (from && d.animate) {
       sc.classList.add('still'); const to = d.getBoundingClientRect(); d.style.overflow = 'hidden';
       const done = () => { d.style.overflow = ''; };
-      const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done;
-      [...d.querySelectorAll('h2,.di,.db > :not(.fxtabs),.df')].forEach((el, i) => el.animate([{ opacity: 0, transform: 'translateY(.5rem)' }, { opacity: 1, transform: 'none' }], { duration: 240, delay: 40 + Math.min(i, 6) * 25, easing: 'ease-out', fill: 'backwards' }));
+      const mv = d.animate([{ width: from.width + 'px', height: from.height + 'px' }, { width: to.width + 'px', height: to.height + 'px' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }); mv.onfinish = done; mv.oncancel = done;
+      [...d.querySelectorAll('h2,.di,.db > :not(.fxtabs),.df')].forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out', fill: 'backwards' }));
     }
     if (o.onOpen) o.onOpen(ctl);
     const f = $('input,select', d); if (f && !o.noFocus) { f.focus(); if (f.select && f.type === 'text') f.select(); }

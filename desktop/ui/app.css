@@ -677,6 +677,8 @@ a:hover,.kv a:hover{text-decoration:underline}
 .dlg{animation:dlgin .24s cubic-bezier(.2,.8,.2,1)}
 @keyframes dlgin{from{opacity:0;transform:translateY(1rem) scale(.97)}}
 .scrim.still,.scrim.still .dlg{animation:none}
+.dlg.conn{min-height:min(41rem,calc(100vh - 5rem))}.dlg.conn .db{flex:1}
+.scrim.top{height:100%;align-items:start;padding-top:max(2rem,calc((100vh - 42rem) / 2))}
 .main{transition:grid-template-columns .24s cubic-bezier(.2,.8,.2,1),grid-template-rows .24s cubic-bezier(.2,.8,.2,1)}
 body.resizing .main{transition:none}
 [data-rows].scrolling .li,[data-rows].scrolling .li .lead{transition:none}

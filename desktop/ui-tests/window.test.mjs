@@ -536,3 +536,34 @@ test("folding the details panel moves it instead of snapping: it slides in, and 
   assert.deepEqual(errs, []);
   done();
 });
+
+test("the add-a-computer tabs share one size, so switching never resizes the box", async () => {
+  const { d, errs, done } = await open();
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".dlg.conn").map((r) => r.cssText).join(" ");
+  assert.match(css, /min-height/, "the connection dialogs need one shared minimum height");
+  d.querySelector(".fab").click(); await sleep(150);
+  const w = [];
+  for (const next of ["code", "disc", "manual"]) {
+    w.push(d.querySelector(".dlg").style.getPropertyValue("--w"));
+    d.querySelector('.dlg [data-fx^="conn.tab|' + next + '"]').click(); await sleep(150);
+  }
+  w.push(d.querySelector(".dlg").style.getPropertyValue("--w"));
+  assert.equal(new Set(w).size, 1, "the three tabs use different widths: " + w.join(", "));
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the add-a-computer tabs share one top edge, so the tab bar stays put when the box changes height", async () => {
+  const { d, A, errs, done } = await open();
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".scrim.top").map((r) => r.cssText).join(" ");
+  assert.match(css, /align-items:\s*start/);
+  assert.match(css, /height:\s*100%/, "an anchored scrim must keep the full height");
+  d.querySelector(".fab").click(); await sleep(150);
+  for (const tab of ["code", "disc", "manual"]) {
+    assert.equal(d.querySelectorAll(".scrim").length, 1, "one dialog at a time before " + tab);
+    assert.ok(d.querySelector(".scrim").classList.contains("top"), "the " + tab + " dialog is not anchored");
+    d.querySelector('.dlg [data-fx^="conn.tab|' + (tab === "code" ? "disc" : tab === "disc" ? "manual" : "code") + '"]').click(); await sleep(150);
+  }
+  assert.deepEqual(errs, []);
+  done();
+});

@@ -5,6 +5,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{free_port, Agent, Raw};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, AgentClient, AgentError};
 use rfe_desktop_lib::device_actions::{
@@ -571,8 +573,7 @@ async fn without_a_login_the_actions_say_so() {
 fn every_message_of_this_feature_is_in_the_guide() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let guide = std::fs::read_to_string(root.join("../docs/user-guide.md")).unwrap();
-    let source = std::fs::read_to_string(root.join("src/device_actions.rs")).unwrap()
-        + &std::fs::read_to_string(root.join("../ui/app.js")).unwrap();
+    let source = std::fs::read_to_string(root.join("src/device_actions.rs")).unwrap() + &ui::js();
     let flat = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let (guide, source) = (
         flat(&guide),
@@ -592,7 +593,7 @@ fn every_message_of_this_feature_is_in_the_guide() {
         "Saved the access of",
         "This computer is signed out; sign in again to continue.",
         "The list could not be refreshed",
-        "Press the button again to sign this computer out",
+        "This is the sign-in this app uses",
     ] {
         assert!(
             guide.contains(stem),

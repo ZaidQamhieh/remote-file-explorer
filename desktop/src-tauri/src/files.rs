@@ -265,24 +265,24 @@ pub struct Page {
 }
 
 #[derive(Deserialize)]
-struct BatchBody {
+pub(crate) struct BatchBody {
     #[serde(default)]
-    results: Vec<BatchItem>,
+    pub(crate) results: Vec<BatchItem>,
 }
 
 #[derive(Deserialize)]
-struct BatchItem {
+pub(crate) struct BatchItem {
     #[serde(default)]
-    ok: bool,
-    error: Option<ItemError>,
+    pub(crate) ok: bool,
+    pub(crate) error: Option<ItemError>,
 }
 
 #[derive(Deserialize)]
-struct ItemError {
+pub(crate) struct ItemError {
     #[serde(default)]
-    code: String,
+    pub(crate) code: String,
     #[serde(default)]
-    message: String,
+    pub(crate) message: String,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -291,7 +291,10 @@ struct ItemError {
 
 /// The pinned client and the saved login, or the reason there is none. Same rules as the device
 /// list: a forgotten pin ends the session here.
-async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String), AgentError> {
+pub(crate) async fn session(
+    dir: &Path,
+    store: &Offloaded,
+) -> Result<(AgentClient, String), AgentError> {
     let saved = {
         let dir = dir.to_path_buf();
         store
@@ -319,7 +322,7 @@ async fn session(dir: &Path, store: &Offloaded) -> Result<(AgentClient, String),
 
 /// Logs the outcome (never a path or a name: only what was done and how it ended) and, when the
 /// agent no longer accepts the login, drops the dead token so the window returns to sign-in.
-async fn settle<T>(
+pub(crate) async fn settle<T>(
     dir: &Path,
     store: &Offloaded,
     token: &str,
@@ -528,17 +531,26 @@ pub async fn rename(
 /// Moves the entry at `path` to the agent's trash, where it can be restored. There is no way to
 /// delete permanently from here: the request never carries `permanent`.
 pub async fn trash(dir: &Path, store: &Offloaded, path: &str) -> Result<(), AgentError> {
+    delete(dir, store, path, false).await
+}
+
+/// Deletes `path` on the computer: into its Trash, or for good when `permanent` is set.
+pub async fn delete(
+    dir: &Path,
+    store: &Offloaded,
+    path: &str,
+    permanent: bool,
+) -> Result<(), AgentError> {
     validate_path(path)?;
     let (client, token) = session(dir, store).await?;
+    let query: Vec<(&str, &str)> = if permanent {
+        vec![("path", path), ("permanent", "true")]
+    } else {
+        vec![("path", path)]
+    };
     let r = async {
         let body: BatchBody = client
-            .authed_json(
-                &token,
-                reqwest::Method::DELETE,
-                "/fs",
-                &[("path", path)],
-                None,
-            )
+            .authed_json(&token, reqwest::Method::DELETE, "/fs", &query, None)
             .await?;
         match body.results.first() {
             Some(BatchItem { ok: true, .. }) => Ok(()),
@@ -551,7 +563,18 @@ pub async fn trash(dir: &Path, store: &Offloaded, path: &str) -> Result<(), Agen
         }
     }
     .await;
-    settle(dir, store, &token, "delete to trash", r).await
+    settle(
+        dir,
+        store,
+        &token,
+        if permanent {
+            "delete permanently"
+        } else {
+            "delete to trash"
+        },
+        r,
+    )
+    .await
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -568,8 +591,8 @@ fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-pub async fn files_roots(app: tauri::AppHandle) -> Result<Roots, String> {
-    roots(&data_dir(&app)?, &keystore())
+pub async fn files_roots(app: tauri::AppHandle, host: Option<String>) -> Result<Roots, String> {
+    roots(&data_dir(&app)?, &keystore().scoped(host))
         .await
         .map_err(|e| user_message(&e))
 }
@@ -577,13 +600,14 @@ pub async fn files_roots(app: tauri::AppHandle) -> Result<Roots, String> {
 #[tauri::command]
 pub async fn files_list(
     app: tauri::AppHandle,
+    host: Option<String>,
     path: String,
     cursor: Option<String>,
     limit: Option<u32>,
 ) -> Result<Page, String> {
     list(
         &data_dir(&app)?,
-        &keystore(),
+        &keystore().scoped(host),
         &path,
         cursor.as_deref(),
         limit,
@@ -593,8 +617,12 @@ pub async fn files_list(
 }
 
 #[tauri::command]
-pub async fn files_meta(app: tauri::AppHandle, path: String) -> Result<FileEntry, String> {
-    meta(&data_dir(&app)?, &keystore(), &path)
+pub async fn files_meta(
+    app: tauri::AppHandle,
+    host: Option<String>,
+    path: String,
+) -> Result<FileEntry, String> {
+    meta(&data_dir(&app)?, &keystore().scoped(host), &path)
         .await
         .map_err(|e| user_message(&e))
 }
@@ -602,10 +630,11 @@ pub async fn files_meta(app: tauri::AppHandle, path: String) -> Result<FileEntry
 #[tauri::command]
 pub async fn files_create_folder(
     app: tauri::AppHandle,
+    host: Option<String>,
     parent: String,
     name: String,
 ) -> Result<FileEntry, String> {
-    create_folder(&data_dir(&app)?, &keystore(), &parent, &name)
+    create_folder(&data_dir(&app)?, &keystore().scoped(host), &parent, &name)
         .await
         .map_err(|e| user_message(&e))
 }
@@ -613,19 +642,30 @@ pub async fn files_create_folder(
 #[tauri::command]
 pub async fn files_rename(
     app: tauri::AppHandle,
+    host: Option<String>,
     path: String,
     new_name: String,
 ) -> Result<FileEntry, String> {
-    rename(&data_dir(&app)?, &keystore(), &path, &new_name)
+    rename(&data_dir(&app)?, &keystore().scoped(host), &path, &new_name)
         .await
         .map_err(|e| user_message(&e))
 }
 
 #[tauri::command]
-pub async fn files_trash(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    trash(&data_dir(&app)?, &keystore(), &path)
-        .await
-        .map_err(|e| user_message(&e))
+pub async fn files_trash(
+    app: tauri::AppHandle,
+    host: Option<String>,
+    path: String,
+    permanent: Option<bool>,
+) -> Result<(), String> {
+    delete(
+        &data_dir(&app)?,
+        &keystore().scoped(host),
+        &path,
+        permanent.unwrap_or(false),
+    )
+    .await
+    .map_err(|e| user_message(&e))
 }
 
 #[cfg(test)]

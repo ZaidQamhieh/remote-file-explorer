@@ -7,6 +7,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{agent_bin, cli, free_port};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, AgentError};
 use rfe_desktop_lib::files::{self, FileEntry};
@@ -669,7 +671,7 @@ impl FileAgent {
 
 // --- the guide explains every message this feature can show -------------------------------------
 
-/// Stems of what the file browser itself says, from `src/files.rs` and `ui/app.js`.
+/// Stems of what the file browser itself says, from `src/files.rs` and `ui/*.js`.
 const MESSAGES: &[&str] = &[
     "a path must be absolute (start with / or a drive letter)",
     "a path cannot be empty, hold a NUL character or a .. step, or be longer than 4096 bytes",
@@ -679,18 +681,11 @@ const MESSAGES: &[&str] = &[
     "No folder is open to this login",
     "This folder is empty.",
     "The agent lists more items than are shown",
-    "Folder name",
-    "Press Delete again to move",
-    "Moved to the trash",
-    "Selected",
-    "Loading folder",
+    "New folder name",
+    "Moved to Trash:",
     "unexpected route",
     "The agent is read-only",
     "This computer may look but not change",
-    "Sorted by",
-    "Creating the folder",
-    "Moving to the trash",
-    "Renaming...",
 ];
 
 fn read(rel: &str) -> String {
@@ -704,7 +699,7 @@ fn every_file_browser_message_is_in_the_guide_and_still_in_the_app() {
     let source = [
         read("src/files.rs"),
         read("src/agent_client.rs"),
-        read("../ui/app.js"),
+        ui::js(),
         read("../ui/index.html"),
     ]
     .join("\n");
@@ -724,4 +719,34 @@ fn every_file_browser_message_is_in_the_guide_and_still_in_the_app() {
             "{stem:?} is listed but no longer in the app"
         );
     }
+}
+
+#[tokio::test]
+async fn a_permanent_delete_skips_the_trash() {
+    let a = FileAgent::start();
+    let (store, root) = (memory(), a.root());
+    let app = a.owner(&store).await;
+    write(a.at("gone.txt"), "bye");
+    write(a.at("kept.txt"), "stay");
+
+    files::delete(app.path(), &store, &a.at("gone.txt"), true)
+        .await
+        .unwrap();
+    assert!(!Path::new(&a.at("gone.txt")).exists());
+    assert!(
+        !a.trash_files().join("gone.txt").exists(),
+        "a permanent delete leaves nothing in the agent's trash"
+    );
+
+    files::delete(app.path(), &store, &a.at("kept.txt"), false)
+        .await
+        .unwrap();
+    assert!(
+        a.trash_files().join("kept.txt").exists(),
+        "the default is the trash"
+    );
+    let top = files::list(app.path(), &store, &root, None, None)
+        .await
+        .unwrap();
+    assert!(!names(&top.entries).contains(&"gone.txt"));
 }

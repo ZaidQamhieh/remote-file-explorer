@@ -5,6 +5,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{free_port, Agent};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, AgentError};
 use rfe_desktop_lib::flows;
@@ -185,13 +187,12 @@ fn every_message_of_this_feature_is_explained_and_still_in_the_app() {
         "This login cannot create pairing codes",
         "This pairing code has expired",
         "unexpected response: the agent sent no pairing code",
-        "Selected. Press Ctrl+C to copy.",
-        "Select the code with the mouse, then press Ctrl+C.",
     ];
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let guide = std::fs::read_to_string(root.join("../docs/user-guide.md")).unwrap();
     let mut code = String::new();
-    for f in ["../ui/app.js", "../ui/index.html", "src/pairing_codes.rs"] {
+    code.push_str(&ui::js());
+    for f in ["../ui/index.html", "src/pairing_codes.rs"] {
         code.push_str(&std::fs::read_to_string(root.join(f)).unwrap());
     }
     let flat = code.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -204,5 +205,29 @@ fn every_message_of_this_feature_is_explained_and_still_in_the_app() {
             code.contains(stem) || flat.contains(stem),
             "{stem:?} is listed but no longer in the app"
         );
+    }
+}
+
+#[tokio::test]
+async fn the_lifetime_from_the_settings_is_what_the_agent_gives_the_code() {
+    let a = Agent::start(free_port());
+    a.add_user("owner", PW);
+    let fp = capture_fingerprint(&a.host).await.unwrap();
+    let store = Offloaded::new(MemoryStore::default());
+    let dir = TempDir::new().unwrap();
+    admin(&a, &fp, dir.path(), &store).await;
+
+    for (asked, got) in [
+        (120, 120),
+        (300, 300),
+        (600, 600),
+        (7, TTL_SECONDS),
+        (86_400, TTL_SECONDS),
+    ] {
+        let made = pairing_codes::generate_for(dir.path(), &store, asked)
+            .await
+            .unwrap();
+        assert_eq!(made.status, "ok", "{made:?}");
+        assert_eq!(made.expires_in_seconds, got, "asked for {asked}");
     }
 }

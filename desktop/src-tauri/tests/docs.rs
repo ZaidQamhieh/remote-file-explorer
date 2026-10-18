@@ -3,6 +3,8 @@
 //! Messages that come from the app itself are listed below by a stem the guide must contain: when
 //! you add a message the user can see, add its stem here and a row to the guide.
 
+#[path = "support/ui.rs"]
+mod ui;
 use rfe_desktop_lib::agent_client::{known_message, KNOWN_CODES};
 use std::path::Path;
 
@@ -25,7 +27,7 @@ fn every_agent_error_code_is_in_the_guide_with_its_exact_wording() {
     }
 }
 
-/// Stems of the messages the app itself produces, from `src/` and `ui/app.js`.
+/// Stems of the messages the app itself produces, from `src/` and `ui/*.js`.
 const APP_MESSAGES: &[&str] = &[
     "agent address must be host:port",
     "cannot reach the agent securely",
@@ -99,7 +101,7 @@ fn the_listed_messages_still_exist_in_the_app() {
     ] {
         code.push_str(&std::fs::read_to_string(src.join("src").join(f)).unwrap());
     }
-    code.push_str(&std::fs::read_to_string(src.join("../ui/app.js")).unwrap());
+    code.push_str(&ui::js());
     // Source literals wrap long strings across lines; compare with the wrapping removed.
     let flat: String = code
         .split_whitespace()

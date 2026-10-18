@@ -235,6 +235,27 @@ pub async fn device_access(
     logged(&format!("reading the access of device {id}"), r)
 }
 
+/// Every device with its access, in one read. An ordinary (non-admin) session gets only itself.
+pub async fn device_access_all(
+    dir: &Path,
+    store: &Offloaded,
+) -> Result<Vec<DeviceAccess>, AgentError> {
+    let r = async {
+        let s = session(dir, store).await?;
+        let list = s
+            .client
+            .call_device_json(Method::GET, "/devices", &s.token, None)
+            .await?;
+        parse_access_list(list)
+    }
+    .await;
+    logged("reading the access of all devices", r)
+}
+
+fn parse_access_list(v: serde_json::Value) -> Result<Vec<DeviceAccess>, AgentError> {
+    serde_json::from_value(v).map_err(|e| AgentError::Local(format!("unexpected response: {e}")))
+}
+
 /// Changes a device's access (`PATCH /devices/{id}`) and returns the device as the agent now has it.
 pub async fn set_access(
     dir: &Path,
@@ -371,8 +392,22 @@ pub mod commands {
     }
 
     #[tauri::command]
-    pub async fn device_access(app: tauri::AppHandle, id: String) -> Result<DeviceAccess, String> {
-        super::device_access(&dir(&app)?, &keystore(), &id)
+    pub async fn device_access(
+        app: tauri::AppHandle,
+        host: Option<String>,
+        id: String,
+    ) -> Result<DeviceAccess, String> {
+        super::device_access(&dir(&app)?, &keystore().scoped(host), &id)
+            .await
+            .map_err(|e| explain(&e))
+    }
+
+    #[tauri::command]
+    pub async fn device_access_all(
+        app: tauri::AppHandle,
+        host: Option<String>,
+    ) -> Result<Vec<DeviceAccess>, String> {
+        super::device_access_all(&dir(&app)?, &keystore().scoped(host))
             .await
             .map_err(|e| explain(&e))
     }
@@ -380,22 +415,30 @@ pub mod commands {
     #[tauri::command]
     pub async fn set_device_access(
         app: tauri::AppHandle,
+        host: Option<String>,
         id: String,
         patch: AccessPatch,
         confirm_self: bool,
     ) -> Result<DeviceAccess, String> {
-        set_access(&dir(&app)?, &keystore(), &id, &patch, confirm_self)
-            .await
-            .map_err(|e| explain(&e))
+        set_access(
+            &dir(&app)?,
+            &keystore().scoped(host),
+            &id,
+            &patch,
+            confirm_self,
+        )
+        .await
+        .map_err(|e| explain(&e))
     }
 
     #[tauri::command]
     pub async fn revoke_device(
         app: tauri::AppHandle,
+        host: Option<String>,
         id: String,
         confirm_self: bool,
     ) -> Result<Done, String> {
-        revoke(&dir(&app)?, &keystore(), &id, confirm_self)
+        revoke(&dir(&app)?, &keystore().scoped(host), &id, confirm_self)
             .await
             .map_err(|e| explain(&e))
     }
@@ -403,10 +446,11 @@ pub mod commands {
     #[tauri::command]
     pub async fn remove_device(
         app: tauri::AppHandle,
+        host: Option<String>,
         id: String,
         confirm_self: bool,
     ) -> Result<Done, String> {
-        remove(&dir(&app)?, &keystore(), &id, confirm_self)
+        remove(&dir(&app)?, &keystore().scoped(host), &id, confirm_self)
             .await
             .map_err(|e| explain(&e))
     }

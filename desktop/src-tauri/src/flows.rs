@@ -291,6 +291,14 @@ fn logged<T>(what: &str, r: Result<T, AgentError>) -> Result<T, AgentError> {
 /// earlier version is moved into the keystore first, then removed from the file; if the
 /// keystore refuses, this fails and the file is left as it was.
 pub fn load_saved(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> {
+    match store.scope_host() {
+        Some(host) => crate::hosts::saved_for(dir, store, host),
+        None => load_active(dir, store),
+    }
+}
+
+/// The active session, whatever host `store` is scoped to.
+pub fn load_active(dir: &Path, store: &dyn SecretStore) -> Result<Saved, String> {
     // Under the saved-hosts lock: a switch in progress has changed the token and not yet the
     // address (or the reverse), and this must never pair one agent's address with another's token.
     let _held = crate::hosts::lock();
@@ -657,7 +665,7 @@ pub fn drop_refused_token(dir: &Path, store: &dyn SecretStore, token: &str) -> R
         return Ok(());
     }
     let _held = crate::hosts::lock();
-    if load_saved(dir, store)?.token == token {
+    if load_active(dir, store)?.token == token {
         return store.delete(&account("token", dir));
     }
     crate::hosts::forget_parked_token(dir, store, token)

@@ -1,6 +1,6 @@
 # Accessibility audit
 
-Status 2026-10-04: keyboard-only runs of every sign-in route and the main actions pass in the real
+Status 2026-10-05: keyboard-only runs of every sign-in route and the main actions pass in the real
 window (`e2e/keyboard.test.mjs`), and the AT-SPI tree, which is what Orca reads, was checked
 (`e2e/a11y.test.mjs`). **Not done:** a run with Orca itself (it is not installed on the test machine,
 and speech output was not heard), and a check at a true 200% display scale (see below).
@@ -9,67 +9,55 @@ and speech output was not heard), and a check at a true 200% display scale (see 
 
 | Finding | Fix |
 |---|---|
-| After a screen change focus stayed on a control that had just been hidden, so a keyboard or screen reader user landed nowhere | The new screen's heading (`h2`, `tabindex="-1"`) takes focus and is read out |
+| Tab left a dialog and went on through the page behind it | A dialog is modal: Tab and Shift+Tab stay inside it, and focus goes back to what opened it when it closes |
+| Enter on a focused button in a dialog pressed the dialog's main button instead | Enter activates the focused button; it presses the main one only from a field |
+| Switching tabs in the sign-in dialog dropped focus to the page | Focus goes to the field (or main button) of the new tab |
+| Pressing Escape in the sign-in dialog left the approval request polling | Closing the dialog by any route stops the wait and cancels the request |
+| Menus were not reachable by keyboard (items were plain `div`s) | A menu takes focus, Up, Down, Home and End move, Enter or Space chooses, Escape closes and gives focus back to its button, even if the page redrew meanwhile |
+| A switch or a segmented button redrew the whole page and focus was lost | The same control gets focus back, so Space can be pressed again |
+| Fields in dialogs had a visible label that was not tied to them | A `label` next to a field is tied to it (`for`), so the AT-SPI entry has the label's name |
 | Errors and progress were both a polite `role="status"` | Errors are `role="alert"`; progress and results stay `status` |
-| "Forget" and "Use" buttons were identical rows apart | Each has an `aria-label` naming its row; the armed "Forget?" says to press again to confirm |
-| Table headers had no `scope`; the action column's header was empty | `scope="col"`, and the empty header has the visually hidden text "Action" |
 | Form controls in the dark theme could keep light-theme defaults | `color-scheme: light dark` |
 
 ## What is checked automatically
 
-`ui-tests/a11y.test.mjs` (also run in CI): the page language, unique ids, a label or `aria-label` on every
-field, a name and a type on every button, no positive `tabindex`, scoped table headers, a focusable
-heading on every screen, focus moving on a screen change, alert versus status, and the labels of
-buttons built at run time. `ui-tests/theme.test.mjs`: text, secondary text, accent, error and success
-colours reach 4.5:1 (WCAG AA) on both backgrounds in both themes.
+- `ui-tests/window.test.mjs` (jsdom, also run in CI): every control has an accessible name, every screen
+  draws with a heading and no script error, and the language switch flips the layout for Arabic.
+- `ui-tests/contrast.test.mjs`: text, secondary text, accent, error, warning and success colours reach 4.5:1
+  (WCAG AA) on their backgrounds in both themes, and outlines 3:1; the tokens are read from `app.css`.
+- `e2e/keyboard.test.mjs` (real window): the tab order of the rail and top bar, the New connection
+  dialog, the sign-in dialog and Settings is recorded and printed, every stop must show a focus outline
+  (the search box shows it as the border of its bar), and the sign-in routes, switches, menus and the
+  confirmation of Revoke are used with Tab, Enter, Space, the arrows and Escape.
+- `e2e/a11y.test.mjs` (real window): reads the AT-SPI tree from a private accessibility bus. Buttons of
+  the rail are named, a page has a heading, a dialog has the `dialog` role and a heading, its fields have
+  their label as name, and a device row's menu button names its device.
 
 ## Already true from the structure
 
-- One column, DOM order is reading order, so the tab order is the visual order. Nothing sets a positive
-  `tabindex`.
-- Every input has a visible `label`; hints are plain paragraphs.
+- DOM order is reading order, so the tab order is the visual order (rail, top bar, page). A "Skip to
+  content" link is the first stop. Nothing sets a positive `tabindex`.
 - Focus rings are the browser's `:focus-visible` outline in the accent colour, 2px with an offset.
-- Destructive actions (forget an agent, create a new device key) need a second press and say so in
-  their text.
+- Destructive actions (forget a server, revoke or remove a device, create a new device key, delete) ask in
+  a dialog that names what will happen.
 - The pairing match code is plain text with an `aria-label`.
-
-## Keyboard audit, real window (2026-10-04, KWin virtual session, WebKitGTK)
-
-Run by `e2e/keyboard.test.mjs`; the tests fail if a stop shows no focus outline.
-
-- Tab order follows reading order on every screen. Header links come first (Settings, Files,
-  Transfers, Sign out, Hosts), then the screen. Sign out was moved after Transfers so a destructive
-  action is not between two navigation links.
-- Connect: address, Check certificate, Find agents. Sign-in: username, password, Sign in, Back, pairing
-  code, ask the PC to approve, new device key. Devices: Refresh, per-row Access / Revoke / Remove
-  (named with the device), Apps, Health, Pairing, Audit, Requests. Settings: Forget, keystore test, log
-  level, report, host actions, Add another host.
-- Completed with the keyboard alone: connect and compare, sign in with an account, sign in with a pairing
-  code, approve on the PC (including Cancel), sign out, Refresh, Find agents, open Settings, Forget
-  (first press arms, the label says to press again), Revoke on the device's own row (arms, says so).
-- Focus lands on the new screen's heading after every screen change.
-
-## AT-SPI tree (what Orca speaks from), 2026-10-04
-
-`e2e/a11y.test.mjs` reads the tree from a private accessibility bus. Found: a heading per screen, the
-address field named "Agent address", buttons named by their text, device-row buttons named with the
-device, the device list as a `table` with six `column header` nodes and a row of six cells. The text of
-table cells is not exposed as nodes by WebKit, so the words themselves were not checked here.
+- Page changes are announced in a live region.
 
 ## Layout at small sizes
 
-The compositor's `--scale 2` did not change `window.devicePixelRatio` (it stays 1), so a 200% run of
-`e2e/run.sh` is not a 200% run. The layout is checked instead at what 200% of a 1280x800 screen comes
-to, 640x400 CSS pixels, and at 520 wide (the narrowest window): `e2e/small-window.test.mjs` fails if any
-screen or table needs a sideways scroll. It found overflows in the device list, saved hosts and file
-locations; they are fixed with wrapping rules under `@media (max-width: 700px)` in `style.css`.
+The window cannot be made smaller than 1100 by 700. The compositor's `--scale 2` did not change
+`window.devicePixelRatio` (it stays 1), so a 200% run of `e2e/run.sh` is not a 200% run. A request for
+what 200% of a 1280x800 screen comes to (640x400 CSS pixels) is checked instead: the window refuses to
+get smaller than 1100x700, and `e2e/small-window.test.mjs` fails if any screen needs a sideways scroll at
+that size.
 
 ## Still not done
 
 1. Orca itself: each screen announced, errors interrupting, the match code read digit by digit.
-2. A true 200% display scale (needs a real session; the remembered window size and the second-launch
-   focus were also only partly driven: a second launch hands over and exits, covered by
-   `e2e/window.test.mjs`; the saved size could not be driven because WebDriver's close ends the app
-   without the close event).
+2. A true 200% display scale (needs a real session; the remembered window size was also not driven:
+   WebDriver's close ends the app without the close event the size is saved on). A second launch hands
+   over and exits, covered by `e2e/window.test.mjs`.
+3. The tables of the old window are gone; the lists of the new window (files, devices, servers) are built
+   from `div`s with a name per row, and the AT-SPI test does not yet read their structure.
 
 Record the result here, with the desktop environment and Orca version.

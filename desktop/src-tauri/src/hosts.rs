@@ -174,6 +174,40 @@ pub fn park_before_replace(
     write_file(dir, &file)
 }
 
+/// The address, pin and login of the saved host `key` without making it the active one: the
+/// active session when it is that host, otherwise the parked login. A host that is not saved, or
+/// is no longer trusted, is an error; a host with no login gives an empty token.
+pub fn saved_for(dir: &Path, store: &dyn SecretStore, key: &str) -> Result<Saved, String> {
+    let _held = lock();
+    let key = pin_key(key);
+    let active = flows::load_active(dir, store)?;
+    if !active.host.is_empty() && pin_key(&active.host) == key {
+        return Ok(active);
+    }
+    let file = read_file(dir)?;
+    let rec = file
+        .hosts
+        .iter()
+        .find(|r| r.key == key)
+        .ok_or_else(|| format!("{key} is not a saved host"))?;
+    let fingerprint = flows::list_pins(dir)?
+        .into_iter()
+        .find(|p| p.host == key)
+        .map(|p| p.fingerprint)
+        .ok_or_else(|| {
+            format!("{key} is no longer a trusted agent; connect and compare its fingerprint again")
+        })?;
+    let token = store.get(&parked_account(dir, &key))?.unwrap_or_default();
+    crate::applog::register_secret(&token);
+    Ok(Saved {
+        host: rec.host.clone(),
+        fingerprint,
+        token,
+        username: rec.username.clone(),
+        device_id: rec.device_id.clone(),
+    })
+}
+
 /// Removes every parked login, for every saved host. A reset device key retires the identity those
 /// logins were made with, so none of them may outlive it.
 pub fn forget_all_parked(dir: &Path, store: &dyn SecretStore) -> Result<(), String> {

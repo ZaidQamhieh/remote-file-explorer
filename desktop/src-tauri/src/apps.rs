@@ -233,17 +233,24 @@ fn app_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-pub async fn list_host_apps(app: tauri::AppHandle) -> Result<HostAppCatalog, String> {
+pub async fn list_host_apps(
+    app: tauri::AppHandle,
+    host: Option<String>,
+) -> Result<HostAppCatalog, String> {
     let dir = app_dir(&app)?;
-    list(&dir, &Offloaded::new(OsKeystore::new()))
+    list(&dir, &Offloaded::new(OsKeystore::new()).scoped(host))
         .await
         .map_err(|e| describe(&e))
 }
 
 #[tauri::command]
-pub async fn launch_host_app(app: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn launch_host_app(
+    app: tauri::AppHandle,
+    host: Option<String>,
+    id: String,
+) -> Result<(), String> {
     let dir = app_dir(&app)?;
-    launch(&dir, &Offloaded::new(OsKeystore::new()), &id)
+    launch(&dir, &Offloaded::new(OsKeystore::new()).scoped(host), &id)
         .await
         .map_err(|e| describe(&e))
 }

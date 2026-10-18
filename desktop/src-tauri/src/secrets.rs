@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,6 +16,12 @@ pub trait SecretStore: Send + Sync {
     fn set(&self, account: &str, secret: &str) -> Result<(), String>;
     /// Deleting a secret that does not exist is not an error.
     fn delete(&self, account: &str) -> Result<(), String>;
+    /// The saved host this handle acts for, when it is not the active one. Only
+    /// `flows::load_saved` looks at it: a read-only command scoped to a host sees that host's
+    /// address, pin and login instead of the active session's. Writes never go through it.
+    fn scope_host(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// One keystore entry per secret kind and state directory, so separate state directories
@@ -110,7 +117,8 @@ impl SecretStore for OsKeystore {
 /// Run on a runtime worker (or Tauri's main thread for a sync command) that stalls every other
 /// command, so async code goes through [`Offloaded::run`], which moves the call to a blocking
 /// thread and gives up waiting after a timeout. The blocked thread itself cannot be cancelled: if
-/// the user answers the prompt later, the call finishes and its result is dropped.
+/// the user answers the prompt later, the call finishes and its result is dropped. Calls run one at a
+/// time in the order made, and one that timed out while still queued never runs.
 ///
 /// It also implements [`SecretStore`] by calling straight through, for code that is already
 /// synchronous (tests, examples, `load_saved`).
@@ -118,6 +126,35 @@ impl SecretStore for OsKeystore {
 pub struct Offloaded {
     inner: Arc<dyn SecretStore>,
     timeout: Duration,
+    host: Option<String>,
+    /// Keystore calls run one at a time, in the order they were made. A call abandoned on timeout
+    /// stays on its blocked thread, so without this a later call could finish first and the stale
+    /// one would land after it (a token saved after "failed", or kept after "removed").
+    gate: Arc<Mutex<()>>,
+}
+
+/// The store a closure sees when its [`Offloaded`] is scoped to a host.
+struct Scoped<'a> {
+    inner: &'a dyn SecretStore,
+    host: &'a str,
+}
+
+impl SecretStore for Scoped<'_> {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        self.inner.get(account)
+    }
+
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.inner.set(account, secret)
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        self.inner.delete(account)
+    }
+
+    fn scope_host(&self) -> Option<&str> {
+        Some(self.host)
+    }
 }
 
 impl Offloaded {
@@ -128,7 +165,17 @@ impl Offloaded {
         Self {
             inner: Arc::new(store),
             timeout: Self::DEFAULT_TIMEOUT,
+            host: None,
+            gate: Arc::new(Mutex::new(())),
         }
+    }
+
+    /// The same store, acting for the saved host `host` (`host:port`) instead of the active
+    /// session; `None` or an empty text means the active session.
+    pub fn scoped(&self, host: Option<String>) -> Self {
+        let mut s = self.clone();
+        s.host = host.filter(|h| !h.trim().is_empty());
+        s
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -143,8 +190,29 @@ impl Offloaded {
         F: FnOnce(&dyn SecretStore) -> Result<T, String> + Send + 'static,
     {
         let store = Arc::clone(&self.inner);
-        let task = tokio::task::spawn_blocking(move || f(&*store));
-        match tokio::time::timeout(self.timeout, task).await {
+        let host = self.host.clone();
+        let gate = Arc::clone(&self.gate);
+        let abandoned = Arc::new(AtomicBool::new(false));
+        let gave_up = Arc::clone(&abandoned);
+        let task = tokio::task::spawn_blocking(move || {
+            let _turn = gate.lock().unwrap_or_else(|e| e.into_inner());
+            if gave_up.load(Ordering::SeqCst) {
+                // The caller was already told this failed: do not run it now.
+                return Err("the OS keystore call was abandoned before it started".to_string());
+            }
+            match &host {
+                Some(h) => f(&Scoped {
+                    inner: &*store,
+                    host: h,
+                }),
+                None => f(&*store),
+            }
+        });
+        let outcome = tokio::time::timeout(self.timeout, task).await;
+        if outcome.is_err() {
+            abandoned.store(true, Ordering::SeqCst);
+        }
+        match outcome {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(format!("the OS keystore call failed to run: {e}")),
             Err(_) => Err(format!(
@@ -167,6 +235,10 @@ impl SecretStore for Offloaded {
 
     fn delete(&self, account: &str) -> Result<(), String> {
         self.inner.delete(account)
+    }
+
+    fn scope_host(&self) -> Option<&str> {
+        self.host.as_deref()
     }
 }
 

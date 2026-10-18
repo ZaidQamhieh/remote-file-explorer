@@ -5,6 +5,8 @@
 
 mod common;
 
+#[path = "support/ui.rs"]
+mod ui;
 use common::{free_port, Agent, Raw};
 use rfe_desktop_lib::agent_client::{capture_fingerprint, AgentClient, AgentError};
 use rfe_desktop_lib::flows;
@@ -313,7 +315,7 @@ fn every_message_of_the_screen_is_explained_in_the_guide() {
     let guide = std::fs::read_to_string(root.join("../docs/user-guide.md")).unwrap();
     let mut code = std::fs::read_to_string(root.join("src/agent_client.rs")).unwrap();
     code.push_str(&std::fs::read_to_string(root.join("src/health.rs")).unwrap());
-    code.push_str(&std::fs::read_to_string(root.join("../ui/app.js")).unwrap());
+    code.push_str(&ui::js());
     let flat: String = code
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -325,7 +327,6 @@ fn every_message_of_the_screen_is_explained_in_the_guide() {
         "unexpected response: the agent's health answer does not say ok",
         "Metrics are for administrators",
         "No metrics were reported",
-        "Auto-refresh stopped",
         "not reported",
     ] {
         assert!(guide.contains(stem), "the guide does not explain {stem:?}");

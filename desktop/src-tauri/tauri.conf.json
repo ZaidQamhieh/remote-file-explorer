@@ -12,14 +12,14 @@
       {
         "label": "main",
         "title": "RFE Desktop",
-        "width": 780,
-        "height": 600,
-        "minWidth": 520,
-        "minHeight": 420
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700
       }
     ],
     "security": {
-      "csp": "default-src 'self'; base-uri 'none'; form-action 'none'; connect-src ipc: http://ipc.localhost; style-src 'self'"
+      "csp": "default-src 'self'; base-uri 'none'; form-action 'none'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self'"
     }
   },
   "bundle": {
@@ -50,7 +50,8 @@
           "libdbus-1-3"
         ],
         "recommends": [
-          "gnome-keyring | keepassxc"
+          "gnome-keyring | keepassxc",
+          "libayatana-appindicator3-1"
         ],
         "desktopTemplate": "packaging/linux/rfe-desktop.desktop",
         "files": {

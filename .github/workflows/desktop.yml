@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: agent/go.sum
 
       # Tauri 2 on Linux links against WebKitGTK; the tests build the whole crate, so the dev packages are needed.
@@ -81,10 +81,12 @@ jobs:
           RFE_AGENT_BIN: ${{ runner.temp }}/rfe-agent
         run: cargo test --locked
 
-      # Which screen and message the window shows in each error, empty and loading state, with
-      # `invoke` faked. Not a check of how it looks.
-      - name: Window state tests
-        run: node --test ../ui-tests/*.test.mjs
+      # The window's engine, its command contract with this crate, and the window scripts in a DOM
+      # (jsdom) on a stand-in for the core. Not a check of how it looks: desktop/e2e does that.
+      - name: Window tests
+        run: |
+          npm ci --prefix ../ui-tests
+          node --test ../ui-tests/*.test.mjs
 
       # The app must keep working with the last stable agent release, not only with the agent built
       # from this checkout. Tests of features that release lacks may skip (RFE_ALLOW_OLD_AGENT);

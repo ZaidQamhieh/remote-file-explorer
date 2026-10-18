@@ -112,3 +112,57 @@ async fn control_login_with_a_working_keystore_reaches_the_network() {
     .unwrap_err();
     assert!(matches!(err, AgentError::Network(_)), "{err:?}");
 }
+
+/// Records the order in which writes reach the keystore; `set` sits on a prompt for `0`.
+struct OrderStore {
+    log: std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+    slow_set: Duration,
+}
+
+impl SecretStore for OrderStore {
+    fn get(&self, _: &str) -> Result<Option<String>, String> {
+        std::thread::sleep(self.slow_set);
+        Ok(None)
+    }
+    fn set(&self, _: &str, _: &str) -> Result<(), String> {
+        std::thread::sleep(self.slow_set);
+        self.log.lock().unwrap().push("set");
+        Ok(())
+    }
+    fn delete(&self, _: &str) -> Result<(), String> {
+        self.log.lock().unwrap().push("delete");
+        Ok(())
+    }
+}
+
+/// A `set` that timed out is still sitting on the prompt. A later `delete` must not overtake it,
+/// or the stale `set` lands last and the token the user just removed comes back.
+#[tokio::test]
+async fn a_timed_out_write_cannot_land_after_a_later_one() {
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let store = Offloaded::new(OrderStore {
+        log: log.clone(),
+        slow_set: Duration::from_millis(300),
+    })
+    .with_timeout(Duration::from_millis(50));
+    assert!(store.run(|s| s.set("a", "t")).await.is_err());
+    let later = store.clone().with_timeout(Duration::from_secs(5));
+    later.run(|s| s.delete("a")).await.unwrap();
+    assert_eq!(*log.lock().unwrap(), vec!["set", "delete"]);
+}
+
+/// A call that gave up while still queued behind a stuck one never runs: its caller was told it
+/// failed, so it must not save anything later.
+#[tokio::test]
+async fn a_call_abandoned_before_it_started_never_runs() {
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let store = Offloaded::new(OrderStore {
+        log: log.clone(),
+        slow_set: Duration::from_millis(300),
+    })
+    .with_timeout(Duration::from_millis(50));
+    assert!(store.run(|s| s.get("a")).await.is_err()); // stuck on the prompt
+    assert!(store.run(|s| s.delete("a")).await.is_err()); // queued behind it, then abandoned
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(log.lock().unwrap().is_empty(), "{:?}", log.lock().unwrap());
+}

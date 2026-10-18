@@ -250,7 +250,8 @@ button{cursor:pointer}
 .cwide .card{width:auto}
 /* snack, dialog, menu */
 .layer{position:fixed;inset:0;pointer-events:none;z-index:50}
-.snack{position:absolute;left:7rem;bottom:7.25rem;width:30rem;max-width:calc(100vw - 8.75rem);min-height:3rem;background:var(--snack);color:var(--snack-on);border-radius:.375rem;display:flex;align-items:center;gap:.75rem;padding:.375rem .5rem .375rem 1rem;box-shadow:0 .1875rem .5rem rgba(0,0,0,.3);pointer-events:auto}
+.snacks{position:absolute;left:7rem;bottom:7.25rem;width:30rem;max-width:calc(100vw - 8.75rem);display:flex;flex-direction:column-reverse;gap:.5rem;pointer-events:none}
+.snack{position:relative;width:100%;min-height:3rem;background:var(--snack);color:var(--snack-on);border-radius:.375rem;display:flex;align-items:center;gap:.75rem;padding:.375rem .5rem .375rem 1rem;box-shadow:0 .1875rem .5rem rgba(0,0,0,.3);pointer-events:auto}
 .snack span{flex:1;font-size:.875rem}
 .snack .sna{color:var(--snack-link);font-weight:500;padding:.5rem .625rem;border-radius:1rem;cursor:pointer;background:none;border:0;font:inherit;font-weight:500}
 .snack .sna:hover,.snack .ib:hover{background:rgba(127,127,127,.2)}.snack .ib{color:var(--snack-on);padding:0}
@@ -577,7 +578,7 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 [dir="rtl"] .bulk{left:auto;right:calc((100% - var(--sidew,23.25rem) - var(--gap))/2);transform:translateX(50%)}
 [dir="rtl"] .qdrop{left:0;right:0}
 [dir="rtl"] .main{padding:0 0 var(--gap) var(--gap)}
-[dir="rtl"] .snack{left:auto;right:7rem}
+[dir="rtl"] .snacks{left:auto;right:7rem}
 [dir="rtl"] :is(b,small,span,td,th,time,p,h2,h3,i,em):not(.ic){unicode-bidi:plaintext}
 [dir="rtl"] .li > *{unicode-bidi:plaintext}
 [lang="de"] .dest,[lang="es"] .dest{font-size:.6562rem;letter-spacing:-.2px}
@@ -712,4 +713,4 @@ input::placeholder,textarea::placeholder{color:var(--outline)}
 .sbar input::placeholder{color:var(--on-var)}
 .li.cur,.tile.cur{outline:.125rem solid var(--primary);outline-offset:-.125rem}
 .qi.on{background:var(--hover);outline:.125rem solid var(--primary);outline-offset:-.125rem}
-body:has(.app.drawer) .snack,body:has(.app.wide) .snack{left:16rem}
+body:has(.app.drawer) .snacks,body:has(.app.wide) .snacks{left:16rem}

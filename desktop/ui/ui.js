@@ -38,10 +38,9 @@
     el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); if (el.contains(document.activeElement)) { const rw = document.querySelector('[data-rows]'); if (rw) rw.focus({ preventScroll: true }); } el.remove(); });
     /* It stays while the pointer or the keyboard is on it, and an Undo gets longer (WCAG 2.2.1). */
     const arm = () => { clearTimeout(el._t); el._t = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
-    if (keep) el.style.bottom = 'calc(7.25rem + ' + (3.75 * olds.filter((x) => x === keep).length) + 'rem)';
     el.addEventListener('mouseenter', () => clearTimeout(el._t)); el.addEventListener('mouseleave', arm);
     el.addEventListener('focusin', () => clearTimeout(el._t)); el.addEventListener('focusout', arm);
-    layer().appendChild(el); arm();
+    let stack = layer().querySelector('.snacks'); if (!stack) { stack = document.createElement('div'); stack.className = 'snacks'; layer().appendChild(stack); } stack.appendChild(el); arm();
   };
   /* A short fade-and-rise for content that has just been swapped in. */
   A.dialog = (o) => {

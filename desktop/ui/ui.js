@@ -28,16 +28,19 @@
   const layer = () => $('#layer');
   let snackTimer = null;
   A.snack = (msg, o) => {
-    o = o || {}; $('.snack', layer()) && $('.snack', layer()).remove(); clearTimeout(snackTimer);
+    o = o || {};
+    /* An Undo that is still on offer stays: the new message stacks above it instead of replacing it. */
+    const olds = $$('.snack', layer()); const keep = !o.action && olds.find((x) => x.querySelector('.sna')); olds.forEach((x) => { if (x !== keep) { clearTimeout(x._t); x.remove(); } });
     const el = document.createElement('div'); el.className = 'snack' + (o.error ? ' err' : '');
     /* Announced through a live region that is always in the page: a region created together with its text is often not read. */
-    const lr = document.getElementById(o.error ? 'liveA' : 'liveP'); if (lr) { lr.textContent = ''; setTimeout(() => { lr.textContent = msg; }, 60); }
+    const lr = document.getElementById(o.error ? 'liveA' : 'liveP'); if (lr) { lr.textContent = ''; setTimeout(() => { lr.textContent = msg + (o.action ? '. ' + o.action + ' is available' : ''); }, 60); }
     el.innerHTML = (o.error ? ic('alert-circle') : '') + '<span>' + esc(msg) + '</span>' + (o.action ? '<button type="button" class="sna" data-a="1">' + esc(o.action) + '</button>' : '') + '<button type="button" class="ib sm" data-x="1" aria-label="Dismiss">' + ic('x', { size: 18 }) + '</button>';
     el.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.a && o.onAction) o.onAction(); el.remove(); });
     /* It stays while the pointer or the keyboard is on it, and an Undo gets longer (WCAG 2.2.1). */
-    const arm = () => { clearTimeout(snackTimer); snackTimer = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
-    el.addEventListener('mouseenter', () => clearTimeout(snackTimer)); el.addEventListener('mouseleave', arm);
-    el.addEventListener('focusin', () => clearTimeout(snackTimer)); el.addEventListener('focusout', arm);
+    const arm = () => { clearTimeout(el._t); el._t = setTimeout(() => el.remove(), o.timeout || (o.action ? 10000 : 6000)); };
+    if (keep) el.style.bottom = 'calc(5.5rem + 3.75rem)';
+    el.addEventListener('mouseenter', () => clearTimeout(el._t)); el.addEventListener('mouseleave', arm);
+    el.addEventListener('focusin', () => clearTimeout(el._t)); el.addEventListener('focusout', arm);
     layer().appendChild(el); arm();
   };
   /* A short fade-and-rise for content that has just been swapped in. */
@@ -127,8 +130,9 @@
 
   /* ---------- the file pane ---------- */
   class Pane {
+    static n = 0;
     constructor(id, host, o) {
-      this.id = id; this.host = host; this.o = o || {}; this.compact = !!this.o.compact; this.paths = {}; this.hist = []; this.fwd = []; this.sel = new Set(); this.anchor = -1;
+      this.id = id; this.host = host; this.o = o || {}; this.compact = !!this.o.compact; this.paths = {}; this.hist = []; this.fwd = []; this.sel = new Set(); this.anchor = -1; this.cursor = -1; this.kb = false;
       this.sort = { key: 'name', dir: 1 }; this.filter = 'all'; this.q = ''; this.mode = 'list'; this.items = []; this.renaming = null; this.creating = false; this.editPath = false; this.loading = false; this.scroll = 0; this.cut = new Set();
       this.refreshItems();
     }
@@ -148,14 +152,14 @@
     go(path, o) {
       o = o || {}; path = U.norm(path);
       if (o.push !== false && path !== this.path) { this.hist.push(this.path); this.fwd = []; }
-      this.path = path; this.sel.clear(); this.anchor = -1; this.q = ''; this.renaming = null; this.creating = false; this.scroll = 0;
+      this.path = path; this.sel.clear(); this.anchor = -1; this.cursor = -1; this.q = ''; this.renaming = null; this.creating = false; this.scroll = 0;
       E.fs.drop(this.host, path); this.loadSim(); if (this.o.onNav) this.o.onNav(this); return true;
     }
     loadSim() { this.refreshItems(); this.render(); }
     up() { if (!U.isRoot(this.path) || this.path !== '/' && E.server(this.host) && E.server(this.host).virtualRoot) this.go(U.isRoot(this.path) ? '/' : U.parentOf(this.path)); }
     back() { if (this.hist.length) { this.fwd.push(this.path); this.go(this.hist.pop(), { push: false }); } }
     forward() { if (this.fwd.length) { this.hist.push(this.path); this.go(this.fwd.pop(), { push: false }); } }
-    setHost(h) { this.host = h; this.hist = []; this.fwd = []; this.sel.clear(); this.anchor = -1; this.q = ''; this.renaming = null; this.creating = false; this.scroll = 0; this.loadSim(); if (this.o.onNav) this.o.onNav(this); }
+    setHost(h) { this.host = h; this.hist = []; this.fwd = []; this.sel.clear(); this.anchor = -1; this.cursor = -1; this.q = ''; this.renaming = null; this.creating = false; this.scroll = 0; this.loadSim(); if (this.o.onNav) this.o.onNav(this); }
     refresh(spin) { if (spin && this.o.onSpin) this.o.onSpin(); this.refreshItems(); this.render(); if (spin && this.online()) E.fs.refresh(this.host, this.path).catch(() => {}); /* read the folder again, not the copy kept */ }
     open(n) { if (n.t === 'dir') this.go(n.path || U.join(this.path, n.n)); else this.preview(n); }
     selChanged() { this.renderRows(); this.renderActions(); this.renderFoot(); if (this.o.onSelect) this.o.onSelect(this); }
@@ -177,13 +181,20 @@
     }
     render() {
       if (!this.el) return; const el = this.el;
+      /* A redraw replaces every control: the focused one is found again afterwards so the keyboard keeps its place. */
+      const fa = document.activeElement; let back = '';
+      if (fa && fa !== document.body && el.contains(fa)) { const ks = ['data-filter', 'data-sort', 'data-act', 'data-rows', 'data-mode', 'data-view']; for (const k of ks) { const v = fa.getAttribute && fa.getAttribute(k); if (v !== null && v !== undefined) { back = '[' + k + (v ? '="' + v + '"' : '') + ']'; break; } } }
+      try { this.renderInner(); } finally { if (back && !this.editPath) { const n = $(back, el); if (n) n.focus({ preventScroll: true }); } }
+    }
+    renderInner() {
+      const el = this.el;
       if (!this.online()) { el.innerHTML = this.stateHTML(); return; }
       const name = this.path === '/' ? hostName(this.host) : U.baseOf(this.path);
       const head = this.compact
         ? '<div class="lh"><div class="nav"><button class="ib sm" data-act="up" title="Up" aria-label="Up">' + ic('arrow-up') + '</button></div><div class="crumb" data-crumb>' + this.crumbs() + '</div><button class="ib sm" data-act="edit-path" title="Edit path" aria-label="Edit path">' + ic('edit') + '</button><button class="ib sm" data-act="refresh" title="Refresh" aria-label="Refresh">' + ic('refresh') + '</button></div>'
         : '<div class="lh"><div class="nav"><button class="ib sm" data-act="back" title="Back (Alt+←)" aria-label="Back">' + ic('arrow-left') + '</button><button class="ib sm" data-act="forward" title="Forward (Alt+→)" aria-label="Forward">' + ic('arrow-right') + '</button><button class="ib sm" data-act="up" title="Up (Backspace)" aria-label="Up">' + ic('arrow-up') + '</button></div><h1>' + esc(name) + '</h1><div class="crumb" data-crumb>' + this.crumbs() + '</div><button class="ib sm star' + (A.isFav && A.isFav(this.host, this.path) ? ' on' : '') + '" data-act="fav" title="' + (A.isFav && A.isFav(this.host, this.path) ? 'Remove from favorites' : 'Add folder to favorites') + '" aria-label="Favorite folder">' + ic('star') + '</button><button class="ib sm" data-act="edit-path" title="Edit path (Ctrl+L)" aria-label="Edit path">' + ic('edit') + '</button><span data-slot="act" style="display:contents"></span></div>';
       const F = [['all', 'All'], ['folders', 'Folders'], ['packages', 'Packages'], ['media', 'Media'], ['archives', 'Archives'], ['big', 'Over 100 MB']];
-      const chips = '<div class="chips">' + (this.compact ? '' : F.map((f) => '<button class="chip' + (this.filter === f[0] ? ' on' : '') + '" data-filter="' + f[0] + '">' + (this.filter === f[0] ? ic('check') : '') + f[1] + '</button>').join('')) + '<span class="sp"></span><label class="mini">' + ic('filter') + '<input data-q placeholder="Filter this folder" value="' + esc(this.q) + '" aria-label="Filter this folder"></label>' + (this.compact ? '' : '<button class="chip" data-act="sortmenu">' + ic('sort') + { name: 'Name', size: 'Size', mod: 'Modified', kind: 'Type' }[this.sort.key] + '</button><button class="chip" data-act="mode" title="List or grid">' + ic(this.mode === 'list' ? 'list' : 'grid') + (this.mode === 'list' ? 'List' : 'Grid') + '</button>') + '</div>';
+      const chips = '<div class="chips">' + (this.compact ? '' : F.map((f) => '<button class="chip' + (this.filter === f[0] ? ' on' : '') + '" aria-pressed="' + (this.filter === f[0]) + '" data-filter="' + f[0] + '">' + (this.filter === f[0] ? ic('check') : '') + f[1] + '</button>').join('')) + '<span class="sp"></span><label class="mini">' + ic('filter') + '<input data-q placeholder="Filter this folder" value="' + esc(this.q) + '" aria-label="Filter this folder"></label>' + (this.compact ? '' : '<button class="chip" data-act="sortmenu">' + ic('sort') + { name: 'Name', size: 'Size', mod: 'Modified', kind: 'Type' }[this.sort.key] + '</button><button class="chip" data-act="mode" title="List or grid">' + ic(this.mode === 'list' ? 'list' : 'grid') + (this.mode === 'list' ? 'List' : 'Grid') + '</button>') + '</div>';
       const as = (k) => (this.sort.key === k ? ' aria-sort="' + (this.sort.dir === 1 ? 'ascending' : 'descending') + '"' : '');
       const arrow = (k) => (this.sort.key === k ? ic(this.sort.dir === 1 ? 'arrow-up' : 'arrow-down') : '');
       const cols = '<div class="cols"><span></span><span data-sort="name" tabindex="0" role="button"' + as('name') + '>Name ' + arrow('name') + '</span><span class="r" data-sort="size" tabindex="0" role="button"' + as('size') + '>Size ' + arrow('size') + '</span><span class="hm" data-sort="mod" tabindex="0" role="button"' + as('mod') + ' style="padding-left:1rem">Modified ' + arrow('mod') + '</span><span class="hm">Permissions</span><span class="hm"></span></div>';
@@ -231,7 +242,7 @@
       }
       if (this.mode === 'grid') {
         rows.classList.add('grid'); vs.style.height = 'auto'; const cap = this.items.slice(0, 600);
-        vs.innerHTML = cap.map((it, i) => '<div role="row" aria-selected="' + this.sel.has(it.n) + '" class="tile' + (this.sel.has(it.n) ? ' sel' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString(U.lang()) + '. Use the list view for the full folder.</div>' : '');
+        vs.innerHTML = cap.map((it, i) => '<div role="row" id="' + this.rid(i) + '" aria-selected="' + this.sel.has(it.n) + '" class="tile' + (this.sel.has(it.n) ? ' sel' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="true"><button class="tck" data-lead title="Select" aria-label="Select ' + esc(it.n) + '">' + ic('check') + '</button><div class="big">' + fic(it) + '</div><b>' + hl(it.n, this.q) + '</b><small>' + itemSize(it) + '</small></div>').join('') + (n > 600 ? '<div style="grid-column:1/-1;padding:.75rem;color:var(--on-var)">Showing the first 600 of ' + n.toLocaleString(U.lang()) + '. Use the list view for the full folder.</div>' : ''); this.activeDesc(rows);
         return;
       }
       rows.classList.remove('grid'); const rh = this.rh, rb = this.rhb; const off = this.creating ? 1 : 0; vs.style.height = (n + off) * rb / 16 + 'rem';
@@ -241,15 +252,19 @@
         if (this.creating && r === 0) { h += '<div class="li" style="top:0;height:' + rb / 16 + 'rem"><div class="lead">' + ic('folder-plus') + '</div><div class="t newrow"><input class="rn" data-new value="New folder" spellcheck="false" aria-label="New folder name"><span class="rerr" data-err></span></div></div>'; continue; }
         const i = r - off; const it = this.items[i]; const sel = this.sel.has(it.n); const rn = this.renaming === it.n;
         const nameCell = rn ? '<div class="t newrow"><input class="rn" data-rn value="' + esc(it.n) + '" spellcheck="false" aria-label="New name"><span class="rerr" data-err></span></div>' : '<div class="t"><b>' + hl(it.n, this.q) + (!E.fs.canRead(it) ? '<span class="lk">' + esc(it.own) + ' only</span>' : '') + '</b></div>';
-        h += '<div role="row" aria-selected="' + !!sel + '" class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem" role="row" aria-selected="' + sel + '"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
+        h += '<div role="row" id="' + this.rid(i) + '" aria-selected="' + !!sel + '" class="li' + (sel ? ' sel' : '') + (this.cut.has(it.n) ? ' cut' : '') + (this.kb && this.cursor === i ? ' cur' : '') + '" data-i="' + i + '" draggable="' + (rn ? 'false' : 'true') + '" style="top:' + r * rb / 16 + 'rem;height:' + rb / 16 + 'rem"><div class="lead" data-lead title="Select">' + (sel ? ic('check') : fic(it)) + '</div>' + nameCell + '<div class="s">' + itemSize(it) + '</div><div class="m hm">' + U.fmtDate(it.mod) + '</div><div class="p hm">' + esc(it.perm) + '</div><div class="qa hm">' + (this.compact ? '' : '<button class="ib sm" data-q="' + (this.host === 'local' ? 'upload' : 'download') + '" title="' + (this.host === 'local' ? 'Upload' : 'Download') + '" aria-label="Transfer">' + ic(this.host === 'local' ? 'upload' : 'download') + '</button><button class="ib sm" data-q="rename" title="Rename" aria-label="Rename">' + ic('edit') + '</button><button class="ib sm" data-q="more" title="More" aria-label="More">' + ic('more-v') + '</button>') + '</div></div>';
       }
-      vs.innerHTML = h;
+      vs.innerHTML = h; this.activeDesc(rows);
       const inp = $('input.rn', vs); if (inp && !inp._f) { inp._f = 1; inp.focus(); const dot = inp.value.lastIndexOf('.'); inp.setSelectionRange(0, this.renaming && dot > 0 && !(E.fs.get(this.host, U.join(this.path, this.renaming)) || {}).kids ? dot : inp.value.length); }
     }
     /* ----- interactions ----- */
+    rid(i) { return (this.uid || (this.uid = 'pn' + (++Pane.n))) + 'r' + i; }
+    activeDesc(rows) { const c = this.cursor; if (c >= 0 && rows.querySelector('[data-i="' + c + '"]')) rows.setAttribute('aria-activedescendant', this.rid(c)); else rows.removeAttribute('aria-activedescendant'); }
+    cols() { const t = $$('.tile', this.el); if (!t.length) return 1; const top = t[0].offsetTop; let c = 0; while (c < t.length && t[c].offsetTop === top) c++; return c; }
+    setCursor(i) { this.cursor = i; this.kb = true; this.renderRows(); }
     selectIdx(i, e) {
       this.lead = -1; /* the keyboard sets it again after a Shift+Arrow step */
-      const it = this.items[i]; if (!it) return;
+      const it = this.items[i]; if (!it) return; this.cursor = i; this.kb = !!(e && e.type === 'keydown');
       if (e && e.shiftKey && this.anchor >= 0) { const [a, b] = [Math.min(this.anchor, i), Math.max(this.anchor, i)]; this.sel.clear(); for (let k = a; k <= b; k++) this.sel.add(this.items[k].n); }
       else if (e && (e.ctrlKey || e.metaKey || e.lead)) { this.sel.has(it.n) ? this.sel.delete(it.n) : this.sel.add(it.n); this.anchor = i; }
       else { this.sel.clear(); this.sel.add(it.n); this.anchor = i; }
@@ -312,7 +327,9 @@
       });
       el.addEventListener('dblclick', (e) => { if (S.openMode !== 'double') return; const row = e.target.closest('[data-i]:not(svg)'); if (row && !e.target.closest('input,button')) { const it = this.items[+row.dataset.i]; if (it) this.open(it); } });
       el.addEventListener('contextmenu', (e) => {
-        if (!e.target.closest('[data-rows]')) return; e.preventDefault(); const row = e.target.closest('[data-i]:not(svg)');
+        if (!e.target.closest('[data-rows]')) return; e.preventDefault(); let row = e.target.closest('[data-i]:not(svg)');
+        /* Shift+F10 or the Menu key: the target is the list itself, so the menu opens for the cursor (or selected) row, anchored on it. */
+        if (!row && e.clientX === 0 && e.clientY === 0 && e.detail === 0) { const ci = this.cursor >= 0 ? this.cursor : this.sel.size ? this.items.findIndex((x) => this.sel.has(x.n)) : -1; const r = ci >= 0 ? $('[data-i="' + ci + '"]', this.el) : null; if (r) { row = r; const b = r.getBoundingClientRect(); A.setActive(this); if (!this.sel.has(this.items[ci].n)) { this.sel = new Set([this.items[ci].n]); this.anchor = ci; this.selChanged(); } A.menu(b.left + 40, b.bottom, this.ctxItems(true)); return; } }
         if (row) { const it = this.items[+row.dataset.i]; if (!this.sel.has(it.n)) { this.sel = new Set([it.n]); this.anchor = +row.dataset.i; this.selChanged(); } }
         else if (this.sel.size) { this.sel.clear(); this.selChanged(); }
         A.setActive(this); A.menu(e.clientX, e.clientY, this.ctxItems(!!row));
@@ -372,7 +389,7 @@
         case 'download': this.transfer(); break;
         case 'clearfilter': this.q = ''; this.filter = 'all'; this.refreshItems(); this.render(); break;
         case 'mode': this.mode = this.mode === 'list' ? 'grid' : 'list'; this.render(); break;
-        case 'sortmenu': { const r = e.target.closest('button').getBoundingClientRect(); const mk = (k, l) => ({ icon: this.sort.key === k ? 'check' : '', label: l, sub: this.sort.key === k ? (this.sort.dir === 1 ? 'A→Z' : 'Z→A') : '', onClick: () => { this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); } }); A.menu(r.left, r.bottom + 4, [mk('name', 'Name'), mk('size', 'Size'), mk('mod', 'Modified'), mk('kind', 'Type')]); break; }
+        case 'sortmenu': { const r = e.target.closest('button').getBoundingClientRect(); const mk = (k, l) => ({ icon: this.sort.key === k ? 'check' : '', label: l, sub: this.sort.key === k ? ({ size: ['Smallest first', 'Largest first'], mod: ['Oldest first', 'Newest first'] }[k] || ['A→Z', 'Z→A'])[this.sort.dir === 1 ? 0 : 1] : '', onClick: () => { this.sort = this.sort.key === k ? { key: k, dir: -this.sort.dir } : { key: k, dir: 1 }; this.refreshItems(); this.render(); } }); A.menu(r.left, r.bottom + 4, [mk('name', 'Name'), mk('size', 'Size'), mk('mod', 'Modified'), mk('kind', 'Type')]); break; }
         case 'retry': E.retryNow(this.host); break; case 'connect': E.connect(this.host); break; case 'cancel': E.cancelConnect(this.host); break;
         case 'trust': { const ts = E.server(this.host); if (ts) A.trustDialog(ts); break; } case 'servers': A.go('servers'); break; case 'edit': A.serverDialog(E.server(this.host)); break;
       }

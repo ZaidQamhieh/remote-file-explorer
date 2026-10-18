@@ -51,7 +51,7 @@
       actions: [{ label: 'Close', kind: 'tx', cb: () => (guard() ? undefined : false) }, { id: 'save', label: 'Save', kind: 'f', icon: 'check', cb: (c) => doSave(c) }],
       onOpen: (c) => { ctl = c; const ta = $('.fxta', c.el); ta.value = ''; stat();
         ta.addEventListener('input', () => { dirty = ta.value !== orig; stat(); }); ['keyup', 'click'].forEach((ev) => ta.addEventListener(ev, stat));
-        ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!ro && dirty && loaded) doSave(c); } if (e.key === 'Tab' && !ro) { e.preventDefault(); document.execCommand('insertText', false, '  '); } });
+        ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!ro && dirty && loaded) doSave(c); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') { e.preventDefault(); ta._tabFocus = !ta._tabFocus; A.snack(ta._tabFocus ? 'Tab now moves focus out of the editor. Press Ctrl+M to indent with Tab again.' : 'Tab indents again.'); } else if (e.key === 'Tab' && !ro && !e.shiftKey && !ta._tabFocus) { e.preventDefault(); document.execCommand('insertText', false, '  '); } });
         $('#edw', c.el).addEventListener('change', (e) => { ta.style.whiteSpace = e.target.checked ? 'pre-wrap' : 'pre'; ta.style.overflowX = e.target.checked ? 'hidden' : 'auto'; });
         if (big) { ta.value = 'Too large to open.'; return; }
         readText(host, dir, n).then((r) => { if (!c.el.isConnected) return; orig = r.text; base = r.modified || ''; ta.value = r.text; ta.readOnly = ro; loaded = true; ta.focus(); stat(); }).catch((e) => { ta.value = e.message; stat(); }); } });

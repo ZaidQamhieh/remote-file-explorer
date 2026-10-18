@@ -12,6 +12,9 @@
   const LANGS = [['en', 'English'], ['de', 'Deutsch'], ['es', 'Español'], ['ar', 'العربية']];
   /* [en, de, es, ar] */
   const D = [
+    ['Loading…', 'Wird geladen…', 'Cargando…', 'جارٍ التحميل…'], ['Too large to preview', 'Zu groß für die Vorschau', 'Demasiado grande para la vista previa', 'كبير جدًا للمعاينة'], ['No preview', 'Keine Vorschau', 'Sin vista previa', 'لا توجد معاينة'],
+    ['Fit', 'Einpassen', 'Ajustar', 'ملاءمة'], ['Zoom in', 'Vergrößern', 'Acercar', 'تكبير'], ['Zoom out', 'Verkleinern', 'Alejar', 'تصغير'], ['Previous file', 'Vorherige Datei', 'Archivo anterior', 'الملف السابق'], ['Next file', 'Nächste Datei', 'Archivo siguiente', 'الملف التالي'],
+    ['Download to read it', 'Zum Lesen herunterladen', 'Descargar para leerlo', 'نزّل للقراءة'], ['Download to open it', 'Zum Öffnen herunterladen', 'Descargar para abrirlo', 'نزّل للفتح'],
     ['Files', 'Dateien', 'Archivos', 'الملفات'], ['Servers', 'Server', 'Servidores', 'الخوادم'], ['Devices', 'Geräte', 'Dispositivos', 'الأجهزة'], ['Transfers', 'Übertragungen', 'Transferencias', 'عمليات النقل'], ['Search', 'Suche', 'Buscar', 'بحث'], ['Tools', 'Werkzeuge', 'Herramientas', 'الأدوات'], ['History', 'Verlauf', 'Historial', 'السجل'], ['Settings', 'Einstellungen', 'Ajustes', 'الإعدادات'],
     ['All', 'Alle', 'Todo', 'الكل'], ['Folders', 'Ordner', 'Carpetas', 'المجلدات'], ['Packages', 'Pakete', 'Paquetes', 'الحزم'], ['Media', 'Medien', 'Multimedia', 'الوسائط'], ['Archives', 'Archive', 'Archivos comprimidos', 'الأرشيفات'], ['Over 100 MB', 'Über 100 MB', 'Más de 100 MB', 'أكثر من 100 ميغابايت'], ['Filter this folder', 'Ordner filtern', 'Filtrar esta carpeta', 'تصفية هذا المجلد'],
     ['Name', 'Name', 'Nombre', 'الاسم'], ['Size', 'Größe', 'Tamaño', 'الحجم'], ['Modified', 'Geändert', 'Modificado', 'آخر تعديل'], ['Permissions', 'Berechtigungen', 'Permisos', 'الأذونات'], ['List', 'Liste', 'Lista', 'قائمة'],
@@ -52,10 +55,12 @@
   ];
   const IDX = { de: 1, es: 2, ar: 3 }; const MAP = { de: {}, es: {}, ar: {} };
   D.forEach((r) => { Object.keys(IDX).forEach((l) => { MAP[l][r[0]] = r[IDX[l]]; }); });
+  /* The number in a matched count: Western or Arabic-Indic digits, with or without grouping. */
+  const cnt = (n) => +String(n).replace(/[\u0660-\u0669]/g, (d) => d.charCodeAt(0) - 0x660).replace(/[^\d]/g, '');
   const RX = {
-    de: [[/^(\d+) items?$/, (m, n) => n + (+n === 1 ? ' Element' : ' Elemente')], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
-    es: [[/^(\d+) items?$/, (m, n) => n + (+n === 1 ? ' elemento' : ' elementos')], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
-    ar: [[/^(\d+) items?$/, (m, n) => (+n === 1 ? 'عنصر واحد' : +n === 2 ? 'عنصران' : +n >= 3 && +n <= 10 ? n + ' عناصر' : n + ' عنصرًا')], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
+    de: [[/^([\\d.,\\u00a0\\u202f\\u066c\\u0660-\\u0669]+) items?$/, (m, n) => n + (cnt(n) === 1 ? ' Element' : ' Elemente')], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
+    es: [[/^([\\d.,\\u00a0\\u202f\\u066c\\u0660-\\u0669]+) items?$/, (m, n) => n + (cnt(n) === 1 ? ' elemento' : ' elementos')], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
+    ar: [[/^([\\d.,\\u00a0\\u202f\\u066c\\u0660-\\u0669]+) items?$/, (m, n) => { const f = new Intl.PluralRules('ar').select(cnt(n)); return f === 'zero' ? 'لا عناصر' : f === 'one' ? 'عنصر واحد' : f === 'two' ? 'عنصران' : f === 'few' ? n + ' عناصر' : f === 'many' ? n + ' عنصرًا' : n + ' عنصر'; }], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
   };
   const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } return r === undefined ? s : s.replace(t, r); };
   const SKIP = 'script,style,textarea,input,select,.mono,code,pre,[data-nolocal],.crumb,.codev,.csvv,.fp,.hrow time';

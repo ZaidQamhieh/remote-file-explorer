@@ -176,17 +176,18 @@
   function closePop() { A.closeMenus(); popOpen = null; }
   function bellMenu(btn) {
     const r = btn.getBoundingClientRect(); const ns = E.notes.slice(0, 12);
-    const ni = (n) => '<div class="ni ' + n.kind + (n.read ? '' : ' unread') + '" title="' + esc(new Date(n.at).toLocaleString(U.lang())) + '">' + ic(n.kind === 'error' ? 'alert-circle' : n.kind === 'ok' ? 'check-circle' : 'info') + '<div><span>' + esc(n.text) + '</span><small>' + A.ago(n.at) + '</small></div></div>';
+    const ni = (n) => '<div role="listitem" class="ni ' + n.kind + (n.read ? '' : ' unread') + '" title="' + esc(new Date(n.at).toLocaleString(U.lang())) + '">' + ic(n.kind === 'error' ? 'alert-circle' : n.kind === 'ok' ? 'check-circle' : 'info') + '<div><span>' + esc(n.text) + '</span><small>' + A.ago(n.at) + '</small></div></div>';
     const day0 = new Date().setHours(0, 0, 0, 0); const today = ns.filter((n) => n.at >= day0), earlier = ns.filter((n) => n.at < day0);
-    const html = ns.length ? (today.length ? '<div class="mh">Today</div>' + today.map(ni).join('') : '') + (earlier.length ? '<div class="mh">Earlier</div>' + earlier.map(ni).join('') : '') : '<div class="ni">No notifications</div>';
-    const m = A.menu(r.right - 380, r.bottom + 6, [], { cls: 'notif' }); m.innerHTML = '<div class="mh">Notifications</div>' + html + '<hr><div class="mi" data-clear="1" role="menuitem" tabindex="0">' + ic('check') + '<span>Mark all as read</span></div>';
-    const clr = $('[data-clear]', m); m.tabIndex = -1; clr.focus();
-    clr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clr.click(); } });
+    const html = ns.length ? (today.length ? '<div class="mh">Today</div>' + today.map(ni).join('') : '') + (earlier.length ? '<div class="mh">Earlier</div>' + earlier.map(ni).join('') : '') : '<div role="listitem" class="ni">No notifications</div>';
+    const unread = ns.some((n) => !n.read);
+    const m = A.menu(r.right - 380, r.bottom + 6, [], { cls: 'notif' }); m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Notifications'); m.innerHTML = '<div class="mh">Notifications</div><div role="list">' + html + '</div>' + (unread ? '<hr><div class="mi" data-clear="1" role="button" tabindex="0">' + ic('check') + '<span>Mark all as read</span></div>' : '');
+    const clr = $('[data-clear]', m); m.tabIndex = -1; (clr || m).focus();
+    if (clr) clr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clr.click(); } });
     m.addEventListener('click', (e) => { if (e.target.closest('[data-clear]')) { E.notes.forEach((n) => (n.read = true)); updateBell(); A.closeMenus(); } });
     /* They count as read once the list is closed, not while it is still being read. */
     const lay = $('#layer'); const mo = new MutationObserver(() => { if (!m.isConnected) { mo.disconnect(); E.notes.forEach((n) => (n.read = true)); updateBell(); } }); mo.observe(lay, { childList: true });
   }
-  function updateBell() { const n = E.notes.filter((x) => !x.read).length; const b = $('#bd'); if (b) { b.hidden = !n; b.textContent = n; } }
+  function updateBell() { const n = E.notes.filter((x) => !x.read).length; const b = $('#bd'); if (b) { b.hidden = !n; b.textContent = n; } const bb = $('#btnBell'); if (bb) bb.setAttribute('aria-label', n ? 'Notifications, ' + n + ' unread' : 'Notifications'); }
 
   /* ---------- stage ---------- */
   function renderStage() {
@@ -198,7 +199,7 @@
   /* ---------- side (details + local) ---------- */
   function renderSide() {
     const side = $('#side'); if (st.view !== 'files') return;
-    side.innerHTML = '<div class="stabs2" role="tablist"><button role="tab" data-tab="details" class="' + (st.sideTab === 'details' ? 'on' : '') + '">Details</button><button role="tab" data-tab="local" class="' + (st.sideTab === 'local' ? 'on' : '') + '">Local files</button></div><div class="sbody"><div class="detail" id="detail"' + (st.sideTab === 'details' ? '' : ' hidden') + '></div><div id="localWrap" style="display:' + (st.sideTab === 'local' ? 'flex' : 'none') + ';flex-direction:column;flex:1;min-height:0"><div id="paneLocal" style="display:flex;flex-direction:column;flex:1;min-height:0"></div><div class="da" id="localFoot" style="border-top:1px solid var(--outline-var);padding-top:.75rem"></div></div></div>';
+    side.innerHTML = '<div class="stabs2" role="tablist"><button role="tab" aria-selected="' + (st.sideTab === 'details') + '" data-tab="details" class="' + (st.sideTab === 'details' ? 'on' : '') + '">Details</button><button role="tab" aria-selected="' + (st.sideTab === 'local') + '" data-tab="local" class="' + (st.sideTab === 'local' ? 'on' : '') + '">Local files</button></div><div class="sbody"><div class="detail" id="detail"' + (st.sideTab === 'details' ? '' : ' hidden') + '></div><div id="localWrap" style="display:' + (st.sideTab === 'local' ? 'flex' : 'none') + ';flex-direction:column;flex:1;min-height:0"><div id="paneLocal" style="display:flex;flex-direction:column;flex:1;min-height:0"></div><div class="da" id="localFoot" style="border-top:1px solid var(--outline-var);padding-top:.75rem"></div></div></div>';
     A.localPane.mount($('#paneLocal')); renderDetail(); renderLocalFooter();
   }
   $('#side').addEventListener('click', (e) => {
@@ -246,7 +247,7 @@
     const c = counts(); const sig = E.tasks.map((t) => t.id + t.state + (t.msg || '') + (t.conflict ? 'c' : '')).join('|') + '/' + st.sheetTab + st.sheetOpen + st.view + (E.tasks.length ? '' : 'e');
     if (!force && sig === sheetSig) { A.patchCards(sh); updateTotals(); return; }
     sheetSig = sig; layout();
-    const tab = (k, l, n, red) => '<button class="stab' + (st.sheetTab === k ? ' on' : '') + '" data-stab="' + k + '" role="tab">' + l + ' <b' + (red && n ? ' class="r"' : '') + '>' + n + '</b></button>';
+    const tab = (k, l, n, red) => '<button class="stab' + (st.sheetTab === k ? ' on' : '') + '" data-stab="' + k + '" role="tab" aria-selected="' + (st.sheetTab === k) + '">' + l + ' <b' + (red && n ? ' class="r"' : '') + '>' + n + '</b></button>';
     const list = E.tasks.filter((t) => A.groupOf(t) === st.sheetTab).sort((a, b) => a.queuedAt - b.queuedAt);
     const anyRun = E.tasks.some((t) => t.state === 'running' || t.state === 'queued'), anyPaused = E.tasks.some((t) => t.state === 'paused');
     sh.classList.toggle('min', !st.sheetOpen); $('#main').classList.toggle('noconn', !(A.mainPane.host !== 'local' && E.connected(A.mainPane.host)));
@@ -504,11 +505,28 @@
     else if (mod && e.key.toLowerCase() === 'u') { e.preventDefault(); uploadFab(); }
     else if (mod && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); p.startNew(); }
     else if (mod && e.key.toLowerCase() === 'l') { e.preventDefault(); p.editPath = true; p.render(); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault(); const n = p.items.length; if (!n) return; let i = e.shiftKey && p.lead >= 0 ? p.lead : p.anchor; i = e.key === 'ArrowDown' ? Math.min(n - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
-      p.selectIdx(i, e); if (e.shiftKey) p.lead = i; const rows = $('[data-rows]', p.el); if (rows && p.mode === 'list') { const rh = p.rh; if (i * rh < rows.scrollTop) rows.scrollTop = i * rh; else if ((i + 1) * rh > rows.scrollTop + rows.clientHeight) rows.scrollTop = (i + 1) * rh - rows.clientHeight; }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && p.mode === 'grid')) {
+      e.preventDefault(); const n = p.mode === 'grid' ? Math.min(p.items.length, 600) : p.items.length; if (!n) return;
+      const step = e.key === 'ArrowDown' ? (p.mode === 'grid' ? p.cols() : 1) : e.key === 'ArrowUp' ? (p.mode === 'grid' ? -p.cols() : -1) : e.key === 'ArrowRight' ? 1 : -1;
+      const from = e.shiftKey && p.lead >= 0 ? p.lead : p.cursor >= 0 ? p.cursor : p.anchor;
+      const i = from < 0 ? 0 : Math.max(0, Math.min(n - 1, from + step));
+      if (mod) p.setCursor(i); else { p.selectIdx(i, e); if (e.shiftKey) p.lead = i; }
+      const rows = $('[data-rows]', p.el);
+      if (rows && p.mode === 'list') { const rh = p.rh; if (i * rh < rows.scrollTop) rows.scrollTop = i * rh; else if ((i + 1) * rh > rows.scrollTop + rows.clientHeight) rows.scrollTop = (i + 1) * rh - rows.clientHeight; }
+      else if (rows) { const t = rows.querySelector('[data-i="' + i + '"]'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'nearest' }); }
     }
+    else if (e.key === ' ' && p.cursor >= 0 && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') { e.preventDefault(); p.selectIdx(p.cursor, { ctrlKey: true, type: 'keydown' }); }
     else if (e.key === 'Escape') { if (p.sel.size) { p.sel.clear(); p.selChanged(); } }
+  });
+
+  /* Tabs: Left and Right (Home and End) move to the neighbouring tab and open it; the new tab keeps the focus after the page redraws. */
+  document.addEventListener('keydown', (e) => {
+    const t = e.target; if (!t || !t.matches || !t.matches('[role="tab"]') || e.altKey || e.ctrlKey || e.metaKey) return;
+    const k = e.key; if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(k)) return;
+    const list = Array.from(t.parentNode.querySelectorAll('[role="tab"]')); const i = list.indexOf(t); if (i < 0) return;
+    const j = k === 'Home' ? 0 : k === 'End' ? list.length - 1 : (i + (k === 'ArrowRight' ? 1 : -1) + list.length) % list.length;
+    e.preventDefault(); const n = list[j]; const attr = Array.from(n.attributes).find((a) => a.name.startsWith('data-') && a.name !== 'data-i');
+    n.click(); setTimeout(() => { const q = attr ? document.querySelector('[role="tab"][' + attr.name + '="' + attr.value.replace(/"/g, '\\"') + '"]') : n; if (q) q.focus(); }, 0);
   });
 
   /* ---------- engine events -> UI ---------- */

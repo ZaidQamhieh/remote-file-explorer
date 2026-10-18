@@ -162,3 +162,9 @@ repo; unfinished work is in that card's `## Next`. Read on demand:
 - `docs/WAVE_RUNBOOK.md` - wave dispatch loop + sub-agent brief template.
 - `docs/development.md` (dev setup), `HANDOFF.md` (deployment runbook), `docs/feature-roadmap.md`,
   `docs/next-waves-addendum.md` (planned waves), `docs/upgrade-to-react-native.md`.
+
+## Git authorization policy
+Commit policy: automatic
+Push policy: ask
+Selected by: project owner
+Scope: this repository only

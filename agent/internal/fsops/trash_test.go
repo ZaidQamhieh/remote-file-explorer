@@ -277,3 +277,46 @@ func TestTrash_EmptyTrash_SkipsIDsOutsideJail(t *testing.T) {
 		t.Fatalf("item outside the jail was deleted despite an explicit id: %+v", remaining)
 	}
 }
+
+// A trash id that names a symlink must delete the link, never its target.
+func TestTrash_EmptyDoesNotFollowSymlinkEntry(t *testing.T) {
+	ops, _, trashDir := setupTrash(t)
+	outside := t.TempDir()
+	keep := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(keep, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(trashFilesDir(trashDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(trashFilesDir(trashDir), "link")); err != nil {
+		t.Skip("symlinks unavailable:", err)
+	}
+	_ = ops.EmptyTrash(trashDir, []string{"link"})
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("symlink target was deleted: %v", err)
+	}
+}
+
+// If the store's files/ directory was swapped for a symlink, ids must not
+// resolve through it into other directories.
+func TestTrash_EmptyRefusesSymlinkedStore(t *testing.T) {
+	ops, _, trashDir := setupTrash(t)
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "victim.txt")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(trashDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, trashFilesDir(trashDir)); err != nil {
+		t.Skip("symlinks unavailable:", err)
+	}
+	if err := ops.EmptyTrash(trashDir, []string{"victim.txt"}); err == nil {
+		t.Fatal("EmptyTrash accepted a symlinked store")
+	}
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("victim deleted through symlinked store: %v", err)
+	}
+}

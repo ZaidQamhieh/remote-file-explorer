@@ -93,7 +93,7 @@
   grip.addEventListener('dblclick', () => { S.sideR = SIDE_DEF; S.sideHide = false; save(); layout(); refit(); });
   let lastUnit = 0;
   addEventListener('resize', () => { layout(); renderRail(); const u = A.u(); if (u !== lastUnit) { lastUnit = u; refit(); } else [A.mainPane, A.localPane].forEach((p) => p && p.fit && p.fit()); });
-  function renderAll() { layout(); renderRail(); renderChip(); renderStage(); renderSide(); renderSheet(true); }
+  function renderAll() { layout(); renderRail(); renderChip(); renderStage(); renderSide(); renderSheet(true); const nm = { files: 'Files', servers: 'Servers', devices: 'Devices', transfers: 'Transfers', search: 'Search', tools: 'Tools', history: 'History', settings: 'Settings' }[st.view]; document.title = (nm ? nm + ' - ' : '') + 'RFE'; }
   A.renderAll = renderAll;
   A.renderRail = () => renderRail(); /* A control that redraws the page keeps the keyboard focus: the same switch or segment button gets it back. */
   A.pageSettings = () => {
@@ -109,12 +109,15 @@
   }
   function renderRail() {
     const c = counts(); const bad = E.servers.some((s) => s.state === 'lost' || s.state === 'offline' || s.state === 'trust' || s.state === 'refused');
-    const D = (v, i, l, extra) => '<button class="dest' + (st.view === v ? ' on' : '') + '" data-go="' + v + '" aria-label="' + l + '"><div class="pill">' + ic(i) + (extra || '') + '</div>' + l + '</button>';
+    const D = (v, i, l, extra) => '<button class="dest' + (st.view === v ? ' on' : '') + '" data-go="' + v + '"' + (st.view === v ? ' aria-current="page"' : '') + '><div class="pill">' + ic(i) + (extra || '') + '</div>' + l + '</button>';
     const wide = remW() >= WIDE_MIN ? !!S.railWide : !!st.drawer;
+    /* Redrawing the rail must not drop the keyboard focus from the button that was just used. */
+    const fa = document.activeElement; const fsel = fa && $('#rail').contains(fa) ? (fa.dataset.go ? '[data-go="' + fa.dataset.go + '"]' : fa.dataset.new ? '[data-new]' : fa.dataset.menu ? '[data-menu]' : '') : '';
     $('#rail').innerHTML = '<button class="rmenu" data-menu="1" title="' + (wide ? 'Hide the labels' : 'Show the labels') + '" aria-label="Menu" aria-expanded="' + wide + '">' + ic('menu') + '</button><button class="fab" data-new="1" title="New connection" aria-label="New connection">' + ic('plug') + '<span class="fl">New connection</span></button>' +
       D('files', 'folder', 'Files') + D('servers', 'server', 'Servers', bad ? '<i class="dt"></i>' : '') + D('devices', 'phone', 'Devices', A.X && A.X.inbox && A.X.inbox.length ? '<i class="bg">' + A.X.inbox.length + '</i>' : '') +
       D('transfers', 'swap', 'Transfers', c.attn ? '<i class="bg">' + c.attn + '</i>' : c.active + c.queued ? '<i class="bg pri">' + (c.active + c.queued) + '</i>' : '') +
       D('search', 'search', 'Search') + D('tools', 'layers', 'Tools') + D('history', 'history', 'History') + '<div class="sp"></div>' + D('settings', 'gear', 'Settings');
+    if (fsel) { const n = $(fsel, $('#rail')); if (n) n.focus(); }
   }
   $('#rail').addEventListener('click', (e) => {
     e.railHandled = true; /* the page-wide click that closes the drawer must not see this one */
@@ -133,8 +136,8 @@
   function buildTop() {
     $('#top').innerHTML = '<button class="srv" id="chip" aria-haspopup="menu"></button><label class="sbar">' + ic('search') + '<input id="q" placeholder="Search files on this server" aria-label="Search" autocomplete="off"><kbd>/</kbd></label><span class="sp"></span><button class="ib" id="btnRefresh" title="Refresh (F5)" aria-label="Refresh">' + ic('refresh') + '</button><button class="ib" id="btnQR" title="Pair a phone (QR)" aria-label="Pair a phone">' + ic('qr') + '</button><button class="ib" id="btnTheme" title="Theme" aria-label="Theme">' + ic('sun') + '</button><button class="ib" id="btnPal" title="Command palette (Ctrl+K)" aria-label="Command palette">' + ic('command') + '</button><button class="ib" id="btnXfer" aria-label="Transfers" aria-pressed="false">' + ic('swap') + '<i class="bd ok" id="bdx" hidden></i></button><button class="ib" id="btnBell" title="Notifications" aria-label="Notifications">' + ic('bell') + '<i class="bd" id="bd" hidden></i></button><button class="av" id="btnAv" aria-label="Account">Z</button>';
     const q = $('#q'); let tm;
-    q.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => runQuery(q.value), 280); });
-    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(tm); runQuery(q.value); } if (e.key === 'Escape') { q.value = ''; q.blur(); runQuery(''); } });
+    q.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => runQuery(q.value, false), 280); });
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(tm); runQuery(q.value, true); } if (e.key === 'Escape') { clearTimeout(tm); q.value = ''; q.blur(); } });
     $('#chip').addEventListener('click', (e) => serverMenu(e.currentTarget));
     $('#side').insertAdjacentHTML('afterend', '<button class="ib" id="btnSide" aria-label="Details panel" aria-pressed="true">' + ic('panel') + '</button>');
     $('#btnSide').addEventListener('click', () => A.toggleSide());
@@ -147,8 +150,8 @@
     $('#btnXfer').addEventListener('click', () => A.toggleTransfers());
     $('#btnAv').addEventListener('click', (e) => { const r = e.currentTarget.getBoundingClientRect(); A.menu(r.right - 224 * A.u(), r.bottom + 6, [{ head: (() => { const sv = E.server(A.mainPane.host); return sv && sv.signedIn && sv.user ? sv.user + '@' + sv.name : 'Not signed in'; })() }, { icon: 'phone', label: 'Pair a phone', onClick: () => A.pairDialog && A.pairDialog() }, { icon: 'user', label: 'Accounts…', onClick: () => A.accountsDialog && A.accountsDialog() }, { icon: 'gear', label: 'Settings', onClick: () => A.go('settings') }, { icon: 'keyboard', label: 'Keyboard shortcuts', onClick: shortcutsDialog }]); });
   }
-  function runQuery(v) {
-    st.q = v.trim(); if (st.q && A.recordQuery) A.recordQuery(st.q);
+  function runQuery(v, commit) {
+    st.q = v.trim(); /* Only a search the user confirmed goes to Recent, not each word typed on the way. */ if (st.q && commit !== false && A.recordQuery) A.recordQuery(st.q);
     if (!st.q) { if (st.view === 'search') { A.searchRun = null; renderStage(); } return; }
     if (st.view !== 'search') { st.view = 'search'; layout(); renderRail(); renderSide(); renderSheet(true); }
     startSearch();
@@ -172,9 +175,12 @@
   function bellMenu(btn) {
     const r = btn.getBoundingClientRect(); const ns = E.notes.slice(0, 12);
     const html = ns.length ? ns.map((n) => '<div class="ni ' + n.kind + (n.read ? '' : ' unread') + '">' + ic(n.kind === 'error' ? 'alert-circle' : n.kind === 'ok' ? 'check-circle' : 'info') + '<div><span>' + esc(n.text) + '</span><small>' + A.ago(n.at) + '</small></div></div>').join('') : '<div class="ni">No notifications</div>';
-    const m = A.menu(r.right - 380, r.bottom + 6, [], { cls: 'notif' }); m.innerHTML = '<div class="mh">Notifications</div>' + html + '<hr><div class="mi" data-clear="1">' + ic('check') + '<span>Mark all as read</span></div>';
+    const m = A.menu(r.right - 380, r.bottom + 6, [], { cls: 'notif' }); m.innerHTML = '<div class="mh">Notifications</div>' + html + '<hr><div class="mi" data-clear="1" role="menuitem" tabindex="0">' + ic('check') + '<span>Mark all as read</span></div>';
+    const clr = $('[data-clear]', m); m.tabIndex = -1; clr.focus();
+    clr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clr.click(); } });
     m.addEventListener('click', (e) => { if (e.target.closest('[data-clear]')) { E.notes.forEach((n) => (n.read = true)); updateBell(); A.closeMenus(); } });
-    setTimeout(() => { E.notes.forEach((n) => (n.read = true)); updateBell(); }, 1500);
+    /* They count as read once the list is closed, not while it is still being read. */
+    const lay = $('#layer'); const mo = new MutationObserver(() => { if (!m.isConnected) { mo.disconnect(); E.notes.forEach((n) => (n.read = true)); updateBell(); } }); mo.observe(lay, { childList: true });
   }
   function updateBell() { const n = E.notes.filter((x) => !x.read).length; const b = $('#bd'); if (b) { b.hidden = !n; b.textContent = n; } }
 
@@ -471,6 +477,8 @@
     if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
     if (typing) return;
+    /* A focused button, tab or switch keeps its own Enter, Space and Backspace: the file keys work only in the list or on the page itself. */
+    if (['Enter', 'Backspace', 'Delete', 'F2'].includes(e.key) && t.closest && t.closest('button,[role=switch],[role=tab],[role=menuitem],a[href],select,summary') && !t.closest('[data-rows]')) return;
     const p = st.view === 'files' ? A.activePane : null; if (e.key === 'F5') { e.preventDefault(); if (p) p.refresh(true); return; }
     if (!p) return; const sel = p.selected(); const one = sel.length === 1 ? sel[0] : null;
     if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); p.selectAll(); }
@@ -484,8 +492,8 @@
     else if (mod && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); p.startNew(); }
     else if (mod && e.key.toLowerCase() === 'l') { e.preventDefault(); p.editPath = true; p.render(); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault(); const n = p.items.length; if (!n) return; let i = p.anchor; i = e.key === 'ArrowDown' ? Math.min(n - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
-      p.selectIdx(i, e); const rows = $('[data-rows]', p.el); if (rows && p.mode === 'list') { const rh = p.rh; if (i * rh < rows.scrollTop) rows.scrollTop = i * rh; else if ((i + 1) * rh > rows.scrollTop + rows.clientHeight) rows.scrollTop = (i + 1) * rh - rows.clientHeight; }
+      e.preventDefault(); const n = p.items.length; if (!n) return; let i = e.shiftKey && p.lead >= 0 ? p.lead : p.anchor; i = e.key === 'ArrowDown' ? Math.min(n - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+      p.selectIdx(i, e); if (e.shiftKey) p.lead = i; const rows = $('[data-rows]', p.el); if (rows && p.mode === 'list') { const rh = p.rh; if (i * rh < rows.scrollTop) rows.scrollTop = i * rh; else if ((i + 1) * rh > rows.scrollTop + rows.clientHeight) rows.scrollTop = (i + 1) * rh - rows.clientHeight; }
     }
     else if (e.key === 'Escape') { if (p.sel.size) { p.sel.clear(); p.selChanged(); } }
   });

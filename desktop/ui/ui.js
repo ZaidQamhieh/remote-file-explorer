@@ -243,6 +243,7 @@
     }
     /* ----- interactions ----- */
     selectIdx(i, e) {
+      this.lead = -1; /* the keyboard sets it again after a Shift+Arrow step */
       const it = this.items[i]; if (!it) return;
       if (e && e.shiftKey && this.anchor >= 0) { const [a, b] = [Math.min(this.anchor, i), Math.max(this.anchor, i)]; this.sel.clear(); for (let k = a; k <= b; k++) this.sel.add(this.items[k].n); }
       else if (e && (e.ctrlKey || e.metaKey || e.lead)) { this.sel.has(it.n) ? this.sel.delete(it.n) : this.sel.add(it.n); this.anchor = i; }

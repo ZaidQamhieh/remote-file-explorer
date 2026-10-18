@@ -130,11 +130,12 @@
     if (host !== 'local') acts.push({ id: 'sv', label: 'Save as…', kind: 'tx', icon: 'download', cb: () => { A.doEnqueue('down', host, dir, A.downloadDir(), [n.n], { askWhere: true }); } });
     else acts.push({ id: 'op', label: 'Open', kind: 'tx', icon: 'external', cb: () => { E.call('local_open', { path: pathOf(dir, n) }).catch(fail); return false; } });
     acts.push({ id: 'dl', label: host === 'local' ? 'Upload' : 'Download', kind: 'f', icon: host === 'local' ? 'upload' : 'download', cb: () => { A.transferNames(host, dir, [n.n]); } });
-    const ctl = A.dialog({ title: n.n, nolocal: true, width: 780, cls: 'fxpv', body: nav + '<div class="pvbody" tabindex="0" role="region" aria-label="File preview"><div class="pv nop"><span class="spin">' + ic('spinner') + '</span><b>Loading…</b></div></div><div class="pvmeta">' + U.KINDS[U.kindOf(n)] + ' · ' + U.fmtBytes(n.b) + ' · modified ' + U.fmtDate(n.mod) + (n.own ? ' · ' + esc(n.own) : '') + ' · ' + esc(n.perm) + '</div>', actions: acts, noFocus: true, onClose: () => { if (ctl && ctl.onGone) ctl.onGone(); },
+    let kn0 = null;
+    const ctl = A.dialog({ title: n.n, nolocal: true, width: 780, cls: 'fxpv', body: nav + '<div class="pvbody" tabindex="0" role="region" aria-label="File preview"><div class="pv nop"><span class="spin">' + ic('spinner') + '</span><b>Loading…</b></div></div><div class="pvmeta">' + U.KINDS[U.kindOf(n)] + ' · ' + U.fmtBytes(n.b) + ' · modified ' + U.fmtDate(n.mod) + (n.own ? ' · ' + esc(n.own) : '') + ' · ' + esc(n.perm) + '</div>', actions: acts, noFocus: true, onClose: () => { if (kn0) document.removeEventListener('keydown', kn0); if (ctl && ctl.onGone) ctl.onGone(); },
       onOpen: (c) => {
         c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-pn]'); if (!b || b.disabled) return; const nx = sib[i + +b.dataset.pn]; if (!nx) return; c.close(); showPreview(host, dir, nx); });
         const kn = (e) => { if (!c.el.isConnected) { document.removeEventListener('keydown', kn); return; } if (e.target.matches && e.target.matches('input,textarea,select')) return; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const cv = $('#imC', c.el); if (cv && (cv.scrollWidth > cv.clientWidth + 1 || cv.scrollHeight > cv.clientHeight + 1)) return; const b = $('[data-pn="' + ((e.key === 'ArrowLeft') === (document.documentElement.dir !== 'rtl') ? -1 : 1) + '"]', c.el); if (b && !b.disabled) { e.preventDefault(); b.click(); } } };
-        document.addEventListener('keydown', kn);
+        document.addEventListener('keydown', kn); kn0 = kn;
         build(host, dir, n).then((r) => { if (!c.el.isConnected) return; $('.pvbody', c.el).innerHTML = r.html; if (r.init) r.init(c); }).catch((e) => { if (c.el.isConnected) $('.pvbody', c.el).innerHTML = nop('alert-circle', 'Could not show this file', esc(e.message)); });
       } });
     return ctl;

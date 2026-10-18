@@ -49,6 +49,7 @@
     const m = $('#main'); m.classList.toggle('nosid', st.view !== 'files'); m.classList.toggle('nosheet', st.view === 'transfers');
     m.classList.toggle('sidehid', st.view === 'files' && !!S.sideHide);
     m.style.setProperty('--sidew', sideNow().toFixed(2) + 'rem');
+    const gp = $('#rszSide'); if (gp) { gp.setAttribute('aria-valuemin', '0'); gp.setAttribute('aria-valuemax', String(Math.round(sideMax()))); gp.setAttribute('aria-valuenow', S.sideHide ? '0' : String(Math.round(sideNow()))); }
     $('#side').style.display = st.view === 'files' && !S.sideHide ? '' : 'none'; $('#sheet').classList.toggle('min', !st.sheetOpen);
     const bx = $('#btnXfer'); if (bx) { bx.hidden = st.view === 'transfers'; bx.setAttribute('aria-pressed', String(!!st.sheetOpen)); bx.title = st.sheetOpen ? 'Hide transfers' : 'Show transfers'; }
     $('#app').classList.toggle('wide', !!S.railWide && remW() >= WIDE_MIN);
@@ -86,7 +87,7 @@
     dragging(grip, e, (dx) => { const want = w0 - dir * dx / remPx(); S.sideHide = want < SIDE_HIDE; if (!S.sideHide) S.sideR = clamp(want, SIDE_MIN, sideMax()); layout(); }, (moved) => { if (!moved) S.sideHide = !S.sideHide; save(); layout(); refit(); });
   });
   grip.addEventListener('keydown', (e) => {
-    const k = { ArrowLeft: 1.5, ArrowRight: -1.5 }[e.key]; if (!k && e.key !== 'Home' && e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault();
+    const rt = document.documentElement.dir === 'rtl' ? -1 : 1; const k = { ArrowLeft: 1.5 * rt, ArrowRight: -1.5 * rt }[e.key]; if (!k && e.key !== 'Home' && e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault();
     if (e.key === 'Enter' || e.key === ' ') S.sideHide = !S.sideHide; else if (e.key === 'Home') { S.sideR = SIDE_DEF; S.sideHide = false; } else { const was = S.sideHide ? 0 : sideNow(); const want = was + k; S.sideHide = want < SIDE_HIDE; if (!S.sideHide) S.sideR = clamp(want, SIDE_MIN, sideMax()); }
     save(); layout(); refit();
   });

@@ -462,7 +462,7 @@ mark{background:var(--warn-c);color:var(--on-warn-c);border-radius:.1875rem;padd
 .kv2{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-top:1px solid var(--outline-var)}.kv2:first-child{border-top:0}.kv2 > div{flex:1;min-width:0}.kv2 b{display:block;font-weight:500;color:var(--on-surface)}.kv2 small{color:var(--on-var)}.kv2 small.mono{font-family:var(--mono);font-size:.7188rem;word-break:break-all}
 .fld select{height:3rem;border-radius:.5rem;border:1px solid var(--outline);background:var(--surface);padding:0 .75rem;color:var(--on-surface);font:inherit}
 .stage.page{container-type:inline-size}
-@container (max-width:66rem){.dvg{grid-template-columns:minmax(0,1fr)}}
+@container (max-width:66rem){.dvg{grid-template-columns:minmax(0,1fr)}.dvr{display:contents}.dvg>.fxpair{order:1}.dvr>.fxc.warn{order:0}.dvr>.fxc:not(.warn){order:2}}
 .lh{flex-wrap:nowrap}
 .lh h1{flex:0 1 auto;min-width:3.5rem}
 .lh .btn,.lh .ib,.lh .nav{flex:none}

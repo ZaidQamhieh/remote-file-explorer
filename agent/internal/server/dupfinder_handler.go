@@ -28,7 +28,7 @@ func batchChecksumHandler(ops *fsops.Ops) http.HandlerFunc {
 			Paths []string `json:"paths"`
 			Algo  string   `json:"algo"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Paths) == 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || len(req.Paths) == 0 {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "paths required")
 			return
 		}

@@ -387,7 +387,7 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 			return
 		}
 		var b deviceUpdateBody
-		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&b); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
 			return
 		}

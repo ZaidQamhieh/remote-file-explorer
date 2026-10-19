@@ -676,6 +676,17 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 		}
 		dst := dstDir.child(filepath.Base(resSrc.full))
 
+		// Never copy a directory into itself or its own subtree: each level
+		// would copy the tree again until the path length limit.
+		if info, lerr := resSrc.lstat(); lerr == nil && info.IsDir() && isUnder(dstDir.full, resSrc.full) {
+			results[i] = BatchResult{Path: src, Error: apiErr("CONFLICT", "cannot copy a folder into itself")}
+			resSrc.close()
+			if dstDir.root != resSrc.root {
+				dstDir.close()
+			}
+			continue
+		}
+
 		// Same-path guard: copying a path onto itself is a no-op — UNLESS
 		// duplicate is requested, in which case copying into the source's own
 		// directory means "make a renamed copy" (duplicate-in-place), handled
@@ -1008,6 +1019,9 @@ func mimeForPath(path string, info os.FileInfo, sniff bool) string {
 	return "application/octet-stream"
 }
 
+// maxAutoRename bounds the "name (N)" search.
+const maxAutoRename = 10000
+
 func autoRenameSecure(dst *securePath) *securePath {
 	dir := dst.parent()
 	base := filepath.Base(dst.full)
@@ -1015,7 +1029,9 @@ func autoRenameSecure(dst *securePath) *securePath {
 	stem := strings.TrimSuffix(base, ext)
 	for i := 1; ; i++ {
 		candidate := dir.child(fmt.Sprintf("%s (%d)%s", stem, i, ext))
-		if _, err := candidate.lstat(); os.IsNotExist(err) {
+		// Any lstat failure other than "exists" ends the search: the caller's
+		// next operation reports the real error instead of this looping.
+		if _, err := candidate.lstat(); err != nil || i >= maxAutoRename {
 			return candidate
 		}
 	}

@@ -55,7 +55,7 @@
   function svg(text, o) {
     o = o || {}; const q = make(text, o.ecc || 'M'), b = o.border == null ? 2 : o.border, n = q.size + b * 2; let d = '';
     for (let y = 0; y < q.size; y++) for (let x = 0; x < q.size; x++) if (q.get(x, y)) d += 'M' + (x + b) + ' ' + (y + b) + 'h1v1h-1z';
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + n + ' ' + n + '" width="' + (o.px || 200) + '" height="' + (o.px || 200) + '" shape-rendering="crispEdges" role="img" aria-label="' + (o.label || 'QR code') + '"><rect width="' + n + '" height="' + n + '" fill="' + (o.bg || '#fff') + '"/><path d="' + d + '" fill="' + (o.fg || '#000') + '"/></svg>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + n + ' ' + n + '" width="' + (o.px || 200) + '" height="' + (o.px || 200) + '" shape-rendering="crispEdges" role="img" aria-label="' + String(o.label || 'QR code').replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';') + '"><rect width="' + n + '" height="' + n + '" fill="' + (o.bg || '#fff') + '"/><path d="' + d + '" fill="' + (o.fg || '#000') + '"/></svg>';
   }
   g.QR = { make, svg };
 })(window);

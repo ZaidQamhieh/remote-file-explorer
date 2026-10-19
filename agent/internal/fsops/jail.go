@@ -202,7 +202,13 @@ func isUnder(p, root string) bool {
 	if p == root {
 		return true
 	}
-	return strings.HasPrefix(p, root+string(filepath.Separator))
+	// A filesystem root ("/", `D:\`) already ends in a separator; adding
+	// another would match nothing below it.
+	prefix := root
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	return strings.HasPrefix(p, prefix)
 }
 
 // securePath is an operation-scoped view of a path. When an Ops instance is

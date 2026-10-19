@@ -51,3 +51,9 @@ test("the SVG is a single path with an accessible label", () => {
   assert.match(svg, /aria-label="Pairing QR code for nas"/);
   assert.equal((svg.match(/<path/g) || []).length, 1);
 });
+
+test("the aria-label cannot break out of its attribute", () => {
+  const svg = QR.svg("hello", { label: '"><meta http-equiv=refresh content=0>' });
+  assert.ok(!svg.includes("<meta"), svg.slice(0, 400));
+  assert.match(svg, /aria-label="&#34;&#62;&#60;meta/);
+});

@@ -68,7 +68,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 		}
 
 		var req mintShareRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
 			return
 		}

@@ -150,7 +150,7 @@ func generatePairingHandler(pm *pairing.Manager, st *settings.Store) http.Handle
 			Guest      bool   `json:"guest"`
 			JailRoot   string `json:"jailRoot"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&req) // body is optional; default TTL below
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req) // body is optional; default TTL below
 		ttl := pairing.DefaultTTL
 		if req.TTLSeconds > 0 {
 			ttl = time.Duration(req.TTLSeconds) * time.Second

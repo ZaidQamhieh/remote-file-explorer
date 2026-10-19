@@ -68,7 +68,7 @@ func deleteHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 			var body struct {
 				Paths []string `json:"paths"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err == nil {
 				paths = append(paths, body.Paths...)
 			}
 		}
@@ -108,7 +108,7 @@ func restoreTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		var body struct {
 			IDs []string `json:"ids"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.IDs) == 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil || len(body.IDs) == 0 {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "ids required")
 			return
 		}
@@ -131,7 +131,7 @@ func emptyTrashHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		// Only a body with no content at all means "empty all"; a body that
 		// fails to decode (including an unsized one) is rejected so a bad
 		// request can never wipe the whole trash.
-		err := json.NewDecoder(r.Body).Decode(&body)
+		err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body)
 		if err != nil && !errors.Is(err, io.EOF) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid body")
 			return
@@ -162,7 +162,7 @@ func createFolderHandler(ops *fsops.Ops) http.HandlerFunc {
 		var req struct {
 			Path string `json:"path"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || req.Path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
@@ -183,7 +183,7 @@ func createFileHandler(ops *fsops.Ops) http.HandlerFunc {
 		var req struct {
 			Path string `json:"path"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || req.Path == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
@@ -205,7 +205,7 @@ func renameHandler(ops *fsops.Ops) http.HandlerFunc {
 			Src string `json:"src"`
 			Dst string `json:"dst"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Src == "" || req.Dst == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || req.Src == "" || req.Dst == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "src and dst required")
 			return
 		}
@@ -229,7 +229,7 @@ func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 			Dup       bool     `json:"duplicate"`
 			Overwrite bool     `json:"overwrite"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
@@ -249,7 +249,7 @@ func moveHandler(ops *fsops.Ops) http.HandlerFunc {
 			Dup       bool     `json:"duplicate"`
 			Overwrite bool     `json:"overwrite"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || len(req.Sources) == 0 || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
@@ -267,7 +267,7 @@ func compressHandler(ops *fsops.Ops) http.HandlerFunc {
 			Sources []string `json:"sources"`
 			Dest    string   `json:"dest"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Sources) == 0 || req.Dest == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || len(req.Sources) == 0 || req.Dest == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and dest required")
 			return
 		}
@@ -289,7 +289,7 @@ func extractHandler(ops *fsops.Ops) http.HandlerFunc {
 			Archive string `json:"archive"`
 			DestDir string `json:"destDir"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Archive == "" || req.DestDir == "" {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&req); err != nil || req.Archive == "" || req.DestDir == "" {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "archive and destDir required")
 			return
 		}

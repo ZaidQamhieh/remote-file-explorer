@@ -249,8 +249,23 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 		}
 		// lstat, not stat: a dangling symlink at the original path is an
 		// occupied name and must be kept, not replaced by the rename.
+		if dest.root != nil && dest.name == "." {
+			// The jail root itself: its keep-both name would be a sibling of
+			// the root (outside the jail) while its root-relative name lands
+			// inside it. Refuse; the entry stays in the trash.
+			dest.close()
+			results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED",
+				"cannot restore to the jail root itself: "+orig)}
+			continue
+		}
 		if _, err := dest.lstat(); err == nil {
 			dest = autoRenameSecure(dest)
+			if dest.root != nil && !filepath.IsLocal(dest.name) {
+				dest.close()
+				results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED",
+					"cannot restore: the keep-both name would be outside the jail: "+orig)}
+				continue
+			}
 		} else if !os.IsNotExist(err) {
 			dest.close()
 			results[i] = BatchResult{Path: id, Error: apiErr("RESTORE_FAILED", err.Error())}
@@ -363,6 +378,13 @@ func errResults(paths []string, code string, err error) []BatchResult {
 	return res
 }
 
+// renameAcrossRootsFn and removeAllFn are variables so tests can force the
+// cross-device fallback and a failing source removal.
+var (
+	renameAcrossRootsFn = renameAcrossRoots
+	removeAllFn         = func(p *securePath) error { return p.removeAll() }
+)
+
 // moveAcrossRootsSecure uses descriptor-relative rename when both paths share
 // a root. When one side is the agent-managed trash store outside the user's
 // jail, it copies through the rooted source/destination handles, then removes
@@ -373,7 +395,7 @@ func moveAcrossRootsSecure(src, dst *securePath) error {
 		// Different roots (jailed source, unrooted trash): the jail check has
 		// already run, so rename without the root handle and copy only when the
 		// rename is cross-device (EXDEV, or ERROR_NOT_SAME_DEVICE on Windows).
-		err = renameAcrossRoots(src, dst)
+		err = renameAcrossRootsFn(src, dst)
 	}
 	if err == nil {
 		return nil
@@ -386,7 +408,18 @@ func moveAcrossRootsSecure(src, dst *securePath) error {
 		_ = dst.removeAll()
 		return err
 	}
-	return src.removeAll()
+	rmErr := removeAllFn(src)
+	if rmErr == nil {
+		return nil
+	}
+	// The copy is complete but the source could not be fully removed. If the
+	// source is in fact gone the move succeeded; otherwise report both places.
+	// The copy is kept: it holds the data.
+	if _, lerr := src.lstat(); os.IsNotExist(lerr) {
+		return nil
+	}
+	return fmt.Errorf("copied to %s but could not remove the source %s (it may be partly deleted): %w; "+
+		"the complete copy remains at %s", dst.full, src.full, rmErr, dst.full)
 }
 
 // uniqueTrashName returns a name not already used by either files/ or info/.

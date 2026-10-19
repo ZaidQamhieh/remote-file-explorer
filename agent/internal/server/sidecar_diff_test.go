@@ -269,6 +269,13 @@ func TestSidecarIndexMatchesFrozenGoIndex(t *testing.T) {
 			roots[i] = sub(r)
 		}
 		got, trunc, ok := si.query(diffQuery(t, q.Raw), roots, q.Limit)
+		if covered := indexCovers([]string{root}, roots[0]); !covered && len(roots) == 1 {
+			// An uncovered root is no longer answered (empty) from the index; the handler walks live.
+			if ok || len(q.Entries) != 0 {
+				t.Fatalf("%s roots=%v: ok=%v golden=%d entries, want decline of an uncovered root", q.Raw, roots, ok, len(q.Entries))
+			}
+			continue
+		}
 		if !ok {
 			t.Fatalf("%s: sidecar not ready", q.Raw)
 		}

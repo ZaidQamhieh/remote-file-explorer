@@ -320,3 +320,31 @@ func TestTrash_EmptyRefusesSymlinkedStore(t *testing.T) {
 		t.Fatalf("victim deleted through symlinked store: %v", err)
 	}
 }
+
+// TestTrash_JailedUsesRenameNotCopy verifies a jailed trash on the same
+// filesystem renames (inode preserved) instead of copying the tree.
+func TestTrash_JailedUsesRenameNotCopy(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	dir := filepath.Join(root, "tree")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := ops.MoveToTrash([]string{dir}, trashDir)
+	if len(res) != 1 || !res[0].OK {
+		t.Fatalf("MoveToTrash: %+v", res)
+	}
+	after, err := os.Stat(filepath.Join(trashFilesDir(trashDir), "tree"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatalf("trash entry is a copy, expected a rename")
+	}
+}

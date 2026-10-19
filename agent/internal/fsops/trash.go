@@ -348,10 +348,15 @@ func errResults(paths []string, code string, err error) []BatchResult {
 // the source through its handle.
 func moveAcrossRootsSecure(src, dst *securePath) error {
 	err := src.renameTo(dst)
+	if err != nil && src.root != dst.root {
+		// Different roots (jailed source, unrooted trash): the jail check has
+		// already run, so rename by absolute path and copy only on EXDEV.
+		err = os.Rename(src.full, dst.full)
+	}
 	if err == nil {
 		return nil
 	}
-	if src.root == dst.root && !errors.Is(err, syscall.EXDEV) {
+	if !errors.Is(err, syscall.EXDEV) {
 		return err
 	}
 	if err := copySecureRecursive(src, dst); err != nil {

@@ -33,8 +33,9 @@ impl Desktop {
 /// The kinds of notification the window may ask for.
 pub const KINDS: [&str; 5] = ["done", "error", "pair", "update", "test"];
 
-/// A title or body fit to hand to the system: no control or direction-changing characters, cut at a
-/// character boundary to `max` characters.
+/// A title or body fit to hand to the system: no control or direction-changing characters, no angle
+/// brackets (Linux notification servers render `<b>`, `<a href>` and `<img>` in a body, and device
+/// names and file names come from outside), cut at a character boundary to `max` characters.
 pub fn clean_text(text: &str, max: usize) -> String {
     let kept: String = text
         .chars()
@@ -43,6 +44,11 @@ pub fn clean_text(text: &str, max: usize) -> String {
                 && !matches!(c,
                     '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2064}'
                     | '\u{2066}'..='\u{2069}' | '\u{feff}')
+        })
+        .map(|c| match c {
+            '<' => '\u{2039}',
+            '>' => '\u{203a}',
+            c => c,
         })
         .collect();
     let kept = kept.trim();

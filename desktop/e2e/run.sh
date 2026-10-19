@@ -104,6 +104,8 @@ session)
     sed "s|<standard_session_servicedirs */>|<servicedir>$XDG_RUNTIME_DIR/no-services</servicedir>|" /usr/share/dbus-1/session.conf >"$XDG_RUNTIME_DIR/session-no-services.conf"
     bus_config=(--config-file="$XDG_RUNTIME_DIR/session-no-services.conf")
   fi
+  # e2e/os-drop.test.mjs moves the pointer through KWin's fake-input protocol, which KWin only offers to authorised programs.
+  export KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
   RFE_E2E_STAGE=inside dbus-run-session "${bus_config[@]}" -- kwin_wayland --virtual --socket rfe-e2e --width 1280 --height 800 \
     --scale "${SCALE:-1}" --no-lockscreen --no-global-shortcuts -- "$here/run.sh" >"$XDG_RUNTIME_DIR/tests.log" 2>&1 &
   kwin=$!

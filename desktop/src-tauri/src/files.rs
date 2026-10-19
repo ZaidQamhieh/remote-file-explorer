@@ -11,7 +11,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{Offloaded, OsKeystore};
+use crate::secrets::Offloaded;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::Path;
@@ -582,7 +582,7 @@ pub async fn delete(
 // ---------------------------------------------------------------------------------------------
 
 fn keystore() -> Offloaded {
-    Offloaded::new(OsKeystore::new())
+    Offloaded::os_keystore()
 }
 
 fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {

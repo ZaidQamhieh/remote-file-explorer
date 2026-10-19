@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 pub trait SecretStore: Send + Sync {
@@ -168,6 +168,15 @@ impl Offloaded {
             host: None,
             gate: Arc::new(Mutex::new(())),
         }
+    }
+
+    /// The OS keystore. Every handle from here shares one process-wide gate, so keystore calls
+    /// serialize across Tauri commands, each of which builds its own handle.
+    pub fn os_keystore() -> Self {
+        static GATE: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+        let mut s = Self::new(OsKeystore::new());
+        s.gate = Arc::clone(GATE.get_or_init(|| Arc::new(Mutex::new(()))));
+        s
     }
 
     /// The same store, acting for the saved host `host` (`host:port`) instead of the active

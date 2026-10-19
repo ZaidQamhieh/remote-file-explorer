@@ -1935,12 +1935,12 @@ pub async fn reset_download_folder(app: tauri::AppHandle) -> Result<String, Stri
 /// `host` scopes the login to one saved host (`host:port`); `None` is the active session. The
 /// transfer keeps it, so switching the active host never sends a transfer to another agent.
 pub fn saved_login(data_dir: PathBuf, host: Option<String>) -> Creds {
-    use crate::secrets::{Offloaded, OsKeystore};
+    use crate::secrets::Offloaded;
     Arc::new(move || {
         let dir = data_dir.clone();
         let host = host.clone();
         Box::pin(async move {
-            let saved = Offloaded::new(OsKeystore::new())
+            let saved = Offloaded::os_keystore()
                 .scoped(host)
                 .run(move |s| crate::flows::load_saved(&dir, s))
                 .await?;
@@ -2028,8 +2028,7 @@ pub async fn transfer_upload_tree(
         use tauri::Manager;
         app.path().app_data_dir().map_err(|e| e.to_string())?
     };
-    let store =
-        crate::secrets::Offloaded::new(crate::secrets::OsKeystore::new()).scoped(host.clone());
+    let store = crate::secrets::Offloaded::os_keystore().scoped(host.clone());
     // Each folder of the tree, empty ones too, shallowest first. One that already exists is fine.
     for rel in &folders {
         let (up, step) = match rel.rsplit_once('/') {
@@ -2135,8 +2134,7 @@ pub async fn transfer_download_tree(
         use tauri::Manager;
         app.path().app_data_dir().map_err(|e| e.to_string())?
     };
-    let store =
-        crate::secrets::Offloaded::new(crate::secrets::OsKeystore::new()).scoped(host.clone());
+    let store = crate::secrets::Offloaded::os_keystore().scoped(host.clone());
     let top = safe_name(&remote_path);
     // (remote folder, its path under the downloads folder)
     let mut stack = vec![(remote_path.clone(), top)];

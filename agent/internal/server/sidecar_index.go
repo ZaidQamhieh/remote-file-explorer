@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -163,13 +164,46 @@ func (s *sidecarIndex) loop() {
 	}
 }
 
-func (s *sidecarIndex) build(c *sidecar.Client) error {
+// indexRoots are the roots the sidecar index is built over: the jail roots, else the user's home directory.
+func (s *sidecarIndex) indexRoots() []string {
 	roots := s.ops.Roots()
 	if len(roots) == 0 {
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
 			roots = []string{home}
 		}
 	}
+	return roots
+}
+
+// indexCovers reports whether the index can answer a search under root: root is inside an indexed root and no
+// directory on the way down is one the index walk prunes (hidden, node_modules, pseudo-filesystems).
+func indexCovers(indexed []string, root string) bool {
+	root = filepath.Clean(root)
+	for _, base := range indexed {
+		base = filepath.Clean(base)
+		rel, err := filepath.Rel(base, root)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		cur, ok := base, true
+		if rel != "." {
+			for _, part := range strings.Split(rel, string(filepath.Separator)) {
+				cur = filepath.Join(cur, part)
+				if shouldSkipVirtualDir(cur) {
+					ok = false
+					break
+				}
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *sidecarIndex) build(c *sidecar.Client) error {
+	roots := s.indexRoots()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	var resp buildResp
@@ -288,6 +322,14 @@ type queryResp struct {
 }
 
 func (s *sidecarIndex) query(filters *searchFilters, roots []string, limit int) ([]fsops.Entry, bool, bool) {
+	// A ready index that does not cover a root would answer [] for it; walk live instead.
+	indexed := s.indexRoots()
+	for _, r := range roots {
+		if !indexCovers(indexed, r) {
+			sidecar.Note("indexd.search-uncovered")
+			return nil, false, false
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), searchTimeBudget)
 	defer cancel()
 	var resp queryResp

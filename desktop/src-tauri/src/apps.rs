@@ -9,7 +9,7 @@
 use crate::agent_client::{AgentClient, AgentError};
 use crate::applog;
 use crate::flows;
-use crate::secrets::{Offloaded, OsKeystore};
+use crate::secrets::Offloaded;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::Manager;
@@ -238,7 +238,7 @@ pub async fn list_host_apps(
     host: Option<String>,
 ) -> Result<HostAppCatalog, String> {
     let dir = app_dir(&app)?;
-    list(&dir, &Offloaded::new(OsKeystore::new()).scoped(host))
+    list(&dir, &Offloaded::os_keystore().scoped(host))
         .await
         .map_err(|e| describe(&e))
 }
@@ -250,7 +250,7 @@ pub async fn launch_host_app(
     id: String,
 ) -> Result<(), String> {
     let dir = app_dir(&app)?;
-    launch(&dir, &Offloaded::new(OsKeystore::new()).scoped(host), &id)
+    launch(&dir, &Offloaded::os_keystore().scoped(host), &id)
         .await
         .map_err(|e| describe(&e))
 }

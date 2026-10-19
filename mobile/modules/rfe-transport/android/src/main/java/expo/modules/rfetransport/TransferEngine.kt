@@ -33,6 +33,10 @@ data class TransferRecord(
   val publicUri: String? = null,
   /** Epoch millis of the last journal write; for a finished transfer, when it finished. 0 in journals written before this field. */
   val updatedAt: Long = 0,
+  /** Downloads only: the file's ETag (or Last-Modified) from the response that started the `.part`, sent as If-Range on resume. */
+  val validator: String? = null,
+  /** Upload only: the source's modified time when [sha256] was computed; a different time means the hash is stale. */
+  val sourceModified: Long = 0,
 ) {
   val isUpload get() = direction == "UPLOAD"
 
@@ -43,6 +47,7 @@ data class TransferRecord(
     .put("sessionId", sessionId ?: JSONObject.NULL).put("sha256", sha256 ?: JSONObject.NULL)
     .put("overwrite", overwrite).put("deleteSource", deleteSource)
     .put("publicUri", publicUri ?: JSONObject.NULL).put("updatedAt", updatedAt)
+    .put("validator", validator ?: JSONObject.NULL).put("sourceModified", sourceModified)
 
   companion object {
     fun fromJson(j: JSONObject) = TransferRecord(
@@ -55,6 +60,8 @@ data class TransferRecord(
       j.optBoolean("overwrite", false), j.optBoolean("deleteSource", false),
       if (j.isNull("publicUri")) null else j.optString("publicUri"),
       j.optLong("updatedAt", 0),
+      if (j.isNull("validator")) null else j.optString("validator"),
+      j.optLong("sourceModified", 0),
     )
   }
 }
@@ -234,7 +241,12 @@ class TransferEngine(
       val headers = mutableMapOf("X-RFE-Client-Version" to "rn")
       if (token != null) headers["Authorization"] = "Bearer $token"
       var offset = if (part.exists()) part.length() else 0L
-      if (offset > 0) headers["Range"] = "bytes=$offset-"
+      // A partial can only be continued if we know which version of the file it came from; otherwise start over.
+      if (offset > 0 && r.validator == null) { part.delete(); offset = 0 }
+      if (offset > 0) {
+        headers["Range"] = "bytes=$offset-"
+        headers["If-Range"] = r.validator!!
+      }
       val url = "https://${r.address}/v1/content?path=" + java.net.URLEncoder.encode(r.remotePath, "UTF-8")
       val call = PinnedHttp.newGetCall(url, headers, creds.pin(r.hostId), timeoutMs)
       calls[id] = call
@@ -251,7 +263,11 @@ class TransferEngine(
           throw UploadRejected(resp.code, code)
         }
         val resumed = offset > 0 && resp.code == 206
-        if (!resumed) offset = 0
+        if (!resumed) {
+          // 200: the file changed (If-Range failed) or the server ignored Range; the body is the whole current file.
+          offset = 0
+          r = update(r.copy(validator = resp.header("ETag") ?: resp.header("Last-Modified")))
+        }
         val len = resp.body!!.contentLength()
         val total = if (len >= 0) offset + len else -1L
         var received = offset

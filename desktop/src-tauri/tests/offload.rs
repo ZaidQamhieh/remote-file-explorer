@@ -166,3 +166,33 @@ async fn a_call_abandoned_before_it_started_never_runs() {
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(log.lock().unwrap().is_empty(), "{:?}", log.lock().unwrap());
 }
+
+/// Every Tauri command builds its own handle, so the one-at-a-time gate has to be shared by all
+/// of them or concurrent commands would not serialize.
+#[tokio::test]
+async fn separate_os_keystore_handles_serialize_through_one_gate() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    let running = Arc::new(AtomicUsize::new(0));
+    let overlap = Arc::new(AtomicUsize::new(0));
+    let mut calls = Vec::new();
+    for _ in 0..4 {
+        let (running, overlap) = (Arc::clone(&running), Arc::clone(&overlap));
+        calls.push(tokio::spawn(async move {
+            Offloaded::os_keystore()
+                .run(move |_| {
+                    if running.fetch_add(1, Ordering::SeqCst) > 0 {
+                        overlap.fetch_add(1, Ordering::SeqCst);
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                    running.fetch_sub(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .await
+        }));
+    }
+    for c in calls {
+        c.await.unwrap().unwrap();
+    }
+    assert_eq!(overlap.load(Ordering::SeqCst), 0, "calls ran concurrently");
+}

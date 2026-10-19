@@ -388,7 +388,7 @@ pub mod commands {
     }
 
     fn keystore() -> Offloaded {
-        Offloaded::new(crate::secrets::OsKeystore::new())
+        Offloaded::os_keystore()
     }
 
     #[tauri::command]

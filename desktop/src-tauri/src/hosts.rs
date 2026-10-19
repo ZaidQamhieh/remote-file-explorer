@@ -23,7 +23,7 @@
 use crate::applog;
 use crate::flows::{self, pin_key, Saved};
 use crate::fsutil::write_private;
-use crate::secrets::{account, Offloaded, OsKeystore, SecretStore};
+use crate::secrets::{account, Offloaded, SecretStore};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
@@ -475,7 +475,7 @@ impl From<Saved> for ActiveView {
 }
 
 fn keystore() -> Offloaded {
-    Offloaded::new(OsKeystore::new())
+    Offloaded::os_keystore()
 }
 
 fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {

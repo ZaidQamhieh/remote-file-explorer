@@ -11,7 +11,7 @@ use crate::agent_client::AgentError;
 use crate::files::{
     session, settle, user_message, validate_name, validate_path, BatchBody, FileEntry,
 };
-use crate::secrets::{Offloaded, OsKeystore};
+use crate::secrets::Offloaded;
 use base64::Engine as _;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -676,7 +676,7 @@ pub async fn wake(dir: &Path, store: &Offloaded, mac: &str) -> Result<(), AgentE
 // ---------------------------------------------------------------------------------------------
 
 fn keystore(host: Option<String>) -> Offloaded {
-    Offloaded::new(OsKeystore::new()).scoped(host)
+    Offloaded::os_keystore().scoped(host)
 }
 
 fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {

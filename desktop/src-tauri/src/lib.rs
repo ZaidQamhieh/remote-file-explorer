@@ -26,13 +26,13 @@ pub mod transfers;
 
 use agent_client::Device;
 use flows::Saved;
-use secrets::{Offloaded, OsKeystore};
+use secrets::Offloaded;
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::Manager;
 
 fn keystore() -> Offloaded {
-    Offloaded::new(OsKeystore::new())
+    Offloaded::os_keystore()
 }
 
 fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {

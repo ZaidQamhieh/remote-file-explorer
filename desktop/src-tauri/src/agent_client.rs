@@ -203,6 +203,36 @@ impl ServerCertVerifier for PinVerifier {
     }
 }
 
+/// Time to reach the agent. A PC that is off or on another network fails here, quickly.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Whole-request limit for ordinary calls. Above the agent's own 15 s search and recents budgets, so
+/// the agent's partial "ran out of time" answer arrives instead of being cut off.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Whole-request limit for calls that read or rewrite a whole tree (copy, move, archive, checksum,
+/// delete, trash). The agent runs them to completion inside the request.
+const LONG_OP_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// The whole-request limit for a signed-in file-operation call.
+fn route_timeout(method: &reqwest::Method, route: &str) -> Duration {
+    let long = matches!(
+        route,
+        "/fs/copy"
+            | "/fs/move"
+            | "/fs/compress"
+            | "/fs/extract"
+            | "/fs/archive"
+            | "/fs/checksum"
+            | "/fs/checksums"
+            | "/trash"
+            | "/trash/restore"
+    ) || (route == "/fs" && method == reqwest::Method::DELETE);
+    if long {
+        LONG_OP_TIMEOUT
+    } else {
+        REQUEST_TIMEOUT
+    }
+}
+
 fn build_http(mode: Mode) -> Result<reqwest::Client, AgentError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ClientConfig::builder_with_provider(provider.clone())
@@ -216,7 +246,8 @@ fn build_http(mode: Mode) -> Result<reqwest::Client, AgentError> {
         // Agent traffic goes straight to the agent; never via an environment proxy.
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(10))
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
         .build()
         .map_err(|e| AgentError::Local(format!("http client: {e}")))
 }
@@ -794,7 +825,8 @@ impl AgentClient {
         }
         let mut req = self
             .http
-            .request(method, format!("{}{route}", self.base))
+            .request(method.clone(), format!("{}{route}", self.base))
+            .timeout(route_timeout(&method, route))
             .bearer_auth(token)
             .header("X-RFE-Client-Version", CLIENT_VERSION);
         if !query.is_empty() {
@@ -822,7 +854,8 @@ impl AgentClient {
         }
         let mut req = self
             .http
-            .request(method, format!("{}{route}", self.base))
+            .request(method.clone(), format!("{}{route}", self.base))
+            .timeout(route_timeout(&method, route))
             .bearer_auth(token)
             .header("X-RFE-Client-Version", CLIENT_VERSION);
         if !query.is_empty() {
@@ -1131,6 +1164,42 @@ pub(crate) async fn response_error(resp: reqwest::Response) -> AgentError {
 /// A transport failure as an `AgentError`, with the whole cause chain in the text.
 pub(crate) fn network_error(e: reqwest::Error) -> AgentError {
     net(e)
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+    use reqwest::Method;
+
+    #[test]
+    fn every_call_outlasts_the_agents_15_second_budgets() {
+        let budget = Duration::from_secs(15);
+        for (m, r) in [
+            (Method::GET, "/search"),
+            (Method::GET, "/fs/recent"),
+            (Method::GET, "/fs"),
+        ] {
+            assert!(route_timeout(&m, r) > budget, "{m} {r}");
+        }
+    }
+
+    #[test]
+    fn whole_tree_operations_get_the_long_limit() {
+        for (m, r) in [
+            (Method::POST, "/fs/copy"),
+            (Method::POST, "/fs/move"),
+            (Method::POST, "/fs/compress"),
+            (Method::POST, "/fs/extract"),
+            (Method::GET, "/fs/archive"),
+            (Method::POST, "/fs/checksum"),
+            (Method::DELETE, "/trash"),
+            (Method::POST, "/trash/restore"),
+            (Method::DELETE, "/fs"),
+        ] {
+            assert_eq!(route_timeout(&m, r), LONG_OP_TIMEOUT, "{m} {r}");
+        }
+        assert_eq!(route_timeout(&Method::GET, "/fs"), REQUEST_TIMEOUT);
+    }
 }
 
 #[cfg(test)]

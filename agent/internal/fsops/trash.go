@@ -368,7 +368,9 @@ func uniqueTrashName(trashDir, base string) string {
 	for i := 1; ; i++ {
 		_, e1 := os.Lstat(filepath.Join(trashFilesDir(trashDir), candidate))
 		_, e2 := os.Lstat(filepath.Join(trashInfoDir(trashDir), candidate+trashInfoExt))
-		if os.IsNotExist(e1) && os.IsNotExist(e2) {
+		// Stop on any error other than "exists" (e.g. name too long) so a
+		// failing lstat cannot loop forever; the caller's write reports it.
+		if (e1 != nil && e2 != nil) || i >= maxAutoRename {
 			return candidate
 		}
 		candidate = fmt.Sprintf("%s_%d%s", stem, i, ext)

@@ -81,7 +81,7 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		// recoverable client-side hiccup — burning the code on that would
 		// force a trip back to the PC for something that wasn't the code's
 		// fault.
-		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange, requireBoundProof); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
 		codeInfo := pm.Consume(req.PairingCode)
@@ -99,10 +99,24 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 			return
 		}
 
+		// Decided before the upsert overwrites the row: pairing onto an
+		// existing id with a different key (or a revoked row) is a takeover
+		// and must not inherit that device's grants.
+		replaces, err := pairReplaces(db, req.DeviceID, req.DevicePublicKey)
+		if err != nil {
+			writeInternal(w, "pair", err)
+			return
+		}
 		deviceID, err := db.UpsertDevice(req.DeviceID, req.DeviceLabel, token, req.DevicePublicKey, false)
 		if err != nil {
 			writeInternal(w, "pair", err)
 			return
+		}
+		if replaces != "" {
+			if err := db.ResetDeviceAccess(deviceID); err != nil {
+				writeInternal(w, "pair", err)
+				return
+			}
 		}
 		// Apply the pairing code's guest-mode defaults, if any, to the new
 		// device. A normal (non-guest) code has JailRoot=="" and ReadOnly==

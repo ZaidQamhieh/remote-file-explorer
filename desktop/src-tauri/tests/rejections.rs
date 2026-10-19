@@ -91,7 +91,8 @@ async fn each_rejection_the_agent_can_be_made_to_send_reads_differently() {
             "/pair",
             json!({
                 "pairingCode": "000000", "deviceLabel": "T", "deviceId": id.device_id(),
-                "devicePublicKey": id.public_key_b64(), "nonce": n, "signature": id.sign_b64(&n),
+                "devicePublicKey": id.public_key_b64(), "nonce": n,
+                "signature": id.proof_b64(&a.status_fingerprint(), &n),
             }),
         )
         .await,

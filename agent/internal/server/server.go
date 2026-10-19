@@ -147,10 +147,11 @@ func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Ma
 	r.Post("/auth/logout", logoutHandler)
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/pair/request", createPairRequestHandler(cfg, db, nonces))
+	r.Post("/pair/request/{id}/reveal", revealPairRequestHandler(cfg, db))
 	r.Get("/pair/request/{id}", pollPairRequestHandler(cfg, db))
 	r.Post("/register", registerHandler(cfg, db, pm, nonces))
 	r.Post("/login", loginHandler(cfg, db, nonces))
-	r.Get("/share/{token}", serveShareHandler(db, ops))
+	r.Get("/share/{token}", serveShareHandler(db, ops, cfg.Settings.IsAllowSharing))
 }
 
 // registerSettingsAndDeviceRoutes wires agent settings, bandwidth limits, and
@@ -184,7 +185,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 // endpoints (mint/revoke/list — serving the file itself is unauthenticated,
 // see registerUnauthRoutes).
 func registerShareRoutes(r chi.Router, cfg Config, db *store.DB, ops *fsops.Ops) {
-	r.With(requireFileCapabilities(capShare, capBrowse)).Post("/share/mint", mintShareHandler(cfg, db, ops))
+	r.With(requireFileCapabilities(capShare, capBrowse, capDownload)).Post("/share/mint", mintShareHandler(cfg, db, ops))
 	r.Delete("/share/{tokenHash}", revokeShareHandler(db))
 	r.Get("/share", listSharesHandler(db))
 }

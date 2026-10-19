@@ -213,7 +213,7 @@ ELSE terminal_at END`, cutoff-1, cutoff-1, cutoff, cutoff+1); err != nil {
 }
 
 // retentionMigrationBase is the schema version just before migrateTransferHistoryRetention.
-var retentionMigrationBase = len(migrations) - 2
+var retentionMigrationBase = len(migrations) - 3
 
 func TestTransferHistoryMigrationBackfillsOnce(t *testing.T) {
 	db := openCoverageDB(t)

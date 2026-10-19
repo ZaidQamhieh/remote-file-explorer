@@ -274,9 +274,9 @@ async fn an_agent_without_approval_is_told_so_in_words() {
         .await
         .unwrap_err();
     let text = err.to_string();
+    assert!(text.contains("too old"), "{text}");
     assert!(
-        text.contains("too old") && text.contains(flows::MIN_AGENT_FOR_APPROVAL),
+        !text.contains("HTTP_404") && !text.contains("BAD_REQUEST"),
         "{text}"
     );
-    assert!(!text.contains("HTTP_404"), "{text}");
 }

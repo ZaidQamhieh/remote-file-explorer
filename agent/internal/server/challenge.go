@@ -76,7 +76,7 @@ const (
 )
 
 // proofVersion is advertised by /auth/challenge. The agent accepts the v2 proof and, for the
-// phone and browser clients that predate it, a signature over the bare nonce.
+// browser sign-in that predates it, a signature over the bare nonce (never when pairing).
 const proofVersion = "v2"
 
 // challengeHandler mints a nonce that a device signs with its Ed25519
@@ -127,6 +127,17 @@ const (
 	rejectOnKeyChange
 )
 
+// proofPolicy says whether verifyDeviceProof still accepts a signature over the bare nonce.
+type proofPolicy int
+
+const (
+	// acceptLegacyProof also takes a bare-nonce signature, for the browser sign-in that predates v2.
+	acceptLegacyProof proofPolicy = iota
+	// requireBoundProof takes only the v2 proof. A bare-nonce signature can be replayed by a relay
+	// that passes this agent's nonce to the phone; v2 names the certificate the phone actually saw.
+	requireBoundProof
+)
+
 // verifyDeviceProof validates the device-identity signature shared by
 // pairHandler, registerHandler, and loginHandler: the presented public key
 // must have signed a nonce this server just minted. pinPolicy controls what
@@ -136,7 +147,7 @@ const (
 // On failure it writes the appropriate error response itself and returns a
 // non-nil error; callers should return immediately without writing anything
 // else.
-func verifyDeviceProof(db *store.DB, nonces *nonceStore, certFingerprint, deviceID, publicKey, nonce, signature string, w http.ResponseWriter, pinPolicy keyPinPolicy) error {
+func verifyDeviceProof(db *store.DB, nonces *nonceStore, certFingerprint, deviceID, publicKey, nonce, signature string, w http.ResponseWriter, pinPolicy keyPinPolicy, proofs proofPolicy) error {
 	if publicKey == "" || nonce == "" || signature == "" {
 		writeError(w, http.StatusBadRequest, "DEVICE_KEY_REQUIRED", "devicePublicKey, nonce, and signature are required")
 		return errDeviceProofFailed
@@ -148,7 +159,7 @@ func verifyDeviceProof(db *store.DB, nonces *nonceStore, certFingerprint, device
 	// v2 (bound to this agent's certificate) first, then the bare nonce older clients sign.
 	bound := certFingerprint != "" &&
 		security.VerifyDeviceSignature(publicKey, security.DeviceProofMessageV2(certFingerprint, nonce), signature)
-	if !bound && !security.VerifyDeviceSignature(publicKey, nonce, signature) {
+	if !bound && (proofs == requireBoundProof || !security.VerifyDeviceSignature(publicKey, nonce, signature)) {
 		writeError(w, http.StatusUnauthorized, "INVALID_SIGNATURE", "signature does not match devicePublicKey")
 		return errDeviceProofFailed
 	}

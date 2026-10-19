@@ -142,13 +142,14 @@ impl Agent {
         cli(&["pair", verb, "-data", self.dir()]);
     }
 
-    /// Whether this agent has `/pair/request`: a newer agent answers with a JSON error body, an
-    /// older one with a bare-text 404.
+    /// Whether this agent has approve-on-PC with the commit-then-reveal nonce (`/pair/request/{id}/reveal`):
+    /// a newer agent answers with a JSON error body, an older one with a bare-text 404.
     pub async fn supports_pair_request(&self) -> bool {
         let raw = Raw::new(&self.host);
         let resp = raw
             .http
-            .get(format!("{}/pair/request/probe?nonce=00", raw.base))
+            .post(format!("{}/pair/request/probe/reveal", raw.base))
+            .json(&serde_json::json!({}))
             .send()
             .await
             .unwrap();

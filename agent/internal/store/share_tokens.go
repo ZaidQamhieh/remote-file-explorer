@@ -32,34 +32,42 @@ func (s *DB) CreateShareToken(tokenHash, path, deviceID string, expiresAt time.T
 // exist or has expired — callers must not distinguish the two in their
 // response (don't leak which).
 func (s *DB) ConsumeShareToken(tokenHash string) (path string, ok bool, err error) {
+	path, _, ok, err = s.ConsumeShareTokenFor(tokenHash)
+	return path, ok, err
+}
+
+// ConsumeShareTokenFor is ConsumeShareToken that also returns the minting
+// device id ("" for tokens that predate the column), so the caller can
+// re-check that device's current rights before serving.
+func (s *DB) ConsumeShareTokenFor(tokenHash string) (path, deviceID string, ok bool, err error) {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return "", false, fmt.Errorf("begin tx: %w", err)
+		return "", "", false, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op once committed
 
 	var expires int64
 	err = tx.QueryRow(
-		`SELECT path, expires FROM share_tokens WHERE token_hash=?`, tokenHash,
-	).Scan(&path, &expires)
+		`SELECT path, expires, device_id FROM share_tokens WHERE token_hash=?`, tokenHash,
+	).Scan(&path, &expires, &deviceID)
 	if err == sql.ErrNoRows {
-		return "", false, nil
+		return "", "", false, nil
 	}
 	if err != nil {
-		return "", false, err
+		return "", "", false, err
 	}
 
 	if _, err := tx.Exec(`DELETE FROM share_tokens WHERE token_hash=?`, tokenHash); err != nil {
-		return "", false, err
+		return "", "", false, err
 	}
 	if err := tx.Commit(); err != nil {
-		return "", false, err
+		return "", "", false, err
 	}
 
 	if time.Now().Unix() > expires {
-		return "", false, nil
+		return "", "", false, nil
 	}
-	return path, true, nil
+	return path, deviceID, true, nil
 }
 
 // GetShareToken returns the token with this hash, or (nil, nil) if there is

@@ -233,6 +233,11 @@ func copyHandler(ops *fsops.Ops) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "sources and destDir required")
 			return
 		}
+		// Overwrite replaces (deletes) whatever is at the destination, so it
+		// needs the delete permission too. Duplicate wins over overwrite.
+		if req.Overwrite && !req.Dup && !requireDeviceFileCapabilities(w, r, capDelete) {
+			return
+		}
 		results := ops.Copy(req.Sources, req.DestDir, req.Dup, req.Overwrite)
 		writeJSON(w, http.StatusAccepted, map[string]any{"results": results})
 	}

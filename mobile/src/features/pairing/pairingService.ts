@@ -1,3 +1,5 @@
+import { sha256 } from '@noble/hashes/sha2.js';
+
 import { AgentApiError, AgentClient, type Transport } from '../../core/api/agentClient';
 import type { PairResponse } from '../../core/api/models';
 import { CertPinMismatch, MissingCertPin, normalizeFingerprint } from '../../core/api/pin';
@@ -58,15 +60,35 @@ export function humanizeError(e: unknown): string {
   return message.replace(/^Call to function '[^']*' has been rejected\.\s*→ Caused by:\s*/, '');
 }
 
-async function proof(client: AgentClient, identity: DeviceIdentity) {
+/**
+ * What the device key signs (agent: security.DeviceProofMessageV2): the certificate this phone pinned plus the
+ * agent's nonce. A relay that passes another agent's nonce to this phone gets a signature that names the wrong
+ * certificate, so it cannot replay it at the real agent.
+ */
+export const proofMessage = (fingerprintHex: string, nonce: string) => `rfe-device-proof-v2\n${fingerprintHex.toLowerCase()}\n${nonce}`;
+
+async function proof(client: AgentClient, identity: DeviceIdentity, fingerprintHex: string) {
   // The challenge goes through the pinned client too: a wrong host is rejected
   // before anything (even a nonce request) is exchanged.
   const nonce = await client.challenge();
   return {
     devicePublicKey: await identity.publicKeyBase64(),
     nonce,
-    signature: await identity.signBase64(nonce),
+    signature: await identity.signBase64(proofMessage(fingerprintHex, nonce)),
   };
+}
+
+const sameAddress = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Before a password is sent to [target]: refuses a host already saved at this address under a different
+ * certificate (the pin is never silently replaced), and reports whether the certificate is one this phone already
+ * trusts. A first contact is not known; the caller shows its fingerprint for confirmation.
+ */
+export async function checkKnownPin(deps: PairingDeps, target: PairingTarget): Promise<'known' | 'new'> {
+  const same = (await deps.store.listHosts()).filter((h) => sameAddress(h.address, target.address));
+  if (same.some((h) => normalizeFingerprint(h.certFingerprint) !== target.fingerprint)) throw new CertPinMismatch();
+  return same.length > 0 ? 'known' : 'new';
 }
 
 async function commit(deps: PairingDeps, target: PairingTarget, resp: PairResponse): Promise<Host> {
@@ -95,7 +117,7 @@ function pinnedClient(deps: PairingDeps, target: PairingTarget): AgentClient {
 
 export async function pairWithCode(deps: PairingDeps, target: PairingTarget, pairingCode: string): Promise<Host> {
   const client = pinnedClient(deps, target);
-  const p = await proof(client, deps.identity);
+  const p = await proof(client, deps.identity, target.fingerprint);
   const resp = await client.pair({
     pairingCode: pairingCode.trim(),
     deviceLabel: deps.deviceLabel ?? 'Mobile App',
@@ -110,8 +132,9 @@ export async function loginWithAccount(
   target: PairingTarget,
   creds: { username: string; password: string },
 ): Promise<Host> {
+  await checkKnownPin(deps, target);
   const client = pinnedClient(deps, target);
-  const p = await proof(client, deps.identity);
+  const p = await proof(client, deps.identity, target.fingerprint);
   const resp = await client.login({
     username: creds.username.trim(),
     password: creds.password,
@@ -127,8 +150,9 @@ export async function registerAccount(
   target: PairingTarget,
   a: { pairingCode: string; username: string; password: string },
 ): Promise<Host> {
+  await checkKnownPin(deps, target);
   const client = pinnedClient(deps, target);
-  const p = await proof(client, deps.identity);
+  const p = await proof(client, deps.identity, target.fingerprint);
   const resp = await client.register({
     pairingCode: a.pairingCode.trim(),
     username: a.username.trim(),
@@ -169,6 +193,7 @@ export async function probeTarget(deps: PairingDeps, address: string): Promise<P
   return { address: authority, fingerprint: fp };
 }
 
+const hexToBytes = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
 /**
@@ -180,15 +205,18 @@ export async function requestPairing(deps: PairingDeps, address: string): Promis
   const target = await probeTarget(deps, address);
   const fp = target.fingerprint;
   const client = pinnedClient(deps, target);
-  const p = await proof(client, deps.identity);
+  const p = await proof(client, deps.identity, fp);
+  // Commit to the nonce first and reveal it only once the agent has chosen the request id. A relay that
+  // could see the nonce before the id exists could grind an id that makes both match codes agree.
   const clientNonce = hex(deps.randomBytes(16));
   const r = await client.requestPair({
     deviceLabel: deps.deviceLabel ?? 'Mobile App',
-    clientNonce,
+    clientNonceCommit: hex(sha256(hexToBytes(clientNonce))),
     ...p,
     deviceId: (await deps.deviceId()) ?? undefined,
   });
   if (!r.requestId) throw new AgentApiError(0, 'BAD_RESPONSE', 'The host returned an incomplete pairing response.');
+  await client.revealPair(r.requestId, clientNonce);
   return { target, requestId: r.requestId, clientNonce, matchCode: matchCode(fp, clientNonce, r.requestId), expiresInSeconds: r.expiresInSeconds };
 }
 

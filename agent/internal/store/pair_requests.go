@@ -10,10 +10,13 @@ import (
 // it at the PC. Statuses: pending, approved (decided, token not yet collected),
 // rejected, done (token collected).
 const (
-	PairPending  = "pending"
-	PairApproved = "approved"
-	PairRejected = "rejected"
-	PairDone     = "done"
+	// PairCommitted: the phone has sent only a hash of its nonce; the owner is not
+	// asked until it reveals the nonce (see RevealPairRequest).
+	PairCommitted = "committed"
+	PairPending   = "pending"
+	PairApproved  = "approved"
+	PairRejected  = "rejected"
+	PairDone      = "done"
 )
 
 // MaxPendingPairRequests bounds how many undecided requests can exist at once,
@@ -31,7 +34,8 @@ type PairRequest struct {
 	Label       string
 	ClientID    string
 	PublicKey   string
-	ClientNonce string
+	ClientNonce string // empty until revealed
+	NonceCommit string // hex SHA-256 of the client nonce
 	RemoteIP    string
 	Status      string
 	Created     int64
@@ -50,26 +54,26 @@ func (s *DB) CreatePairRequest(r PairRequest) error {
 		return err
 	}
 	var pending int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM pair_requests WHERE status='pending' AND expires >= ?`, now).Scan(&pending); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pair_requests WHERE status IN ('committed','pending') AND expires >= ?`, now).Scan(&pending); err != nil {
 		return err
 	}
 	if pending >= MaxPendingPairRequests {
 		return ErrTooManyPairRequests
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO pair_requests (id,label,client_id,public_key,client_nonce,remote_ip,status,created,expires) VALUES (?,?,?,?,?,?,?,?,?)`,
-		r.ID, r.Label, r.ClientID, r.PublicKey, r.ClientNonce, r.RemoteIP, PairPending, r.Created, r.Expires,
+		`INSERT INTO pair_requests (id,label,client_id,public_key,client_nonce,nonce_commit,remote_ip,status,created,expires) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		r.ID, r.Label, r.ClientID, r.PublicKey, "", r.NonceCommit, r.RemoteIP, PairCommitted, r.Created, r.Expires,
 	); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-const pairRequestCols = `id,label,client_id,public_key,client_nonce,remote_ip,status,created,expires`
+const pairRequestCols = `id,label,client_id,public_key,client_nonce,nonce_commit,remote_ip,status,created,expires`
 
 func scanPairRequest(row interface{ Scan(...any) error }) (PairRequest, error) {
 	var r PairRequest
-	err := row.Scan(&r.ID, &r.Label, &r.ClientID, &r.PublicKey, &r.ClientNonce, &r.RemoteIP, &r.Status, &r.Created, &r.Expires)
+	err := row.Scan(&r.ID, &r.Label, &r.ClientID, &r.PublicKey, &r.ClientNonce, &r.NonceCommit, &r.RemoteIP, &r.Status, &r.Created, &r.Expires)
 	return r, err
 }
 
@@ -142,4 +146,20 @@ func (s *DB) ClaimApprovedPairRequest(id string) (PairRequest, bool, error) {
 		return PairRequest{}, false, err
 	}
 	return r, true, tx.Commit()
+}
+
+// RevealPairRequest records the client nonce of a committed request and makes it
+// pending, so the owner can be asked. It succeeds once, only while the request is
+// still committed and unexpired; the caller has already checked the nonce against
+// the commitment.
+func (s *DB) RevealPairRequest(id, clientNonce string) (PairRequest, error) {
+	res, err := s.db.Exec(`UPDATE pair_requests SET client_nonce=?, status='pending' WHERE id=? AND status='committed' AND expires >= ?`, clientNonce, id, time.Now().Unix())
+	if err != nil {
+		return PairRequest{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return PairRequest{}, ErrPairRequestGone
+	}
+	r, err := scanPairRequest(s.db.QueryRow(`SELECT `+pairRequestCols+` FROM pair_requests WHERE id=?`, id))
+	return r, err
 }

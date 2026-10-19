@@ -55,7 +55,14 @@ func New(db *store.DB, lanAddress, tailscaleAddress, fingerprint string) *Manage
 // Mint generates a new single-use pairing code valid for ttl, persists it, and
 // returns the code together with the QR payload the phone should scan.
 func (m *Manager) Mint(ttl time.Duration) (string, QRPayload, error) {
-	return m.mint(ttl, "", false)
+	return m.mint(ttl, "", false, false)
+}
+
+// MintOwner generates a single-use code that can also create the owner
+// account (POST /v1/register). Ordinary codes only pair a device, so a
+// code handed to a guest cannot be turned into an owner account.
+func (m *Manager) MintOwner(ttl time.Duration) (string, QRPayload, error) {
+	return m.mint(ttl, "", false, true)
 }
 
 // MintGuest generates a single-use pairing code that pre-configures the
@@ -63,10 +70,10 @@ func (m *Manager) Mint(ttl time.Duration) (string, QRPayload, error) {
 // the Guest role: the resulting device can never be full-access, and (like
 // every device) can't change its own jail/read-only state, only an admin can.
 func (m *Manager) MintGuest(ttl time.Duration, jailRoot string) (string, QRPayload, error) {
-	return m.mint(ttl, jailRoot, true)
+	return m.mint(ttl, jailRoot, true, false)
 }
 
-func (m *Manager) mint(ttl time.Duration, jailRoot string, readOnly bool) (string, QRPayload, error) {
+func (m *Manager) mint(ttl time.Duration, jailRoot string, readOnly, canRegister bool) (string, QRPayload, error) {
 	if ttl <= 0 {
 		ttl = DefaultTTL
 	}
@@ -74,7 +81,7 @@ func (m *Manager) mint(ttl time.Duration, jailRoot string, readOnly bool) (strin
 	if err != nil {
 		return "", QRPayload{}, err
 	}
-	if err := m.db.CreatePairingCode(code, time.Now().Add(ttl), jailRoot, readOnly); err != nil {
+	if err := m.db.CreatePairingCodeFor(code, time.Now().Add(ttl), jailRoot, readOnly, canRegister); err != nil {
 		return "", QRPayload{}, err
 	}
 	return code, m.Payload(code), nil

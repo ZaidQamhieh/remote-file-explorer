@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/mdns"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/netinfo"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
@@ -296,6 +297,10 @@ func runServe(args []string) {
 	if err := os.MkdirAll(flags.dataDir, 0o700); err != nil {
 		log.Fatalf("data dir: %v", err)
 	}
+
+	// The data folder holds the TLS key and database; keep it out of every
+	// device's reach even when a shared root contains it.
+	fsops.ProtectDir(flags.dataDir)
 
 	cert, err := security.LoadOrCreateCert(flags.dataDir)
 	if err != nil {

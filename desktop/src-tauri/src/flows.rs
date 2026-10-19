@@ -540,8 +540,19 @@ async fn request_pairing_inner(
                      Pair with a code or sign in with an account instead."
                 ))
             }
+            // An agent from before the commit-then-reveal nonce rejects the request body.
+            AgentError::Server { status: 400, code, .. } if code == "BAD_REQUEST" => {
+                AgentError::Local(
+                    "This agent is too old for this version of the app: update the agent on that computer. \
+                     Meanwhile, pair with a code or sign in with an account instead."
+                        .into(),
+                )
+            }
             other => other,
         })?;
+    client
+        .reveal_pair_request(&started.request_id, &client_nonce)
+        .await?;
     let fingerprint = normalize_fingerprint(fingerprint);
     Ok(PairWait {
         match_code: match_code(&fingerprint, &client_nonce, &started.request_id)?,

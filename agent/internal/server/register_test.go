@@ -14,7 +14,7 @@ import (
 func TestRegisterHandler_RequiresValidPairingCode(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := registerHandler(cfg, db, pm, nonces)
 
@@ -32,10 +32,10 @@ func TestRegisterHandler_RequiresValidPairingCode(t *testing.T) {
 func TestRegisterHandler_WeakPasswordRejected(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := registerHandler(cfg, db, pm, newNonceStore())
 
-	code, _, err := pm.Mint(time.Minute)
+	code, _, err := pm.MintOwner(time.Minute)
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 	nonces := newNonceStore()
 	handler := registerHandler(cfg, db, pm, nonces)
 
-	code, _, err := pm.Mint(time.Minute)
+	code, _, err := pm.MintOwner(time.Minute)
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 	// A second registration attempt is rejected once an account exists —
 	// one account per agent — even with a fresh valid pairing code and
 	// valid device proof for a different device/username.
-	code2, _, err := pm.Mint(time.Minute)
+	code2, _, err := pm.MintOwner(time.Minute)
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -135,11 +135,11 @@ func TestRegisterHandler_ValidRegistrationCreatesAccountAndDevice(t *testing.T) 
 func TestRegisterHandler_DuplicateUsernameRejected(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := registerHandler(cfg, db, pm, nonces)
 
-	code1, _, _ := pm.Mint(time.Minute)
+	code1, _, _ := pm.MintOwner(time.Minute)
 	pubKey1, nonce1, sig1 := signedDeviceProof(t, nonces)
 	body1 := `{"pairingCode":"` + code1 + `","username":"owner","password":"correct-horse-battery",` +
 		`"devicePublicKey":"` + pubKey1 + `","nonce":"` + nonce1 + `","signature":"` + sig1 + `"}`
@@ -150,7 +150,7 @@ func TestRegisterHandler_DuplicateUsernameRejected(t *testing.T) {
 		t.Fatalf("first registration expected 200, got %d: %s", rr1.Code, rr1.Body.String())
 	}
 
-	code2, _, _ := pm.Mint(time.Minute)
+	code2, _, _ := pm.MintOwner(time.Minute)
 	pubKey2, nonce2, sig2 := signedDeviceProof(t, nonces)
 	body2 := `{"pairingCode":"` + code2 + `","username":"owner","password":"another-password",` +
 		`"devicePublicKey":"` + pubKey2 + `","nonce":"` + nonce2 + `","signature":"` + sig2 + `"}`

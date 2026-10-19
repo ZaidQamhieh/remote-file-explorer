@@ -1,6 +1,6 @@
 import { Eye, EyeOff, Lock, LogIn, UserPlus, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import { Button, InlineError, Pressable, Text } from '../../design/components';
 import { LumenType } from '../../design/lumen';
@@ -9,7 +9,25 @@ import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { pairingDeps } from '../../services';
 import { AddressField, CodeBoxRow, LumenField } from './fields';
-import { humanizeError, loginWithAccount, probeTarget, registerAccount } from './pairingService';
+import { checkKnownPin, humanizeError, loginWithAccount, probeTarget, registerAccount } from './pairingService';
+
+/** "ab12…" → "AB12 34CD …" in groups of four, so the user can compare it with the one the computer shows. */
+const groupFingerprint = (fp: string) => (fp.toUpperCase().match(/.{1,4}/g) ?? []).join(' ');
+
+/** First contact with a computer: its password is only sent once the user has seen its fingerprint. */
+function confirmFingerprint(address: string, fingerprint: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      t('confirmFingerprintTitle'),
+      t('confirmFingerprintBody', { address, fingerprint: groupFingerprint(fingerprint) }),
+      [
+        { text: t('cancelButton'), style: 'cancel', onPress: () => resolve(false) },
+        { text: t('confirmFingerprintTrust'), onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
+}
 
 /** Login (existing account) and Register (new account + one-time pairing code) share one form. */
 export function AccountForm({ mode, prefillAddress, onPaired }: { mode: 'login' | 'register'; prefillAddress?: string; onPaired: (label: string) => void }) {
@@ -38,6 +56,7 @@ export function AccountForm({ mode, prefillAddress, onPaired }: { mode: 'login' 
     setError(null);
     try {
       const target = await probeTarget(pairingDeps, address);
+      if ((await checkKnownPin(pairingDeps, target)) === 'new' && !(await confirmFingerprint(target.address, target.fingerprint))) return;
       const host = reg
         ? await registerAccount(pairingDeps, target, { pairingCode: code, username, password })
         : await loginWithAccount(pairingDeps, target, { username, password });

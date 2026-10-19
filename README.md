@@ -33,6 +33,7 @@ Pairing is done from the host side with the agent's admin CLI:
 
 ```sh
 rfe-agent pair         # prints a one-time pairing code, QR, and readable certificate fingerprint
+                       # (first time? `rfe-agent pair --owner` also lets the app create your account)
 ```
 
 Scan the QR displayed locally on the intended host, or obtain the pairing details through a

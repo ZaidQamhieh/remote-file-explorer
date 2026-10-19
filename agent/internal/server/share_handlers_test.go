@@ -94,7 +94,7 @@ func TestServeShareHandler_UnknownToken404s(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/share/nope", nil)
 	req = withURLParam(req, map[string]string{"token": "nope"})
-	serveShareHandler(db, ops)(rr, req)
+	serveShareHandler(db, ops, nil)(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -112,7 +112,7 @@ func TestServeShareHandler_ExpiredToken404s(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/share/expired-token", nil)
 	req = withURLParam(req, map[string]string{"token": "expired-token"})
-	serveShareHandler(db, ops)(rr, req)
+	serveShareHandler(db, ops, nil)(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for expired token, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -123,7 +123,7 @@ func TestServeShareHandler_ExpiredToken404s(t *testing.T) {
 func TestServeShareHandler_SingleUse(t *testing.T) {
 	ops, root := newFsFixture(t)
 	db, _ := newTestDeps(t)
-	handler := serveShareHandler(db, ops)
+	handler := serveShareHandler(db, ops, nil)
 
 	hash := hashShareToken("good-token")
 	if err := db.CreateShareToken(hash, filepath.Join(root, "a.txt"), "", time.Now().Add(time.Hour)); err != nil {

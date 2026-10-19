@@ -394,10 +394,17 @@ paths:
       summary: Ask to be paired; the owner approves at the computer (unauthenticated)
       description: >
         Pairing without a code. The caller proves possession of its device key
-        (nonce from /auth/challenge, as for /pair) and sends a random
-        `clientNonce`. The agent shows the owner a prompt (desktop notification,
-        `rfe-agent pair accept`, or an admin session) with the device label and a
-        match code. The caller then polls GET /pair/request/{id}. Both sides
+        (nonce from /auth/challenge, signed as the v2 proof bound to the agent's
+        certificate; a bare-nonce signature is refused) and sends
+        `clientNonceCommit`, the SHA-256 of a random 16-byte nonce it keeps
+        secret for now. The agent answers with `requestId`, chosen after it holds
+        the commitment. The caller then reveals the nonce with POST
+        /pair/request/{id}/reveal; only then does the agent show the owner a
+        prompt (desktop notification, `rfe-agent pair accept`, or an admin
+        session) with the device label and a match code. Committing first stops a
+        relay from choosing the request id after seeing the nonce and grinding
+        for an id that makes both codes agree. The caller then polls
+        GET /pair/request/{id}. Both sides
         derive the match code as HMAC-SHA256(key = certificate SHA-256 bytes,
         msg = "rfe-pair-sas\n" + clientNonce bytes + requestId), first 8 bytes
         as big-endian uint64 mod 10^8, formatted "1234 5678". It is keyed by the
@@ -412,17 +419,17 @@ paths:
           application/json:
             schema:
               type: object
-              required: [devicePublicKey, nonce, signature, clientNonce]
+              required: [devicePublicKey, nonce, signature, clientNonceCommit]
               properties:
                 deviceLabel: { type: string, description: "Shown to the owner; control characters removed, 40 characters max." }
                 deviceId: { type: string }
                 devicePublicKey: { type: string }
                 nonce: { type: string }
                 signature: { type: string }
-                clientNonce: { type: string, description: "16 random bytes, hex (32 characters). Also authorises polling." }
+                clientNonceCommit: { type: string, description: "Hex SHA-256 (64 characters) of the 16-byte client nonce revealed later." }
       responses:
         "200":
-          description: Request created and shown to the owner
+          description: Request recorded; the owner is asked after the reveal
           content:
             application/json:
               schema:
@@ -431,13 +438,51 @@ paths:
                   requestId: { type: string }
                   expiresInSeconds: { type: integer }
         "400":
-          description: Malformed body, bad clientNonce, or missing device proof. code=BAD_REQUEST or DEVICE_KEY_REQUIRED.
+          description: Malformed body, missing clientNonceCommit, or missing device proof. code=BAD_REQUEST or DEVICE_KEY_REQUIRED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401":
           description: Nonce missing/expired/reused (INVALID_NONCE) or bad signature (INVALID_SIGNATURE).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
           description: Rate limited (6/min per address, code=RATE_LIMITED) or 3 requests already waiting (code=PAIR_BUSY).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /pair/request/{id}/reveal:
+    post:
+      summary: Reveal the client nonce of a pairing request (unauthenticated)
+      description: >
+        Sends the 16-byte nonce whose SHA-256 was committed in POST /pair/request.
+        The agent checks it against the commitment, derives the match code and
+        asks the owner. The nonce also authorises polling. Works once per request.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientNonce]
+              properties:
+                clientNonce: { type: string, description: "16 random bytes, hex (32 characters)." }
+      responses:
+        "200":
+          description: The owner has been asked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [pending] }
+        "400":
+          description: Malformed nonce. code=BAD_REQUEST.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: Unknown or expired request, wrong nonce for the commitment, or already revealed. code=NOT_FOUND.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: Rate limited. code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /pair/request/{id}:

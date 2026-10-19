@@ -408,15 +408,31 @@ func (s *DB) ResolveDeviceID(prefix string) (string, error) {
 
 // RevokeDevice marks a device revoked; its token is rejected by authMiddleware.
 func (s *DB) RevokeDevice(id string) error {
-	_, err := s.db.Exec(`UPDATE devices SET revoked=1 WHERE id=?`, id)
-	return err
+	return s.execWithShareTokenPurge(id, `UPDATE devices SET revoked=1 WHERE id=?`)
 }
 
 // DeleteDevice permanently removes a device row. Used to clear out revoked
 // devices so the paired-devices list doesn't accumulate stale entries.
 func (s *DB) DeleteDevice(id string) error {
-	_, err := s.db.Exec(`DELETE FROM devices WHERE id=?`, id)
-	return err
+	return s.execWithShareTokenPurge(id, `DELETE FROM devices WHERE id=?`)
+}
+
+// execWithShareTokenPurge runs a device-ending statement and drops the
+// device's outstanding share links in the same transaction, so a revoked or
+// deleted device cannot leave a working link behind.
+func (s *DB) execWithShareTokenPurge(id, stmt string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(stmt, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM share_tokens WHERE device_id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // GetDeviceByID returns the device with the given id, or (nil,nil) if not found.
@@ -502,14 +518,23 @@ func (s *DB) SetDeviceFilePermissions(id string, browse, download, upload, modif
 // the device created when this code is redeemed; pass "", false for a normal
 // (non-guest) code.
 func (s *DB) CreatePairingCode(code string, expires time.Time, jailRoot string, readOnly bool) error {
+	return s.CreatePairingCodeFor(code, expires, jailRoot, readOnly, false)
+}
+
+// CreatePairingCodeFor is CreatePairingCode with canRegister: whether the code
+// may also create the owner account.
+func (s *DB) CreatePairingCodeFor(code string, expires time.Time, jailRoot string, readOnly, canRegister bool) error {
 	_, _ = s.db.Exec(`DELETE FROM pairing_codes WHERE expires < ?`, time.Now().Unix())
-	ro := 0
+	ro, reg := 0, 0
 	if readOnly {
 		ro = 1
 	}
+	if canRegister {
+		reg = 1
+	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO pairing_codes (code, expires, jail_root, read_only) VALUES (?, ?, ?, ?)`,
-		code, expires.Unix(), jailRoot, ro,
+		`INSERT OR REPLACE INTO pairing_codes (code, expires, jail_root, read_only, can_register) VALUES (?, ?, ?, ?, ?)`,
+		code, expires.Unix(), jailRoot, ro, reg,
 	)
 	return err
 }
@@ -518,9 +543,10 @@ func (s *DB) CreatePairingCode(code string, expires time.Time, jailRoot string, 
 // valid, and any guest-mode defaults (jailRoot/readOnly) to apply to the
 // device created when redeeming it.
 type PairingCodeInfo struct {
-	Valid    bool
-	JailRoot string
-	ReadOnly bool
+	Valid       bool
+	JailRoot    string
+	ReadOnly    bool
+	CanRegister bool // may also create the owner account
 }
 
 // ConsumePairingCode validates code and removes it (single-use).
@@ -530,20 +556,20 @@ func (s *DB) ConsumePairingCode(code string) PairingCodeInfo {
 	}
 	var expires int64
 	var jailRoot string
-	var readOnly int
+	var readOnly, canRegister int
 	// PR-10: consume the code atomically. DELETE ... RETURNING guarantees only
 	// one concurrent caller can claim a single-use code — a SELECT-then-DELETE
 	// race let two requests both validate before either deleted.
 	err := s.db.QueryRow(
-		`DELETE FROM pairing_codes WHERE code=? RETURNING expires, jail_root, read_only`, code,
-	).Scan(&expires, &jailRoot, &readOnly)
+		`DELETE FROM pairing_codes WHERE code=? RETURNING expires, jail_root, read_only, can_register`, code,
+	).Scan(&expires, &jailRoot, &readOnly, &canRegister)
 	if err != nil {
 		return PairingCodeInfo{}
 	}
 	if time.Now().Unix() > expires {
 		return PairingCodeInfo{}
 	}
-	return PairingCodeInfo{Valid: true, JailRoot: jailRoot, ReadOnly: readOnly != 0}
+	return PairingCodeInfo{Valid: true, JailRoot: jailRoot, ReadOnly: readOnly != 0, CanRegister: canRegister != 0}
 }
 
 func hashToken(token string) string {

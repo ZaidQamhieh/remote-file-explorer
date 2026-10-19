@@ -75,11 +75,18 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 			writeError(w, http.StatusConflict, "ACCOUNT_ALREADY_EXISTS", "this computer already has an account — log in instead, or ask the owner to add a device")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange, requireBoundProof); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
-		if !pm.Consume(req.PairingCode).Valid {
-			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair` on the computer to mint one")
+		codeInfo := pm.Consume(req.PairingCode)
+		if !codeInfo.Valid {
+			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair --owner` on the computer to mint one")
+			return
+		}
+		// Ordinary codes pair a device only; creating the owner account takes
+		// a code minted for it, so a code given to a guest can't claim the PC.
+		if !codeInfo.CanRegister {
+			writeError(w, http.StatusForbidden, "CODE_CANNOT_REGISTER", "this code can't create an account — run `rfe-agent pair --owner` on the computer")
 			return
 		}
 

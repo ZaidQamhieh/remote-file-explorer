@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/pairing"
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
@@ -21,13 +24,14 @@ const (
 )
 
 type pairReqEnv struct {
-	t      *testing.T
-	db     *store.DB
-	cfg    Config
-	nonces *nonceStore
-	prompt *PairPrompt
-	create http.HandlerFunc
-	poll   http.HandlerFunc
+	t       *testing.T
+	db      *store.DB
+	cfg     Config
+	nonces  *nonceStore
+	prompt  *PairPrompt
+	create  http.HandlerFunc
+	poll    http.HandlerFunc
+	revealH http.HandlerFunc
 }
 
 func newPairReqEnv(t *testing.T) *pairReqEnv {
@@ -36,12 +40,34 @@ func newPairReqEnv(t *testing.T) *pairReqEnv {
 	e.cfg = Config{Name: "test-pc", CertFingerprint: testFp, OnPairRequest: func(p PairPrompt) { e.prompt = &p }}
 	e.create = createPairRequestHandler(e.cfg, db, e.nonces)
 	e.poll = pollPairRequestHandler(e.cfg, db)
+	e.revealH = revealPairRequestHandler(e.cfg, db)
 	return e
 }
 
+// commitOf is the commitment a phone sends for clientNonce: hex SHA-256 of its bytes.
+func commitOf(clientNonce string) string {
+	raw, err := hex.DecodeString(clientNonce)
+	if err != nil {
+		return clientNonce // deliberately malformed, for the validation test
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// reveal sends the nonce for request id.
+func (e *pairReqEnv) reveal(id, clientNonce string) *httptest.ResponseRecorder {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/pair/request/"+id+"/reveal", strings.NewReader(`{"clientNonce":"`+clientNonce+`"}`))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	req = req.WithContext(withChiCtx(req, rctx))
+	e.revealH(rr, req)
+	return rr
+}
+
 func (e *pairReqEnv) request(clientNonce string) *httptest.ResponseRecorder {
-	pub, nonce, sig := signedDeviceProof(e.t, e.nonces)
-	body := `{"deviceLabel":"Pixel","devicePublicKey":"` + pub + `","nonce":"` + nonce + `","signature":"` + sig + `","clientNonce":"` + clientNonce + `"}`
+	pub, nonce, sig := signedDeviceProofFor(e.t, e.nonces, testFp)
+	body := `{"deviceLabel":"Pixel","devicePublicKey":"` + pub + `","nonce":"` + nonce + `","signature":"` + sig + `","clientNonceCommit":"` + commitOf(clientNonce) + `"}`
 	rr := httptest.NewRecorder()
 	e.create(rr, httptest.NewRequest(http.MethodPost, "/v1/pair/request", strings.NewReader(body)))
 	return rr
@@ -67,8 +93,20 @@ func TestPairRequest_ApprovedFlowMintsTokenOnce(t *testing.T) {
 	}
 	var created struct{ RequestID string }
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
-	if created.RequestID == "" || e.prompt == nil {
-		t.Fatalf("missing id or prompt: %+v %+v", created, e.prompt)
+	if created.RequestID == "" || e.prompt != nil {
+		t.Fatalf("want an id and no prompt before the reveal: %+v %+v", created, e.prompt)
+	}
+	if code, _ := e.pollStatus(created.RequestID, testCNonc); code != http.StatusNotFound {
+		t.Fatalf("an unrevealed request must not be pollable, got %d", code)
+	}
+	if rv := e.reveal(created.RequestID, strings.Repeat("ff", 16)); rv.Code != http.StatusNotFound || e.prompt != nil {
+		t.Fatalf("a nonce that does not match the commitment must be refused: %d", rv.Code)
+	}
+	if rv := e.reveal(created.RequestID, testCNonc); rv.Code != http.StatusOK || e.prompt == nil {
+		t.Fatalf("reveal: %d %s", rv.Code, rv.Body.String())
+	}
+	if rv := e.reveal(created.RequestID, testCNonc); rv.Code != http.StatusNotFound {
+		t.Fatalf("reveal works once, second got %d", rv.Code)
 	}
 	want, _ := pairing.SAS(testFp, testCNonc, created.RequestID)
 	if e.prompt.SAS != want || e.prompt.Label != "Pixel" {
@@ -97,6 +135,9 @@ func TestPairRequest_RejectedAndWrongNonce(t *testing.T) {
 	e := newPairReqEnv(t)
 	var created struct{ RequestID string }
 	_ = json.Unmarshal(e.request(testCNonc).Body.Bytes(), &created)
+	if rv := e.reveal(created.RequestID, testCNonc); rv.Code != http.StatusOK {
+		t.Fatalf("reveal: %d", rv.Code)
+	}
 	if code, _ := e.pollStatus(created.RequestID, strings.Repeat("ff", 16)); code != http.StatusNotFound {
 		t.Fatalf("wrong nonce got %d", code)
 	}
@@ -157,9 +198,9 @@ func (e *pairReqEnv) requestWith(clientID string, pub ed25519.PublicKey, priv ed
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(nonce)))
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(security.DeviceProofMessageV2(testFp, nonce))))
 	body := `{"deviceLabel":"Pixel","deviceId":"` + clientID + `","devicePublicKey":"` + base64.StdEncoding.EncodeToString(pub) +
-		`","nonce":"` + nonce + `","signature":"` + sig + `","clientNonce":"` + testCNonc + `"}`
+		`","nonce":"` + nonce + `","signature":"` + sig + `","clientNonceCommit":"` + commitOf(testCNonc) + `"}`
 	rr := httptest.NewRecorder()
 	e.create(rr, httptest.NewRequest(http.MethodPost, "/v1/pair/request", strings.NewReader(body)))
 	if rr.Code != http.StatusOK {
@@ -167,6 +208,9 @@ func (e *pairReqEnv) requestWith(clientID string, pub ed25519.PublicKey, priv ed
 	}
 	var created struct{ RequestID string }
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	if rv := e.reveal(created.RequestID, testCNonc); rv.Code != http.StatusOK {
+		e.t.Fatalf("reveal: %d %s", rv.Code, rv.Body.String())
+	}
 	return created.RequestID
 }
 

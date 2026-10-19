@@ -50,6 +50,15 @@ keyring = { version = "3.6", default-features = false, features = ["windows-nati
 [dev-dependencies]
 tempfile = "3"
 
+# Debug and test builds. Each tests/*.rs links the whole app into its own executable, and full debug info made
+# each one about 350 MB (a target dir reached 71 GB). Line tables keep backtraces and panic locations; dependencies
+# get no debug info at all. A debugger loses local variables: set `debug = true` locally if you need them.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # The shipped binary: smaller and with less of it touched at run time. Measured on the same code in the
 # real window, with the WebKit processes unchanged: 21.8 MB -> 8.4 MB on disk and 53.0 -> 49.6 MB for
 # the app's own process. Unwinding stays on (a panic in a command must not end the app).

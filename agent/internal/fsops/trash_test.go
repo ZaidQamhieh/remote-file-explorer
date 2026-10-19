@@ -332,18 +332,26 @@ func TestTrash_JailedUsesRenameNotCopy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	before, err := os.Stat(dir)
-	if err != nil {
-		t.Fatal(err)
+	// Compare opened handles: on Windows a plain Stat carries no file index, so SameFile on two Stat results is always false.
+	statOpen := func(p string) os.FileInfo {
+		t.Helper()
+		f, err := os.Open(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		fi, err := f.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi
 	}
+	before := statOpen(dir)
 	res := ops.MoveToTrash([]string{dir}, trashDir)
 	if len(res) != 1 || !res[0].OK {
 		t.Fatalf("MoveToTrash: %+v", res)
 	}
-	after, err := os.Stat(filepath.Join(trashFilesDir(trashDir), "tree"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	after := statOpen(filepath.Join(trashFilesDir(trashDir), "tree"))
 	if !os.SameFile(before, after) {
 		t.Fatalf("trash entry is a copy, expected a rename")
 	}

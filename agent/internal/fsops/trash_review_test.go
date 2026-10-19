@@ -187,3 +187,129 @@ func TestRenameAcrossRoots_RefusesExistingTarget(t *testing.T) {
 		t.Fatalf("source disappeared: %v", err)
 	}
 }
+
+// A .trashinfo whose original path is the jail root itself must be refused:
+// the keep-both name would be a sibling of the root but named inside it, so the
+// payload would land in the jail while the reported Path is outside it.
+func TestTrash_RestoreRefusesJailRootAsOriginal(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	if err := os.MkdirAll(trashFilesDir(trashDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(trashInfoDir(trashDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const id = "payload.txt"
+	payload := filepath.Join(trashFilesDir(trashDir), id)
+	if err := os.WriteFile(payload, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTrashInfo(trashDir, id, root); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := ops.RestoreFromTrash([]string{id}, trashDir)
+	if res[0].OK || res[0].Error == nil {
+		t.Fatalf("restore onto the jail root must fail, got %+v", res[0])
+	}
+	if filepath.Dir(res[0].Path) == filepath.Dir(root) && res[0].Path != id {
+		t.Fatalf("reported a path outside the jail: %q", res[0].Path)
+	}
+	if after, _ := os.ReadDir(root); len(after) != len(before) {
+		t.Fatalf("payload landed inside the jail: %v", after)
+	}
+	if _, err := os.Stat(payload); err != nil {
+		t.Fatalf("payload must stay in the trash: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)); err != nil {
+		t.Fatalf("sidecar must stay in the trash: %v", err)
+	}
+}
+
+// If the cross-device copy succeeds but removing the source fails part-way, the
+// error must name both the leftover source and the complete copy, and the copy
+// must stay in place (it holds the data).
+func TestMoveAcrossRoots_RemoveFailureKeepsCopyAndNamesBoth(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	tree := filepath.Join(root, "tree")
+	if err := os.MkdirAll(tree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(filepath.Join(tree, n), []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(trashFilesDir(trashDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dstFull := filepath.Join(trashFilesDir(trashDir), "tree")
+
+	origRename, origRemove := renameAcrossRootsFn, removeAllFn
+	t.Cleanup(func() { renameAcrossRootsFn, removeAllFn = origRename, origRemove })
+	renameAcrossRootsFn = func(_, _ *securePath) error {
+		return &os.LinkError{Op: "rename", Err: syscall.EXDEV}
+	}
+	removeAllFn = func(p *securePath) error {
+		// Half-delete the source, then fail.
+		_ = os.Remove(filepath.Join(tree, "a.txt"))
+		return errors.New("injected remove failure")
+	}
+
+	src, err := ops.access(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.close()
+	err = moveAcrossRootsSecure(src, &securePath{full: dstFull})
+	if err == nil {
+		t.Fatal("a half-removed source must be reported as an error")
+	}
+	if !strings.Contains(err.Error(), tree) || !strings.Contains(err.Error(), dstFull) {
+		t.Fatalf("error must name the source %s and the copy %s: %q", tree, dstFull, err)
+	}
+	for _, n := range []string{"a.txt", "b.txt"} {
+		if got, rerr := os.ReadFile(filepath.Join(dstFull, n)); rerr != nil || string(got) != n {
+			t.Fatalf("complete copy must be left in place: %s: %q %v", n, got, rerr)
+		}
+	}
+}
+
+// removeAll may report an error after it has in fact removed everything; the
+// move then succeeded and must not be reported as a failure.
+func TestMoveAcrossRoots_RemoveErrorButSourceGoneIsSuccess(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	f := filepath.Join(root, "f.txt")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(trashFilesDir(trashDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dstFull := filepath.Join(trashFilesDir(trashDir), "f.txt")
+
+	origRename, origRemove := renameAcrossRootsFn, removeAllFn
+	t.Cleanup(func() { renameAcrossRootsFn, removeAllFn = origRename, origRemove })
+	renameAcrossRootsFn = func(_, _ *securePath) error {
+		return &os.LinkError{Op: "rename", Err: syscall.EXDEV}
+	}
+	removeAllFn = func(p *securePath) error {
+		_ = p.removeAll()
+		return errors.New("late error")
+	}
+	src, err := ops.access(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.close()
+	if err := moveAcrossRootsSecure(src, &securePath{full: dstFull}); err != nil {
+		t.Fatalf("source is gone, move must succeed: %v", err)
+	}
+	if got, _ := os.ReadFile(dstFull); string(got) != "x" {
+		t.Fatalf("copy = %q", got)
+	}
+}

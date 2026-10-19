@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 )
 
@@ -111,25 +111,42 @@ func (o *Ops) MoveToTrash(paths []string, trashDir string) []BatchResult {
 			continue
 		}
 
-		id := uniqueTrashName(trashDir, filepath.Base(resolved.full))
-		dest := filepath.Join(trashFilesDir(trashDir), id)
-		destPath := &securePath{full: dest}
-		if err := moveAcrossRootsSecure(resolved, destPath); err != nil {
-			resolved.close()
-			results[i] = BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
-			continue
-		}
-		if err := writeTrashInfo(trashDir, id, resolved.full); err != nil {
-			// Roll the file back so a sidecar failure doesn't orphan the data.
-			_ = moveAcrossRootsSecure(destPath, resolved)
-			resolved.close()
-			results[i] = BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
-			continue
-		}
+		results[i] = trashOne(p, resolved, trashDir)
 		resolved.close()
-		results[i] = BatchResult{Path: p, OK: true}
 	}
 	return results
+}
+
+// trashMu serializes picking a trash name through writing its sidecar, so two
+// concurrent MoveToTrash calls for the same basename cannot both pick one name
+// and overwrite each other's payload.
+var trashMu sync.Mutex
+
+// writeTrashInfoFn is the sidecar writer; a variable so tests can fail it.
+var writeTrashInfoFn = writeTrashInfo
+
+// trashOne moves one resolved path into the store. The caller closes resolved.
+func trashOne(p string, resolved *securePath, trashDir string) BatchResult {
+	trashMu.Lock()
+	defer trashMu.Unlock()
+
+	id := uniqueTrashName(trashDir, filepath.Base(resolved.full))
+	dest := filepath.Join(trashFilesDir(trashDir), id)
+	destPath := &securePath{full: dest}
+	if err := moveAcrossRootsSecure(resolved, destPath); err != nil {
+		return BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
+	}
+	if err := writeTrashInfoFn(trashDir, id, resolved.full); err != nil {
+		// Roll the file back so a sidecar failure doesn't orphan the data. If
+		// the rollback fails too, the data is stranded in the store: say where.
+		if rbErr := moveAcrossRootsSecure(destPath, resolved); rbErr != nil {
+			return BatchResult{Path: p, Error: apiErr("TRASH_FAILED", fmt.Sprintf(
+				"%s; rollback failed (%s), the item is stranded in the trash files directory at %s",
+				err.Error(), rbErr.Error(), dest))}
+		}
+		return BatchResult{Path: p, Error: apiErr("TRASH_FAILED", err.Error())}
+	}
+	return BatchResult{Path: p, OK: true}
 }
 
 // ListTrash enumerates the trash store, newest deletion first. A missing
@@ -230,7 +247,9 @@ func (o *Ops) RestoreFromTrash(ids []string, trashDir string) []BatchResult {
 			results[i] = BatchResult{Path: id, Error: apiErr("PATH_NOT_FOUND", "trash payload missing")}
 			continue
 		}
-		if _, err := dest.stat(); err == nil {
+		// lstat, not stat: a dangling symlink at the original path is an
+		// occupied name and must be kept, not replaced by the rename.
+		if _, err := dest.lstat(); err == nil {
 			dest = autoRenameSecure(dest)
 		} else if !os.IsNotExist(err) {
 			dest.close()
@@ -273,6 +292,8 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 	}
 	roots := o.Roots()
 	if len(ids) == 0 && len(roots) == 0 {
+		trashMu.Lock()
+		defer trashMu.Unlock()
 		if err := os.RemoveAll(trashFilesDir(trashDir)); err != nil {
 			return err
 		}
@@ -350,31 +371,19 @@ func moveAcrossRootsSecure(src, dst *securePath) error {
 	err := src.renameTo(dst)
 	if err != nil && src.root != dst.root {
 		// Different roots (jailed source, unrooted trash): the jail check has
-		// already run, so rename by absolute path and copy only on EXDEV. An
-		// absolute rename follows symlinks in the parents, so first check that
-		// the jailed side's parent is still its own canonical path and that the
-		// jail root itself is not being moved.
-		for _, side := range []*securePath{src, dst} {
-			if side.root == nil {
-				continue
-			}
-			if side.name == "." {
-				return fmt.Errorf("cannot move the jail root")
-			}
-			parent := filepath.Dir(side.full)
-			if real, rerr := filepath.EvalSymlinks(parent); rerr != nil || real != parent {
-				return fmt.Errorf("path changed during the operation")
-			}
-		}
-		err = os.Rename(src.full, dst.full)
+		// already run, so rename without the root handle and copy only when the
+		// rename is cross-device (EXDEV, or ERROR_NOT_SAME_DEVICE on Windows).
+		err = renameAcrossRoots(src, dst)
 	}
 	if err == nil {
 		return nil
 	}
-	if !errors.Is(err, syscall.EXDEV) {
+	if !isCrossDevice(err) {
 		return err
 	}
 	if err := copySecureRecursive(src, dst); err != nil {
+		// Do not leave a half-copied payload behind; the source is still whole.
+		_ = dst.removeAll()
 		return err
 	}
 	return src.removeAll()

@@ -47,9 +47,10 @@ class Uploader(
     val src = File(r.destPath)
     if (!src.isFile) throw IOException("source file is missing")
     val size = src.length()
-    if (r.sha256 == null || r.total != size) {
-      // First run, or the source changed since it was hashed: any old session describes different bytes.
-      r = r.copy(sha256 = sha256Of(src), total = size, sessionId = null)
+    val modified = src.lastModified()
+    if (r.sha256 == null || r.total != size || r.sourceModified != modified) {
+      // First run, or the source changed (size or modified time) since it was hashed: any old session describes different bytes.
+      r = r.copy(sha256 = sha256Of(src), total = size, sourceModified = modified, sessionId = null)
       save(r)
     }
     var session: Session? = r.sessionId?.let { existing(r, it) }
@@ -107,7 +108,13 @@ class Uploader(
       pool.shutdownNow()
     }
     if (stopped()) throw InterruptedException()
-    complete(r, session.id)
+    try {
+      complete(r, session.id)
+    } catch (e: UploadRejected) {
+      // The bytes the agent assembled differ from the saved hash (e.g. the file was edited in place): hash again on retry.
+      if (e.message == "HASH_MISMATCH") save(r.copy(sha256 = null, sessionId = null))
+      throw e
+    }
     return r.copy(received = size)
   }
 

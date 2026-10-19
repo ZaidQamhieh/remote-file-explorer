@@ -61,7 +61,8 @@ class TransferEngineTest {
     throw AssertionError("timeout waiting for $states, have ${engine.list()}")
   }
 
-  private fun full() = MockResponse().setBody(Buffer().write(payload))
+  private val lastModified = "Wed, 21 Oct 2026 07:28:00 GMT"
+  private fun full() = MockResponse().setBody(Buffer().write(payload)).setHeader("Last-Modified", lastModified)
 
   @Test fun downloadsAndFinalizesAtomically() {
     server.enqueue(full())
@@ -98,8 +99,36 @@ class TransferEngineTest {
     )
     engine.resume("t2")
     await("t2", TransferState.DONE)
-    assertEquals("bytes=$partLen-", server.takeRequest().getHeader("Range"))
+    val resumeReq = server.takeRequest()
+    assertEquals("bytes=$partLen-", resumeReq.getHeader("Range"))
+    assertEquals(lastModified, resumeReq.getHeader("If-Range"))
     assertArrayEquals(payload, File(dest("b.bin")).readBytes())
+  }
+
+  @Test fun resumeAfterTheFileChangedRestartsFromZeroInsteadOfAppending() {
+    server.enqueue(full().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
+    engine.enqueue("t2b", "h", address, "/b.bin", dest("b.bin"))
+    await("t2b", TransferState.FAILED)
+    assertTrue(File(dest("b.bin") + ".part").length() > 0)
+    server.takeRequest()
+
+    // If-Range no longer matches, so a real server answers 200 with the whole new file.
+    val changed = ByteArray(payload.size + 77) { (it * 7 % 253).toByte() }
+    server.enqueue(MockResponse().setBody(Buffer().write(changed)).setHeader("Last-Modified", "Thu, 22 Oct 2026 07:28:00 GMT"))
+    engine.resume("t2b")
+    await("t2b", TransferState.DONE)
+    assertEquals(lastModified, server.takeRequest().getHeader("If-Range"))
+    assertArrayEquals(changed, File(dest("b.bin")).readBytes())
+  }
+
+  @Test fun partialWithoutAKnownVersionIsNotResumed() {
+    File(dest("v.bin") + ".part").apply { parentFile.mkdirs(); writeBytes(ByteArray(1000) { 9 }) }
+    server.enqueue(full())
+    engine.enqueue("t2c", "h", address, "/v.bin", dest("v.bin"))
+    await("t2c", TransferState.DONE)
+    val req = server.takeRequest()
+    assertEquals(null, req.getHeader("Range"))
+    assertArrayEquals(payload, File(dest("v.bin")).readBytes())
   }
 
   @Test fun serverIgnoringRangeRestartsFromZeroWithoutCorruption() {

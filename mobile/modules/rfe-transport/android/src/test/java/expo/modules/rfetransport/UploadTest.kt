@@ -277,6 +277,45 @@ class UploadTest {
     assertEquals(hex(edited), r.sha256)
   }
 
+  @Test fun aSameSizeEditWithANewModifiedTimeIsHashedAgain() {
+    val src = source()
+    val stamp = src.lastModified()
+    agent.failChunk = 1
+    engine.enqueueUpload("u9b", "h", address, src.path, "/dest/a.bin", overwrite = false, deleteSource = false)
+    await("u9b", TransferState.FAILED)
+    val edited = ByteArray(payload.size) { (it % 197).toByte() }
+    src.writeBytes(edited)
+    src.setLastModified(stamp + 60_000)
+    agent.received.clear()
+    agent.failChunk = -1
+    engine.resume("u9b")
+    val r = await("u9b", TransferState.DONE)
+    assertArrayEquals(edited, agent.assembled())
+    assertEquals(hex(edited), r.sha256)
+  }
+
+  @Test fun aHashMismatchIsRecoveredByHashingAgainOnRetry() {
+    val src = source()
+    val stamp = src.lastModified()
+    agent.failChunk = 1
+    engine.enqueueUpload("u9c", "h", address, src.path, "/dest/a.bin", overwrite = false, deleteSource = false)
+    await("u9c", TransferState.FAILED)
+    // Edited in place with the same size and the same modified time: only the agent's check can notice.
+    val edited = ByteArray(payload.size) { (it % 197).toByte() }
+    src.writeBytes(edited)
+    src.setLastModified(stamp)
+    agent.failChunk = -1
+    engine.resume("u9c")
+    val failed = await("u9c", TransferState.FAILED)
+    assertEquals("HASH_MISMATCH", failed.error)
+    assertEquals(null, failed.sha256)
+    agent.received.clear()
+    engine.resume("u9c")
+    val r = await("u9c", TransferState.DONE)
+    assertArrayEquals(edited, agent.assembled())
+    assertEquals(hex(edited), r.sha256)
+  }
+
   @Test fun removeForgetsFinishedTransfersOnly() {
     engine.enqueueUpload("u10", "h", address, source().path, "/dest/a.bin", overwrite = false, deleteSource = false)
     await("u10", TransferState.DONE)

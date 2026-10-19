@@ -81,9 +81,9 @@
     A.dialog({ icon: 'phone', title: d.name, width: 560, noFocus: true,
       body: '<div class="tags" style="margin:0 0 .75rem"><span class="tag ' + (!d.revoked && d.last && E.now() - d.last < 120000 ? 'ok' : '') + '">' + (d.revoked ? 'Revoked' : d.last && E.now() - d.last < 120000 ? 'Online now' : d.last ? 'Last seen ' + rel(d.last) : 'Never seen') + '</span>' + (d.ver ? '<span class="tag">' + esc(d.ver) + '</span>' : '') + (d.addr ? '<span class="tag">' + esc(d.addr) + '</span>' : '') + '</div>' +
         '<div class="kv2"><div><b>Device id</b><small class="mono">' + esc(d.id) + '</small></div></div><div class="kv2"><div><b>Paired</b><small>' + (d.paired ? U.fmtDate(d.paired) + ' · ' + rel(d.paired) : 'Unknown') + (d.viaLogin ? ' · signed in with an account' : ' · paired with a code') + '</small></div></div>' +
-        '<h4 class="dsh">What it can do</h4><table class="capm"><tbody><tr><td>Browse and preview</td><td><span class="tag ok">Allowed</span></td></tr>' + [['download', 'Download files'], ['upload', 'Upload files'], ['modify', 'Rename and move'], ['delete', 'Delete'], ['share', 'Make share links'], ['viewApps', 'See apps'], ['launchApps', 'Launch apps']].map((r) => '<tr><td>' + r[1] + '</td><td>' + on(r[0]) + '</td></tr>').join('') + (a && a.readOnly ? '<tr><td>Read-only</td><td><span class="tag warn">On</span></td></tr>' : '') + '</tbody></table>' +
-        (a ? '<h4 class="dsh">Folder limit</h4><div class="fld"><input id="dvj" value="' + esc(a.jailRoot || '') + '" placeholder="No limit: all of the roots the server allows" spellcheck="false"><span class="err" id="dvje"></span></div><div class="fxsub">The device can only open this folder and what is inside it. Leave it empty for no limit.</div>' : '') +
-        '<h4 class="dsh">Recent activity</h4>' + (acts.length ? acts.map((h) => '<div class="evrow">' + ic('shield-check') + '<span>' + esc(h.text) + '</span><small>' + rel(h.at) + '</small></div>').join('') : '<div class="fxsub">No security events for this device yet.</div>'),
+        '<h3 class="dsh">What it can do</h3><table class="capm"><tbody><tr><td>Browse and preview</td><td><span class="tag ok">Allowed</span></td></tr>' + [['download', 'Download files'], ['upload', 'Upload files'], ['modify', 'Rename and move'], ['delete', 'Delete'], ['share', 'Make share links'], ['viewApps', 'See apps'], ['launchApps', 'Launch apps']].map((r) => '<tr><td>' + r[1] + '</td><td>' + on(r[0]) + '</td></tr>').join('') + (a && a.readOnly ? '<tr><td>Read-only</td><td><span class="tag warn">On</span></td></tr>' : '') + '</tbody></table>' +
+        (a ? '<h3 class="dsh">Folder limit</h3><div class="fld"><input id="dvj" value="' + esc(a.jailRoot || '') + '" placeholder="No limit: all of the roots the server allows" spellcheck="false"><span class="err" id="dvje"></span></div><div class="fxsub">The device can only open this folder and what is inside it. Leave it empty for no limit.</div>' : '') +
+        '<h3 class="dsh">Recent activity</h3>' + (acts.length ? acts.map((h) => '<div class="evrow">' + ic('shield-check') + '<span>' + esc(h.text) + '</span><small>' + rel(h.at) + '</small></div>').join('') : '<div class="fxsub">No security events for this device yet.</div>'),
       actions: [{ label: 'Permissions…', kind: 'tx', disabled: !a, cb: () => { setTimeout(() => H['dev.perm'](id), 0); } }].concat(a ? [{ id: 'ok', label: 'Save folder limit', kind: 'f', icon: 'check', cb: (c) => {
         const v = $('#dvj', c.el).value.trim(); if (v === (a.jailRoot || '')) { return; }
         E.call('set_device_access', { host: s.id, id: d.id, patch: { jailRoot: v }, confirmSelf: !!d.current }).then(() => { audit('Folder limit of ' + d.name + ' set to ' + (v || 'none')); A.snack(v ? d.name + ' is limited to ' + v : d.name + ' has no folder limit'); A.loadDevices(); }).catch(fail); } }] : []) });
@@ -186,16 +186,22 @@
     const hint = document.createElement('div'); hint.className = 'dohint'; hint.hidden = true; hint.innerHTML = ic('upload') + 'Drop to upload to the open folder'; document.body.appendChild(hint);
     ev.listen('tauri://drag-enter', () => { if (st.view === 'files' && A.mainPane.host !== 'local') hint.hidden = false; });
     ev.listen('tauri://drag-leave', () => { hint.hidden = true; });
-    ev.listen('tauri://drag-drop', (e) => { hint.hidden = true; const paths = (e.payload && e.payload.paths) || []; if (paths.length) A.uploadPaths(paths); });
+    ev.listen('tauri://drag-drop', (e) => {
+      hint.hidden = true; const paths = (e.payload && e.payload.paths) || []; if (!paths.length || st.view !== 'files') return;
+      /* A drop on a folder row goes into that folder; anywhere else it goes to the open folder. */
+      const pos = e.payload.position; const m = A.mainPane; let dir = m.path;
+      if (pos) { const dpr = window.devicePixelRatio || 1; const row = document.elementFromPoint(pos.x / dpr, pos.y / dpr); const li = row && row.closest && row.closest('.li[data-i], .tile[data-i]'); const it = li && m.el && m.el.contains(li) ? m.items[+li.dataset.i] : null; if (it && it.t === 'dir') dir = U.join(m.path, it.n); }
+      A.uploadPaths(paths, m.host, dir);
+    });
   })();
 
   /* ================= settings ================= */
   const se1 = A.settingsExtra;
   A.settingsExtra = (k) => {
     let h = se1(k); const row = k.row, sw = k.sw;
-    const backup = '<div class="sg"><h4>Backup</h4>' + row('Back up settings', '', '<button class="btn" data-sx="backup">' + ic('lock') + 'Back up…</button>') + row('Restore settings', '', '<button class="btn" data-sx="restore">' + ic('upload') + 'Restore…</button>') + '</div>';
-    h = h.replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + row('Ask where to save downloads', '', sw('askSave')));
-    h = h.replace('<div class="sg"><h4>About</h4>', backup + '<div class="sg"><h4>About</h4>');
+    const backup = '<div class="sg"><h3>Backup</h3>' + row('Back up settings', '', '<button class="btn" data-sx="backup">' + ic('lock') + 'Back up…</button>') + row('Restore settings', '', '<button class="btn" data-sx="restore">' + ic('upload') + 'Restore…</button>') + '</div>';
+    h = h.replace('<div class="sg"><h3>Files</h3>', '<div class="sg"><h3>Files</h3>' + row('Ask where to save downloads', '', sw('askSave')));
+    h = h.replace('<div class="sg"><h3>About</h3>', backup + '<div class="sg"><h3>About</h3>');
     return h;
   };
   const sa1 = A.settingsAction;
@@ -210,7 +216,7 @@
   /* ================= palette, boot ================= */
   A.paletteExtra.push((C) => {
     C('lock', 'Back up settings…', A.backupDialog); C('upload', 'Restore settings…', () => A.restoreDialog());
-    C('upload', 'Upload files…', () => A.chooseAndUpload(), 'Ctrl+U'); C('download', 'Export security log (CSV)', () => A.exportAuditCSV());
+    C('upload', 'Upload files…', () => A.chooseAndUpload()); C('download', 'Export security log (CSV)', () => A.exportAuditCSV());
   });
   document.addEventListener('DOMContentLoaded', () => {
     if (THUMB || new URLSearchParams(location.search).get('demo')) return;

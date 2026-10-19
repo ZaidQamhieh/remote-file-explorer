@@ -61,6 +61,6 @@ test("the dark theme redefines every colour the light theme defines", () => {
 
 test("the window cannot be made smaller than the layout needs", () => {
   const w = conf.app.windows[0];
-  assert.ok(w.minWidth >= 1100 && w.minHeight >= 700);
+  assert.ok(w.minWidth >= 900 && w.minHeight >= 600);
   assert.ok(w.width >= w.minWidth && w.height >= w.minHeight);
 });

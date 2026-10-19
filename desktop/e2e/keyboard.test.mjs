@@ -179,8 +179,17 @@ test("settings: every control is reachable by keyboard", async () => {
   for (const tab of ["Transfers", "Connection", "Appearance", "Files", "Security", "Desktop", "Backup", "Troubleshooting"]) {
     await app.clickLabel(tab, ".setn");
     await sleep(350); /* the accessible names are filled in a moment after a page is drawn */
-    await app.script("document.activeElement && document.activeElement.blur(); document.querySelector('#stage').scrollTo(0, 0);");
-    const got = await tabOrder(80);
+    // Choosing a section keeps focus on its button; Tab onward from there through the page's controls.
+    await app.script("document.querySelector('#stage').scrollTo(0, 0); const b = document.querySelector('.setn button[aria-current]'); if (b) b.focus();");
+    const got = [];
+    for (let i = 0; i < 60; i++) {
+      const before = got.length ? got[got.length - 1].name : (await focusInfo()).name;
+      await app.press(KEYS.tab);
+      await waitForFocusChange(before);
+      const inStage = await app.script("return !!document.activeElement && !!document.activeElement.closest('#stage');");
+      if (!inStage) break;
+      got.push(await focusInfo());
+    }
     console.log(`tab order, settings, ${tab}: ${got.map((s) => s.name).join(" > ")}`);
     stops.push(...got);
   }

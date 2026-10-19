@@ -18,8 +18,8 @@
     const kv = (k, v, mono) => '<div class="kv2"><div><b>' + k + '</b><small' + (mono ? ' class="mono"' : '') + '>' + v + '</small></div></div>';
     const octal = () => { let s = '0'; for (let i = 0; i < 3; i++) s += ($$('[data-pm^="' + i + '"]', $('#pmg')).reduce((a, c, j) => a + (c.checked ? [4, 2, 1][j] : 0), 0)); return s; };
     A.dialog({ icon: 'info', title: n.n || '/', width: 520, noFocus: true,
-      body: kv('Location', esc((loc ? '' : A.hostName(host) + ':') + full), true) + kv('Kind', U.KINDS[U.kindOf(n)] + (n.link ? ' · link' + (n.to ? ' to ' + esc(n.to) : '') : '')) + (n.t === 'dir' ? (n.cc != null || n.kids ? kv('Contains', E.fs.itemCount(n).toLocaleString() + ' items') : '') : kv('Size', U.fmtBytes(n.b) + ' (' + n.b.toLocaleString() + ' bytes)')) + kv('Modified', n.mod ? U.fmtDate(n.mod) + ' · ' + rel(n.mod) : 'Unknown') +
-        (n.perm ? kv('Permissions', esc(n.perm) + ' · ' + U.permOctal(n.perm), true) : '') + (unix ? '<h4 class="dsh">Permissions</h4>' + grid + '<div class="fxsub">' + (canChange ? 'Changes the mode on ' + esc(A.hostName(host)) + '. The agent refuses it if this login may not modify files.' : loc ? 'Change permissions of local files in your file manager.' : 'This login cannot change permissions here.') + '</div>' : ''),
+      body: kv('Location', esc((loc ? '' : A.hostName(host) + ':') + full), true) + kv('Kind', U.KINDS[U.kindOf(n)] + (n.link ? ' · link' + (n.to ? ' to ' + esc(n.to) : '') : '')) + (n.t === 'dir' ? (n.cc != null || n.kids ? kv('Contains', E.fs.itemCount(n).toLocaleString(U.lang()) + ' items') : '') : kv('Size', U.fmtBytes(n.b) + ' (' + n.b.toLocaleString(U.lang()) + ' bytes)')) + kv('Modified', n.mod ? U.fmtDate(n.mod) + ' · ' + rel(n.mod) : 'Unknown') +
+        (n.perm ? kv('Permissions', esc(n.perm) + ' · ' + U.permOctal(n.perm), true) : '') + (unix ? '<h3 class="dsh">Permissions</h3>' + grid + '<div class="fxsub">' + (canChange ? 'Changes the mode on ' + esc(A.hostName(host)) + '. The agent refuses it if this login may not modify files.' : loc ? 'Change permissions of local files in your file manager.' : 'This login cannot change permissions here.') + '</div>' : ''),
       actions: [{ label: 'Close', kind: 'tx' }, { label: 'Copy path', kind: 'tx', icon: 'copy', cb: () => { A.copy(full); return false; } }].concat(canChange ? [{ id: 'go', label: 'Apply permissions', kind: 'f', icon: 'check', cb: (c) => {
         const mode = octal(); if (mode === U.permOctal(n.perm)) return;
         E.call('files_chmod', { host, path: full, mode }).then(() => { audit('Permissions of ' + n.n + ' on ' + A.hostName(host) + ' set to ' + mode); A.snack('Permissions of “' + n.n + '” are now ' + mode); return E.fs.refresh(host, dir); }).catch(fail);
@@ -54,7 +54,7 @@
         kv('Uptime', st0 ? v(st0.uptimeSeconds, (x) => U.fmtDur(x)) : NR) + kv('Reachable at', [h.address && 'LAN ' + esc(h.address), h.tailscaleAddress && 'Tailscale ' + esc(h.tailscaleAddress), h.macAddress && 'MAC ' + esc(h.macAddress)].filter(Boolean).join(' · ') || NR) +
         kv('Changes', h.readOnly ? 'The agent is read-only' : 'Allowed') + kv('Disk', st0 && st0.totalBytes ? U.fmtBytes(st0.totalBytes - (st0.freeBytes || 0)) + ' used of ' + U.fmtBytes(st0.totalBytes) : NR) +
         (st0 ? '' : note('Disk and uptime were not reported' + (snap.statusNote ? ': ' + esc(snap.statusNote) : '') + '.')) +
-        '<h4 class="dsh">Load</h4>' + (m ? kv('Processor', v(m.cpuPercent, (x) => x.toFixed(0) + ' %')) + kv('Memory', v(m.ramPercent, (x) => x.toFixed(0) + ' %')) + kv('Network since the agent started', v(m.rxBytes, (x) => U.fmtBytes(x)) + ' received · ' + v(m.txBytes, (x) => U.fmtBytes(x)) + ' sent') :
+        '<h3 class="dsh">Load</h3>' + (m ? kv('Processor', v(m.cpuPercent, (x) => x.toFixed(0) + ' %')) + kv('Memory', v(m.ramPercent, (x) => x.toFixed(0) + ' %')) + kv('Network since the agent started', v(m.rxBytes, (x) => U.fmtBytes(x)) + ' received · ' + v(m.txBytes, (x) => U.fmtBytes(x)) + ' sent') :
           snap.metricsForbidden ? note('Metrics are for administrators. This computer signed in with a pairing code or was approved on the PC; sign out and sign in with the account to see them.') : note('No metrics were reported' + (snap.metricsNote ? ': ' + esc(snap.metricsNote) : '') + '.'));
     };
     const load = (c) => E.call('agent_health', { host: id }).then((snap) => draw(c, snap)).catch((e) => { $('.db', c.el).innerHTML = '<div class="fxsub">' + esc((e && e.message) || String(e)) + '</div>'; });
@@ -84,11 +84,11 @@
   const se0 = A.settingsExtra;
   A.settingsExtra = (k) => {
     const h = se0(k); const lv = T.level || 'info';
-    const grp = '<div class="sg"><h4>Troubleshooting</h4>' + k.row('Log detail', '', '<div class="seg">' + [['error', 'Errors'], ['info', 'Normal'], ['debug', 'Detailed']].map((o) => '<button data-sx="loglevel:' + o[0] + '" class="' + (lv === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>') +
+    const grp = '<div class="sg"><h3>Troubleshooting</h3>' + k.row('Log detail', '', '<div class="seg">' + [['error', 'Errors'], ['info', 'Normal'], ['debug', 'Detailed']].map((o) => '<button data-sx="loglevel:' + o[0] + '" class="' + (lv === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>') +
       k.row('Agent log', '', '<button class="btn" data-sx="agentlog">View</button>') +
       k.row('Check the keystore', '', '<button class="btn" data-sx="keystore">Check</button>') +
-      k.row('Device key', '', '<button class="btn" data-sx="devkey">New key…</button>') + '</div>';
-    return h.replace('<div class="sg"><h4>About</h4>', grp + '<div class="sg"><h4>About</h4>');
+      k.row('Device key', '', '<button class="btn e" data-sx="devkey">New key…</button>') + '</div>';
+    return h.replace('<div class="sg"><h3>About</h3>', grp + '<div class="sg"><h3>About</h3>');
   };
   const sa0 = A.settingsAction;
   A.settingsAction = (a) => {
@@ -132,17 +132,17 @@
   A.settingsExtra = (k) => {
     const h = sx1(k); const row = k.row, sw = k.sw;
     const noTray = D.tray === false;
-    const desktop = '<div class="sg"><h4>Desktop</h4>' +
+    const desktop = '<div class="sg"><h3>Desktop</h3>' +
       row('Close to the system tray', noTray ? 'This system shows no tray icon, so closing the window closes the app' : 'Closing the window keeps transfers running in the tray', noTray ? '<button class="sw" disabled role="switch" aria-checked="false" aria-label="closeToTray"></button>' : sw('closeToTray')) +
       row('Start RFE when I sign in', '', sw('startLogin')) +
       row('Desktop notifications', '', sw('desktopNotif')) +
-      (S.desktopNotif ? row('New device requests', '', sw('nPair')) + row('Updates', '', sw('nUpdate')) : '') +
+      (S.desktopNotif ? row('Notify when a transfer finishes', '', sw('notifyDone')) + row('Notify about errors', '', sw('notifyErrors')) + row('New device requests', '', sw('nPair')) + row('Updates', '', sw('nUpdate')) : '') +
       row('Try it', '', '<button class="btn" data-sx="notif">' + ic('bell') + 'Test notification</button>') + '</div>';
-    return h.replace('<div class="sg"><h4>Files</h4>', desktop + '<div class="sg"><h4>Files</h4>');
+    return h.replace('<div class="sg"><h3>Files</h3>', desktop + '<div class="sg"><h3>Files</h3>');
   };
   const sa1 = A.settingsAction;
   A.settingsAction = (a) => {
-    if (a === 'notif') { E.call('desktop_notify', { kind: 'test', title: 'Transfer finished', body: 'atlas-2.0.0-release.apk was saved to Downloads' }).then((shown) => { if (!shown) A.snack('The notification was not shown'); }).catch(fail); return true; }
+    if (a === 'notif') { E.call('desktop_notify', { kind: 'test', title: 'RFE test notification', body: 'Notifications work. Finished transfers and new device requests appear like this.' }).then((shown) => { if (!shown) A.snack('The notification was not shown'); }).catch(fail); return true; }
     if (a === 'update') { A.updateDialog(); return true; }
     return sa1(a);
   };
@@ -160,7 +160,7 @@
     else if (UP.err) main = '<div class="fxsub" role="alert">' + esc(UP.err) + '</div>';
     else if (r) {
       main = '<div class="kv2"><div><b>RFE Desktop</b><small>Installed ' + esc(r.current) + ' · channel ' + esc(S.channel) + '</small></div>' + (r.available ? '<span class="tag pri">' + esc(r.latest) + ' available</span>' : '<span class="tag ok">Up to date</span>') + '</div>' +
-        (r.available ? '<h4 class="dsh">What’s new in ' + esc(r.latest) + '</h4>' + (r.notes.length ? '<ul class="notes">' + r.notes.map((n) => '<li>' + esc(n) + '</li>').join('') + '</ul>' : '<div class="fxsub">No notes were published.</div>') +
+        (r.available ? '<h3 class="dsh">What’s new in ' + esc(r.latest) + '</h3>' + (r.notes.length ? '<ul class="notes">' + r.notes.map((n) => '<li>' + esc(n) + '</li>').join('') + '</ul>' : '<div class="fxsub">No notes were published.</div>') +
           (r.package ? '<div class="fxsub">' + esc(r.package.name) + ' · ' + U.fmtBytes(r.package.size) + ' · checked against the release’s SHA-256 list before it is kept</div>' : '<div class="fxsub">This release has no package for this system.</div>') : '') +
         (UP.dl ? '<div class="fxsub" role="status">Downloading and checking the package…</div>' : '') +
         (UP.saved ? '<div class="fxsub" role="status">Saved and checked: <span class="mono">' + esc(UP.saved) + '</span>. Install it with your package manager (for a .deb: <span class="mono">sudo apt install ./the-file.deb</span>) or run the AppImage. RFE never installs it for you.</div>' : '');

@@ -72,12 +72,17 @@
     /* Items older than the chosen number of days are removed for good as the Trash opens. */
     const cut = Date.now() - (+S.trashDays || 30) * 864e5; const stale = rows.filter((r) => r.at && r.at < cut);
     if (stale.length) {
-      const by = {}; stale.forEach((r) => { (by[r.host] = by[r.host] || []).push(r); }); let gone = 0;
-      for (const h of Object.keys(by)) {
-        try { await E.call('trash_empty_items', { host: h, ids: by[h].map((r) => r.id) }); gone += by[h].length; by[h].forEach((r) => rows.splice(rows.indexOf(r), 1)); }
-        catch (e) { errs.push(A.hostName(h) + ': ' + e.message); }
+      /* They are removed for good, so the person is asked first (once for each set of items), and what is older than the setting stays listed until they answer. */
+      const key = stale.map((r) => r.host + r.id).sort().join(','); const days = +S.trashDays || 30;
+      if (X.trashAsked !== key) {
+        X.trashAsked = key;
+        A.dialog({ icon: 'trash', title: 'Delete old items from Trash?', width: 460, modal: true, body: '<p>' + stale.length + (stale.length === 1 ? ' item has' : ' items have') + ' been in Trash longer than ' + days + ' days (your Keep items in Trash for setting). Deleting them cannot be undone.</p>',
+          actions: [{ id: 'k', label: 'Keep them', kind: 't', cb: (c) => c.close() }, { id: 'd', label: 'Delete ' + stale.length, kind: 'f', cb: async (c) => {
+            c.close(); const by = {}; stale.forEach((r) => { (by[r.host] = by[r.host] || []).push(r); }); let gone = 0; const bad = [];
+            for (const h of Object.keys(by)) { try { await E.call('trash_empty_items', { host: h, ids: by[h].map((r) => r.id) }); gone += by[h].length; } catch (e) { bad.push(A.hostName(h) + ': ' + e.message); } }
+            if (gone) A.snack('Removed ' + gone + (gone === 1 ? ' item' : ' items') + ' older than ' + days + ' days from Trash'); if (bad.length) A.snack(bad.join(' · '), { error: true });
+            X.trashAt = 0; if (A.state.view === 'tools') A.pageTools(); } }] });
       }
-      if (gone) A.snack('Removed ' + gone + (gone === 1 ? ' item' : ' items') + ' older than ' + (+S.trashDays || 30) + ' days from Trash');
     }
     rows.sort((a, b) => b.at - a.at); X.trash = rows; X.trashAt = E.now(); X.trashBusy = false; X.trashErr = errs.join(' · ');
     for (const k of [...X.trashSel]) if (!rows.some((r) => r.host + '~' + r.id === k)) X.trashSel.delete(k);
@@ -165,7 +170,7 @@
   function checksumDialog(pane, n) {
     let algo = 'sha256'; let value = ''; let err = '';
     const d = A.dialog({ icon: 'hash', title: 'Checksum', width: 520, body: '<div class="fxkv"><b>' + esc(n.n) + '</b><small>' + U.fmtBytes(n.b) + '</small></div><div class="seg" id="ckalg" style="margin:0 0 .75rem">' + ALGOS.map((a) => '<button data-v="' + a[0] + '" class="' + (a[0] === algo ? 'on' : '') + '">' + a[1] + '</button>').join('') + '</div><div class="fxhash"><small id="cklab">SHA-256</small><code id="ckval">Computing…</code></div><div class="hint" style="margin:.75rem 0 0">Computed on the server by <span class="mono">rfe-agent</span>. Compare it with the value the publisher lists.</div>',
-      actions: [{ label: 'Close', kind: 'tx' }, { id: 'copy', label: 'Copy', kind: 'f', icon: 'copy', cb: () => { if (value) { A.copy(value); A.snack('Checksum copied'); } return false; } }],
+      actions: [{ label: 'Close', kind: 'tx' }, { id: 'copy', label: 'Copy', kind: 'f', icon: 'copy', cb: () => { if (value) { A.copy(value, 'Checksum copied'); } return false; } }],
       onOpen: (ctl) => {
         const run = () => {
           value = ''; err = ''; const v = $('#ckval', ctl.el); v.textContent = 'Computing…'; $('#cklab', ctl.el).textContent = ALGOS.find((a) => a[0] === algo)[1]; if (ctl.btn.copy) ctl.btn.copy.disabled = true; const mine = algo;
@@ -220,7 +225,10 @@
     });
   }
   function shareResult(sh) {
-    A.dialog({ icon: 'check-circle', title: 'Link ready', width: 460, body: '<div class="qrwrap sm"><div class="qrbox">' + A.qrSvg(sh.url, { px: 168, fg: '#0b1110', bg: '#fff', border: 2 }) + '</div></div><div class="fxhash"><small>' + esc(sh.name) + ' · expires in ' + left(sh.exp - E.now()) + '</small><code>' + esc(sh.url) + '</code></div>', actions: [{ label: 'Done', kind: 'tx' }, { label: 'Copy link', kind: 'f', icon: 'copy', cb: () => { A.copy(sh.url); A.snack('Link copied'); return false; } }] });
+    /* The agent keeps only a hash of the link: closing before it is copied loses it, so the first close asks. */
+    let copied = false, warned = false;
+    const guard = () => { if (copied || warned) return undefined; warned = true; A.snack('This link can’t be shown again. Copy it, or press Done again to close.'); return false; };
+    A.dialog({ icon: 'check-circle', title: 'Link ready', width: 460, body: '<div class="qrwrap sm"><div class="qrbox">' + A.qrSvg(sh.url, { px: 168, fg: '#0b1110', bg: '#fff', border: 2 }) + '</div></div><div class="fxhash"><small>' + esc(sh.name) + ' · expires in ' + left(sh.exp - E.now()) + '</small><code>' + esc(sh.url) + '</code></div>', actions: [{ label: 'Done', kind: 'tx', cb: () => guard() }, { label: 'Copy link', kind: 'f', icon: 'copy', cb: () => { copied = true; A.copy(sh.url, 'Link copied'); return false; } }], beforeClose: () => guard() });
   }
   A.shareDialog = shareDialog; A.shareResult = shareResult;
 
@@ -247,7 +255,11 @@
   };
 
   /* ---------- pairing a phone ---------- */
-  const pairSrv = () => { let s = E.server(X.pair.host); if (!s || s.state !== 'online') { s = online()[0] || null; if ((s && s.id) !== X.pair.host) { X.pair.host = s ? s.id : null; X.pair.code = ''; X.devices = []; X.devAt = 0; } } return s; };
+  const pairSrv = () => {
+    /* The Devices page follows the server chosen in the top bar; a pick made in the pairing card holds until the top bar changes. */
+    const mh = A.mainPane && A.mainPane.host; const ms = mh && mh !== 'local' ? E.server(mh) : null;
+    if (mh !== X.pair.lastMain) { X.pair.lastMain = mh; if (ms && ms.state === 'online' && X.pair.host !== ms.id) { X.pair.host = ms.id; X.pair.code = ''; X.devices = []; X.devAt = 0; } }
+    let s = E.server(X.pair.host); if (!s || s.state !== 'online') { s = online()[0] || null; if ((s && s.id) !== X.pair.host) { X.pair.host = s ? s.id : null; X.pair.code = ''; X.devices = []; X.devAt = 0; } } return s; };
   A.pairServer = pairSrv;
   const qrObj = () => { try { return JSON.parse(X.pair.qr || '{}'); } catch (e) { return {}; } };
   const life = () => X.pair.life || 600000;
@@ -264,7 +276,7 @@
   A.pairNewCode = newCode;
   function pairInner() {
     const s = pairSrv(); const p = X.pair; const ms = p.exp - Date.now(); const dead = !!p.code && ms <= 0; const q = qrObj();
-    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" data-fx="pair.srv|' + esc(x.id) + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
+    const chips = '<div class="fxchips" role="group" aria-label="Server">' + (online().length ? online() : []).map((x) => '<button class="chip' + (s && x.id === s.id ? ' on' : '') + '" aria-pressed="' + !!(s && x.id === s.id) + '" data-fx="pair.srv|' + esc(x.id) + '">' + ic('server') + esc(x.name) + '</button>').join('') + '</div>';
     const head = '<div class="fxh"><span class="fxi">' + ic('phone') + '</span><div><b>Pair a phone</b></div></div>';
     if (!s) return head + '<div class="fxempty">' + ic('server', { size: 40 }) + '<b>No connected server</b><span>Connect a server first. Its agent makes the pairing code.</span></div>';
     if (p.err) return head + chips + '<div class="fxempty">' + ic('shield', { size: 40 }) + '<b>No code</b><span>' + esc(p.err) + '</span></div><div class="pbtns"><button class="btn t sm" data-fx="pair.new">' + ic('refresh') + 'Try again</button></div>';
@@ -272,7 +284,7 @@
     const addrs = [q.address && ['LAN', q.address], q.tailscaleAddress && ['Tailscale', q.tailscaleAddress]].filter(Boolean);
     return head + chips +
       '<div class="qrwrap"><div class="qrbox' + (dead ? ' dead' : '') + '" id="pairQR">' + A.qrSvg(p.qr, { px: 212, fg: '#0b1110', bg: '#ffffff', border: 2, label: 'Pairing QR code for ' + s.name }) + (dead ? '<div class="qrx"><b>This pairing code has expired</b><button class="btn f sm" data-fx="pair.new">' + ic('refresh') + 'New code</button></div>' : '') + '</div></div>' +
-      '<div class="pcode"><span id="pairCode" aria-label="Pairing code">' + esc(p.code.slice(0, 4) + ' ' + p.code.slice(4)) + '</span><button class="ib sm" data-fx="pair.copycode" title="Copy code" aria-label="Copy code">' + ic('copy') + '</button></div>' +
+      '<div class="pcode"><span class="srOnly">Pairing code: </span><span id="pairCode">' + esc(p.code.slice(0, 4) + ' ' + p.code.slice(4)) + '</span><button class="ib sm" data-fx="pair.copycode" title="Copy code" aria-label="Copy code">' + ic('copy') + '</button></div>' +
       '<div class="ptimer"><div class="bar"><i id="pairBar" style="width:' + Math.max(0, Math.min(100, ms / life() * 100)) + '%"></i></div><small id="pairT">' + (dead ? 'Expired' : 'Expires in ' + mmss(ms)) + '</small></div>' +
       (addrs.length ? addrs.map((a) => '<div class="paddr"><span>' + ic(a[0] === 'LAN' ? 'wifi' : 'globe') + '<code>' + esc(a[1]) + '</code></span></div>').join('') : '') +
       '<div class="paddr"><span class="fp">SHA-256 ' + esc(s.fp.slice(0, 23)) + '…</span></div>' +
@@ -316,12 +328,12 @@
     const cur = Object.assign({}, a); const patch = {};
     A.dialog({
       icon: 'shield-check', title: d.name + ' permissions', width: 480,
-      body: '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Browse files</b><small>Always on while paired</small></div><button class="sw on" disabled aria-checked="true"></button></div>' + GRANTS.map((c) => '<div class="sr" style="padding:.375rem 0"><div class="l"><b>' + c[1] + '</b><small>' + c[2] + '</small></div><button class="sw' + (cur[c[0]] ? ' on' : '') + '" data-c="' + c[0] + '" role="switch" aria-checked="' + !!cur[c[0]] + '" aria-label="' + c[1] + '"></button></div>').join('') + '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Read-only</b><small>Blocks every change, whatever else is on</small></div><button class="sw' + (cur.readOnly ? ' on' : '') + '" data-c="readOnly" role="switch" aria-checked="' + !!cur.readOnly + '" aria-label="Read-only"></button></div>' + (a.jailRoot ? '<div class="hint" style="margin:.5rem 0 0">Limited to <span class="mono">' + esc(a.jailRoot) + '</span></div>' : ''),
+      body: '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Browse files</b><small>Always on while paired</small></div><button class="sw on" disabled role="switch" aria-checked="true" aria-label="Browse files, always on"></button></div>' + GRANTS.map((c) => '<div class="sr" style="padding:.375rem 0"><div class="l"><b>' + c[1] + '</b><small>' + c[2] + '</small></div><button class="sw' + (cur[c[0]] ? ' on' : '') + '" data-c="' + c[0] + '" role="switch" aria-checked="' + !!cur[c[0]] + '" aria-label="' + c[1] + '"></button></div>').join('') + '<div class="sr" style="padding:.375rem 0"><div class="l"><b>Read-only</b><small>Blocks every change, whatever else is on</small></div><button class="sw' + (cur.readOnly ? ' on' : '') + '" data-c="readOnly" role="switch" aria-checked="' + !!cur.readOnly + '" aria-label="Read-only"></button></div>' + (a.jailRoot ? '<div class="hint" style="margin:.5rem 0 0">Limited to <span class="mono">' + esc(a.jailRoot) + '</span></div>' : ''),
       actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Save', kind: 'f', icon: 'check', cb: () => {
         if (!Object.keys(patch).length) return;
         E.call('set_device_access', { host: s.id, id: d.id, patch, confirmSelf: !!d.current }).then(() => { audit(d.name + ' permissions changed on ' + s.name); A.snack('Saved the access of ' + d.name); A.loadDevices(); }).catch(fail);
       } }],
-      onOpen: (ctl) => ctl.el.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b && !b.disabled) { const k = b.dataset.c; cur[k] = !cur[k]; if (cur[k] === !!a[k]) delete patch[k]; else patch[k] = cur[k]; if (k === 'launchApps' && cur[k] && !cur.viewApps) { cur.viewApps = true; patch.viewApps = true; const v = $('[data-c="viewApps"]', ctl.el); v.classList.add('on'); v.setAttribute('aria-checked', 'true'); } b.classList.toggle('on', cur[k]); b.setAttribute('aria-checked', cur[k]); } })
+      onOpen: (ctl) => ctl.el.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b && !b.disabled) { const k = b.dataset.c; cur[k] = !cur[k]; if (cur[k] === !!a[k]) delete patch[k]; else patch[k] = cur[k]; if (k === 'launchApps' && cur[k] && !cur.viewApps) { cur.viewApps = true; patch.viewApps = true; const v = $('[data-c="viewApps"]', ctl.el); v.classList.add('on'); v.setAttribute('aria-checked', 'true'); } if (k === 'viewApps' && !cur[k] && cur.launchApps) { cur.launchApps = false; if (a.launchApps) patch.launchApps = false; else delete patch.launchApps; const l = $('[data-c="launchApps"]', ctl.el); l.classList.remove('on'); l.setAttribute('aria-checked', 'false'); } b.classList.toggle('on', cur[k]); b.setAttribute('aria-checked', cur[k]); } })
     });
   }
   function approveDialog(q) {
@@ -343,11 +355,11 @@
 
   /* ---------- delegated actions ---------- */
   const H = {
-    'pair.new': () => newCode(), 'pair.link': () => { A.copy(X.pair.qr); A.snack('Pairing data copied'); }, 'pair.copycode': () => { A.copy(X.pair.code); A.snack('Code copied'); },
+    'pair.new': () => newCode(), 'pair.link': () => { A.copy(X.pair.qr, 'Pairing data copied'); }, 'pair.copycode': () => { A.copy(X.pair.code, 'Code copied'); },
     'pair.save': () => { const s = pairSrv(); let svg; try { svg = QR.svg(X.pair.qr, { px: 512, border: 4 }); } catch (e) { fail(e); return; } A.saveLocal('rfe-pairing-' + s.name.replace(/[^\w.-]+/g, '-') + '.svg', svg).then((r) => A.snack('Saved ' + r.name + ' to ' + r.dir, { action: 'Show', onAction: () => A.openPath('local', r.path, true) })).catch(fail); },
     'pair.srv': (id) => { X.pair.host = id; X.pair.code = ''; X.pair.err = ''; X.devices = []; X.devAt = 0; refreshPair(); newCode(true); A.loadDevices(); },
     'dev.approve': (i) => approveDialog(X.inbox[+i || 0]),
-    'dev.deny': (i) => { const q = X.inbox[+i || 0]; if (q) answer(q, false); },
+    'dev.deny': (i) => { const q = X.inbox[+i || 0]; if (!q) return; A.dialog({ icon: 'phone', cls: 'danger', title: 'Deny ' + q.label + '?', body: 'It will have to ask again with a new code or request.', enter: 'go', actions: [{ label: 'Cancel', kind: 'tx' }, { id: 'go', label: 'Deny', kind: 'ed', cb: () => { answer(q, false); } }] }); },
     'dev.perm': (id) => { const d = X.devices.find((x) => x.id === id); if (d) accessDialog(d); },
     'dev.revoke': (id) => {
       const d = X.devices.find((x) => x.id === id); const s = pairSrv(); if (!d) return;

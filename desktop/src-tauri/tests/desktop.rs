@@ -25,6 +25,16 @@ fn notification_text_has_no_control_or_direction_characters_and_is_cut_short() {
 }
 
 #[test]
+fn notification_text_cannot_carry_markup() {
+    let text = clean_text(
+        "<b>x</b> <a href=\"https://e.example\">pay</a><img src=\"f\">",
+        240,
+    );
+    assert!(!text.contains('<') && !text.contains('>'));
+    assert!(text.contains("pay"));
+}
+
+#[test]
 fn only_known_kinds_exist() {
     assert!(KINDS.contains(&"done") && KINDS.contains(&"test"));
     assert!(!KINDS.contains(&"anything"));

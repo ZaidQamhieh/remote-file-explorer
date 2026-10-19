@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::Manager;
 
-/// One entry of the host's catalog, as the window shows it. The agent sends no path or command.
+/// One entry of the PC's catalog, as the window shows it. The agent sends no path or command.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct HostApp {
@@ -86,23 +86,23 @@ impl AgentClient {
 pub const APP_MESSAGES: &[(&str, &str)] = &[
     (
         "APP_VIEW_FORBIDDEN",
-        "This computer is not allowed to see the host's apps. On the PC's agent, turn on app viewing for this computer, then refresh.",
+        "This computer is not allowed to see the PC's apps. On the PC's agent, turn on app viewing for this computer, then refresh.",
     ),
     (
         "APP_LAUNCH_FORBIDDEN",
-        "This computer may see the host's apps but not start them. On the PC's agent, turn on app launching for this computer.",
+        "This computer may see the PC's apps but not start them. On the PC's agent, turn on app launching for this computer.",
     ),
     (
         "APP_NOT_FOUND",
-        "That app is no longer in the host's catalog. It may have been uninstalled. Refresh the list.",
+        "That app is no longer in the PC's catalog. It may have been uninstalled. Refresh the list.",
     ),
     (
         "APP_NOT_LAUNCHABLE",
-        "The host has no way to start that app. It is listed but cannot be launched from here.",
+        "The PC has no way to start that app. It is listed but cannot be launched from here.",
     ),
     (
         "APP_LAUNCH_BUSY",
-        "The host is already starting another app. Wait a moment, then try again.",
+        "The PC is already starting another app. Wait a moment, then try again.",
     ),
     (
         "NO_INTERACTIVE_SESSION",
@@ -110,11 +110,11 @@ pub const APP_MESSAGES: &[(&str, &str)] = &[
     ),
     (
         "APP_LAUNCH_UNAVAILABLE",
-        "The host's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again.",
+        "The PC's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again.",
     ),
     (
         "APP_LAUNCH_FAILED",
-        "The host tried to start the app and could not. Check that it still works on the PC.",
+        "The PC tried to start the app and could not. Check that it still works on the PC.",
     ),
     (
         "APP_CATALOG_RATE_LIMITED",
@@ -126,7 +126,7 @@ pub const APP_MESSAGES: &[(&str, &str)] = &[
     ),
     (
         "APP_CATALOG_UNSUPPORTED",
-        "The host's operating system does not support the app catalog yet.",
+        "The PC's operating system does not support the app catalog yet.",
     ),
     (
         "BAD_APP_ID",

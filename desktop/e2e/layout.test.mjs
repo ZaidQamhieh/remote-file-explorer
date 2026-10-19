@@ -121,8 +121,8 @@ test("a bigger interface size scales everything and keeps the layout whole", asy
   await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 
-test("the page scales with the window: 16 px at the smallest, bigger as the window grows", async () => {
-  const want = { "1100x700": 16, "1440x900": 17.6, "1920x1080": 19, "2560x1440": 21.8 };
+test("the page scales with the window: 13 px at the smallest, bigger as the window grows", async () => {
+  const want = { "900x600": 13.1, "1100x700": 16, "1440x900": 17.6, "1920x1080": 19, "2560x1440": 21.8 };
   for (const [size, px] of Object.entries(want)) {
     const [width, height] = size.split("x").map(Number);
     await app.setRect({ x: 0, y: 0, width, height });
@@ -160,7 +160,7 @@ test("a narrow window gets the drawer: the labels over the page, closed by Escap
   await app.setRect({ x: 0, y: 0, width: 1440, height: 900 });
 });
 
-const SIZES = [[1100, 700], [1440, 900], [1920, 1080], [2560, 1440]];
+const SIZES = [[900, 600], [1100, 700], [1440, 900], [1920, 1080], [2560, 1440]];
 for (const view of ["files", "tools"]) {
   test(`${view} at every size`, async () => {
     await app.go(view);

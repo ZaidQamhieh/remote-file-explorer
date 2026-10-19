@@ -6,12 +6,16 @@
     const root = document.documentElement;
   const q0 = new URLSearchParams(location.search);
   ['lang', 'zoom', 'contrast'].forEach((k) => { if (q0.get(k)) S[k === 'contrast' ? 'highContrast' : k === 'zoom' ? 'textSize' : 'lang'] = k === 'contrast' ? q0.get(k) === 'high' : k === 'zoom' ? +q0.get(k) : q0.get(k); });
-  if (S.lang === undefined) S.lang = 'en'; if (S.textSize === undefined) S.textSize = 100; if (S.reduceMotion === undefined) S.reduceMotion = false; if (S.highContrast === undefined) S.highContrast = false;
+  if (S.lang === undefined) S.lang = 'en'; if (S.textSize === undefined) S.textSize = 100; if (S.reduceMotion === undefined) S.reduceMotion = false; if (S.highContrast === undefined) S.highContrast = !!(window.matchMedia && matchMedia('(prefers-contrast: more)').matches); /* follows the system until the owner chooses */
 
   /* ================= localization ================= */
   const LANGS = [['en', 'English'], ['de', 'Deutsch'], ['es', 'Español'], ['ar', 'العربية']];
   /* [en, de, es, ar] */
   const D = [
+    ['folder', 'Ordner', 'carpeta', 'مجلد'], ['file', 'Datei', 'archivo', 'ملف'],
+    ['Loading…', 'Wird geladen…', 'Cargando…', 'جارٍ التحميل…'], ['Too large to preview', 'Zu groß für die Vorschau', 'Demasiado grande para la vista previa', 'كبير جدًا للمعاينة'], ['No preview', 'Keine Vorschau', 'Sin vista previa', 'لا توجد معاينة'],
+    ['Fit', 'Einpassen', 'Ajustar', 'ملاءمة'], ['Zoom in', 'Vergrößern', 'Acercar', 'تكبير'], ['Zoom out', 'Verkleinern', 'Alejar', 'تصغير'], ['Previous file', 'Vorherige Datei', 'Archivo anterior', 'الملف السابق'], ['Next file', 'Nächste Datei', 'Archivo siguiente', 'الملف التالي'],
+    ['Download to read it', 'Zum Lesen herunterladen', 'Descargar para leerlo', 'نزّل للقراءة'], ['Download to open it', 'Zum Öffnen herunterladen', 'Descargar para abrirlo', 'نزّل للفتح'],
     ['Files', 'Dateien', 'Archivos', 'الملفات'], ['Servers', 'Server', 'Servidores', 'الخوادم'], ['Devices', 'Geräte', 'Dispositivos', 'الأجهزة'], ['Transfers', 'Übertragungen', 'Transferencias', 'عمليات النقل'], ['Search', 'Suche', 'Buscar', 'بحث'], ['Tools', 'Werkzeuge', 'Herramientas', 'الأدوات'], ['History', 'Verlauf', 'Historial', 'السجل'], ['Settings', 'Einstellungen', 'Ajustes', 'الإعدادات'],
     ['All', 'Alle', 'Todo', 'الكل'], ['Folders', 'Ordner', 'Carpetas', 'المجلدات'], ['Packages', 'Pakete', 'Paquetes', 'الحزم'], ['Media', 'Medien', 'Multimedia', 'الوسائط'], ['Archives', 'Archive', 'Archivos comprimidos', 'الأرشيفات'], ['Over 100 MB', 'Über 100 MB', 'Más de 100 MB', 'أكثر من 100 ميغابايت'], ['Filter this folder', 'Ordner filtern', 'Filtrar esta carpeta', 'تصفية هذا المجلد'],
     ['Name', 'Name', 'Nombre', 'الاسم'], ['Size', 'Größe', 'Tamaño', 'الحجم'], ['Modified', 'Geändert', 'Modificado', 'آخر تعديل'], ['Permissions', 'Berechtigungen', 'Permisos', 'الأذونات'], ['List', 'Liste', 'Lista', 'قائمة'],
@@ -52,12 +56,14 @@
   ];
   const IDX = { de: 1, es: 2, ar: 3 }; const MAP = { de: {}, es: {}, ar: {} };
   D.forEach((r) => { Object.keys(IDX).forEach((l) => { MAP[l][r[0]] = r[IDX[l]]; }); });
+  /* The number in a matched count: Western or Arabic-Indic digits, with or without grouping. */
+  const cnt = (n) => +String(n).replace(/[\u0660-\u0669]/g, (d) => d.charCodeAt(0) - 0x660).replace(/[^\d]/g, '');
   const RX = {
-    de: [[/^(\d+) items?$/, '$1 Elemente'], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
-    es: [[/^(\d+) items?$/, '$1 elementos'], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
-    ar: [[/^(\d+) items?$/, '$1 عنصر'], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
+    de: [[/^([\d.,\u00a0\u202f\u066c\u0660-\u0669]+) items?$/, (m, n) => n + (cnt(n) === 1 ? ' Element' : ' Elemente')], [/^(\d+) selected$/, '$1 ausgewählt'], [/^Search in (.+)$/, 'In $1 suchen'], [/^(\d+) selected · (.+)$/, '$1 ausgewählt · $2'], [/^(.+) free$/, '$1 frei']],
+    es: [[/^([\d.,\u00a0\u202f\u066c\u0660-\u0669]+) items?$/, (m, n) => n + (cnt(n) === 1 ? ' elemento' : ' elementos')], [/^(\d+) selected$/, '$1 seleccionados'], [/^Search in (.+)$/, 'Buscar en $1'], [/^(\d+) selected · (.+)$/, '$1 seleccionados · $2'], [/^(.+) free$/, '$1 libres']],
+    ar: [[/^([\d.,\u00a0\u202f\u066c\u0660-\u0669]+) items?$/, (m, n) => { const f = new Intl.PluralRules('ar').select(cnt(n)); return f === 'zero' ? 'لا عناصر' : f === 'one' ? 'عنصر واحد' : f === 'two' ? 'عنصران' : f === 'few' ? n + ' عناصر' : f === 'many' ? n + ' عنصرًا' : n + ' عنصر'; }], [/^(\d+) selected$/, '$1 محدد'], [/^Search in (.+)$/, 'ابحث في $1'], [/^(\d+) selected · (.+)$/, '$1 محدد · $2'], [/^(.+) free$/, '$1 متاح']]
   };
-  const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } return r === undefined ? s : s.replace(t, r); };
+  const tr = (s, lang) => { const t = s.trim(); if (!t) return s; let r = MAP[lang][t]; if (r === undefined) { for (const [re, to] of RX[lang]) if (re.test(t)) { r = t.replace(re, to); break; } } if (r === undefined && /^[\d.,\u00a0\u202f\u066c\u0660-\u0669]+ items? · /.test(t)) r = t.split(' · ').map((p) => tr(p, lang).trim()).join(' · '); return r === undefined ? s : s.replace(t, r); };
   const SKIP = 'script,style,textarea,input,select,.mono,code,pre,[data-nolocal],.crumb,.codev,.csvv,.fp,.hrow time';
   const recs = new WeakMap(); const arecs = new WeakMap(); let busy = false;
   function doText(n) {
@@ -100,7 +106,7 @@
   /* dialogs: the title names the dialog; ui.js keeps Tab inside and gives focus back */
   const dlg0 = A.dialog;
   A.dialog = function (o) {
-    const c = dlg0.call(this, o); const d = c.el; d.setAttribute('aria-labelledby', 'dlgT'); const h = $('h2', d); if (h) h.id = 'dlgT'; d.tabIndex = -1;
+    const c = dlg0.call(this, o); const d = c.el; d.tabIndex = -1;
     if (!d.contains(document.activeElement)) d.focus({ preventScroll: true });
     return c;
   };
@@ -121,10 +127,10 @@
   const se2 = A.settingsExtra;
   A.settingsExtra = (k) => {
     let h = se2(k); const row = k.row, seg = k.seg, sw = k.sw;
-    const grp = '<div class="sg"><h4>Language and accessibility</h4>' + row('Language', '', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
+    const grp = '<div class="sg"><h3>Language and accessibility</h3>' + row('Language', '', '<div class="seg" data-set="lang">' + LANGS.map((l) => '<button data-v="' + l[0] + '" lang="' + l[0] + '" class="' + (S.lang === l[0] ? 'on' : '') + '">' + l[1] + '</button>').join('') + '</div>') +
       row('Reduce motion', '', sw('reduceMotion')) + row('High contrast', '', sw('highContrast')) + '</div>';
-    h = h.replace('<div class="sg"><h4>Security</h4>', grp + '<div class="sg"><h4>Security</h4>');
-    h = h.replace('<div class="sg"><h4>About</h4>', '<div class="sg"><h4>About</h4>' + row('Welcome tour', '', '<button class="btn" data-sx="welcome">Show again</button>'));
+    h = h.replace('<div class="sg"><h3>Security</h3>', grp + '<div class="sg"><h3>Security</h3>');
+    h = h.replace('<div class="sg"><h3>About</h3>', '<div class="sg"><h3>About</h3>' + row('Welcome tour', '', '<button class="btn" data-sx="welcome">Show again</button>'));
     return h;
   };
   const sa2 = A.settingsAction;

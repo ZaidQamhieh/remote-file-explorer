@@ -411,7 +411,7 @@ test("every length in the stylesheet is in rem, so the page scales with the wind
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("../ui/app.css", import.meta.url), "utf8");
   const root = css.match(/html\{--ui:1;font-size:([^}]*)\}/);
-  assert.ok(root && /vw/.test(root[1]) && /vh/.test(root[1]) && /clamp\(calc\(16px/.test(root[1]), "the root size follows the window: " + (root && root[1]));
+  assert.ok(root && /vw/.test(root[1]) && /vh/.test(root[1]) && /clamp\(calc\((?:16px|1rem|\.818rem)/.test(root[1]), "the root size follows the window: " + (root && root[1]));
   const rest = css.replace(root[0], "").replace(/\/\*[\s\S]*?\*\//g, "");
   const big = [...rest.matchAll(/(?<![\w.#-])(\d*\.?\d+)px/g)].filter((m) => +m[1] > 1.5).map((m) => m[0]);
   assert.deepEqual(big, [], "no fixed pixel sizes beyond hairlines");
@@ -482,13 +482,49 @@ test("a scrolling file list drops its hover fades while it moves, and gets them 
   done();
 });
 
-test("reduced motion: the entrance animations and fades are switched off, and the fade-and-rise helper does nothing", async () => {
-  const { w, d, A, done } = await open();
+test("switching pages swaps the content at once: no fade, dip or slide", async () => {
+  const { d, A, errs, done } = await open();
+  const calls = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
+  proto.animate = function (k) { calls.push({ el: this, k }); return { cancel() {}, finish() {} }; };
+  for (const v of ["servers", "transfers", "files", "settings"]) { calls.length = 0; A.go(v); await sleep(30);
+    assert.equal(calls.length, 0, "a page switch to " + v + " animated " + calls.map((c) => c.el.id || c.el.className).join(", ")); }
+  proto.animate = was;
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("pop-ups appear in full on their first frame: no entrance animation on a dialog, backdrop, menu or snackbar", async () => {
+  const { d, done } = await open();
+  const rules = [...d.styleSheets].flatMap((s) => [...s.cssRules]);
+  for (const sel of [".scrim", ".dlg", ".menu", ".snack"]) {
+    const bad = rules.filter((r) => r.selectorText === sel && /animation(-name)?\s*:\s*(?!none)[a-z]/i.test(r.cssText) && !/spin|pulse|ind\b/.test(r.cssText));
+    assert.equal(bad.length, 0, sel + " still has an entrance animation: " + bad.map((r) => r.cssText.slice(0, 80)).join(" | "));
+  }
+  const keys = rules.filter((r) => r.type === 7).map((r) => r.name);
+  for (const k of ["fin", "dlgin", "snin", "snackin"]) assert.ok(!keys.includes(k), "keyframes " + k + " is left behind");
+  done();
+});
+
+test("the refresh button turns once, slowly and smoothly, and is not a fast linear whirl", async () => {
+  const { d, done } = await open();
+  const r = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((x) => x.selectorText === ".ib.spin .ic").map((x) => x.cssText).join(" ");
+  const m = /animation:\s*spin\s+([\d.]+)s\s+([^;}]*)/.exec(r); assert.ok(m, "no spin rule: " + r);
+  assert.ok(+m[1] >= 1, "one turn takes " + m[1] + " s, too fast");
+  assert.ok(!/linear/.test(m[2]) && !/infinite/.test(m[2]), "it must ease and run once: " + m[2]);
+  done();
+});
+
+test("reduced motion: the transitions are switched off; tab switches in the side panel, Settings and Tools never fade", async () => {
+  const { d, A, done } = await open();
   assert.match(sheet(d), /prefers-reduced-motion:\s*reduce[^]*transition-duration/);
-  const el = d.createElement("div"); let played = 0; el.animate = () => { played++; };
-  A.ease(el); assert.equal(played, 1, "ease does not play normally");
-  w.matchMedia = (q) => ({ matches: /reduced-motion/.test(q), addEventListener() {}, addListener() {} });
-  A.ease(el); assert.equal(played, 1, "ease plays with reduced motion on");
+  assert.equal(A.ease, undefined, "the fade helper is back");
+  const hit = []; const proto = d.defaultView.Element.prototype; const was = proto.animate; proto.animate = function () { hit.push(this); return { cancel() {}, finish() {} }; };
+  A.go("files"); await sleep(30); hit.length = 0;
+  for (const t of d.querySelectorAll("#side [data-tab]")) { t.click(); await sleep(30); }
+  A.go("settings"); await sleep(30); hit.length = 0;
+  for (const t of d.querySelectorAll("#stage [data-snav]")) { t.click(); await sleep(30); }
+  proto.animate = was;
+  assert.equal(hit.length, 0, "a tab switch animated: " + hit.map((e) => e.className || e.tagName).join(", "));
   done();
 });
 
@@ -518,21 +554,76 @@ test("the indeterminate bar moves by transform, not by a layout property", async
   done();
 });
 
-test("folding the details panel moves it instead of snapping: it slides in, and a copy fades out where it stood", async () => {
+test("folding the details panel slides it in by transform only: never faded, no copy left behind", async () => {
   const { w, d, A, errs, done } = await open();
   A.go("files"); await sleep(200);
   const calls = [];
   const orig = w.HTMLElement.prototype.animate;
-  w.HTMLElement.prototype.animate = function (kf, o) { calls.push([this.id || this.getAttribute("aria-hidden") || this.className, kf[0].opacity, kf[1].opacity]); return { onfinish: null, oncancel: null }; };
+  w.HTMLElement.prototype.animate = function (kf, o) { calls.push(kf); return { onfinish: null, oncancel: null }; };
   A.toggleSide(); await sleep(30);
-  const ghost = d.querySelector('body > [aria-hidden="true"].side, body > aside[aria-hidden="true"]');
-  assert.ok(ghost, "no copy of the panel left to fade out");
-  assert.equal(ghost.querySelectorAll("[id],[data-rows]").length, 0, "the copy keeps ids or list hooks");
-  assert.equal(ghost.inert, true);
-  assert.ok(calls.some((c) => c[1] === 1 && c[2] === 0), "the copy does not fade out");
+  assert.equal(d.querySelectorAll('body > [aria-hidden="true"]').length, 0, "a copy of the panel is left on the page");
   A.toggleSide(); await sleep(30);
-  assert.ok(calls.some((c) => c[1] === 0 && c[2] === 1), "the panel does not slide in");
+  assert.ok(calls.some((k) => k[0].transform && k[0].opacity === undefined), "the panel does not slide in");
+  assert.ok(!calls.some((k) => k.some((f) => f.opacity !== undefined && +f.opacity < 1)), "the panel fades");
+  assert.doesNotMatch([...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => /^\.side,\.sheet|^\.side$|^\.sheet$/.test(r.selectorText || "")).map((r) => r.cssText).join(" "), /transition:\s*opacity/);
   w.HTMLElement.prototype.animate = orig;
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("switching add-a-computer tabs swaps the contents at once: nothing fades or blinks", async () => {
+  const { d, errs, done } = await open();
+  d.querySelector(".fab").click(); await sleep(150);
+  const hit = []; const proto = d.defaultView.Element.prototype; const was = proto.animate;
+  proto.animate = function (k, o) { hit.push(this); return { cancel() {}, finish() {} }; };
+  d.querySelector('.dlg [data-fx^="conn.tab|code"]').click(); await sleep(50);
+  proto.animate = was;
+  const dlg = d.querySelector(".dlg");
+  assert.equal(hit.length, 0, "a tab switch animated: " + hit.map((e) => e.className || e.tagName).join(", "));
+  assert.ok(dlg.querySelector(".fxtabs"), "the dialog still has its tab bar");
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the add-a-computer tabs are one dialog: the backdrop node is never removed and Escape still closes once", async () => {
+  const { w, d, errs, done } = await open();
+  d.querySelector(".fab").click(); await sleep(150);
+  const sc = d.querySelector(".scrim"); const removed = []; const mo = new w.MutationObserver((l) => l.forEach((r) => r.removedNodes.forEach((n) => removed.push(n)))); mo.observe(sc.parentNode, { childList: true });
+  for (const next of ["code", "disc", "manual", "disc"]) { d.querySelector('.dlg [data-fx^="conn.tab|' + next + '"]').click(); await sleep(60); assert.equal(d.querySelector(".scrim"), sc, "the backdrop was replaced on " + next); assert.equal(d.querySelectorAll(".scrim").length, 1); assert.equal(d.querySelectorAll(".scrim .dlg").length, 1); }
+  assert.equal(removed.length, 0, "the backdrop left the page during a switch");
+  d.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await sleep(60);
+  assert.equal(d.querySelectorAll(".scrim").length, 0, "Escape did not close the dialog after switching");
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the add-a-computer tabs share one size, so switching never resizes the box", async () => {
+  const { d, errs, done } = await open();
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".dlg.conn").map((r) => r.cssText).join(" ");
+  assert.match(css, /min-height/, "the connection dialogs need one shared minimum height");
+  d.querySelector(".fab").click(); await sleep(150);
+  const w = [];
+  for (const next of ["code", "disc", "manual"]) {
+    w.push(d.querySelector(".dlg").style.getPropertyValue("--w"));
+    d.querySelector('.dlg [data-fx^="conn.tab|' + next + '"]').click(); await sleep(150);
+  }
+  w.push(d.querySelector(".dlg").style.getPropertyValue("--w"));
+  assert.equal(new Set(w).size, 1, "the three tabs use different widths: " + w.join(", "));
+  assert.deepEqual(errs, []);
+  done();
+});
+
+test("the add-a-computer tabs share one top edge, so the tab bar stays put when the box changes height", async () => {
+  const { d, A, errs, done } = await open();
+  const css = [...d.styleSheets].flatMap((s) => [...s.cssRules]).filter((r) => r.selectorText === ".scrim.top").map((r) => r.cssText).join(" ");
+  assert.match(css, /align-items:\s*start/);
+  assert.match(css, /height:\s*100%/, "an anchored scrim must keep the full height");
+  d.querySelector(".fab").click(); await sleep(150);
+  for (const tab of ["code", "disc", "manual"]) {
+    assert.equal(d.querySelectorAll(".scrim").length, 1, "one dialog at a time before " + tab);
+    assert.ok(d.querySelector(".scrim").classList.contains("top"), "the " + tab + " dialog is not anchored");
+    d.querySelector('.dlg [data-fx^="conn.tab|' + (tab === "code" ? "disc" : tab === "disc" ? "manual" : "code") + '"]').click(); await sleep(150);
+  }
   assert.deepEqual(errs, []);
   done();
 });

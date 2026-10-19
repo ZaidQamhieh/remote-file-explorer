@@ -48,7 +48,7 @@ in a narrower one. Drag the handle between the list and the side panel to make t
 narrower; drag it far enough and the panel folds away, and the same handle (or the panel button in the top bar) brings it
 back. Arrow keys move either handle, `Enter` folds or opens it, and a double click on the side panel's handle restores
 its width. The list always keeps room for its names. The window is at
-least 1100 by 700 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
+least 900 by 600 and opens at 1440 by 900; it follows the system's light or dark setting (or the one you
 choose in **Settings**) and remembers its size and position. Starting the app a second time does not open
 a second copy: the first window is brought forward. Press `/` to search, `Ctrl+K` for the command
 palette, and `Esc` to close a dialog or menu. Every control can be reached with Tab, and menus move with
@@ -123,7 +123,7 @@ code for the RFE phone app, so you do not have to walk to the PC and run `rfe-ag
 with the QR icon at the top of the window opens the same thing in a dialog.)
 
 1. Choose the server at the top of **Devices** if you have several. The app asks the agent for a code
-   when the page opens and shows it with the time it has left (10 minutes).
+   when the page opens and shows it with the time it has left (2, 5 or 10 minutes, as set in Settings).
 2. On the phone, scan the QR code (**RFE for Android → Add computer → Scan QR**) or type the address and
    the code. The phone is paired as an ordinary device with browse access only; give it more under
    **Permissions** in the list below.
@@ -185,7 +185,7 @@ updates** and the welcome tour.
 
 - **Interface size** (90%, 100%, 115% or 130%) makes the whole window smaller or bigger on top of the scale
   the window already has: everything is drawn in units that grow with the window, from the smallest size
-  (1100 by 700) up, so a larger or higher-resolution screen shows larger text and controls without any
+  (900 by 600) up, so a larger or higher-resolution screen shows larger text and controls without any
   setting. The smallest window grows with the size you pick.
 - **Open files and folders** decides what a click does. **One click** (the default) opens a folder and
   shows a file that has something to show (a picture, text, or the list inside an archive); any other
@@ -201,7 +201,7 @@ updates** and the welcome tour.
   was approved (not owner logins and not this app), after you confirm.
 - **Move deleted items to Trash** off makes a delete on a computer permanent (the agent's trash is
   skipped). **Keep items in Trash for** (7, 30 or 90 days): when you open **Tools → Trash**, items
-  deleted longer ago than that are removed for good, and the app says how many.
+  deleted longer ago than that are listed in a question ("Delete old items from Trash?"); if you agree they are removed for good and the app says how many, and if you keep them they stay until you empty them.
 - **Close to the system tray** hides the window instead of closing it, and transfers go on; the tray
   icon's menu has **Open RFE**, the number of running transfers, **Pause all transfers**, **Pair a
   phone…** and **Quit RFE**, and a click on the icon brings the window back. On a desktop with no tray
@@ -402,7 +402,7 @@ Messages from this app:
 |---|---|
 | agent address must be host:port (put an IPv6 address in brackets, like [::1]:8765) | The address has a scheme, path or typo. Use `host:port`, for example `192.168.1.20:8765`. |
 | cannot reach the agent securely | Nothing answered, or the connection failed. Check that the agent is running, the address and port are right, and no firewall is in the way. The text after the colon is the reason. |
-| This agent's certificate is not the one you trusted | The agent presented a different certificate than the one you pinned. Do not sign in. If you did replace or reinstall the agent, forget it under Settings, Trusted agents, and compare the new fingerprint. If you did not, something else is answering at that address. |
+| This agent's certificate is not the one you trusted | The agent presented a different certificate than the one you pinned. Do not sign in. If you did replace or reinstall the agent, open Servers and choose Forget server on its card, then add it again and compare the new fingerprint. If you did not, something else is answering at that address. |
 | the agent presented no certificate | The address answers but not with TLS. It is not an RFE agent. |
 | the agent reports a different fingerprint than the pinned one | The agent's own report disagrees with the certificate it presented. Do not continue; compare fingerprints again. |
 | fingerprint must be 64 hex characters | Internal check; reconnect from the first screen. |
@@ -418,23 +418,23 @@ Messages from this app:
 | is no longer a trusted agent; connect and compare its fingerprint again | The pin was forgotten while a login for it existed. Connect to the agent again from the first screen. |
 | Sign out first; the saved login belongs to the current device key. | A new device key can only be made while signed out. Making one also removes the logins saved for your other agents (their devices stay registered on those agents until removed there), so you sign in to each again. |
 | Signed out on this computer only | The agent could not be told. Revoke this computer on the PC (`rfe-agent revoke <id>`) so its old login stops working. |
-| This transfer belongs to <agent> | The transfer was started on another agent and you have since switched to a different one. It does nothing to the wrong computer. Switch back to that agent (Hosts) and press Retry, or cancel it. |
+| This transfer belongs to <agent> | The transfer was started on another agent and you have since switched to a different one. It does nothing to the wrong computer. Switch back to that agent (Servers) and press Retry, or cancel it. |
 | is damaged (...); delete it to create a new device identity | An `identity.json` left by an early version cannot be read. Delete that file; the app makes a new device key at the next sign-in. |
 | cannot start network discovery, network discovery stopped | The app could not listen for mDNS answers (no network interface, or the system refused). Type the agent's address instead. |
 | unknown log level | Choose one of the levels in the list. |
 | is damaged (...); delete it to start over | `state.json` cannot be read. Delete it (Settings shows where) and set the app up again. |
 | read, create, open, write or rename a path failed | The app's data folder cannot be used: check that it exists and that you own it. |
 | tls config, http client, random | The system could not set up a secure connection or random numbers. Report it. |
-| this host is not in the saved list | The host was removed (perhaps from another window) before the action ran. Close Settings and open it again. |
+| this server is not in the saved list | The server was removed (perhaps from another window) before the action ran. Open Servers again. |
 | enter a name for the host | The new name is empty. Type a name, or press Cancel. |
 | the name can be at most 64 characters | Use a shorter name. |
 | the name cannot contain control characters | The name has a line break or another control character. Type it again on one line. |
 | `hosts.json` is damaged (...); delete it to start over | The list of saved hosts cannot be read. Delete `hosts.json` (Settings shows the folder): the list is rebuilt from the agents you trusted, and every login stays where it is. Until then signing in to a second agent is refused so the list is not overwritten. |
 | `hosts.json` was written by a newer version of this app | A newer app wrote the list. Update this app, or delete `hosts.json` to start over as above. |
-| Signed out on this host. Sign in to continue. | You switched to a host that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
-| Type the new host's address. Your current login stays saved. | Shown when you press Add another host. Nothing was changed on the host you were using. |
+| Signed out on this server. Sign in to continue. | You switched to a server that has no saved login (you signed out of it, or only trusted it). Sign in; the account name is filled in. |
+| Type the new server's address. Your current login stays saved. | Shown when you press **Add a server**. Nothing was changed on the server you were using. |
 | This login cannot create pairing codes. Only a session signed in with the account can; a computer paired with a code or approved on the PC cannot. | The agent refused (`FORBIDDEN`) because this computer is not an account session. Sign out and sign in with the account, or run `rfe-agent pair` on the PC. |
-| This pairing code has expired. Generate a new one. | The code's 10 minutes are up and it was removed from the window. Press **Generate a code**. |
+| This pairing code has expired. Generate a new one. | The code's lifetime (2, 5 or 10 minutes, set in Settings) is up and it was removed from the window. Press **New code**. |
 | unexpected response: the agent sent no pairing code | The agent answered without a code. Update the agent and the app; if both are current, report it. |
 | This login cannot answer pairing requests. | This computer was paired with a code or approved on the PC, and the agent lets only an account answer. Sign out and sign in with the account, or use `rfe-agent pair accept` or `reject` on the PC. |
 | This agent is too old to list pairing requests | Answering from the window needs `agent-v1.43.0-rc.1` or newer. Update the agent, or answer on the PC. |
@@ -455,7 +455,7 @@ Messages from the file browser:
 | unexpected route | Internal check on the address the app asked for. Report it. |
 | No folder is open to this login. | The agent shows this computer nothing to browse. The sentence after it says why: the agent confined this computer to a folder it does not allow (change it on the PC), this computer is not allowed to browse (allow it on the PC), or the agent has not shared a folder with it. |
 | This folder is empty. | There is nothing in it. |
-| The agent lists more items than are shown. | The folder has more entries than one page. Press **Load more**. |
+| The agent lists more items than are shown. | The folder has more entries than the window reads (60 pages of 1000). Use search to find the rest. |
 | The agent is read-only, so nothing here can be created, renamed or deleted. | The agent was started with `-read-only`. |
 | This computer may look but not change files on this agent. | This login has no modify or delete permission. The owner can allow it on the PC. |
 | Moved to Trash: NAME | Done. Restore it from the Trash view. |
@@ -478,7 +478,7 @@ in [keystore.md](keystore.md).
 | Nothing to transfer | Nothing is selected, or the selection holds no files. |
 | Open the folder in Files to extract. | **Extract here** works on an archive you opened in **Files**. |
 | Trash is already empty | There is nothing in the agent's trash to restore or discard. |
-| Removed N items older than D days from Trash | You opened Trash and **Keep items in Trash for** removed the items deleted longer ago than that. |
+| Removed N items older than D days from Trash | You opened Trash, agreed to "Delete old items from Trash?" and **Keep items in Trash for** removed the items deleted longer ago than that. |
 | RFE starts hidden in the tray when you sign in | **Start RFE when I sign in** was switched on. |
 | RFE no longer starts when you sign in | It was switched off. |
 | The notification was not shown | **Test notification** was refused: notifications are not available in this session. |
@@ -521,7 +521,7 @@ in [keystore.md](keystore.md).
 | the checksum must be sha256, sha1 or md5 | The algorithm the agent computes is one of these three. |
 | a permission mode is 3 or 4 octal digits, for example 0755 | Type the mode as octal digits, for example `644` or `0755`. |
 | this file is not text, or is too large to open here | The preview shows text files up to a size limit; download the file to open it. |
-| a share link lasts from 1 minute to 24 hours | Choose a duration within that range. |
+| a share link lasts from 1 minute to 24 hours | Choose a duration within that range (the window offers 15 minutes, 1 hour or 24 hours). |
 | that is not a share link id | The link was already removed or never existed. |
 | a MAC address looks like aa:bb:cc:dd:ee:ff | Type the MAC address with colons. |
 | a path must be absolute, with no .. step | A path on this computer starts with `/` and has no `..` step. |
@@ -565,17 +565,17 @@ Messages from the agent for these two screens:
 
 | The window says | Code | What to do |
 |---|---|---|
-| This computer is not allowed to see the host's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
-| This computer may see the host's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
-| That app is no longer in the host's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
-| The host has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
-| The host is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
+| This computer is not allowed to see the PC's apps. On the PC's agent, turn on app viewing for this computer, then refresh. | `APP_VIEW_FORBIDDEN` | The owner has not given this computer the right to see the PC's apps. An account sign-in does not include it. Turn on "view apps" for this computer's device on the agent (an account session can change it), then press Refresh. |
+| This computer may see the PC's apps but not start them. On the PC's agent, turn on app launching for this computer. | `APP_LAUNCH_FORBIDDEN` | This computer may list apps but not start them. Turn on "launch apps" for it on the agent (it needs "view apps" too). The Launch buttons stay hidden until then. |
+| That app is no longer in the PC's catalog. It may have been uninstalled. Refresh the list. | `APP_NOT_FOUND` | The app was removed from the PC after the list was loaded. Press Refresh. |
+| The PC has no way to start that app. It is listed but cannot be launched from here. | `APP_NOT_LAUNCHABLE` | The PC knows the app but has no way to start it (for example its desktop entry has no command, or the program it names is missing). Nothing can be done from here. |
+| The PC is already starting another app. Wait a moment, then try again. | `APP_LAUNCH_BUSY` | The agent starts one app at a time. Wait a few seconds and press Launch again. |
 | Nobody is signed in to a graphical desktop on the host, so there is nowhere to open the app. Sign in at the PC, then try again. | `NO_INTERACTIVE_SESSION` | The agent only opens apps on a screen someone is signed in to. Sign in to the PC's desktop, then try again. |
-| The host's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
-| The host tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
+| The PC's app launcher is not available (on Linux it needs the gio tool). Install it on the PC, then try again. | `APP_LAUNCH_UNAVAILABLE` | The agent's launcher is missing. On Linux the PC needs `gio` (the `glib2` or `libglib2.0-bin` package) on the agent's PATH. |
+| The PC tried to start the app and could not. Check that it still works on the PC. | `APP_LAUNCH_FAILED` | The launcher accepted the request but could not start the program. Try it on the PC itself. |
 | Too many requests for the app list. Wait a minute, then refresh. | `APP_CATALOG_RATE_LIMITED` | The agent allows 60 list requests a minute per computer. Wait a minute. |
 | Too many app launches. The agent allows only a few per minute. Wait a minute, then try again. | `APP_LAUNCH_RATE_LIMITED` | The agent allows 5 launches a minute per computer. Wait a minute. |
-| The host's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
+| The PC's operating system does not support the app catalog yet. | `APP_CATALOG_UNSUPPORTED` | The agent runs on a system with no app catalog. Nothing can be done. |
 | The agent refused the app id as malformed. This is a bug in the app. | `BAD_APP_ID` | The app sent an id the agent does not accept. This is a bug in the app. Report it with the log level set to Detailed. |
 
 Messages from this app:
@@ -598,7 +598,7 @@ what the agent reports about itself and, for an administrator, how busy the PC i
 - **Uptime** and **Disk**: how long the agent has been running, and the used and total space of its data
   folder.
 - **Load** (administrators only): processor and memory in use (percent, at the moment of reading) and
-  the bytes received and sent since the agent started (binary units: 1 KiB is 1024 bytes).
+  the bytes received and sent since the agent started (shown in decimal units: 1 KB is 1000 bytes).
 - **Refresh** reads again. The window keeps only the last reading, and the agent keeps no history.
 
 A value the agent did not send reads "not reported" (an older agent, or one that withheld it) instead
@@ -608,7 +608,7 @@ of a made-up zero. The agent does not report the state of its helper programs, s
 |---|---|
 | Metrics are for administrators. | This computer signed in with a pairing code or was approved on the PC, so the agent answers the metrics request with 403 (`FORBIDDEN`). The rest of the screen still works. Sign out and sign in with the account (`rfe-agent adduser`) to see the metrics. |
 | No metrics were reported. | The agent answered the health request but not the metrics one; the text after it says why (for example it timed out). Press Refresh to try again. |
-| Uptime and disk space could not be read | The agent's status request failed; the reason follows. The health part is still current. |
+| Disk and uptime were not reported | The agent's status request failed; the reason follows. The health part is still current. |
 | The agent did not answer within 5 seconds. | The agent did not reply in time. It may be asleep, busy, or on another network. Check that it is running and the address is right, then press Refresh. Each of the three requests has its own five second limit and they run together, so the screen never waits longer. |
 | unexpected response: the agent's health answer does not say ok | The address answered with something that is not an RFE agent's health reply. Check the address and the agent version. |
 | not reported | That value was missing from the agent's answer. |
@@ -619,19 +619,18 @@ of a made-up zero. The agent does not report the state of its helper programs, s
 ## Audit and logs (admin)
 
 **History** lists what this app and the servers have done: transfers, connections and, with the
-**Audit** filter, what the agent has recorded. The audit part needs an account sign-in: the agent
+**Security** filter, what the agent has recorded. The audit part needs an account sign-in: the agent
 refuses it for a computer paired with a code or approved on the PC, because the trail describes every
 device, not just this one.
 
 - **Audit log**: pairings, registrations, sign-ins (failed ones included), device revokes, removals and
   changes, share links, agent restarts and app launches, newest first. File operations are deliberately
-  not recorded. The agent keeps the most recent 5000 events and sends 100 at a time; **Load more**
-  fetches the next older 100. **Devices → Recent security events** shows the latest few.
+  not recorded. The agent keeps the most recent 5000 events. **Devices → Security events** shows the latest few; **View all** opens them in History.
 - **Agent log** (**Settings → Troubleshooting → Agent log**): the last ~200 lines of the agent's own log,
   which it reads from the systemd journal (`journalctl --user -u rfe-agent.service`). It is empty when
   the agent does not run as that service. The box above it narrows what is already loaded; it does not
   ask the agent again.
-- The filters of History narrow what is already loaded; to look further back, press **Load more**
+- The filters of History narrow what is already loaded; to look further back, widen the filters
   first.
 - Times are shown in this computer's local time. Point at a time to see the exact timestamp the agent
   recorded.
@@ -643,7 +642,7 @@ device, not just this one.
 |---|---|
 | This login cannot read the audit log or the agent log. | The agent refused (403 FORBIDDEN). Sign out and sign in with an account (`rfe-agent adduser`), not a pairing code or an approval on the PC. |
 | The audit log is empty. | The agent has recorded nothing yet. |
-| No loaded event matches these filters. | Nothing already loaded fits the Event and Time choices. Widen them, or press **Load more** to look further back. |
+| No loaded event matches these filters. | Nothing already loaded fits the Event and Time choices. Widen them. |
 | No log line matches these filters. | Nothing in the agent's last lines fits the text and Time. Clear them. |
 | The agent's log is empty. | The agent could not read a journal. Run it as the `rfe-agent` service (`rfe-agent setup`), or read its output where you started it. |
 | unexpected audit cursor, the page size must be | A bug in the app: it asked for a page the agent does not have. Report it with the log level set to Detailed. |

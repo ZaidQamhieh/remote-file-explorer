@@ -46,12 +46,12 @@
       return false;
     };
     const guard = () => { if (!dirty) return true; if ($('.eddc', ctl.el)) return false; const bar = document.createElement('div'); bar.className = 'eddc'; bar.innerHTML = ic('alert-circle') + '<span>Discard your unsaved changes?</span><button class="btn sm e" data-d="1">Discard</button><button class="btn sm" data-d="0">Keep editing</button>'; $('.db', ctl.el).prepend(bar); bar.addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (!b) return; if (b.dataset.d === '1') { dirty = false; ctl.close(); } else bar.remove(); }); return false; };
-    ctl = A.dialog({ title: n.n, width: 880, cls: 'fxed', modal: true, noFocus: true, beforeClose: guard,
-      body: '<div class="edhd">' + fic(n) + '<span class="mono">' + esc(host === 'local' ? '' : A.hostName(host) + ':') + esc(full) + '</span><span class="sp"></span><label class="fxck" style="margin:0"><input type="checkbox" id="edw" checked> Wrap lines</label></div>' + (ro ? '<div class="hint" style="margin:.5rem 0 0">' + ic('lock') + '<span>' + (big ? 'This file is ' + U.fmtBytes(n.b) + ', too large to edit here (limit 1 MB).' : host === 'local' ? 'Files on this computer open read-only here. Edit them in your own editor.' : 'You can read this file but not change it: this device may not modify files on ' + esc(A.hostName(host)) + '.') + '</span></div>' : '') + '<textarea class="fxta" spellcheck="false" aria-label="File contents" readonly></textarea><div class="edst" role="status"></div>',
+    ctl = A.dialog({ title: n.n, nolocal: true, width: 880, cls: 'fxed', modal: true, noFocus: true, beforeClose: guard,
+      body: '<div class="edhd">' + fic(n) + '<span class="mono">' + esc(host === 'local' ? '' : A.hostName(host) + ':') + esc(full) + '</span><span class="sp"></span><label class="fxck" style="margin:0"><input type="checkbox" id="edw" checked> Wrap lines</label></div>' + (ro ? '<div class="hint" style="margin:.5rem 0 0">' + ic('lock') + '<span>' + (big ? 'This file is ' + U.fmtBytes(n.b) + ', too large to edit here (limit 1 MB).' : host === 'local' ? 'Files on this computer open read-only here. Edit them in your own editor.' : 'You can read this file but not change it: this device may not modify files on ' + esc(A.hostName(host)) + '.') + '</span></div>' : '') + '<textarea class="fxta" spellcheck="false" aria-label="File contents" aria-description="Tab indents. Press Ctrl+M to make Tab move focus instead." title="Tab indents; Ctrl+M makes Tab move focus" readonly></textarea><div class="edst"></div>',
       actions: [{ label: 'Close', kind: 'tx', cb: () => (guard() ? undefined : false) }, { id: 'save', label: 'Save', kind: 'f', icon: 'check', cb: (c) => doSave(c) }],
       onOpen: (c) => { ctl = c; const ta = $('.fxta', c.el); ta.value = ''; stat();
         ta.addEventListener('input', () => { dirty = ta.value !== orig; stat(); }); ['keyup', 'click'].forEach((ev) => ta.addEventListener(ev, stat));
-        ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!ro && dirty && loaded) doSave(c); } if (e.key === 'Tab' && !ro) { e.preventDefault(); document.execCommand('insertText', false, '  '); } });
+        ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!ro && dirty && loaded) doSave(c); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') { e.preventDefault(); ta._tabFocus = !ta._tabFocus; A.snack(ta._tabFocus ? 'Tab now moves focus out of the editor. Press Ctrl+M to indent with Tab again.' : 'Tab indents again.'); } else if (e.key === 'Tab' && !ro && !e.shiftKey && !ta._tabFocus) { e.preventDefault(); document.execCommand('insertText', false, '  '); } });
         $('#edw', c.el).addEventListener('change', (e) => { ta.style.whiteSpace = e.target.checked ? 'pre-wrap' : 'pre'; ta.style.overflowX = e.target.checked ? 'hidden' : 'auto'; });
         if (big) { ta.value = 'Too large to open.'; return; }
         readText(host, dir, n).then((r) => { if (!c.el.isConnected) return; orig = r.text; base = r.modified || ''; ta.value = r.text; ta.readOnly = ro; loaded = true; ta.focus(); stat(); }).catch((e) => { ta.value = e.message; stat(); }); } });
@@ -77,7 +77,7 @@
   const numbered = (html) => { const ls = html.split('\n'); return '<div class="codev"><div class="ln">' + ls.map((_, i) => i + 1).join('\n') + '</div><pre>' + html + '</pre></div>'; };
   const csvTable = (n, raw) => {
     const sep = /\.tsv$/i.test(n.n) ? '\t' : ','; const rows = raw.trim().split('\n').map((r) => r.split(sep)); const head = rows[0] || [], body = rows.slice(1, 15);
-    return '<div class="csvv"><table><thead><tr><th>#</th>' + head.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' + body.map((r, i) => '<tr><td>' + (i + 1) + '</td>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><div class="pvnote">Showing the first ' + body.length + ' of ' + Math.max(0, rows.length - 1).toLocaleString() + ' rows</div>';
+    return '<div class="csvv"><table><thead><tr><th>#</th>' + head.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' + body.map((r, i) => '<tr><td>' + (i + 1) + '</td>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><div class="pvnote">Showing the first ' + body.length + ' of ' + Math.max(0, rows.length - 1).toLocaleString(U.lang()) + ' rows</div>';
   };
   const AUDIO = /\.(mp3|wav|flac|ogg|m4a|opus|aac)$/i, PDF = /\.pdf$/i, CSV = /\.(csv|tsv)$/i, MD = /\.(md|markdown)$/i, JSN = /\.json$/i, ARC = /\.(zip|tar|tgz|7z|rar|zst|gz|xz)$/i;
   const IMG = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
@@ -88,29 +88,37 @@
   /* What the preview body shows once the file is read; the dialog is already open with "Loading…". */
   async function build(host, dir, n) {
     const k = U.kindOf(n); const r = { html: '', init: null };
-    if (!E.fs.canRead(n)) { r.html = nop('lock', 'Can’t read this file', 'It has mode ' + U.permOctal(n.perm) + ' on the server. Ask the owner, or request access.'); return r; }
+    if (!E.fs.canRead(n)) { r.html = nop('lock', 'Can’t read this file', 'It has mode ' + U.permOctal(n.perm) + ' on the server. Ask the owner of the file to change it.'); return r; }
     if (IMG.test(n.n) || k === 'image') {
       if (n.b > 8 << 20 && host === 'local') { r.html = nop('image', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 8 MB preview limit.'); return r; }
       const src = host === 'local' ? await E.call('local_read_image', { path: pathOf(dir, n) }) : await E.call('files_thumb', { host, path: pathOf(dir, n), size: 1024 });
       r.html = '<div class="imgv"><div class="canvas" id="imC"><div class="im" id="imI"><img alt="' + esc(n.n) + '" id="imG"></div></div><div class="imc"><button class="ib sm" data-im="out" aria-label="Zoom out">' + ic('minus') + '</button><span id="imZ">Fit</span><button class="ib sm" data-im="in" aria-label="Zoom in">' + ic('plus') + '</button><button class="btn sm tx" data-im="fit">Fit</button><button class="btn sm tx" data-im="100">100%</button></div></div><div class="pvnote" id="imN">' + U.fmtBytes(n.b) + '</div>';
-      r.init = (c) => { const g = $('#imG', c.el); g.addEventListener('load', () => { $('#imN', c.el).textContent = g.naturalWidth + ' × ' + g.naturalHeight + ' px · ' + U.fmtBytes(n.b) + (host === 'local' ? '' : ' · preview'); }); g.src = src; let z = 1; const set = (v, lab) => { z = Math.max(0.25, Math.min(4, v)); $('#imI', c.el).style.transform = 'scale(' + z + ')'; $('#imZ', c.el).textContent = lab || Math.round(z * 100) + '%'; }; c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-im]'); if (!b) return; const a = b.dataset.im; if (a === 'in') set(z * 1.25); else if (a === 'out') set(z / 1.25); else if (a === 'fit') set(1, 'Fit'); else set(1.6, '100%'); }); };
+      r.init = (c) => {
+        const g = $('#imG', c.el); let z = 1, fitW = 0;
+        /* "Fit" is the picture scaled to the box; "100%" is its real pixel size; the box scrolls when it is larger. */
+        const set = (v, lab) => { if (!fitW) return; z = Math.max(0.25, Math.min(16, v)); if (fitW) g.style.width = (fitW * z) + 'px'; $('#imZ', c.el).textContent = lab || Math.round(z * fitW / g.naturalWidth * 100) + '%'; };
+        g.addEventListener('load', () => { const cv = $('#imC', c.el); fitW = Math.max(1, Math.min(g.naturalWidth, g.naturalWidth * Math.min(cv.clientWidth / g.naturalWidth, cv.clientHeight / g.naturalHeight))); set(1, 'Fit'); $('#imN', c.el).textContent = (host === 'local' ? '' : 'Preview ') + g.naturalWidth + ' × ' + g.naturalHeight + ' px' + (host === 'local' ? '' : ' (preview of the original)'); });
+        g.addEventListener('error', () => { $('.pvbody', c.el).innerHTML = nop('image', 'Could not load this picture', 'The file may be damaged or not an image this app can show.'); });
+        g.src = src;
+        c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-im]'); if (!b) return; const a = b.dataset.im; if (a === 'in') set(z * 1.25); else if (a === 'out') set(z / 1.25); else if (a === 'fit') set(1, 'Fit'); else set(g.naturalWidth / fitW, '100%'); });
+      };
       return r;
     }
     if (ARC.test(n.n) && !(isText(n) && !ARC.test(n.n))) {
       if (host === 'local') { r.html = nop('archive', 'No preview for archives on this computer', U.fmtBytes(n.b)); return r; }
       const ents = await E.call('files_archive_list', { host, path: pathOf(dir, n), limit: 200 });
-      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + ' entries</b><span>' + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
+      r.html = '<div class="arcv"><div class="arh">' + ic('archive') + '<b>' + ents.length + (ents.length >= 200 ? '+' : '') + (ents.length === 1 ? ' entry' : ' entries') + '</b><span>' + (ents.length >= 200 ? 'at least ' : '') + U.fmtBytes(ents.reduce((a, e) => a + (e.size || 0), 0)) + ' uncompressed · ' + U.fmtBytes(n.b) + ' packed</span></div><table><tbody>' + ents.slice(0, 200).map((e) => '<tr><td>' + ic(e.isDir ? 'folder' : 'file') + '</td><td class="mono">' + esc(e.path) + '</td><td class="r">' + (e.isDir ? '' : U.fmtBytes(e.size || 0)) + '</td></tr>').join('') + '</tbody></table></div>';
       r.arc = true; return r;
     }
     if (isText(n)) {
-      if (n.b > MAX_TEXT) { r.html = nop('file', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 1 MB text preview limit. Download it to read it.'); return r; }
+      if (n.b > MAX_TEXT) { r.html = nop('file', 'Too large to preview', U.fmtBytes(n.b) + ' is more than the 1 MB text preview limit.', host === 'local' ? '' : '<div style="margin-top:.75rem"><button class="btn sm f" data-pvx="dl">' + ic('download') + 'Download to read it</button></div>'); r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="dl"]')) { A.transferNames(host, dir, [n.n]); c.close(); } }); return r; }
       const t = await readText(host, dir, n); const txt = t.text; r.edit = true;
       r.html = MD.test(n.n) ? '<div class="mdv">' + mdHTML(txt) + '</div>' : CSV.test(n.n) ? csvTable(n, txt) : JSN.test(n.n) ? numbered(jsonHTML(txt)) : numbered(esc(txt));
       return r;
     }
     const why = AUDIO.test(n.n) || k === 'audio' ? 'The app does not play audio.' : k === 'video' ? 'The app does not play video.' : PDF.test(n.n) ? 'The app does not render PDFs.' : 'The app has no preview for this type.';
-    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:.75rem"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:.75rem">Download it, then open it from the folder it lands in.</div>');
-    r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="open"]')) E.call('local_open', { path: pathOf(dir, n) }).catch(fail); });
+    r.html = nop('file', 'No preview', why + ' ' + U.KINDS[k] + ' · ' + U.fmtBytes(n.b), host === 'local' ? '<div style="margin-top:.75rem"><button class="btn sm" data-pvx="open">Open with default app</button></div>' : '<div style="margin-top:.75rem"><button class="btn sm f" data-pvx="dl">' + ic('download') + 'Download to open it</button></div>');
+    r.init = (c) => c.el.addEventListener('click', (e) => { if (e.target.closest('[data-pvx="open"]')) E.call('local_open', { path: pathOf(dir, n) }).catch(fail); else if (e.target.closest('[data-pvx="dl"]')) { A.transferNames(host, dir, [n.n]); c.close(); } });
     return r;
   }
   function showPreview(host, dir, n) {
@@ -122,9 +130,12 @@
     if (host !== 'local') acts.push({ id: 'sv', label: 'Save as…', kind: 'tx', icon: 'download', cb: () => { A.doEnqueue('down', host, dir, A.downloadDir(), [n.n], { askWhere: true }); } });
     else acts.push({ id: 'op', label: 'Open', kind: 'tx', icon: 'external', cb: () => { E.call('local_open', { path: pathOf(dir, n) }).catch(fail); return false; } });
     acts.push({ id: 'dl', label: host === 'local' ? 'Upload' : 'Download', kind: 'f', icon: host === 'local' ? 'upload' : 'download', cb: () => { A.transferNames(host, dir, [n.n]); } });
-    const ctl = A.dialog({ title: n.n, width: 780, cls: 'fxpv', body: nav + '<div class="pvbody"><div class="pv nop"><span class="spin">' + ic('spinner') + '</span><b>Loading…</b></div></div><div class="pvmeta">' + U.KINDS[U.kindOf(n)] + ' · ' + U.fmtBytes(n.b) + ' · modified ' + U.fmtDate(n.mod) + (n.own ? ' · ' + esc(n.own) : '') + ' · ' + esc(n.perm) + '</div>', actions: acts, noFocus: true, onClose: () => { if (ctl && ctl.onGone) ctl.onGone(); },
+    let kn0 = null;
+    const ctl = A.dialog({ title: n.n, nolocal: true, width: 780, cls: 'fxpv', body: nav + '<div class="pvbody" tabindex="0" role="region" aria-label="File preview"><div class="pv nop"><span class="spin">' + ic('spinner') + '</span><b>Loading…</b></div></div><div class="pvmeta">' + U.KINDS[U.kindOf(n)] + ' · ' + U.fmtBytes(n.b) + ' · modified ' + U.fmtDate(n.mod) + (n.own ? ' · ' + esc(n.own) : '') + ' · ' + esc(n.perm) + '</div>', actions: acts, noFocus: true, onClose: () => { if (kn0) document.removeEventListener('keydown', kn0); if (ctl && ctl.onGone) ctl.onGone(); },
       onOpen: (c) => {
         c.el.addEventListener('click', (e) => { const b = e.target.closest('[data-pn]'); if (!b || b.disabled) return; const nx = sib[i + +b.dataset.pn]; if (!nx) return; c.close(); showPreview(host, dir, nx); });
+        const kn = (e) => { if (!c.el.isConnected) { document.removeEventListener('keydown', kn); return; } if (e.target.matches && e.target.matches('input,textarea,select')) return; if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const cv = $('#imC', c.el); if (cv && (cv.scrollWidth > cv.clientWidth + 1 || cv.scrollHeight > cv.clientHeight + 1)) return; const b = $('[data-pn="' + ((e.key === 'ArrowLeft') === (document.documentElement.dir !== 'rtl') ? -1 : 1) + '"]', c.el); if (b && !b.disabled) { e.preventDefault(); b.click(); } } };
+        document.addEventListener('keydown', kn); kn0 = kn;
         build(host, dir, n).then((r) => { if (!c.el.isConnected) return; $('.pvbody', c.el).innerHTML = r.html; if (r.init) r.init(c); }).catch((e) => { if (c.el.isConnected) $('.pvbody', c.el).innerHTML = nop('alert-circle', 'Could not show this file', esc(e.message)); });
       } });
     return ctl;
@@ -168,11 +179,21 @@
     sb.style.position = 'relative'; const dd = document.createElement('div'); dd.className = 'qdrop'; dd.hidden = true; dd.setAttribute('role', 'listbox'); sb.appendChild(dd); const inp = $('#q');
     const fill = () => { const v = inp.value.trim().toLowerCase(); const rec = X3.recentQ.filter((q) => !v || q.toLowerCase().includes(v)).slice(0, 5); const sv = X3.saved.filter((s) => !v || s.q.toLowerCase().includes(v)); dd.innerHTML = (sv.length ? '<small>Saved</small>' + sv.map((s) => '<div class="qi" role="option" data-q="' + esc(s.q) + '">' + ic('star') + esc(s.q) + '<small>' + (s.scope === 'all' ? 'all servers' : 'this server') + '</small></div>').join('') : '') + (rec.length ? '<small>Recent</small>' + rec.map((q) => '<div class="qi" role="option" data-q="' + esc(q) + '">' + ic('clock') + esc(q) + '</div>').join('') : ''); dd.hidden = !dd.innerHTML; };
     inp.addEventListener('focus', fill); inp.addEventListener('input', fill); inp.addEventListener('blur', () => setTimeout(() => { dd.hidden = true; }, 160)); inp.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+    /* The suggestions can be picked with the keyboard: Down and Up move through them, Enter runs the marked one. */
+    dd.id = 'qdrop'; inp.setAttribute('role', 'combobox'); inp.setAttribute('aria-controls', 'qdrop'); inp.setAttribute('aria-autocomplete', 'list'); let qa = -1;
+    const mark = () => { const its = $$('[data-q]', dd); its.forEach((x, i) => { x.id = 'qo' + i; x.setAttribute('aria-selected', String(i === qa)); x.classList.toggle('on', i === qa); }); if (qa >= 0 && its[qa]) inp.setAttribute('aria-activedescendant', its[qa].id); else inp.removeAttribute('aria-activedescendant'); inp.setAttribute('aria-expanded', String(!dd.hidden)); };
+    inp.addEventListener('input', () => { qa = -1; setTimeout(mark, 0); }); inp.addEventListener('focus', () => { qa = -1; setTimeout(mark, 0); });
+    inp.addEventListener('keydown', (e) => {
+      const its = $$('[data-q]', dd); if (dd.hidden || !its.length) { if (e.key === 'ArrowDown' && inp.value === '') { fill(); setTimeout(mark, 0); } return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); qa = e.key === 'ArrowDown' ? Math.min(its.length - 1, qa + 1) : Math.max(-1, qa - 1); mark(); }
+      else if (e.key === 'Enter' && qa >= 0 && its[qa]) { e.preventDefault(); e.stopImmediatePropagation(); const q = its[qa].dataset.q; dd.hidden = true; qa = -1; mark(); A.runQuery(q, true); }
+      else if (e.key === 'Escape') { qa = -1; mark(); }
+    }, true);
     dd.addEventListener('mousedown', (e) => { const it = e.target.closest('[data-q]'); if (it) { e.preventDefault(); dd.hidden = true; A.runQuery(it.dataset.q); } });
   }
 
   const se0 = A.settingsExtra;
-  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h4>Files</h4>', '<div class="sg"><h4>Files</h4>' + k.row('Show hidden files', '', k.sw('showHidden')));
+  A.settingsExtra = (k) => se0(k).replace('<div class="sg"><h3>Files</h3>', '<div class="sg"><h3>Files</h3>' + k.row('Show hidden files', '', k.sw('showHidden')));
 
   /* ================= palette ================= */
   A.paletteExtra.push((C) => {

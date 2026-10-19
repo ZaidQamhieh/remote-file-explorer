@@ -285,7 +285,7 @@
       if (s.state === 'connecting') {
         s.connectLeft -= dt;
         if (s.connectLeft <= 0) {
-          if (!s.reachable) { s.error = 'Host did not answer on ' + s.host + ':' + s.port; setState(s, 'offline', s.error); s.lastSeen = s.lastSeen || now(); log('conn', 'Could not reach ' + s.name, { error: true }); note('error', s.name + ' is unreachable'); }
+          if (!s.reachable) { s.error = 'The PC did not answer on ' + s.host + ':' + s.port; setState(s, 'offline', s.error); s.lastSeen = s.lastSeen || now(); log('conn', 'Could not reach ' + s.name, { error: true }); note('error', s.name + ' is unreachable'); }
           else if (!s.pinned) { setState(s, 'trust'); }
           else { s.latency = s.base; s.hist.push(s.base); setState(s, 'online'); s.attempts = 0; log('conn', 'Connected to ' + s.name + ' · ' + s.latency + ' ms'); if (settings.notifyDone) note('ok', 'Connected to ' + s.name); resume(s.id); }
         }

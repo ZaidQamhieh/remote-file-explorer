@@ -22,7 +22,7 @@
     const raw = typeof e === 'string' ? e : (e && e.message) || String(e);
     const m = /\(([A-Z][A-Z_]+)\)$/.exec(raw);
     const err = new Error(raw.replace(/^The agent says: /, '').replace(/ \([A-Z][A-Z_]+\)$/, ''));
-    err.code = m ? m[1] : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|connect|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
+    err.code = m ? m[1] : /too old/i.test(raw) ? 'INCOMPATIBLE' : /not signed in|no longer accepts this login/i.test(raw) ? 'UNAUTHORIZED' : /certificate|fingerprint|pinned/i.test(raw) ? 'CERT' : /did not answer|timed out|could not connect|cannot connect|cannot reach|connection (?:refused|reset|closed|failed)|connect error|network|refused|unreachable|dns/i.test(raw) ? 'NETWORK' : 'ERROR';
     err.raw = raw;
     return err;
   }
@@ -32,17 +32,24 @@
   const now = () => Date.now();
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const p2 = (n) => String(n).padStart(2, '0');
-  const fmtDate = (ms) => { if (!ms) return '—'; const d = new Date(ms); const base = MON[d.getMonth()] + ' ' + d.getDate(); return d.getFullYear() === new Date().getFullYear() ? base + ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : base + ', ' + d.getFullYear(); };
+  /* The language of the window (set with the language choice); dates and numbers follow it. English keeps its short fixed form. */
+  const lang = () => (typeof document !== 'undefined' && document.documentElement.lang) || 'en';
+  const fmtDate = (ms) => { if (!ms) return '—'; const d = new Date(ms); if (!/^en/.test(lang())) { const y = d.getFullYear() === new Date().getFullYear(); try { return new Intl.DateTimeFormat(lang(), y ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(d); } catch (x) { /* fall through to the English form */ } } const base = MON[d.getMonth()] + ' ' + d.getDate(); return d.getFullYear() === new Date().getFullYear() ? base + ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : base + ', ' + d.getFullYear(); };
   const fmtTime = (ms) => { const d = new Date(ms); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); };
   const fmtBytes = (b) => {
     if (!isFinite(b) || b < 0) return '—';
     if (b < 1000) return b + ' B';
     const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; let v = b;
     do { v /= 1000; i++; } while (v >= 1000 && i < 3);
-    return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + u[i];
+    /* Digits stay 0-9 in every language, as in the rest of the UI; only the decimal mark follows the language (an engine may otherwise pick Arabic-Indic digits for 'ar'). */
+    const nf = (x, d) => (/^en/.test(lang()) ? x.toFixed(d) : x.toLocaleString(lang() + '-u-nu-latn', { minimumFractionDigits: d, maximumFractionDigits: d }));
+    const f = (x) => (x >= 100 ? nf(x, 0) : x >= 10 ? nf(x, 1) : nf(x, 2));
+    if (parseFloat((x => x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2))(v)) >= 1000 && i < 3) { v /= 1000; i++; }
+    return f(v) + ' ' + u[i];
   };
-  const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + 'h ' + p2(Math.floor((s % 3600) / 60)) + 'm'; if (s >= 60) return Math.floor(s / 60) + 'm ' + p2(s % 60) + 's'; return s + 's'; };
-  const fmtSpeed = (bps) => (bps / 1e6).toFixed(1) + ' MB/s';
+  /* Same style as the ages ("5 min ago"): a number, a space, the unit. */
+  const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + ' h ' + Math.floor((s % 3600) / 60) + ' min'; if (s >= 60) return Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; return s + ' s'; };
+  const fmtSpeed = (bps) => (bps >= 1e6 ? (/^en/.test(lang()) ? (bps / 1e6).toFixed(1) : (bps / 1e6).toLocaleString(lang() + '-u-nu-latn', { minimumFractionDigits: 1, maximumFractionDigits: 1 })) + ' MB/s' : bps >= 1e3 ? Math.round(bps / 1e3) + ' KB/s' : Math.round(bps) + ' B/s');
   let uid = 0;
   const nid = (p) => p + (++uid);
 
@@ -82,7 +89,7 @@
   const sizeOf = (n) => (n.t === 'dir' ? 0 : n.b);
 
   /* ---------- state ---------- */
-  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'light', density: 'comfortable', openMode: 'single', uiSize: 100, railWide: false, sideR: 21, sideHide: false, sheetR: 15.75, notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
+  const settings = { parallel: 2, limit: 0, onConflict: 'ask', verify: true, autoReconnect: true, downloadDir: '', theme: 'system', density: 'comfortable', openMode: 'single', uiSize: 100, railWide: false, sideR: 21, sideHide: false, sheetR: 15.75, notifyDone: true, notifyErrors: true, requireApproval: true, trash: true, trashDays: 30, pairLife: 10 };
   let servers = [], tasks = [], history = [], notes = [], listeners = [];
   const emit = (type, data) => { for (const l of listeners.slice()) { try { l(type, data); } catch (e) { if (typeof console !== 'undefined') console.error(e); } } };
   const note = (kind, text) => { const n = { id: nid('n'), at: now(), kind, text, read: false }; notes.unshift(n); if (notes.length > 60) notes.pop(); emit('notify', n); };
@@ -190,7 +197,7 @@
     emit('fs', { host, dir: norm(dir) }); return out;
   }
   const bad = (msg, code) => Object.assign(new Error(msg), { code: code || 'EINVAL' });
-  const validName = (name) => { if (!name || !name.trim()) throw bad('Name can’t be empty'); if (/[\/\\\0]/.test(name)) throw bad('Names can’t contain “/”'); if (name === '.' || name === '..') throw bad('Reserved name'); if (name.length > 255) throw bad('Name too long'); if (name.trim() !== name) throw bad('A name can’t start or end with a space'); };
+  const validName = (name) => { if (!name || !name.trim()) throw bad('Name can’t be empty'); if (/[\/\\\0]/.test(name)) throw bad('A name can’t contain / or \\'); if (name === '.' || name === '..') throw bad('“.” and “..” are taken; choose another name'); if (name.length > 255) throw bad('A name can be at most 255 characters'); if (name.trim() !== name) throw bad('A name can’t start or end with a space'); };
   const uniqueName = (host, dir, name) => {
     const m = /^(.*?)(\.[^.]*)?$/.exec(name); let i = 1, c;
     do { c = m[1] + ' (' + i + ')' + (m[2] || ''); i++; } while (exists(host, dir, c)); return c;
@@ -319,12 +326,12 @@
       if (snap.status) { s.uptime = snap.status.uptimeSeconds || 0; s.platform = snap.status.platform || ''; }
       s.metrics = snap.metrics || null; s.metricsForbidden = !!snap.metricsForbidden; s.statusNote = snap.statusNote || ''; s.metricsNote = snap.metricsNote || '';
       s.lastSeen = now(); s.reachable = true; s.signedIn = true;
-      const was = s.state; setState(s, 'online');
+      const was = s.state; s.incompatible = false; setState(s, 'online');
       if (was !== 'online') { const dirs = dirsOf(s.id); for (const k of Object.keys(dirs)) if (dirs[k].state === 'error') delete dirs[k]; } /* folders that failed while it was away are read again */
       if (was !== 'online') { log('conn', 'Connected to ' + s.name + ' · ' + s.latency + ' ms'); if (settings.notifyDone && was !== 'connecting' ) note('ok', s.name + ' is back'); resumeHost(s.id); if (!s.roots.length) loadRoots(s).catch(() => {}); }
     } catch (e) {
       if (s.userOff) return;
-      s.error = e.message;
+      s.error = e.message; s.incompatible = e.code === 'INCOMPATIBLE'; /* an agent older than this app needs: shown as such, not as a dead address */
       if (e.code === 'UNAUTHORIZED') { s.signedIn = false; setState(s, 'login', e.message); }
       else if (e.code === 'CERT') { await flagCert(s).catch(() => {}); }
       else if (s.state === 'online' || s.state === 'lost') {
@@ -488,12 +495,12 @@
           for (const v of vs) delete byRemote[v.id]; const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1);
           log('transfer', 'Skipped ' + t.name + ' (already exists)', { tid: t.id, dir: t.dir, host: t.host }); changed = true; continue;
         }
-        if (st === 'conflict') { const c = cv.conflict || {}; t.state = 'conflict'; t.speed = 0; t.conflict = { size: c.size || 0, mod: c.modifiedMs || Date.parse(c.modifiedText || '') || 0, dir: !!c.isDir }; t.msg = 'A ' + (c.isDir ? 'folder' : 'file') + ' with this name already exists'; }
-        else if (st === 'failed') { const f = vs.find((v) => v.state === 'failed'); t.state = 'failed'; t.msg = f.error || 'Failed'; t.speed = 0; if (was !== 'failed') { t.finishedAt = nowMs; log('transfer', t.name + ' failed: ' + t.msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + t.msg); } }
+        if (st === 'conflict') { const c = cv.conflict || {}; t.state = 'conflict'; t.speed = 0; t.conflict = { size: c.size || 0, mod: c.modifiedMs || Date.parse(c.modifiedText || '') || 0, dir: !!c.isDir, name: cv.name || '', mine: cv.total || 0, more: Math.max(0, vs.filter((v) => v.state === 'conflict').length - 1) }; t.msg = 'A ' + (c.isDir ? 'folder' : 'file') + ' with this name already exists'; }
+        else if (st === 'failed') { const f = vs.find((v) => v.state === 'failed'); const nf = vs.filter((v) => v.state === 'failed').length; t.state = 'failed'; t.msg = (nf > 1 ? nf + ' of ' + vs.length + ' files failed. First: ' : '') + (f.error || 'Failed'); t.speed = 0; if (was !== 'failed') { t.finishedAt = nowMs; log('transfer', t.name + ' failed: ' + t.msg, { tid: t.id, error: true, dir: t.dir, host: t.host }); if (settings.notifyErrors) note('error', t.name + ': ' + t.msg); } }
         else if (st === 'done') { t.state = 'done'; t.done = t.bytes; t.speed = 0; if (was !== 'done') { t.finishedAt = nowMs; t.savedAs = vs.length === 1 ? vs[0].name : t.name; if (t.dir === 'down') { const lp = (vs.find((v) => v.localPath) || {}).localPath; if (lp && vs.length === 1) { t.savedPath = lp; t.dstDir = parentOf(lp); } } log('transfer', (t.dir === 'up' ? 'Uploaded ' : 'Downloaded ') + t.name + ' · ' + fmtBytes(t.bytes) + ' in ' + fmtDur((t.finishedAt - (t.startedAt || t.queuedAt)) / 1000), { tid: t.id, ok: true, dir: t.dir, host: t.host }); if (settings.notifyDone) note('ok', t.name + ' ' + (t.dir === 'up' ? 'uploaded' : 'downloaded')); if (t.dir === 'up') refresh(t.host, t.dstDir).catch(() => {}); else refresh(LOCAL, t.dstDir).catch(() => {}); } }
         else if (st === 'cancelled') t.state = 'cancelled';
         else t.state = st;
-        if (t.state !== was || t.state === 'running') changed = true;
+        if (t.state !== was) changed = true; /* progress is drawn by the tick, not by a rebuild of the page on every poll */
       }
       if (changed) emit('transfers');
     } catch (e) { /* the next poll tries again */ } finally { polling = false; }
@@ -514,21 +521,22 @@
     for (const t of tasks) if (t.host === hostId && (t.state === 'waiting' || t.held)) { t.held = false; if (t.rids.length) { t.resumedAt = now(); retryRust(t); } else if (t.state === 'waiting') { t.state = 'queued'; t.msg = ''; if (!t.starting) startTask(t); } any = true; }
     if (any) emit('transfers');
   }
-  async function retryRust(t) { t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); for (const id of t.rids) { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } } pollTransfers(); }
+  async function retryRust(t) { t.held = false; t.state = 'queued'; t.msg = ''; t.fix = null; emit('transfers'); await Promise.all(t.rids.map(async (id) => { try { await call('transfer_retry', { id }); } catch (e) { /* done or gone */ } })); pollTransfers(); }
   async function pause(id) {
     const t = taskById(id); if (!t || !['running', 'queued'].includes(t.state)) return;
     if (!t.rids.length) throw bad('Wait until the transfer has started, then pause it.', 'EINVAL');
     t.state = 'paused'; t.speed = 0; t.pauseAt = now(); emit('transfers');
-    for (const rid of t.rids) { try { await call('transfer_pause', { id: rid }); } catch (e) { /* finished meanwhile */ } }
+    await Promise.all(t.rids.map(async (rid) => { try { await call('transfer_pause', { id: rid }); } catch (e) { /* finished meanwhile */ } })); /* all files at once, so the button does not flip while it waits */
     log('transfer', 'Paused ' + t.name, { tid: t.id, dir: t.dir, host: t.host }); pollTransfers();
   }
   function resumeTask(id) { const t = taskById(id); if (t) retryRust(t); }
   async function cancel(id) {
     const t = taskById(id); if (!t) return;
     const was = t.state; t.state = 'cancelled'; t.speed = 0;
-    for (const rid of t.rids) { try { await call('transfer_cancel', { id: rid }); } catch (e) { /* already finished */ } delete byRemote[rid]; }
+    /* The card goes at once; the core is told about every file in parallel, not one after the other. */
+    const rids = t.rids.slice(); const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); emit('transfers');
+    await Promise.all(rids.map(async (rid) => { try { await call('transfer_cancel', { id: rid }); } catch (e) { /* already finished */ } delete byRemote[rid]; }));
     if (was !== 'failed') log('transfer', 'Cancelled ' + t.name, { tid: t.id, dir: t.dir, host: t.host });
-    const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); emit('transfers');
   }
   function dismiss(id) { const i = tasks.findIndex((t) => t.id === id); if (i >= 0 && !ACTIVE.includes(tasks[i].state)) { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); emit('transfers'); } }
   function retry(id) { const t = taskById(id); if (!t || (t.state !== 'failed' && t.state !== 'paused')) return; if (!t.rids.length) { t.state = 'queued'; t.msg = ''; startTask(t); emit('transfers'); } else retryRust(t); }
@@ -540,9 +548,9 @@
   }
   /* Tells the core the settings that change how transfers run. */
   async function pushPrefs() { try { await call('transfer_set_prefs', { parallel: +settings.parallel || 2, limitMbps: +settings.limit || 0, onConflict: settings.onConflict || 'keep', verify: settings.verify !== false }); } catch (e) { /* the core says nothing here; the next change tries again */ } }
-  function pauseAll() { for (const t of tasks) if ((t.state === 'running' || t.state === 'queued') && t.rids.length) pause(t.id); }
-  function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'failed' || t.state === 'paused') retry(t.id); }
-  async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
+  function pauseAll() { for (const t of tasks) if (t.state === 'running' || t.state === 'queued') { if (t.rids.length) pause(t.id); else { t.held = true; t.state = 'paused'; t.pauseAt = now(); emit('transfers'); } } } /* a task not started yet is held and paused when it starts */
+  function resumeAll() { for (const t of tasks) if (t.state === 'waiting' || t.state === 'paused') retry(t.id); }
+  async function clearDone() { const n = tasks.length; for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].state === 'done' || tasks[i].state === 'cancelled') { for (const rid of tasks[i].rids) delete byRemote[rid]; tasks.splice(i, 1); } if (tasks.length !== n) { emit('transfers'); try { await call('transfer_clear_finished'); } catch (e) { /* ignore */ } } }
   function retryFailed() { for (const t of tasks) if (t.state === 'failed') retry(t.id); }
   const eta = (t) => (t.speed > 0 ? (t.bytes - t.done) / t.speed : Infinity);
 
@@ -585,7 +593,7 @@
     makeSearch, enqueue, pause, resumeTask, cancel, dismiss, retry, resolve, pushPrefs, pauseAll, resumeAll, clearDone, retryFailed, task: taskById, eta, ACTIVE, pollTransfers,
     totalSpeed: () => running().reduce((a, t) => a + t.speed, 0),
     note, log, emit,
-    util: { fmtBytes, fmtDate, fmtTime, fmtDur, fmtSpeed, norm, join, parentOf, baseOf, segs, upTo, isRoot, kindOf, KINDS, permOctal, sizeOf, fmtFp, viaOf, splitAddr, parsePath }
+    util: { fmtBytes, lang, fmtDate, fmtTime, fmtDur, fmtSpeed, norm, join, parentOf, baseOf, segs, upTo, isRoot, kindOf, KINDS, permOctal, sizeOf, fmtFp, viaOf, splitAddr, parsePath }
   };
   return api;
 });

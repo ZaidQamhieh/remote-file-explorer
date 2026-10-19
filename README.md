@@ -99,3 +99,8 @@ ready out of the box.
 For development, run the agent with `cd agent && go run ./cmd/agent`; see
 [`docs/development.md`](docs/development.md) for the developer workflow. The same agent process
 serves the web companion at `https://<host>:8765/`.
+
+## Contributing and license
+
+Pull requests are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). The project is licensed under the
+GNU General Public License v3.0 ([`LICENSE`](LICENSE)). The Rust sidecars in `agent-rs/` are MIT.

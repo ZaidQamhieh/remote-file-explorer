@@ -59,6 +59,7 @@
     "lint": "expo lint"
   },
   "private": true,
+  "license": "GPL-3.0-only",
   "jest": {
     "preset": "jest-expo",
     "testPathIgnorePatterns": [

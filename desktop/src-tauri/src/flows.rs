@@ -540,6 +540,14 @@ async fn request_pairing_inner(
                      Pair with a code or sign in with an account instead."
                 ))
             }
+            // An agent from before the commit-then-reveal nonce rejects the request body.
+            AgentError::Server { status: 400, code, .. } if code == "BAD_REQUEST" => {
+                AgentError::Local(
+                    "This agent is too old for this version of the app: update the agent on that computer. \
+                     Meanwhile, pair with a code or sign in with an account instead."
+                        .into(),
+                )
+            }
             other => other,
         })?;
     client

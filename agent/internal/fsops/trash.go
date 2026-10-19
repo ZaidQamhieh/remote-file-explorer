@@ -350,7 +350,22 @@ func moveAcrossRootsSecure(src, dst *securePath) error {
 	err := src.renameTo(dst)
 	if err != nil && src.root != dst.root {
 		// Different roots (jailed source, unrooted trash): the jail check has
-		// already run, so rename by absolute path and copy only on EXDEV.
+		// already run, so rename by absolute path and copy only on EXDEV. An
+		// absolute rename follows symlinks in the parents, so first check that
+		// the jailed side's parent is still its own canonical path and that the
+		// jail root itself is not being moved.
+		for _, side := range []*securePath{src, dst} {
+			if side.root == nil {
+				continue
+			}
+			if side.name == "." {
+				return fmt.Errorf("cannot move the jail root")
+			}
+			parent := filepath.Dir(side.full)
+			if real, rerr := filepath.EvalSymlinks(parent); rerr != nil || real != parent {
+				return fmt.Errorf("path changed during the operation")
+			}
+		}
 		err = os.Rename(src.full, dst.full)
 	}
 	if err == nil {

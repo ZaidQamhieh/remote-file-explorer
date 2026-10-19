@@ -348,3 +348,15 @@ func TestTrash_JailedUsesRenameNotCopy(t *testing.T) {
 		t.Fatalf("trash entry is a copy, expected a rename")
 	}
 }
+
+// TestTrash_JailedRootCannotBeTrashed verifies the jail root is refused, not moved into the trash.
+func TestTrash_JailedRootCannotBeTrashed(t *testing.T) {
+	ops, root, trashDir := setupTrash(t)
+	res := ops.MoveToTrash([]string{root}, trashDir)
+	if len(res) != 1 || res[0].OK {
+		t.Fatalf("expected the jail root to be refused: %+v", res)
+	}
+	if _, err := os.Stat(root); err != nil {
+		t.Fatalf("jail root gone: %v", err)
+	}
+}

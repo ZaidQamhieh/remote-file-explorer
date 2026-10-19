@@ -41,14 +41,15 @@
     if (b < 1000) return b + ' B';
     const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; let v = b;
     do { v /= 1000; i++; } while (v >= 1000 && i < 3);
-    const nf = (x, d) => (/^en/.test(lang()) ? x.toFixed(d) : x.toLocaleString(lang(), { minimumFractionDigits: d, maximumFractionDigits: d }));
+    /* Digits stay 0-9 in every language, as in the rest of the UI; only the decimal mark follows the language (an engine may otherwise pick Arabic-Indic digits for 'ar'). */
+    const nf = (x, d) => (/^en/.test(lang()) ? x.toFixed(d) : x.toLocaleString(lang() + '-u-nu-latn', { minimumFractionDigits: d, maximumFractionDigits: d }));
     const f = (x) => (x >= 100 ? nf(x, 0) : x >= 10 ? nf(x, 1) : nf(x, 2));
     if (parseFloat((x => x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2))(v)) >= 1000 && i < 3) { v /= 1000; i++; }
     return f(v) + ' ' + u[i];
   };
   /* Same style as the ages ("5 min ago"): a number, a space, the unit. */
   const fmtDur = (s) => { s = Math.max(0, Math.round(s)); if (!isFinite(s)) return '—'; if (s >= 3600) return Math.floor(s / 3600) + ' h ' + Math.floor((s % 3600) / 60) + ' min'; if (s >= 60) return Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; return s + ' s'; };
-  const fmtSpeed = (bps) => (bps >= 1e6 ? (/^en/.test(lang()) ? (bps / 1e6).toFixed(1) : (bps / 1e6).toLocaleString(lang(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })) + ' MB/s' : bps >= 1e3 ? Math.round(bps / 1e3) + ' KB/s' : Math.round(bps) + ' B/s');
+  const fmtSpeed = (bps) => (bps >= 1e6 ? (/^en/.test(lang()) ? (bps / 1e6).toFixed(1) : (bps / 1e6).toLocaleString(lang() + '-u-nu-latn', { minimumFractionDigits: 1, maximumFractionDigits: 1 })) + ' MB/s' : bps >= 1e3 ? Math.round(bps / 1e3) + ' KB/s' : Math.round(bps) + ' B/s');
   let uid = 0;
   const nid = (p) => p + (++uid);
 

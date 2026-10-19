@@ -18,12 +18,24 @@ pub fn agent_bin() -> PathBuf {
     )
 }
 
+/// A loopback port nobody is using, for an agent that is started a moment later. Asking the system
+/// for port 0 and closing the socket again is not enough: under load the same number goes to the next
+/// asker (another test's agent, or a client socket in the system's own range) before this agent has
+/// bound it. Such an agent exits, and the test then talks to someone else's agent. So each call takes
+/// the next number of a range the system never hands out by itself, and starts from a place that
+/// depends on the process, so tests running side by side do not share numbers either.
 pub fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    const BASE: u32 = 12_000;
+    const SPAN: u32 = 18_000; // below the system's range for outgoing sockets (32768 and up)
+    let start = std::process::id().wrapping_mul(2_654_435_761) % SPAN;
+    loop {
+        let port = (BASE + (start + NEXT.fetch_add(1, Ordering::SeqCst)) % SPAN) as u16;
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
 }
 
 pub fn cli(args: &[&str]) -> String {

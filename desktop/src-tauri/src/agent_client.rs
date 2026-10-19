@@ -1200,6 +1200,23 @@ mod timeout_tests {
         }
         assert_eq!(route_timeout(&Method::GET, "/fs"), REQUEST_TIMEOUT);
     }
+
+    #[test]
+    fn the_built_request_carries_its_routes_limit() {
+        let fp = "ab".repeat(32);
+        let client = AgentClient::pinned("127.0.0.1:8765", &fp).unwrap();
+        for (m, r, want) in [
+            (Method::POST, "/fs/copy", LONG_OP_TIMEOUT),
+            (Method::GET, "/search", REQUEST_TIMEOUT),
+        ] {
+            let req = client
+                .authed_request("t", m, r, &[])
+                .unwrap()
+                .build()
+                .unwrap();
+            assert_eq!(req.timeout(), Some(&want), "{r}");
+        }
+    }
 }
 
 #[cfg(test)]

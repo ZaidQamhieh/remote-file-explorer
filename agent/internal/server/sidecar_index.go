@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
@@ -68,6 +69,11 @@ type sidecarIndex struct {
 	ops  *fsops.Ops
 	sup  *sidecar.Supervisor
 	kick chan struct{}
+
+	// builtMu guards built: the roots of the last finished index.build. Coverage is judged against these, not
+	// the live jail roots, which the owner can change while the index still holds the old ones.
+	builtMu sync.Mutex
+	built   []string
 }
 
 func newSidecarIndex(ops *fsops.Ops, cfg sidecar.Config) *sidecarIndex {
@@ -181,8 +187,14 @@ func indexCovers(indexed []string, root string) bool {
 	root = filepath.Clean(root)
 	for _, base := range indexed {
 		base = filepath.Clean(base)
-		rel, err := filepath.Rel(base, root)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		// Exact, case-sensitive comparison on purpose: the index matches paths byte for byte.
+		rel := ""
+		switch {
+		case root == base:
+			rel = "."
+		case strings.HasPrefix(root, strings.TrimRight(base, string(filepath.Separator))+string(filepath.Separator)):
+			rel = root[len(strings.TrimRight(base, string(filepath.Separator)))+1:]
+		default:
 			continue
 		}
 		cur, ok := base, true
@@ -210,6 +222,9 @@ func (s *sidecarIndex) build(c *sidecar.Client) error {
 	if err := c.Call(ctx, "index.build", buildReq{Roots: roots, MaxEntries: indexMaxEntries, MaxBytes: indexMaxEstimatedBytes}, &resp); err != nil {
 		return err
 	}
+	s.builtMu.Lock()
+	s.built = roots
+	s.builtMu.Unlock()
 	if resp.Truncated {
 		log.Printf("search index (sidecar): truncated at %d entries; remaining files are not searchable", resp.Entries)
 	}
@@ -323,7 +338,9 @@ type queryResp struct {
 
 func (s *sidecarIndex) query(filters *searchFilters, roots []string, limit int) ([]fsops.Entry, bool, bool) {
 	// A ready index that does not cover a root would answer [] for it; walk live instead.
-	indexed := s.indexRoots()
+	s.builtMu.Lock()
+	indexed := s.built
+	s.builtMu.Unlock()
 	for _, r := range roots {
 		if !indexCovers(indexed, r) {
 			sidecar.Note("indexd.search-uncovered")

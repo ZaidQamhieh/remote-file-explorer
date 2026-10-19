@@ -51,7 +51,7 @@ func TestLoginHandler_DeviceKeyMismatchRejected(t *testing.T) {
 	if err := db.CreateUser("owner", hash); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := loginHandler(cfg, db, nonces)
 
@@ -94,7 +94,7 @@ func TestLoginHandler_InvalidSignatureRejected(t *testing.T) {
 	if err := db.CreateUser("owner", hash); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := loginHandler(cfg, db, nonces)
 
@@ -129,7 +129,7 @@ func TestLoginHandler_MissingDeviceProofRejected(t *testing.T) {
 	if err := db.CreateUser("owner", hash); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"owner","password":"correct-horse-battery"}`
@@ -156,7 +156,7 @@ func TestLoginHandler_MissingDeviceProofRejected(t *testing.T) {
 func TestPairHandler_KeyChangeRePinsRatherThanRejects(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := pairHandler(cfg, db, pm, nonces)
 
@@ -237,7 +237,7 @@ func TestVerifyDeviceProof_BoundToThisAgentsCertificate(t *testing.T) {
 	}{
 		{"v2 for this agent", func(n string) string { return security.DeviceProofMessageV2(here, n) }, true},
 		{"v2 for another agent", func(n string) string { return security.DeviceProofMessageV2(elsewhere, n) }, false},
-		{"bare nonce (older clients)", func(n string) string { return n }, true},
+		{"bare nonce (browser sign-in only)", func(n string) string { return n }, true},
 		{"v2 label without the fingerprint", func(n string) string { return "rfe-device-proof-v2\n\n" + n }, false},
 	}
 	for _, c := range cases {
@@ -247,9 +247,33 @@ func TestVerifyDeviceProof_BoundToThisAgentsCertificate(t *testing.T) {
 			t.Fatalf("mint: %v", err)
 		}
 		rr := httptest.NewRecorder()
-		err = verifyDeviceProof(nil, nonces, here, "dev", pubB64, nonce, sign(c.message(nonce)), rr, rePinOnKeyChange)
+		err = verifyDeviceProof(nil, nonces, here, "dev", pubB64, nonce, sign(c.message(nonce)), rr, rePinOnKeyChange, acceptLegacyProof)
 		if (err == nil) != c.ok {
 			t.Errorf("%s: accepted=%v, want %v (%s)", c.name, err == nil, c.ok, rr.Body.String())
+		}
+	}
+}
+
+// Pairing refuses the bare-nonce proof: a relay can pass this agent's nonce to a phone and replay
+// the signature, but a v2 signature names the certificate the phone saw.
+func TestVerifyDeviceProof_PairingRequiresBoundProof(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	pubB64 := base64.StdEncoding.EncodeToString(pub)
+	for _, c := range []struct {
+		name string
+		msg  func(n string) string
+		ok   bool
+	}{
+		{"v2", func(n string) string { return security.DeviceProofMessageV2(testProofFp, n) }, true},
+		{"bare nonce", func(n string) string { return n }, false},
+	} {
+		nonces := newNonceStore()
+		nonce, _ := nonces.Mint()
+		sig := base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(c.msg(nonce))))
+		rr := httptest.NewRecorder()
+		err := verifyDeviceProof(nil, nonces, testProofFp, "dev", pubB64, nonce, sig, rr, rePinOnKeyChange, requireBoundProof)
+		if (err == nil) != c.ok {
+			t.Errorf("%s: accepted=%v want %v", c.name, err == nil, c.ok)
 		}
 	}
 }

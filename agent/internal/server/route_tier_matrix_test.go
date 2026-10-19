@@ -45,6 +45,7 @@ var routeTiers = map[string]routeTier{
 	"POST /v1/pair":                       tierPublic,
 	"POST /v1/pair/request":               tierPublic,
 	"GET /v1/pair/request/{id}":           tierPublic,
+	"POST /v1/pair/request/{id}/reveal":   tierPublic,
 	"POST /v1/register":                   tierPublic,
 	"POST /v1/login":                      tierPublic,
 	"GET /v1/share/{token}":               tierPublic,

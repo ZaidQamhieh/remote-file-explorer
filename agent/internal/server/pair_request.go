@@ -8,6 +8,7 @@
 package server
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -49,9 +50,22 @@ type pairRequestBody struct {
 	DevicePublicKey string `json:"devicePublicKey"`
 	Nonce           string `json:"nonce"`
 	Signature       string `json:"signature"`
-	// ClientNonce is 16 random bytes (hex) the phone picks; it seeds the match
-	// code and is the secret that authorises polling for the result.
+	// ClientNonceCommit is the hex SHA-256 of the 16-byte client nonce the phone
+	// will reveal after it has the request id. Committing first means a relay cannot
+	// pick the request id after seeing the nonce, so it cannot grind an id that makes
+	// the two match codes agree.
+	ClientNonceCommit string `json:"clientNonceCommit"`
+}
+
+// revealBody is POST /v1/pair/request/{id}/reveal. The nonce seeds the match code
+// and is the secret that authorises polling for the result.
+type revealBody struct {
 	ClientNonce string `json:"clientNonce"`
+}
+
+func validNonceCommit(s string) bool {
+	b, err := hex.DecodeString(s)
+	return err == nil && len(b) == sha256.Size
 }
 
 func validClientNonce(s string) bool {
@@ -72,11 +86,11 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 			return
 		}
-		if !validClientNonce(req.ClientNonce) {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "clientNonce must be 16 random bytes, hex encoded")
+		if !validNonceCommit(req.ClientNonceCommit) {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "clientNonceCommit (hex SHA-256 of the client nonce) is required — update the app")
 			return
 		}
-		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange); err != nil {
+		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange, requireBoundProof); err != nil {
 			return
 		}
 		label := sanitizeLabel(req.DeviceLabel)
@@ -85,20 +99,10 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			writeInternal(w, "pair request", err)
 			return
 		}
-		sas, err := pairing.SAS(cfg.CertFingerprint, req.ClientNonce, id)
-		if err != nil {
-			writeInternal(w, "pair request", err)
-			return
-		}
-		replaces, err := pairReplaces(db, req.DeviceID, req.DevicePublicKey)
-		if err != nil {
-			writeInternal(w, "pair request", err)
-			return
-		}
 		now := time.Now()
 		err = db.CreatePairRequest(store.PairRequest{
 			ID: id, Label: label, ClientID: req.DeviceID, PublicKey: req.DevicePublicKey,
-			ClientNonce: req.ClientNonce, RemoteIP: clientIP(r),
+			NonceCommit: req.ClientNonceCommit, RemoteIP: clientIP(r),
 			Created: now.Unix(), Expires: now.Add(pairRequestTTL).Unix(),
 		})
 		if errors.Is(err, store.ErrTooManyPairRequests) {
@@ -109,13 +113,64 @@ func createPairRequestHandler(cfg Config, db *store.DB, nonces *nonceStore) http
 			writeInternal(w, "pair request", err)
 			return
 		}
-		if cfg.OnPairRequest != nil {
-			cfg.OnPairRequest(PairPrompt{ID: id, Label: label, SAS: sas, IP: clientIP(r), TTL: pairRequestTTL, Replaces: replaces})
-		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"requestId":        id,
 			"expiresInSeconds": int(pairRequestTTL.Seconds()),
 		})
+	}
+}
+
+// revealPairRequestHandler implements POST /v1/pair/request/{id}/reveal. Only now,
+// with the nonce fixed after the request id, is the match code derived and the
+// owner asked.
+func revealPairRequestHandler(cfg Config, db *store.DB) http.HandlerFunc {
+	limiter := newKeyedLimiter(pairRequestRateAttempts*4, pairRequestRateWindow)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow(clientIP(r)) {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many pairing attempts, try again later")
+			return
+		}
+		var body revealBody
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || !validClientNonce(body.ClientNonce) {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "clientNonce must be 16 random bytes, hex encoded")
+			return
+		}
+		id := chi.URLParam(r, "id")
+		pr, ok, err := db.GetPairRequest(id)
+		if err != nil {
+			writeInternal(w, "pair reveal", err)
+			return
+		}
+		raw, _ := hex.DecodeString(body.ClientNonce)
+		sum := sha256.Sum256(raw)
+		// One error for unknown id and wrong nonce so ids cannot be probed.
+		if !ok || pr.Status != store.PairCommitted || subtle.ConstantTimeCompare([]byte(hex.EncodeToString(sum[:])), []byte(pr.NonceCommit)) != 1 {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
+			return
+		}
+		sas, err := pairing.SAS(cfg.CertFingerprint, body.ClientNonce, id)
+		if err != nil {
+			writeInternal(w, "pair reveal", err)
+			return
+		}
+		replaces, err := pairReplaces(db, pr.ClientID, pr.PublicKey)
+		if err != nil {
+			writeInternal(w, "pair reveal", err)
+			return
+		}
+		pr, err = db.RevealPairRequest(id, body.ClientNonce)
+		if errors.Is(err, store.ErrPairRequestGone) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
+			return
+		}
+		if err != nil {
+			writeInternal(w, "pair reveal", err)
+			return
+		}
+		if cfg.OnPairRequest != nil {
+			cfg.OnPairRequest(PairPrompt{ID: id, Label: pr.Label, SAS: sas, IP: clientIP(r), TTL: time.Until(time.Unix(pr.Expires, 0)), Replaces: replaces})
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 	}
 }
 
@@ -166,8 +221,9 @@ func pollPairRequestHandler(cfg Config, db *store.DB) http.HandlerFunc {
 			writeInternal(w, "pair poll", err)
 			return
 		}
-		// One error for unknown id and wrong nonce so ids cannot be probed.
-		if !ok || subtle.ConstantTimeCompare([]byte(pr.ClientNonce), []byte(r.URL.Query().Get("nonce"))) != 1 {
+		// One error for unknown id and wrong nonce so ids cannot be probed. A request that
+		// has not revealed its nonce yet has none to match.
+		if !ok || pr.ClientNonce == "" || subtle.ConstantTimeCompare([]byte(pr.ClientNonce), []byte(r.URL.Query().Get("nonce"))) != 1 {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
 			return
 		}

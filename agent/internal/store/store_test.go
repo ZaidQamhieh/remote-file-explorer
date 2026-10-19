@@ -205,6 +205,7 @@ public_key TEXT NOT NULL DEFAULT '', via_login INTEGER NOT NULL DEFAULT 0,
 username TEXT NOT NULL DEFAULT '', view_apps INTEGER NOT NULL DEFAULT 0,
 launch_apps INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE pairing_codes (code TEXT PRIMARY KEY, expires INTEGER NOT NULL);
 INSERT INTO devices (id,label,token_hash,created,last_seen,read_only) VALUES
 ('legacy-rw','legacy rw','hash-rw',1,1,0),
 ('legacy-ro','legacy ro','hash-ro',1,1,1);

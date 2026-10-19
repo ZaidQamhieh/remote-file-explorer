@@ -1,6 +1,7 @@
 package fsops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,5 +79,53 @@ func TestUniqueTrashName_LongNameTerminates(t *testing.T) {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("uniqueTrashName did not terminate")
+	}
+}
+
+func TestResolve_OutsideRootsRejectedWithoutTouchingDisk(t *testing.T) {
+	ops, _ := setupJail(t)
+	outside := t.TempDir()
+	file := filepath.Join(outside, "candidate")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Below a regular file the OS would answer ENOTDIR (a distinct error);
+	// the roots check must answer first, identically for existing and
+	// missing paths.
+	for _, p := range []string{filepath.Join(file, "x"), filepath.Join(outside, "missing", "x")} {
+		_, err := ops.Resolve(p)
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("%s: want ErrForbidden, got %v", p, err)
+		}
+	}
+}
+
+func TestResolve_ProtectedDirDeniedUnderBroadRoot(t *testing.T) {
+	home := t.TempDir()
+	data := filepath.Join(home, ".rfe-agent")
+	if err := os.MkdirAll(data, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	key := filepath.Join(data, "agent-key.pem")
+	if err := os.WriteFile(key, []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ops := New([]string{home}, false)
+	if _, err := ops.Resolve(key); err != nil {
+		t.Fatalf("before protecting, the broad root reaches it: %v", err)
+	}
+	ProtectDir(data)
+	t.Cleanup(func() { protectedMu.Lock(); protectedDirs = nil; protectedMu.Unlock() })
+	for _, p := range []string{key, data, filepath.Join(data, "new")} {
+		if _, err := ops.Resolve(p); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("%s must be forbidden, got %v", p, err)
+		}
+	}
+	if _, err := ops.Resolve(filepath.Join(home, "ok.txt")); err != nil {
+		t.Fatalf("sibling paths stay reachable: %v", err)
+	}
+	unrestricted := New(nil, false)
+	if _, err := unrestricted.Resolve(key); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("also protected with no roots, got %v", err)
 	}
 }

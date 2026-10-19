@@ -21,7 +21,7 @@ import (
 func TestPairHandler_BadDeviceProofDoesNotBurnPairingCode(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := pairHandler(cfg, db, pm, newNonceStore())
 
 	code, _, err := pm.Mint(time.Minute)
@@ -48,7 +48,7 @@ func TestPairHandler_BadDeviceProofDoesNotBurnPairingCode(t *testing.T) {
 func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	nonces := newNonceStore()
 	handler := pairHandler(cfg, db, pm, nonces)
 
@@ -88,7 +88,7 @@ func TestPairHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 func TestPairHandler_InvalidBody(t *testing.T) {
 	db, _ := newTestDeps(t)
 	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := pairHandler(cfg, db, pm, newNonceStore())
 
 	rr := httptest.NewRecorder()

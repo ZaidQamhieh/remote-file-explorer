@@ -62,7 +62,7 @@ func TestPathRootedHandlersRejectOutsideFileSymlink(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/share/rooted-path-test", nil)
 		req = withURLParam(req, map[string]string{"token": "rooted-path-test"})
 		rr := httptest.NewRecorder()
-		serveShareHandler(db, ops)(rr, req)
+		serveShareHandler(db, ops, nil)(rr, req)
 		if rr.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want 404; body: %s", rr.Code, rr.Body.String())
 		}

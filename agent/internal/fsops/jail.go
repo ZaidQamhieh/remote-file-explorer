@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 )
 
 // This file holds the agent's path-jail and access-control model — the
@@ -125,12 +127,23 @@ func (o *Ops) Resolve(p string) (string, error) {
 	}
 	clean := filepath.Clean(p)
 
+	roots := o.settings.Roots()
+	// Authorize the lexical path before touching the disk: resolving a
+	// path outside the roots would leak whether it exists (and, on Windows,
+	// make the OS contact a UNC host with the user's credentials).
+	if !lexicallyAllowed(clean, roots) {
+		return "", fmt.Errorf("%w: %s", ErrForbidden, p)
+	}
+
 	real, err := resolveReal(clean)
 	if err != nil {
 		return "", err
 	}
 
-	roots := o.settings.Roots()
+	if isProtected(real) {
+		return "", fmt.Errorf("%w: %s", ErrForbidden, p)
+	}
+
 	if len(roots) == 0 {
 		return real, nil
 	}
@@ -141,6 +154,65 @@ func (o *Ops) Resolve(p string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%w: %s", ErrForbidden, p)
+}
+
+var (
+	protectedMu   sync.RWMutex
+	protectedDirs []string
+)
+
+// ProtectDir makes every path at or under dir unreachable through any Ops,
+// whatever the roots are. The agent registers its own data folder (TLS key,
+// database, in-progress uploads) so a home-wide or unrestricted root cannot
+// expose it.
+func ProtectDir(dir string) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	protectedMu.Lock()
+	protectedDirs = append(protectedDirs, abs)
+	protectedMu.Unlock()
+}
+
+func isProtected(real string) bool {
+	protectedMu.RLock()
+	defer protectedMu.RUnlock()
+	for _, d := range protectedDirs {
+		if isUnder(real, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// lexicallyAllowed reports whether clean could be inside the roots without
+// reading the path itself: it is under a root as written, or under a root's
+// symlink-resolved form (the roots are the owner's configuration, so
+// resolving them is safe). With no roots only UNC and device paths are
+// refused.
+func lexicallyAllowed(clean string, roots []string) bool {
+	if len(roots) == 0 {
+		return !isUNCPath(clean)
+	}
+	for _, root := range roots {
+		if isUnder(clean, root) {
+			return true
+		}
+		if realRoot, err := filepath.EvalSymlinks(root); err == nil && isUnder(clean, realRoot) {
+			return true
+		}
+	}
+	return false
+}
+
+// isUNCPath reports a Windows network or device path (\\host\share,
+// \\?\, \\.\). It is always false on other platforms.
+func isUNCPath(p string) bool {
+	return runtime.GOOS == "windows" && strings.HasPrefix(filepath.VolumeName(p), `\\`)
 }
 
 // resolveReal returns the symlink-free form of a cleaned, absolute path.

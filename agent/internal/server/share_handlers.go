@@ -158,7 +158,7 @@ func shareURL(cfg Config, token string) string {
 
 // --------- GET /v1/share/{token} (UNAUTHENTICATED — see package doc) ---------
 
-func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
+func serveShareHandler(db *store.DB, ops *fsops.Ops, sharingEnabled func() bool) http.HandlerFunc {
 	limiter := newShareIPLimiter(shareRateLimitAttempts, shareRateLimitWindow, shareRateLimitMaxIPs)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.allow(clientIP(r)) {
@@ -169,10 +169,29 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 		token := chi.URLParam(r, "token")
 		hash := hashShareToken(token)
 
-		path, ok, err := db.ConsumeShareToken(hash)
+		path, ownerID, ok, err := db.ConsumeShareTokenFor(hash)
 		if err != nil {
 			writeInternal(w, "serve share", err)
 			return
+		}
+		if ok && sharingEnabled != nil && !sharingEnabled() {
+			ok = false
+		}
+		// The link is only as good as its minting device: re-check that
+		// device still exists, is not revoked, may still share, and serve
+		// through its current jail rather than the global one.
+		serveOps := ops
+		if ok && ownerID != "" {
+			dev, derr := db.GetDeviceByID(ownerID)
+			switch {
+			case derr != nil:
+				writeInternal(w, "serve share", derr)
+				return
+			case dev == nil || dev.Revoked || (!dev.ViaLogin && !(dev.CanShare && dev.CanDownload)):
+				ok = false
+			case dev.JailRoot != "":
+				serveOps = ops.Jailed(dev.JailRoot)
+			}
 		}
 		if !ok {
 			// Don't distinguish "expired" from "never existed" (T1/T6).
@@ -186,7 +205,7 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops) http.HandlerFunc {
 		// O_NONBLOCK prevents a path swapped to a FIFO from pinning an HTTP
 		// handler while Open waits for a writer. It has no effect for regular
 		// files; validate the opened descriptor before sending any bytes.
-		f, err := ops.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		f, err := serveOps.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "share link not found or expired")
 			return

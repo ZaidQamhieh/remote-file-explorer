@@ -255,6 +255,13 @@ pub fn match_code(
     Ok(format!("{:04} {:04}", n / 10_000, n % 10_000))
 }
 
+/// Hex SHA-256 of the client nonce's bytes: what the agent holds until the nonce is revealed.
+pub fn nonce_commitment(client_nonce_hex: &str) -> Result<String, AgentError> {
+    let raw = hex::decode(client_nonce_hex)
+        .map_err(|_| AgentError::Local("the client nonce is not hex".into()))?;
+    Ok(hex::encode(Sha256::digest(raw)))
+}
+
 /// 16 random bytes, hex: the secret that authorises polling for one pairing request.
 pub fn new_client_nonce() -> Result<String, AgentError> {
     let mut b = [0u8; 16];
@@ -377,6 +384,12 @@ struct PairRequestBody<'a> {
     device_public_key: String,
     nonce: String,
     signature: String,
+    client_nonce_commit: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RevealBody<'a> {
     client_nonce: &'a str,
 }
 
@@ -612,7 +625,9 @@ impl AgentClient {
     }
 
     /// Asks the owner to approve this computer at the PC (`POST /pair/request`). The device proof
-    /// goes with it; `client_nonce` is the secret needed to poll for the answer.
+    /// goes with it, and only a hash of `client_nonce`: the agent picks the request id before it
+    /// sees the nonce (see `reveal_pair_request`), so a relay cannot grind an id that makes the
+    /// two match codes agree.
     pub async fn pair_request(
         &self,
         id: &Identity,
@@ -626,7 +641,7 @@ impl AgentClient {
             device_public_key: id.public_key_b64(),
             signature: id.proof_b64(&self.fingerprint, &nonce),
             nonce,
-            client_nonce,
+            client_nonce_commit: nonce_commitment(client_nonce)?,
         };
         parse(
             self.http
@@ -637,6 +652,23 @@ impl AgentClient {
                 .map_err(net)?,
         )
         .await
+    }
+
+    /// Reveals the nonce committed in `pair_request` (`POST /pair/request/{id}/reveal`). Only now
+    /// does the agent ask the owner; `client_nonce` is also the secret needed to poll.
+    pub async fn reveal_pair_request(
+        &self,
+        request_id: &str,
+        client_nonce: &str,
+    ) -> Result<(), AgentError> {
+        let resp = self
+            .http
+            .post(format!("{}/pair/request/{}/reveal", self.base, request_id))
+            .json(&RevealBody { client_nonce })
+            .send()
+            .await
+            .map_err(net)?;
+        parse::<serde_json::Value>(resp).await.map(|_| ())
     }
 
     /// Asks how a pairing request stands (`GET /pair/request/{id}`). The approval, with the

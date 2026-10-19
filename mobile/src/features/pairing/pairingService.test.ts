@@ -3,7 +3,9 @@ import { CertPinMismatch } from '../../core/api/pin';
 import { DeviceIdentity } from '../../core/security/deviceIdentity';
 import { MemorySecureStore } from '../../core/security/secureStore';
 import { HostStore, MemoryKeyValueStore } from '../../core/storage/hostStore';
-import { awaitPairing, humanizeError, loginWithAccount, PairExpired, pairWithCode, PairRejected, parsePairingQr, registerAccount, requestPairing, type PairingDeps } from './pairingService';
+import { sha256 } from '@noble/hashes/sha2.js';
+
+import { awaitPairing, checkKnownPin, humanizeError, loginWithAccount, PairExpired, pairWithCode, PairRejected, parsePairingQr, proofMessage, registerAccount, requestPairing, type PairingDeps } from './pairingService';
 
 const PIN = 'ab'.repeat(32);
 const rnd = (n: number) => Uint8Array.from({ length: n }, (_, i) => (i * 5 + 1) & 255);
@@ -121,11 +123,20 @@ describe('approve-on-computer pairing', () => {
     const { deps, calls } = setup(requestHandler(() => ({ status: 'pending' })));
     const h = await requestPairing(deps, ' https://10.0.0.2:8765/ ');
     expect(h.target).toEqual({ address: '10.0.0.2:8765', fingerprint: PIN });
-    expect(calls.map((c) => c.url.split('/v1')[1])).toEqual(['/auth/challenge', '/pair/request']);
+    expect(calls.map((c) => c.url.split('/v1')[1])).toEqual(['/auth/challenge', '/pair/request', '/pair/request/rid1/reveal']);
     expect(calls.every((c) => c.pin === PIN)).toBe(true);
     expect(calls[1].body).toMatchObject({ deviceId: 'android-id-1', nonce: 'n-1' });
-    expect(calls[1].body).toHaveProperty('clientNonce');
     expect(JSON.stringify(calls[1].body)).not.toContain(PIN);
+    // The nonce is committed before the request id exists and revealed after; the commitment is its SHA-256.
+    expect(calls[1].body).toHaveProperty('clientNonceCommit');
+    expect(calls[1].body).not.toHaveProperty('clientNonce');
+    const revealed = (calls[2].body as { clientNonce: string }).clientNonce;
+    expect(revealed).toBe(h.clientNonce);
+    const commit = Array.from(sha256(Uint8Array.from(revealed.match(/../g)!, (b) => parseInt(b, 16))), (x) => x.toString(16).padStart(2, '0')).join('');
+    expect((calls[1].body as { clientNonceCommit: string }).clientNonceCommit).toBe(commit);
+    // The device proof names the certificate this phone pinned (v2), not the bare nonce.
+    expect((calls[1].body as { signature: string }).signature).toBe(await deps.identity.signBase64(proofMessage(PIN, 'n-1')));
+    expect((calls[1].body as { signature: string }).signature).not.toBe(await deps.identity.signBase64('n-1'));
     expect(h.matchCode).toMatch(/^\d{4} \d{4}$/);
   });
 
@@ -162,5 +173,25 @@ describe('approve-on-computer pairing', () => {
     const p = awaitPairing(deps, h, { signal: ctl.signal, sleep: async () => ctl.abort() });
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls.length - before).toBe(1);
+  });
+});
+
+describe('credentials are only sent to a computer this phone trusts', () => {
+  const okLogin = (url: string) => (url.endsWith('/auth/challenge') ? { nonce: 'n-1' } : { deviceToken: 'tok', deviceId: 'dev-9', agentName: 'My PC' });
+  const host = (fp: string) => ({ id: 'h1', label: 'PC', address: '10.0.0.2:8765', certFingerprint: fp });
+
+  it('refuses to log in when the address is saved under a different certificate, before any request', async () => {
+    const { deps, calls, store } = setup(okLogin);
+    await store.commitPairing(host('cd'.repeat(32)), { token: 't', fingerprint: 'cd'.repeat(32) });
+    await expect(loginWithAccount(deps, { address: '10.0.0.2:8765', fingerprint: PIN }, { username: 'u', password: 'secret-password' })).rejects.toBeInstanceOf(CertPinMismatch);
+    await expect(registerAccount(deps, { address: '10.0.0.2:8765', fingerprint: PIN }, { pairingCode: 'ABCD1234', username: 'u', password: 'secret-password' })).rejects.toBeInstanceOf(CertPinMismatch);
+    expect(calls).toEqual([]);
+  });
+
+  it('knows a saved certificate, and treats an unseen address as new', async () => {
+    const { deps, store } = setup(okLogin);
+    expect(await checkKnownPin(deps, { address: '10.0.0.2:8765', fingerprint: PIN })).toBe('new');
+    await store.commitPairing(host(PIN), { token: 't', fingerprint: PIN });
+    expect(await checkKnownPin(deps, { address: '10.0.0.2:8765', fingerprint: PIN })).toBe('known');
   });
 });

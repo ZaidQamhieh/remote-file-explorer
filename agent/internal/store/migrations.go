@@ -26,6 +26,7 @@ var migrations = []func(*sql.Tx) error{
 	migrateDeviceFilePermissions,
 	migrateTransferHistoryRetention,
 	migratePairRequests,
+	migratePairingHardening,
 }
 
 // migrateTransferHistoryRetention adds an explicit completion timestamp so
@@ -74,6 +75,17 @@ CREATE TABLE IF NOT EXISTS pair_requests (
 CREATE INDEX IF NOT EXISTS idx_pair_requests_status ON pair_requests(status, expires);
 `)
 	return err
+}
+
+// migratePairingHardening adds can_register to pairing_codes (only codes minted
+// with `rfe-agent pair --owner` may create the owner account) and nonce_commit
+// to pair_requests (the phone commits to its match-code nonce before it sees the
+// request id, so a relay cannot grind an id that forges the match code).
+func migratePairingHardening(tx *sql.Tx) error {
+	if err := addColumn(tx, "pairing_codes", "can_register", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	return addColumn(tx, "pair_requests", "nonce_commit", "TEXT NOT NULL DEFAULT ''")
 }
 
 // migrate brings the schema up to len(migrations).

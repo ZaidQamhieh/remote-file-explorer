@@ -138,6 +138,7 @@ func cmdPair(args []string) error {
 	data := fs.String("data", "", "agent data dir")
 	addr := fs.String("addr", ":8765", "listen address the phone will dial (for the QR)")
 	ttl := fs.Duration("ttl", pairing.DefaultTTL, "how long the code stays valid")
+	owner := fs.Bool("owner", false, "mint a code that can also create the owner account (first-time setup)")
 	_ = fs.Parse(args)
 
 	dir := adminDataDir(*data)
@@ -155,7 +156,11 @@ func cmdPair(args []string) error {
 	defer db.Close()
 
 	pm := pairing.New(db, lan, ts, fingerprint)
-	code, payload, err := pm.Mint(*ttl)
+	mint := pm.Mint
+	if *owner {
+		mint = pm.MintOwner
+	}
+	code, payload, err := mint(*ttl)
 	if err != nil {
 		return fmt.Errorf("mint: %w", err)
 	}
@@ -171,6 +176,11 @@ func cmdPair(args []string) error {
 		fmt.Println(qr.ToSmallString(false))
 	}
 	fmt.Println("Scan in the app: Add computer → Scan QR.")
+	if !*owner {
+		if has, herr := db.HasAnyUser(); herr == nil && !has {
+			fmt.Println("No account exists yet. To create the owner account from the app, run `rfe-agent pair --owner` instead.")
+		}
+	}
 	return nil
 }
 

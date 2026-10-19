@@ -542,6 +542,9 @@ async fn request_pairing_inner(
             }
             other => other,
         })?;
+    client
+        .reveal_pair_request(&started.request_id, &client_nonce)
+        .await?;
     let fingerprint = normalize_fingerprint(fingerprint);
     Ok(PairWait {
         match_code: match_code(&fingerprint, &client_nonce, &started.request_id)?,

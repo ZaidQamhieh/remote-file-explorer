@@ -372,12 +372,18 @@ export class AgentClient {
     devicePublicKey: string;
     nonce: string;
     signature: string;
-    clientNonce: string;
+    /** Hex SHA-256 of the 16-byte client nonce, revealed later with [revealPair]. */
+    clientNonceCommit: string;
     deviceId?: string;
   }): Promise<{ requestId: string; expiresInSeconds: number }> {
     const { deviceId, ...rest } = a;
     const d = (await this.call('POST', '/pair/request', { json: { ...rest, ...(deviceId ? { deviceId } : {}) } })) as Record<string, unknown>;
     return { requestId: String(d.requestId ?? ''), expiresInSeconds: Number(d.expiresInSeconds ?? 120) };
+  }
+
+  /** Sends the nonce committed in [requestPair]; only now is the owner asked to approve. */
+  async revealPair(id: string, clientNonce: string): Promise<void> {
+    await this.call('POST', `/pair/request/${encodeURIComponent(id)}/reveal`, { json: { clientNonce } });
   }
 
   async pairRequestStatus(id: string, clientNonce: string): Promise<{ status: 'pending' | 'rejected' } | { status: 'approved'; response: PairResponse }> {

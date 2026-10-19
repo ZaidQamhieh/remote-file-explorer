@@ -12,7 +12,7 @@ import (
 
 func TestLoginHandler_InvalidBody(t *testing.T) {
 	db, _ := newTestDeps(t)
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := loginHandler(cfg, db, newNonceStore())
 
 	rr := httptest.NewRecorder()
@@ -25,7 +25,7 @@ func TestLoginHandler_InvalidBody(t *testing.T) {
 
 func TestLoginHandler_UnknownUsername(t *testing.T) {
 	db, _ := newTestDeps(t)
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"nobody","password":"whatever123"}`
@@ -53,7 +53,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 	if err := db.CreateUser("owner", hash); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"owner","password":"wrong-password"}`
@@ -112,7 +112,7 @@ func TestLoginHandler_ValidLogin(t *testing.T) {
 
 func TestLoginHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	db, _ := newTestDeps(t)
-	cfg := Config{Name: "test-pc"}
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
 	handler := loginHandler(cfg, db, newNonceStore())
 
 	body := `{"username":"nobody","password":"whatever123"}`

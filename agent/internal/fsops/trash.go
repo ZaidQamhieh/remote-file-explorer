@@ -49,6 +49,23 @@ func trashInfoDir(trashDir string) string  { return filepath.Join(trashDir, "inf
 // let DELETE/restore reach arbitrary paths.
 var ErrBadTrashID = errors.New("invalid trash id")
 
+// ErrTrashStoreUnsafe is returned when the trash files directory is not a real
+// directory (for example a symlink swapped in to redirect deletions).
+var ErrTrashStoreUnsafe = errors.New("trash store is not a plain directory")
+
+// openTrashFiles opens files/ as a root, refusing a symlinked store.
+func openTrashFiles(trashDir string) (*os.Root, error) {
+	dir := trashFilesDir(trashDir)
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.IsDir() {
+		return nil, ErrTrashStoreUnsafe
+	}
+	return os.OpenRoot(dir)
+}
+
 func validTrashID(id string) bool {
 	if id == "" || id == "." || id == ".." {
 		return false
@@ -274,6 +291,19 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 		if !validTrashID(id) {
 			return ErrBadTrashID
 		}
+	}
+	store, err := openTrashFiles(trashDir)
+	if os.IsNotExist(err) {
+		return nil // empty store: nothing to delete
+	}
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	for _, id := range ids {
+		if !validTrashID(id) {
+			return ErrBadTrashID
+		}
 		if len(roots) > 0 {
 			orig, _, err := readTrashInfo(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt))
 			if err != nil {
@@ -283,7 +313,8 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 				continue // outside the jail: skip rather than fail the whole batch
 			}
 		}
-		if err := os.RemoveAll(filepath.Join(trashFilesDir(trashDir), id)); err != nil {
+		// Descriptor-relative and no-follow: id cannot leave the store.
+		if err := store.RemoveAll(id); err != nil {
 			return err
 		}
 		if err := os.Remove(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)); err != nil && !os.IsNotExist(err) {

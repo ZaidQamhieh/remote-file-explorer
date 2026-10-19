@@ -354,9 +354,17 @@ func runServe(args []string) {
 
 	srv := newHTTPServer(flags.addr, handler, cert)
 
-	statsCtx, stopStats := context.WithCancel(context.Background())
-	defer stopStats()
-	go server.PublishSidecarStats(statsCtx, flags.dataDir)
+	statsCtx, cancelStats := context.WithCancel(context.Background())
+	statsDone := make(chan struct{})
+	go func() {
+		defer close(statsDone)
+		server.PublishSidecarStats(statsCtx, flags.dataDir)
+	}()
+	// PublishSidecarStats writes once more on cancel; wait so the final counters reach disk before exit.
+	defer func() {
+		cancelStats()
+		<-statsDone
+	}()
 
 	go func() {
 		log.Printf("listening on https://%s/v1  (LAN + Tailscale)", flags.addr)

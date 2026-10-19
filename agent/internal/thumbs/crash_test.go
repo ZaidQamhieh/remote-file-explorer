@@ -87,3 +87,36 @@ func TestCrashLogIsBounded(t *testing.T) {
 		t.Fatalf("crash log holds %d entries, cap %d", len(l.strikes), crashLogCap)
 	}
 }
+
+// An open breaker or a sidecar INTERNAL failure (a render panic) is final: the same bytes must not be handed to the
+// unsandboxed in-process decoder.
+func TestBreakerOpenAndInternalFailureNeverFallBack(t *testing.T) {
+	path := filepath.Join(fixtureDir, "photo.jpg")
+	cases := map[string]error{
+		"breaker open":    fmt.Errorf("%w: %w", sidecar.ErrUnavailable, sidecar.ErrBreakerOpen),
+		"render panicked": fmt.Errorf("%w: render panicked", errRemoteFailed),
+	}
+	for name, remoteErr := range cases {
+		t.Run(name, func(t *testing.T) {
+			rn, err := New(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			rn.UseRemote(&crashingRemote{err: remoteErr})
+			data, err := rn.Get(path, 96)
+			if err == nil || len(data) != 0 {
+				t.Fatalf("got %d bytes, err %v; want an error and no in-process render", len(data), err)
+			}
+			if errors.Is(err, ErrNotSupported) {
+				t.Fatalf("err = %v, want a transient error, not ErrNotSupported", err)
+			}
+		})
+	}
+}
+
+func TestSidecarRemoteMapsInternalToFinalError(t *testing.T) {
+	got := mapRemoteError(&sidecar.RemoteError{Code: "INTERNAL", Message: "render panicked"})
+	if !errors.Is(got, errRemoteFailed) {
+		t.Fatalf("INTERNAL mapped to %v", got)
+	}
+}

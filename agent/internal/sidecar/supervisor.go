@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -57,14 +58,21 @@ func (s *Supervisor) Client() (*Client, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.client == nil {
-		return nil, ErrUnavailable
+		return nil, s.unavailable()
 	}
 	select {
 	case <-s.client.Done():
-		return nil, ErrUnavailable
+		return nil, s.unavailable()
 	default:
 	}
 	return s.client, nil
+}
+
+func (s *Supervisor) unavailable() error {
+	if s.stats.breakerOpen.Load() {
+		return fmt.Errorf("%w: %w", ErrUnavailable, ErrBreakerOpen)
+	}
+	return ErrUnavailable
 }
 
 // Call runs op on the live sidecar.
@@ -133,7 +141,6 @@ func (s *Supervisor) loop() {
 			backoff = min(backoff*2, s.maxBackoff)
 			continue
 		}
-		failures = 0
 		s.stats.breakerOpen.Store(false)
 		s.stats.starts.Add(1)
 		s.setClient(c)
@@ -153,6 +160,7 @@ func (s *Supervisor) loop() {
 		Note(s.cfg.Name + ".crash")
 		if time.Since(started) >= s.healthyAfter {
 			backoff = s.minBackoff
+			failures = 0 // only a run that stayed up clears the count; a start that dies at once does not
 		}
 		s.cfg.logf("sidecar %s: stopped, restarting in %v", s.cfg.Name, backoff)
 		if !s.sleep(backoff) {

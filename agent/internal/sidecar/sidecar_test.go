@@ -178,6 +178,9 @@ func TestSupervisorCountsStartFailuresAndTheBreaker(t *testing.T) {
 	if st.StartFailures < breakerFailures || st.BreakerOpens != 1 || st.Running {
 		t.Fatalf("stats: %+v", st)
 	}
+	if _, err := s.Client(); !errors.Is(err, ErrUnavailable) || !errors.Is(err, ErrBreakerOpen) {
+		t.Fatalf("Client() with the breaker open: %v, want ErrUnavailable and ErrBreakerOpen", err)
+	}
 	rep := Snapshot()
 	if rep.Events["fake-breaker.breaker-open"] != 1 {
 		t.Fatalf("events: %v", rep.Events)

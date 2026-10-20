@@ -37,6 +37,11 @@ pub const PARALLEL: usize = 2;
 pub const MAX_PARALLEL: usize = 8;
 
 const DEFAULT_CHUNK: usize = 8 << 20;
+/// A part file can only be continued when the version it came from is known.
+fn resume_is_unsafe(offset: u64, version: &Option<String>) -> bool {
+    offset > 0 && version.is_none()
+}
+
 /// The most files one folder download may queue.
 const MAX_FOLDER_FILES: usize = 50_000;
 // The most an agent may ask for per chunk: a larger answer would make this side allocate it whole.
@@ -1414,6 +1419,13 @@ async fn download(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
     let mut total: Option<u64> = None;
     let mut restarted = false;
     let mut version = lock(&item.resume).remote_version.clone();
+    // Bytes left by an earlier attempt with no validator to prove they belong to the file as it is now cannot
+    // be continued safely: start over rather than append a changed file onto them (audit F-142). Checked once,
+    // before the first request, so a server that never sends a validator is not restarted after every segment.
+    if resume_is_unsafe(part_len(part)?, &version) {
+        std::fs::File::create(part)
+            .map_err(|e| format!("cannot restart {}: {e}", part.display()))?;
+    }
     loop {
         let offset = part_len(part)?;
         if total.is_some_and(|t| offset >= t) {
@@ -2345,5 +2357,17 @@ mod checksum_tests {
     async fn a_failed_or_garbled_check_is_an_error_not_unverified() {
         assert!(ask("500 Internal Server Error", "{}").await.is_err());
         assert!(ask("200 OK", "not json").await.is_err());
+    }
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::resume_is_unsafe;
+
+    #[test]
+    fn bytes_without_a_known_version_are_not_continued() {
+        assert!(resume_is_unsafe(10, &None));
+        assert!(!resume_is_unsafe(0, &None));
+        assert!(!resume_is_unsafe(10, &Some("\"etag\"".into())));
     }
 }

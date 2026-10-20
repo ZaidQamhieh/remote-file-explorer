@@ -149,7 +149,13 @@ async function loadIdentity(): Promise<StoredIdentity> {
     await validateIdentity(stored);
     return stored;
   }
-  const legacy = await importLegacyIdentity();
+  // Malformed legacy keys must not wedge sign-in for good: drop them and start a fresh identity.
+  let legacy: StoredIdentity | null = null;
+  try {
+    legacy = await importLegacyIdentity();
+  } catch {
+    clearLegacyIdentity();
+  }
   return legacy ?? generateIdentity();
 }
 

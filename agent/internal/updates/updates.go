@@ -48,9 +48,17 @@ func Latest(dir string) (*Release, error) {
 		if best != nil && code <= best.VersionCode {
 			continue
 		}
-		info, err := e.Info()
+		// Stat the file itself (the download serves the link's target) and skip an entry that vanished
+		// between ReadDir and now, instead of failing the whole listing (audit F-57).
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			return nil, err
+		}
+		if info.IsDir() {
+			continue
 		}
 		best = &Release{
 			VersionName: m[1],

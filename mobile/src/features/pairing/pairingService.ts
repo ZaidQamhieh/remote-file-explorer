@@ -1,25 +1,12 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 
-import {
-  AgentApiError,
-  AgentClient,
-  type Transport,
-} from "../../core/api/agentClient";
-import {
-  hasFeature,
-  isMissingRoute,
-  unsupportedByAgent,
-} from "../../core/api/compat";
-import type { Health, PairResponse } from "../../core/api/models";
-import {
-  CertPinMismatch,
-  MissingCertPin,
-  normalizeFingerprint,
-} from "../../core/api/pin";
-import type { Host } from "../../core/models/host";
-import type { DeviceIdentity } from "../../core/security/deviceIdentity";
-import type { HostStore } from "../../core/storage/hostStore";
-import { matchCode } from "./matchCode";
+import { AgentApiError, AgentClient, type Transport } from '../../core/api/agentClient';
+import type { PairResponse } from '../../core/api/models';
+import { CertPinMismatch, MissingCertPin, normalizeFingerprint } from '../../core/api/pin';
+import type { Host } from '../../core/models/host';
+import type { DeviceIdentity } from '../../core/security/deviceIdentity';
+import type { HostStore } from '../../core/storage/hostStore';
+import { matchCode } from './matchCode';
 
 export type PairingDeps = {
   transport: Transport;
@@ -214,34 +201,12 @@ export async function probeTarget(deps: PairingDeps, address: string): Promise<P
 const hexToBytes = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
-const mapMissingRoute = (e: unknown): never => {
-  throw isMissingRoute(e) ? unsupportedByAgent("pairRequest") : e;
-};
-
-/** agent-v1.43.0 has /pair/request but takes the nonce up front: it answers the commit-reveal request with 400. */
-const mapOlderPairProtocol = (e: unknown): never => {
-  if (
-    e instanceof AgentApiError &&
-    e.statusCode === 400 &&
-    e.code === "BAD_REQUEST"
-  )
-    throw unsupportedByAgent("pairRequest");
-  return mapMissingRoute(e);
-};
-
 /**
  * Asks the computer at [address] to approve this phone; nothing is typed. The certificate the host presents is
  * pinned on first contact (the user never sees or enters it); the match code the computer shows is derived from that
  * pin, so a machine relaying the connection produces a code that differs from the one on the computer's screen.
  */
-export async function requestPairing(
-  deps: PairingDeps,
-  address: string,
-  knownHealth?: Health | null,
-): Promise<PairRequestHandle> {
-  // Health needs a token, so a first pairing usually has none: then the route itself answers, and 404/405 maps below.
-  if (!hasFeature(knownHealth, "pairRequest"))
-    throw unsupportedByAgent("pairRequest");
+export async function requestPairing(deps: PairingDeps, address: string): Promise<PairRequestHandle> {
   const target = await probeTarget(deps, address);
   const fp = target.fingerprint;
   const client = pinnedClient(deps, target);
@@ -249,29 +214,15 @@ export async function requestPairing(
   // Commit to the nonce first and reveal it only once the agent has chosen the request id. A relay that
   // could see the nonce before the id exists could grind an id that makes both match codes agree.
   const clientNonce = hex(deps.randomBytes(16));
-  const deviceId = (await deps.deviceId()) ?? undefined;
-  const r = await client
-    .requestPair({
-      deviceLabel: deps.deviceLabel ?? "Mobile App",
-      clientNonceCommit: hex(sha256(hexToBytes(clientNonce))),
-      ...p,
-      deviceId,
-    })
-    .catch(mapOlderPairProtocol);
-  if (!r.requestId)
-    throw new AgentApiError(
-      0,
-      "BAD_RESPONSE",
-      "The host returned an incomplete pairing response.",
-    );
-  await client.revealPair(r.requestId, clientNonce).catch(mapMissingRoute);
-  return {
-    target,
-    requestId: r.requestId,
-    clientNonce,
-    matchCode: matchCode(fp, clientNonce, r.requestId),
-    expiresInSeconds: r.expiresInSeconds,
-  };
+  const r = await client.requestPair({
+    deviceLabel: deps.deviceLabel ?? 'Mobile App',
+    clientNonceCommit: hex(sha256(hexToBytes(clientNonce))),
+    ...p,
+    deviceId: (await deps.deviceId()) ?? undefined,
+  });
+  if (!r.requestId) throw new AgentApiError(0, 'BAD_RESPONSE', 'The host returned an incomplete pairing response.');
+  await client.revealPair(r.requestId, clientNonce);
+  return { target, requestId: r.requestId, clientNonce, matchCode: matchCode(fp, clientNonce, r.requestId), expiresInSeconds: r.expiresInSeconds };
 }
 
 /** Polls until the owner answers; resolves with the paired host. Aborting stops polling (the request lapses on the computer). */

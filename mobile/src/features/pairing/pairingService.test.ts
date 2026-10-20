@@ -28,14 +28,9 @@ function setup(handler: (url: string, method: string, body: unknown, pin: string
 }
 
 const okHandler = (url: string) =>
-  url.endsWith("/auth/challenge")
-    ? { nonce: "n-1", proof: "v2" }
-    : {
-        deviceToken: "tok",
-        deviceId: "dev-9",
-        agentName: "My PC",
-        tailscaleAddress: "100.1.1.1:8765",
-      };
+  url.endsWith('/auth/challenge')
+    ? { nonce: 'n-1' }
+    : { deviceToken: 'tok', deviceId: 'dev-9', agentName: 'My PC', tailscaleAddress: '100.1.1.1:8765' };
 
 describe('pairWithCode', () => {
   it('pins before every request, sends the proof and device id, and commits pin+token', async () => {
@@ -63,15 +58,9 @@ describe('pairWithCode', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("rejects an incomplete pairing response without committing", async () => {
-    const { deps, store } = setup((url) =>
-      url.endsWith("/auth/challenge")
-        ? { nonce: "n", proof: "v2" }
-        : { deviceToken: "", deviceId: "" },
-    );
-    await expect(
-      pairWithCode(deps, { address: "a:1", fingerprint: PIN }, "C"),
-    ).rejects.toMatchObject({ code: "BAD_RESPONSE" });
+  it('rejects an incomplete pairing response without committing', async () => {
+    const { deps, store } = setup((url) => (url.endsWith('/auth/challenge') ? { nonce: 'n' } : { deviceToken: '', deviceId: '' }));
+    await expect(pairWithCode(deps, { address: 'a:1', fingerprint: PIN }, 'C')).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
     expect(await store.listHosts()).toEqual([]);
   });
 });
@@ -132,11 +121,7 @@ describe('humanizeError', () => {
 
 describe('approve-on-computer pairing', () => {
   const requestHandler = (status: () => unknown) => (url: string) =>
-    url.endsWith("/auth/challenge")
-      ? { nonce: "n-1", proof: "v2" }
-      : url.endsWith("/pair/request")
-        ? { requestId: "rid1", expiresInSeconds: 120 }
-        : status();
+    url.endsWith('/auth/challenge') ? { nonce: 'n-1' } : url.endsWith('/pair/request') ? { requestId: 'rid1', expiresInSeconds: 120 } : status();
 
   it('probes the certificate, pins every call to it, and never sends a code or a fingerprint', async () => {
     const { deps, calls } = setup(requestHandler(() => ({ status: 'pending' })));
@@ -210,17 +195,9 @@ describe('approve-on-computer pairing', () => {
   });
 });
 
-describe("credentials are only sent to a computer this phone trusts", () => {
-  const okLogin = (url: string) =>
-    url.endsWith("/auth/challenge")
-      ? { nonce: "n-1", proof: "v2" }
-      : { deviceToken: "tok", deviceId: "dev-9", agentName: "My PC" };
-  const host = (fp: string) => ({
-    id: "h1",
-    label: "PC",
-    address: "10.0.0.2:8765",
-    certFingerprint: fp,
-  });
+describe('credentials are only sent to a computer this phone trusts', () => {
+  const okLogin = (url: string) => (url.endsWith('/auth/challenge') ? { nonce: 'n-1' } : { deviceToken: 'tok', deviceId: 'dev-9', agentName: 'My PC' });
+  const host = (fp: string) => ({ id: 'h1', label: 'PC', address: '10.0.0.2:8765', certFingerprint: fp });
 
   it('refuses to log in when the address is saved under a different certificate, before any request', async () => {
     const { deps, calls, store } = setup(okLogin);

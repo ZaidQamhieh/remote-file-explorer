@@ -905,8 +905,6 @@
  "pairRequestRejected": "The computer declined the request.",
  "pairRequestExpired": "Nobody approved in time. Ask again.",
  "pairRequestFailed": "Could not ask the computer: {error}",
- "pairRequestUnsupported": "This computer’s agent is too old to approve a pairing request, so it needs the pairing QR code instead. Scan the QR shown by the agent on that computer, or update the agent there.",
- "pairRequestUseCode": "Scan pairing QR",
  "pairRequestRetry": "Try again",
  "pairRequestCancel": "Cancel"
 }

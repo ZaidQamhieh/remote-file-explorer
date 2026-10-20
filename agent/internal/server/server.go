@@ -324,16 +324,6 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 // --------- health ---------
 
-// APIVersion is the protocol revision this agent speaks. A v1.42.x agent sends
-// none, which clients read as 1. Bump only for a change a client must know about.
-const APIVersion = 2
-
-// Features lists the optional capabilities this agent has, sorted. Clients gate
-// newer UI on these ids, never on version strings. Ids are only ever added.
-var Features = []string{
-	"pairRequest", // /pair/request* (phone-initiated pairing approved on the PC)
-}
-
 // healthHandler is deliberately reachable without a device credential (a phone
 // probing reachability/latency shouldn't need one), but the topology detail
 // below is not: name/OS/version/read-only/addresses/MAC let an unauthenticated
@@ -353,8 +343,6 @@ func healthHandler(cfg Config, db *store.DB) http.HandlerFunc {
 			// when the host is asleep (and thus unreachable).
 			resp["name"] = cfg.Settings.AgentName()
 			resp["version"] = cfg.Version
-			resp["apiVersion"] = APIVersion
-			resp["features"] = Features
 			resp["os"] = runtime.GOOS
 			resp["readOnly"] = cfg.Settings.IsReadOnly()
 			resp["address"] = cfg.Address

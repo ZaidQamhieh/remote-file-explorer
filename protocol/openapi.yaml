@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Remote File Explorer — Host Agent API
-  version: 1.19.0
+  version: 1.18.0
   description: >
     Contract between the Flutter mobile app and the Go host agent. JSON for control and
     metadata; binary streams for file content. All routes except /pair, /register,
@@ -2201,17 +2201,6 @@ components:
         status: { type: string, example: ok }
         name: { type: string, description: Agent display name }
         version: { type: string }
-        apiVersion:
-          type: integer
-          description: >
-            Protocol revision (2 today). Absent on v1.42.x agents; clients read
-            absent as 1. See protocol/compat.md.
-        features:
-          type: array
-          items: { type: string }
-          description: >
-            Sorted ids of optional capabilities (e.g. "pairRequest"). Absent on
-            older agents; clients read absent as none. Gate UI on these.
         os: { type: string, enum: [windows, linux] }
         readOnly: { type: boolean }
         address:

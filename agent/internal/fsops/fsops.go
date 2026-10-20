@@ -5,6 +5,7 @@ package fsops
 
 import (
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
@@ -704,6 +705,7 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 			continue
 		}
 
+		var backup *securePath // the replaced destination, kept until the copy has succeeded
 		if _, err := dst.stat(); err == nil {
 			switch {
 			case duplicate:
@@ -719,7 +721,9 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 					}
 					continue
 				}
-				if err := dst.removeAll(); err != nil {
+				var err error
+				backup, err = moveAside(dstDir, dst)
+				if err != nil {
 					results[i] = BatchResult{Path: src, Error: apiErr("COPY_FAILED", err.Error())}
 					resSrc.close()
 					if dstDir.root != resSrc.root {
@@ -738,8 +742,10 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 		}
 		if err := copySecureRecursive(resSrc, dst); err != nil {
 			results[i] = BatchResult{Path: src, Error: apiErr("COPY_FAILED", err.Error())}
+			restoreAside(dst, backup)
 		} else {
 			results[i] = BatchResult{Path: src, OK: true}
+			discardAside(backup)
 		}
 		resSrc.close()
 		if dstDir.root != resSrc.root {
@@ -794,6 +800,7 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 			continue
 		}
 
+		var backup *securePath // the replaced destination, kept until the move has succeeded
 		if _, err := dst.lstat(); err == nil {
 			switch {
 			case duplicate:
@@ -809,7 +816,9 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 					}
 					continue
 				}
-				if err := dst.removeAll(); err != nil {
+				var err error
+				backup, err = moveAside(dstDir, dst)
+				if err != nil {
 					results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", err.Error())}
 					resSrc.close()
 					if dstDir.root != resSrc.root {
@@ -828,6 +837,7 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 		}
 		if err := dstDir.mkdirAll(0o755); err != nil {
 			results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", err.Error())}
+			restoreAside(dst, backup)
 			resSrc.close()
 			if dstDir.root != resSrc.root {
 				dstDir.close()
@@ -840,11 +850,14 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 			}
 			if err != nil {
 				results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", err.Error())}
+				restoreAside(dst, backup)
 			} else {
 				results[i] = BatchResult{Path: src, OK: true}
+				discardAside(backup)
 			}
 		} else {
 			results[i] = BatchResult{Path: src, OK: true}
+			discardAside(backup)
 		}
 		resSrc.close()
 		if dstDir.root != resSrc.root {
@@ -1136,4 +1149,36 @@ func copySecureRecursive(src, dst *securePath) error {
 
 func apiErr(code, msg string) *Error {
 	return &Error{Code: code, Message: msg}
+}
+
+// moveAside renames an existing destination out of the way (to a hidden sibling) so an overwrite
+// can put the new content in place first and only then delete the old one. Deleting first lost the
+// destination whenever the copy or move then failed (audit F-41, F-120).
+func moveAside(dir, dst *securePath) (*securePath, error) {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return nil, err
+	}
+	aside := dir.child(".rfe-old-" + hex.EncodeToString(b[:]) + "-" + filepath.Base(dst.full))
+	if err := dst.renameTo(aside); err != nil {
+		return nil, err
+	}
+	return aside, nil
+}
+
+// restoreAside undoes moveAside after a failed overwrite: the partial result is removed and the
+// original destination put back.
+func restoreAside(dst, aside *securePath) {
+	if aside == nil {
+		return
+	}
+	_ = dst.removeAll()
+	_ = aside.renameTo(dst)
+}
+
+// discardAside deletes the replaced destination once its replacement is complete.
+func discardAside(aside *securePath) {
+	if aside != nil {
+		_ = aside.removeAll()
+	}
 }

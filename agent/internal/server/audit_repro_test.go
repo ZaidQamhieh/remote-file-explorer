@@ -64,3 +64,45 @@ func TestAuditRepro_ShareExpiryOverflowRejected(t *testing.T) {
 		t.Fatalf("expiresInSeconds above the 24h cap accepted: %d %s", rr.Code, rr.Body.String())
 	}
 }
+
+// F-70: ListDir and Checksum open a FIFO with a blocking open(2) and never return.
+func TestAuditRepro_ListDirAndChecksumFIFOReturnPromptly(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	fifo := filepath.Join(root, "pipe")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	for name, call := range map[string]func(){
+		"ListDir":  func() { _, _ = ops.ListDir(fifo, "", 10) },
+		"Checksum": func() { _, _ = ops.Checksum(fifo, "sha256") },
+	} {
+		done := make(chan struct{})
+		go func() { call(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Errorf("%s on a FIFO blocked for over 3s", name)
+		}
+	}
+}
+
+// F-89: Move(src, destDir inside src, overwrite=true) deletes a subtree of the source, then fails.
+func TestAuditRepro_MoveIntoItselfOverwriteKeepsData(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	keep := filepath.Join(root, "a", "b", "a", "keep.txt")
+	if err := os.MkdirAll(filepath.Dir(keep), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keep, []byte("precious"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	res := ops.Move([]string{filepath.Join(root, "a")}, filepath.Join(root, "a", "b"), false, true)
+	t.Logf("result: %+v", res)
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("data inside the source was deleted by a failing move: %v", err)
+	}
+}

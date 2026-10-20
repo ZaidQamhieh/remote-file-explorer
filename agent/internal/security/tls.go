@@ -11,11 +11,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -65,14 +67,17 @@ func LoadOrCreateCert(dir string) (tls.Certificate, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return tls.Certificate{}, err
 	}
-	if err := writePEM(certPath, "CERTIFICATE", der, 0o644); err != nil {
-		return tls.Certificate{}, err
-	}
+	// The key goes first and the certificate last: the certificate is what phones pin and what marks
+	// the pair as complete, so a crash between the two writes leaves only a key, which is replaced on
+	// the next start before anything was ever pinned (audit F-92).
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
 	if err := writePEM(keyPath, "EC PRIVATE KEY", keyDER, 0o600); err != nil {
+		return tls.Certificate{}, err
+	}
+	if err := writePEM(certPath, "CERTIFICATE", der, 0o644); err != nil {
 		return tls.Certificate{}, err
 	}
 
@@ -85,13 +90,37 @@ func Fingerprint(cert tls.Certificate) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// writePEM writes through a temporary file and renames it into place, so a crash never leaves a
+// truncated file behind.
 func writePEM(path, blockType string, der []byte, mode os.FileMode) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return pem.Encode(f, &pem.Block{Type: blockType, Bytes: der})
+	name := tmp.Name()
+	fail := func(err error) error {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil && !errors.Is(err, os.ErrPermission) && runtime.GOOS != "windows" {
+		return fail(err)
+	}
+	if err := pem.Encode(tmp, &pem.Block{Type: blockType, Bytes: der}); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		os.Remove(name)
+		return err
+	}
+	return nil
 }
 
 func fileExists(p string) bool {

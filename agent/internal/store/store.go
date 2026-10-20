@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +37,13 @@ func Open(dir string) (*DB, error) {
 	// modernc.org/sqlite only recognizes `_pragma` (plus `_time_format` and
 	// `_txlock`) DSN params, not the mattn-style `_journal_mode`/`_busy_timeout`
 	// keys — those would be silently ignored.
-	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
+	// A '?', '#' or '%' in the data directory would cut the DSN short and drop the pragmas below
+	// (audit F-96), so such a path goes through an escaped file: URI; other paths keep the plain form.
+	dsnPath := path
+	if strings.ContainsAny(path, "?#%") {
+		dsnPath = "file:" + strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23").Replace(path)
+	}
+	dsn := dsnPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)

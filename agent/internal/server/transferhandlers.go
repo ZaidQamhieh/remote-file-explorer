@@ -2,7 +2,6 @@
 package server
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -392,10 +391,22 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 		}
 		defer chunkBudget.release(need)
 
-		// Read into a buffer sized for the reservation so the transient peak stays inside the budget.
-		buf := bytes.NewBuffer(make([]byte, 0, need))
-		_, err = io.Copy(buf, bodyReader)
-		data := buf.Bytes()
+		// Read straight into one buffer of exactly the reserved size, so the peak stays inside the budget (a
+		// growing buffer would double). One extra byte probes for a body longer than the chunk size.
+		data := make([]byte, need)
+		got, err := io.ReadFull(bodyReader, data)
+		switch {
+		case err == nil:
+			var one [1]byte
+			m, perr := bodyReader.Read(one[:])
+			var tooBig *http.MaxBytesError
+			if m > 0 || errors.As(perr, &tooBig) {
+				writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "chunk exceeds session chunk size")
+				return
+			}
+		case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+			data, err = data[:got], nil
+		}
 		if err != nil {
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {

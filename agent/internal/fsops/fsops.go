@@ -1176,7 +1176,8 @@ func moveAside(dir, dst *securePath) (*securePath, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return nil, err
 	}
-	aside := dir.child(".rfe-old-" + hex.EncodeToString(b[:]) + "-" + filepath.Base(dst.full))
+	// The name is fixed-length: appending the old name would overflow NAME_MAX for a long destination name.
+	aside := dir.child(".rfe-old-" + hex.EncodeToString(b[:]))
 	if err := dst.renameTo(aside); err != nil {
 		return nil, err
 	}

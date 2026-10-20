@@ -70,3 +70,18 @@ func TestKeyedLimiterCapsActiveKeysAndBoundsOverflowBudget(t *testing.T) {
 		t.Fatalf("tracked source map grew to %d keys, want cap %d", got, limiter.maxKeys)
 	}
 }
+
+// A key that is sent to an overflow window (the key map is full) is still seen as exhausted.
+func TestKeyedLimiterExhaustedSeesOverflowWindows(t *testing.T) {
+	k := newKeyedLimiter(2, time.Minute)
+	k.maxKeys = 1
+	k.Allow("occupies-the-only-slot")
+	if k.Exhausted("late") {
+		t.Fatal("a fresh key must not be exhausted")
+	}
+	k.Allow("late")
+	k.Allow("late")
+	if !k.Exhausted("late") {
+		t.Fatal("a key in an overflow window that used its attempts must be exhausted")
+	}
+}

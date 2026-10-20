@@ -139,10 +139,21 @@ func (l *fixedWindowLimiter) allowAt(now time.Time) bool {
 func (k *keyedLimiter) Exhausted(key string) bool {
 	k.mu.Lock()
 	l, ok := k.perKey[key]
+	if !ok && len(k.perKey) >= k.maxKeys {
+		// A key that would be sent to a shared overflow window is judged by that window.
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(key))
+		l, ok = k.overflow[h.Sum32()%overflowBuckets], true
+	}
 	k.mu.Unlock()
 	if !ok {
 		return false
 	}
+	return l.full()
+}
+
+// full reports whether the window holds maxAttempts live hits, without recording one.
+func (l *fixedWindowLimiter) full() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	cutoff := time.Now().Add(-l.window)

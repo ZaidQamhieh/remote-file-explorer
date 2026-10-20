@@ -1,6 +1,5 @@
-// Audit 2026-10-20 (F-67): overlapping collection mutations lose updates. Runs only with RFE_AUDIT_REPRO=1
+// Audit 2026-10-20 (F-67): overlapping collection mutations must not lose updates.
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories and lazy require are the supported pattern here */
-// because it FAILS while the defect exists. See docs/audit/2026-10-20-audit.md.
 
 jest.mock('../services', () => {
   const kv = new (require('../core/storage/hostStore').MemoryKeyValueStore)();
@@ -12,7 +11,7 @@ jest.mock('../services', () => {
   return { keyValue: kv, listingCache: { clear: jest.fn() } };
 });
 
-const run = process.env.RFE_AUDIT_REPRO === '1' ? it : it.skip;
+const run = it;
 
 describe('audit F-67', () => {
   run('two overlapping toggleFavorite calls both persist', async () => {

@@ -46,6 +46,15 @@ type S = {
   removeSavedSearch(name: string): Promise<void>;
 };
 
+// Every mutation reads the current list and writes the next one, so two overlapping calls would each start from the
+// same list and the later write would drop the earlier change (audit F-67). Run them one after another.
+let tail: Promise<unknown> = Promise.resolve();
+function queued<T>(job: () => Promise<T>): Promise<T> {
+  const run = tail.then(job, job);
+  tail = run.catch(() => undefined);
+  return run;
+}
+
 /** Favorites, bookmarks, offline pins and searches: persisted first, then mirrored in memory. Keys/encodings match the Flutter app. */
 export const useCollections = create<S>((set, get) => ({
   loaded: false,
@@ -58,61 +67,83 @@ export const useCollections = create<S>((set, get) => ({
     const [favorites, bookmarks, pins, recentSearches, savedSearches] = await Promise.all([favs.load(), marks.load(), pinsStore.load(), recents.load(), saved.load()]);
     set({ favorites, bookmarks, pins, recentSearches, savedSearches, loaded: true });
   },
-  async toggleFavorite(f) {
-    const next = toggleFavorite(get().favorites, f);
-    await favs.save(next);
-    set({ favorites: next });
+  toggleFavorite(f) {
+    return queued(async () => {
+      const next = toggleFavorite(get().favorites, f);
+      await favs.save(next);
+      set({ favorites: next });
+    });
   },
-  async removeFavorite(hostId, path) {
-    const next = get().favorites.filter((f) => !(f.hostId === hostId && f.path === path));
-    await favs.save(next);
-    set({ favorites: next });
+  removeFavorite(hostId, path) {
+    return queued(async () => {
+      const next = get().favorites.filter((f) => !(f.hostId === hostId && f.path === path));
+      await favs.save(next);
+      set({ favorites: next });
+    });
   },
-  async addBookmark(b) {
-    const next = upsertBookmark(get().bookmarks, b);
-    await marks.save(next);
-    set({ bookmarks: next });
+  addBookmark(b) {
+    return queued(async () => {
+      const next = upsertBookmark(get().bookmarks, b);
+      await marks.save(next);
+      set({ bookmarks: next });
+    });
   },
-  async removeBookmark(hostId, path) {
-    const next = removeBookmark(get().bookmarks, hostId, path);
-    await marks.save(next);
-    set({ bookmarks: next });
+  removeBookmark(hostId, path) {
+    return queued(async () => {
+      const next = removeBookmark(get().bookmarks, hostId, path);
+      await marks.save(next);
+      set({ bookmarks: next });
+    });
   },
-  async pin(hostId, path) {
-    const next = addPin(get().pins, { hostId, remotePath: path });
-    await pinsStore.save(next);
-    set({ pins: next });
-    listingCache.syncPinned(hostId, next.filter((p) => p.hostId === hostId).map((p) => p.remotePath));
+  pin(hostId, path) {
+    return queued(async () => {
+      const next = addPin(get().pins, { hostId, remotePath: path });
+      await pinsStore.save(next);
+      set({ pins: next });
+      listingCache.syncPinned(hostId, next.filter((p) => p.hostId === hostId).map((p) => p.remotePath));
+    });
   },
-  async unpin(hostId, path) {
-    const next = removePin(get().pins, hostId, path);
-    await pinsStore.save(next);
-    set({ pins: next });
-    listingCache.syncPinned(hostId, next.filter((p) => p.hostId === hostId).map((p) => p.remotePath));
+  unpin(hostId, path) {
+    return queued(async () => {
+      const next = removePin(get().pins, hostId, path);
+      await pinsStore.save(next);
+      set({ pins: next });
+      listingCache.syncPinned(hostId, next.filter((p) => p.hostId === hostId).map((p) => p.remotePath));
+    });
   },
-  async recordSearch(q) {
-    const next = recordSearch(get().recentSearches, q);
-    await recents.save(next);
-    set({ recentSearches: next });
+  recordSearch(q) {
+    return queued(async () => {
+      const next = recordSearch(get().recentSearches, q);
+      await recents.save(next);
+      set({ recentSearches: next });
+    });
   },
-  async removeRecentSearch(q) {
-    const next = get().recentSearches.filter((s) => s !== q);
-    await recents.save(next);
-    set({ recentSearches: next });
+  removeRecentSearch(q) {
+    return queued(async () => {
+      const next = get().recentSearches.filter((s) => s !== q);
+      await recents.save(next);
+      set({ recentSearches: next });
+    });
   },
-  async clearRecentSearches() {
-    await recents.save([]);
-    set({ recentSearches: [] });
+  clearRecentSearches() {
+    return queued(async () => {
+      await recents.save([]);
+      set({ recentSearches: [] });
+    });
   },
-  async addSavedSearch(s) {
-    const next = [s, ...get().savedSearches];
-    await saved.save(next);
-    set({ savedSearches: next });
+  addSavedSearch(s) {
+    return queued(async () => {
+      const next = [s, ...get().savedSearches];
+      await saved.save(next);
+      set({ savedSearches: next });
+    });
   },
-  async removeSavedSearch(name) {
-    const next = get().savedSearches.filter((s) => s.name !== name);
-    await saved.save(next);
-    set({ savedSearches: next });
+  removeSavedSearch(name) {
+    return queued(async () => {
+      const next = get().savedSearches.filter((s) => s.name !== name);
+      await saved.save(next);
+      set({ savedSearches: next });
+    });
   },
 }));
 

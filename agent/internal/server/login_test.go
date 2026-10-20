@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -130,5 +131,31 @@ func TestLoginHandler_RateLimitedAfterTooManyAttempts(t *testing.T) {
 	handler(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// Guesses spread over many source addresses still run out: the account itself stops answering after enough
+// failures, while a different account is unaffected.
+func TestLoginHandler_AccountLockoutAcrossAddresses(t *testing.T) {
+	db, _ := newTestDeps(t)
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
+	handler := loginHandler(cfg, db, newNonceStore())
+	post := func(user, ip string) int {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/login", strings.NewReader(`{"username":"`+user+`","password":"wrong-password"}`))
+		req.RemoteAddr = ip + ":1234"
+		handler(rr, req)
+		return rr.Code
+	}
+	for i := 0; i < loginAccountFailures; i++ {
+		if c := post("Victim", fmt.Sprintf("10.0.%d.%d", i/200, i%200+1)); c != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected 401, got %d", i+1, c)
+		}
+	}
+	if c := post("victim", "10.9.9.9"); c != http.StatusTooManyRequests {
+		t.Fatalf("expected the account to be locked (429), got %d", c)
+	}
+	if c := post("someone-else", "10.9.9.9"); c != http.StatusUnauthorized {
+		t.Fatalf("another account must be unaffected, got %d", c)
 	}
 }

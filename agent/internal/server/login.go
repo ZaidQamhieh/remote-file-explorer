@@ -11,6 +11,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/security"
@@ -22,6 +23,10 @@ import (
 const (
 	loginRateLimitAttempts = 10
 	loginRateLimitWindow   = time.Minute
+	// A per-account cap on failures from any address, so guesses spread over many sources still run out. It is
+	// generous and counts failures only, so a stranger cannot lock the owner out with a few attempts.
+	loginAccountFailures      = 30
+	loginAccountFailureWindow = 15 * time.Minute
 )
 
 type loginRequest struct {
@@ -38,6 +43,7 @@ type loginRequest struct {
 
 func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc {
 	limiter := newKeyedLimiter(loginRateLimitAttempts, loginRateLimitWindow)
+	accountFails := newKeyedLimiter(loginAccountFailures, loginAccountFailureWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
@@ -52,6 +58,11 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			return
 		}
 
+		account := strings.ToLower(req.Username)
+		if accountFails.Exhausted(account) {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many failed logins for this account, try again later")
+			return
+		}
 		user, err := db.GetUserByUsername(req.Username)
 		if err != nil {
 			writeInternal(w, "login", err)
@@ -66,6 +77,7 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 			// Records the attempted username, not whether it exists — the
 			// response still doesn't distinguish the two, but the host owner
 			// reading their own audit trail should see what was tried.
+			accountFails.Allow(account)
 			auditAs(db, req.Username, store.AuditLoginFailed, "", "from "+clientIP(r))
 			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid username or password")
 			return

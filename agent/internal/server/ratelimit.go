@@ -133,3 +133,24 @@ func (l *fixedWindowLimiter) allowAt(now time.Time) bool {
 	l.hits = append(l.hits, now)
 	return true
 }
+
+// Exhausted reports whether key has used its whole window, without recording an attempt. Used to refuse a
+// login for an account that has had too many failures, whichever address they came from.
+func (k *keyedLimiter) Exhausted(key string) bool {
+	k.mu.Lock()
+	l, ok := k.perKey[key]
+	k.mu.Unlock()
+	if !ok {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	cutoff := time.Now().Add(-l.window)
+	n := 0
+	for _, t := range l.hits {
+		if t.After(cutoff) {
+			n++
+		}
+	}
+	return n >= l.maxAttempts
+}

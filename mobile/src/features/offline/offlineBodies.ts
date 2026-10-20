@@ -30,8 +30,10 @@ export const wantsOfflineCopy = (d: Pick<OfflineDeps, 'isPinnedFolder'>, host: H
 export async function keepOfflineCopy(d: OfflineDeps, host: Host, e: Pick<Entry, 'path' | 'isDir' | 'size'>, localPath: string, replace: boolean): Promise<boolean> {
   try {
     if (!wantsOfflineCopy(d, host, e)) return false;
-    if (!replace && (await d.vault.has(host.id, e.path))) return false;
-    if ((await d.vault.totalBytes()) + (e.size ?? 0) > MAX_OFFLINE_CACHE_BYTES) return false;
+    const had = await d.vault.has(host.id, e.path);
+    if (!replace && had) return false;
+    // A replaced body's old copy is already in the total, so only a new entry adds its size to the budget.
+    if ((await d.vault.totalBytes()) + (had ? 0 : (e.size ?? 0)) > MAX_OFFLINE_CACHE_BYTES) return false;
     await d.vault.put(host.id, e.path, localPath);
     return true;
   } catch {

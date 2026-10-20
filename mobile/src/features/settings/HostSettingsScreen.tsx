@@ -130,7 +130,8 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
     if (value === null) return;
     const { internetAddress: _drop, ...rest } = host;
     const updated: Host = value === '' ? rest : { ...rest, internetAddress: value };
-    await hostStore.updateHost(updated);
+    // Patch only this field: a background learn (address, MAC) that landed meanwhile must not be reverted.
+    await hostStore.patchHost(host.id, { internetAddress: value === '' ? undefined : value });
     setHost(updated);
     toast.success(value === '' ? t('internetRouteRemoved') : t('internetRouteSaved'));
   }

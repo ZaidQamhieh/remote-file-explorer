@@ -54,7 +54,17 @@ const toPath = (uri: string) => decodeURIComponent(uri.replace('file://', ''));
  * Each photo is copied into app storage and queued as a durable native upload named `pb-<asset id>`; the asset is
  * recorded as done only when that upload finishes (see [watchPhotoBackup]), so a failed upload is retried next run.
  */
-export const runPhotoBackup = singleFlight(runPhotoBackupOnce);
+const runPhotoBackupShared = singleFlight(runPhotoBackupOnce);
+
+/**
+ * A caller that joins a run already in flight gets that run's result. If that run was a background one that could
+ * not ask for photo access and this caller can, it asks now instead of reporting the background run's refusal.
+ */
+export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise<BackupResult> {
+  const result = await runPhotoBackupShared(o);
+  if (result.kind === 'permissionDenied' && (o.interactive ?? true)) return runPhotoBackupShared(o);
+  return result;
+}
 
 async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<BackupResult> {
   const prefs = await photoBackupStore.load();

@@ -203,7 +203,24 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     if (pinnedHere) return void (await collections.unpin(host.id, path));
     await collections.pin(host.id, path);
     // Fetch the folder's files in the background so they open offline (each fetch stores its encrypted copy).
-    void precachePinnedFolder(offlineDeps, host, ex.getState().entries, (h, e) => fetchPreviewFile(h, e, MAX_OFFLINE_FILE_BYTES));
+    // Page through the whole folder: the screen may hold only the first page.
+    void (async () => {
+      const all: Entry[] = [...ex.getState().entries];
+      try {
+        let cursor = ex.getState().nextCursor ?? undefined;
+        if (cursor) {
+          const client = await clientForHost(host);
+          while (cursor) {
+            const page = await client.list(path, { cursor });
+            all.push(...page.entries);
+            cursor = page.nextCursor;
+          }
+        }
+      } catch {
+        // Best effort: precache what was loaded.
+      }
+      await precachePinnedFolder(offlineDeps, host, all, (h, e) => fetchPreviewFile(h, e, MAX_OFFLINE_FILE_BYTES));
+    })();
   }
 
   async function bookmark(e: Entry) {

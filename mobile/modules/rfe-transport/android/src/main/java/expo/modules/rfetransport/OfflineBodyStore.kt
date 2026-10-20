@@ -52,16 +52,29 @@ class OfflineBodyStore(private val dir: File, private val keyProvider: () -> Byt
     val src = fileFor(hostId, path)
     if (!src.exists()) return false
     val tmp = File(dest.path + ".dec-" + random.nextLong().toString(16))
+    var unreadable = false
     try {
       dest.parentFile?.mkdirs()
       FileInputStream(src).use { raw ->
-        aead().newDecryptingStream(raw, aad(hostId, path)).use { plain -> FileOutputStream(tmp).use { out -> plain.copyTo(out, 64 * 1024) } }
+        aead().newDecryptingStream(raw, aad(hostId, path)).use { plain ->
+          FileOutputStream(tmp).use { out ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+              // Only a failure to READ the encrypted body means it is bad; a full disk or an unwritable
+              // destination must not destroy a good cached copy (audit F-108).
+              val n = try { plain.read(buf) } catch (e: IOException) { unreadable = true; throw e }
+              if (n < 0) break
+              out.write(buf, 0, n)
+            }
+          }
+        }
       }
       if (dest.exists()) dest.delete()
       if (!tmp.renameTo(dest)) throw IOException("could not publish restored file")
       return true
     } catch (e: IOException) {
       // Tink reports authentication failures as IOException("Tag mismatch") and short reads as truncation.
+      if (!unreadable) throw e
       src.delete()
       throw OfflineBodyIntegrityException()
     } finally {

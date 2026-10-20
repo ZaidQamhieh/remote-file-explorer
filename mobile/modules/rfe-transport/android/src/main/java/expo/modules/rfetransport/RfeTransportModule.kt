@@ -59,14 +59,20 @@ class RfeTransportModule : Module() {
   // call (a ping to an offline host) would stall every other native call. Network work runs on IO.
   private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { guard(block) }
 
+  private val offlineKeyLock = Any()
+
   // Bodies of pinned folders, encrypted at rest. The key is created once and kept in secure storage.
   private val bodies by lazy {
     val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
     OfflineBodyStore(File(ctx.filesDir, "offline_cache")) {
       val name = "rfe.offline_body_cache.aes_gcm_hkdf.v1"
-      val existing = secure.read(name)?.let { Base64.decode(it, Base64.NO_WRAP) }
-      if (existing != null && existing.size == OfflineBodyStore.KEY_BYTES) existing
-      else OfflineBodyStore.newKey().also { secure.write(name, Base64.encodeToString(it, Base64.NO_WRAP)) }
+      // One creator at a time, re-reading inside the lock: two first uses must not each make a key and
+      // let the last write win, which would orphan the bodies stored under the other (audit F-109).
+      synchronized(offlineKeyLock) {
+        val existing = secure.read(name)?.let { Base64.decode(it, Base64.NO_WRAP) }
+        if (existing != null && existing.size == OfflineBodyStore.KEY_BYTES) existing
+        else OfflineBodyStore.newKey().also { secure.write(name, Base64.encodeToString(it, Base64.NO_WRAP)) }
+      }
     }
   }
 

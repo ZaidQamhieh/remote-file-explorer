@@ -63,6 +63,16 @@ class OfflineBodyStoreTest {
     assertThrows(OfflineBodyIntegrityException::class.java) { store.restore("h", "/a", File(root, "o")) }
   }
 
+  @Test fun anUnwritableDestinationKeepsTheCachedCopy() {
+    store.put("h", "/a", file("s", sample(1000)))
+    val blocker = file("blocker", sample(1)) // a file where the destination's folder should be
+    assertThrows(java.io.IOException::class.java) { store.restore("h", "/a", File(blocker, "out")) }
+    assertTrue("a good copy must survive a failure that was not its fault", store.has("h", "/a"))
+    val out = File(root, "ok")
+    assertTrue(store.restore("h", "/a", out))
+    assertArrayEquals(sample(1000), out.readBytes())
+  }
+
   @Test fun anEntryCannotBeReadUnderAnotherHostOrPath() {
     store.put("h1", "/a", file("s", sample(1000)))
     val src = File(root, "cache").listFiles()!!.single()

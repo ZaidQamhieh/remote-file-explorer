@@ -59,9 +59,19 @@ func writePairResponse(w http.ResponseWriter, r *http.Request, response pairResp
 	writeJSON(w, http.StatusOK, response)
 }
 
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
-	clearWebSessionCookie(w)
-	w.WriteHeader(http.StatusNoContent)
+// logoutHandler clears the browser cookie and, for a password-login session (a browser the owner signed in on,
+// not a paired device), deletes that session's device row so the token is dead server-side too. A paired device
+// keeps its row: its token is a standing pairing the owner revokes from the Devices page.
+func logoutHandler(db *store.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie(webSessionCookie); err == nil && c.Value != "" && validWebSessionRequest(r) {
+			if d, err := db.DeviceByToken(c.Value); err == nil && d != nil && d.ViaLogin {
+				_ = db.DeleteDevice(d.ID)
+			}
+		}
+		clearWebSessionCookie(w)
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {

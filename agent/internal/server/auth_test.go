@@ -196,7 +196,8 @@ func TestWritePairResponseKeepsBrowserTokenHttpOnly(t *testing.T) {
 
 func TestLogoutHandlerClearsOnlyBrowserCookie(t *testing.T) {
 	response := httptest.NewRecorder()
-	logoutHandler(response, httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil))
+	db, _ := newTestDeps(t)
+	logoutHandler(db)(response, httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("logout status = %d, want 204", response.Code)
 	}
@@ -257,5 +258,32 @@ func TestDeviceJailMiddleware_ReadOnly(t *testing.T) {
 	_, err := gotOps.CreateFolder(root + "/test-dir")
 	if err == nil {
 		t.Fatal("expected error from read-only ops")
+	}
+}
+
+func TestLogout_EndsALoginSessionButNotAPairing(t *testing.T) {
+	db, _ := newTestDeps(t)
+	if err := db.CreateUser("owner", "pw-hash"); err != nil {
+		t.Fatal(err)
+	}
+	loginID, err := db.LoginDevice("browser-login", "Browser", "login-token", "", "owner", "pw-hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pairedID, err := db.UpsertDevice("browser-paired", "Browser", "paired-token", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{"login-token", "paired-token"} {
+		req := httptest.NewRequest(http.MethodPost, "https://example.test/v1/auth/logout", nil)
+		req.Header.Set(webSessionHeader, "1")
+		req.AddCookie(&http.Cookie{Name: webSessionCookie, Value: token})
+		logoutHandler(db)(httptest.NewRecorder(), req)
+	}
+	if d, _ := db.GetDeviceByID(loginID); d != nil {
+		t.Fatal("a password-login session must be deleted on logout")
+	}
+	if d, _ := db.GetDeviceByID(pairedID); d == nil || d.Revoked {
+		t.Fatal("a paired device must survive logout")
 	}
 }

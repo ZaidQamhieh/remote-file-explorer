@@ -144,7 +144,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops, nonces *nonceStore) {
 	r.Get("/health", healthHandler(cfg, db))
 	r.Post("/auth/challenge", challengeHandler(nonces, cfg.CertFingerprint))
-	r.Post("/auth/logout", logoutHandler)
+	r.Post("/auth/logout", logoutHandler(db))
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/pair/request", createPairRequestHandler(cfg, db, nonces))
 	r.Post("/pair/request/{id}/reveal", revealPairRequestHandler(cfg, db))

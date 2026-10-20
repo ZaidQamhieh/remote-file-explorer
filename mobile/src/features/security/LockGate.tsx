@@ -1,5 +1,5 @@
 import { Lock } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState, View } from 'react-native';
 
 import { authenticate } from '../../core/security/deviceAuth';
@@ -23,12 +23,15 @@ export function LockGate({ children }: { children: ReactNode }) {
   const setUnlocked = useLock((s) => s.setUnlocked);
   const prompting = useRef(false);
   const backgroundedAt = useRef<number | null>(null);
+  const [noScreenLock, setNoScreenLock] = useState(false);
 
   const unlock = useCallback(async () => {
     if (prompting.current) return;
     prompting.current = true;
     try {
-      if (unlocksApp(await authenticate(t('unlockReason')))) setUnlocked(true);
+      const outcome = await authenticate(t('unlockReason'));
+      setNoScreenLock(outcome === 'unavailable');
+      if (unlocksApp(outcome)) setUnlocked(true);
     } finally {
       prompting.current = false;
     }
@@ -58,6 +61,7 @@ export function LockGate({ children }: { children: ReactNode }) {
         <>
           <Lock size={40} color={c.primary} />
           <Text variant="titleLarge">{t('appLockedTitle')}</Text>
+          {noScreenLock ? <Text muted>{t('appLockNeedsScreenLock')}</Text> : null}
           <Button label={t('unlockButton')} onPress={() => void unlock()} />
         </>
       ) : null}

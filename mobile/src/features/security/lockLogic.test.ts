@@ -17,9 +17,9 @@ describe('shouldRelockOnResume', () => {
 });
 
 describe('unlocksApp', () => {
-  it('opens on success and when device auth is unavailable, stays locked on failure', () => {
+  it('opens only on success; failure and an unavailable device lock stay locked', () => {
     expect(unlocksApp('success')).toBe(true);
-    expect(unlocksApp('unavailable')).toBe(true);
+    expect(unlocksApp('unavailable')).toBe(false);
     expect(unlocksApp('failed')).toBe(false);
   });
 });

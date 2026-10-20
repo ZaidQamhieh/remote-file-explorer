@@ -12,10 +12,10 @@ export function shouldRelockOnResume(enabled: boolean, backgroundedAt: number | 
 
 
 /**
- * Device auth outcome to lock action. `unavailable` (no screen lock enrolled, or no hardware) opens the app: a lock
- * that can never be satisfied would brick it, so it fails open exactly as the Flutter LockGate does.
+ * Device auth outcome to lock action. Only a successful check opens the app: no screen lock or no hardware
+ * (`unavailable`) keeps it locked too, and the lock screen says to set a screen lock (audit F-19).
  */
-export const unlocksApp = (o: AuthOutcome): boolean => o !== 'failed';
+export const unlocksApp = (o: AuthOutcome): boolean => o === 'success';
 
 /** Why the switch cannot be turned on right now, or null when it can. */
 export function lockEnableBlocker(hasHardware: boolean, enrolledLevel: number): 'noHardware' | 'noScreenLock' | null {

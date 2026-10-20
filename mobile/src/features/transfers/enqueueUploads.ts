@@ -26,8 +26,18 @@ export async function enqueueUploads(host: Host, destDir: string, items: UploadI
     // directory or the chosen remote folder.
     const targetName = cleanUploadName(item.targetName);
     const staged = new File(dir, targetName);
-    await new File(item.source.uri).move(staged);
-    await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), joinRemotePath(destDir, targetName), item.overwrite, true);
+    try {
+      await new File(item.source.uri).move(staged);
+      await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), joinRemotePath(destDir, targetName), item.overwrite, true);
+    } catch (e) {
+      // A full phone (or any failed move/enqueue) must not leave a half-copied file behind in app storage.
+      try {
+        dir.delete();
+      } catch {
+        // Already gone.
+      }
+      throw e;
+    }
     queued++;
   }
   return queued;

@@ -68,6 +68,19 @@ describe('HostStore list handling', () => {
     await expect(failing.removeHost('h1')).resolves.toBeUndefined();
   });
 
+  it('removeHost keeps the host listed when a keystore delete fails (F-75)', async () => {
+    const { store, secure } = make();
+    await store.commitPairing(host, { token: 'tok', fingerprint: PIN });
+    const del = secure.delete.bind(secure);
+    secure.delete = async () => Promise.reject(new Error('keystore'));
+    await expect(store.removeHost('h1')).rejects.toThrow('keystore');
+    expect((await store.listHosts()).map((h) => h.id)).toEqual(['h1']);
+    secure.delete = del;
+    await store.removeHost('h1');
+    expect(await store.listHosts()).toEqual([]);
+    expect(await store.getToken('h1')).toBeNull();
+  });
+
   it('removeHost clears its secrets', async () => {
     const { store, secure } = make();
     await store.commitPairing(host, { token: 't', fingerprint: PIN });

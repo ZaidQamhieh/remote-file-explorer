@@ -1,3 +1,4 @@
+import { Directory, Paths } from 'expo-file-system';
 import { openDatabaseSync } from 'expo-sqlite';
 
 import { AgentClient } from './core/api/agentClient';
@@ -12,6 +13,7 @@ import type { Host } from './core/models/host';
 
 import type { PairingDeps } from './features/pairing/pairingService';
 
+import { forgetRoots } from './features/explorer/rootsCache';
 import { ListingCache, type ListingBackend } from './core/storage/listingCache';
 
 // Non-secret key/value storage in SQLite. Secrets never touch it.
@@ -30,9 +32,27 @@ const kv: KeyValueStore = {
   },
 };
 
+/**
+ * Cached file bytes are named by a hash of host and path, so one host's files cannot be picked out: forgetting a
+ * host empties these regenerable caches (previews, thumbnails, PDF pages and the share/open hand-off copies).
+ * The folders themselves stay, because their owners keep a handle to them (audit F-17).
+ */
+const CONTENT_CACHE_DIRS = ['preview', 'thumbs', 'pdfpages', 'share', 'open'];
+function clearContentCaches() {
+  for (const name of CONTENT_CACHE_DIRS) {
+    try {
+      const dir = new Directory(Paths.cache, name);
+      if (dir.exists) for (const f of dir.list()) f.delete();
+    } catch {
+      // best effort: a file in use is evicted by the cache's own size cap later
+    }
+  }
+}
+
 export const hostStore = new HostStore(kv, nativeSecureStore, async (id) => {
-  // Forgetting a host drops everything cached for it: listings and encrypted offline bodies.
-  await Promise.allSettled([listingCache.evictHost(id), offlineBodies.evictHost(id)]);
+  // Forgetting a host drops everything cached for it: listings, encrypted offline bodies, file caches, root paths.
+  clearContentCaches();
+  await Promise.allSettled([listingCache.evictHost(id), offlineBodies.evictHost(id), forgetRoots(kv, id)]);
 });
 /** Everything the encrypted backup reads and replaces: the app's own preference rows and its secure-storage entries. */
 export const backupStorage: BackupStorage = {

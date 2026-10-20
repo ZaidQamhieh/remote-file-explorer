@@ -159,8 +159,19 @@ object PinnedHttp {
       val h = HashMap<String, String>()
       for (i in 0 until r.headers.size) h[r.headers.name(i).lowercase()] = r.headers.value(i)
       // A pinned response only exists if the handshake matched the pin.
-      return PinnedResponse(r.code, h, r.body?.bytes() ?: ByteArray(0), tm?.seen ?: normalized)
+      return PinnedResponse(r.code, h, readCapped(r), tm?.seen ?: normalized)
     }
+  }
+
+  /** The biggest response read into memory by [request]; file bodies stream through [newGetCall] and [newCall] instead (audit F-155). */
+  const val MAX_BODY_BYTES = 64L * 1024 * 1024
+
+  private fun readCapped(r: okhttp3.Response): ByteArray {
+    val body = r.body ?: return ByteArray(0)
+    val source = body.source()
+    source.request(MAX_BODY_BYTES + 1)
+    if (source.buffer.size > MAX_BODY_BYTES) throw java.io.IOException("the response is larger than ${MAX_BODY_BYTES / (1024 * 1024)} MiB")
+    return source.readByteArray()
   }
 
   /** Pinned GET call for streaming; the caller executes it and may cancel it. */

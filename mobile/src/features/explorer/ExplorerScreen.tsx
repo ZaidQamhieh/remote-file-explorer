@@ -14,6 +14,7 @@ import { useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
 import { t } from '../../i18n';
 import { isPinned, useCollections } from '../../state/collections';
+import { useActiveHost } from '../../state/activeHost';
 import { useSettings } from '../../state/settings';
 import { offlineDeps } from '../offline/offlineDeps';
 import { MAX_OFFLINE_FILE_BYTES, precachePinnedFolder } from '../offline/offlineBodies';
@@ -384,7 +385,20 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
 
   let body: React.ReactNode;
   if (state.loading && state.entries.length === 0) body = <ListingSkeleton />;
-  else if (state.error && state.entries.length === 0) body = <ErrorRetry message={state.error} onRetry={() => ex.refresh()} />;
+  else if (state.error && state.entries.length === 0) {
+    // The saved folder is no longer one this device may browse (the computer's allowed folders changed): retrying cannot help, so offer the list of shared folders again.
+    const rootRejected = state.errorCode === 'FORBIDDEN' && atRoot(state);
+    body = (
+      <View style={{ flex: 1 }}>
+        <ErrorRetry message={state.error} onRetry={() => ex.refresh()} />
+        {rootRejected ? (
+          <View style={{ paddingHorizontal: 18, paddingBottom: 12 }}>
+            <Button kind="tonal" label={t('chooseAnotherFolder')} onPress={() => { const cur = useActiveHost.getState().active; if (cur) useActiveHost.getState().setActive({ ...cur, rootPath: undefined, initialPath: undefined }); }} />
+          </View>
+        ) : null}
+      </View>
+    );
+  }
   else if (entries.length === 0) body = <EmptyState kind={state.entries.length > 0 ? 'noMatches' : 'emptyFolder'} message={state.entries.length > 0 ? t('noMatchesMessage') : t('emptyFolderMessage')} />;
   else {
     const footer = (

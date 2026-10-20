@@ -104,6 +104,10 @@ export class HostStore {
   async commitPairing(host: Host, o: { token: string; fingerprint: string }) {
     const pin = normalizeFingerprint(o.fingerprint);
     if (pin === null) throw new Error('refusing to commit pairing without a valid certificate pin');
+    // Re-pairing a host that is still listed: a failure must put its previous pin and token back, not delete them
+    // and leave a listed host with no login (audit F-49).
+    const before = new Map<string, string | null>();
+    for (const k of [SecureKeys.fingerprint(host.id), SecureKeys.token(host.id)]) before.set(k, await this.secure.read(k).catch(() => null));
     const done: string[] = [];
     try {
       await this.secure.write(SecureKeys.fingerprint(host.id), pin);
@@ -112,7 +116,10 @@ export class HostStore {
       done.push(SecureKeys.token(host.id));
       await this.addHost({ ...host, certFingerprint: pin });
     } catch (e) {
-      for (const k of done) await this.secure.delete(k).catch(() => undefined);
+      for (const k of done) {
+        const prev = before.get(k) ?? null;
+        await (prev === null ? this.secure.delete(k) : this.secure.write(k, prev)).catch(() => undefined);
+      }
       throw e;
     }
   }

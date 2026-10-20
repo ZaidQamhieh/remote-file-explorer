@@ -18,6 +18,8 @@ export type ExplorerState = {
   /** The last page fetch failed (in memory only); the list stops asking until the user retries or refreshes. */
   loadMoreError: string | null;
   error: string | null;
+  /** The agent's error code behind `error` (for example FORBIDDEN), when it gave one. */
+  errorCode: string | null;
   selected: Set<string>;
   /** The item a range selection extends from: the last one ticked. */
   anchor: string | null;
@@ -53,6 +55,8 @@ export function deriveDisplay(s: Pick<ExplorerState, 'entries' | 'showHidden'>, 
  * Explorer state machine ported from ExplorerNotifier. Every load takes a generation number so a
  * stale result of an overlapping same-path load (A -> B -> A) can never clobber the fresh one (PR-34).
  */
+const errorCodeOf = (e: unknown): string | null => (typeof e === 'object' && e !== null && typeof (e as { code?: unknown }).code === 'string' ? (e as { code: string }).code : null);
+
 export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Explorer {
   const store = createStore<ExplorerState>(() => ({
     pathStack: [deps.rootPath],
@@ -61,6 +65,7 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     loadingMore: false,
     loadMoreError: null,
     error: null,
+    errorCode: null,
     selected: new Set(),
     anchor: null,
     stale: false,
@@ -85,20 +90,20 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     if (cached) shownPath = path;
     if (cached) set({ entries: cached.entries, loading: false, loadingMore: false, stale: true, offline: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
     // A miss for another folder must not leave the previous folder's rows, or its offline flag, under this folder's name (a failed fetch showed the parent's list as the child's).
-    else set({ loading: true, loadingMore: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null, ...(shownPath !== path ? { entries: [], stale: false, offline: false } : {}) });
+    else set({ loading: true, loadingMore: false, error: null, errorCode: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null, ...(shownPath !== path ? { entries: [], stale: false, offline: false } : {}) });
     try {
       const client = await deps.getClient();
       if (gen !== generation) return;
       const listing = await client.list(path);
       if (gen !== generation) return;
       shownPath = path;
-      set({ loading: false, entries: listing.entries, stale: false, offline: false, error: null, nextCursor: listing.nextCursor ?? null });
+      set({ loading: false, entries: listing.entries, stale: false, offline: false, error: null, errorCode: null, nextCursor: listing.nextCursor ?? null });
       // A good listing stays on screen even if the local cache cannot be written.
       await deps.cache.put(deps.hostId, path, listing.entries).catch(() => {});
     } catch (e) {
       if (gen !== generation) return;
       if (cached) set({ loading: false, stale: true, offline: true });
-      else set({ loading: false, error: deps.humanize(e) });
+      else set({ loading: false, error: deps.humanize(e), errorCode: errorCodeOf(e) });
     }
   };
 

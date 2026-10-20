@@ -138,6 +138,12 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
   const toast = useToast();
   // The result of "Verify" for this row; kept only while the screen is open.
   const [verified, setVerified] = useState<VerifyOutcome | 'checking' | null>(null);
+  // "5s ago" must not stay frozen while the screen is open: draw the row again every 20 s (audit F-37).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 20_000);
+    return () => clearInterval(id);
+  }, []);
   const name = transferName(r);
   const kind = transferKind(name);
   const Glyph = GLYPHS[kind.glyph];

@@ -134,4 +134,20 @@ describe('HostStore list handling', () => {
     expect(secure.data.size).toBe(0);
     expect(await store.listHosts()).toEqual([]);
   });
+
+  it('a failed re-pairing of a listed host restores its previous pin and token', async () => {
+    const { store, secure, kv } = make();
+    await store.commitPairing(host, { token: 'old-token', fingerprint: PIN });
+    const set = kv.set.bind(kv);
+    kv.set = async () => {
+      throw new Error('disk full');
+    };
+    const NEW = 'ab'.repeat(32);
+    await expect(store.commitPairing(host, { token: 'new-token', fingerprint: NEW })).rejects.toThrow('disk full');
+    kv.set = set;
+    expect(await store.getToken('h1')).toBe('old-token');
+    expect(await store.getPin('h1')).toBe(PIN);
+    expect(secure.data.get(SecureKeys.token('h1'))).toBe('old-token');
+    expect((await store.listHosts()).map((h) => h.id)).toEqual(['h1']);
+  });
 });

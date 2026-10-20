@@ -57,8 +57,14 @@ object PdfPages {
     val r = open(path)
     require(index in 0 until r.pageCount) { "page $index out of range" }
     r.openPage(index).use { page ->
-      val w = widthPx.coerceIn(64, 2048)
-      val h = (w.toLong() * page.height / page.width.coerceAtLeast(1)).toInt().coerceIn(1, 4096)
+      val ratio = page.height.toDouble() / page.width.coerceAtLeast(1)
+      var w = widthPx.coerceIn(64, 2048)
+      var h = (w * ratio).toInt().coerceAtLeast(1)
+      // A very tall page is scaled down as a whole; clamping only the height would stretch it (audit F-50).
+      if (h > 4096) {
+        h = 4096
+        w = (4096 / ratio).toInt().coerceAtLeast(1)
+      }
       val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
       try {
         bmp.eraseColor(Color.WHITE)

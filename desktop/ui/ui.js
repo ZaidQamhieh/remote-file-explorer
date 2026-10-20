@@ -115,6 +115,8 @@
 
   /* ---------- selection helpers ---------- */
   /* what the server's settings say about changing files here, or '' */
+  /* The list of an agent's allowed folders is not a folder: nothing can be created in it. */
+  A.atVirtualRoot = (host, path) => { const sv = host === 'local' ? null : E.server(host); return !!sv && !!sv.virtualRoot && path === sv.virtualRoot; };
   A.readOnlyNote = (host) => { const sv = host === 'local' ? null : E.server(host); if (!sv) return ''; if (sv.readOnly) return 'The agent is read-only, so nothing here can be created, renamed or deleted.'; return sv.caps && sv.caps.modify === false ? 'This computer may look but not change files on this agent.' : ''; };
   A.confirmDelete = (host, dir, names, after) => {
     const nodes = names.map((n) => E.fs.get(host, U.join(dir, n))).filter(Boolean);
@@ -218,7 +220,7 @@
       const slot = $('[data-slot="act"]', this.el); if (!slot) return; const sel = this.selected();
       let h = '';
       if (this.host !== 'local' && sel.length) h += '<button class="btn f sm" data-act="download">' + ic('download') + 'Download ' + (sel.length > 1 ? sel.length : '') + '</button>';
-      h += '<button class="btn t sm" data-act="newfolder"' + (A.readOnlyNote(this.host) ? ' disabled' : '') + '>' + ic('folder-plus') + 'New folder</button>';
+      h += '<button class="btn t sm" data-act="newfolder"' + (A.readOnlyNote(this.host) || A.atVirtualRoot(this.host, this.path) ? ' disabled title="Open one of the folders first"' : '') + '>' + ic('folder-plus') + 'New folder</button>';
       slot.innerHTML = h;
     }
     renderFoot() {
@@ -273,7 +275,7 @@
     }
     selectAll() { const l = this.mode === 'grid' ? this.items.slice(0, 600) : this.items; /* the grid draws at most 600 tiles: only what is shown is selected */ this.sel = new Set(l.map((x) => x.n)); this.selChanged(); }
     startRename(n) { if (!n) return; this.renaming = n.n; if (this.mode !== 'list') { this.mode = 'list'; this.render(); } else this.renderRows(); } /* the grid draws no input, so renaming shows the list */
-    startNew() { this.creating = true; this.mode = 'list'; this.q = ''; this.filter = 'all'; this.refreshItems(); this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
+    startNew() { if (A.atVirtualRoot(this.host, this.path)) return; this.creating = true; this.mode = 'list'; this.q = ''; this.filter = 'all'; this.refreshItems(); this.render(); const rows = $('[data-rows]', this.el); if (rows) rows.scrollTop = 0; }
     async commitRename(inp) {
       if (this.renameBusy) return; /* a second Enter while the first is still being sent */
       const old = this.renaming; const v = inp.value.trim(); const err = $('[data-err]', inp.parentNode);

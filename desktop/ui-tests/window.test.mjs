@@ -60,6 +60,23 @@ test("the window starts, lists the roots of the server being browsed, and throws
   done();
 });
 
+test("the list of allowed folders offers no New folder; a real folder does", async () => {
+  const { d, A, E, errs, done } = await open();
+  await until(() => E.fs.list(NAS, "/"), "the root listing");
+  await sleep(100);
+  const sv = E.server(NAS);
+  assert.equal(A.atVirtualRoot(NAS, "/"), !!sv.virtualRoot && "/" === sv.virtualRoot);
+  assert.equal(sv.virtualRoot, "/", "the stub server lists several roots under a virtual root");
+  {
+    assert.equal(d.querySelector('[data-act="newfolder"]').disabled, true, "disabled at the virtual root");
+    A.mainPane.startNew();
+    assert.notEqual(A.mainPane.creating, true, "startNew does nothing there");
+  }
+  assert.equal(A.atVirtualRoot(NAS, "/srv"), false);
+  assert.deepEqual(errs, []);
+  done();
+});
+
 test("every screen draws with its heading and no script error", async () => {
   const { d, A, errs, done } = await open();
   for (const [v, h] of [["servers", "Servers"], ["devices", "Devices"], ["tools", "Tools"], ["transfers", "Transfers"], ["history", "History"], ["settings", "Settings"]]) {

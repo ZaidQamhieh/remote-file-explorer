@@ -37,6 +37,16 @@ describe('load / cache / offline', () => {
     expect(ex.getState()).toMatchObject({ entries: [], offline: false, stale: false, error: 'down' });
   });
 
+  it('keeps the agent\'s error code, and clears it on the next good listing', async () => {
+    const forbidden = Object.assign(new Error('path is outside allowed root'), { code: 'FORBIDDEN' });
+    const list = jest.fn().mockRejectedValueOnce(forbidden).mockResolvedValueOnce({ path: '/r', entries: [e('a')] });
+    const { ex } = setup({ list });
+    await ex.load();
+    expect(ex.getState()).toMatchObject({ error: 'path is outside allowed root', errorCode: 'FORBIDDEN' });
+    await ex.load();
+    expect(ex.getState()).toMatchObject({ error: null, errorCode: null });
+  });
+
   it('reports the error when there is no cache', async () => {
     const { ex } = setup({ list: jest.fn().mockRejectedValue(new Error('boom')) });
     await ex.load();

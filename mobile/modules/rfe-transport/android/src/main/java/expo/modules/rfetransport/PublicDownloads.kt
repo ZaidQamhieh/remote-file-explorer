@@ -47,7 +47,8 @@ object PublicDownloads {
   /** ACTION_VIEW on a MediaStore URI this app published; anything else is refused. */
   fun open(ctx: Context, uri: String, mime: String): Boolean {
     val parsed = Uri.parse(uri)
-    if (parsed.scheme != "content" || parsed.authority != MediaStore.AUTHORITY) return false
+    // Only the Downloads collection this app publishes into, not any MediaStore item (audit F-79).
+    if (parsed.scheme != "content" || parsed.authority != MediaStore.AUTHORITY || !parsed.pathSegments.contains("downloads")) return false
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(parsed, mime)
       .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     return try { ctx.startActivity(intent); true } catch (_: ActivityNotFoundException) { false }

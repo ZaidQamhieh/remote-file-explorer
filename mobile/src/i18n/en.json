@@ -57,6 +57,7 @@
  "emptyStatePairTitle": "Pair your first PC",
  "emptyStatePairBody": "Scan the pairing QR code shown by the desktop agent to connect this phone over your network or Tailscale.",
  "errorLabel": "{error}",
+ "chooseAnotherFolder": "Choose another folder",
  "connectionDiagnosticsTitle": "Connection Diagnostics",
  "connectionRoutesTitle": "Connection routes",
  "currentRouteLabel": "Current route",

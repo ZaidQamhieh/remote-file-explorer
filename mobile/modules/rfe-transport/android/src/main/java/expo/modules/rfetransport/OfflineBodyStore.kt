@@ -40,7 +40,7 @@ class OfflineBodyStore(private val dir: File, private val keyProvider: () -> Byt
       FileInputStream(src).use { input ->
         aead().newEncryptingStream(FileOutputStream(tmp), aad(hostId, path)).use { out -> input.copyTo(out, 64 * 1024) }
       }
-      if (target.exists()) target.delete()
+      // rename(2) replaces the target atomically; a delete first would leave a moment with neither body (audit F-115).
       if (!tmp.renameTo(target)) throw IOException("could not publish cache entry")
     } finally {
       tmp.delete()
@@ -71,7 +71,6 @@ class OfflineBodyStore(private val dir: File, private val keyProvider: () -> Byt
           }
         }
       }
-      if (dest.exists()) dest.delete()
       if (!tmp.renameTo(dest)) throw IOException("could not publish restored file")
       return true
     } catch (e: IOException) {

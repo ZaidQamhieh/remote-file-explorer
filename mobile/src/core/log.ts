@@ -6,7 +6,8 @@ const REDACTED = '[redacted]';
 // fingerprints (also colon-separated), and long base64 blobs that could be keys.
 const PATTERNS: [RegExp, string][] = [
   [/\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, `$1 ${REDACTED}`],
-  [/\b(authorization|token|password|secret|pairingCode|code|pin)(["']?\s*[:=]\s*["']?)[^\s"',&}]+/gi, `$1$2${REDACTED}`],
+  // Also compound names such as deviceToken or rfe_token_<id> (audit F-81).
+  [/\b([A-Za-z0-9_]*(?:authorization|token|password|secret)[A-Za-z0-9_]*|pairingCode|code|pin)(["']?\s*[:=]\s*["']?)[^\s"',&}]+/gi, `$1$2${REDACTED}`],
   [/\b(?:[0-9a-f]{2}:){31}[0-9a-f]{2}\b/gi, REDACTED],
   [/\b[0-9a-f]{64}\b/gi, REDACTED],
   [/\b[A-Za-z0-9+/_-]{40,}={0,2}(?![A-Za-z0-9+/_-])/g, REDACTED],

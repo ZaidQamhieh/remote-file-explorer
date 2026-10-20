@@ -81,7 +81,8 @@ export default function RootLayout() {
   const loadCollections = useCollections((s) => s.load);
   useEffect(() => {
     // The one-time Flutter import must finish before settings and collections are read.
-    ensureLegacyImport().finally(() => {
+    // A damaged legacy file must not become an unhandled rejection; the app starts with the new storage (audit F-51).
+    ensureLegacyImport().catch(() => undefined).finally(() => {
       void load();
       void loadCollections();
     });

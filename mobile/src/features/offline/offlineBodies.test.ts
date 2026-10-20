@@ -84,4 +84,17 @@ describe('precachePinnedFolder', () => {
     expect(fetched).toEqual(['/p/b']);
     expect(n).toBe(1);
   });
+  it('one failing lookup does not stop the folder, and an unmeasurable store adds nothing', async () => {
+    const { d } = deps({});
+    const fetched: string[] = [];
+    d.vault.has = async (_h, path) => {
+      if (path === '/p/a') throw new Error('native failure');
+      return false;
+    };
+    expect(await precachePinnedFolder(d, host, [file('/p/a', 1), file('/p/b', 1)], async (_h, e) => void fetched.push(e.path))).toBe(1);
+    expect(fetched).toEqual(['/p/b']);
+    d.vault.totalBytes = async () => Promise.reject(new Error('native failure'));
+    expect(await precachePinnedFolder(d, host, [file('/p/c', 1)], async () => fetched.push('/p/c'))).toBe(0);
+    expect(fetched).toEqual(['/p/b']);
+  });
 });

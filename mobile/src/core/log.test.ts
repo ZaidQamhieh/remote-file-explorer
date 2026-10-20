@@ -21,3 +21,9 @@ describe('redact', () => {
     expect(redact('GET /v1/files/list failed with status 502')).toBe('GET /v1/files/list failed with status 502');
   });
 });
+
+test('compound secret names are redacted too', () => {
+  expect(redact('deviceToken=abc')).not.toContain('abc');
+  expect(redact('rfe_token_h1: "xyz"')).not.toContain('xyz');
+  expect(redact('statusCode=200')).toContain('200');
+});

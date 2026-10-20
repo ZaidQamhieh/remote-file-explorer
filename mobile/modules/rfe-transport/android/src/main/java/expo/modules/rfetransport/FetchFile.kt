@@ -39,7 +39,6 @@ object FetchFile {
             out.write(buf, 0, r)
           }
         }
-        if (dest.exists()) dest.delete()
         if (!part.renameTo(dest)) throw java.io.IOException("could not publish file")
         return FetchResult(resp.code, null, n)
       }
@@ -47,7 +46,8 @@ object FetchFile {
       part.delete()
       throw e
     } finally {
-      calls.remove(id)
+      // Only this fetch's own handle: a newer fetch with the same id keeps its cancel handle (audit F-24).
+      calls.remove(id, call)
     }
   }
 

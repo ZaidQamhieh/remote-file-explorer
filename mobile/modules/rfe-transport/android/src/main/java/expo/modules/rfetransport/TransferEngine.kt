@@ -118,6 +118,7 @@ class TransferEngine(
 
   fun enqueue(id: String, hostId: String, address: String, remotePath: String, destPath: String): TransferRecord {
     require(id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "invalid transfer id" }
+    requireIdFree(id)
     val r = TransferRecord(id, hostId, address, remotePath, destPath, TransferState.QUEUED, 0, -1, null)
     records[id] = r
     persist(r)
@@ -131,11 +132,18 @@ class TransferEngine(
    */
   fun enqueueUpload(id: String, hostId: String, address: String, localPath: String, remotePath: String, overwrite: Boolean, deleteSource: Boolean): TransferRecord {
     require(id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "invalid transfer id" }
+    requireIdFree(id)
     val r = TransferRecord(id, hostId, address, remotePath, localPath, TransferState.QUEUED, 0, -1, null, "UPLOAD", null, null, overwrite, deleteSource)
     records[id] = r
     persist(r)
     submit(id)
     return r
+  }
+
+  /** A live transfer's id is not reused: a second one would overwrite its future and share its partial file (audit F-116). */
+  private fun requireIdFree(id: String) {
+    val cur = records[id] ?: return
+    require(cur.state != TransferState.RUNNING && cur.state != TransferState.QUEUED) { "transfer id already in use" }
   }
 
   fun resume(id: String) {
@@ -219,7 +227,8 @@ class TransferEngine(
       r = uploader.run(r)
       if (attempts[id] !== attempt) return // replaced while finishing: the new attempt still needs the source
       update(r.copy(state = TransferState.DONE, received = r.total, error = null))
-      discardSource(r)
+      // The upload is done; a failure to remove the staged source must not turn it back into FAILED (audit F-127).
+      runCatching { discardSource(r) }
     } catch (e: Exception) {
       if (attempts[id] !== attempt) return
       val reason = attempt.stop ?: if (e is InterruptedException || Thread.currentThread().isInterrupted) TransferState.PAUSED else null

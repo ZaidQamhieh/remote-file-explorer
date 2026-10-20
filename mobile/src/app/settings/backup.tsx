@@ -17,6 +17,8 @@ import { backupStorage } from '../../services';
 type Ask = { mode: 'export' } | { mode: 'import'; envelope: string } | null;
 
 /** Encrypted export and import of hosts, tokens, pins and settings; the file format is the Flutter app's. */
+const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
+
 export default function Backup() {
   const toast = useToast();
   const dialogs = useDialogs();
@@ -27,6 +29,8 @@ export default function Backup() {
     try {
       const picked = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
       if (picked.canceled || !picked.assets[0]) return;
+      // A backup is a few KB; refuse a huge pick before reading it into a string (audit F-117).
+      if ((picked.assets[0].size ?? 0) > MAX_BACKUP_BYTES) throw new Error('That file is too large to be a backup');
       const envelope = await new File(picked.assets[0].uri).text();
       setAsk({ mode: 'import', envelope });
     } catch (e) {

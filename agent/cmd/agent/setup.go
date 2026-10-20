@@ -103,7 +103,7 @@ func cmdSetup(args []string) error {
 		return nil
 	}
 	if err := cmdInstall(nil); err != nil {
-		return fmt.Errorf("folder policy is saved, but service installation failed: %w", err)
+		return fmt.Errorf("folder policy is saved, but service installation failed: %w (fix the cause, then run `rfe-agent install`; setup cannot be run again)", err)
 	}
 	return cmdPair(nil)
 }

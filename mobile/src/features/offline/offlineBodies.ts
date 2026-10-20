@@ -56,11 +56,20 @@ export async function restoreOfflineCopy(d: OfflineDeps, host: Host, e: Pick<Ent
  * the body in the vault (the preview fetch does when the folder is pinned). Returns how many were fetched.
  */
 export async function precachePinnedFolder(d: OfflineDeps, host: Host, entries: Entry[], fetchFile: (host: Host, e: Entry) => Promise<unknown>): Promise<number> {
-  let used = await d.vault.totalBytes();
+  let used: number;
+  try {
+    used = await d.vault.totalBytes();
+  } catch {
+    return 0; // the store cannot be measured, so nothing is added to it (audit F-114)
+  }
   let fetched = 0;
   for (const e of entries) {
     if (e.isDir || (e.size ?? 0) > MAX_OFFLINE_FILE_BYTES) continue;
-    if (await d.vault.has(host.id, e.path)) continue;
+    try {
+      if (await d.vault.has(host.id, e.path)) continue;
+    } catch {
+      continue; // one failing lookup must not abort the rest of the folder (audit F-114)
+    }
     // A file that would overshoot the budget is skipped; a smaller one later in the folder may still fit.
     if (used + (e.size ?? 0) > MAX_OFFLINE_CACHE_BYTES) continue;
     try {

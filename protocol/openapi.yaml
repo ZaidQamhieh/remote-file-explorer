@@ -333,6 +333,12 @@ paths:
                     type: string
                     enum: [v2]
                     description: Present on agents that accept the certificate-bound v2 proof.
+                  certFingerprint:
+                    type: string
+                    description: >
+                      This agent's TLS leaf-certificate SHA-256 (lowercase hex), so the browser companion,
+                      which cannot read the certificate itself, can sign the v2 message. /pair and /register
+                      accept only the v2 proof.
         "429":
           description: Too many challenge requests (rate-limited at 30/min). code=RATE_LIMITED.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

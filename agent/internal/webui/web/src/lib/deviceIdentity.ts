@@ -171,11 +171,16 @@ export async function getDevicePublicKeyB64(): Promise<string> {
   return toBase64(await crypto.subtle.exportKey('raw', publicKey));
 }
 
-/** signature field: nonce signed with the non-extractable private key. */
-export async function signNonce(nonce: string): Promise<string> {
+/** What the agent verifies for /pair and /register: the nonce bound to its certificate fingerprint. */
+export function deviceProofMessageV2(certFingerprint: string, nonce: string): string {
+  return `rfe-device-proof-v2\n${certFingerprint.toLowerCase()}\n${nonce}`;
+}
+
+/** signature field: message (the bound v2 proof, or the bare nonce for /login) signed with the non-extractable key. */
+export async function signNonce(message: string): Promise<string> {
   const { privateKey } = await getDeviceKeyPair();
   const signature = await crypto.subtle.sign(
-    'Ed25519', privateKey, new TextEncoder().encode(nonce),
+    'Ed25519', privateKey, new TextEncoder().encode(message),
   );
   return toBase64(signature);
 }

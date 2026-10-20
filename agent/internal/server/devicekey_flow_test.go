@@ -16,7 +16,7 @@ import (
 
 func TestChallengeHandler_MintsSingleUseNonce(t *testing.T) {
 	nonces := newNonceStore()
-	handler := challengeHandler(nonces)
+	handler := challengeHandler(nonces, "")
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/challenge", nil)
@@ -206,7 +206,7 @@ func TestPairHandler_KeyChangeRePinsRatherThanRejects(t *testing.T) {
 
 func TestChallengeHandler_AdvertisesTheBoundProof(t *testing.T) {
 	rr := httptest.NewRecorder()
-	challengeHandler(newNonceStore())(rr, httptest.NewRequest(http.MethodPost, "/v1/auth/challenge", nil))
+	challengeHandler(newNonceStore(), "")(rr, httptest.NewRequest(http.MethodPost, "/v1/auth/challenge", nil))
 	var resp map[string]string
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -275,5 +275,23 @@ func TestVerifyDeviceProof_PairingRequiresBoundProof(t *testing.T) {
 		if (err == nil) != c.ok {
 			t.Errorf("%s: accepted=%v want %v", c.name, err == nil, c.ok)
 		}
+	}
+}
+
+// The browser companion cannot read the certificate it talks to, so the challenge carries the
+// fingerprint it must bind its /pair and /register signature to (audit F-168).
+func TestChallengeHandler_ReportsCertFingerprint(t *testing.T) {
+	rr := httptest.NewRecorder()
+	challengeHandler(newNonceStore(), "AB12CD")(rr, httptest.NewRequest(http.MethodPost, "/v1/auth/challenge", nil))
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["certFingerprint"] != "ab12cd" || resp["proof"] != "v2" {
+		t.Fatalf("challenge = %v", resp)
+	}
+	want := security.DeviceProofMessageV2("ab12cd", "n")
+	if want != "rfe-device-proof-v2\nab12cd\nn" {
+		t.Fatalf("message layout changed: %q", want)
 	}
 }

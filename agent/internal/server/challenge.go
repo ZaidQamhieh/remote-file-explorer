@@ -4,6 +4,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,7 +83,7 @@ const proofVersion = "v2"
 // challengeHandler mints a nonce that a device signs with its Ed25519
 // identity key to prove possession of the private key on the next
 // /v1/pair or /v1/login call.
-func challengeHandler(nonces *nonceStore) http.HandlerFunc {
+func challengeHandler(nonces *nonceStore, certFingerprint string) http.HandlerFunc {
 	limiter := newKeyedLimiter(challengeRateLimitAttempts, challengeRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow(clientIP(r)) {
@@ -97,7 +98,13 @@ func challengeHandler(nonces *nonceStore) http.HandlerFunc {
 		// "proof" tells a client which proofs this agent verifies. v2 binds the signature to this
 		// agent's certificate (security.DeviceProofMessageV2); a client that refuses to sign a bare
 		// nonce needs it, and an agent without the field cannot be used by such a client.
-		writeJSON(w, http.StatusOK, map[string]string{"nonce": nonce, "proof": proofVersion})
+		// certFingerprint is public (it is the TLS certificate's hash). It lets the browser companion,
+		// which cannot read the certificate it is talking to, sign the same bound message.
+		resp := map[string]string{"nonce": nonce, "proof": proofVersion}
+		if certFingerprint != "" {
+			resp["certFingerprint"] = strings.ToLower(certFingerprint)
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

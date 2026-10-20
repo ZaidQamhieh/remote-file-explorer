@@ -2,7 +2,7 @@
 // contract's source of truth). Same-origin (this bundle is served by the
 // agent itself via go:embed), so requests are relative to "/v1".
 import { sha256 } from '@noble/hashes/sha2.js';
-import { getDevicePublicKeyB64, signNonce } from './deviceIdentity';
+import { deviceProofMessageV2, getDevicePublicKeyB64, signNonce } from './deviceIdentity';
 import { mintBody, renameBody, searchParams, trashIdsBody, wolBody } from './requests';
 
 // Remove the JavaScript-readable bearer token stored by older companion
@@ -107,9 +107,13 @@ async function uploadFileImpl(path: string, file: File, onProgress?: (fraction: 
 // ---------- device identity / proof-of-possession ----------
 
 async function proofFields() {
-  const challenge = await post<{ nonce: string }>('/auth/challenge', undefined);
+  const challenge = await post<{ nonce: string; certFingerprint?: string }>('/auth/challenge', undefined);
   const devicePublicKey = await getDevicePublicKeyB64();
-  const signature = await signNonce(challenge.nonce);
+  // /pair and /register accept only the certificate-bound proof; the agent tells us its fingerprint.
+  const message = challenge.certFingerprint
+    ? deviceProofMessageV2(challenge.certFingerprint, challenge.nonce)
+    : challenge.nonce;
+  const signature = await signNonce(message);
   return { devicePublicKey, nonce: challenge.nonce, signature };
 }
 

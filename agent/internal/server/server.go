@@ -143,7 +143,7 @@ func New(cfg Config, db *store.DB, pm *pairing.Manager, tm *transfer.Manager) (h
 // and expiring — see docs/r1-share-link-threat-model.md).
 func registerUnauthRoutes(r chi.Router, cfg Config, db *store.DB, pm *pairing.Manager, ops *fsops.Ops, nonces *nonceStore) {
 	r.Get("/health", healthHandler(cfg, db))
-	r.Post("/auth/challenge", challengeHandler(nonces))
+	r.Post("/auth/challenge", challengeHandler(nonces, cfg.CertFingerprint))
 	r.Post("/auth/logout", logoutHandler)
 	r.Post("/pair", pairHandler(cfg, db, pm, nonces))
 	r.Post("/pair/request", createPairRequestHandler(cfg, db, nonces))

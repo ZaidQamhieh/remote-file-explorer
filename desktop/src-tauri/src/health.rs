@@ -33,6 +33,39 @@ pub struct Health {
     pub address: String,
     pub tailscale_address: String,
     pub mac_address: String,
+    /// Protocol revision; an agent that sends none is revision 1 (see `protocol/compat.md`).
+    #[serde(deserialize_with = "lenient_api_version", default = "one")]
+    pub api_version: i64,
+    /// Optional capabilities the agent has. Absent, null or malformed means none.
+    #[serde(deserialize_with = "lenient_features")]
+    pub features: Vec<String>,
+}
+
+fn one() -> i64 {
+    1
+}
+
+fn lenient_api_version<'de, D: serde::Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_i64().filter(|n| *n >= 1).unwrap_or(1))
+}
+
+fn lenient_features<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+impl Health {
+    /// Whether the agent advertises `feature`. Gate newer UI on this, never on the version string.
+    pub fn supports(&self, feature: &str) -> bool {
+        self.features.iter().any(|f| f == feature)
+    }
 }
 
 /// `GET /status`: uptime and disk space. Counts are whole numbers of seconds and bytes.
@@ -179,4 +212,34 @@ async fn agent_health_inner(dir: &Path, store: &Offloaded) -> Result<Snapshot, A
             .map_err(AgentError::Local)?;
     }
     got
+}
+
+#[cfg(test)]
+mod compat_tests {
+    use super::Health;
+
+    #[test]
+    fn an_old_agent_is_revision_one_with_no_features() {
+        let h: Health = serde_json::from_str(r#"{"status":"ok","version":"1.42.5"}"#).unwrap();
+        assert_eq!(h.api_version, 1);
+        assert!(!h.supports("pairRequest"));
+    }
+
+    #[test]
+    fn a_new_agent_lists_features_and_unknown_fields_are_ignored() {
+        let h: Health = serde_json::from_str(
+            r#"{"status":"ok","apiVersion":2,"features":["pairRequest","future"],"extra":{"a":1}}"#,
+        )
+        .unwrap();
+        assert_eq!(h.api_version, 2);
+        assert!(h.supports("pairRequest"));
+    }
+
+    #[test]
+    fn malformed_values_do_not_fail_health() {
+        let h: Health =
+            serde_json::from_str(r#"{"status":"ok","apiVersion":"x","features":null}"#).unwrap();
+        assert_eq!(h.api_version, 1);
+        assert!(h.features.is_empty());
+    }
 }

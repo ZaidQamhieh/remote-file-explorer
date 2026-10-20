@@ -33,8 +33,10 @@ describe('AgentClient pin policy', () => {
     expect(() => new AgentClient(host, { transport, pinnedFingerprint: 'zz' })).toThrow(MissingCertPin);
   });
 
-  it('unpinned client may only call health and challenge, and never sends credentials', async () => {
-    const { transport, calls } = fake(() => ok({ status: 'ok', nonce: 'n' }));
+  it("unpinned client may only call health and challenge, and never sends credentials", async () => {
+    const { transport, calls } = fake(() =>
+      ok({ status: "ok", nonce: "n", proof: "v2" }),
+    );
     const c = new AgentClient(host, { transport });
     await c.health();
     await c.challenge();
@@ -308,10 +310,22 @@ describe('AgentClient 2xx replies that are not JSON (F-139)', () => {
     await expect(make(html).list('/')).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
   });
 
-  it('challenge never returns undefined: a non-JSON or nonce-less reply is BAD_RESPONSE', async () => {
-    await expect(make(html).challenge()).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
-    await expect(make(ok({ nope: 1 })).challenge()).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
-    await expect(make(ok({ nonce: 'abc' })).challenge()).resolves.toBe('abc');
+  it("a challenge without the v2 proof is UNSUPPORTED_BY_AGENT, not a later INVALID_SIGNATURE", async () => {
+    await expect(make(ok({ nonce: "abc" })).challenge()).rejects.toMatchObject({
+      code: "UNSUPPORTED_BY_AGENT",
+    });
+  });
+
+  it("challenge never returns undefined: a non-JSON or nonce-less reply is BAD_RESPONSE", async () => {
+    await expect(make(html).challenge()).rejects.toMatchObject({
+      code: "BAD_RESPONSE",
+    });
+    await expect(make(ok({ nope: 1 })).challenge()).rejects.toMatchObject({
+      code: "BAD_RESPONSE",
+    });
+    await expect(
+      make(ok({ nonce: "abc", proof: "v2" })).challenge(),
+    ).resolves.toBe("abc");
   });
 
   it('launchApp and drives reject an unexpected shape instead of a raw TypeError', async () => {

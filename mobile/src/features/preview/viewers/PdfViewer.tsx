@@ -31,6 +31,11 @@ function pageDir(): Directory {
  * into view. Pages scroll vertically (Flutter paged horizontally) so they don't fight the file pager.
  */
 export function PdfViewer({ host, entry }: { host: Host; entry: Entry }) {
+  // Keyed, so a different file starts from its own first page instead of the previous file's count and position (audit F-175).
+  return <PdfDocument key={`${host.id}:${entry.path}`} host={host} entry={entry} />;
+}
+
+function PdfDocument({ host, entry }: { host: Host; entry: Entry }) {
   const c = useScheme();
   const { state, retry } = usePreviewFile(host, entry, MAX_IN_MEMORY_PREVIEW_BYTES);
   const [pages, setPages] = useState<{ count: number } | { error: unknown } | null>(null);

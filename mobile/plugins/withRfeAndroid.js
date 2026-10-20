@@ -56,7 +56,8 @@ function withSigningAndDebuggable(config) {
       g = g.replace(/(\nandroid \{\n)/, '$1    lint {\n        checkReleaseBuilds false\n    }\n');
     }
     if (process.env.RFE_TEST_BUILD === '1' && !g.includes('debuggable true')) {
-      g = g.replace(/(\n\s*release \{\n)/, '$1            debuggable true\n');
+      // Anchored on buildTypes so the signing config's own `release {` is not the one that gets it (audit F-68).
+      g = g.replace(/(buildTypes \{[\s\S]*?\n\s*release \{\n)/, '$1            debuggable true\n');
     }
     cfg.modResults.contents = g;
     return cfg;

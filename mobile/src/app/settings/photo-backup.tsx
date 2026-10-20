@@ -48,11 +48,15 @@ export default function PhotoBackup() {
   const refreshCount = useCallback(() => void photoBackupStore.doneIds().then((s) => setBackedUp(s.size)), []);
   useEffect(() => {
     let live = true;
-    void photoBackupStore.load().then((p) => {
-      if (!live) return;
-      setPrefs(p);
-      setLoaded(true);
-    });
+    void photoBackupStore
+      .load()
+      .then((p) => {
+        if (live) setPrefs(p);
+      })
+      .catch(() => undefined) // show the defaults rather than a screen that loads forever
+      .then(() => {
+        if (live) setLoaded(true);
+      });
     refreshCount();
     return () => {
       live = false;

@@ -9,7 +9,10 @@ export default function Onboarding() {
   return (
     <OnboardingScreen
       onComplete={() => {
-        void markOnboarded(keyValue).then(() => router.replace('/'));
+        // A failed write must not strand the person on this screen: go on, and it is shown again next launch.
+        void markOnboarded(keyValue)
+          .catch(() => undefined)
+          .then(() => router.replace('/'));
       }}
     />
   );

@@ -217,6 +217,26 @@ pub fn create_folder(parent: &str, name: &str) -> Result<FileEntry, String> {
     Ok(entry(&p, &meta, true, false))
 }
 
+/// Renames without replacing something created at `to` after the check above (audit F-102). A plain `rename`
+/// replaces silently on Unix; a hard link refuses an existing name, so a file is linked in and the old name
+/// dropped. Folders cannot be linked, and a file system without links (FAT) falls back to the plain rename.
+fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let is_dir = std::fs::symlink_metadata(from)
+            .map(|m| m.is_dir())
+            .unwrap_or(false);
+        if !is_dir && from != to {
+            match std::fs::hard_link(from, to) {
+                Ok(()) => return std::fs::remove_file(from),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Err(e),
+                Err(_) => {}
+            }
+        }
+    }
+    std::fs::rename(from, to)
+}
+
 pub fn rename(path: &str, new_name: &str) -> Result<FileEntry, String> {
     let from = check(path)?;
     validate_name(new_name).map_err(|e| e.to_string())?;
@@ -227,7 +247,13 @@ pub fn rename(path: &str, new_name: &str) -> Result<FileEntry, String> {
     if to != from && std::fs::symlink_metadata(&to).is_ok() {
         return Err(format!("“{new_name}” already exists"));
     }
-    std::fs::rename(&from, &to).map_err(|e| format!("cannot rename {}: {e}", from.display()))?;
+    rename_no_replace(&from, &to).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            format!("“{new_name}” already exists")
+        } else {
+            format!("cannot rename {}: {e}", from.display())
+        }
+    })?;
     // The rename already happened, so a link that leads nowhere is described as itself
     // instead of turning a successful rename into an error.
     let (meta, is_dir, link) = match std::fs::metadata(&to) {
@@ -344,17 +370,42 @@ fn starts_program(ext: &str, exec_bit: bool) -> bool {
     PROGRAMS.contains(&ext) || (exec_bit && !DATA.contains(&ext))
 }
 
+/// Whether opening a file called `name` could start a program. Windows ignores trailing dots and spaces in a
+/// name (`evil.exe.` is `evil.exe`) and reads `name:stream` as an alternate data stream, so on Windows those are
+/// stripped or refused before the ending is looked at (audit F-101).
+fn name_starts_program(name: &str, exec_bit: bool, windows: bool) -> bool {
+    let mut n = name;
+    if windows {
+        if n.contains(':') {
+            return true;
+        }
+        n = n.trim_end_matches(['.', ' ']);
+    }
+    let ext = std::path::Path::new(n)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    starts_program(&ext, exec_bit)
+}
+
 /// Opens a file or folder on this computer with the system's default app.
 pub fn open(path: &str) -> Result<(), String> {
     let p = check(path)?;
     let meta = std::fs::metadata(&p).map_err(|e| format!("Could not open {path}: {e}"))?;
     if meta.is_file() {
-        let ext = p
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if starts_program(&ext, is_executable(&meta)) {
+        // A link is judged by its own name and by the file it leads to: the name alone let `photo.jpg` pointing at
+        // a program through, and the target's mode alone let a program hide behind a data name (audit F-45).
+        let mut names = vec![p.file_name().map(|n| n.to_string_lossy().into_owned())];
+        if let Ok(real) = std::fs::canonicalize(&p) {
+            names.push(real.file_name().map(|n| n.to_string_lossy().into_owned()));
+        }
+        let exec = is_executable(&meta);
+        if names
+            .into_iter()
+            .flatten()
+            .any(|n| name_starts_program(&n, exec, cfg!(windows)))
+        {
             return Err("This file would start a program, so it is not opened from here.".into());
         }
     }
@@ -682,6 +733,47 @@ mod tests {
         assert!(!starts_program("jpg", true));
         assert!(!starts_program("pdf", true));
         assert!(!starts_program("txt", false));
+    }
+
+    #[test]
+    fn names_that_windows_reads_as_programs_are_refused() {
+        assert!(name_starts_program("evil.exe.", false, true));
+        assert!(name_starts_program("evil.exe ", false, true));
+        assert!(name_starts_program("evil.exe::$DATA", false, true));
+        assert!(
+            !name_starts_program("evil.exe.", false, false),
+            "a Linux name is taken as it is"
+        );
+        assert!(name_starts_program("run.sh", false, false));
+        assert!(!name_starts_program("photo.jpg", true, false));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_rename_never_replaces_an_existing_file() {
+        let t = tempfile::tempdir().unwrap();
+        let (a, b) = (t.path().join("a.txt"), t.path().join("b.txt"));
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        let err = rename_no_replace(&a, &b).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&b).unwrap(), b"b");
+        let c = t.path().join("c.txt");
+        rename_no_replace(&a, &c).unwrap();
+        assert!(!a.exists());
+        assert_eq!(std::fs::read(&c).unwrap(), b"a");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_a_program_is_not_opened() {
+        let t = tempfile::tempdir().unwrap();
+        let target = t.path().join("tool.sh");
+        std::fs::write(&target, b"#!/bin/sh\n").unwrap();
+        let link = t.path().join("photo.jpg");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let err = open(link.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("start a program"), "{err}");
     }
 
     #[test]

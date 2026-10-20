@@ -1679,6 +1679,9 @@ async fn upload(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
                 match body.status.as_str() {
                     "open" => {
                         if body.received_chunks.iter().any(|&n| n >= s.total_chunks) {
+                            // The saved session is not trustworthy; forget it so a retry starts a fresh
+                            // one instead of failing the same way every time (audit F-88).
+                            lock(&item.resume).session = None;
                             return Err(
                                 "unexpected response: the agent listed a chunk this upload does not have"
                                     .into(),

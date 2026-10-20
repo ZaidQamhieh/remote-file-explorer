@@ -51,7 +51,7 @@ struct Log {
 
 /// Shorter values are not registered: they would mask ordinary words.
 const MIN_SECRET: usize = 6;
-const MAX_SECRETS: usize = 64;
+const MAX_SECRETS: usize = 256;
 
 static LOG: Mutex<Log> = Mutex::new(Log {
     level: Level::Info,
@@ -77,7 +77,11 @@ pub fn register_secret(secret: &str) {
         return;
     }
     let mut l = log();
-    if l.secrets.iter().any(|s| s == secret) {
+    // A secret registered again is the one in use now: move it to the newest place so it is the last to be
+    // evicted, instead of keeping it where it was first registered (audit F-172).
+    if let Some(i) = l.secrets.iter().position(|s| s == secret) {
+        let s = l.secrets.remove(i);
+        l.secrets.push(s);
         return;
     }
     if l.secrets.len() == MAX_SECRETS {
@@ -139,4 +143,20 @@ pub fn lines() -> Vec<String> {
 
 pub fn clear() {
     log().lines.clear();
+}
+
+#[cfg(test)]
+mod secret_order_tests {
+    use super::*;
+
+    #[test]
+    fn a_secret_registered_again_is_the_last_to_be_evicted() {
+        register_secret("keep-this-secret-0");
+        for i in 0..MAX_SECRETS - 1 {
+            register_secret(&format!("filler-secret-{i:04}"));
+        }
+        register_secret("keep-this-secret-0"); // in use again: moves to the newest place
+        register_secret("one-more-secret-xx"); // would evict the oldest
+        assert!(log().secrets.iter().any(|s| s == "keep-this-secret-0"));
+    }
 }

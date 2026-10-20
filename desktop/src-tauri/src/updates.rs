@@ -348,6 +348,9 @@ pub async fn download_at(
         .iter()
         .find(|a| a.name == "SHA256SUMS")
         .ok_or("that release has no SHA256SUMS file, so the package cannot be checked")?;
+    if !secure_url(&sums_asset.browser_download_url) || !secure_url(&pkg.browser_download_url) {
+        return Err("that release points at a download address that is not https".into());
+    }
     let sums_resp = http
         .get(&sums_asset.browser_download_url)
         .send()
@@ -382,6 +385,14 @@ pub async fn download_at(
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("the package could not be put in place: {e}"))
+}
+
+/// Release files are fetched over https only (a plain-http loopback address is allowed for tests), whatever
+/// the release JSON says (audit F-172).
+fn secure_url(url: &str) -> bool {
+    url.starts_with("https://")
+        || url.starts_with("http://127.0.0.1:")
+        || url.starts_with("http://localhost:")
 }
 
 /// Puts the checked package in place; when that fails the full-size part file goes too, instead of
@@ -473,6 +484,16 @@ pub async fn update_download(
 #[cfg(test)]
 mod publish_tests {
     use super::*;
+
+    #[test]
+    fn release_files_must_come_over_https() {
+        assert!(secure_url(
+            "https://github.com/x/y/releases/download/v1/a.deb"
+        ));
+        assert!(secure_url("http://127.0.0.1:8080/a.deb"));
+        assert!(!secure_url("http://example.com/a.deb"));
+        assert!(!secure_url("ftp://example.com/a.deb"));
+    }
 
     #[test]
     fn a_failed_publish_removes_the_part_file() {

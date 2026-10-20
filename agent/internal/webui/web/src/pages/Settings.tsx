@@ -60,17 +60,20 @@ export function Settings() {
   }
 
   async function saveChanges() {
+    if (!settings || !bandwidth) return;
+    // Send only what this form changed, so saving never overwrites a value another tab or the app set meanwhile.
+    const upload = Number(uploadInput) || 0;
+    const download = Number(downloadInput) || 0;
+    const bandwidthChanged = upload !== bandwidth.maxUploadBytesPerSec || download !== bandwidth.maxDownloadBytesPerSec;
+    const rootChanged = photoRoot !== settings.photoBackupRoot;
     try {
       await Promise.all([
-        api.putBandwidth({
-          maxUploadBytesPerSec: Number(uploadInput) || 0,
-          maxDownloadBytesPerSec: Number(downloadInput) || 0,
-        }),
-        api.patchSettings({ photoBackupRoot: photoRoot }),
+        bandwidthChanged ? api.putBandwidth({ maxUploadBytesPerSec: upload, maxDownloadBytesPerSec: download }) : null,
+        rootChanged ? api.patchSettings({ photoBackupRoot: photoRoot }) : null,
       ]);
       qc.invalidateQueries({ queryKey: ['bandwidth'] });
       qc.invalidateQueries({ queryKey: ['settings'] });
-      toast('Changes saved');
+      toast(bandwidthChanged || rootChanged ? 'Changes saved' : 'Nothing to save');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to save changes');
     }

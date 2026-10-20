@@ -22,7 +22,7 @@ function classify(message: string): Level {
 export function Logs() {
   const { toast } = useToast();
   const [filter, setFilter] = useState<Filter>('all');
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['logs'],
     queryFn: api.listLogs,
     refetchInterval: 10000,
@@ -54,6 +54,11 @@ export function Logs() {
 
       {isLoading ? (
         <div className="empty"><p>Loading logs…</p></div>
+      ) : isError && !data ? (
+        <div className="empty">
+          <h4>Could not load the logs</h4>
+          <p>{error instanceof Error ? error.message : 'The agent did not answer.'}</p>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="empty">
           <h4>No log lines</h4>

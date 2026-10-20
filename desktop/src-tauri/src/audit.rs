@@ -83,7 +83,7 @@ pub fn clean(s: &str, max: usize) -> String {
 }
 
 fn is_bidi(c: char) -> bool {
-    matches!(c, '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+    matches!(c, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 
 impl AuditEntry {
@@ -255,5 +255,16 @@ async fn fetch_logs_inner(dir: &Path, store: &Offloaded) -> Result<LogsReply, Ag
             drop_dead_token(dir, store, &token, &e).await?;
             Err(e)
         }
+    }
+}
+
+#[cfg(test)]
+mod bidi_tests {
+    use super::*;
+
+    #[test]
+    fn arabic_letter_mark_is_treated_as_bidi() {
+        assert!(is_bidi('\u{061c}'));
+        assert_eq!(clean("a\u{061c}b", 16), "a b");
     }
 }

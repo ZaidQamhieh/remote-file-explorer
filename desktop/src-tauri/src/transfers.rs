@@ -650,6 +650,8 @@ impl Transfers {
     /// an upload sends only the chunks the agent does not have.
     pub fn retry(&self, id: &str) -> Result<(), String> {
         let item = self.find(id)?;
+        // Held for the whole restart so a cancel racing it is either seen or runs after it, never wiped (audit F-62).
+        let deciding = lock(&item.decide);
         {
             let mut v = lock(&item.view);
             if !matches!(v.state, State::Failed | State::Paused | State::Cancelled) {
@@ -662,6 +664,7 @@ impl Transfers {
         item.cancelling.store(false, Ordering::SeqCst);
         let (tx, rx) = watch::channel(false);
         *lock(&item.cancel) = tx;
+        drop(deciding);
         tokio::spawn(run(self.inner.clone(), item, rx));
         Ok(())
     }

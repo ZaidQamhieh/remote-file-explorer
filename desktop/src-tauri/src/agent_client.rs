@@ -692,6 +692,9 @@ impl AgentClient {
         request_id: &str,
         client_nonce: &str,
     ) -> Result<(), AgentError> {
+        if !valid_pair_request_id(request_id) {
+            return Err(AgentError::Local("invalid pairing request id".into()));
+        }
         let resp = self
             .http
             .post(format!("{}/pair/request/{}/reveal", self.base, request_id))
@@ -1274,5 +1277,19 @@ mod proof_tests {
     fn a_missing_proof_field_parses_as_unsupported() {
         let c: Challenge = serde_json::from_str(r#"{"nonce":"abc"}"#).unwrap();
         assert!(require_bound_proof(&c).is_err());
+    }
+}
+
+#[cfg(test)]
+mod pair_id_tests {
+    use super::valid_pair_request_id;
+
+    #[test]
+    fn only_alphanumeric_ids_may_enter_a_url() {
+        assert!(valid_pair_request_id("abc123"));
+        assert!(!valid_pair_request_id(""));
+        assert!(!valid_pair_request_id("../x"));
+        assert!(!valid_pair_request_id("a/b"));
+        assert!(!valid_pair_request_id(&"a".repeat(65)));
     }
 }

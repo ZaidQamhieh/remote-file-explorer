@@ -378,10 +378,20 @@ pub async fn download_at(
     }
     let dir = dir.to_path_buf();
     let name = pkg.name.clone();
-    tokio::task::spawn_blocking(move || crate::transfers::publish_no_clobber(&part, &dir, &name))
+    tokio::task::spawn_blocking(move || publish_or_clean(&part, &dir, &name))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("the package could not be put in place: {e}"))
+}
+
+/// Puts the checked package in place; when that fails the full-size part file goes too, instead of
+/// staying in the folder (audit F-105).
+fn publish_or_clean(part: &Path, dir: &Path, name: &str) -> std::io::Result<std::path::PathBuf> {
+    let r = crate::transfers::publish_no_clobber(part, dir, name);
+    if r.is_err() {
+        let _ = std::fs::remove_file(part);
+    }
+    r
 }
 
 async fn fetch_checked(
@@ -458,4 +468,20 @@ pub async fn update_download(
     let path = download_at(RELEASES_URL, &version, &name, &dir).await?;
     crate::applog::info("an update package was downloaded and checked");
     Ok(path.display().to_string())
+}
+
+#[cfg(test)]
+mod publish_tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_publish_removes_the_part_file() {
+        let d = tempfile::tempdir().unwrap();
+        let part = d.path().join(".rfe-update-x.part");
+        std::fs::write(&part, b"bytes").unwrap();
+        // A name that cannot be created in the folder makes the publish fail.
+        let r = publish_or_clean(&part, &d.path().join("missing-dir"), "pkg.zip");
+        assert!(r.is_err());
+        assert!(!part.exists(), "the part file is cleaned up");
+    }
 }

@@ -141,6 +141,17 @@ async fn pair_with_code(
 #[derive(Default)]
 struct PendingPair(Mutex<Option<flows::PairWait>>);
 
+impl PendingPair {
+    /// Clears the slot only if it still holds `request_id`: a poll that finishes after the window asked
+    /// for a newer request must not discard that one (audit F-141).
+    fn take_if(&self, request_id: &str) {
+        let mut slot = self.0.lock().unwrap();
+        if slot.as_ref().is_some_and(|w| w.request_id == request_id) {
+            slot.take();
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PairWaitView {
@@ -195,22 +206,22 @@ async fn poll_pairing(
     match progress {
         Ok(flows::PairProgress::Pending) => Ok(view("pending", None)),
         Ok(flows::PairProgress::Rejected) => {
-            pending.0.lock().unwrap().take();
+            pending.take_if(&wait.request_id);
             Ok(view("rejected", None))
         }
         Ok(flows::PairProgress::Expired) => {
-            pending.0.lock().unwrap().take();
+            pending.take_if(&wait.request_id);
             Ok(view("expired", None))
         }
         Ok(flows::PairProgress::Approved(saved)) => {
-            pending.0.lock().unwrap().take();
+            pending.take_if(&wait.request_id);
             Ok(view("approved", Some(saved.into())))
         }
         Err(e) => {
             // An error after the agent handed out the approval cannot be retried: the request
             // is spent. Keep waiting only for errors that left it untouched.
             if matches!(e, agent_client::AgentError::Local(_)) {
-                pending.0.lock().unwrap().take();
+                pending.take_if(&wait.request_id);
             }
             Err(e.to_string())
         }
@@ -547,5 +558,31 @@ mod display_tests {
             no_display_message(env(&[("DISPLAY", ""), ("WAYLAND_DISPLAY", "")])).is_some(),
             "empty values are not a display"
         );
+    }
+}
+
+#[cfg(test)]
+mod pending_pair_tests {
+    use super::*;
+
+    fn wait(id: &str) -> flows::PairWait {
+        flows::PairWait {
+            host: "h".into(),
+            fingerprint: "f".into(),
+            request_id: id.into(),
+            client_nonce: "n".into(),
+            match_code: "123456".into(),
+            expires_in_seconds: 60,
+        }
+    }
+
+    #[test]
+    fn a_finished_poll_does_not_clear_a_newer_request() {
+        let p = PendingPair::default();
+        *p.0.lock().unwrap() = Some(wait("new"));
+        p.take_if("old");
+        assert!(p.0.lock().unwrap().is_some(), "the newer request survives");
+        p.take_if("new");
+        assert!(p.0.lock().unwrap().is_none());
     }
 }

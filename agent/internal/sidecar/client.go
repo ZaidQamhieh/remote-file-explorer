@@ -393,9 +393,19 @@ func (c *Client) call(ctx context.Context, op string, req any, body []byte, resp
 	}
 }
 
+// sendTimeout bounds one frame write. A sidecar that stops reading stdin would
+// otherwise block the writer (and, through wmu, every other caller and the
+// supervisor's ping) forever; on expiry the write fails and the caller tears
+// the sidecar down.
+var sendTimeout = 15 * time.Second
+
 func (c *Client) send(msg, body []byte) error {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
+	if d, ok := c.stdin.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = d.SetWriteDeadline(time.Now().Add(sendTimeout))
+		defer func() { _ = d.SetWriteDeadline(time.Time{}) }()
+	}
 	if err := writeFrame(c.stdin, kindJSON, msg); err != nil {
 		return err
 	}

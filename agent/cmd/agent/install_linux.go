@@ -155,7 +155,7 @@ func systemdExecArg(value string) (string, error) {
 	if strings.ContainsAny(value, "\r\n") {
 		return "", fmt.Errorf("agent executable path contains a line break and cannot be installed")
 	}
-	escaped := strings.NewReplacer("\\", "\\\\", `"`, `\"`, "%", "%%").Replace(value)
+	escaped := strings.NewReplacer("\\", "\\\\", `"`, `\"`, "%", "%%", "$", "$$").Replace(value)
 	return `"` + escaped + `"`, nil
 }
 

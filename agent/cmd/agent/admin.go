@@ -260,7 +260,7 @@ func cmdPairDecide(args []string, approve bool) error {
 func cmdAddUser(args []string) error {
 	fs := flag.NewFlagSet("adduser", flag.ExitOnError)
 	data := fs.String("data", "", "agent data dir")
-	passwordFlag := fs.String("password", "", "password (non-interactive; omit to be prompted with hidden input)")
+	passwordFlag := fs.String("password", "", "password (visible in ps and shell history; prefer the RFE_PASSWORD environment variable, or omit to be prompted with hidden input)")
 	_ = fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -269,6 +269,11 @@ func cmdAddUser(args []string) error {
 	username := fs.Arg(0)
 
 	password := *passwordFlag
+	if password != "" {
+		fmt.Fprintln(os.Stderr, "warning: -password is visible in the process list and shell history; use RFE_PASSWORD or the prompt instead")
+	} else {
+		password = os.Getenv("RFE_PASSWORD")
+	}
 	if password == "" {
 		fmt.Print("Password: ")
 		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -280,6 +285,9 @@ func cmdAddUser(args []string) error {
 	}
 	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
+	}
+	if len(password) > security.MaxPasswordBytes {
+		return fmt.Errorf("password must be at most %d bytes", security.MaxPasswordBytes)
 	}
 
 	hash, err := security.HashPassword(password)

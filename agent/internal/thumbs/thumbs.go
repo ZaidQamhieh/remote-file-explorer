@@ -17,6 +17,7 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -288,7 +289,7 @@ func (rn *Renderer) waitForCall(ctx context.Context, cachePath string, call *ren
 }
 
 func (rn *Renderer) renderCall(cachePath string, source *os.File, maxSize int, call *renderCall) {
-	data, renderErr := rn.renderOpened(call.ctx, source, maxSize)
+	data, renderErr := rn.safeRenderOpened(call.ctx, source, maxSize)
 	if renderErr == nil && call.ctx.Err() == nil {
 		if err := rn.writeCache(cachePath, data); err != nil {
 			// Cache write failures shouldn't prevent serving the thumbnail.
@@ -304,6 +305,20 @@ func (rn *Renderer) renderCall(cachePath string, source *os.File, maxSize int, c
 	close(call.done)
 	call.cancel()
 	rn.mu.Unlock()
+}
+
+// safeRenderOpened runs the decoder and turns a panic in it (a crafted image
+// can trip one in the image libraries) into ErrNotSupported. renderCall runs in
+// its own goroutine, outside the HTTP recoverer, so an unrecovered panic here
+// would end the whole agent process.
+func (rn *Renderer) safeRenderOpened(ctx context.Context, source *os.File, maxSize int) (data []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("thumbnail decoder panicked: %v", r)
+			data, err = nil, ErrNotSupported
+		}
+	}()
+	return rn.renderOpened(ctx, source, maxSize)
 }
 
 // Render decodes the image at srcPath, resizes it so its longest side is at

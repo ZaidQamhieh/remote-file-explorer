@@ -57,8 +57,8 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		// is a recoverable client-side mistake — burning the code on that
 		// would force a trip back to the PC for something that wasn't the
 		// code's fault. See pairHandler for the same reasoning.
-		if req.Username == "" || utf8.RuneCountInString(req.Password) < 8 {
-			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "username required and password must be at least 8 characters")
+		if req.Username == "" || utf8.RuneCountInString(req.Password) < 8 || len(req.Password) > security.MaxPasswordBytes {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "username required and password must be 8 characters to 72 bytes")
 			return
 		}
 		// One account per agent (see the `users` table doc comment in

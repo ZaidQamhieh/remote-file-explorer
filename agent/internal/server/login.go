@@ -59,6 +59,9 @@ func loginHandler(cfg Config, db *store.DB, nonces *nonceStore) http.HandlerFunc
 		}
 		// Same error for "no such user" and "wrong password" — don't leak
 		// which one it was.
+		if user == nil {
+			security.BurnPasswordCheck(req.Password)
+		}
 		if user == nil || !security.VerifyPassword(user.PasswordHash, req.Password) {
 			// Records the attempted username, not whether it exists — the
 			// response still doesn't distinguish the two, but the host owner

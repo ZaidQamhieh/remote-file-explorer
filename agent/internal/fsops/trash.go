@@ -424,9 +424,16 @@ func moveAcrossRootsSecure(src, dst *securePath) error {
 	if _, lerr := src.lstat(); os.IsNotExist(lerr) {
 		return nil
 	}
-	return fmt.Errorf("copied to %s but could not remove the source %s (it may be partly deleted): %w; "+
-		"the complete copy remains at %s", dst.full, src.full, rmErr, dst.full)
+	return &copyKeptError{err: fmt.Errorf("copied to %s but could not remove the source %s (it may be partly deleted): %w; "+
+		"the complete copy remains at %s", dst.full, src.full, rmErr, dst.full)}
 }
+
+// copyKeptError marks a cross-device move whose copy is complete but whose source could not be fully removed.
+// The destination holds the data, so a caller must keep it (and not restore whatever it replaced).
+type copyKeptError struct{ err error }
+
+func (e *copyKeptError) Error() string { return e.err.Error() }
+func (e *copyKeptError) Unwrap() error { return e.err }
 
 // uniqueTrashName returns a name not already used by either files/ or info/.
 func uniqueTrashName(trashDir, base string) string {

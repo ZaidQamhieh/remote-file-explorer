@@ -269,6 +269,10 @@ func TestMoveAcrossRoots_RemoveFailureKeepsCopyAndNamesBoth(t *testing.T) {
 	if err == nil {
 		t.Fatal("a half-removed source must be reported as an error")
 	}
+	var kept *copyKeptError
+	if !errors.As(err, &kept) {
+		t.Fatalf("a kept copy must be a *copyKeptError so Move does not restore over it: %T", err)
+	}
 	if !strings.Contains(err.Error(), tree) || !strings.Contains(err.Error(), dstFull) {
 		t.Fatalf("error must name the source %s and the copy %s: %q", tree, dstFull, err)
 	}

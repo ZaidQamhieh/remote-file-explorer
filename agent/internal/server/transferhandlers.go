@@ -2,6 +2,7 @@
 package server
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -391,7 +392,10 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 		}
 		defer chunkBudget.release(need)
 
-		data, err := io.ReadAll(bodyReader)
+		// Read into a buffer sized for the reservation so the transient peak stays inside the budget.
+		buf := bytes.NewBuffer(make([]byte, 0, need))
+		_, err = io.Copy(buf, bodyReader)
+		data := buf.Bytes()
 		if err != nil {
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {

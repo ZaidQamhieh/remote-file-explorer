@@ -706,7 +706,8 @@ func (o *Ops) Copy(sources []string, destDir string, duplicate, overwrite bool) 
 		}
 
 		var backup *securePath // the replaced destination, kept until the copy has succeeded
-		if _, err := dst.stat(); err == nil {
+		// lstat: a dangling symlink at the destination is an existing name, not a free one.
+		if _, err := dst.lstat(); err == nil {
 			switch {
 			case duplicate:
 				dst = autoRenameSecure(dst)
@@ -850,7 +851,13 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 			}
 			if err != nil {
 				results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", err.Error())}
-				restoreAside(dst, backup)
+				var kept *copyKeptError
+				if errors.As(err, &kept) {
+					// The complete copy is at dst; restoring the replaced file would delete it.
+					discardAside(backup)
+				} else {
+					restoreAside(dst, backup)
+				}
 			} else {
 				results[i] = BatchResult{Path: src, OK: true}
 				discardAside(backup)

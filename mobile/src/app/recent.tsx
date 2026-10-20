@@ -5,7 +5,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-nativ
 
 import type { Entry, SearchResult } from '../core/api/models';
 import { formatRelative } from '../core/format';
-import { ErrorRetry, Pressable, SectionLabel, Text } from '../design/components';
+import { ErrorRetry, Pressable, SectionLabel, Text, useToast } from '../design/components';
 import { LumenType } from '../design/lumen';
 import { useScheme } from '../design/theme';
 import { Spacing } from '../design/tokens';
@@ -23,6 +23,7 @@ import { useActiveHost } from '../state/activeHost';
 export default function Recent() {
   const c = useScheme();
   const router = useRouter();
+  const toast = useToast();
   const active = useActiveHost((s) => s.active);
   // Opened from a folder's menu: only files under it.
   const { root } = useLocalSearchParams<{ root?: string }>();
@@ -46,10 +47,14 @@ export default function Recent() {
     } else setError(r.error);
     setLoading(false);
   }, []);
+  const hasResult = result !== null;
   const reload = useCallback(async () => {
     setLoading(true);
-    apply(await fetchRecent());
-  }, [apply, fetchRecent]);
+    const r = await fetchRecent();
+    apply(r);
+    // With a list on screen the full-page error is not shown, so a failed pull-to-refresh would look like "nothing new".
+    if ('error' in r && hasResult) toast.error(r.error);
+  }, [apply, fetchRecent, hasResult, toast]);
   useEffect(() => {
     let live = true;
     void fetchRecent().then((r) => live && apply(r));

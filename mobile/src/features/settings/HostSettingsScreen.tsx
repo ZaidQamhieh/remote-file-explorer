@@ -198,14 +198,25 @@ export function HostSettingsScreen({ host: initialHost }: { host: Host }) {
       return;
     }
     // The token is dead the moment that call succeeds: clear the credentials locally and leave.
-    await hostStore.removeHost(host.id);
+    try {
+      await hostStore.removeHost(host.id);
+    } catch (e) {
+      toast.error(t('updateFailed', { error: humanizeError(e) }));
+      return;
+    }
     await leaveHost();
   }
 
   async function forgetThisDevice() {
     const ok = await dialogs.confirm({ title: t('forgetComputerTitle'), description: t('forgetComputerConfirm', { hostLabel: host.label }), confirmLabel: t('forgetButton'), cancelLabel: t('cancelButton'), destructive: true });
     if (!ok) return;
-    await hostStore.removeHost(host.id);
+    try {
+      await hostStore.removeHost(host.id);
+    } catch (e) {
+      // A keystore failure leaves the computer listed (secrets are deleted first); say so instead of failing silently.
+      toast.error(t('updateFailed', { error: humanizeError(e) }));
+      return;
+    }
     await leaveHost();
   }
 

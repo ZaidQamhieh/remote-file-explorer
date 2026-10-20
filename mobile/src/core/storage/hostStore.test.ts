@@ -81,6 +81,52 @@ describe('HostStore list handling', () => {
     expect(await store.getToken('h1')).toBeNull();
   });
 
+  it('updateHost and patchHost never bring back a forgotten host, and setLastSeen leaves no row for it (F-28)', async () => {
+    const { store, kv } = make();
+    await store.commitPairing(host, { token: 't', fingerprint: PIN });
+    await store.removeHost('h1');
+    await store.updateHost({ ...host, label: 'old snapshot' });
+    expect(await store.patchHost('h1', { macAddress: 'aa:bb' })).toBe(false);
+    await store.setLastSeen('h1');
+    expect(await store.listHosts()).toEqual([]);
+    expect(await store.getLastSeen('h1')).toBeNull();
+    expect([...kv.data.keys()]).toEqual([HOSTS_KEY]);
+  });
+
+  it('a ping that learns an address does not revert an edit made meanwhile (F-29)', async () => {
+    const { store } = make();
+    await store.addHost(host);
+    // The edit and the learn start together; both are applied, in order, whatever the async timing.
+    await Promise.all([store.updateHost({ ...host, label: 'Renamed', address: '10.0.0.9:8765' }), store.patchHost('h1', { tailscaleAddress: '100.64.0.1:8765' })]);
+    const [h] = await store.listHosts();
+    expect(h.label).toBe('Renamed');
+    expect(h.address).toBe('10.0.0.9:8765');
+    expect(h.tailscaleAddress).toBe('100.64.0.1:8765');
+  });
+
+  it('serialises overlapping mutations of a slow store so none is lost (F-29)', async () => {
+    const { store, kv } = make();
+    const set = kv.set.bind(kv);
+    kv.set = async (k, v) => {
+      await new Promise((r) => setTimeout(r, 5));
+      return set(k, v);
+    };
+    await Promise.all([store.addHost(host), store.addHost({ id: 'h2', label: 'B', address: 'b:1' }), store.addHost({ id: 'h3', label: 'C', address: 'c:1' })]);
+    expect((await store.listHosts()).map((h) => h.id).sort()).toEqual(['h1', 'h2', 'h3']);
+  });
+
+  it('a failed mutation does not block the ones queued after it', async () => {
+    const { store, kv } = make();
+    const set = kv.set.bind(kv);
+    kv.set = async () => {
+      throw new Error('disk');
+    };
+    await expect(store.addHost(host)).rejects.toThrow('disk');
+    kv.set = set;
+    await store.addHost(host);
+    expect((await store.listHosts()).map((h) => h.id)).toEqual(['h1']);
+  });
+
   it('removeHost clears its secrets', async () => {
     const { store, secure } = make();
     await store.commitPairing(host, { token: 't', fingerprint: PIN });

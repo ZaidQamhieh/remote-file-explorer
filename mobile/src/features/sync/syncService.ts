@@ -4,11 +4,12 @@ import type { Entry } from '../../core/api/models';
 import { fetchToFileNative } from '../../core/native';
 import { SyncRuleStore, type SyncRule } from '../../core/storage/syncRules';
 import { clientForHost, hostStore, keyValue } from '../../services';
-import { runSync, type LocalFolder, type LocalInfo, type SyncProgress, type SyncResult } from './syncRunner';
+import { fileUriFromPath, pathFromFileUri } from './syncLogic';
+import { runSync,type LocalFolder, type LocalInfo, type SyncProgress, type SyncResult } from './syncRunner';
 
 export const syncRules = new SyncRuleStore(keyValue);
 
-const nativePath = (uri: string) => decodeURIComponent(uri.replace('file://', ''));
+const nativePath = pathFromFileUri;
 
 /** Opens the system folder picker. The app keeps read and write access to the chosen tree across restarts. */
 export async function pickLocalFolder(): Promise<string | null> {
@@ -31,7 +32,7 @@ export function folderLabel(localPath: string): string {
 
 /** The mirror folder as files: a picked tree URI (Storage Access Framework) or a plain path from the Flutter app. */
 export function openLocalFolder(localPath: string): LocalFolder {
-  const dir = () => new Directory(localPath.startsWith('content://') ? localPath : `file://${localPath}`);
+  const dir = () => new Directory(localPath.startsWith('content://') ? localPath : fileUriFromPath(localPath));
   return {
     async list() {
       const out = new Map<string, LocalInfo>();
@@ -43,7 +44,7 @@ export function openLocalFolder(localPath: string): LocalFolder {
     async put(_name, stagedPath) {
       // Copying into the folder lets the file system create the document, named after the staged file, and replace any
       // existing one. Overwriting a document made beforehand with createFile deletes it before writing.
-      await new File(`file://${stagedPath}`).copy(dir(), { overwrite: true });
+      await new File(fileUriFromPath(stagedPath)).copy(dir(), { overwrite: true });
     },
   };
 }
@@ -81,7 +82,7 @@ export async function syncRule(rule: SyncRule, onProgress?: (p: SyncProgress) =>
       staging: (name) => nativePath(new File(stage, name).uri),
       discard: (p) => {
         try {
-          new File(`file://${p}`).delete();
+          new File(fileUriFromPath(p)).delete();
         } catch {
           // Already gone.
         }

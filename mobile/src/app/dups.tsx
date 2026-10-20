@@ -78,7 +78,8 @@ export default function Duplicates() {
       const deleted = [...toDelete];
       const freed = deleted.reduce((n, p) => n + (result.sizes[p] ?? 0), 0);
       await (await clientForHost(host)).delete(deleted);
-      if (rootPath) void explorerFor(host, rootPath, () => clientForHost(host)).refresh();
+      // The delete already succeeded; a failed background refresh of the open folder must not become an unhandled rejection.
+      if (rootPath) void explorerFor(host, rootPath, () => clientForHost(host)).refresh().catch(() => {});
       if (!alive.current) return;
       setResult({ ...result, groups: withoutPaths(result.groups, new Set(deleted)) });
       setToDelete(new Set());

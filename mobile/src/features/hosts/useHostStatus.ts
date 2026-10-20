@@ -59,8 +59,10 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
       const learnedTs = health.tailscaleAddress && health.tailscaleAddress !== h.tailscaleAddress && health.tailscaleAddress !== h.address;
       const learnedMac = health.macAddress && health.macAddress !== h.macAddress;
       if (learnedTs || learnedMac) {
-        await hostStore.updateHost({ ...h, ...(learnedTs ? { tailscaleAddress: health.tailscaleAddress } : {}), ...(learnedMac ? { macAddress: health.macAddress } : {}) });
-        onHostLearned?.();
+        // Only the learned fields, and only if the host is still listed: a label or address edited (or the host forgotten)
+        // while this ping was in flight must not be reverted or brought back.
+        const stored = await hostStore.patchHost(h.id, { ...(learnedTs ? { tailscaleAddress: health.tailscaleAddress } : {}), ...(learnedMac ? { macAddress: health.macAddress } : {}) });
+        if (stored) onHostLearned?.();
       }
       await hostStore.setLastSeen(h.id, now);
       setState((s) => ({ ...s, checking: false, health, untrusted: false, activeAddress: client!.activeAddress, lastSeen: now }));

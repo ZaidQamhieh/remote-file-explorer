@@ -71,8 +71,16 @@ export async function importLegacyState(
   }
 
   const existingRaw = await kv.get(HOSTS_KEY);
-  const existing: unknown[] = existingRaw ? (JSON.parse(existingRaw) as unknown[]) : [];
-  const existingIds = new Set(existing.map((x) => (x as { id?: string }).id));
+  // A corrupt or non-list value already stored reads as no hosts (as `HostStore.listHosts` does); throwing here would
+  // skip the done marker below and retry the import on every start.
+  let existing: unknown[] = [];
+  try {
+    const parsed: unknown = existingRaw ? JSON.parse(existingRaw) : [];
+    if (Array.isArray(parsed)) existing = parsed;
+  } catch {
+    // unreadable: replaced by the imported list
+  }
+  const existingIds = new Set(existing.map((x) => (x as { id?: string } | null)?.id));
   const merged = [...existing, ...hosts.filter((h) => !existingIds.has(h.id)).map(hostToJson)];
   await kv.set(HOSTS_KEY, JSON.stringify(merged));
   await copyOwnedPrefs(legacyPrefs, kv);

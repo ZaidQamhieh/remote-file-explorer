@@ -1,4 +1,4 @@
-import { destinationProblem, pasteSources } from './pasteLogic';
+import { destinationProblem, pasteSources, transferFullySucceeded } from './pasteLogic';
 
 describe('pasteSources', () => {
   it('moves everything when nothing is already in the destination', () => {
@@ -32,5 +32,12 @@ describe('destinationProblem', () => {
     expect(destinationProblem(['/a/dir'], '/a/dir2')).toBeNull();
     expect(destinationProblem(['/a/dir', '/a/f.txt'], '/b')).toBeNull();
     expect(destinationProblem(['/a/dir'], '/')).toBeNull();
+  });
+});
+
+describe('transferFullySucceeded (F-154)', () => {
+  it('is true only when no item failed', () => {
+    expect(transferFullySucceeded({ failed: [] })).toBe(true);
+    expect(transferFullySucceeded({ failed: [{ path: '/a' }] })).toBe(false);
   });
 });

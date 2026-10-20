@@ -41,6 +41,22 @@ describe('importLegacyState', () => {
     expect((await importLegacyState(legacy, kv, secure)).status).toBe('already-done');
   });
 
+  it.each(['{not json', '{"a":1}', 'null'])('a corrupt stored host list (%s) still lets the import finish and mark itself done (F-137)', async (corrupt) => {
+    const kv = new MemoryKeyValueStore();
+    await kv.set(HOSTS_KEY, corrupt);
+    const r = await importLegacyState(legacy, kv, new MemorySecureStore());
+    expect(r.status).toBe('imported');
+    expect(JSON.parse(kv.data.get(HOSTS_KEY)!).map((h: { id: string }) => h.id)).toEqual(['h1', 'h2']);
+    expect(kv.data.get(IMPORT_DONE_KEY)).toBe('1');
+  });
+
+  it('a null entry in the stored list does not abort the import', async () => {
+    const kv = new MemoryKeyValueStore();
+    await kv.set(HOSTS_KEY, JSON.stringify([null, { id: 'h9', label: 'Z', address: 'z:1' }]));
+    expect((await importLegacyState(legacy, kv, new MemorySecureStore())).status).toBe('imported');
+    expect(kv.data.get(IMPORT_DONE_KEY)).toBe('1');
+  });
+
   it('handles a fresh install with nothing to import', async () => {
     const kv = new MemoryKeyValueStore();
     expect((await importLegacyState({}, kv, new MemorySecureStore())).status).toBe('nothing-to-import');

@@ -1,6 +1,6 @@
 import type { ShareIntentFile } from 'expo-share-intent';
 
-import type { Picked } from '../transfers/uploadPlan';
+import { cleanUploadName, type Picked } from '../transfers/uploadPlan';
 
 /** Files another app shared with us as upload candidates; entries without a usable path are dropped. */
 export function sharedFiles(files: readonly Pick<ShareIntentFile, 'path' | 'fileName' | 'size'>[] | null | undefined): Picked[] {
@@ -9,10 +9,20 @@ export function sharedFiles(files: readonly Pick<ShareIntentFile, 'path' | 'file
     if (!f.path) continue;
     const uri = f.path.startsWith('/') ? `file://${f.path}` : f.path;
     if (!uri.startsWith('file://')) continue;
-    const name = f.fileName || decodeURIComponent(uri.split('/').pop() ?? '') || 'file';
+    // The sending app chooses this name: keep only a base name (no `../`, separators or control characters).
+    const name = cleanUploadName(f.fileName || safeDecode(uri.split('/').pop() ?? '') || 'file');
     out.push({ name, uri, size: f.size ?? undefined });
   }
   return out;
+}
+
+/** `decodeURIComponent` that keeps the raw text when it is not valid percent-encoding. */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
 }
 
 /** Expiry choices for a new share link; the agent refuses anything above 24 h, so 24 h is the last. */

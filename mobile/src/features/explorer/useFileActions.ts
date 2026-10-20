@@ -18,7 +18,7 @@ import { basenameOf, folderLabel, renameDestination } from './paths';
 import { deleteSubtitle } from './selectionLogic';
 import { compareVerdict, sizeVerdict, type Verdict } from './compareFiles';
 import { moveUndo, renameUndo, type UndoOp } from './undoPlan';
-import { destinationProblem, pasteSources } from './pasteLogic';
+import { destinationProblem, pasteSources, transferFullySucceeded } from './pasteLogic';
 
 /** Ports the explorer screen's copy/cut/paste/delete/compress flows, keeping their dialogs, messages and precedence rules. */
 export function useFileActions(host: Host, ex: Explorer & { getState(): ExplorerState }) {
@@ -104,7 +104,8 @@ export function useFileActions(host: Host, ex: Explorer & { getState(): Explorer
       const res = isCut ? await ex.moveSelected(dest, { sources, duplicate, overwrite }) : await ex.copySelected(dest, { sources, duplicate, overwrite });
       // A plain move can be put back; keep-both and overwrite changed names or removed files, so they cannot.
       await reportBatch(res, isCut ? t('movedLabel') : t('copiedLabel'), isCut && !duplicate && !overwrite ? moveUndo(sources, dest, res.results) : null);
-      return true;
+      // A partial failure keeps the clipboard (and selection) so the failed items can be pasted again.
+      return transferFullySucceeded(res);
     } catch (e) {
       toast.error(t('operationFailed', { operation: isCut ? t('moveLabel') : t('copyLabel'), error: humanizeError(e) }), retry);
       return false;

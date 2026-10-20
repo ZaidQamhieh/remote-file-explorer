@@ -76,6 +76,32 @@ export function assetIdFromTransferId(id: string): string | null {
  */
 export const isAlreadyOnHost = (r: { state: string; error: string | null }) => r.state === 'FAILED' && r.error === 'CONFLICT';
 
+/** Most staged photo copies (queued, running, paused or failed uploads) held in app storage at once. */
+export const MAX_STAGED_PHOTOS = 100;
+
+/**
+ * How many more photos a run may copy into app storage: every queued upload keeps its own copy until it finishes, so a
+ * first run over a large library would otherwise copy the whole library. The rest is picked up by later runs.
+ */
+export function stagingBudget(records: readonly { id: string; state: string; error: string | null }[], max = MAX_STAGED_PHOTOS): number {
+  const held = records.filter((r) => assetIdFromTransferId(r.id) !== null && r.state !== 'DONE' && r.state !== 'CANCELLED' && !isAlreadyOnHost(r)).length;
+  return Math.max(0, max - held);
+}
+
+/** Wraps [run] so calls made while one is in flight share that run instead of starting a second one. */
+export function singleFlight<A extends unknown[], T>(run: (...args: A) => Promise<T>): (...args: A) => Promise<T> {
+  let current: Promise<T> | null = null;
+  return (...args) => {
+    if (current === null) {
+      const p: Promise<T> = run(...args).finally(() => {
+        if (current === p) current = null;
+      });
+      current = p;
+    }
+    return current;
+  };
+}
+
 export type PhotoBackupPrefs = {
   enabled: boolean;
   hostId: string | null;

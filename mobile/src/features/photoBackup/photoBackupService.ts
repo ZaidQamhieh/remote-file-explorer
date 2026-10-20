@@ -5,7 +5,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { deviceIdNative, networkTransports, transfers, type TransferRecord } from '../../core/native';
 import { t } from '../../i18n';
 import { clientForHost, hostStore, keyValue } from '../../services';
-import { albumsToScan, assetIdFromTransferId, assetKey, backupRemotePath, backupTransferId, isAlreadyOnHost, isFileStable, PhotoBackupStore, safeExtension, sanitizeSegment } from './photoBackupLogic';
+import { albumsToScan, assetIdFromTransferId, assetKey, backupRemotePath, backupTransferId, isAlreadyOnHost, isFileStable, PhotoBackupStore, safeExtension, sanitizeSegment, singleFlight, stagingBudget } from './photoBackupLogic';
 
 export const photoBackupStore = new PhotoBackupStore(keyValue);
 
@@ -54,7 +54,9 @@ const toPath = (uri: string) => decodeURIComponent(uri.replace('file://', ''));
  * Each photo is copied into app storage and queued as a durable native upload named `pb-<asset id>`; the asset is
  * recorded as done only when that upload finishes (see [watchPhotoBackup]), so a failed upload is retried next run.
  */
-export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise<BackupResult> {
+export const runPhotoBackup = singleFlight(runPhotoBackupOnce);
+
+async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<BackupResult> {
   const prefs = await photoBackupStore.load();
   if (!prefs.enabled) return { kind: 'disabled' };
   if (!prefs.hostId) return { kind: 'notConfigured' };
@@ -103,7 +105,10 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
   const nickname = prefs.deviceName?.trim();
   const segment = nickname ? sanitizeSegment(nickname) : ((await deviceIdNative())?.slice(0, 8) ?? 'phone');
   const address = client.activeAddress ?? host.address;
-  const existing = new Map((await transfers.list()).map((r) => [r.id, r]));
+  const records = await transfers.list();
+  const existing = new Map(records.map((r) => [r.id, r]));
+  // Each queued photo keeps a private copy until it uploads: copy only as many as the cap allows, the next run takes the rest.
+  let copyBudget = stagingBudget(records);
   let count = 0;
   let failed = 0;
   for (const asset of pending) {
@@ -123,6 +128,7 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
         count++;
         continue;
       }
+      if (copyBudget <= 0) break;
       if (prior) await transfers.remove(id);
       const src = new File(await asset.getUri());
       if (!(await isFileStable(() => src.size))) continue;
@@ -134,6 +140,7 @@ export async function runPhotoBackup(o: { interactive?: boolean } = {}): Promise
       const staged = new File(dir, name);
       await src.copy(staged);
       await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), backupRemotePath(root, created, name, segment), false, true);
+      copyBudget--;
       count++;
     } catch {
       // An asset that cannot be read or copied (removed meanwhile, limited access, storage full) is skipped and retried next run.

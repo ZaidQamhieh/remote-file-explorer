@@ -15,3 +15,9 @@ export function destinationProblem(sources: readonly string[], dest: string): 'i
   const d = norm(dest);
   return sources.some((s) => d === norm(s) || d.startsWith(`${norm(s)}/`)) ? 'inside-itself' : null;
 }
+
+/**
+ * True when a paste or move finished with no failed item. Only then may a cut clipboard be cleared or the selection
+ * dropped: after a partial failure the failed items must stay available to paste again.
+ */
+export const transferFullySucceeded = (res: { failed: readonly unknown[] }): boolean => res.failed.length === 0;

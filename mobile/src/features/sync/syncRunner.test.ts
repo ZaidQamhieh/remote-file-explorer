@@ -50,3 +50,13 @@ test('unsafe remote names are skipped, progress is reported, and cancelling stop
   expect(r).toEqual({ downloaded: 1, failed: [], skipped: 1 });
   expect(s.fetched).toEqual(['ok']);
 });
+
+test('names that are not one path segment never reach staging, including "." and ".." (F-31)', async () => {
+  const s = setup([file('..', 1), file('.', 1), file('a/b', 1), file('ok', 1)], {});
+  const staged: string[] = [];
+  const staging = s.deps.staging;
+  s.deps.staging = (n) => (staged.push(n), staging(n));
+  const r = await runSync('/d', s.deps);
+  expect(staged).toEqual(['ok']);
+  expect(r).toEqual({ downloaded: 1, failed: [], skipped: 3 });
+});

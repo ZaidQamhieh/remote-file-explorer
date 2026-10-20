@@ -75,7 +75,10 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
   const load = async () => {
     const path = currentPath(get());
     const gen = ++generation;
-    const cached = await deps.cache.get(deps.hostId, path);
+    // The cache only speeds things up: a backend read that fails is treated as a miss, not as a failed navigation.
+    const cached = await Promise.resolve()
+      .then(() => deps.cache.get(deps.hostId, path))
+      .catch(() => undefined);
     if (gen !== generation) return;
     if (cached) set({ entries: cached.entries, loading: false, loadingMore: false, stale: true, offline: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
     else set({ loading: true, loadingMore: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
@@ -84,9 +87,9 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
       if (gen !== generation) return;
       const listing = await client.list(path);
       if (gen !== generation) return;
-      await deps.cache.put(deps.hostId, path, listing.entries);
-      if (gen !== generation) return;
       set({ loading: false, entries: listing.entries, stale: false, offline: false, error: null, nextCursor: listing.nextCursor ?? null });
+      // A good listing stays on screen even if the local cache cannot be written.
+      await deps.cache.put(deps.hostId, path, listing.entries).catch(() => {});
     } catch (e) {
       if (gen !== generation) return;
       if (cached) set({ loading: false, stale: true, offline: true });
@@ -111,9 +114,8 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
         const listing = await client.list(path, { cursor: s.nextCursor });
         if (gen !== generation) return;
         const merged = [...get().entries, ...listing.entries];
-        await deps.cache.put(deps.hostId, path, merged);
-        if (gen !== generation) return;
         set({ entries: merged, loadingMore: false, nextCursor: listing.nextCursor ?? null });
+        await deps.cache.put(deps.hostId, path, merged).catch(() => {});
       } catch (e) {
         if (gen === generation) set({ loadingMore: false, loadMoreError: deps.humanize(e) });
       }
@@ -230,8 +232,37 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
       }
       // A final name that is already in the folder and is not being vacated by this batch would be refused by the
       // host after other files had moved; refuse it up front instead (a chain a>b, b>c stays allowed).
+      // The entries on screen can be stale or only the first page, so a target in a page that was never loaded would be
+      // refused by the host midway and could strand a file under its temp name: read the whole folder fresh as well.
       const shown = new Set(get().entries.map((x) => x.path));
-      const vacated = new Set(renames.filter((r) => !invalidNameReason(r.newName) && renameDestination(r.path, r.newName) !== r.path).map((r) => r.path));
+      try {
+        let cursor: string | undefined;
+        do {
+          const l = await client.list(currentPath(get()), { cursor });
+          for (const x of l.entries) shown.add(x.path);
+          cursor = l.nextCursor;
+        } while (cursor);
+      } catch {
+        // No fresh listing: the host still refuses a taken name, and each failed item is put back below.
+      }
+      // Only a rename that really goes ahead vacates its old name, so refusing one (its target is taken) can in turn
+      // leave the rename that wanted the name it would have vacated without a free target: repeat until stable, so no
+      // file is moved to a temp name that it then cannot leave again.
+      const moving = (i: number) => !invalidNameReason(renames[i].newName) && renameDestination(renames[i].path, renames[i].newName) !== renames[i].path && (counts.get(renameDestination(renames[i].path, renames[i].newName)) ?? 0) <= 1;
+      const blocked = new Set<number>();
+      for (let changed = true; changed; ) {
+        changed = false;
+        const vacated = new Set<string>();
+        for (let i = 0; i < renames.length; i++) if (moving(i) && !blocked.has(i)) vacated.add(renames[i].path);
+        for (let i = 0; i < renames.length; i++) {
+          if (!moving(i) || blocked.has(i)) continue;
+          const dst = renameDestination(renames[i].path, renames[i].newName);
+          if (shown.has(dst) && !vacated.has(dst)) {
+            blocked.add(i);
+            changed = true;
+          }
+        }
+      }
       for (let i = 0; i < renames.length; i++) {
         const r = renames[i];
         const badName = invalidNameReason(r.newName);
@@ -244,7 +275,7 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
           results.push({ path: r.path, ok: true });
           continue;
         }
-        if (shown.has(dst) && !vacated.has(dst)) {
+        if (blocked.has(i)) {
           results.push({ path: r.path, ok: false, errorCode: 'TARGET_EXISTS', errorMessage: `"${r.newName}" already exists in this folder` });
           continue;
         }

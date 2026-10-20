@@ -53,18 +53,46 @@ export class HostStore {
     return this.kv.set(HOSTS_KEY, JSON.stringify(hosts.map(hostToJson)));
   }
 
-  async addHost(host: Host) {
-    const hosts = (await this.listHosts()).filter((h) => h.id !== host.id);
-    hosts.push(host);
-    await this.save(hosts);
+  /** Mutations of the host list read, change and write it back: run one at a time so none overwrites another (F-29). */
+  private queue: Promise<unknown> = Promise.resolve();
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn, fn);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
-  async updateHost(host: Host) {
-    const hosts = await this.listHosts();
-    const i = hosts.findIndex((h) => h.id === host.id);
-    if (i < 0) return this.addHost(host);
-    hosts[i] = host;
-    await this.save(hosts);
+  addHost(host: Host) {
+    return this.serial(async () => {
+      const hosts = (await this.listHosts()).filter((h) => h.id !== host.id);
+      hosts.push(host);
+      await this.save(hosts);
+    });
+  }
+
+  /** Replaces a listed host's record. A host that is no longer listed (forgotten meanwhile) is not added back (F-28). */
+  updateHost(host: Host) {
+    return this.serial(async () => {
+      const hosts = await this.listHosts();
+      const i = hosts.findIndex((h) => h.id === host.id);
+      if (i < 0) return;
+      hosts[i] = host;
+      await this.save(hosts);
+    });
+  }
+
+  /**
+   * Changes only the given fields of the stored record, so a background learn (address, MAC) cannot revert an edit made
+   * meanwhile. Returns false, writing nothing, when the host is no longer listed.
+   */
+  patchHost(id: string, patch: Partial<Omit<Host, 'id'>>): Promise<boolean> {
+    return this.serial(async () => {
+      const hosts = await this.listHosts();
+      const i = hosts.findIndex((h) => h.id === id);
+      if (i < 0) return false;
+      hosts[i] = { ...hosts[i], ...patch };
+      await this.save(hosts);
+      return true;
+    });
   }
 
   /**
@@ -89,24 +117,28 @@ export class HostStore {
     }
   }
 
-  async touchHost(id: string) {
-    const hosts = await this.listHosts();
-    const i = hosts.findIndex((h) => h.id === id);
-    if (i <= 0) return;
-    hosts.unshift(...hosts.splice(i, 1));
-    await this.save(hosts);
+  touchHost(id: string) {
+    return this.serial(async () => {
+      const hosts = await this.listHosts();
+      const i = hosts.findIndex((h) => h.id === id);
+      if (i <= 0) return;
+      hosts.unshift(...hosts.splice(i, 1));
+      await this.save(hosts);
+    });
   }
 
-  async removeHost(id: string) {
-    // Secrets first: if a keystore delete throws, the host is still listed and can be forgotten again, instead of
-    // vanishing from the list while its bearer token stays in the keystore and in backups (audit F-75).
-    await this.secure.delete(SecureKeys.token(id));
-    await this.secure.delete(SecureKeys.fingerprint(id));
-    await this.save((await this.listHosts()).filter((h) => h.id !== id));
-    await this.kv.remove(lastSeenKey(id));
-    // A forgotten host must not keep serving its cached listings and files. Cleanup is best effort: the
-    // host, token and pin are already gone, so a failure here cannot resurrect access.
-    await this.onRemoved(id).catch(() => {});
+  removeHost(id: string) {
+    return this.serial(async () => {
+      // Secrets first: if a keystore delete throws, the host is still listed and can be forgotten again, instead of
+      // vanishing from the list while its bearer token stays in the keystore and in backups (audit F-75).
+      await this.secure.delete(SecureKeys.token(id));
+      await this.secure.delete(SecureKeys.fingerprint(id));
+      await this.save((await this.listHosts()).filter((h) => h.id !== id));
+      await this.kv.remove(lastSeenKey(id));
+      // A forgotten host must not keep serving its cached listings and files. Cleanup is best effort: the
+      // host, token and pin are already gone, so a failure here cannot resurrect access.
+      await this.onRemoved(id).catch(() => {});
+    });
   }
 
   /** Last successful /health, shown on offline hosts. */
@@ -116,8 +148,12 @@ export class HostStore {
     return Number.isFinite(ms) ? new Date(ms) : null;
   }
 
+  /** Records a successful /health; ignored for a host that is no longer listed, so a late ping cannot resurrect it. */
   setLastSeen(id: string, at: Date = new Date()) {
-    return this.kv.set(lastSeenKey(id), String(at.getTime()));
+    return this.serial(async () => {
+      if (!(await this.listHosts()).some((h) => h.id === id)) return;
+      await this.kv.set(lastSeenKey(id), String(at.getTime()));
+    });
   }
 
   getToken(id: string) {

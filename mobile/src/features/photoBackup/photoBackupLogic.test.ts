@@ -1,5 +1,5 @@
 import { MemoryKeyValueStore } from '../../core/storage/hostStore';
-import { albumsToScan, isAlreadyOnHost, assetIdFromTransferId, assetKey, backupRemotePath, backupTransferId, isFileStable, pendingIds, PhotoBackupStore, safeExtension, sanitizeSegment } from './photoBackupLogic';
+import { albumsToScan, isAlreadyOnHost, assetIdFromTransferId, assetKey, backupRemotePath, backupTransferId, isFileStable, MAX_STAGED_PHOTOS, pendingIds, PhotoBackupStore, safeExtension, sanitizeSegment, singleFlight, stagingBudget } from './photoBackupLogic';
 
 test('builds date folders, with and without a device segment or root destination', () => {
   const d = new Date(2026, 2, 9);
@@ -13,6 +13,43 @@ test('pending ids keep order; album selection drops missing albums and empty mea
   expect(pendingIds(['1', '2', '3'], new Set(['2']))).toEqual(['1', '3']);
   expect(albumsToScan(['a', 'b'], new Set())).toEqual(['a', 'b']);
   expect(albumsToScan(['a', 'b'], new Set(['b', 'gone']))).toEqual(['b']);
+});
+
+test('single flight shares the in-flight run and starts a new one after it ends', async () => {
+  let calls = 0;
+  let finish!: (n: number) => void;
+  const run = singleFlight(() => {
+    calls++;
+    return new Promise<number>((r) => (finish = r));
+  });
+  const a = run();
+  const b = run();
+  expect(calls).toBe(1);
+  finish(7);
+  expect(await a).toBe(7);
+  expect(await b).toBe(7);
+  const c = run();
+  expect(calls).toBe(2);
+  finish(8);
+  expect(await c).toBe(8);
+});
+
+test('single flight also frees the slot after a failure', async () => {
+  let n = 0;
+  const run = singleFlight(async () => {
+    if (n++ === 0) throw new Error('first');
+    return 'ok';
+  });
+  await expect(run()).rejects.toThrow('first');
+  expect(await run()).toBe('ok');
+});
+
+test('staging budget counts held photo copies only', () => {
+  const rec = (id: string, state: string, error: string | null = null) => ({ id, state, error });
+  const records = [rec('pb-1', 'RUNNING'), rec('pb-2', 'FAILED', 'NETWORK'), rec('pb-3', 'DONE'), rec('pb-4', 'FAILED', 'CONFLICT'), rec('pb-5', 'CANCELLED'), rec('u123', 'RUNNING')];
+  expect(stagingBudget(records, 10)).toBe(8);
+  expect(stagingBudget(records, 2)).toBe(0);
+  expect(stagingBudget([], MAX_STAGED_PHOTOS)).toBe(MAX_STAGED_PHOTOS);
 });
 
 test('a file counts as stable only when two reads agree and are non-zero', async () => {

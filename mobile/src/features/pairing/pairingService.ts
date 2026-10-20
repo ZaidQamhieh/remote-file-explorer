@@ -236,9 +236,12 @@ export async function awaitPairing(
     try {
       const s = await client.pairRequestStatus(h.requestId, h.clientNonce);
       transient = 0;
+      // Cancelled while this request was in flight: do not save the host and token the person just backed out of.
+      if (o.signal?.aborted) throw new DOMException('aborted', 'AbortError');
       if (s.status === 'approved') return commit(deps, h.target, s.response);
       if (s.status === 'rejected') throw new PairRejected();
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
       if (e instanceof PairRejected || e instanceof CertPinMismatch || e instanceof MissingCertPin) throw e;
       if (e instanceof AgentApiError && e.code === 'NOT_FOUND') throw new PairExpired();
       // A dropped connection or a busy agent is retried; a few in a row is a real failure.

@@ -5,7 +5,8 @@ import { View } from 'react-native';
 import { formatDate } from '../../core/format';
 import type { Host } from '../../core/models/host';
 import type { SyncRule } from '../../core/storage/syncRules';
-import { Button, Text, useDialogs, useToast } from '../../design/components';
+import { useGuardedAction } from '../../core/useGuardedAction';
+import { Button, ErrorRetry, Text, useDialogs, useToast } from '../../design/components';
 import { LumenType } from '../../design/lumen';
 import { useScheme } from '../../design/theme';
 import { Spacing } from '../../design/tokens';
@@ -24,6 +25,8 @@ export default function Sync() {
   const [running, setRunning] = useState<{ id: string; text: string } | null>(null);
   const c = useScheme();
   const cancel = useRef(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const reload = useCallback(async () => {
     const [r, h] = await Promise.all([syncRules.list(), hostStore.listHosts()]);
@@ -32,16 +35,20 @@ export default function Sync() {
   }, []);
   useEffect(() => {
     let live = true;
-    void Promise.all([syncRules.list(), hostStore.listHosts()]).then(([r, h]) => {
-      if (!live) return;
-      setRules(r);
-      setHosts(h);
-    });
+    Promise.all([syncRules.list(), hostStore.listHosts()]).then(
+      ([r, h]) => {
+        if (!live) return;
+        setRules(r);
+        setHosts(h);
+      },
+      // A failed read must not leave a blank screen with no way forward.
+      (e) => live && setLoadError(humanizeError(e)),
+    );
     return () => {
       live = false;
       cancel.current = true;
     };
-  }, []);
+  }, [attempt]);
 
   async function addRule() {
     if (hosts.length === 0) return void toast.info(t('noPairedPcs'));
@@ -68,7 +75,6 @@ export default function Sync() {
   }
 
   async function syncNow(rule: SyncRule) {
-    if (running) return;
     cancel.current = false;
     setRunning({ id: rule.id, text: '…' });
     try {
@@ -79,11 +85,30 @@ export default function Sync() {
       toast.error(t('syncFailed', { error: humanizeError(e) }));
     } finally {
       setRunning(null);
-      await reload();
+      await reload().catch(() => {});
     }
   }
 
-  if (rules === null) return null;
+  // A second tap before the first action finishes is ignored (the `running` state only updates after a render), and a
+  // failure shows a message instead of an unhandled rejection.
+  const onActionError = (e: unknown) => toast.error(humanizeError(e));
+  const guardedAdd = useGuardedAction(addRule, onActionError);
+  const guardedToggle = useGuardedAction(toggle, onActionError);
+  const guardedRemove = useGuardedAction(remove, onActionError);
+  const guardedSyncNow = useGuardedAction(syncNow, onActionError);
+
+  if (rules === null) {
+    if (loadError === null) return null;
+    return (
+      <ErrorRetry
+        message={loadError}
+        onRetry={() => {
+          setLoadError(null);
+          setAttempt((n) => n + 1);
+        }}
+      />
+    );
+  }
   return (
     <SettingsPage>
       {rules.length === 0 ? (
@@ -98,13 +123,13 @@ export default function Sync() {
         const busy = running?.id === rule.id;
         return (
           <SettingsSection key={rule.id} title={`${host?.label ?? '?'} · ${rule.remotePath}`}>
-            <ToggleRow icon={FolderSync} title={folderLabel(rule.localPath)} subtitle={rule.lastSync ? t('syncLastSync', { when: formatDate(new Date(rule.lastSync)) }) : t('syncNever')} value={rule.enabled} onChange={(v) => void toggle(rule, v)} />
-            {busy ? <InfoRow icon={CloudDownload} title={t('syncNow')} subtitle={running?.text} /> : <NavRow icon={CloudDownload} title={t('syncNow')} onPress={() => (rule.enabled ? void syncNow(rule) : toast.info(t('syncRuleOff')))} />}
-            <NavRow icon={Trash2} title={t('syncDeleteRule')} onPress={() => void remove(rule)} />
+            <ToggleRow icon={FolderSync} title={folderLabel(rule.localPath)} subtitle={rule.lastSync ? t('syncLastSync', { when: formatDate(new Date(rule.lastSync)) }) : t('syncNever')} value={rule.enabled} onChange={(v) => void guardedToggle(rule, v)} />
+            {busy ? <InfoRow icon={CloudDownload} title={t('syncNow')} subtitle={running?.text} /> : <NavRow icon={CloudDownload} title={t('syncNow')} onPress={() => (rule.enabled ? void guardedSyncNow(rule) : toast.info(t('syncRuleOff')))} />}
+            <NavRow icon={Trash2} title={t('syncDeleteRule')} onPress={() => void guardedRemove(rule)} />
           </SettingsSection>
         );
       })}
-      <Button size="lg" label={t('syncAddRule')} onPress={() => void addRule()} />
+      <Button size="lg" label={t('syncAddRule')} onPress={() => void guardedAdd()} />
     </SettingsPage>
   );
 }

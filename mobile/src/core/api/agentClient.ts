@@ -53,6 +53,8 @@ export const ERR_CERT_PIN_MISMATCH = 'ERR_CERT_PIN_MISMATCH';
 export const ERR_PIN_POLICY = 'ERR_PIN_POLICY';
 export const ERR_CONNECTION = 'ERR_CONNECTION';
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
 export class AgentApiError extends Error {
   constructor(
     readonly statusCode: number,
@@ -218,12 +220,19 @@ export class AgentClient {
 
   private parse(res: TransportResponse): unknown {
     let body: unknown;
+    let unreadable = false;
     try {
       body = res.bodyText.length ? JSON.parse(res.bodyText) : null;
     } catch {
       body = null;
+      unreadable = true;
     }
-    if (res.status >= 200 && res.status < 300) return body;
+    if (res.status >= 200 && res.status < 300) {
+      // A success whose body is not JSON (a proxy or captive-portal page) must not pass as "empty", or callers
+      // would sign or index `undefined`.
+      if (unreadable) throw new AgentApiError(res.status, 'BAD_RESPONSE', 'The computer sent a reply this app could not read.');
+      return body;
+    }
     const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
     throw new AgentApiError(
       res.status,
@@ -315,13 +324,14 @@ export class AgentClient {
 
   /** Starts one catalog app by its opaque id; the agent re-checks the id against its current catalog. */
   async launchApp(id: string): Promise<void> {
-    const d = (await this.call('POST', `/apps/${encodeURIComponent(id)}/launch`)) as Record<string, unknown>;
-    if (d.status !== 'started') throw new Error('Unexpected app launch response.');
+    const d = await this.call('POST', `/apps/${encodeURIComponent(id)}/launch`);
+    if (!isObject(d) || d.status !== 'started') throw new Error('Unexpected app launch response.');
   }
 
   async challenge(): Promise<string> {
-    const d = (await this.call('POST', '/auth/challenge')) as Record<string, unknown>;
-    return d.nonce as string;
+    const d = await this.call('POST', '/auth/challenge');
+    if (!isObject(d) || typeof d.nonce !== 'string' || d.nonce === '') throw new AgentApiError(200, 'BAD_RESPONSE', 'The computer sent a reply this app could not read.');
+    return d.nonce;
   }
 
   async login(a: {
@@ -393,8 +403,9 @@ export class AgentClient {
   }
 
   async drives(): Promise<Drive[]> {
-    const d = (await this.call('GET', '/system/drives')) as Record<string, unknown>[];
-    return d.map(parseDrive);
+    const d = await this.call('GET', '/system/drives');
+    if (!Array.isArray(d)) throw new AgentApiError(200, 'BAD_RESPONSE', 'The computer sent a reply this app could not read.');
+    return (d as Record<string, unknown>[]).map(parseDrive);
   }
 
   async list(path: string, o: { cursor?: string; limit?: number } = {}): Promise<Listing> {

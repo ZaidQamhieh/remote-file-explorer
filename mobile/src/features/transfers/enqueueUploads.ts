@@ -4,7 +4,7 @@ import type { Host } from '../../core/models/host';
 import { transfers } from '../../core/native';
 import { clientForHost } from '../../services';
 import { joinRemotePath } from '../explorer/paths';
-import type { UploadItem } from './uploadPlan';
+import { cleanUploadName, type UploadItem } from './uploadPlan';
 
 const newTransferId = () => `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -22,9 +22,12 @@ export async function enqueueUploads(host: Host, destDir: string, items: UploadI
     const id = newTransferId();
     const dir = new Directory(Paths.document, 'uploads', id);
     dir.create({ idempotent: true, intermediates: true });
-    const staged = new File(dir, item.targetName);
+    // Planned names are already clean; clean again so a caller that skips the plan cannot leave the staging
+    // directory or the chosen remote folder.
+    const targetName = cleanUploadName(item.targetName);
+    const staged = new File(dir, targetName);
     await new File(item.source.uri).move(staged);
-    await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), joinRemotePath(destDir, item.targetName), item.overwrite, true);
+    await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), joinRemotePath(destDir, targetName), item.overwrite, true);
     queued++;
   }
   return queued;

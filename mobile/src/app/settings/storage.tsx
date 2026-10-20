@@ -3,7 +3,10 @@ import { Database, Fingerprint, ShieldOff, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 
+import { useGuardedAction } from '../../core/useGuardedAction';
 import { authenticate, deviceAuthState } from '../../core/security/deviceAuth';
+import { humanizeError } from '../../features/pairing/pairingService';
+import { useActiveHost } from '../../state/activeHost';
 import type { Host } from '../../core/models/host';
 import { Pressable, Text, useDialogs, useToast } from '../../design/components';
 import { LumenType } from '../../design/lumen';
@@ -65,6 +68,8 @@ export default function StorageSecuritySettings() {
     const ok = await dialogs.confirm({ title: t('forgetHostTitle', { host: label }), description: t('forgetHostMessage'), confirmLabel: t('forgetButton'), cancelLabel: t('cancelButton'), destructive: true });
     if (!ok) return;
     await hostStore.removeHost(host.id);
+    // The Files tab must not keep browsing a computer that was just forgotten (F-76).
+    if (useActiveHost.getState().active?.host.id === host.id) useActiveHost.getState().setActive(null);
     toast.success(t('hostForgotten', { host: label }));
     await reload();
   };
@@ -78,10 +83,16 @@ export default function StorageSecuritySettings() {
     await reload();
   };
 
+  // A failed action shows a message instead of an unhandled rejection, and a second tap while one runs is ignored (F-175).
+  const onActionError = (e: unknown) => toast.error(humanizeError(e));
+  const guardedToggleLock = useGuardedAction(toggleLock, onActionError);
+  const guardedForget = useGuardedAction(forget, onActionError);
+  const guardedClearCache = useGuardedAction(clearCache, onActionError);
+
   return (
     <SettingsPage>
       <SettingsSection title={t('appLockTitle')}>
-        <ToggleRow icon={Fingerprint} tint={c.primary} title={t('appLockTitle')} subtitle={t('appLockSubtitle')} value={lockOn} onChange={(v) => void toggleLock(v)} />
+        <ToggleRow icon={Fingerprint} tint={c.primary} title={t('appLockTitle')} subtitle={t('appLockSubtitle')} value={lockOn} onChange={(v) => void guardedToggleLock(v)} />
       </SettingsSection>
       <SettingsSection title={t('trustedCertsSection')}>
         {trusted === null ? (
@@ -96,7 +107,7 @@ export default function StorageSecuritySettings() {
                 <Text style={LumenType.name}>{x.host.label || x.host.address}</Text>
                 <Text muted style={LumenType.meta}>{x.pin ? x.host.address : t('probeMissingPinHint')}</Text>
               </View>
-              <Pressable onPress={() => void forget(x)} accessibilityLabel={`${t('forgetButton')} ${x.host.label || x.host.address}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Pressable onPress={() => void guardedForget(x)} accessibilityLabel={`${t('forgetButton')} ${x.host.label || x.host.address}`} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
                 <Trash2 size={20} color={c.error} />
               </Pressable>
             </View>
@@ -105,7 +116,7 @@ export default function StorageSecuritySettings() {
       </SettingsSection>
       <SettingsSection title={t('cacheSection')}>
         <InfoRow icon={Database} tint={c.primary} title={t('cacheListingLabel')} subtitle={cached === null ? t('cacheCalculating') : t('cacheListingsSummary', { count: cached })} />
-        <NavRow icon={Trash2} tint={c.error} title={t('cacheClearAll')} onPress={() => void clearCache()} />
+        <NavRow icon={Trash2} tint={c.error} title={t('cacheClearAll')} onPress={() => void guardedClearCache()} />
       </SettingsSection>
     </SettingsPage>
   );

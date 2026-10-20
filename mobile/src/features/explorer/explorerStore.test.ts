@@ -198,16 +198,41 @@ describe('operations', () => {
     const list = jest.fn().mockImplementation(async () => ({ path: '/r', entries: [...files].map((p) => e(p.slice(3))) }));
     const { ex } = setup({ list, rename });
     await ex.load();
-    // a>b then b>c is a chain through b, and c exists unselected: b>c is refused up front, a>b is refused by the host
+    // a>b then b>c is a chain through b, and c exists unselected: b>c is refused up front, a>b (which needed the name b to be vacated) is refused up front too
     // and put back, and nothing is left under a temp name.
     const res = await ex.batchRename([
       { path: '/r/a', newName: 'b' },
       { path: '/r/b', newName: 'c' },
       { path: '/r/d', newName: 'e' },
     ]);
-    expect(res.failed.map((r) => [r.path, r.errorCode])).toEqual([['/r/b', 'TARGET_EXISTS'], ['/r/a', 'RENAME_FAILED']]);
+    expect(res.failed.map((r) => [r.path, r.errorCode])).toEqual([['/r/a', 'TARGET_EXISTS'], ['/r/b', 'TARGET_EXISTS']]);
     expect([...files].sort()).toEqual(['/r/a', '/r/b', '/r/c', '/r/e']);
     expect([...files].some((p) => p.includes('.rfe-rn-'))).toBe(false);
+  });
+
+  it('batchRename refuses a target that is only in an unloaded page, so nothing is stranded (F-138)', async () => {
+    const files = new Set(['/r/x', '/r/a', '/r/b', '/r/c']);
+    const rename = jest.fn().mockImplementation(async (from: string, to: string) => {
+      if (files.has(to)) throw new Error('destination already exists');
+      files.delete(from);
+      files.add(to);
+    });
+    // The screen holds only the first page (x, a, b); c sits on the next page. Listing without a cursor returns page one.
+    const list = jest.fn().mockImplementation(async (_dir: string, o?: { cursor?: string }) => {
+      const all = [...files].sort().map((p) => e(p.slice(3)));
+      return o?.cursor ? { path: '/r', entries: all.slice(3) } : { path: '/r', entries: all.slice(0, 3), nextCursor: 'p2' };
+    });
+    const { ex } = setup({ list, rename });
+    await ex.load();
+    const res = await ex.batchRename([
+      { path: '/r/x', newName: 'a' },
+      { path: '/r/a', newName: 'b' },
+      { path: '/r/b', newName: 'c' },
+    ]);
+    expect(res.failed.find((r) => r.errorCode === 'RENAME_STRANDED')).toBeUndefined();
+    expect(res.failed.map((r) => [r.path, r.errorCode])).toEqual([['/r/x', 'TARGET_EXISTS'], ['/r/a', 'TARGET_EXISTS'], ['/r/b', 'TARGET_EXISTS']]);
+    expect([...files].some((p) => p.includes('.rfe-rn-'))).toBe(false);
+    expect(files.has('/r/b')).toBe(true);
   });
 
   it('a loadMore that a refresh superseded does not leave the list unable to page', async () => {
@@ -329,5 +354,42 @@ describe('listing cache', () => {
     expect(await cache.get('h', '/c')).not.toBeNull();
     await cache.evictHost('h');
     expect(await cache.get('h', '/a')).toBeNull();
+  });
+});
+
+describe('local cache failures never decide the result (F-163, F-164)', () => {
+  const brokenCache = (o: { get?: boolean; put?: boolean }) =>
+    ({
+      get: jest.fn(async () => {
+        if (o.get) throw new Error('db read');
+        return null;
+      }),
+      put: jest.fn(async () => {
+        if (o.put) throw new Error('db write');
+      }),
+    }) as unknown as ListingCache;
+  const make = (cache: ListingCache, list: jest.Mock) => createExplorer({ hostId: 'h', rootPath: '/r', getClient: async () => ({ list }) as unknown as AgentClient, cache, humanize: (x) => (x as Error).message });
+
+  it('a good listing is shown although the cache write fails', async () => {
+    const ex = make(brokenCache({ put: true }), jest.fn().mockResolvedValue({ path: '/r', entries: [e('a')] }));
+    await ex.load();
+    expect(ex.getState()).toMatchObject({ loading: false, error: null, offline: false });
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a']);
+  });
+
+  it('a failed cache write while paging keeps the page and sets no loadMoreError', async () => {
+    const list = jest.fn().mockResolvedValueOnce({ path: '/r', entries: [e('a')], nextCursor: 'c' }).mockResolvedValueOnce({ path: '/r', entries: [e('b')] });
+    const ex = make(brokenCache({ put: true }), list);
+    await ex.load();
+    await ex.loadMore();
+    expect(ex.getState().loadMoreError).toBeNull();
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a', 'b']);
+  });
+
+  it('a failed cache read is a miss: load does not reject and still lists the folder', async () => {
+    const ex = make(brokenCache({ get: true }), jest.fn().mockResolvedValue({ path: '/r', entries: [e('a')] }));
+    await expect(ex.load()).resolves.toBeUndefined();
+    expect(ex.getState().entries.map((x) => x.name)).toEqual(['a']);
+    expect(ex.getState().loading).toBe(false);
   });
 });

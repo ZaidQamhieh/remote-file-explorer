@@ -298,3 +298,33 @@ describe('AgentClient settings, devices, bandwidth and audit', () => {
     expect(canManageHost(parseStatus({ isAdmin: true }))).toBe(true);
   });
 });
+
+describe('AgentClient 2xx replies that are not JSON (F-139)', () => {
+  const html = { status: 200, headers: {}, bodyText: '<html>captive portal</html>' };
+  const make = (reply: unknown) => new AgentClient(host, { transport: fake(() => reply).transport, deviceToken: 't', pinnedFingerprint: PIN });
+
+  it('throws BAD_RESPONSE instead of returning an empty body', async () => {
+    await expect(make(html).drives()).rejects.toMatchObject({ statusCode: 200, code: 'BAD_RESPONSE' });
+    await expect(make(html).list('/')).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+  });
+
+  it('challenge never returns undefined: a non-JSON or nonce-less reply is BAD_RESPONSE', async () => {
+    await expect(make(html).challenge()).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+    await expect(make(ok({ nope: 1 })).challenge()).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+    await expect(make(ok({ nonce: 'abc' })).challenge()).resolves.toBe('abc');
+  });
+
+  it('launchApp and drives reject an unexpected shape instead of a raw TypeError', async () => {
+    await expect(make(ok(null)).launchApp('x')).rejects.toThrow('Unexpected app launch response.');
+    await expect(make(ok({ not: 'an array' })).drives()).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+  });
+
+  it('an empty 2xx body is still a valid empty reply', async () => {
+    const c = make({ status: 204, headers: {}, bodyText: '' });
+    await expect(c.revealPair('id', 'n')).resolves.toBeUndefined();
+  });
+
+  it('an error status with a non-JSON body keeps its status code', async () => {
+    await expect(make({ status: 502, headers: {}, bodyText: '<html>bad gateway</html>' }).drives()).rejects.toMatchObject({ statusCode: 502, code: 'UNKNOWN' });
+  });
+});

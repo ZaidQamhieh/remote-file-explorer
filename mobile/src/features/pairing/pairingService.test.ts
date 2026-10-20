@@ -174,6 +174,21 @@ describe('approve-on-computer pairing', () => {
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls.length - before).toBe(1);
   });
+
+  it('an approval that arrives after cancelling is not committed (F-151)', async () => {
+    const ctl = new AbortController();
+    // The person cancels while the status request is in flight; the answer that comes back is "approved".
+    const { deps, store } = setup(
+      requestHandler(() => {
+        ctl.abort();
+        return { status: 'approved', deviceToken: 'tok', deviceId: 'dev-9', agentName: 'My PC' };
+      }),
+    );
+    const h = await requestPairing(deps, '10.0.0.2:8765');
+    await expect(awaitPairing(deps, h, { signal: ctl.signal, sleep: async () => {} })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(await store.listHosts()).toEqual([]);
+    expect(await store.getToken('dev-9')).toBeNull();
+  });
 });
 
 describe('credentials are only sent to a computer this phone trusts', () => {

@@ -13,6 +13,7 @@ import { FontFamily, Radii, Spacing } from '../../../design/tokens';
 import { clientForHost } from '../../../services';
 import { hashKey } from '../../explorer/thumbnails';
 import { humanizeError } from '../../pairing/pairingService';
+import { leaseMediaProxy } from '../mediaProxyLease';
 import { PreviewError, PreviewLoading, PreviewTooLarge } from '../PreviewChrome';
 import { MAX_AUDIO_PREVIEW_BYTES, usePreviewFile } from '../previewFile';
 
@@ -37,18 +38,17 @@ function VideoStream({ host, entry }: { host: Host; entry: Entry }) {
   useEffect(() => {
     let live = true;
     const id = `v${hashKey(entry.path)}${attempt}`;
-    clientForHost(host)
-      .then((client) => {
-        const spec = client.downloadSpec(entry.path);
-        return mediaProxy.start(id, spec.url, spec.headers, spec.pin);
-      })
-      .then(
-        (uri) => live && setSrc({ uri }),
-        (error) => live && setSrc({ error }),
-      );
+    const lease = leaseMediaProxy(mediaProxy, id, async () => {
+      const client = await clientForHost(host);
+      return client.downloadSpec(entry.path);
+    });
+    lease.uri.then(
+      (uri) => live && setSrc({ uri }),
+      (error) => live && setSrc({ error }),
+    );
     return () => {
       live = false;
-      void mediaProxy.stop(id);
+      lease.release();
     };
   }, [host, entry.path, attempt]);
 

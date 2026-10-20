@@ -240,7 +240,7 @@ func (rn *Renderer) GetFileContext(ctx context.Context, source *os.File, cacheKe
 		return nil, fmt.Errorf("%w: source is not a regular file", ErrNotSupported)
 	}
 
-	cachePath := rn.cachePath(cacheKey, maxSize, info.ModTime().UnixNano())
+	cachePath := rn.cachePath(cacheKey, maxSize, info)
 
 	if data, err := os.ReadFile(cachePath); err == nil {
 		return data, nil
@@ -452,9 +452,11 @@ func renderOpened(ctx context.Context, cf *os.File, maxSize int) ([]byte, error)
 // cachePath returns the on-disk path for a cached thumbnail keyed by the
 // source path, requested size, and the source's modification time (so stale
 // cache entries are naturally bypassed when the source file changes).
-func (rn *Renderer) cachePath(srcPath string, maxSize int, mtimeNano int64) string {
-	sum := sha256.Sum256([]byte(srcPath))
-	key := fmt.Sprintf("%s_%d_%d.jpg", hex.EncodeToString(sum[:]), maxSize, mtimeNano)
+func (rn *Renderer) cachePath(srcPath string, maxSize int, info os.FileInfo) string {
+	// The key names the file's content version: path, modification time, size and (where the OS has
+	// one) device and inode, so a replaced file with a restored mtime is not served stale.
+	sum := sha256.Sum256([]byte(srcPath + "\x00" + fileIdentity(info)))
+	key := fmt.Sprintf("%s_%d_%d_%d.jpg", hex.EncodeToString(sum[:]), maxSize, info.ModTime().UnixNano(), info.Size())
 	return filepath.Join(rn.cacheDir, key)
 }
 

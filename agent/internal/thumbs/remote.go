@@ -119,6 +119,12 @@ func (rn *Renderer) renderWithRemote(ctx context.Context, f *os.File, size int64
 		sidecar.Note("thumbd.breaker-open-refused")
 		return nil, true, fmt.Errorf("thumbnail sidecar is unavailable: %w", err)
 	default:
+		// A file the sidecar already died on must not take the in-process path while the sidecar restarts:
+		// that would run the suspect input unsandboxed and skip the two-strike rule (audit F-53).
+		if haveKey && rn.crashes.struck(key) {
+			sidecar.Note("thumbd.restarting-refused")
+			return nil, true, fmt.Errorf("thumbnail sidecar is restarting: %w", err)
+		}
 		// Not running, refused or misbehaving: this render ran in-process instead.
 		sidecar.Note("thumbd.fallback")
 		return nil, false, nil
@@ -148,6 +154,13 @@ type crashLog struct {
 	mu      sync.Mutex
 	strikes map[crashKey]int
 	order   []crashKey
+}
+
+// struck reports whether the sidecar was interrupted on this file at least once.
+func (l *crashLog) struck(k crashKey) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.strikes[k] >= 1
 }
 
 func (l *crashLog) poisoned(k crashKey) bool {

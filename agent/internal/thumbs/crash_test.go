@@ -120,3 +120,33 @@ func TestSidecarRemoteMapsInternalToFinalError(t *testing.T) {
 		t.Fatalf("INTERNAL mapped to %v", got)
 	}
 }
+
+type sequenceRemote struct {
+	errs []error
+	n    int
+}
+
+func (s *sequenceRemote) Render(context.Context, []byte, int) ([]byte, error) {
+	e := s.errs[min(s.n, len(s.errs)-1)]
+	s.n++
+	return nil, e
+}
+
+// F-53: right after a crash the sidecar is briefly unavailable; the retry must not decode the suspect file in-process.
+func TestRetryDuringRestartDoesNotDecodeInProcess(t *testing.T) {
+	path := filepath.Join(fixtureDir, "photo.jpg")
+	rn, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rn.UseRemote(&sequenceRemote{errs: []error{
+		fmt.Errorf("%w: %w", sidecar.ErrUnavailable, sidecar.ErrInterrupted),
+		sidecar.ErrUnavailable,
+	}})
+	if _, err := rn.Get(path, 96); err == nil {
+		t.Fatal("interrupted render should fail")
+	}
+	if data, err := rn.Get(path, 96); err == nil || len(data) != 0 {
+		t.Fatalf("retry while restarting decoded in-process (err=%v, %d bytes)", err, len(data))
+	}
+}

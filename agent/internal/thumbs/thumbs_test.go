@@ -177,7 +177,11 @@ func TestRendererCachesAndInvalidatesOnSourceChange(t *testing.T) {
 	if err != nil || !bytes.Equal(first, second) {
 		t.Fatalf("cache hit = (%v, %v), bytes equal=%v", err, nil, bytes.Equal(first, second))
 	}
-	cachePath := renderer.cachePath(src, 16, old.UnixNano())
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath := renderer.cachePath(src, 16, srcInfo)
 	if got, err := os.ReadFile(cachePath); err != nil || !bytes.Equal(got, first) {
 		t.Fatalf("cached thumbnail = %d bytes, err %v", len(got), err)
 	}
@@ -370,5 +374,35 @@ func TestDecodeBudgetLimitCancellationQueueAndRelease(t *testing.T) {
 	budget.mu.Unlock()
 	if used != 0 {
 		t.Fatalf("release left %d bytes reserved", used)
+	}
+}
+
+// F-54: a replaced file whose modification time was restored must not be served from the old cache entry.
+func TestRendererCacheKeyChangesWhenFileIsReplacedWithSameMtime(t *testing.T) {
+	root := t.TempDir()
+	renderer, err := New(filepath.Join(root, "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(root, "a.png")
+	old := time.Unix(1000, 0)
+	writeTestPNG(t, src, 40, 20, color.NRGBA{R: 255, A: 255})
+	if err := os.Chtimes(src, old, old); err != nil {
+		t.Fatal(err)
+	}
+	red, err := renderer.Get(src, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestPNG(t, src, 60, 30, color.NRGBA{B: 255, A: 255})
+	if err := os.Chtimes(src, old, old); err != nil {
+		t.Fatal(err)
+	}
+	blue, err := renderer.Get(src, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(red, blue) {
+		t.Fatal("a different file with the same name and mtime was served from the cache")
 	}
 }

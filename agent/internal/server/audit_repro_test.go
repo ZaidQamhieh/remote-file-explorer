@@ -6,6 +6,8 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -104,5 +106,91 @@ func TestAuditRepro_MoveIntoItselfOverwriteKeepsData(t *testing.T) {
 	t.Logf("result: %+v", res)
 	if _, err := os.Stat(keep); err != nil {
 		t.Fatalf("data inside the source was deleted by a failing move: %v", err)
+	}
+}
+
+// F-90: Extract silently replaces an existing file of the same name.
+func TestAuditRepro_ExtractDoesNotClobberExisting(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("doc.txt")
+	_, _ = w.Write([]byte("from-archive"))
+	_ = zw.Close()
+	if err := os.WriteFile(filepath.Join(root, "pack.zip"), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(root, "out")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig := filepath.Join(dest, "doc.txt")
+	if err := os.WriteFile(orig, []byte("precious"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	_, _ = ops.Extract(filepath.Join(root, "pack.zip"), dest)
+	if b, _ := os.ReadFile(orig); string(b) != "precious" {
+		t.Fatalf("existing file replaced by Extract: now %q", b)
+	}
+}
+
+// F-119: Move over a dangling symlink at the destination replaces it with no conflict.
+func TestAuditRepro_MoveOverDanglingSymlinkConflicts(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	src := filepath.Join(root, "x")
+	dir := filepath.Join(root, "d")
+	if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("nowhere", filepath.Join(dir, "x")); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	res := ops.Move([]string{src}, dir, false, false)
+	if len(res) == 1 && res[0].Error == nil {
+		t.Fatalf("Move replaced the dangling symlink without a CONFLICT (Rename uses lstat and would refuse)")
+	}
+}
+
+// F-132: Chmod opens a FIFO with a blocking open.
+func TestAuditRepro_ChmodFIFOReturnsPromptly(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	fifo := filepath.Join(root, "pipe")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	done := make(chan struct{})
+	go func() { _ = ops.Chmod(fifo, 0o600); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Chmod on a FIFO blocked for over 3s")
+	}
+}
+
+// F-133: the handler passes a raw 32-bit octal value to fs.FileMode, so Go's type bits
+// (setuid is 1<<23) are reachable: mode "40000755" sets setuid while "4755" is dropped.
+func TestAuditRepro_ChmodModeAboveSevenSevenSevenSevenRejected(t *testing.T) {
+	auditRepro(t)
+	root := t.TempDir()
+	f := filepath.Join(root, "f.sh")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := fsops.New([]string{root}, false)
+	if err := ops.Chmod(f, os.FileMode(0o40000755)); err != nil {
+		t.Skipf("chmod refused: %v", err)
+	}
+	st, _ := os.Stat(f)
+	if st.Mode()&os.ModeSetuid != 0 {
+		t.Fatalf("setuid set via mode 40000755 (handler accepts any 32-bit octal): %v", st.Mode())
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 
@@ -403,6 +404,23 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "launchApps requires viewApps")
 			return
 		}
+		// The settings are written one by one, so a later failure would leave
+		// the earlier ones applied while the caller is told the request
+		// failed. rollback puts the values read above back in that case.
+		rollback := func() {
+			if _, err := SetDeviceJail(db, id, target.JailRoot, st.Roots(), st.IsReadOnly()); err != nil {
+				log.Printf("device %s: could not restore jail after a failed update: %v", id, err)
+			}
+			if err := db.SetDeviceReadOnly(id, target.ReadOnly); err != nil {
+				log.Printf("device %s: could not restore read-only after a failed update: %v", id, err)
+			}
+			if err := db.SetDeviceAppPermissions(id, target.ViewApps, target.LaunchApps); err != nil {
+				log.Printf("device %s: could not restore app permissions after a failed update: %v", id, err)
+			}
+			if err := db.SetDeviceFilePermissions(id, target.CanBrowse, target.CanDownload, target.CanUpload, target.CanModify, target.CanDelete, target.CanShare); err != nil {
+				log.Printf("device %s: could not restore file permissions after a failed update: %v", id, err)
+			}
+		}
 		if b.JailRoot != nil {
 			if _, err := SetDeviceJail(db, id, *b.JailRoot, st.Roots(), st.IsReadOnly()); err != nil {
 				writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -411,12 +429,14 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 		}
 		if b.ReadOnly != nil {
 			if err := db.SetDeviceReadOnly(id, *b.ReadOnly); err != nil {
+				rollback()
 				writeInternal(w, "set device jail", err)
 				return
 			}
 		}
 		if b.ViewApps != nil || b.LaunchApps != nil {
 			if err := db.SetDeviceAppPermissions(id, viewApps, launchApps); err != nil {
+				rollback()
 				writeInternal(w, "set device app permissions", err)
 				return
 			}
@@ -443,6 +463,7 @@ func setDeviceJailHandler(db *store.DB, st *settings.Store) http.HandlerFunc {
 				share = *b.Share
 			}
 			if err := db.SetDeviceFilePermissions(id, browse, download, upload, modify, del, share); err != nil {
+				rollback()
 				writeInternal(w, "set device file permissions", err)
 				return
 			}

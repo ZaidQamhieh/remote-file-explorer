@@ -101,6 +101,15 @@ func (s *DB) DeleteUser(username string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Existence first: asking to delete an account that is not there is a 404
+	// whatever the number of accounts, not a "last user" refusal.
+	var exists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE username=?`, username).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 0 {
+		return sql.ErrNoRows
+	}
 	var count int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return err
@@ -108,22 +117,17 @@ func (s *DB) DeleteUser(username string) error {
 	if count <= 1 {
 		return ErrLastUser
 	}
-	res, err := tx.Exec(`DELETE FROM users WHERE username=?`, username)
-	if err != nil {
+	if _, err := tx.Exec(`DELETE FROM users WHERE username=?`, username); err != nil {
 		return err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
+	// End every device session that belongs to the account, in the same
+	// transaction, with the share links those devices minted. A device that
+	// was later re-paired by code keeps its username, so match on the
+	// username alone rather than on via_login.
+	if _, err := tx.Exec(`DELETE FROM share_tokens WHERE device_id IN (SELECT id FROM devices WHERE username=?)`, username); err != nil {
 		return err
 	}
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	// Revoke password-login sessions in the same transaction as the account
-	// removal. Code-paired devices are intentionally unaffected.
-	if _, err := tx.Exec(
-		`UPDATE devices SET revoked=1 WHERE via_login=1 AND username=?`, username,
-	); err != nil {
+	if _, err := tx.Exec(`UPDATE devices SET revoked=1 WHERE username=?`, username); err != nil {
 		return err
 	}
 	return tx.Commit()

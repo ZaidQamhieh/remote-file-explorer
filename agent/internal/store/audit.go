@@ -63,8 +63,11 @@ func (s *DB) AppendAudit(action, actor, target, detail string) error {
 // AuditEntries returns up to limit entries, newest first. A non-zero beforeID
 // pages backwards from an earlier response's last id.
 func (s *DB) AuditEntries(limit int, beforeID int64) ([]AuditEntry, error) {
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 {
 		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
 	}
 	var (
 		rows *sql.Rows

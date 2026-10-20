@@ -5,6 +5,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -249,7 +250,11 @@ const maxLogLines = 200
 // returns an empty list elsewhere rather than erroring.
 func listLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cmd := exec.Command("journalctl", "--user", "-u", "rfe-agent.service",
+		// A wedged journald must not pin a request goroutine and a process
+		// forever, so the command gets a deadline tied to the request.
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "journalctl", "--user", "-u", "rfe-agent.service",
 			"-n", "200", "--no-pager", "-o", "short-iso")
 		raw, err := cmd.Output()
 		if err != nil {

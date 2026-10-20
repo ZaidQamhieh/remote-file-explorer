@@ -23,6 +23,13 @@ const (
 // so an unauthenticated peer cannot bury the owner in prompts.
 const MaxPendingPairRequests = 3
 
+// MaxCommittedPairRequestsPerIP and MaxCommittedPairRequests bound requests that
+// have committed a nonce but not yet revealed it (the owner is not asked yet).
+const (
+	MaxCommittedPairRequestsPerIP = 3
+	MaxCommittedPairRequests      = 30
+)
+
 // ErrTooManyPairRequests means MaxPendingPairRequests undecided requests already exist.
 var ErrTooManyPairRequests = errors.New("too many pending pair requests")
 
@@ -53,11 +60,22 @@ func (s *DB) CreatePairRequest(r PairRequest) error {
 	if _, err := tx.Exec(`DELETE FROM pair_requests WHERE expires < ? OR (status IN ('rejected','done') AND created < ?)`, now, now-600); err != nil {
 		return err
 	}
-	var pending int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM pair_requests WHERE status IN ('committed','pending') AND expires >= ?`, now).Scan(&pending); err != nil {
+	// Only requests the owner is actually being asked about count towards the
+	// prompt cap. A committed request has not revealed its nonce yet, so it is
+	// invisible to the owner; letting those fill the cap would let an
+	// unauthenticated peer lock real phones out of pairing. They are bounded
+	// separately, per source address and in total.
+	var pending, committedTotal, committedFromIP int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pair_requests WHERE status='pending' AND expires >= ?`, now).Scan(&pending); err != nil {
 		return err
 	}
 	if pending >= MaxPendingPairRequests {
+		return ErrTooManyPairRequests
+	}
+	if err := tx.QueryRow(`SELECT COUNT(*), COALESCE(SUM(remote_ip = ?), 0) FROM pair_requests WHERE status='committed' AND expires >= ?`, r.RemoteIP, now).Scan(&committedTotal, &committedFromIP); err != nil {
+		return err
+	}
+	if committedFromIP >= MaxCommittedPairRequestsPerIP || committedTotal >= MaxCommittedPairRequests {
 		return ErrTooManyPairRequests
 	}
 	if _, err := tx.Exec(
@@ -134,7 +152,7 @@ func (s *DB) ClaimApprovedPairRequest(id string) (PairRequest, bool, error) {
 		return PairRequest{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.Exec(`UPDATE pair_requests SET status='done' WHERE id=? AND status='approved'`, id)
+	res, err := tx.Exec(`UPDATE pair_requests SET status='done' WHERE id=? AND status='approved' AND expires >= ?`, id, time.Now().Unix())
 	if err != nil {
 		return PairRequest{}, false, err
 	}

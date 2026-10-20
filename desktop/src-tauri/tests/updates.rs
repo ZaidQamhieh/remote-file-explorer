@@ -1,7 +1,11 @@
 //! Looking for a newer version and fetching its package, against a small local stand-in for
 //! GitHub's list of releases. The package is only kept when its SHA-256 is the one the release lists.
 
-use rfe_desktop_lib::updates::{check_at, download_at, notes_of, package_for, sum_for, Version};
+use ed25519_dalek::{Signer, SigningKey};
+use rfe_desktop_lib::updates::{
+    check_at, download_at, download_signed_by, notes_of, package_for, sum_for, sums_signature_ok,
+    Version,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -215,6 +219,14 @@ async fn a_check_picks_the_newest_release_of_the_channel() {
     );
 }
 
+fn test_key() -> SigningKey {
+    SigningKey::from_bytes(&[7u8; 32])
+}
+
+fn sign(sums: &[u8], key: &SigningKey) -> Vec<u8> {
+    hex::encode(key.sign(sums).to_bytes()).into_bytes()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_package_is_kept_only_when_its_checksum_matches() {
     let body = vec![7u8; 100_000];
@@ -226,10 +238,16 @@ async fn a_package_is_kept_only_when_its_checksum_matches() {
             "desktop-v1.1.0",
             false,
             false,
-            vec![(name, body.clone()), ("SHA256SUMS", sums.into_bytes())],
+            vec![
+                (name, body.clone()),
+                ("SHA256SUMS.sig", sign(sums.as_bytes(), &test_key())),
+                ("SHA256SUMS", sums.into_bytes()),
+            ],
         )]);
         let dir = TempDir::new().unwrap();
-        let got = download_at(&format!("{}/list", s.base), "1.1.0", name, dir.path()).await;
+        let key = test_key().verifying_key().to_bytes();
+        let got =
+            download_signed_by(&format!("{}/list", s.base), "1.1.0", name, dir.path(), &key).await;
         if kept {
             let path = got.unwrap();
             assert_eq!(std::fs::read(&path).unwrap(), body);
@@ -248,6 +266,62 @@ async fn a_package_is_kept_only_when_its_checksum_matches() {
             );
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn checksums_that_are_unsigned_or_signed_by_another_key_are_refused() {
+    let body = b"abc".to_vec();
+    let sums = format!("{}  a.deb\n", hex::encode(Sha256::digest(&body)));
+    let key = test_key().verifying_key().to_bytes();
+    let other = SigningKey::from_bytes(&[9u8; 32]);
+    let mut tampered = sums.clone().into_bytes();
+    tampered.push(b'\n');
+    let cases: Vec<(&str, Option<Vec<u8>>, &str)> = vec![
+        ("unsigned", None, "not signed"),
+        (
+            "wrong key",
+            Some(sign(sums.as_bytes(), &other)),
+            "not signed by",
+        ),
+        (
+            "tampered sums",
+            Some(sign(&tampered, &test_key())),
+            "not signed by",
+        ),
+        ("garbage", Some(b"zz".to_vec()), "not signed by"),
+    ];
+    for (what, sig, want) in cases {
+        let mut assets = vec![
+            ("a.deb", body.clone()),
+            ("SHA256SUMS", sums.clone().into_bytes()),
+        ];
+        if let Some(sig) = sig {
+            assets.push(("SHA256SUMS.sig", sig));
+        }
+        let s = site(&[("desktop-v1.1.0", false, false, assets)]);
+        let dir = TempDir::new().unwrap();
+        let e = download_signed_by(
+            &format!("{}/list", s.base),
+            "1.1.0",
+            "a.deb",
+            dir.path(),
+            &key,
+        )
+        .await
+        .unwrap_err();
+        assert!(e.contains(want), "{what}: {e}");
+        assert!(
+            s.hits.lock().unwrap().iter().all(|p| !p.ends_with("a.deb")),
+            "{what}: the package was fetched"
+        );
+    }
+    let good = sign(sums.as_bytes(), &test_key());
+    assert!(sums_signature_ok(
+        sums.as_bytes(),
+        std::str::from_utf8(&good).unwrap(),
+        &key
+    ));
+    assert!(!sums_signature_ok(sums.as_bytes(), "", &key));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -323,4 +397,23 @@ async fn a_page_full_of_other_products_releases_does_not_hide_the_desktop_ones()
     assert!(v.available);
     let hits = s.hits.lock().unwrap().clone();
     assert_eq!(hits, ["/p", "/p?page=2"]);
+}
+
+#[test]
+fn the_pinned_release_key_accepts_what_the_workflow_signs() {
+    // Produced exactly as .github/workflows/desktop-release.yml does it (openssl pkeyutl -rawin | xxd).
+    let sums = std::fs::read("tests/fixtures/SHA256SUMS.example").unwrap();
+    let sig = std::fs::read_to_string("tests/fixtures/SHA256SUMS.example.sig").unwrap();
+    assert!(sums_signature_ok(
+        &sums,
+        &sig,
+        &rfe_desktop_lib::updates::RELEASE_KEY
+    ));
+    let mut changed = sums.clone();
+    changed[0] ^= 1;
+    assert!(!sums_signature_ok(
+        &changed,
+        &sig,
+        &rfe_desktop_lib::updates::RELEASE_KEY
+    ));
 }

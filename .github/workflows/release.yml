@@ -188,11 +188,20 @@ jobs:
         env:
           APK: ${{ needs.build.outputs.apk }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          RFE_RELEASE_SIGNING_KEY: ${{ secrets.RFE_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
+          # The app checks this ed25519 signature of latest.json against a public key pinned in
+          # mobile/src/features/update/updateLogic.ts before it trusts the APK hash in it (audit F-106).
+          test -n "$RFE_RELEASE_SIGNING_KEY" || { echo "::error::the RFE_RELEASE_SIGNING_KEY secret is not set"; exit 1; }
+          key="$RUNNER_TEMP/release-signing.pem"
+          (umask 077 && printf '%s\n' "$RFE_RELEASE_SIGNING_KEY" > "$key")
+          openssl pkeyutl -sign -rawin -inkey "$key" -in latest.json | xxd -p -c 256 > latest.json.sig
+          rm -f "$key"
+          test "$(tr -d '\n' < latest.json.sig | wc -c)" -eq 128
           # The updater reads releases/latest, so Latest is always explicit: a pre-release never takes it, and a
           # release takes it from whatever else (the agent's releases carry no latest.json) was published last.
           if [ "$PRERELEASE" = true ]; then flag="--prerelease --latest=false"; else flag="--latest"; fi
-          gh release create "$GITHUB_REF_NAME" "$APK" latest.json \
+          gh release create "$GITHUB_REF_NAME" "$APK" latest.json latest.json.sig \
             --title "v${{ needs.build.outputs.name }} (build ${{ needs.build.outputs.code }})" \
             --generate-notes $flag

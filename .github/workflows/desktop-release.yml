@@ -81,6 +81,21 @@ jobs:
           if grep -q ' ' <(cut -c67- SHA256SUMS); then echo "::error::a name in SHA256SUMS still has a space"; exit 1; fi
           cat SHA256SUMS
 
+      # The apps verify this signature (ed25519, public key pinned in desktop/src-tauri/src/updates.rs)
+      # before they trust SHA256SUMS, so a tampered release cannot pass on its own checksums (audit F-13).
+      # The private key is the repository secret RFE_RELEASE_SIGNING_KEY (a PEM), never committed.
+      - name: Sign the checksums
+        env:
+          RFE_RELEASE_SIGNING_KEY: ${{ secrets.RFE_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$RFE_RELEASE_SIGNING_KEY" || { echo "::error::the RFE_RELEASE_SIGNING_KEY secret is not set"; exit 1; }
+          key="$RUNNER_TEMP/release-signing.pem"
+          (umask 077 && printf '%s\n' "$RFE_RELEASE_SIGNING_KEY" > "$key")
+          openssl pkeyutl -sign -rawin -inkey "$key" -in release-files/SHA256SUMS | xxd -p -c 256 > release-files/SHA256SUMS.sig
+          rm -f "$key"
+          test "$(tr -d '\n' < release-files/SHA256SUMS.sig | wc -c)" -eq 128
+
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |

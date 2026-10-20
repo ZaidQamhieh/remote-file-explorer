@@ -1,9 +1,30 @@
+import { ed25519 } from '@noble/curves/ed25519.js';
+
 /** The release manifest (`latest.json`) published next to each GitHub release. */
 export type AppRelease = { versionName: string; versionCode: number; size: number; url: string | null; sha256: string };
 
 /** Same repository and stable "latest release" redirect the Flutter app reads, so both apps follow one release channel. */
 export const GITHUB_REPO = 'ZaidQamhieh/remote-file-explorer';
 export const LATEST_MANIFEST_URL = `https://github.com/${GITHUB_REPO}/releases/latest/download/latest.json`;
+
+export const LATEST_SIGNATURE_URL = `${LATEST_MANIFEST_URL}.sig`;
+
+/** The release signing public key (ed25519, hex). The private key signs `latest.json` in the release workflow and is never in the repository (audit F-106). */
+export const RELEASE_PUBLIC_KEY = '0c7b69ac0e0b08ca6c6cf0c12c528870e99506aeeecf59fce1076014a481bac2';
+
+const hexBytes = (hex: string): Uint8Array | null => (/^([0-9a-fA-F]{2})+$/.test(hex) ? Uint8Array.from(hex.match(/../g) as string[], (h) => parseInt(h, 16)) : null);
+
+/** True when `signatureHex` is a valid ed25519 signature of exactly `manifestText` under `publicKeyHex`. */
+export function manifestSignatureOk(manifestText: string, signatureHex: string, publicKeyHex: string = RELEASE_PUBLIC_KEY): boolean {
+  const sig = hexBytes(signatureHex.trim());
+  const key = hexBytes(publicKeyHex);
+  if (sig === null || key === null || sig.length !== 64 || key.length !== 32) return false;
+  try {
+    return ed25519.verify(sig, new TextEncoder().encode(manifestText), key);
+  } catch {
+    return false;
+  }
+}
 
 /** Hosts an APK may be fetched from: GitHub, and the storage host its release downloads redirect to. */
 const APK_HOSTS = ['github.com', 'githubusercontent.com'];

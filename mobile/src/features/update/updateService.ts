@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { canInstallPackages, installApk, openInstallSettings, publicDownload, publicDownloadCancel, sha256File, appBuild } from '../../core/native';
 import { keyValue } from '../../services';
-import { isUpdateAvailable, LATEST_MANIFEST_URL, parseRelease, percent, type AppRelease } from './updateLogic';
+import { isUpdateAvailable, LATEST_MANIFEST_URL, LATEST_SIGNATURE_URL, manifestSignatureOk, parseRelease, percent, type AppRelease } from './updateLogic';
 
 const DISMISSED_KEY = 'rfe_update_dismissed_code_v1';
 
@@ -10,8 +10,12 @@ const DISMISSED_KEY = 'rfe_update_dismissed_code_v1';
 export async function checkForUpdate(): Promise<AppRelease | null> {
   const res = await fetch(LATEST_MANIFEST_URL, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = (await res.text()).trim();
+  const body = await res.text();
+  const text = body.trim();
   if (text === '') return null;
+  // The manifest is trusted only with the project's signature over its exact bytes (audit F-106).
+  const sigRes = await fetch(LATEST_SIGNATURE_URL);
+  if (!sigRes.ok || !manifestSignatureOk(body, await sigRes.text())) throw new Error('The update manifest is not signed by the project');
   const release = parseRelease(JSON.parse(text));
   return isUpdateAvailable(await appBuild(), release) ? release : null;
 }

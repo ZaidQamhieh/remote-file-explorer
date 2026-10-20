@@ -1,4 +1,4 @@
-import { isTrustedApkUrl, isUpdateAvailable, parseRelease, percent, shouldSurfaceUpdate } from './updateLogic';
+import { isTrustedApkUrl, isUpdateAvailable, parseRelease, percent, shouldSurfaceUpdate, manifestSignatureOk } from './updateLogic';
 
 const good = { versionName: '2.1.0', versionCode: 82, size: 1000, url: 'https://github.com/ZaidQamhieh/remote-file-explorer/releases/download/v2.1.0/app.apk', sha256: 'A'.repeat(64) };
 
@@ -44,4 +44,18 @@ test('percent clamps and tolerates an unknown total', () => {
   expect(percent(50, 200)).toBe(25);
   expect(percent(300, 200)).toBe(100);
   expect(percent(5, 0)).toBe(0);
+});
+
+// Signed exactly as .github/workflows/release.yml does it (openssl pkeyutl -rawin | xxd) with the real release key.
+const SIGNED_MANIFEST = '{"versionName":"x"}\n';
+const SIGNATURE = '6607c554580a6b468616cfe531be2dd6f52f1de0ae3ab1a93dd01de136e8db3e7048f49d45c1b95401fd8079eac13967f41d9348f133b98055f3c3484c1b1300';
+
+test('the pinned release key accepts only the manifest it signed', () => {
+  expect(manifestSignatureOk(SIGNED_MANIFEST, SIGNATURE)).toBe(true);
+  expect(manifestSignatureOk(SIGNED_MANIFEST, SIGNATURE + '\n')).toBe(true);
+  expect(manifestSignatureOk(SIGNED_MANIFEST.replace('x', 'y'), SIGNATURE)).toBe(false);
+  expect(manifestSignatureOk(SIGNED_MANIFEST, '')).toBe(false);
+  expect(manifestSignatureOk(SIGNED_MANIFEST, 'zz'.repeat(64))).toBe(false);
+  expect(manifestSignatureOk(SIGNED_MANIFEST, '00'.repeat(64))).toBe(false);
+  expect(manifestSignatureOk(SIGNED_MANIFEST, SIGNATURE, '11'.repeat(32))).toBe(false);
 });

@@ -321,6 +321,45 @@ pub async fn download_at(
     name: &str,
     dir: &Path,
 ) -> Result<PathBuf, String> {
+    download_signed_by(url, tag_version, name, dir, &RELEASE_KEY).await
+}
+
+/// The release signing public key (ed25519, raw). The matching private key signs `SHA256SUMS` in
+/// the release workflow and is never in the repository (audit F-13).
+pub const RELEASE_KEY: [u8; 32] = [
+    0x0c, 0x7b, 0x69, 0xac, 0x0e, 0x0b, 0x08, 0xca, 0x6c, 0x6c, 0xf0, 0xc1, 0x2c, 0x52, 0x88, 0x70,
+    0xe9, 0x95, 0x06, 0xae, 0xee, 0xcf, 0x59, 0xfc, 0xe1, 0x07, 0x60, 0x14, 0xa4, 0x81, 0xba, 0xc2,
+];
+
+/// True when `sig_hex` (128 hex digits, the `SHA256SUMS.sig` asset) is a valid ed25519 signature
+/// of `sums` under `key`.
+pub fn sums_signature_ok(sums: &[u8], sig_hex: &str, key: &[u8; 32]) -> bool {
+    let hex = sig_hex.trim();
+    if hex.len() != 128 || !hex.is_ascii() {
+        return false;
+    }
+    let mut sig = [0u8; 64];
+    for (i, b) in sig.iter_mut().enumerate() {
+        match u8::from_str_radix(&hex[2 * i..2 * i + 2], 16) {
+            Ok(v) => *b = v,
+            Err(_) => return false,
+        }
+    }
+    let Ok(key) = ed25519_dalek::VerifyingKey::from_bytes(key) else {
+        return false;
+    };
+    key.verify_strict(sums, &ed25519_dalek::Signature::from_bytes(&sig))
+        .is_ok()
+}
+
+/// `download_at` with the key to check `SHA256SUMS` against.
+pub async fn download_signed_by(
+    url: &str,
+    tag_version: &str,
+    name: &str,
+    dir: &Path,
+    key: &[u8; 32],
+) -> Result<PathBuf, String> {
     let http = client()?;
     let want = format!("{TAG_PREFIX}{tag_version}");
     let list = releases(url, |r| !r.draft && r.tag_name == want).await?;
@@ -359,7 +398,29 @@ pub async fn download_at(
     if !sums_resp.status().is_success() {
         return Err("the checksum file of that release could not be fetched".into());
     }
-    let sums = String::from_utf8(capped(sums_resp, 1 << 20).await?)
+    let sums_bytes = capped(sums_resp, 1 << 20).await?;
+    let sig_asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == "SHA256SUMS.sig")
+        .ok_or("that release has no SHA256SUMS.sig file, so it is not signed")?;
+    if !secure_url(&sig_asset.browser_download_url) {
+        return Err("that release points at a download address that is not https".into());
+    }
+    let sig_resp = http
+        .get(&sig_asset.browser_download_url)
+        .send()
+        .await
+        .map_err(offline)?;
+    if !sig_resp.status().is_success() {
+        return Err("the signature of that release could not be fetched".into());
+    }
+    let sig = String::from_utf8(capped(sig_resp, 4096).await?)
+        .map_err(|_| "the signature of that release is not text".to_string())?;
+    if !sums_signature_ok(&sums_bytes, &sig, key) {
+        return Err("the release's checksums are not signed by the project's release key".into());
+    }
+    let sums = String::from_utf8(sums_bytes)
         .map_err(|_| "the checksum file of that release is not text".to_string())?;
     let expect =
         sum_for(&sums, &pkg.name).ok_or("the release's checksums do not list that package")?;

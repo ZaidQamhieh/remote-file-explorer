@@ -222,7 +222,16 @@ class RfeTransportModule : Module() {
       }
     }
     AsyncFunction("publicDownloadCancel") { id: String -> publicHttp.cancel(id) }
-    AsyncFunction("sha256File") Coroutine { path: String -> withContext(Dispatchers.IO) { sha256Hex(File(path)) } }
+    AsyncFunction("sha256File") Coroutine { path: String ->
+      withContext(Dispatchers.IO) {
+        // A download published to Downloads no longer has its app-private file: hash it through its content URI.
+        if (path.startsWith("content://")) {
+          val ctx = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null)
+          val input = ctx.contentResolver.openInputStream(android.net.Uri.parse(path)) ?: throw CodedException("ERR_NOT_FOUND", "cannot open $path", null)
+          input.use { sha256Hex(it) }
+        } else sha256Hex(File(path))
+      }
+    }
     AsyncFunction("canInstallPackages") {
       ExternalFiles.canInstall(appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "no context", null))
     }

@@ -172,7 +172,7 @@ function Row({ r, speed, hostName, onForget }: { r: TransferRecord; speed?: numb
     try {
       const host = (await hostStore.listHosts()).find((h) => h.id === r.hostId);
       if (!host) return setVerified('unavailable');
-      const [local, remote] = await Promise.all([sha256File(r.destPath), clientForHost(host).then((cl) => cl.checksum(r.remotePath))]);
+      const [local, remote] = await Promise.all([sha256File(r.publicUri ?? r.destPath), clientForHost(host).then((cl) => cl.checksum(r.remotePath))]);
       setVerified(verifyOutcome(local, remote));
     } catch {
       setVerified('unavailable');

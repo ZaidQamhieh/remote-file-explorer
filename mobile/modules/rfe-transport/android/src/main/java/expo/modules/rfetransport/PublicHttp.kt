@@ -65,15 +65,16 @@ class PublicHttp(private val client: OkHttpClient = OkHttpClient.Builder().readT
 }
 
 /** Lower-case hex SHA-256 of a file, streamed. */
-fun sha256Hex(f: File): String {
+fun sha256Hex(f: File): String = f.inputStream().use { sha256Hex(it) }
+
+/** Lower-case hex SHA-256 of a stream (a published download is read through its content URI). */
+fun sha256Hex(input: java.io.InputStream): String {
   val md = java.security.MessageDigest.getInstance("SHA-256")
-  f.inputStream().use { input ->
-    val buf = ByteArray(64 * 1024)
-    while (true) {
-      val n = input.read(buf)
-      if (n < 0) break
-      md.update(buf, 0, n)
-    }
+  val buf = ByteArray(64 * 1024)
+  while (true) {
+    val n = input.read(buf)
+    if (n < 0) break
+    md.update(buf, 0, n)
   }
   return md.digest().joinToString("") { "%02x".format(it) }
 }

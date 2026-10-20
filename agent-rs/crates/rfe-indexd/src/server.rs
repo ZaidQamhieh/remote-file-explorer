@@ -112,12 +112,29 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
             send(&out, &json!({"id": env.id, "ok": true}));
             continue;
         }
+        // A request id already in flight would overwrite (and later remove) the other job's cancel flag, and an
+        // unbounded number of requests would each get a thread (audit F-12).
+        workers.retain(|h| !h.is_finished());
+        if workers.len() >= MAX_IN_FLIGHT {
+            send(
+                &out,
+                &error_response(env.id, code::BUSY, "too many requests in flight"),
+            );
+            continue;
+        }
         let cancel = Arc::new(AtomicBool::new(false));
-        state
-            .cancels
-            .lock()
-            .unwrap()
-            .insert(env.id, Arc::clone(&cancel));
+        {
+            let mut cancels = state.cancels.lock().unwrap();
+            if cancels.contains_key(&env.id) {
+                drop(cancels);
+                send(
+                    &out,
+                    &error_response(env.id, code::BAD_REQUEST, "request id already in use"),
+                );
+                continue;
+            }
+            cancels.insert(env.id, Arc::clone(&cancel));
+        }
         let (state, out2, payload) = (Arc::clone(&state), Arc::clone(&out), frame.payload);
         workers.retain(|h| !h.is_finished());
         workers.push(std::thread::spawn(move || {
@@ -144,6 +161,9 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
     state.stop.store(true, Ordering::Relaxed);
     Ok(())
 }
+
+/// The most requests the sidecar works on at once; more are refused with BUSY.
+const MAX_IN_FLIGHT: usize = 64;
 
 type HandlerResult = Result<Value, (&'static str, String)>;
 

@@ -1356,6 +1356,11 @@ paths:
           description: Chunk hash mismatch, the transfer is no longer open, or completion currently holds the session. code=CHUNK_HASH_MISMATCH, TRANSFER_NOT_OPEN, or TRANSFER_ACTIVE.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "413": { $ref: "#/components/responses/Error" }
+        "429":
+          description: The agent is already holding as many chunk bodies in memory as it allows. Retry after the `Retry-After` seconds. code=CHUNK_BUSY.
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /transfers/{id}/complete:
     post:
@@ -2457,6 +2462,7 @@ components:
             - TRANSFER_ACTIVE
             - TRANSFER_NOT_OPEN
             - UPLOAD_INCOMPLETE
+            - CHUNK_BUSY
             - PAYLOAD_TOO_LARGE
             - NOT_FOUND
             - INTERNAL
@@ -2491,6 +2497,7 @@ components:
             - `TRANSFER_ACTIVE` (409): an operation conflicts with active
               session work; completion is exclusive, and DELETE is rejected
               while another request holds the session.
+            - `CHUNK_BUSY` (429): too many chunk bodies are in flight; retry after `Retry-After`.
             - `UPLOAD_INCOMPLETE` (409): complete was called before every chunk arrived; the session stays open, send the missing chunks and complete again.
             - `TRANSFER_NOT_OPEN` (409): the session is completed or failed
               and no longer accepts chunks or completion.

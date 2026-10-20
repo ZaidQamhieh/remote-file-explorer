@@ -382,6 +382,15 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 			}
 		}
 
+		// Reserve the memory this chunk may need before buffering it.
+		need := int64(t.ChunkSize)
+		if !chunkBudget.acquire(need, chunkWait, r.Context().Done()) {
+			w.Header().Set("Retry-After", "2")
+			writeError(w, http.StatusTooManyRequests, "CHUNK_BUSY", "too many chunks are being received; retry shortly")
+			return
+		}
+		defer chunkBudget.release(need)
+
 		data, err := io.ReadAll(bodyReader)
 		if err != nil {
 			var maxErr *http.MaxBytesError

@@ -108,6 +108,10 @@ describe('humanizeError', () => {
     expect(humanizeError(new AgentApiError(403, 'FORBIDDEN', 'answering pairing requests requires an admin session'))).toBe('answering pairing requests requires an admin session');
     expect(humanizeError(statusError(500))).toBe('HTTP 500');
   });
+  it('says a bare 401 means this computer no longer accepts the phone', () => {
+    expect(humanizeError(new AgentApiError(401, 'UNKNOWN', 'HTTP 401'))).toMatch(/no longer accepts this phone/);
+    expect(humanizeError(new AgentApiError(401, 'UNAUTHORIZED', 'token expired'))).toBe('token expired');
+  });
   it('explains a certificate mismatch as a changed computer identity', () => {
     const m = humanizeError(new CertPinMismatch());
     expect(m).toMatch(/identity has changed/);

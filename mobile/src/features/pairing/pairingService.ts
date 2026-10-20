@@ -51,7 +51,12 @@ export function humanizeError(e: unknown): string {
   if (e instanceof AgentApiError) {
     // A streamed download only knows the status; the agent's own message (when there is one) already says what is missing.
     if (e.code === 'CAPABILITY_DENIED' || (e.statusCode === 403 && /^HTTP \d+$/.test(e.message))) {
-      return 'This computer has not allowed this phone to do that. Allow it on the computer, in the device’s access settings.';
+      // A streamed download carries only the status, so this cannot tell a missing grant from a path outside the shared folders (audit F-34).
+      return 'This computer has not allowed this phone to do that. Allow it on the computer, in the device’s access settings, or the item may be outside the folders it shares.';
+    }
+    // A revoked phone gets a bare 401 from a streamed call (audit F-33).
+    if (e.statusCode === 401 && /^HTTP \d+$/.test(e.message)) {
+      return 'This computer no longer accepts this phone. If it was removed there, remove this computer here and pair it again.';
     }
     return e.message;
   }

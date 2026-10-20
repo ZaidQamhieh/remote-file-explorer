@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import type { Entry } from '../../core/api/models';
-import { fetchToFileNative } from '../../core/native';
+import { fetchCancelNative, fetchToFileNative } from '../../core/native';
 import { SyncRuleStore, type SyncRule } from '../../core/storage/syncRules';
 import { clientForHost, hostStore, keyValue } from '../../services';
 import { fileUriFromPath, pathFromFileUri } from './syncLogic';
@@ -76,8 +76,15 @@ export async function syncRule(rule: SyncRule, onProgress?: (p: SyncProgress) =>
       listRemote: (p) => listAll(rule.hostId, p),
       async fetch(entry, dest) {
         const spec = client.downloadSpec(entry.path);
-        const r = await fetchToFileNative(`s${rule.id}${Date.now().toString(36)}`, spec.url, spec.headers, spec.pin, dest, 600_000);
-        if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+        const id = `s${rule.id}${Date.now().toString(36)}`;
+        // A cancel stops the download in flight instead of waiting for a large file to finish (audit F-112).
+        const watch = cancelled ? setInterval(() => cancelled() && void fetchCancelNative(id).catch(() => undefined), 500) : undefined;
+        try {
+          const r = await fetchToFileNative(id, spec.url, spec.headers, spec.pin, dest, 600_000);
+          if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+        } finally {
+          if (watch !== undefined) clearInterval(watch);
+        }
       },
       staging: (name) => nativePath(new File(stage, name).uri),
       discard: (p) => {

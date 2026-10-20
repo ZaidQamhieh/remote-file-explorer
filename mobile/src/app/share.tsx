@@ -118,8 +118,9 @@ async function collidingNames(host: Host, dest: string, names: string[]): Promis
   let cursor: string | undefined;
   do {
     const l = await client.list(dest, { cursor });
-    for (const e of l.entries) existing.add(e.name);
+    // Case-insensitive: a Windows or macOS host treats Photo.JPG and photo.jpg as one file; asking too often is safe (audit F-129).
+    for (const e of l.entries) existing.add(e.name.toLowerCase());
     cursor = l.nextCursor ?? undefined;
   } while (cursor);
-  return new Set(names.filter((n) => existing.has(n)));
+  return new Set(names.filter((n) => existing.has(n.toLowerCase())));
 }

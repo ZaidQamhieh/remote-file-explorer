@@ -394,3 +394,11 @@ test("a certificate that changed puts the server in the refused state", async ()
   await until(() => E.server(HOST).state === "refused", "the refusal");
   assert.equal(E.server(HOST).newFp.startsWith("CD:CD"), true);
 });
+
+test("a folder the agent counted only up to its cap says 1000+, a listed one says its real count", () => {
+  const { fs } = fresh();
+  assert.equal(fs.itemsLabel({ t: "dir", cc: 1000 }), "1000+ items");
+  assert.equal(fs.itemsLabel({ t: "dir", cc: 1 }), "1 item");
+  assert.equal(fs.itemsLabel({ t: "dir", cc: 7 }), "7 items");
+  assert.equal(fs.itemsLabel({ t: "dir", cc: 1000, kids: new Array(1200).fill({}) }), "1000 items", "a listed folder shows its cc, not a cap");
+});

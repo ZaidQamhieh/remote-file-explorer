@@ -21,7 +21,7 @@
   A.ago = ago;
   const hl = (name, q) => { const i = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1; return '<span data-nolocal dir="auto" title="' + esc(name) + '">' + (i < 0 ? esc(name) : esc(name.slice(0, i)) + '<mark>' + esc(name.slice(i, i + q.length)) + '</mark>' + esc(name.slice(i + q.length))) + '</span>'; };
   A.hl = hl;
-  const itemSize = (n) => (n.t === 'dir' ? (n.cc == null && !n.kids ? '—' : E.fs.itemCount(n) + (E.fs.itemCount(n) === 1 ? ' item' : ' items')) : U.fmtBytes(n.b));
+  const itemSize = (n) => (n.t === 'dir' ? (n.cc == null && !n.kids ? '—' : E.fs.itemsLabel(n)) : U.fmtBytes(n.b));
   A.itemSize = itemSize;
 
   /* ---------- overlays ---------- */

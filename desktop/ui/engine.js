@@ -110,6 +110,8 @@
   const cached = (host, path) => dirsOf(host)[norm(path)] || null;
   const kidsOf = (d) => d.kids || [];
   const itemCount = (n) => (n.t === 'dir' ? (n.cc != null ? n.cc : n.kids ? n.kids.length : 0) : 0);
+  // The agent counts at most 1000 children of a folder it has not listed; that figure is a floor, not the count (audit F-35).
+  const itemsLabel = (n, fmt) => { const c = itemCount(n); const capped = !n.kids && n.cc != null && n.cc >= 1000; return (capped ? '1000+' : fmt ? fmt(c) : String(c)) + (c === 1 && !capped ? ' item' : ' items'); };
 
   function getNode(host, path) {
     path = norm(path);
@@ -590,7 +592,7 @@
     server, connected, connect, trust, cancelConnect, disconnect, retryNow, addServer, updateServer, forget, reverify, switchRoute, restoreServer, start, loadServers, check, loadRoots,
     signIn, signInWithCode, requestApproval, pollApproval, cancelApproval, signOut,
     local: LOCAL_START,
-    fs: { add: insert, copy, mkfile, get: getNode, list, state: listState, error: listError, load, refresh, drop, exists, mkdir, rename, remove, restore, info, total, view, uniqueName, writableDir, canRead, canWrite, kidsOf, itemCount, cached },
+    fs: { itemsLabel, add: insert, copy, mkfile, get: getNode, list, state: listState, error: listError, load, refresh, drop, exists, mkdir, rename, remove, restore, info, total, view, uniqueName, writableDir, canRead, canWrite, kidsOf, itemCount, cached },
     makeSearch, enqueue, pause, resumeTask, cancel, dismiss, retry, resolve, pushPrefs, pauseAll, resumeAll, clearDone, retryFailed, task: taskById, eta, ACTIVE, pollTransfers,
     totalSpeed: () => running().reduce((a, t) => a + t.speed, 0),
     note, log, emit,

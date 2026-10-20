@@ -37,6 +37,8 @@ pub const PARALLEL: usize = 2;
 pub const MAX_PARALLEL: usize = 8;
 
 const DEFAULT_CHUNK: usize = 8 << 20;
+/// The most files one folder download may queue.
+const MAX_FOLDER_FILES: usize = 50_000;
 // The most an agent may ask for per chunk: a larger answer would make this side allocate it whole.
 const MAX_SESSION_CHUNK: usize = 32 << 20;
 const DEFAULT_SEGMENT: u64 = 4 << 20;
@@ -1862,7 +1864,9 @@ async fn upload(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
     struct Done {
         verified: bool,
     }
-    let done: Done = resp.json().await.unwrap_or_default();
+    // Read through the same size cap as every other agent answer: a pinned agent that never ends a 200 body
+    // must not grow memory without limit (audit F-150).
+    let done: Done = read_json(resp, MAX_JSON_BODY).await.unwrap_or_default();
     lock(&item.resume).session = None;
     item.update(|v| v.verified = done.verified);
     Ok(())
@@ -2173,6 +2177,12 @@ pub async fn transfer_download_tree(
                             stack.push((e.path.clone(), format!("{rel}/{}", safe_name(&e.path))));
                         }
                     } else {
+                        // Checked per file, not per folder, so a huge folder is refused before it queues millions.
+                        if ids.len() >= MAX_FOLDER_FILES {
+                            return Err(
+                                "that folder holds too many files to download at once".into()
+                            );
+                        }
                         let ctx = app_ctx_in(&app, host.clone(), here.clone())?;
                         ids.push(state.start_download(ctx, &e.path).await?);
                     }
@@ -2183,7 +2193,7 @@ pub async fn transfer_download_tree(
                 }
             }
             folders += 1;
-            if folders > 20_000 || ids.len() > 50_000 {
+            if folders > 20_000 || ids.len() > MAX_FOLDER_FILES {
                 return Err("that folder holds too many files to download at once".into());
             }
         }

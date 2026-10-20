@@ -77,7 +77,7 @@ func (o *Ops) Compress(sources []string, destPath string) (*Entry, error) {
 	// klauspost's deflate writes the same format about 1.5x faster than the standard library at a ~1% larger size.
 	zw.RegisterCompressor(zip.Deflate, func(w io.Writer) (io.WriteCloser, error) { return kflate.NewWriter(w, zipDeflateLevel) })
 	for _, src := range resolved {
-		if err := addToZipSecure(zw, src); err != nil {
+		if err := addToZipSecure(zw, src, tmpPath.full); err != nil {
 			zw.Close()
 			tmp.Close()
 			cleanup()
@@ -109,12 +109,18 @@ func (o *Ops) Compress(sources []string, destPath string) (*Entry, error) {
 // 221 MB mixed corpus, within about 1% of its output size (see TestZipCompressorSpeed).
 const zipDeflateLevel = 5
 
-func addToZipSecure(zw *zip.Writer, src *securePath) error {
+// addToZipSecure adds src to the archive. skip is the archive's own temp file:
+// when the destination sits inside a folder being compressed, the walk would
+// otherwise read the half-written archive into itself.
+func addToZipSecure(zw *zip.Writer, src *securePath, skip string) error {
 	base := filepath.Base(src.full)
-	return addToZipSecureEntry(zw, src, base)
+	return addToZipSecureEntry(zw, src, base, skip)
 }
 
-func addToZipSecureEntry(zw *zip.Writer, src *securePath, name string) error {
+func addToZipSecureEntry(zw *zip.Writer, src *securePath, name, skip string) error {
+	if skip != "" && src.full == skip {
+		return nil
+	}
 	info, err := src.lstat()
 	if err != nil {
 		return err
@@ -139,7 +145,7 @@ func addToZipSecureEntry(zw *zip.Writer, src *securePath, name string) error {
 		}
 		for _, entry := range entries {
 			childName := filepath.Join(name, entry.Name())
-			if err := addToZipSecureEntry(zw, src.child(entry.Name()), childName); err != nil {
+			if err := addToZipSecureEntry(zw, src.child(entry.Name()), childName, skip); err != nil {
 				return err
 			}
 		}
@@ -194,6 +200,9 @@ func (o *Ops) Extract(archivePath, destDir string) (*Entry, error) {
 	if err := resDest.mkdirAll(0o755); err != nil {
 		return nil, err
 	}
+
+	extractSlots <- struct{}{}
+	defer func() { <-extractSlots }()
 
 	lower := strings.ToLower(resArchive.full)
 	switch {
@@ -298,6 +307,18 @@ func safeJoinSecure(dest *securePath, name string) (*securePath, error) {
 }
 
 func createArchiveFile(path *securePath, mode os.FileMode) (*os.File, error) {
+	dst, err := uniqueArchivePath(path)
+	if err != nil {
+		return nil, err
+	}
+	return dst.openFile(os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+}
+
+// uniqueArchivePath prepares the location for an extracted file: its parent
+// exists and, if the name is taken, a free "name (1)" style sibling is used.
+// Extraction never replaces a file that is already there (Compress and Copy
+// behave the same way).
+func uniqueArchivePath(path *securePath) (*securePath, error) {
 	if err := path.parent().mkdirAll(0o755); err != nil {
 		return nil, err
 	}
@@ -305,13 +326,38 @@ func createArchiveFile(path *securePath, mode os.FileMode) (*os.File, error) {
 		if info.IsDir() {
 			return nil, fmt.Errorf("archive file conflicts with a directory")
 		}
-		// Never replace a file that is already there: keep both, as Compress
-		// and Copy do, so an extraction cannot destroy existing data.
-		path = autoRenameSecure(path)
+		return autoRenameSecure(path), nil
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	return path.openFile(os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	return path, nil
+}
+
+// extractSlots bounds how many archives expand at once across the whole
+// process, which makes maxArchiveTotalBytes a real ceiling on the disk one
+// burst of requests can fill, as the constant's comment says.
+var extractSlots = make(chan struct{}, 1)
+
+// writeArchiveEntry writes one extracted file within the shared byte budget
+// and removes the partial file if anything fails, so an archive that blows the
+// limit does not leave gigabytes behind.
+func writeArchiveEntry(target *securePath, mode os.FileMode, src io.Reader, remaining *int64) error {
+	dst, err := uniqueArchivePath(target)
+	if err != nil {
+		return err
+	}
+	out, err := dst.openFile(os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	err = copyBounded(out, src, remaining)
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = dst.remove()
+	}
+	return err
 }
 
 func extractZipSecure(archive, dest *securePath) error {
@@ -354,14 +400,7 @@ func extractZipSecure(archive, dest *securePath) error {
 		if mode == 0 {
 			mode = 0o644
 		}
-		out, err := createArchiveFile(target, mode)
-		if err == nil {
-			err = copyBounded(out, rc, &remaining)
-			closeErr := out.Close()
-			if err == nil {
-				err = closeErr
-			}
-		}
+		err = writeArchiveEntry(target, mode, rc, &remaining)
 		rc.Close()
 		if err != nil {
 			return err
@@ -410,17 +449,8 @@ func extractTarGzSecure(archive, dest *securePath) error {
 			if mode == 0 {
 				mode = 0o644
 			}
-			out, err := createArchiveFile(target, mode)
-			if err != nil {
+			if err := writeArchiveEntry(target, mode, tr, &remaining); err != nil {
 				return err
-			}
-			copyErr := copyBounded(out, tr, &remaining)
-			closeErr := out.Close()
-			if copyErr != nil {
-				return copyErr
-			}
-			if closeErr != nil {
-				return closeErr
 			}
 		default:
 			continue

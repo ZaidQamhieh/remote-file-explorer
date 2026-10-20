@@ -82,6 +82,10 @@ func archivePeekHandler(ops *fsops.Ops) http.HandlerFunc {
 			handleFsError(w, fsops.ErrUnsupported)
 			return
 		}
+		if errors.Is(err, errPeekTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", err.Error())
+			return
+		}
 		if err != nil {
 			writeInternal(w, "archive peek", err)
 			return
@@ -125,7 +129,33 @@ func peekTarGzFile(file *os.File, limit int) ([]ArchiveEntry, error) {
 	}
 	defer gz.Close()
 
-	return readTarEntries(tar.NewReader(gz), limit)
+	// Listing a .tar.gz means inflating everything before the entries wanted
+	// (tar cannot skip inside a gzip stream), so bound the inflation: a small
+	// archive that expands to gigabytes must not cost a request that much CPU.
+	return readTarEntries(tar.NewReader(&budgetReader{r: gz, left: peekInflateBudget}), limit)
+}
+
+// peekInflateBudget caps decompressed bytes read while listing a .tar.gz.
+var peekInflateBudget = int64(256) << 20
+
+var errPeekTooLarge = errors.New("archive is too large to list")
+
+// budgetReader fails once more than left bytes have been read.
+type budgetReader struct {
+	r    io.Reader
+	left int64
+}
+
+func (b *budgetReader) Read(p []byte) (int, error) {
+	if b.left <= 0 {
+		return 0, errPeekTooLarge
+	}
+	if int64(len(p)) > b.left {
+		p = p[:b.left]
+	}
+	n, err := b.r.Read(p)
+	b.left -= int64(n)
+	return n, err
 }
 
 func peekTarFile(file *os.File, limit int) ([]ArchiveEntry, error) {

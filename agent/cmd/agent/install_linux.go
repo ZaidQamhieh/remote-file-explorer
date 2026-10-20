@@ -48,6 +48,11 @@ WantedBy=default.target
 	if err := runSystemctl("enable", "--now", linuxUnitName); err != nil {
 		return fmt.Errorf("systemctl enable --now: %w", err)
 	}
+	// enable --now leaves an already running unit alone, so a reinstall would keep the old binary
+	// running while reporting success (audit F-73).
+	if err := runSystemctl("restart", linuxUnitName); err != nil {
+		return fmt.Errorf("systemctl restart: %w", err)
+	}
 
 	fmt.Printf("Installed and started %s (unit: %s)\n", linuxUnitName, unitPath)
 	return nil
@@ -121,7 +126,13 @@ func runSystemctlOutput(args ...string) string {
 func uninstallService() error {
 	// Best-effort: disable/stop even if the unit was already gone, so a
 	// half-installed state still cleans up.
-	_ = runSystemctl("disable", "--now", linuxUnitName)
+	if err := runSystemctl("disable", "--now", linuxUnitName); err != nil {
+		// A unit that was never loaded is fine to clean up; a running agent that could not be stopped
+		// must not be reported as removed (audit F-72).
+		if strings.TrimSpace(runSystemctlOutput("is-active", linuxUnitName)) == "active" {
+			return fmt.Errorf("could not stop the running agent (is systemd --user reachable?): %w", err)
+		}
+	}
 
 	unitDir, err := userSystemdUnitDir()
 	if err != nil {
@@ -130,6 +141,9 @@ func uninstallService() error {
 	unitPath := filepath.Join(unitDir, linuxUnitName)
 	if err := os.Remove(unitPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove unit file: %w", err)
+	}
+	if err := runSystemctl("daemon-reload"); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: systemctl daemon-reload failed: %v\n", err)
 	}
 
 	fmt.Printf("Stopped and removed %s\n", linuxUnitName)

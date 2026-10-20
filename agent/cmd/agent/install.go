@@ -12,6 +12,15 @@ import (
 // install_linux.go / install_darwin.go / install_windows.go for the
 // platform-specific installService/uninstallService implementations.
 func cmdInstall(args []string) error {
+	// The service always runs against the standard data folder; accepting -data (or a different
+	// $RFE_DATA_DIR) and silently dropping it would leave the service and the admin CLI on different
+	// databases (audit F-91).
+	if len(args) > 0 {
+		return fmt.Errorf("install takes no options: the service uses the standard data folder (~/.rfe-agent)")
+	}
+	if home, herr := os.UserHomeDir(); herr == nil && filepath.Clean(defaultDataDir()) != filepath.Join(home, ".rfe-agent") {
+		return fmt.Errorf("the service uses the standard data folder %q; clear RFE_DATA_DIR before installing", filepath.Join(home, ".rfe-agent"))
+	}
 	exe, err := resolveExecutable()
 	if err != nil {
 		return err

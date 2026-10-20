@@ -47,3 +47,14 @@ func TestJailRefusesAnUninitialisedDatabase(t *testing.T) {
 		t.Fatal("the command wrote settings it should not have")
 	}
 }
+
+// F-91: install must not silently drop a data directory the service would not use.
+func TestInstallRefusesOptionsAndForeignDataDir(t *testing.T) {
+	if err := cmdInstall([]string{"-data", t.TempDir()}); err == nil {
+		t.Fatal("install with options should be refused")
+	}
+	t.Setenv("RFE_DATA_DIR", t.TempDir())
+	if err := cmdInstall(nil); err == nil {
+		t.Fatal("install with a non-standard RFE_DATA_DIR should be refused")
+	}
+}

@@ -692,3 +692,37 @@ fn forgetting_the_active_agent_with_a_refusing_keystore_changes_nothing() {
     assert_eq!(now.host, A, "the address stays with its token: {now:?}");
     assert_eq!(now.token, format!("token-for-{A}"));
 }
+
+/// A keystore whose reads of the active login fail (writes and deletes still work).
+struct UnreadableToken(MemoryStore);
+
+impl SecretStore for UnreadableToken {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        if account.starts_with("token:") {
+            return Err("the keystore could not be read".into());
+        }
+        self.0.get(account)
+    }
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.0.set(account, secret)
+    }
+    fn delete(&self, account: &str) -> Result<(), String> {
+        self.0.delete(account)
+    }
+}
+
+/// Audit F-160: a save that cannot read the old login must stop before touching anything, not treat it as
+/// "no old login" and delete it if a later step fails.
+#[test]
+fn a_save_that_cannot_read_the_old_login_changes_nothing() {
+    let dir = TempDir::new().unwrap();
+    let mem = MemoryStore::default();
+    flows::save(dir.path(), &mem, &session(A, FP_A, "alice")).unwrap();
+    let store = UnreadableToken(mem);
+
+    assert!(flows::save(dir.path(), &store, &session(B, FP_B, "bob")).is_err());
+
+    let now = flows::load_saved(dir.path(), &store.0).unwrap();
+    assert_eq!(now.host, A, "{now:?}");
+    assert_eq!(now.token, format!("token-for-{A}"));
+}

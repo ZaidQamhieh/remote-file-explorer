@@ -342,7 +342,9 @@ pub fn save(dir: &Path, store: &dyn SecretStore, s: &Saved) -> Result<(), String
     f.username = s.username.clone();
     f.device_id = s.device_id.clone();
     f.token.clear();
-    let previous = store.get(&acct).ok().flatten();
+    // A keystore that cannot be read must stop the save before anything changes: reading it as 'no old
+    // token' would make the rollback below delete the real one (audit F-160).
+    let previous = store.get(&acct)?;
     if s.token.is_empty() {
         store.delete(&acct)?;
     } else {

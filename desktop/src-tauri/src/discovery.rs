@@ -15,6 +15,10 @@ pub const SERVICE: &str = "_rfe._tcp.local.";
 
 /// Most agents listed; a network can be made to advertise any number.
 const MAX_FOUND: usize = 50;
+/// Entries tracked while browsing, and how many one network address may account for: a peer that
+/// advertises many names cannot push the real agents out of the list (audit F-171).
+const MAX_TRACKED: usize = 200;
+const MAX_PER_ADDRESS: usize = 3;
 
 /// One advertised agent.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -112,6 +116,9 @@ fn browse(window: Duration) -> Result<Vec<Found>, String> {
                     continue;
                 }
                 let first = list.remove(0);
+                if !admit(&found, &r.fullname, &first) {
+                    continue;
+                }
                 found.insert(
                     r.fullname.clone(),
                     Found {
@@ -133,6 +140,55 @@ fn browse(window: Duration) -> Result<Vec<Found>, String> {
     }
     let _ = daemon.shutdown();
     Ok(found.into_values().take(MAX_FOUND).collect())
+}
+
+fn address_of(hostport: &str) -> &str {
+    hostport.rsplit_once(':').map_or(hostport, |(a, _)| a)
+}
+
+/// Whether a resolved service may join the list. A name already listed always updates.
+fn admit(found: &BTreeMap<String, Found>, fullname: &str, hostport: &str) -> bool {
+    if found.contains_key(fullname) {
+        return true;
+    }
+    if found.len() >= MAX_TRACKED {
+        return false;
+    }
+    let from_here = found
+        .values()
+        .filter(|f| address_of(&f.hostport) == address_of(hostport))
+        .count();
+    from_here < MAX_PER_ADDRESS
+}
+
+#[cfg(test)]
+mod admit_tests {
+    use super::*;
+
+    fn entry(hostport: &str) -> Found {
+        Found {
+            name: "n".into(),
+            hostport: hostport.into(),
+            other_addresses: vec![],
+            version: String::new(),
+        }
+    }
+
+    #[test]
+    fn one_address_cannot_fill_the_list() {
+        let mut found = BTreeMap::new();
+        for i in 0..MAX_PER_ADDRESS {
+            let name = format!("a{i}._rfe._tcp.local.");
+            assert!(admit(&found, &name, "10.0.0.9:8765"));
+            found.insert(name, entry("10.0.0.9:8765"));
+        }
+        assert!(!admit(&found, "a-extra._rfe._tcp.local.", "10.0.0.9:8765"));
+        assert!(admit(&found, "real._rfe._tcp.local.", "10.0.0.2:8765"));
+        assert!(
+            admit(&found, "a0._rfe._tcp.local.", "10.0.0.9:8765"),
+            "a listed name still updates"
+        );
+    }
 }
 
 #[cfg(test)]

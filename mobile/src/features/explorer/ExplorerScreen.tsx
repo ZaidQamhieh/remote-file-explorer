@@ -89,7 +89,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
   }, [ex, initialPath, rootPath]);
 
   // Once per launch, while the host is reachable, bring its pinned folders up to date in the background.
-  const online = !state.loading && !state.error;
+  const online = !state.loading && !state.error && !state.offline;
   useEffect(() => {
     if (!online || !pinSyncPending(host.id)) return;
     const paths = useCollections.getState().pins.filter((p) => p.hostId === host.id).map((p) => p.remotePath);
@@ -221,7 +221,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
         // Best effort: precache what was loaded.
       }
       await precachePinnedFolder(offlineDeps, host, all, (h, e) => fetchPreviewFile(h, e, MAX_OFFLINE_FILE_BYTES));
-    })();
+    })().catch(() => {});
   }
 
   async function bookmark(e: Entry) {
@@ -256,7 +256,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
     const entry = state.entries.find((e) => e.path === only);
     if (!entry) return;
     ex.clearSelection();
-    void bookmark(entry);
+    bookmark(entry).catch(() => {});
   }
 
   function detailsOfSelected() {
@@ -308,7 +308,7 @@ export function ExplorerScreen({ host, rootPath, initialPath }: { host: Host; ro
       case 'commandPalette':
         return setPaletteOpen(true);
       default:
-        toast.info(`${a}: available in a later phase`);
+        return;
     }
   };
 

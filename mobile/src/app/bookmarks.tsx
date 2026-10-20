@@ -104,6 +104,8 @@ export default function Bookmarks() {
               <ResultCardRow key={b.remotePath} index={i} count={items.length}>
               <Pressable
                 accessibilityLabel={name}
+                accessibilityActions={[{ name: 'delete', label: 'Remove bookmark' }]}
+                onAccessibilityAction={(ev) => ev.nativeEvent.actionName === 'delete' && confirmRemove(b, name)}
                 onPress={() => void openBookmark(b)}
                 onLongPress={() => confirmRemove(b, name)}
               >

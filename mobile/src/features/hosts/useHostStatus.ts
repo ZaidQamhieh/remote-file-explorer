@@ -39,6 +39,7 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
     drives: null,
   });
   const inFlight = useRef(false);
+  const rerunForced = useRef(false);
   const lastDrives = useRef(0);
   const focused = useRef(false);
   const hostRef = useRef(host);
@@ -47,7 +48,11 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
   }, [host]);
 
   const ping = useCallback(async (forceDrives: boolean) => {
-    if (inFlight.current) return;
+    if (inFlight.current) {
+      // A forced ping (focus, resume, pull to refresh) must not be lost to one already running.
+      if (forceDrives) rerunForced.current = true;
+      return;
+    }
     inFlight.current = true;
     setState((s) => ({ ...s, checking: true }));
     let client: AgentClient | null = null;
@@ -77,6 +82,10 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
       setState((s) => ({ ...s, checking: false, health: null, untrusted: e instanceof CertPinMismatch }));
     } finally {
       inFlight.current = false;
+      if (rerunForced.current) {
+        rerunForced.current = false;
+        void ping(true);
+      }
     }
   }, [onHostLearned]);
 
@@ -86,6 +95,12 @@ export function useHostStatus(host: Host, onHostLearned?: () => void): HostStatu
     return () => {
       live = false;
     };
+  }, [host.id]);
+
+  // Another host's status must not show under this one while its first ping is out.
+  useEffect(() => {
+    lastDrives.current = 0;
+    setState((s) => (s.health || s.drives ? { checking: true, health: null, untrusted: false, activeAddress: null, lastSeen: null, drives: null } : s));
   }, [host.id]);
 
   useFocusEffect(

@@ -21,7 +21,13 @@ export async function enqueueDownloads(host: Host, paths: string[]): Promise<voi
     const id = newTransferId();
     const own = new Directory(dir, id);
     own.create({ idempotent: true, intermediates: true });
-    const dest = decodeURIComponent(new File(own, name).uri.replace('file://', ''));
+    const rawDest = new File(own, name).uri.replace('file://', '');
+    let dest = rawDest;
+    try {
+      dest = decodeURIComponent(rawDest);
+    } catch {
+      // A stray '%' in the name: use the path as given.
+    }
     await transfers.enqueue(id, host.id, address, p, dest);
   }
 }

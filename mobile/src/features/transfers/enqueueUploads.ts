@@ -8,7 +8,15 @@ import { cleanUploadName, type UploadItem } from './uploadPlan';
 
 const newTransferId = () => `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-const toPath = (uri: string) => decodeURIComponent(uri.replace('file://', ''));
+const toPath = (uri: string) => {
+  const raw = uri.replace('file://', '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // A stray '%' in a name: the raw path is what the file system has.
+    return raw;
+  }
+};
 
 /**
  * Queues durable native uploads of [items] into [destDir]. Each picked file is moved from the picker's cache into

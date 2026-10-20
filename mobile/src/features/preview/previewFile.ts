@@ -43,7 +43,7 @@ function cacheDir(): Directory {
 
 function evictIfNeeded(keep: string) {
   try {
-    const files = cacheDir().list().filter((f): f is File => f instanceof File && f.uri !== keep);
+    const files = cacheDir().list().filter((f): f is File => f instanceof File && f.uri !== keep && !f.uri.endsWith('.part'));
     let total = files.reduce((n, f) => n + (f.size ?? 0), 0);
     if (total <= MAX_CACHE_BYTES) return;
     files.sort((a, b) => (a.modificationTime ?? 0) - (b.modificationTime ?? 0));

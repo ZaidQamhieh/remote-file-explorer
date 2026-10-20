@@ -527,17 +527,19 @@ impl Transfers {
     pub async fn start_upload(
         &self,
         ctx: Ctx,
-        local_path: &str,
+        local_path: impl AsRef<Path>,
         remote_dir: &str,
     ) -> Result<String, String> {
-        if local_path.trim().is_empty() {
+        let local_path = local_path.as_ref();
+        // A Path, not a string: a name that is not valid UTF-8 must not be mangled on its way in (audit F-44).
+        if local_path.to_string_lossy().trim().is_empty() {
             return Err("enter the full path of the file on this computer".into());
         }
         validate_remote(
             remote_dir,
             "enter the folder on the computer to upload into",
         )?;
-        let src = PathBuf::from(local_path);
+        let src = local_path.to_path_buf();
         let (_file, ident) = open_source(&src)?;
         let name = remote_file_name(&src)?;
         let conn = (ctx.creds)().await?;
@@ -550,7 +552,7 @@ impl Transfers {
             state: State::Queued,
             name,
             remote_path: remote_path.clone(),
-            local_path: local_path.to_string(),
+            local_path: local_path.to_string_lossy().into_owned(),
             done: 0,
             total: ident.size,
             error: String::new(),
@@ -2088,11 +2090,7 @@ pub async fn transfer_upload_tree(
                 None => remote_dir.clone(),
             };
             let id = state
-                .start_upload(
-                    app_ctx(&app, host.clone())?,
-                    &path.to_string_lossy(),
-                    &target,
-                )
+                .start_upload(app_ctx(&app, host.clone())?, &path, &target)
                 .await?;
             ids.push(id);
         }
@@ -2372,5 +2370,20 @@ mod resume_tests {
         assert!(resume_is_unsafe(10, &None));
         assert!(!resume_is_unsafe(0, &None));
         assert!(!resume_is_unsafe(10, &Some("\"etag\"".into())));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod non_utf8_tests {
+    use super::*;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn an_upload_source_with_a_non_utf8_name_is_opened_as_it_is() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join(std::ffi::OsStr::from_bytes(b"caf\xe9.txt"));
+        std::fs::write(&path, b"x").unwrap();
+        assert!(open_source(&path).is_ok());
+        assert!(path.to_str().is_none(), "the name really is not UTF-8");
     }
 }

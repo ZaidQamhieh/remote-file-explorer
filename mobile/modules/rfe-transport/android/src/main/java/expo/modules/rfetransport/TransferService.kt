@@ -102,7 +102,9 @@ class TransferService : Service() {
     val engine = TransferHost.engine(this)
     engine.list().filter { it.state == TransferState.RUNNING || it.state == TransferState.QUEUED }.forEach { engine.pause(it.id) }
     stopForeground(STOP_FOREGROUND_REMOVE)
-    stopSelf()
+    // A start already requested must not be discarded by this stop (it would get the app killed); the pending
+    // start re-enters the foreground itself.
+    if (pendingStarts.get() == 0) stopSelf()
   }
 
   override fun onDestroy() {

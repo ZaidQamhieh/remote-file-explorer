@@ -287,12 +287,15 @@ class TransferEngine(
             val now = System.currentTimeMillis()
             if (now - lastEmit > 250) {
               lastEmit = now
-              r = update(r.copy(received = received, total = total))
+              if (attempts[id] === attempt) r = update(r.copy(received = received, total = total))
             }
           }
           out.fd.sync()
         }
         if (total >= 0 && part.length() != total) throw IOException("size mismatch: got ${part.length()} expected $total")
+        // A worker that was stopped (or replaced by a resume) in its last moments must not publish or finish
+        // the transfer under the new attempt; the `.part` stays for the resume.
+        if (attempt.stop != null || attempts[id] !== attempt) throw InterruptedException()
         if (dest.exists()) dest.delete()
         if (!part.renameTo(dest)) throw IOException("could not finalize download")
         val size = dest.length()

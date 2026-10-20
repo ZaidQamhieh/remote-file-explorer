@@ -179,7 +179,7 @@ Active ────────────────────────�
 ╭──────────────────────────────────────╮
 │ ▤ video.mp4              ⏸     ✕    │  card surfaceContainer r16
 │ ▰▰▰▰▰▰▱▱▱▱  62% · 14 MB/s · 0:42 left│  progress: primary, 6dp, r-full
-│ → /home/zaid/Videos                  │  bodySmall destination
+│ → <home>/Videos                  │  bodySmall destination
 ╰──────────────────────────────────────╯
 Queued (2) ▾    Done (5) ▾    Failed (1) ▾     collapsible labelLarge headers
 ```

@@ -89,8 +89,10 @@ func scheduledTaskState() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("find PowerShell to inspect scheduled task: %w", err)
 	}
-	script := "$task = Get-ScheduledTask -TaskName '" + scheduledTaskName + "' -ErrorAction SilentlyContinue; " +
-		"if ($null -eq $task) { 'not installed' } else { [string]$task.State }"
+	// Only a task that does not exist is "not installed"; any other failure (access denied, the
+	// Task Scheduler service down) is an error, not a silent "not installed" (audit F-125).
+	script := "try { $task = Get-ScheduledTask -TaskName '" + scheduledTaskName + "' -ErrorAction Stop; [string]$task.State } " +
+		"catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { 'not installed' } else { [Console]::Error.WriteLine($_.Exception.Message); exit 1 } }"
 	cmd := exec.Command(powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -104,7 +106,21 @@ func scheduledTaskState() (string, error) {
 }
 
 func uninstallService() error {
-	_ = stopService()
+	// Deleting a task does not stop a running instance, so the agent would keep running with no
+	// task to manage it: an unconfirmed stop stops the uninstall (audit F-125).
+	state, err := scheduledTaskState()
+	if err != nil {
+		return err
+	}
+	if state == "not installed" {
+		fmt.Printf("Scheduled task %q is not installed\n", scheduledTaskName)
+		return nil
+	}
+	if strings.EqualFold(state, "Running") {
+		if output, err := exec.Command("schtasks", "/end", "/tn", scheduledTaskName).CombinedOutput(); err != nil {
+			return fmt.Errorf("stop scheduled task failed (%s): %w", strings.TrimSpace(string(output)), err)
+		}
+	}
 	cmd := exec.Command("schtasks", "/delete", "/tn", scheduledTaskName, "/f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

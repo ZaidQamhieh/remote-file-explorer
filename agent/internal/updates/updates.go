@@ -16,6 +16,7 @@ type Release struct {
 	VersionCode int    `json:"versionCode"`
 	Filename    string `json:"-"`
 	Size        int64  `json:"size"`
+	SHA256      string `json:"sha256,omitempty"` // hex digest, filled in by the server when it lists the release
 }
 
 // rfe-<versionName>-<versionCode>.apk

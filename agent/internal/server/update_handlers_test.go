@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,4 +59,15 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+func TestLatestAppHandler_ReportsTheDigest(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "rfe-2.0.0-20.apk"), []byte("apk-bytes"), 0o644)
+	rr := httptest.NewRecorder()
+	latestAppHandler(dir)(rr, httptest.NewRequest(http.MethodGet, "/v1/app/latest", nil))
+	sum := sha256.Sum256([]byte("apk-bytes"))
+	if want := `"sha256":"` + hex.EncodeToString(sum[:]) + `"`; !contains(rr.Body.String(), want) {
+		t.Fatalf("missing %s in %s", want, rr.Body.String())
+	}
 }

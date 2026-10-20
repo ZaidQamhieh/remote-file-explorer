@@ -2193,6 +2193,7 @@ components:
         versionName: { type: string }
         versionCode: { type: integer }
         size: { type: integer, format: int64 }
+        sha256: { type: string, description: Hex SHA-256 of the APK; clients verify the download against it }
     Health:
       type: object
       properties:

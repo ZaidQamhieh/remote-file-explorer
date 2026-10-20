@@ -329,8 +329,21 @@ export class AgentClient {
   }
 
   async challenge(): Promise<string> {
-    const d = await this.call('POST', '/auth/challenge');
-    if (!isObject(d) || typeof d.nonce !== 'string' || d.nonce === '') throw new AgentApiError(200, 'BAD_RESPONSE', 'The computer sent a reply this app could not read.');
+    const d = await this.call("POST", "/auth/challenge");
+    if (!isObject(d) || typeof d.nonce !== "string" || d.nonce === "")
+      throw new AgentApiError(
+        200,
+        "BAD_RESPONSE",
+        "The computer sent a reply this app could not read.",
+      );
+    // An agent older than the v2 proof can only check a bare-nonce signature, which a relay can replay.
+    // Refuse with a clear message instead of failing every sign-in with INVALID_SIGNATURE.
+    if (d.proof !== "v2")
+      throw new AgentApiError(
+        0,
+        "UNSUPPORTED_BY_AGENT",
+        "This computer’s agent is too old to sign in from this app. Update the agent on that computer.",
+      );
     return d.nonce;
   }
 

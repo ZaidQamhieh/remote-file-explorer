@@ -15,7 +15,7 @@ func TestWolRelayHandler_ReadOnlyDeviceForbidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/wol", strings.NewReader(`{"mac":"aa:bb:cc:dd:ee:ff"}`))
 	req = req.WithContext(withDevice(req.Context(), &store.Device{ReadOnly: true}))
 	rr := httptest.NewRecorder()
-	wolRelayHandler()(rr, req)
+	wolRelayHandler(nil)(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for a read-only device, got %d: %s", rr.Code, rr.Body.String())
@@ -27,7 +27,7 @@ func TestWolRelayHandler_ReadOnlyDeviceForbidden(t *testing.T) {
 func TestWolRelayHandler_NoDeviceForbidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/wol", strings.NewReader(`{"mac":"aa:bb:cc:dd:ee:ff"}`))
 	rr := httptest.NewRecorder()
-	wolRelayHandler()(rr, req)
+	wolRelayHandler(nil)(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 with no device in context, got %d: %s", rr.Code, rr.Body.String())
@@ -42,11 +42,34 @@ func TestWolRelayHandler_FullAccessDeviceProceeds(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/wol", strings.NewReader(`{"mac":"not-a-mac"}`))
 	req = req.WithContext(withDevice(req.Context(), &store.Device{ReadOnly: false}))
 	rr := httptest.NewRecorder()
-	wolRelayHandler()(rr, req)
+	wolRelayHandler(nil)(rr, req)
 
 	// Past the authorization gate, an invalid MAC is a 400 — not the 403 a
 	// blocked device would get.
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 (invalid MAC, past the auth gate), got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// Audit F-145: one device may not flood the LAN broadcast.
+func TestWolRelayHandler_RateLimitedPerDevice(t *testing.T) {
+	handler := wolRelayHandler(nil)
+	send := func(id string) int {
+		req := httptest.NewRequest(http.MethodPost, "/v1/wol", strings.NewReader(`{"mac":"not-a-mac"}`))
+		req = req.WithContext(withDevice(req.Context(), &store.Device{ID: id}))
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+		return rr.Code
+	}
+	for i := 0; i < wolRateLimitAttempts; i++ {
+		if code := send("dev-a"); code != http.StatusBadRequest {
+			t.Fatalf("request %d = %d, want 400 (past the limiter)", i, code)
+		}
+	}
+	if code := send("dev-a"); code != http.StatusTooManyRequests {
+		t.Fatalf("request over the budget = %d, want 429", code)
+	}
+	if code := send("dev-b"); code != http.StatusBadRequest {
+		t.Fatalf("another device is limited by dev-a: %d", code)
 	}
 }

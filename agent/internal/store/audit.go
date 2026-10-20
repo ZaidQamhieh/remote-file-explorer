@@ -21,6 +21,7 @@ const (
 	AuditShareRevoked  = "share_revoked"
 	AuditAgentRestart  = "agent_restart"
 	AuditAppLaunch     = "app_launch"
+	AuditWake          = "wake_on_lan"
 )
 
 // auditRetention is the number of most recent entries kept. The log records

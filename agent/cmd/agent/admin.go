@@ -405,11 +405,13 @@ func cmdRevokeOrRemove(args []string, remove bool) error {
 		if err := db.DeleteDevice(id); err != nil {
 			return err
 		}
+		cliAudit(db, store.AuditDeviceRemoved, id, "")
 		fmt.Printf("Removed %q (%s)\n", label, shortID(id))
 	} else {
 		if err := db.RevokeDevice(id); err != nil {
 			return err
 		}
+		cliAudit(db, store.AuditDeviceRevoked, id, "")
 		fmt.Printf("Revoked %q (%s)\n", label, shortID(id))
 	}
 	return nil
@@ -463,6 +465,7 @@ func cmdJail(args []string) error {
 		return err
 	}
 
+	cliAudit(db, store.AuditDeviceUpdated, id, "jail="+clean)
 	if clean == "" {
 		fmt.Printf("Cleared jail for %q (%s)\n", label, shortID(id))
 	} else {
@@ -501,6 +504,7 @@ func cmdReadonly(args []string) error {
 		return err
 	}
 	label := deviceLabel(db, id)
+	cliAudit(db, store.AuditDeviceUpdated, id, fmt.Sprintf("readOnly=%v", ro))
 	if ro {
 		fmt.Printf("Set %q (%s) to read-only\n", label, shortID(id))
 	} else {
@@ -702,6 +706,7 @@ func cmdAllow(args []string) error {
 	if err := db.SetDeviceFilePermissions(id, g[0], g[1], g[2], g[3], g[4], g[5]); err != nil {
 		return err
 	}
+	cliAudit(db, store.AuditDeviceUpdated, id, "permissions="+fs.Arg(1))
 	fmt.Printf("Set %q (%s) permissions to %s\n", deviceLabel(db, id), shortID(id), fs.Arg(1))
 	return nil
 }
@@ -765,4 +770,15 @@ func cmdBackupDir(args []string) error {
 	}
 	fmt.Println("Photo backup folder set to", dir, "— restart the agent to apply.")
 	return nil
+}
+
+// cliActor is the audit actor for changes made from the host's own terminal.
+const cliActor = "host owner (CLI)"
+
+// cliAudit records a device change made through the admin CLI, so the audit
+// trail matches what the same change through the HTTP API would have written.
+func cliAudit(db *store.DB, action, target, detail string) {
+	if err := db.AppendAudit(action, cliActor, target, detail); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not record the audit entry: %v\n", err)
+	}
 }

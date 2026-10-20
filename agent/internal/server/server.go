@@ -174,7 +174,7 @@ func registerSettingsAndDeviceRoutes(r chi.Router, cfg Config, db *store.DB, pm 
 		}
 		revokeDeviceHandler(db)(w, req, id)
 	})
-	r.Post("/wol", wolRelayHandler())
+	r.Post("/wol", wolRelayHandler(db))
 	r.Post("/pairing/generate", generatePairingHandler(pm, cfg.Settings))
 	r.Get("/pair/requests", listPairRequestsHandler(cfg, db))
 	r.Post("/pair/requests/{id}/approve", decidePairRequestHandler(db, true))

@@ -5,7 +5,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
+
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
+
+// wolRateLimitAttempts is the per-device Wake-on-LAN budget per minute.
+const wolRateLimitAttempts = 10
 
 // wolRelayHandler broadcasts a Wake-on-LAN magic packet. Guest/read-only
 // devices are refused (PR-61): the phone app's normal paired token is never
@@ -14,10 +20,18 @@ import (
 // read-only flag is what actually distinguishes a lower-trust guest pairing
 // (MintGuest forces it) from a normal full-access paired phone, which is
 // the real, intended caller here and keeps working unchanged.
-func wolRelayHandler() http.HandlerFunc {
+func wolRelayHandler(db *store.DB) http.HandlerFunc {
+	// Each device may send a handful of packets a minute: enough to wake a
+	// machine, not enough to use the agent as a LAN broadcast amplifier.
+	limiter := newKeyedLimiter(wolRateLimitAttempts, time.Minute)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cur := deviceFromContext(r); cur == nil || cur.ReadOnly {
+		cur := deviceFromContext(r)
+		if cur == nil || cur.ReadOnly {
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "this device is not permitted to send Wake-on-LAN")
+			return
+		}
+		if !limiter.Allow(cur.ID) {
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many Wake-on-LAN requests, try again in a minute")
 			return
 		}
 		var body struct {
@@ -55,6 +69,9 @@ func wolRelayHandler() http.HandlerFunc {
 			log.Printf("wol: write: %v", err)
 			writeError(w, http.StatusInternalServerError, "WOL_FAILED", "failed to send wake packet")
 			return
+		}
+		if db != nil {
+			audit(db, r, store.AuditWake, mac.String(), "")
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
 	}

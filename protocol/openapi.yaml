@@ -2412,7 +2412,7 @@ components:
         action:
           type: string
           enum: [pair, register, login, login_failed, device_revoked, device_removed,
-                 device_updated, share_created, share_revoked, agent_restart]
+                 device_updated, share_created, share_revoked, agent_restart, app_launch, wake_on_lan]
         actor:
           type: string
           description: >

@@ -109,7 +109,13 @@
   const dirNode = (host, path, items) => ({ n: baseOf(path) || '/', t: 'dir', b: 0, mod: 0, perm: 'drwxr-xr-x', own: '', path, kids: items, cc: items ? items.length : null });
   const cached = (host, path) => dirsOf(host)[norm(path)] || null;
   const kidsOf = (d) => d.kids || [];
-  const itemCount = (n) => (n.t === 'dir' ? (n.cc != null ? n.cc : n.kids ? n.kids.length : 0) : 0);
+  // With hidden files off the list omits dotfiles, so a loaded folder's count must too (audit F-36).
+  let dotsHidden = () => false;
+  const itemCount = (n) => {
+    if (n.t !== 'dir') return 0;
+    const base = n.cc != null ? n.cc : n.kids ? n.kids.length : 0;
+    return n.kids && dotsHidden() ? base - n.kids.filter((k) => k.n.charAt(0) === '.').length : base;
+  };
   // The agent counts at most 1000 children of a folder it has not listed; that figure is a floor, not the count (audit F-35).
   const itemsLabel = (n, fmt) => { const c = itemCount(n); const capped = !n.kids && n.cc != null && n.cc >= 1000; return (capped ? '1000+' : fmt ? fmt(c) : String(c)) + (c === 1 && !capped ? ' item' : ' items'); };
 
@@ -592,7 +598,7 @@
     server, connected, connect, trust, cancelConnect, disconnect, retryNow, addServer, updateServer, forget, reverify, switchRoute, restoreServer, start, loadServers, check, loadRoots,
     signIn, signInWithCode, requestApproval, pollApproval, cancelApproval, signOut,
     local: LOCAL_START,
-    fs: { itemsLabel, add: insert, copy, mkfile, get: getNode, list, state: listState, error: listError, load, refresh, drop, exists, mkdir, rename, remove, restore, info, total, view, uniqueName, writableDir, canRead, canWrite, kidsOf, itemCount, cached },
+    fs: { setDotsHidden: (f) => { dotsHidden = f; }, itemsLabel, add: insert, copy, mkfile, get: getNode, list, state: listState, error: listError, load, refresh, drop, exists, mkdir, rename, remove, restore, info, total, view, uniqueName, writableDir, canRead, canWrite, kidsOf, itemCount, cached },
     makeSearch, enqueue, pause, resumeTask, cancel, dismiss, retry, resolve, pushPrefs, pauseAll, resumeAll, clearDone, retryFailed, task: taskById, eta, ACTIVE, pollTransfers,
     totalSpeed: () => running().reduce((a, t) => a + t.speed, 0),
     note, log, emit,

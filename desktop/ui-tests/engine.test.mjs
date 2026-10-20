@@ -402,3 +402,12 @@ test("a folder the agent counted only up to its cap says 1000+, a listed one say
   assert.equal(fs.itemsLabel({ t: "dir", cc: 7 }), "7 items");
   assert.equal(fs.itemsLabel({ t: "dir", cc: 1000, kids: new Array(1200).fill({}) }), "1000 items", "a listed folder shows its cc, not a cap");
 });
+
+test("with hidden files off, a loaded folder's count leaves out its dotfiles (F-36)", () => {
+  const fs = fresh().fs;
+  const kids = [{ n: "a" }, { n: "b" }, { n: ".hidden" }];
+  assert.equal(fs.itemCount({ t: "dir", cc: 3, kids }), 3);
+  fs.setDotsHidden(() => true);
+  assert.equal(fs.itemCount({ t: "dir", cc: 3, kids }), 2);
+  assert.equal(fs.itemCount({ t: "dir", cc: 3 }), 3, "an unlisted folder keeps the agent's count");
+});

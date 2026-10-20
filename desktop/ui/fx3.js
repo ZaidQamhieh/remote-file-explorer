@@ -13,6 +13,7 @@
   const MAX_TEXT = 1 << 20;
 
   /* ================= hidden files ================= */
+  E.fs.setDotsHidden(() => !S.showHidden);
   const view0 = E.fs.view;
   E.fs.view = (items, o) => view0(S.showHidden ? items : items.filter((n) => n.n.charAt(0) !== '.'), o);
   const refreshPanes = () => { for (const p of [A.mainPane, A.localPane]) if (p.el && p.el.isConnected && p.online()) { p.refreshItems(); p.render(); } };

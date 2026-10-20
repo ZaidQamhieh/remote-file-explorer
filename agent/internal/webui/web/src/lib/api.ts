@@ -308,7 +308,7 @@ export const api = {
 
   // users
   listUsers: () => get<UserAccount[]>('/users'),
-  deleteUser: (username: string) => del<void>(`/users/${username}`),
+  deleteUser: (username: string) => del<void>(`/users/${encodeURIComponent(username)}`),
 
   // logs
   listLogs: () => get<LogLine[]>('/logs'),

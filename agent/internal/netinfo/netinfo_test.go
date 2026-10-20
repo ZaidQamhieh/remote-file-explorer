@@ -49,3 +49,16 @@ func TestMustCIDRPanicsForInvalidConfiguration(t *testing.T) {
 	}()
 	mustCIDR("not-a-network")
 }
+
+func TestVirtualBridgeInterfacesAreSkipped(t *testing.T) {
+	for _, n := range []string{"docker0", "br-1a2b3c", "virbr0", "veth12ab", "cni0", "podman1"} {
+		if !virtualBridge(n) {
+			t.Errorf("%s should be treated as a virtual bridge", n)
+		}
+	}
+	for _, n := range []string{"eth0", "enp3s0", "wlan0", "wlp2s0", "tailscale0", "bridge0"} {
+		if virtualBridge(n) {
+			t.Errorf("%s is a real interface", n)
+		}
+	}
+}

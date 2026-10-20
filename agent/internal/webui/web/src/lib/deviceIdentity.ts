@@ -93,15 +93,23 @@ async function importLegacyIdentity(): Promise<StoredIdentity | null> {
     return null;
   }
 
-  const identity: StoredIdentity = {
-    privateKey: await crypto.subtle.importKey(
-      'pkcs8', fromBase64(privateKeyBase64), { name: 'Ed25519' }, false, ['sign'],
-    ),
-    publicKey: await crypto.subtle.importKey(
-      'raw', fromBase64(publicKeyBase64), { name: 'Ed25519' }, true, ['verify'],
-    ),
-  };
-  await validateIdentity(identity);
+  let identity: StoredIdentity;
+  try {
+    identity = {
+      privateKey: await crypto.subtle.importKey(
+        'pkcs8', fromBase64(privateKeyBase64), { name: 'Ed25519' }, false, ['sign'],
+      ),
+      publicKey: await crypto.subtle.importKey(
+        'raw', fromBase64(publicKeyBase64), { name: 'Ed25519' }, true, ['verify'],
+      ),
+    };
+    await validateIdentity(identity);
+  } catch {
+    // A malformed legacy key can never work; drop it so the next load pairs afresh
+    // instead of failing every time with a raw DOMException.
+    clearLegacyIdentity();
+    return null;
+  }
   await writeIdentity(identity);
   clearLegacyIdentity();
   return identity;

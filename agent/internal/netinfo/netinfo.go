@@ -3,7 +3,10 @@
 // without the user having to type IPs by hand.
 package netinfo
 
-import "net"
+import (
+	"net"
+	"strings"
+)
 
 // tailscaleRange is the CGNAT block Tailscale assigns tailnet IPs from
 // (100.64.0.0/10). Identifying addresses by range works the same on every
@@ -45,7 +48,7 @@ func Detect() NetworkInfo {
 		return info
 	}
 	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 || virtualBridge(iface.Name) {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -77,4 +80,16 @@ func Detect() NetworkInfo {
 		}
 	}
 	return info
+}
+
+// virtualBridge reports container and VM bridge interfaces (docker0, br-*,
+// virbr0, veth*, ...). Their private addresses are not the address a phone on
+// the LAN can reach, and their MAC is not the one Wake-on-LAN needs.
+func virtualBridge(name string) bool {
+	for _, p := range []string{"docker", "br-", "virbr", "veth", "vmnet", "vboxnet", "cni", "flannel", "podman"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }

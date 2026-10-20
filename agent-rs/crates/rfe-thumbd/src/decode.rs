@@ -235,7 +235,14 @@ fn gif(data: &[u8]) -> Result<Decoded, DecodeError> {
     check_pixels(dec.width() as u64, dec.height() as u64)?;
     let frame = dec
         .read_next_frame()
-        .map_err(DecodeError::unsupported)?
+        .map_err(|e| match e {
+            // The memory limit refused an over-budget frame: that is "too large", which the agent reports as
+            // such, not "unsupported", which would send the same input to the unsandboxed in-process decoder.
+            gif::DecodingError::Io(ref io) if io.kind() == std::io::ErrorKind::OutOfMemory => {
+                DecodeError::TooLarge("gif frame exceeds the memory budget".into())
+            }
+            e => DecodeError::unsupported(e),
+        })?
         .ok_or_else(|| DecodeError::Unsupported("gif without frames".into()))?;
     // Like Go's decoder, the thumbnail is the first frame's own rectangle.
     let (w, h) = (frame.width as u32, frame.height as u32);
@@ -440,6 +447,10 @@ mod gif_bomb_tests {
 
     #[test]
     fn a_frame_larger_than_the_pixel_budget_is_refused_not_allocated() {
-        assert!(decode(&gif_with_huge_frame(), 96).is_err());
+        // TooLarge, not Unsupported: the agent sends "unsupported" input to its in-process decoder.
+        assert!(matches!(
+            decode(&gif_with_huge_frame(), 96),
+            Err(DecodeError::TooLarge(_))
+        ));
     }
 }

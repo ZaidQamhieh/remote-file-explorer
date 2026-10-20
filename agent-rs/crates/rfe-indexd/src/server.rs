@@ -252,7 +252,12 @@ fn live_ok(state: &State) -> bool {
     {
         return false;
     }
-    match state.watch.lock().unwrap().as_ref() {
+    match state
+        .watch
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+    {
         Some(w) => {
             w.health.complete.load(Ordering::Relaxed) && w.health.error.lock().unwrap().is_empty()
         }
@@ -261,7 +266,12 @@ fn live_ok(state: &State) -> bool {
 }
 
 fn live_stats(state: &State) -> Value {
-    let (watches, complete, error) = match state.watch.lock().unwrap().as_ref() {
+    let (watches, complete, error) = match state
+        .watch
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+    {
         Some(w) => (
             w.health.watches.load(Ordering::Relaxed),
             w.health.complete.load(Ordering::Relaxed),
@@ -299,7 +309,7 @@ impl Drop for BuildingGuard<'_> {
 /// arrive during it are applied to its result afterwards.
 fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResult {
     {
-        let _g = state.mutate.lock().unwrap();
+        let _g = state.mutate.lock().unwrap_or_else(|e| e.into_inner());
         if state.building.swap(true, Ordering::AcqRel) {
             return Err((code::BUSY, "an index build is already running".into()));
         }
@@ -323,11 +333,11 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
     // Watches go in right after the walk; a change made in that window waits for the next reconcile.
     if let Ok(w) = Watch::new(Arc::clone(&state.events)) {
         let w = Arc::new(w);
-        *state.watch.lock().unwrap() = Some(Arc::clone(&w));
+        *state.watch.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&w));
         let (roots, for_watch) = (req.roots.clone(), Arc::clone(&idx));
         std::thread::spawn(move || w.register(&roots, for_watch.dirs()));
     }
-    *state.last_build.lock().unwrap() = Some(req.clone());
+    *state.last_build.lock().unwrap_or_else(|e| e.into_inner()) = Some(req.clone());
     *state.index.write().unwrap_or_else(|e| e.into_inner()) = Some(idx);
     state.resync.store(false, Ordering::Release);
     guard.release();
@@ -343,7 +353,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
 /// Applies batches of changed directories to the live index until the server stops.
 fn applier(state: Arc<State>) {
     while let Some(batch) = state.events.next_batch(&state.stop) {
-        let guard = state.mutate.lock().unwrap();
+        let guard = state.mutate.lock().unwrap_or_else(|e| e.into_inner());
         if state.building.load(Ordering::Acquire) {
             state.events.restore(batch);
             drop(guard);
@@ -365,7 +375,12 @@ fn applier(state: Arc<State>) {
         };
         match applied {
             Some(a) => {
-                if let Some(w) = state.watch.lock().unwrap().clone() {
+                if let Some(w) = state
+                    .watch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                {
                     w.add(a.new_dirs.iter().map(String::as_str));
                 }
                 *state.index.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(a.index));
@@ -374,7 +389,11 @@ fn applier(state: Arc<State>) {
             None => {
                 state.resync.store(true, Ordering::Release);
                 drop(guard);
-                let req = state.last_build.lock().unwrap().clone();
+                let req = state
+                    .last_build
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 if let Some(req) = req {
                     state.rebuilds.fetch_add(1, Ordering::Relaxed);
                     let _ = build(&state, &req, &AtomicBool::new(false));

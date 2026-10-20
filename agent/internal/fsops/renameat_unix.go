@@ -42,7 +42,7 @@ func renameAcrossRoots(src, dst *securePath) error {
 				rerr = unix.EEXIST
 				return
 			}
-			rerr = unix.Renameat(int(sfd), sbase, int(dfd), dbase)
+			rerr = renameNoReplace(int(sfd), sbase, int(dfd), dbase)
 		})
 		if derr != nil {
 			rerr = derr

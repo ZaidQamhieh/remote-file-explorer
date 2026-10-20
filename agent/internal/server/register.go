@@ -41,9 +41,12 @@ type registerRequest struct {
 }
 
 func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceStore) http.HandlerFunc {
-	limiter := newFixedWindowLimiter(registerRateLimitAttempts, registerRateLimitWindow)
+	// Per source first, so one noisy address spends its own allowance and not everyone's; the global
+	// window behind it still caps total guessing at the pairing code from many addresses (audit F-147).
+	perIP := newKeyedLimiter(registerRateLimitAttempts, registerRateLimitWindow)
+	limiter := newFixedWindowLimiter(registerRateLimitAttempts*4, registerRateLimitWindow)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if !perIP.Allow(clientIP(r)) || !limiter.Allow() {
 			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many registration attempts, try again later")
 			return
 		}

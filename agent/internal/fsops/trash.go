@@ -336,6 +336,7 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 		return err
 	}
 	defer store.Close()
+	var firstErr error
 	for _, id := range ids {
 		if !validTrashID(id) {
 			return ErrBadTrashID
@@ -350,14 +351,19 @@ func (o *Ops) EmptyTrash(trashDir string, ids []string) error {
 			}
 		}
 		// Descriptor-relative and no-follow: id cannot leave the store.
+		// One stubborn item must not leave the rest undeleted while the caller is told nothing
+		// changed: keep going and report the first failure at the end (audit F-159).
 		if err := store.RemoveAll(id); err != nil {
-			return err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
-		if err := os.Remove(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)); err != nil && !os.IsNotExist(err) {
-			return err
+		if err := os.Remove(filepath.Join(trashInfoDir(trashDir), id+trashInfoExt)); err != nil && !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // --------- helpers ---------

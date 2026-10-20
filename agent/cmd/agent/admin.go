@@ -174,6 +174,8 @@ func cmdPair(args []string) error {
 	qr, err := qrcode.New(payload.JSON(), qrcode.Medium)
 	if err == nil {
 		fmt.Println(qr.ToSmallString(false))
+	} else {
+		fmt.Printf("(could not draw the QR code: %v; enter the code and address by hand)\n", err)
 	}
 	fmt.Println("Scan in the app: Add computer → Scan QR.")
 	if !*owner {
@@ -237,6 +239,9 @@ func cmdPairDecide(args []string, approve bool) error {
 	list, err := db.ListPendingPairRequests()
 	if err != nil {
 		return err
+	}
+	if fs.NArg() > 0 && strings.TrimSpace(fs.Arg(0)) == "" {
+		return fmt.Errorf("the request id is empty; give the id from `rfe-agent pair requests`")
 	}
 	var match []string
 	for _, r := range list {

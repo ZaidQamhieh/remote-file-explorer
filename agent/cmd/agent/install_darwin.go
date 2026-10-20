@@ -147,12 +147,17 @@ func uninstallService() error {
 
 	// Best-effort: unload even if it is already stopped, so a half-installed
 	// state still cleans up.
-	_ = stopService()
+	stopErr := stopService()
 
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove plist: %w", err)
 	}
 
+	if stopErr != nil {
+		// Do not claim it stopped: a KeepAlive job may still be running (audit F-125).
+		fmt.Printf("Removed %s, but it could not be stopped (%v); the agent may keep running until you log out or run `launchctl bootout gui/$(id -u)/%s`\n", launchdLabel, stopErr, launchdLabel)
+		return nil
+	}
 	fmt.Printf("Stopped and removed %s\n", launchdLabel)
 	return nil
 }

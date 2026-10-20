@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -56,5 +58,13 @@ func TestInstallRefusesOptionsAndForeignDataDir(t *testing.T) {
 	t.Setenv("RFE_DATA_DIR", t.TempDir())
 	if err := cmdInstall(nil); err == nil {
 		t.Fatal("install with a non-standard RFE_DATA_DIR should be refused")
+	}
+}
+
+// F-125: an empty request id must not approve the one waiting request by prefix-matching everything.
+func TestPairAcceptRefusesAnEmptyID(t *testing.T) {
+	data := initializeAdminData(t)
+	if err := cmdPairDecide([]string{"-data", data, ""}, true); err == nil {
+		t.Fatal("an empty id should be refused")
 	}
 }

@@ -54,6 +54,10 @@ var ErrQuotaExceeded = errors.New("transfer capacity exceeded")
 // is using that session.
 var ErrSessionActive = errors.New("transfer is active")
 
+// ErrIncomplete is returned by Complete while chunks are still missing. The
+// session stays open so the client can send the rest and complete again.
+var ErrIncomplete = errors.New("upload is missing chunks")
+
 // ErrNotOpen means the session exists but no longer accepts chunks or a
 // completion request.
 var ErrNotOpen = errors.New("transfer is not open")
@@ -632,6 +636,17 @@ func (m *Manager) complete(id string, publisher func(string, io.Reader, bool) (o
 	}
 	if t.Status != "open" {
 		return nil, "", fmt.Errorf("%w: %s", ErrNotOpen, t.Status)
+	}
+
+	// Every chunk must be on disk before the whole-file hash means anything:
+	// a premature complete is a recoverable client mistake, not a corrupt file,
+	// so it must not end the session.
+	received, err := m.db.ChunkNumbers(id)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(received) < t.TotalChunks {
+		return nil, "", fmt.Errorf("%w: %d of %d chunks received", ErrIncomplete, len(received), t.TotalChunks)
 	}
 
 	// Verify whole-file hash.

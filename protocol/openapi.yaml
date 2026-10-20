@@ -1396,7 +1396,8 @@ paths:
         "409":
           description: >
             The destination was created during the upload and the session was
-            opened with overwrite=false (CONFLICT), or the session is no
+            opened with overwrite=false (CONFLICT), or chunks are still missing
+            (UPLOAD_INCOMPLETE; the session stays open), or the session is no
             longer open (TRANSFER_NOT_OPEN), or another chunk/status request
             currently holds the session (TRANSFER_ACTIVE).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -2436,6 +2437,7 @@ components:
             - READ_ONLY
             - FORBIDDEN
             - PATH_NOT_FOUND
+            - NOT_A_FILE
             - CONFLICT
             - CHUNK_HASH_MISMATCH
             - HASH_MISMATCH
@@ -2448,11 +2450,13 @@ components:
             - RESOURCE_LIMIT
             - TRANSFER_ACTIVE
             - TRANSFER_NOT_OPEN
+            - UPLOAD_INCOMPLETE
             - PAYLOAD_TOO_LARGE
             - NOT_FOUND
             - INTERNAL
           description: >
             - `BAD_REQUEST` (400): malformed or missing required fields.
+            - `NOT_A_FILE` (422): the path is a FIFO, socket or device, which the agent never opens.
             - `UNAUTHORIZED` (401): missing/invalid/revoked bearer token.
             - `READ_ONLY` (403): write rejected — the agent is in global
               read-only mode OR the calling device has the per-device read-only
@@ -2481,6 +2485,7 @@ components:
             - `TRANSFER_ACTIVE` (409): an operation conflicts with active
               session work; completion is exclusive, and DELETE is rejected
               while another request holds the session.
+            - `UPLOAD_INCOMPLETE` (409): complete was called before every chunk arrived; the session stays open, send the missing chunks and complete again.
             - `TRANSFER_NOT_OPEN` (409): the session is completed or failed
               and no longer accepts chunks or completion.
             - `PAYLOAD_TOO_LARGE` (413): chunk body exceeds the session's chunkSize.

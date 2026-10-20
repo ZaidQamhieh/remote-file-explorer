@@ -488,3 +488,30 @@ func TestOpenSession_RejectsOversizedDeclaration(t *testing.T) {
 		t.Fatal("rejected session still created a temp file")
 	}
 }
+
+// Audit F-03: completing early must report the missing chunks and leave the session open
+// so the upload can be finished.
+func TestComplete_EarlyKeepsSessionOpen(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "two.bin")
+	content := []byte("0123456789abcdef")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 8, sha256hex(content), false, ""); err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	if err := tm.WriteChunk(id, 0, content[:8], sha256hex(content[:8])); err != nil {
+		t.Fatalf("WriteChunk 0: %v", err)
+	}
+	if _, _, err := tm.Complete(id); !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("early Complete = %v, want ErrIncomplete", err)
+	}
+	if err := tm.WriteChunk(id, 1, content[8:], sha256hex(content[8:])); err != nil {
+		t.Fatalf("WriteChunk 1 after an early complete: %v", err)
+	}
+	if _, _, err := tm.Complete(id); err != nil {
+		t.Fatalf("Complete after sending the rest: %v", err)
+	}
+	if b, _ := os.ReadFile(target); string(b) != string(content) {
+		t.Fatalf("final content %q", b)
+	}
+}

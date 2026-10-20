@@ -472,6 +472,10 @@ func completeTransferHandler(tm *transfer.Manager, ops *fsops.Ops) http.HandlerF
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "transfer not found")
 				return
 			}
+			if errors.Is(err, transfer.ErrIncomplete) {
+				writeError(w, http.StatusConflict, "UPLOAD_INCOMPLETE", err.Error())
+				return
+			}
 			if errors.Is(err, transfer.ErrFileMismatch) {
 				writeError(w, http.StatusUnprocessableEntity, "HASH_MISMATCH", err.Error())
 				return

@@ -123,12 +123,16 @@ func pairHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonceSto
 		// false, so this is a no-op for the common path.
 		if codeInfo.JailRoot != "" {
 			if err := db.SetDeviceJail(deviceID, codeInfo.JailRoot); err != nil {
+				// The device row already exists with a live token; without its guest limits it must not stay usable.
+				_ = db.RevokeDevice(deviceID)
 				writeInternal(w, "pair", err)
 				return
 			}
 		}
 		if codeInfo.ReadOnly {
 			if err := db.SetDeviceReadOnly(deviceID, true); err != nil {
+				// The device row already exists with a live token; without its guest limits it must not stay usable.
+				_ = db.RevokeDevice(deviceID)
 				writeInternal(w, "pair", err)
 				return
 			}

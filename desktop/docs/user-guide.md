@@ -728,6 +728,7 @@ Messages about transfers from this app:
 | that is not a regular file | The path is a folder, a device or something else that is not a plain file. |
 | cannot read that file | The file is missing or you may not read it. The text after it says which. |
 | the file changed while it was being opened; try again | The path was replaced by another file at that moment. Try again. |
+| That file changed while it was being sent. Send it again. | The file was edited after the upload started, so it was stopped before the computer checked it. Do not change the file while it uploads. |
 | cannot write | The app could not write the unfinished download. Check free space and permissions of the download folder. |
 | The downloaded copy does not match the file on the computer | The saved bytes differ from the file's SHA-256 on the computer, so the copy was deleted. Start the download again. If it repeats, the file may be changing. |
 | The download could not be checked against the computer | You have verification turned on, but the computer did not answer the check (network trouble, a busy agent or an unexpected reply). The file was not saved as finished. Retry the download, or turn verification off in Settings to accept it unchecked. |

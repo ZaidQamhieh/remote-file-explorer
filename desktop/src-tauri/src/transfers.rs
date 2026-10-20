@@ -1857,6 +1857,11 @@ async fn upload(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
         item.set_progress(sent, size);
     }
 
+    // The file may have been edited while it was going: say so now, not after the agent hashes the whole thing.
+    match file.metadata() {
+        Ok(m) if ident_of(&m) == ident => {}
+        _ => return Err("That file changed while it was being sent. Send it again.".into()),
+    }
     // Every chunk is there: the agent hashes the whole file and renames it into place.
     item.set_progress(size, size);
     let resp = authed(

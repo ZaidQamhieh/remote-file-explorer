@@ -79,7 +79,9 @@ func downloadHandler(ops *fsops.Ops, st ...*settings.Store) http.HandlerFunc {
 		var content io.ReadSeeker = f
 		if ss != nil {
 			if limit := ss.MaxDownloadBytesPerSec(); limit > 0 {
-				content = transfer.NewThrottledReadSeeker(f, limit)
+				trs := transfer.NewThrottledReadSeeker(f, limit)
+				trs.WithContext(r.Context())
+				content = trs
 			}
 		}
 
@@ -378,7 +380,7 @@ func uploadChunkHandler(tm *transfer.Manager, st ...*settings.Store) http.Handle
 		var bodyReader io.Reader = r.Body
 		if ss != nil {
 			if limit := ss.MaxUploadBytesPerSec(); limit > 0 {
-				bodyReader = transfer.NewThrottledReader(bodyReader, limit)
+				bodyReader = transfer.NewThrottledReader(bodyReader, limit).WithContext(r.Context())
 			}
 		}
 

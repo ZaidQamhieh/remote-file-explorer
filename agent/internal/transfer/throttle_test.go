@@ -2,6 +2,8 @@ package transfer
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -60,5 +62,22 @@ func TestThrottledReadSeeker_Seek(t *testing.T) {
 	}
 	if string(got) != "fghij" {
 		t.Fatalf("got %q after seek", got)
+	}
+}
+
+func TestThrottledReaderStopsSleepingWhenContextEnds(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	// 5 B/s: an empty bucket sleeps about a second per read.
+	r := NewThrottledReader(strings.NewReader(strings.Repeat("x", 100)), 5).WithContext(ctx)
+	buf := make([]byte, 10)
+	_, _ = r.Read(buf)
+	cancel()
+	start := time.Now()
+	_, err := r.Read(buf)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	if time.Since(start) > 200*time.Millisecond {
+		t.Fatalf("a cancelled read still slept %v", time.Since(start))
 	}
 }

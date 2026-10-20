@@ -2,6 +2,7 @@
 package transfer
 
 import (
+	"context"
 	"io"
 	"time"
 )
@@ -14,6 +15,13 @@ type ThrottledReader struct {
 	bytesPerSec int64
 	bucket      int64     // tokens available
 	lastFill    time.Time // last time the bucket was refilled
+	ctx         context.Context
+}
+
+// WithContext makes a sleeping read return ctx's error as soon as ctx ends, so a cancelled transfer does not linger.
+func (t *ThrottledReader) WithContext(ctx context.Context) *ThrottledReader {
+	t.ctx = ctx
+	return t
 }
 
 // NewThrottledReader creates a rate-limited reader. bytesPerSec <= 0 means
@@ -54,7 +62,17 @@ func (t *ThrottledReader) Read(p []byte) (int, error) {
 		if sleepDur < time.Millisecond {
 			sleepDur = time.Millisecond
 		}
-		time.Sleep(sleepDur)
+		if t.ctx != nil {
+			timer := time.NewTimer(sleepDur)
+			select {
+			case <-t.ctx.Done():
+				timer.Stop()
+				return 0, t.ctx.Err()
+			case <-timer.C:
+			}
+		} else {
+			time.Sleep(sleepDur)
+		}
 		t.bucket += want
 		t.lastFill = time.Now()
 	}

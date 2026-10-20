@@ -363,6 +363,8 @@ func handleFsError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "PATH_NOT_FOUND", err.Error())
 	case errors.Is(err, fsops.ErrReadOnly):
 		writeError(w, http.StatusForbidden, "READ_ONLY", err.Error())
+	case errors.Is(err, fsops.ErrNotRegular):
+		writeError(w, http.StatusUnprocessableEntity, "NOT_A_FILE", err.Error())
 	case errors.Is(err, fsops.ErrUnsupported):
 		writeError(w, http.StatusBadRequest, "UNSUPPORTED_FORMAT", err.Error())
 	case errors.Is(err, fsops.ErrConflict):

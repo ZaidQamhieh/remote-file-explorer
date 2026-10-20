@@ -36,7 +36,16 @@ func chmodHandler(ops *fsops.Ops) http.HandlerFunc {
 			return
 		}
 
-		if err := ops.Chmod(req.Path, fs.FileMode(parsed)); err != nil {
+		// Only the nine permission bits are accepted. Larger values would reach
+		// Go's own FileMode type bits (setuid is 1<<23, not the digits' 04000),
+		// and setuid/setgid/sticky are not something a remote client may set.
+		if parsed > 0o777 {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "mode must be at most 777 (octal); setuid, setgid and sticky are not supported")
+			return
+		}
+		mode := fs.FileMode(parsed)
+
+		if err := ops.Chmod(req.Path, mode); err != nil {
 			if errors.Is(err, fsops.ErrForbidden) {
 				handleFsError(w, err)
 				return

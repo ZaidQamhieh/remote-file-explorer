@@ -1,8 +1,7 @@
 //go:build linux
 
-// Audit 2026-10-20 reproductions. Each test demonstrates a verified defect and
-// FAILS while the defect exists, so the suite skips them unless
-// RFE_AUDIT_REPRO=1. See docs/audit/2026-10-20-audit.md.
+// Regression tests for defects found in the 2026-10-20 audit
+// (docs/audit/2026-10-20-audit.md). Each one failed before its fix.
 package server
 
 import (
@@ -20,17 +19,9 @@ import (
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/fsops"
 )
 
-func auditRepro(t *testing.T) {
-	t.Helper()
-	if os.Getenv("RFE_AUDIT_REPRO") != "1" {
-		t.Skip("audit repro; set RFE_AUDIT_REPRO=1")
-	}
-}
-
 // F-03: downloading a FIFO inside the root blocks the request forever instead of
 // being refused.
 func TestAuditRepro_DownloadFIFOReturnsPromptly(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	fifo := filepath.Join(root, "pipe")
 	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
@@ -52,7 +43,6 @@ func TestAuditRepro_DownloadFIFOReturnsPromptly(t *testing.T) {
 // F-05: expiresInSeconds is multiplied by time.Second before the 24h cap
 // comparison; 18446744074 s overflows int64 to ~0.29 s and passes the check.
 func TestAuditRepro_ShareExpiryOverflowRejected(t *testing.T) {
-	auditRepro(t)
 	ops, root := newFsFixture(t)
 	db, st := newTestDeps(t)
 	if err := st.SetAllowSharing(true); err != nil {
@@ -69,7 +59,6 @@ func TestAuditRepro_ShareExpiryOverflowRejected(t *testing.T) {
 
 // F-70: ListDir and Checksum open a FIFO with a blocking open(2) and never return.
 func TestAuditRepro_ListDirAndChecksumFIFOReturnPromptly(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	fifo := filepath.Join(root, "pipe")
 	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
@@ -92,7 +81,6 @@ func TestAuditRepro_ListDirAndChecksumFIFOReturnPromptly(t *testing.T) {
 
 // F-89: Move(src, destDir inside src, overwrite=true) deletes a subtree of the source, then fails.
 func TestAuditRepro_MoveIntoItselfOverwriteKeepsData(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	keep := filepath.Join(root, "a", "b", "a", "keep.txt")
 	if err := os.MkdirAll(filepath.Dir(keep), 0o755); err != nil {
@@ -111,7 +99,6 @@ func TestAuditRepro_MoveIntoItselfOverwriteKeepsData(t *testing.T) {
 
 // F-90: Extract silently replaces an existing file of the same name.
 func TestAuditRepro_ExtractDoesNotClobberExisting(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -138,7 +125,6 @@ func TestAuditRepro_ExtractDoesNotClobberExisting(t *testing.T) {
 
 // F-119: Move over a dangling symlink at the destination replaces it with no conflict.
 func TestAuditRepro_MoveOverDanglingSymlinkConflicts(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	src := filepath.Join(root, "x")
 	dir := filepath.Join(root, "d")
@@ -160,7 +146,6 @@ func TestAuditRepro_MoveOverDanglingSymlinkConflicts(t *testing.T) {
 
 // F-132: Chmod opens a FIFO with a blocking open.
 func TestAuditRepro_ChmodFIFOReturnsPromptly(t *testing.T) {
-	auditRepro(t)
 	root := t.TempDir()
 	fifo := filepath.Join(root, "pipe")
 	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
@@ -177,20 +162,23 @@ func TestAuditRepro_ChmodFIFOReturnsPromptly(t *testing.T) {
 }
 
 // F-133: the handler passes a raw 32-bit octal value to fs.FileMode, so Go's type bits
-// (setuid is 1<<23) are reachable: mode "40000755" sets setuid while "4755" is dropped.
-func TestAuditRepro_ChmodModeAboveSevenSevenSevenSevenRejected(t *testing.T) {
-	auditRepro(t)
+// (setuid is 1<<23) were reachable: mode "40000755" set setuid while "4755" was dropped.
+func TestAuditRepro_ChmodModeAboveSevenSevenSevenRejected(t *testing.T) {
 	root := t.TempDir()
 	f := filepath.Join(root, "f.sh")
 	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ops := fsops.New([]string{root}, false)
-	if err := ops.Chmod(f, os.FileMode(0o40000755)); err != nil {
-		t.Skipf("chmod refused: %v", err)
+	handler := chmodHandler(fsops.New([]string{root}, false))
+	for _, mode := range []string{"40000755", "4755", "1777"} {
+		rr := httptest.NewRecorder()
+		body := `{"path":"` + f + `","mode":"` + mode + `"}`
+		handler(rr, httptest.NewRequest(http.MethodPost, "/v1/fs/chmod", strings.NewReader(body)))
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("mode %s accepted with %d, want 400", mode, rr.Code)
+		}
 	}
-	st, _ := os.Stat(f)
-	if st.Mode()&os.ModeSetuid != 0 {
-		t.Fatalf("setuid set via mode 40000755 (handler accepts any 32-bit octal): %v", st.Mode())
+	if st, _ := os.Stat(f); st.Mode().Perm() != 0o644 || st.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+		t.Fatalf("mode changed by a rejected request: %v", st.Mode())
 	}
 }

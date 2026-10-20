@@ -24,6 +24,10 @@ import (
 // ErrForbidden is returned when a path is outside the jail.
 var ErrForbidden = errors.New("path is outside allowed root")
 
+// ErrNotRegular is returned when a path is neither a regular file nor a
+// directory (a FIFO, socket or device), which the agent never opens.
+var ErrNotRegular = errors.New("not a regular file or directory")
+
 // ErrReadOnly is returned for write operations when in read-only mode.
 var ErrReadOnly = errors.New("agent is in read-only mode")
 
@@ -778,7 +782,19 @@ func (o *Ops) Move(sources []string, destDir string, duplicate, overwrite bool) 
 			continue
 		}
 
-		if _, err := dst.stat(); err == nil {
+		// Containment guard: a folder can never move into itself or one of its
+		// own subfolders. Without it, overwrite would delete a subtree of the
+		// source before the rename fails.
+		if isUnder(dst.full, resSrc.full) {
+			results[i] = BatchResult{Path: src, Error: apiErr("MOVE_FAILED", "cannot move a folder into itself")}
+			resSrc.close()
+			if dstDir.root != resSrc.root {
+				dstDir.close()
+			}
+			continue
+		}
+
+		if _, err := dst.lstat(); err == nil {
 			switch {
 			case duplicate:
 				dst = autoRenameSecure(dst)

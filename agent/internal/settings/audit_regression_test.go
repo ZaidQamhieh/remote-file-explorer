@@ -1,16 +1,9 @@
 package settings
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
 // Audit 2026-10-20 (F-93): a corrupt bandwidth limit is read as 0 (unlimited) without an error.
-// Fails while the defect exists, so it runs only with RFE_AUDIT_REPRO=1.
 func TestAuditRepro_CorruptThrottleIsNotSilentlyUnlimited(t *testing.T) {
-	if os.Getenv("RFE_AUDIT_REPRO") != "1" {
-		t.Skip("audit repro; set RFE_AUDIT_REPRO=1")
-	}
 	db := newDB(t)
 	if err := db.SetConfig(keyMaxUploadBPS, "abc"); err != nil {
 		t.Fatal(err)

@@ -4,6 +4,7 @@
 package settings
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -115,12 +116,20 @@ func Load(db *store.DB, seedReadOnly bool, seedRoots []string, seedName string) 
 	if v, err := db.GetConfig(keyMaxUploadBPS); err != nil {
 		return nil, err
 	} else if v != "" {
-		s.maxUploadBytesPS, _ = strconv.ParseInt(v, 10, 64)
+		n, perr := parseBandwidth(keyMaxUploadBPS, v)
+		if perr != nil {
+			return nil, perr
+		}
+		s.maxUploadBytesPS = n
 	}
 	if v, err := db.GetConfig(keyMaxDownloadBPS); err != nil {
 		return nil, err
 	} else if v != "" {
-		s.maxDownloadBytesPS, _ = strconv.ParseInt(v, 10, 64)
+		n, perr := parseBandwidth(keyMaxDownloadBPS, v)
+		if perr != nil {
+			return nil, perr
+		}
+		s.maxDownloadBytesPS = n
 	}
 
 	return s, nil
@@ -294,4 +303,15 @@ func normalizeRoots(in []string) []string {
 		out = append(out, c)
 	}
 	return out
+}
+
+// parseBandwidth reads a stored bandwidth limit. A value that is not a
+// non-negative integer is an error rather than silently becoming 0, which
+// would mean "unlimited".
+func parseBandwidth(key, v string) (int64, error) {
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("setting %s has an invalid value %q: expected a whole number of bytes per second (0 = unlimited)", key, v)
+	}
+	return n, nil
 }

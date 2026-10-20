@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // This file holds the agent's path-jail and access-control model — the
@@ -323,11 +324,32 @@ func (p *securePath) parent() *securePath {
 	}
 }
 
+// open opens the path read-only without ever blocking on it: O_NONBLOCK keeps a
+// FIFO from waiting for a writer, and anything that is neither a regular file
+// nor a directory (FIFO, socket, device) is refused with ErrNotRegular.
 func (p *securePath) open() (*os.File, error) {
+	var (
+		f   *os.File
+		err error
+	)
 	if p.root != nil {
-		return p.root.Open(p.name)
+		f, err = p.root.OpenFile(p.name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	} else {
+		f, err = os.OpenFile(p.full, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	}
-	return os.Open(p.full)
+	if err != nil {
+		return nil, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if !st.Mode().IsRegular() && !st.IsDir() {
+		_ = f.Close()
+		return nil, ErrNotRegular
+	}
+	return f, nil
 }
 
 func (p *securePath) openFile(flag int, perm os.FileMode) (*os.File, error) {

@@ -76,7 +76,7 @@ func mintShareHandler(cfg Config, db *store.DB, ops *fsops.Ops) http.HandlerFunc
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path required")
 			return
 		}
-		if req.ExpiresInSeconds < 0 || time.Duration(req.ExpiresInSeconds)*time.Second > shareMaxExpiry {
+		if req.ExpiresInSeconds < 0 || req.ExpiresInSeconds > int64(shareMaxExpiry/time.Second) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "expiresInSeconds exceeds the 24h maximum")
 			return
 		}

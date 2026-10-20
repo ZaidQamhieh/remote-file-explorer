@@ -305,9 +305,9 @@ func createArchiveFile(path *securePath, mode os.FileMode) (*os.File, error) {
 		if info.IsDir() {
 			return nil, fmt.Errorf("archive file conflicts with a directory")
 		}
-		if err := path.remove(); err != nil {
-			return nil, err
-		}
+		// Never replace a file that is already there: keep both, as Compress
+		// and Copy do, so an extraction cannot destroy existing data.
+		path = autoRenameSecure(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}

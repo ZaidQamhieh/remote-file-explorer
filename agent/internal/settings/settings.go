@@ -303,6 +303,11 @@ func normalizeRoots(in []string) []string {
 			continue
 		}
 		c := filepath.Clean(r)
+		// A relative root can never match a request path (they are absolute), so every browse would fail with
+		// "path must be absolute"; resolve it against the working directory once, here.
+		if abs, err := filepath.Abs(c); err == nil {
+			c = abs
+		}
 		if _, dup := seen[c]; dup {
 			continue
 		}

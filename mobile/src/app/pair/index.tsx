@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Globe, LogIn, Network, QrCode, Radar, Send, ShieldCheck, UserPlus, X } from 'lucide-react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { GroupedCard, IconTile, PageHead, SectionLabel, StatePill, Text, useDialogs } from '../../design/components';
@@ -28,6 +28,9 @@ export default function Pair() {
   const [address, setAddress] = useState(params.address ?? '');
   const [touched, setTouched] = useState(false);
   const lan = useLanScan();
+  const scroll = useRef<ScrollView>(null);
+  /** The expanded panel can start below the fold and under the footer button: bring it into view when it appears (audit F-38). */
+  const reveal = (y: number) => scroll.current?.scrollTo({ y: Math.max(0, y - 96), animated: true });
 
   const requestPair = (target: string) => router.push({ pathname: '/pair/request', params: { address: target } });
   const account = (path: '/pair/login' | '/pair/register') => router.push({ pathname: path, params: { address: address.trim() || params.address } });
@@ -63,7 +66,7 @@ export default function Pair() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
       <StackTopBar context="RFE · Add workspace" sub="New computer" right={<StatePill label="Secure setup" icon={ShieldCheck} tone="safe" />} onMore={more} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24, gap: 10 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24, gap: 10 }} keyboardShouldPersistTaps="handled">
         <View style={{ marginHorizontal: -18 }}>
           <PageHead title="Add workspace" subtitle="Pair a computer or enter its address." />
         </View>
@@ -99,9 +102,17 @@ export default function Pair() {
           </Text>
         ) : null}
         <MethodRow icon={Network} tone={roles.route} title="Find on local network" subtitle="Both devices on the same Wi-Fi" selected={method === 'lan'} onPress={() => setMethod('lan')} />
-        {method === 'lan' ? <LanPanel scan={lan} onSelect={requestPair} /> : null}
+        {method === 'lan' ? (
+          <View onLayout={(e) => reveal(e.nativeEvent.layout.y)}>
+            <LanPanel scan={lan} onSelect={requestPair} />
+          </View>
+        ) : null}
         <MethodRow icon={Globe} tone={roles.transfer} title="Enter address" subtitle="Hostname or IP address" selected={method === 'address'} onPress={() => setMethod('address')} />
-        {method === 'address' ? <ManualPanel address={address} onChange={setAddress} showRequired={touched} /> : null}
+        {method === 'address' ? (
+          <View onLayout={(e) => reveal(e.nativeEvent.layout.y)}>
+            <ManualPanel address={address} onChange={setAddress} showRequired={touched} />
+          </View>
+        ) : null}
 
         <View style={{ marginTop: 6 }}>
           <SectionLabel title="With an account" />

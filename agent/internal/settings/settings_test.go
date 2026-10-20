@@ -218,3 +218,14 @@ func TestLoad_DBValueWinsOverSeed(t *testing.T) {
 		t.Fatalf("expected persisted name 'a', got %s", s.AgentName())
 	}
 }
+
+func TestNormalizeRootsMakesRelativeRootsAbsolute(t *testing.T) {
+	got := normalizeRoots([]string{"rel/dir", "/abs/dir/", "rel/dir"})
+	want, err := filepath.Abs("rel/dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != want || got[1] != filepath.Clean("/abs/dir") {
+		t.Fatalf("got %v, want [%s %s]", got, want, filepath.Clean("/abs/dir"))
+	}
+}

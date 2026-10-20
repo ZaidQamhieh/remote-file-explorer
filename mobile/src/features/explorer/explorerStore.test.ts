@@ -26,6 +26,17 @@ describe('load / cache / offline', () => {
     expect(ex.getState().entries).toHaveLength(1);
   });
 
+  it('a folder that fails with no cache does not show the previous folder\'s rows or offline flag', async () => {
+    const list = jest.fn().mockResolvedValueOnce({ path: '/r', entries: [e('a')] }).mockRejectedValueOnce(new Error('down')).mockRejectedValueOnce(new Error('down'));
+    const { ex } = setup({ list });
+    await ex.load();
+    await ex.load(); // the parent now comes from cache while the host is down
+    expect(ex.getState().offline).toBe(true);
+    ex.navigate('/r/sub');
+    await ex.load();
+    expect(ex.getState()).toMatchObject({ entries: [], offline: false, stale: false, error: 'down' });
+  });
+
   it('reports the error when there is no cache', async () => {
     const { ex } = setup({ list: jest.fn().mockRejectedValue(new Error('boom')) });
     await ex.load();

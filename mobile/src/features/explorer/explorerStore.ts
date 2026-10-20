@@ -69,6 +69,8 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
     showHidden: false,
   }));
   let generation = 0;
+  /** The folder `entries` belongs to. */
+  let shownPath: string | null = null;
   const get = store.getState;
   const set = (p: Partial<ExplorerState>) => store.setState(p);
 
@@ -80,13 +82,16 @@ export function createExplorer(deps: ExplorerDeps): StoreApi<ExplorerState> & Ex
       .then(() => deps.cache.get(deps.hostId, path))
       .catch(() => undefined);
     if (gen !== generation) return;
+    if (cached) shownPath = path;
     if (cached) set({ entries: cached.entries, loading: false, loadingMore: false, stale: true, offline: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
-    else set({ loading: true, loadingMore: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null });
+    // A miss for another folder must not leave the previous folder's rows, or its offline flag, under this folder's name (a failed fetch showed the parent's list as the child's).
+    else set({ loading: true, loadingMore: false, error: null, loadMoreError: null, selected: new Set(), anchor: null, nextCursor: null, ...(shownPath !== path ? { entries: [], stale: false, offline: false } : {}) });
     try {
       const client = await deps.getClient();
       if (gen !== generation) return;
       const listing = await client.list(path);
       if (gen !== generation) return;
+      shownPath = path;
       set({ loading: false, entries: listing.entries, stale: false, offline: false, error: null, nextCursor: listing.nextCursor ?? null });
       // A good listing stays on screen even if the local cache cannot be written.
       await deps.cache.put(deps.hostId, path, listing.entries).catch(() => {});

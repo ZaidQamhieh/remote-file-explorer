@@ -81,6 +81,11 @@ func registerHandler(cfg Config, db *store.DB, pm *pairing.Manager, nonces *nonc
 		if err := verifyDeviceProof(db, nonces, cfg.CertFingerprint, req.DeviceID, req.DevicePublicKey, req.Nonce, req.Signature, w, rePinOnKeyChange, requireBoundProof); err != nil {
 			return // verifyDeviceProof already wrote the error response
 		}
+		// An ordinary code must not be spent by a register attempt it can never satisfy (audit F-07).
+		if peek := pm.Peek(req.PairingCode); peek.Valid && !peek.CanRegister {
+			writeError(w, http.StatusForbidden, "CODE_CANNOT_REGISTER", "this code can't create an account — run `rfe-agent pair --owner` on the computer")
+			return
+		}
 		codeInfo := pm.Consume(req.PairingCode)
 		if !codeInfo.Valid {
 			writeError(w, http.StatusUnauthorized, "INVALID_CODE", "invalid or expired pairing code — run `rfe-agent pair --owner` on the computer to mint one")

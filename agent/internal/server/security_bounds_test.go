@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +42,7 @@ func TestDecodeJSONBodyRequiresExactlyOneDocument(t *testing.T) {
 	}
 }
 
-func TestKeyedLimiterCapsActiveKeysAndSharesOverflowBudget(t *testing.T) {
+func TestKeyedLimiterCapsActiveKeysAndBoundsOverflowBudget(t *testing.T) {
 	limiter := newKeyedLimiter(1, time.Hour)
 	limiter.maxKeys = 2
 
@@ -51,8 +52,19 @@ func TestKeyedLimiterCapsActiveKeysAndSharesOverflowBudget(t *testing.T) {
 	if !limiter.Allow("overflow-one") {
 		t.Fatal("first untracked source should use the overflow budget")
 	}
-	if limiter.Allow("overflow-two") {
-		t.Fatal("untracked sources should share the exhausted overflow budget")
+	if limiter.Allow("overflow-one") {
+		t.Fatal("an untracked source must still be limited")
+	}
+	// Untracked sources share a handful of windows by hash, so one exhausted window must not shut out every
+	// other newcomer (audit F-06).
+	allowed := 0
+	for i := 0; i < 200; i++ {
+		if limiter.Allow(fmt.Sprintf("newcomer-%d", i)) {
+			allowed++
+		}
+	}
+	if allowed < overflowBuckets/2 {
+		t.Fatalf("only %d of 200 new sources were allowed; the overflow is one big shared window again", allowed)
 	}
 	if got := len(limiter.perKey); got != limiter.maxKeys {
 		t.Fatalf("tracked source map grew to %d keys, want cap %d", got, limiter.maxKeys)

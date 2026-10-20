@@ -549,6 +549,24 @@ type PairingCodeInfo struct {
 	CanRegister bool // may also create the owner account
 }
 
+// PeekPairingCode reports what a code would allow without using it up. /register uses it to refuse an
+// ordinary pairing code before consuming it (audit F-07).
+func (s *DB) PeekPairingCode(code string) PairingCodeInfo {
+	if code == "" {
+		return PairingCodeInfo{}
+	}
+	var expires int64
+	var jailRoot string
+	var readOnly, canRegister int
+	err := s.db.QueryRow(
+		`SELECT expires, jail_root, read_only, can_register FROM pairing_codes WHERE code=?`, code,
+	).Scan(&expires, &jailRoot, &readOnly, &canRegister)
+	if err != nil || time.Now().Unix() > expires {
+		return PairingCodeInfo{}
+	}
+	return PairingCodeInfo{Valid: true, JailRoot: jailRoot, ReadOnly: readOnly != 0, CanRegister: canRegister != 0}
+}
+
 // ConsumePairingCode validates code and removes it (single-use).
 func (s *DB) ConsumePairingCode(code string) PairingCodeInfo {
 	if code == "" {

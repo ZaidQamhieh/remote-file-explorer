@@ -161,3 +161,28 @@ func TestRegisterHandler_DuplicateUsernameRejected(t *testing.T) {
 		t.Fatalf("expected 409 for duplicate username, got %d: %s", rr2.Code, rr2.Body.String())
 	}
 }
+
+// F-07: an ordinary pairing code refused by /register stays usable for /pair.
+func TestRegisterHandler_OrdinaryCodeIsNotBurned(t *testing.T) {
+	db, _ := newTestDeps(t)
+	pm := pairing.New(db, "127.0.0.1:8765", "", "fingerprint")
+	cfg := Config{Name: "test-pc", CertFingerprint: testProofFp}
+	nonces := newNonceStore()
+	handler := registerHandler(cfg, db, pm, nonces)
+
+	code, _, err := pm.Mint(time.Minute)
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	pubKey, nonce, sig := signedDeviceProof(t, nonces)
+	body := `{"pairingCode":"` + code + `","username":"owner","password":"correct-horse-battery",` +
+		`"devicePublicKey":"` + pubKey + `","nonce":"` + nonce + `","signature":"` + sig + `"}`
+	rr := httptest.NewRecorder()
+	handler(rr, httptest.NewRequest(http.MethodPost, "/v1/register", strings.NewReader(body)))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !pm.Consume(code).Valid {
+		t.Fatal("the ordinary code was burned by a register attempt")
+	}
+}

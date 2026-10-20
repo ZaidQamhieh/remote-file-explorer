@@ -2,6 +2,7 @@
 package server
 
 import (
+	"hash/fnv"
 	"net"
 	"net/http"
 	"sync"
@@ -27,17 +28,24 @@ type keyedLimiter struct {
 	window      time.Duration
 	perKey      map[string]*fixedWindowLimiter
 	maxKeys     int
-	overflow    *fixedWindowLimiter
+	overflow    [overflowBuckets]*fixedWindowLimiter
 }
 
+// overflowBuckets is how many shared windows serve sources the key map has no room for. One shared window let a
+// many-address caller starve every new client; hashing sources over several keeps most of them unaffected (audit F-06).
+const overflowBuckets = 64
+
 func newKeyedLimiter(maxAttempts int, window time.Duration) *keyedLimiter {
-	return &keyedLimiter{
+	k := &keyedLimiter{
 		maxAttempts: maxAttempts,
 		window:      window,
 		perKey:      make(map[string]*fixedWindowLimiter),
 		maxKeys:     4096,
-		overflow:    newFixedWindowLimiter(maxAttempts, window),
 	}
+	for i := range k.overflow {
+		k.overflow[i] = newFixedWindowLimiter(maxAttempts, window)
+	}
+	return k
 }
 
 // Allow reports whether an attempt from key is permitted, recording it if so.
@@ -53,7 +61,9 @@ func (k *keyedLimiter) Allow(key string) bool {
 		// caller can use a fresh source address per request; keep memory bounded
 		// by sending previously unseen keys through one shared overflow window.
 		if len(k.perKey) >= k.maxKeys {
-			return k.overflow.Allow()
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(key))
+			return k.overflow[h.Sum32()%overflowBuckets].Allow()
 		}
 		l = newFixedWindowLimiter(k.maxAttempts, k.window)
 		k.perKey[key] = l

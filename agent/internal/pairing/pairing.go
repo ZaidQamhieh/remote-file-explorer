@@ -105,6 +105,11 @@ func (p QRPayload) JSON() string {
 
 // Consume validates code and clears it (single-use), returning its guest-mode
 // defaults (if any) to apply to the device created on success.
+// Peek reports what code would allow without consuming it.
+func (m *Manager) Peek(code string) store.PairingCodeInfo {
+	return m.db.PeekPairingCode(code)
+}
+
 func (m *Manager) Consume(code string) store.PairingCodeInfo {
 	return m.db.ConsumePairingCode(code)
 }

@@ -539,7 +539,8 @@ func isRendererCacheFile(name string) bool {
 		return false
 	}
 	parts := strings.Split(strings.TrimSuffix(name, ".jpg"), "_")
-	if len(parts) != 3 || len(parts[0]) != sha256.Size*2 {
+	// <digest>_<size>_<mtime>[_<bytes>]: the byte count is part of the key since F-54; older files lack it.
+	if (len(parts) != 3 && len(parts) != 4) || len(parts[0]) != sha256.Size*2 {
 		return false
 	}
 	if _, err := hex.DecodeString(parts[0]); err != nil {
@@ -548,8 +549,10 @@ func isRendererCacheFile(name string) bool {
 	if _, err := strconv.Atoi(parts[1]); err != nil {
 		return false
 	}
-	if _, err := strconv.ParseInt(parts[2], 10, 64); err != nil {
-		return false
+	for _, p := range parts[2:] {
+		if _, err := strconv.ParseInt(p, 10, 64); err != nil {
+			return false
+		}
 	}
 	return true
 }

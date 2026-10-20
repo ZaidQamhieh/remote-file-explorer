@@ -267,6 +267,10 @@ func TestRendererPrunesOnlyOldOwnedRegularCacheFiles(t *testing.T) {
 
 func TestCacheFileRecognitionAtomicWriteAndConstructorErrors(t *testing.T) {
 	valid := strings.Repeat("a", 64) + "_256_123.jpg"
+	current := strings.Repeat("a", 64) + "_256_123_4096.jpg"
+	if !isRendererCacheFile(current) {
+		t.Errorf("the current four-part cache name %q must be recognised, or pruning never sees new files", current)
+	}
 	for _, name := range []string{valid, "short_256_1.jpg", strings.Repeat("g", 64) + "_256_1.jpg", strings.Repeat("a", 64) + "_x_1.jpg", strings.Repeat("a", 64) + "_1_nope.jpg", strings.Repeat("a", 64) + "_256_1.png"} {
 		want := name == valid
 		if got := isRendererCacheFile(name); got != want {

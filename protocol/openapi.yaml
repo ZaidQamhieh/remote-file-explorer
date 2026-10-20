@@ -488,7 +488,7 @@ paths:
           description: Unknown or expired request, wrong nonce for the commitment, or already revealed. code=NOT_FOUND.
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "429":
-          description: Rate limited. code=RATE_LIMITED.
+          description: Rate limited (code=RATE_LIMITED) or 3 requests are already waiting for the owner (code=PAIR_BUSY; retry shortly, the request stays valid until it expires).
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /pair/request/{id}:

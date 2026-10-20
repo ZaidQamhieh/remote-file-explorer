@@ -171,13 +171,31 @@ func (s *DB) ClaimApprovedPairRequest(id string) (PairRequest, bool, error) {
 // still committed and unexpired; the caller has already checked the nonce against
 // the commitment.
 func (s *DB) RevealPairRequest(id, clientNonce string) (PairRequest, error) {
-	res, err := s.db.Exec(`UPDATE pair_requests SET client_nonce=?, status='pending' WHERE id=? AND status='committed' AND expires >= ?`, clientNonce, id, time.Now().Unix())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return PairRequest{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	now := time.Now().Unix()
+	// The owner prompt cap holds at reveal time too: committed requests were bounded separately, so without
+	// this check many of them revealing together would put more prompts in front of the owner than the cap.
+	var pending int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pair_requests WHERE status='pending' AND expires >= ?`, now).Scan(&pending); err != nil {
+		return PairRequest{}, err
+	}
+	if pending >= MaxPendingPairRequests {
+		return PairRequest{}, ErrTooManyPairRequests
+	}
+	res, err := tx.Exec(`UPDATE pair_requests SET client_nonce=?, status='pending' WHERE id=? AND status='committed' AND expires >= ?`, clientNonce, id, now)
 	if err != nil {
 		return PairRequest{}, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return PairRequest{}, ErrPairRequestGone
 	}
-	r, err := scanPairRequest(s.db.QueryRow(`SELECT `+pairRequestCols+` FROM pair_requests WHERE id=?`, id))
-	return r, err
+	r, err := scanPairRequest(tx.QueryRow(`SELECT `+pairRequestCols+` FROM pair_requests WHERE id=?`, id))
+	if err != nil {
+		return PairRequest{}, err
+	}
+	return r, tx.Commit()
 }

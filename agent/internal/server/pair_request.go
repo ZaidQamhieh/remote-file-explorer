@@ -163,6 +163,10 @@ func revealPairRequestHandler(cfg Config, db *store.DB) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "pairing request not found or expired")
 			return
 		}
+		if errors.Is(err, store.ErrTooManyPairRequests) {
+			writeError(w, http.StatusTooManyRequests, "PAIR_BUSY", "too many pairing requests are waiting for approval; try again shortly")
+			return
+		}
 		if err != nil {
 			writeInternal(w, "pair reveal", err)
 			return

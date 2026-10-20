@@ -98,6 +98,11 @@ func stopService() error {
 	}
 	cmd := exec.Command("launchctl", "bootout", launchAgentDomain()+"/"+launchdLabel)
 	if output, err := cmd.CombinedOutput(); err != nil {
+		// A job that is not loaded is already stopped (bootout reports "No such process" / "Could not find service").
+		if text := strings.ToLower(string(output)); strings.Contains(text, "no such process") || strings.Contains(text, "could not find service") {
+			fmt.Printf("%s was not running; it remains configured to start at login\n", launchdLabel)
+			return nil
+		}
 		return fmt.Errorf("launchctl bootout failed (%s): %w", strings.TrimSpace(string(output)), err)
 	}
 	fmt.Printf("Stopped %s; it remains configured to start at login\n", launchdLabel)
@@ -147,7 +152,10 @@ func uninstallService() error {
 
 	// Best-effort: unload even if it is already stopped, so a half-installed
 	// state still cleans up.
-	stopErr := stopService()
+	var stopErr error
+	if _, statErr := os.Stat(path); statErr == nil {
+		stopErr = stopService()
+	}
 
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove plist: %w", err)

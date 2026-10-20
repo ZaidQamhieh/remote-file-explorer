@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -87,5 +88,26 @@ func TestDeleteUnknownUserWithOneAccountIsNotLastUser(t *testing.T) {
 	}
 	if err := db.DeleteUser("ghost"); err == nil || errors.Is(err, ErrLastUser) {
 		t.Fatalf("DeleteUser(ghost) = %v, want a not-found error", err)
+	}
+}
+
+// The owner prompt cap also holds at reveal: many committed requests revealing together must not put more than
+// MaxPendingPairRequests prompts in front of the owner.
+func TestRevealRespectsTheOwnerPromptCap(t *testing.T) {
+	db := openTestDB(t)
+	exp := time.Now().Add(time.Minute)
+	ids := []string{"r1", "r2", "r3", "r4"}
+	for i, id := range ids {
+		if err := db.CreatePairRequest(testPairRequest(id, fmt.Sprintf("10.0.1.%d", i+1), exp)); err != nil {
+			t.Fatalf("commit %s: %v", id, err)
+		}
+	}
+	for _, id := range ids[:MaxPendingPairRequests] {
+		if _, err := db.RevealPairRequest(id, "nonce"); err != nil {
+			t.Fatalf("reveal %s: %v", id, err)
+		}
+	}
+	if _, err := db.RevealPairRequest(ids[MaxPendingPairRequests], "nonce"); !errors.Is(err, ErrTooManyPairRequests) {
+		t.Fatalf("reveal past the cap = %v, want ErrTooManyPairRequests", err)
 	}
 }

@@ -221,7 +221,9 @@ pub fn create_folder(parent: &str, name: &str) -> Result<FileEntry, String> {
 /// replaces silently on Unix; a hard link refuses an existing name, so a file is linked in and the old name
 /// dropped. Folders cannot be linked, and a file system without links (FAT) falls back to the plain rename.
 fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
+    // Linux only: link(2) does not follow a symlink there, so a renamed link stays a link. Elsewhere (macOS and
+    // the BSDs may follow it) the plain rename below is used.
+    #[cfg(target_os = "linux")]
     {
         let is_dir = std::fs::symlink_metadata(from)
             .map(|m| m.is_dir())
@@ -510,7 +512,6 @@ pub fn walk_all(path: &str) -> Result<Tree, String> {
     };
     let mut files = Vec::new();
     let mut dirs = Vec::new();
-    let mut skipped = 0usize;
     let mut stack = vec![root.clone()];
     while let Some(p) = stack.pop() {
         // The folder or file the user picked is followed even when it is a link (the
@@ -526,13 +527,8 @@ pub fn walk_all(path: &str) -> Result<Tree, String> {
             dirs.push(relative(&p)?);
             let rd = match std::fs::read_dir(&p) {
                 Ok(rd) => rd,
-                // The picked folder itself must open; one unreadable folder inside it is
-                // left out of the upload and noted in the log rather than ending it.
-                Err(e) if p != root => {
-                    skipped += 1;
-                    crate::applog::error(&format!("upload skipped an unreadable folder: {e}"));
-                    continue;
-                }
+                // An unreadable folder fails the upload rather than being left out: a partial copy reported as
+                // done would lose files without the user knowing.
                 Err(e) => return Err(format!("cannot open {}: {e}", p.display())),
             };
             for item in rd.flatten() {
@@ -545,11 +541,6 @@ pub fn walk_all(path: &str) -> Result<Tree, String> {
         if files.len() + dirs.len() > MAX_ENTRIES {
             return Err("that folder holds too many files to upload at once".into());
         }
-    }
-    if skipped > 0 {
-        crate::applog::info(&format!(
-            "{skipped} unreadable folder(s) were left out of the upload"
-        ));
     }
     files.sort_by(|a, b| a.1.cmp(&b.1));
     // Shallowest first, so a parent is made before what is inside it.
@@ -834,9 +825,9 @@ mod tests {
         std::fs::set_permissions(real.join("locked"), std::fs::Permissions::from_mode(0o755))
             .unwrap();
         if unreadable {
-            let w = walked.expect("an unreadable subfolder is skipped, not fatal");
-            assert!(w.0.iter().any(|f| f.1.ends_with("a.txt")));
-            assert!(!w.0.iter().any(|f| f.1.ends_with("b.txt")));
+            let e =
+                walked.expect_err("an unreadable subfolder must fail the upload, not be dropped");
+            assert!(e.contains("locked"), "{e}");
         }
     }
 

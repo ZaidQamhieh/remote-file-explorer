@@ -1373,6 +1373,12 @@ async fn remote_checksum(
         .map_err(|e| format!("the computer did not answer the check: {e}"))?;
     let status = resp.status();
     if matches!(status.as_u16(), 404 | 405 | 501) {
+        // A 404 can also mean the file itself is gone (PATH_NOT_FOUND); that is a failure, not an agent
+        // that predates the check.
+        let body = resp.text().await.unwrap_or_default();
+        if body.contains("PATH_NOT_FOUND") {
+            return Err("the file is no longer on the computer, so it could not be checked".into());
+        }
         return Ok(None);
     }
     if !status.is_success() {

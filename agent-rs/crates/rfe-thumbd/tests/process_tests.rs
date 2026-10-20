@@ -169,3 +169,23 @@ fn the_sandbox_refuses_files_sockets_and_new_processes() {
     }
     assert!(out.status.success(), "{text}");
 }
+
+/// The sandbox sets a zero file-size limit, and stderr may be a log file: the process must keep answering, not die
+/// with SIGXFSZ on its first write to that file.
+#[test]
+fn stderr_on_a_regular_file_does_not_kill_it() {
+    let path = format!("{}/stderr-file", env!("CARGO_TARGET_TMPDIR"));
+    let err = std::fs::File::create(&path).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rfe-thumbd"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(err)
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let hello = read_frame(&mut stdout).unwrap().expect("hello");
+    let v: Value = serde_json::from_slice(&hello.payload).unwrap();
+    assert_eq!(v["kind"].as_str(), Some("hello"));
+    let _ = child.kill();
+    let _ = child.wait();
+}

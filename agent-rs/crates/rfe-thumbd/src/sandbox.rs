@@ -12,6 +12,12 @@ pub struct Applied {
 /// hostile image cannot take the machine down.
 pub const MEMORY_LIMIT: u64 = 6 << 30;
 
+/// A line on stderr that cannot stop the process. Once the file-size limit is set, stderr may be a regular file whose
+/// write fails with EFBIG, and eprintln! would panic on that.
+pub fn say(line: &str) {
+    let _ = std::io::Write::write_fmt(&mut std::io::stderr(), format_args!("{line}\n"));
+}
+
 #[cfg(target_os = "linux")]
 pub fn enter() -> Result<Applied, String> {
     use seccompiler::{
@@ -34,6 +40,10 @@ pub fn enter() -> Result<Applied, String> {
     };
     set(libc::RLIMIT_CORE, 0)?;
     set(libc::RLIMIT_AS, MEMORY_LIMIT)?;
+    // A write past the limit must fail with EFBIG; the default disposition kills the process with SIGXFSZ, which
+    // would take a log file on stderr down with it.
+    // SAFETY: signal with a constant disposition.
+    unsafe { libc::signal(libc::SIGXFSZ, libc::SIG_IGN) };
     set(libc::RLIMIT_FSIZE, 0)?;
     applied
         .notes

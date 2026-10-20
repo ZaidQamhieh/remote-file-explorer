@@ -140,7 +140,9 @@ pub fn serve<R: Read, W: Write + Send + 'static>(
                 for s in &slots {
                     let t = s.load(Ordering::Relaxed);
                     if t != 0 && now.saturating_sub(t - 1) > WATCHDOG.as_millis() as u64 {
-                        eprintln!("rfe-thumbd: a render ran longer than {WATCHDOG:?}; exiting");
+                        crate::sandbox::say(&format!(
+                            "rfe-thumbd: a render ran longer than {WATCHDOG:?}; exiting"
+                        ));
                         std::process::exit(3);
                     }
                 }
@@ -148,7 +150,7 @@ pub fn serve<R: Read, W: Write + Send + 'static>(
         });
     }
     if let Err(e) = before_read() {
-        eprintln!("rfe-thumbd: sandbox failed: {e}");
+        crate::sandbox::say(&format!("rfe-thumbd: sandbox failed: {e}"));
         return Err(std::io::Error::other(e));
     }
     send(

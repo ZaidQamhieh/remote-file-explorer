@@ -79,7 +79,10 @@ fn main() {
         move || {
             if sandboxed {
                 let applied = sandbox::enter()?;
-                eprintln!("rfe-thumbd: sandbox: {}", applied.notes.join("; "));
+                sandbox::say(&format!(
+                    "rfe-thumbd: sandbox: {}",
+                    applied.notes.join("; ")
+                ));
             }
             Ok(())
         },

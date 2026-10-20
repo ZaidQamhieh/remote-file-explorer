@@ -80,21 +80,33 @@ const dblReal = async (name) => {
 const dbl0 = (name) => app.script(`const r=[...document.querySelectorAll('[data-rows] [data-row], [data-rows] .row, [data-rows] > div > *')].find((e)=>(e.innerText||"").trim().startsWith(${JSON.stringify(name)})); if(!r) return 'no row'; r.dispatchEvent(new MouseEvent('dblclick',{bubbles:true})); return 'ok';`);
 
 test("downloading a FIFO from the real window", { skip: !on }, async () => {
-  await waitFor("pipe row", () => app.has(/pipe/, "[data-rows]"), 20000);
-  console.log("OPEN", await dblReal("pipe"));
-  await sleep(1500);
-  await app.clickLabel("Download");
-  await sleep(6000);
+  // Drives the app's own transfer engine (window.A.E.enqueue) instead of clicking rows: the row/dialog
+  // navigation is flaky in WebDriver, the engine call is what the Download button runs.
+  console.log("DIAG", JSON.stringify(await app.script("const E = window.A.E; return { servers: E.servers.map((s) => ({ id: s.id, name: s.name })), keys: Object.keys(E).slice(0, 60), rows: (document.querySelector('[data-rows]') || {}).innerText && document.querySelector('[data-rows]').innerText.slice(0, 200), crumb: (document.querySelector('[data-crumbs], .crumbs') || {}).innerText };")));
+  const host = await app.script("return window.A.E.servers.map((s) => s.id)[0];");
+  assert.ok(host, "a signed-in server");
+  const q = await app.script(
+    "const r = window.A.E.enqueue({ dir: 'down', host: arguments[0], srcDir: arguments[1], dstDir: '', names: ['pipe'] }); return JSON.stringify({ error: r.error || null, n: (r.tasks || []).length });",
+    [host, agent.roots],
+  );
+  console.log("ENQUEUE", q);
+  await sleep(8000);
+  const st = await app.script("return window.A.E.tasks.map((t) => ({ name: t.name, state: t.state, msg: t.msg || '' }));");
+  console.log("TASKS-AFTER-8s", JSON.stringify(st));
   await app.go("transfers");
-  await sleep(1000);
-  console.log("TRANSFERS", JSON.stringify((await app.script("return document.querySelector('#stage').innerText.slice(0,500);"))));
+  await sleep(500);
   await app.shot("audit-fifo-download.png");
-  console.log("snack", JSON.stringify(await app.snacks()));
+  // F-01: the agent never answers for a FIFO, so the task stays active instead of failing promptly.
+  const stuck = st.find((t) => t.name === "pipe");
+  console.log("FIFO-TASK", JSON.stringify(stuck));
+  assert.ok(stuck, "a pipe task exists");
 });
 
 test("5000-file folder: window stays responsive", { skip: !on }, async () => {
+  await app.go("files");
+  await waitFor("root listing", () => app.has(/many/, "[data-rows]"), 20000);
   const t0 = Date.now();
-  console.log("MANY dbl", await dblReal("many"));
+  console.log("MANY dbl", await dbl0("many"));
   await waitFor("many listing", () => app.has(/f00000|f00001/, "[data-rows]"), 60000);
   console.log("MANY first page in", Date.now() - t0, "ms");
   const n = await app.script("return document.querySelectorAll('[data-rows] *').length;");

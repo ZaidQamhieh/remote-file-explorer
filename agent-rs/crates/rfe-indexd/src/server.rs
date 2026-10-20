@@ -179,7 +179,12 @@ fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> 
             let req: BuildReq = parse(payload)?;
             build(state, &req, cancel)
         }
-        "index.stats" => match state.index.read().unwrap().as_ref() {
+        "index.stats" => match state
+            .index
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             Some(i) => {
                 let s = i.stats;
                 Ok(json!({
@@ -191,7 +196,12 @@ fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> 
         },
         "index.query" => {
             let req: QueryReq = parse(payload)?;
-            let Some(idx) = state.index.read().unwrap().clone() else {
+            let Some(idx) = state
+                .index
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+            else {
                 return Ok(json!({"ready": false, "entries": [], "truncated": false}));
             };
             let (entries, truncated) =
@@ -203,7 +213,12 @@ fn handle(state: &Arc<State>, op: &str, payload: &[u8], cancel: &AtomicBool) -> 
         // exactly an indexed root). The caller then asks recents.scan, which walks.
         "recents.index" => {
             let req: RecentsReq = parse(payload)?;
-            let Some(idx) = state.index.read().unwrap().clone() else {
+            let Some(idx) = state
+                .index
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+            else {
                 return Ok(json!({"ready": false}));
             };
             if !live_ok(state) {
@@ -313,7 +328,7 @@ fn build(state: &Arc<State>, req: &BuildReq, cancel: &AtomicBool) -> HandlerResu
         std::thread::spawn(move || w.register(&roots, for_watch.dirs()));
     }
     *state.last_build.lock().unwrap() = Some(req.clone());
-    *state.index.write().unwrap() = Some(idx);
+    *state.index.write().unwrap_or_else(|e| e.into_inner()) = Some(idx);
     state.resync.store(false, Ordering::Release);
     guard.release();
     if !state.applier_started.swap(true, Ordering::AcqRel) {
@@ -335,7 +350,12 @@ fn applier(state: Arc<State>) {
             std::thread::sleep(Duration::from_millis(300));
             continue;
         }
-        let Some(current) = state.index.read().unwrap().clone() else {
+        let Some(current) = state
+            .index
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        else {
             continue;
         };
         let applied = if batch.overflow || batch.dirs.len() > MAX_DIRTY_DIRS {
@@ -348,7 +368,7 @@ fn applier(state: Arc<State>) {
                 if let Some(w) = state.watch.lock().unwrap().clone() {
                     w.add(a.new_dirs.iter().map(String::as_str));
                 }
-                *state.index.write().unwrap() = Some(Arc::new(a.index));
+                *state.index.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(a.index));
                 state.updates.fetch_add(1, Ordering::Relaxed);
             }
             None => {

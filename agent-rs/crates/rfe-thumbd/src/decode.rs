@@ -224,6 +224,11 @@ fn png(data: &[u8]) -> Result<Decoded, DecodeError> {
 fn gif(data: &[u8]) -> Result<Decoded, DecodeError> {
     let mut opts = gif::DecodeOptions::new();
     opts.set_color_output(gif::ColorOutput::RGBA);
+    // One RGBA frame at the pixel budget; a frame descriptor claiming more is refused before it is allocated
+    // (audit F-161).
+    opts.set_memory_limit(gif::MemoryLimit::Bytes(
+        std::num::NonZeroU64::new(MAX_PIXELS * 4).expect("non-zero"),
+    ));
     let mut dec = opts
         .read_info(Cursor::new(data))
         .map_err(DecodeError::unsupported)?;
@@ -413,4 +418,28 @@ fn bmp(data: &[u8]) -> Result<Decoded, DecodeError> {
         rgb,
         orientation: 1,
     })
+}
+
+#[cfg(test)]
+mod gif_bomb_tests {
+    use super::*;
+
+    /// A GIF whose first frame claims 65535x65535 pixels but carries almost no data.
+    fn gif_with_huge_frame() -> Vec<u8> {
+        let mut g = b"GIF89a".to_vec();
+        g.extend_from_slice(&[1, 0, 1, 0]); // logical screen 1x1
+        g.extend_from_slice(&[0x80, 0, 0]); // global colour table of 2 entries
+        g.extend_from_slice(&[0, 0, 0, 255, 255, 255]);
+        g.push(0x2c); // image descriptor
+        g.extend_from_slice(&[0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0]); // 65535 x 65535, no local table
+        g.push(2); // LZW minimum code size
+        g.extend_from_slice(&[2, 0x44, 0x01, 0]); // one tiny data block, then the terminator
+        g.push(0x3b);
+        g
+    }
+
+    #[test]
+    fn a_frame_larger_than_the_pixel_budget_is_refused_not_allocated() {
+        assert!(decode(&gif_with_huge_frame(), 96).is_err());
+    }
 }

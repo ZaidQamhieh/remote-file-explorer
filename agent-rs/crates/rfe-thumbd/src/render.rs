@@ -105,6 +105,12 @@ pub fn render(data: &[u8], max: u32) -> Result<Thumb, RenderError> {
     };
     let (rgb, ow, oh) = orient(&rgb, tw as usize, th as usize, d.orientation);
 
+    // The JPEG encoder takes u16 dimensions; a larger output would wrap silently (audit F-86).
+    if ow > u16::MAX as usize || oh > u16::MAX as usize {
+        return Err(RenderError::Internal(
+            "thumbnail dimensions are too large".into(),
+        ));
+    }
     let mut jpeg = Vec::with_capacity(ow * oh / 4 + 1024);
     let mut enc = jpeg_encoder::Encoder::new(&mut jpeg, JPEG_QUALITY);
     enc.set_sampling_factor(jpeg_encoder::SamplingFactor::F_2_2);

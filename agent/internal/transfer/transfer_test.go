@@ -515,3 +515,37 @@ func TestComplete_EarlyKeepsSessionOpen(t *testing.T) {
 		t.Fatalf("final content %q", b)
 	}
 }
+
+// An uploaded file follows the process umask like any file the user saves, not a private 0600 (audit F-22).
+func TestUploadedFileFollowsUmask(t *testing.T) {
+	tm, _, dataDir := setupManager(t)
+	target := filepath.Join(dataDir, "mode.bin")
+	content := []byte("mode check")
+	id := uuid.New().String()
+	if _, err := tm.OpenSession(id, target, int64(len(content)), 1024, sha256hex(content), false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.WriteChunk(id, 0, content, sha256hex(content)); err != nil {
+		t.Fatal(err)
+	}
+	_, finalPath, err := tm.Complete(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(finalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A plain file created with 0666 shows what this process's umask leaves.
+	ref := filepath.Join(dataDir, "ref.bin")
+	if err := os.WriteFile(ref, nil, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.Stat(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != want.Mode().Perm() {
+		t.Fatalf("uploaded file mode = %o, want the umask's %o", st.Mode().Perm(), want.Mode().Perm())
+	}
+}

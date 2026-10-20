@@ -192,7 +192,7 @@ func (m *Manager) openSession(id, targetPath string, size int64, chunkSize int, 
 
 	// Persist the quota reservation first. If file allocation fails, remove the
 	// row so its open-session reservation is released immediately.
-	f, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o666)
 	if err == nil && size > 0 {
 		err = f.Truncate(size)
 	}

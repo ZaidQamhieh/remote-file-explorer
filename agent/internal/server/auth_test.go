@@ -261,7 +261,7 @@ func TestDeviceJailMiddleware_ReadOnly(t *testing.T) {
 	}
 }
 
-func TestLogout_EndsALoginSessionButNotAPairing(t *testing.T) {
+func TestLogout_EndsALoginSessionAndRevokesAPairedBrowser(t *testing.T) {
 	db, _ := newTestDeps(t)
 	if err := db.CreateUser("owner", "pw-hash"); err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func TestLogout_EndsALoginSessionButNotAPairing(t *testing.T) {
 	if d, _ := db.GetDeviceByID(loginID); d != nil {
 		t.Fatal("a password-login session must be deleted on logout")
 	}
-	if d, _ := db.GetDeviceByID(pairedID); d == nil || d.Revoked {
-		t.Fatal("a paired device must survive logout")
+	if d, _ := db.GetDeviceByID(pairedID); d == nil || !d.Revoked {
+		t.Fatal("a paired browser must be revoked on logout, so a copied cookie value is dead")
 	}
 }

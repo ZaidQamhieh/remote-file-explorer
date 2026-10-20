@@ -116,6 +116,11 @@ fn browse(window: Duration) -> Result<Vec<Found>, String> {
                     continue;
                 }
                 let first = list.remove(0);
+                if !found.contains_key(&r.fullname) {
+                    if let Some(victim) = crowded_victim(&found, &first) {
+                        found.remove(&victim);
+                    }
+                }
                 if !admit(&found, &r.fullname, &first) {
                     continue;
                 }
@@ -144,6 +149,27 @@ fn browse(window: Duration) -> Result<Vec<Found>, String> {
 
 fn address_of(hostport: &str) -> &str {
     hostport.rsplit_once(':').map_or(hostport, |(a, _)| a)
+}
+
+/// When the list is full, the name to drop so a newcomer from a less crowded address still fits: one of the entries
+/// of the address that holds the most (a flood from a few hosts cannot push the real agent out, audit F-15).
+fn crowded_victim(found: &BTreeMap<String, Found>, hostport: &str) -> Option<String> {
+    if found.len() < MAX_TRACKED {
+        return None;
+    }
+    let mut per: BTreeMap<&str, usize> = BTreeMap::new();
+    for f in found.values() {
+        *per.entry(address_of(&f.hostport)).or_default() += 1;
+    }
+    let mine = per.get(address_of(hostport)).copied().unwrap_or(0);
+    let (crowded, most) = per.iter().max_by_key(|(_, n)| **n).map(|(a, n)| (*a, *n))?;
+    if most <= mine + 1 {
+        return None;
+    }
+    found
+        .iter()
+        .find(|(_, f)| address_of(&f.hostport) == crowded)
+        .map(|(name, _)| name.clone())
 }
 
 /// Whether a resolved service may join the list. A name already listed always updates.
@@ -188,6 +214,47 @@ mod admit_tests {
             admit(&found, "a0._rfe._tcp.local.", "10.0.0.9:8765"),
             "a listed name still updates"
         );
+    }
+}
+
+#[cfg(test)]
+mod flood_tests {
+    use super::*;
+
+    #[test]
+    fn a_full_list_makes_room_for_a_new_address_by_dropping_the_most_crowded_one() {
+        let mut found = BTreeMap::new();
+        for i in 0..MAX_TRACKED {
+            // 67 spoofing addresses with three names each, so the list is full
+            let addr = format!("10.0.{}.{}:8765", i / 3 / 200, i / 3 % 200 + 1);
+            found.insert(
+                format!("f{i}._rfe._tcp.local."),
+                Found {
+                    name: "n".into(),
+                    hostport: addr,
+                    other_addresses: vec![],
+                    version: String::new(),
+                },
+            );
+        }
+        // Even when every address holds three, an address with none gets in by displacing one of them.
+        assert!(crowded_victim(&found, "192.168.1.5:8765").is_some());
+        // An address that already holds as many as the most crowded one displaces nobody.
+        assert_eq!(crowded_victim(&found, "10.0.0.1:8765"), None);
+        // One address now holds more than the rest: it is the one that gives up an entry.
+        for i in 0..5 {
+            found.insert(
+                format!("x{i}._rfe._tcp.local."),
+                Found {
+                    name: "n".into(),
+                    hostport: "10.9.9.9:8765".into(),
+                    other_addresses: vec![],
+                    version: String::new(),
+                },
+            );
+        }
+        let victim = crowded_victim(&found, "192.168.1.5:8765").expect("a victim");
+        assert_eq!(address_of(&found[&victim].hostport), "10.9.9.9");
     }
 }
 

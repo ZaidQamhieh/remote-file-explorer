@@ -345,12 +345,13 @@ paths:
 
   /auth/logout:
     post:
-      summary: Clear the embedded browser's session cookie
+      summary: End the embedded browser's session
       description: >
-        Clears the RFE browser session cookie. This does not revoke the paired
-        device token; use DELETE /devices/{id} to revoke the device itself.
-        The route is safe to call without a session and has no effect on native
-        bearer-token clients.
+        Clears the RFE browser session cookie and ends the session server-side: a
+        password-login session's device row is deleted, and a paired browser's
+        device is revoked, so a copy of the cookie value stops working (the
+        browser pairs again). The route is safe to call without a session and
+        has no effect on native bearer-token clients.
       security: []
       responses:
         "204": { description: Browser session cookie cleared }

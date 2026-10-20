@@ -1340,12 +1340,15 @@ async fn append_body(
     Ok(())
 }
 
+/// The agent's SHA-256 of `path`. `Ok(None)` only when the agent does not offer the endpoint (an older
+/// agent: 404, 405 or 501); any other failure is an error, because a download the person asked to verify must
+/// not be published as if it had been (audit F-61).
 async fn remote_checksum(
     http: &reqwest::Client,
     base: &str,
     conn: &Conn,
     path: &str,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
     #[derive(Deserialize)]
     struct Sum {
         checksum: String,
@@ -1358,14 +1361,18 @@ async fn remote_checksum(
         .timeout(HASH_TIMEOUT)
         .send()
         .await
-        .ok()?;
-    if !resp.status().is_success() {
-        return None;
+        .map_err(|e| format!("the computer did not answer the check: {e}"))?;
+    let status = resp.status();
+    if matches!(status.as_u16(), 404 | 405 | 501) {
+        return Ok(None);
+    }
+    if !status.is_success() {
+        return Err(format!("the computer refused the check ({status})"));
     }
     read_json::<Sum>(resp, 1 << 20)
         .await
-        .ok()
-        .map(|s| s.checksum)
+        .map(|s| Some(s.checksum))
+        .map_err(|_| "the computer's answer to the check was not understood".to_string())
 }
 
 async fn download(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
@@ -1494,12 +1501,17 @@ async fn download(inner: &Arc<Inner>, item: &Item) -> Result<(), String> {
             .await?
         };
         match remote_checksum(http, base, &conn, &remote).await {
-            Some(sum) if sum.eq_ignore_ascii_case(&local) => true,
-            Some(_) => {
+            Ok(Some(sum)) if sum.eq_ignore_ascii_case(&local) => true,
+            Ok(Some(_)) => {
                 let _ = std::fs::remove_file(part);
                 return Err("The downloaded copy does not match the file on the computer. It was discarded; start it again.".into());
             }
-            None => false,
+            Ok(None) => false,
+            Err(why) => {
+                return Err(format!(
+                    "The download could not be checked against the computer: {why}. Retry it, or turn off verification."
+                ));
+            }
         }
     } else {
         false
@@ -2272,5 +2284,56 @@ mod session_tests {
             !bad_session(&body(1024, 1), 0),
             "an empty file has one chunk"
         );
+    }
+}
+
+#[cfg(test)]
+mod checksum_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    async fn serve(status: &'static str, body: &'static str) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 2048];
+            let _ = sock.read(&mut buf).await;
+            let resp = format!(
+                "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = sock.write_all(resp.as_bytes()).await;
+        });
+        format!("http://{addr}")
+    }
+
+    fn conn() -> Conn {
+        Conn {
+            host: "h".into(),
+            fingerprint: "f".into(),
+            token: "t".into(),
+        }
+    }
+
+    async fn ask(status: &'static str, body: &'static str) -> Result<Option<String>, String> {
+        let base = serve(status, body).await;
+        remote_checksum(&reqwest::Client::new(), &base, &conn(), "/x").await
+    }
+
+    #[tokio::test]
+    async fn only_an_agent_without_the_endpoint_leaves_a_download_unverified() {
+        assert_eq!(ask("404 Not Found", "{}").await, Ok(None));
+        assert_eq!(ask("501 Not Implemented", "{}").await, Ok(None));
+        assert_eq!(
+            ask("200 OK", r#"{"checksum":"ab"}"#).await,
+            Ok(Some("ab".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_or_garbled_check_is_an_error_not_unverified() {
+        assert!(ask("500 Internal Server Error", "{}").await.is_err());
+        assert!(ask("200 OK", "not json").await.is_err());
     }
 }

@@ -730,6 +730,7 @@ Messages about transfers from this app:
 | the file changed while it was being opened; try again | The path was replaced by another file at that moment. Try again. |
 | cannot write | The app could not write the unfinished download. Check free space and permissions of the download folder. |
 | The downloaded copy does not match the file on the computer | The saved bytes differ from the file's SHA-256 on the computer, so the copy was deleted. Start the download again. If it repeats, the file may be changing. |
+| The download could not be checked against the computer | You have verification turned on, but the computer did not answer the check (network trouble, a busy agent or an unexpected reply). The file was not saved as finished. Retry the download, or turn verification off in Settings to accept it unchecked. |
 | the downloaded file could not be put in place | The finished file could not be given its name. Check the download folder's permissions. |
 | the agent ended the download early | The connection ended before all the bytes arrived. Press Retry; the download continues. |
 | no such transfer | The transfer is no longer in the list. |

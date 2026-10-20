@@ -74,6 +74,11 @@ func LoadOrCreateCert(dir string) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, err
 	}
+	// A certificate left over from a key that went missing is not usable with the new key; drop it first so a
+	// crash after the key write leaves a lone key, which the next start replaces, not a mismatched pair.
+	if err := os.Remove(certPath); err != nil && !os.IsNotExist(err) {
+		return tls.Certificate{}, err
+	}
 	if err := writePEM(keyPath, "EC PRIVATE KEY", keyDER, 0o600); err != nil {
 		return tls.Certificate{}, err
 	}

@@ -318,7 +318,7 @@ func normalizeRoots(in []string) []string {
 func parseBandwidth(key, v string) (int64, error) {
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || n < 0 {
-		return 0, fmt.Errorf("setting %s has an invalid value %q: expected a whole number of bytes per second (0 = unlimited)", key, v)
+		return 0, fmt.Errorf("setting %s has an invalid value %q: expected a whole number of bytes per second (0 = unlimited); fix or delete this row in the config table of the agent database (sqlite3 <data dir>/agent.db)", key, v)
 	}
 	return n, nil
 }

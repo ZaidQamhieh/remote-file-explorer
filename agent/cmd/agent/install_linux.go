@@ -129,7 +129,8 @@ func uninstallService() error {
 	if err := runSystemctl("disable", "--now", linuxUnitName); err != nil {
 		// A unit that was never loaded is fine to clean up; a running agent that could not be stopped
 		// must not be reported as removed (audit F-72).
-		if strings.TrimSpace(runSystemctlOutput("is-active", linuxUnitName)) == "active" {
+		// "unavailable" means systemd did not answer, so the agent may well still be running.
+		if state := strings.TrimSpace(runSystemctlOutput("is-active", linuxUnitName)); state == "active" || strings.HasPrefix(state, "unavailable") {
 			return fmt.Errorf("could not stop the running agent (is systemd --user reachable?): %w", err)
 		}
 	}

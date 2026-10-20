@@ -375,7 +375,7 @@ func TestHealthHandler_UnauthenticatedGetsMinimalFingerprint(t *testing.T) {
 	}
 	// No topology/identity fields for a caller without a valid device token
 	// (PR-61) — an unpaired caller can't fingerprint or map the host.
-	for _, field := range []string{"name", "version", "os", "readOnly", "address", "tailscaleAddress", "macAddress"} {
+	for _, field := range []string{"name", "version", "os", "readOnly", "address", "tailscaleAddress", "macAddress", "apiVersion", "features"} {
 		if _, ok := resp[field]; ok {
 			t.Fatalf("expected %q to be absent for an unauthenticated caller, got %v", field, resp[field])
 		}
@@ -784,5 +784,28 @@ func TestDeleteHandler_MalformedBodyIsRejected(t *testing.T) {
 	}
 	if _, err := os.Stat(target); err != nil {
 		t.Fatal("nothing may be deleted on a malformed body")
+	}
+}
+
+func TestHealthHandler_AdvertisesAPIVersionAndSortedFeatures(t *testing.T) {
+	db, st, token := newAuthTestDeps(t)
+	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	healthHandler(Config{Settings: st}, db)(rr, req)
+	var resp struct {
+		APIVersion int      `json:"apiVersion"`
+		Features   []string `json:"features"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.APIVersion != APIVersion || len(resp.Features) == 0 {
+		t.Fatalf("got %+v", resp)
+	}
+	for i := 1; i < len(resp.Features); i++ {
+		if resp.Features[i-1] >= resp.Features[i] {
+			t.Fatalf("features not sorted/unique: %v", resp.Features)
+		}
 	}
 }

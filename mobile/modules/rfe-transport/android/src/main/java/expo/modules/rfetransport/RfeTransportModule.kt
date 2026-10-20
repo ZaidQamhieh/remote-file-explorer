@@ -214,6 +214,9 @@ class RfeTransportModule : Module() {
         } catch (e: RangeNotHonoured) {
           throw CodedException("ERR_RANGE", e.message, e)
         } catch (e: java.io.IOException) {
+          // OkHttp reports a call cancelled by publicDownloadCancel as IOException("Canceled"): the user's own
+          // cancel, not a connection problem.
+          if (e.message == "Canceled") throw CodedException("ERR_CANCELLED", "cancelled", e)
           throw CodedException("ERR_CONNECTION", e.message, e)
         }
       }

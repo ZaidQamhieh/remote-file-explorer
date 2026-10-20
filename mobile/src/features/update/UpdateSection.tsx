@@ -43,7 +43,8 @@ export function UpdateSection() {
       if (outcome === 'needsPermission') toast.info(t('installPermissionNeeded'));
       else if (outcome === 'failed') toast.error(t('couldNotOpenInstaller'));
     } catch (e) {
-      toast.error(t('updateFailed', { error: humanizeError(e) }));
+      // The user's own cancel of the download is not a failure.
+      if ((e as { code?: string }).code !== 'ERR_CANCELLED') toast.error(t('updateFailed', { error: humanizeError(e) }));
     } finally {
       setPhase({ kind: 'idle' });
     }

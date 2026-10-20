@@ -63,7 +63,11 @@ class TransferService : Service() {
         val total = running.sumOf { if (it.total > 0) it.total else 0L }
         val pct = if (total > 0) ((received * 100) / total).toInt() else 0
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        mgr.notify(NOTIFICATION_ID, svc.build("Transferring ${e.activeCount()} file(s)", pct))
+        // Posted under the lock and only while work remains: outside it this could land after the service
+        // removed its notification and leave an ongoing one nobody can dismiss (audit F-66).
+        synchronized(lock) {
+          if (e.activeCount() > 0) mgr.notify(NOTIFICATION_ID, svc.build("Transferring ${e.activeCount()} file(s)", pct))
+        }
       }
     }
   }
@@ -88,6 +92,17 @@ class TransferService : Service() {
       }
     }
     return START_NOT_STICKY
+  }
+
+  /**
+   * Android 15 caps a dataSync foreground service at about six hours in 24 and then calls this; a service that
+   * does not stop gets the app killed. Pause the work (it resumes from its journal) and stop (audit F-65).
+   */
+  override fun onTimeout(startId: Int, fgsType: Int) {
+    val engine = TransferHost.engine(this)
+    engine.list().filter { it.state == TransferState.RUNNING || it.state == TransferState.QUEUED }.forEach { engine.pause(it.id) }
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
   }
 
   override fun onDestroy() {

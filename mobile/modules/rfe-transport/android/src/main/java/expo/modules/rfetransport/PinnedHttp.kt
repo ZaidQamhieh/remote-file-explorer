@@ -111,7 +111,17 @@ object PinnedHttp {
     val tm = PinTrustManager(null)
     val http = client(tm, timeoutMs)
     val u = url.toHttpUrl()
-    val sock = (http.sslSocketFactory.createSocket(u.host, u.port) as javax.net.ssl.SSLSocket)
+    // Connect with a deadline first: createSocket(host, port) connects with none, so an address that drops
+    // SYNs would hold the probe for minutes (audit F-152).
+    val raw = java.net.Socket()
+    val sock: javax.net.ssl.SSLSocket
+    try {
+      raw.connect(java.net.InetSocketAddress(u.host, u.port), timeoutMs.toInt())
+      sock = http.sslSocketFactory.createSocket(raw, u.host, u.port, true) as javax.net.ssl.SSLSocket
+    } catch (e: Exception) {
+      raw.close()
+      throw e
+    }
     try {
       sock.soTimeout = timeoutMs.toInt()
       sock.startHandshake()

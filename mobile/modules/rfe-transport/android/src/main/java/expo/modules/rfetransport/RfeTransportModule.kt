@@ -33,6 +33,9 @@ class RfeTransportModule : Module() {
     if (mismatch) throw CodedException("ERR_CERT_PIN_MISMATCH", e.message, e)
     throw CodedException("ERR_TLS", e.message, e)
   } catch (e: java.io.IOException) {
+    // A pin mismatch wrapped in a plain IOException is still a mismatch, not "unreachable" (audit F-153).
+    val mismatch = generateSequence<Throwable>(e) { it.cause }.any { it is CertPinMismatch }
+    if (mismatch) throw CodedException("ERR_CERT_PIN_MISMATCH", e.message, e)
     throw CodedException("ERR_CONNECTION", e.message, e)
   }
 

@@ -18,7 +18,7 @@ class RangeNotHonoured : IOException("The server ignored the resume request.")
  * HTTP Range from the size already on disk and appends; a server that answers a ranged request with a full 200 makes
  * the partial file invalid, so it is deleted and [RangeNotHonoured] is thrown.
  */
-class PublicHttp(private val client: OkHttpClient = OkHttpClient.Builder().readTimeout(30, TimeUnit.SECONDS).build(), private val allowCleartext: Boolean = false) {
+class PublicHttp(private val client: OkHttpClient = OkHttpClient.Builder().readTimeout(30, TimeUnit.SECONDS).followSslRedirects(false).build(), private val allowCleartext: Boolean = false) {
   private val calls = ConcurrentHashMap<String, Call>()
 
   /** Returns the file's size when the body is complete. */
@@ -30,11 +30,16 @@ class PublicHttp(private val client: OkHttpClient = OkHttpClient.Builder().readT
     calls[id] = call
     try {
       call.execute().use { res ->
-        if (offset > 0 && res.code != 206) {
+        // 416: the partial no longer fits the file on the server. Any other failure keeps it for a later try.
+        if (offset > 0 && res.code == 416) {
           dest.delete()
           throw RangeNotHonoured()
         }
         if (!res.isSuccessful) throw IOException("HTTP ${res.code}")
+        if (offset > 0 && res.code != 206) {
+          dest.delete()
+          throw RangeNotHonoured()
+        }
         val body = res.body ?: throw IOException("Empty response")
         RandomAccessFile(dest, "rw").use { out ->
           if (offset > 0) out.seek(offset) else out.setLength(0)

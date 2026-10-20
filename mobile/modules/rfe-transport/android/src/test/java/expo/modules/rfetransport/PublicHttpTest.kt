@@ -59,4 +59,19 @@ class PublicHttpTest {
     server.enqueue(MockResponse().setResponseCode(404))
     assertThrows(IOException::class.java) { http.download("t", server.url("/x").toString(), File(dir, "c"), 0) }
   }
+
+  @Test fun `a transient server error on resume keeps the partial file`() {
+    val f = File(dir, "a.apk").also { it.writeBytes(data.copyOfRange(0, 100_000)) }
+    server.enqueue(MockResponse().setResponseCode(503))
+    val e = assertThrows(IOException::class.java) { http.download("t", server.url("/a.apk").toString(), f, 100_000) }
+    assertFalse(e is RangeNotHonoured)
+    assertEquals(100_000L, f.length())
+  }
+
+  @Test fun `a 416 on resume drops the stale partial file`() {
+    val f = File(dir, "a.apk").also { it.writeBytes(data.copyOfRange(0, 100_000)) }
+    server.enqueue(MockResponse().setResponseCode(416))
+    assertThrows(RangeNotHonoured::class.java) { http.download("t", server.url("/a.apk").toString(), f, 100_000) }
+    assertFalse(f.exists())
+  }
 }

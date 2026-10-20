@@ -227,3 +227,26 @@ func TestShareHandlers_ScopedToOwner(t *testing.T) {
 		t.Fatalf("want 204 revoking own share, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+// A refusal (sharing switched off here) must not consume the one-time link: it works once sharing is back.
+func TestServeShareHandler_RefusalKeepsTheLink(t *testing.T) {
+	ops, root := newFsFixture(t)
+	db, _ := newTestDeps(t)
+	on := false
+	handler := serveShareHandler(db, ops, func() bool { return on })
+	if err := db.CreateShareToken(hashShareToken("keep-me"), filepath.Join(root, "a.txt"), "", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	get := func() int {
+		rr := httptest.NewRecorder()
+		handler(rr, withURLParam(httptest.NewRequest(http.MethodGet, "/v1/share/keep-me", nil), map[string]string{"token": "keep-me"}))
+		return rr.Code
+	}
+	if c := get(); c != http.StatusNotFound {
+		t.Fatalf("sharing off: expected 404, got %d", c)
+	}
+	on = true
+	if c := get(); c != http.StatusOK {
+		t.Fatalf("sharing back on: expected 200, got %d", c)
+	}
+}

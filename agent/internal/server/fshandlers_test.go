@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -751,5 +752,37 @@ func TestRenameHandler_NotFound(t *testing.T) {
 
 	if rr.Code == http.StatusOK {
 		t.Fatal("expected error for nonexistent source")
+	}
+}
+
+// A chunked request has ContentLength -1; its paths must still be read (a client that streams the body used
+// to get "no paths" or, worse, a delete of only the query path).
+func TestDeleteHandler_ChunkedBody(t *testing.T) {
+	ops, root := newFsFixture(t)
+	target := filepath.Join(root, "a.txt")
+	body, _ := json.Marshal(map[string]any{"paths": []string{target}})
+	req := httptest.NewRequest(http.MethodDelete, "/v1/fs?permanent=true", io.NopCloser(bytes.NewReader(body)))
+	req.ContentLength = -1
+	rr := httptest.NewRecorder()
+	deleteHandler(ops, t.TempDir())(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if _, err := os.Stat(target); err == nil {
+		t.Fatal("file should have been deleted")
+	}
+}
+
+func TestDeleteHandler_MalformedBodyIsRejected(t *testing.T) {
+	ops, root := newFsFixture(t)
+	target := filepath.Join(root, "a.txt")
+	req := httptest.NewRequest(http.MethodDelete, "/v1/fs?path="+target+"&permanent=true", strings.NewReader("{not json"))
+	rr := httptest.NewRecorder()
+	deleteHandler(ops, t.TempDir())(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatal("nothing may be deleted on a malformed body")
 	}
 }

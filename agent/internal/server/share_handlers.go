@@ -169,10 +169,17 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops, sharingEnabled func() bool)
 		token := chi.URLParam(r, "token")
 		hash := hashShareToken(token)
 
-		path, ownerID, ok, err := db.ConsumeShareTokenFor(hash)
+		// Look first, consume last: a link that is denied now (sharing off, minter revoked or stripped of the
+		// right) must stay valid for when that changes, not be burned by the refusal.
+		tok, err := db.GetShareToken(hash)
 		if err != nil {
 			writeInternal(w, "serve share", err)
 			return
+		}
+		ok := tok != nil && time.Now().Before(tok.Expires.Add(time.Second))
+		ownerID := ""
+		if tok != nil {
+			ownerID = tok.DeviceID
 		}
 		if ok && sharingEnabled != nil && !sharingEnabled() {
 			ok = false
@@ -192,6 +199,17 @@ func serveShareHandler(db *store.DB, ops *fsops.Ops, sharingEnabled func() bool)
 			case dev.JailRoot != "":
 				serveOps = ops.Jailed(dev.JailRoot)
 			}
+		}
+		var path string
+		if ok {
+			// Single use: the atomic delete decides a race between two requests.
+			var cok bool
+			path, _, cok, err = db.ConsumeShareTokenFor(hash)
+			if err != nil {
+				writeInternal(w, "serve share", err)
+				return
+			}
+			ok = cok
 		}
 		if !ok {
 			// Don't distinguish "expired" from "never existed" (T1/T6).

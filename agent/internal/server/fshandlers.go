@@ -64,12 +64,18 @@ func deleteHandler(ops *fsops.Ops, trashDir string) http.HandlerFunc {
 		}
 
 		// Parse optional body.
-		if r.ContentLength > 0 {
+		// A chunked body has ContentLength -1, so test for a body rather than a length.
+		if r.Body != nil && r.Body != http.NoBody {
 			var body struct {
 				Paths []string `json:"paths"`
 			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err == nil {
+			err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body)
+			switch {
+			case err == nil:
 				paths = append(paths, body.Paths...)
+			case !errors.Is(err, io.EOF):
+				writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body")
+				return
 			}
 		}
 

@@ -45,7 +45,8 @@ export function WorkspacesScreen() {
     });
     if (!label || label === host.label) return;
     const updated = { ...host, label };
-    await hostStore.updateHost(updated);
+    // Patch the one field: a learned address that landed while the dialog was open must survive.
+    await hostStore.patchHost(host.id, { label });
     const active = useActiveHost.getState().active;
     if (active?.host.id === host.id) useActiveHost.getState().setActive({ ...active, host: updated });
     await reload();
@@ -62,7 +63,7 @@ export function WorkspacesScreen() {
     if (note === null || note === (host.note ?? '')) return;
     const { note: _old, ...rest } = host;
     const updated: Host = note === '' ? rest : { ...rest, note };
-    await hostStore.updateHost(updated);
+    await hostStore.patchHost(host.id, { note: note === '' ? undefined : note });
     const active = useActiveHost.getState().active;
     if (active?.host.id === host.id) useActiveHost.getState().setActive({ ...active, host: updated });
     await reload();

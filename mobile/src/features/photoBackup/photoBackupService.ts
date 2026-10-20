@@ -121,7 +121,9 @@ async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<Ba
   let copyBudget = stagingBudget(records);
   let count = 0;
   let failed = 0;
+  let deferred = false;
   for (const asset of pending) {
+    let stagedDir: Directory | null = null;
     try {
       const id = backupTransferId(asset.id);
       const prior = existing.get(id);
@@ -138,7 +140,10 @@ async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<Ba
         count++;
         continue;
       }
-      if (copyBudget <= 0) break;
+      if (copyBudget <= 0) {
+        deferred = true;
+        break;
+      }
       if (prior) await transfers.remove(id);
       const src = new File(await asset.getUri());
       if (!(await isFileStable(() => src.size))) continue;
@@ -147,6 +152,7 @@ async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<Ba
       const created = new Date((await asset.getCreationTime()) ?? Date.now());
       const dir = new Directory(Paths.document, 'uploads', id);
       dir.create({ idempotent: true, intermediates: true });
+      stagedDir = dir;
       const staged = new File(dir, name);
       await src.copy(staged);
       await transfers.enqueueUpload(id, host.id, address, toPath(staged.uri), backupRemotePath(root, created, name, segment), false, true);
@@ -154,10 +160,18 @@ async function runPhotoBackupOnce(o: { interactive?: boolean } = {}): Promise<Ba
       count++;
     } catch {
       // An asset that cannot be read or copied (removed meanwhile, limited access, storage full) is skipped and retried next run.
+      // Its half-made staged copy goes too, or the next run's copy would collide with it and the space would leak.
+      try {
+        stagedDir?.delete();
+      } catch {
+        // Already gone.
+      }
       failed++;
     }
   }
   if (count > 0) return { kind: 'enqueued', count };
+  // Photos are waiting behind a full staging area: that is not "up to date".
+  if (deferred) return { kind: 'incomplete', count: pending.length };
   return failed > 0 ? { kind: 'incomplete', count: failed } : { kind: 'upToDate' };
 }
 

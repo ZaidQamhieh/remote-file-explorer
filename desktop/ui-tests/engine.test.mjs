@@ -56,6 +56,8 @@ test("paths: POSIX, drive and share roots, dot segments", () => {
   assert.equal(U.parentOf("/a"), "/");
   assert.equal(U.baseOf("/a/b.txt"), "b.txt");
   assert.equal(U.join("/a", "b/c"), "/a/b/c");
+  assert.equal(U.join("/a", "x\\y"), "/a/x\\y", "a backslash in a POSIX name is part of the name (audit F-131)");
+  assert.equal(U.norm("/a/x\\y/.."), "/a");
   assert.equal(U.norm("c:\\Users\\x\\.."), "C:\\Users");
   assert.equal(U.parentOf("C:\\Users"), "C:\\");
   assert.equal(U.isRoot("C:\\"), true);

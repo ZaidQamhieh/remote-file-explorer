@@ -61,14 +61,15 @@
     else if (/^\\\\[^\\/]+[\\/][^\\/]+/.test(p)) { const m = /^\\\\([^\\/]+)[\\/]([^\\/]+)(.*)$/.exec(p); root = '\\\\' + m[1] + '\\' + m[2] + '\\'; rest = m[3]; sep = '\\'; }
     else { root = '/'; rest = p; sep = '/'; }
     const steps = [];
-    for (const s of rest.split(/[\\/]/)) { if (!s || s === '.') continue; if (s === '..') steps.pop(); else steps.push(s); }
+    /* a backslash separates only on Windows paths; on a POSIX path it is an ordinary file-name character */
+    for (const s of rest.split(sep === '\\' ? /[\\/]/ : /\//)) { if (!s || s === '.') continue; if (s === '..') steps.pop(); else steps.push(s); }
     return { root, sep, steps };
   }
   const build = (r) => r.root + r.steps.join(r.sep);
   const isVirtualRoot = (p) => p === '' || p === '/' && false;
   const norm = (p) => build(parsePath(p));
   const segs = (p) => parsePath(p).steps;
-  const join = (a, b) => { const r = parsePath(a); const add = String(b).split(/[\\/]/); return build(parsePath(r.root + r.steps.concat(add).join(r.sep))); };
+  const join = (a, b) => { const r = parsePath(a); const add = String(b).split(r.sep === '\\' ? /[\\/]/ : /\//); return build(parsePath(r.root + r.steps.concat(add).join(r.sep))); };
   const parentOf = (p) => { const r = parsePath(p); if (!r.steps.length) return r.root; r.steps.pop(); return build(r); };
   const baseOf = (p) => { const r = parsePath(p); return r.steps.length ? r.steps[r.steps.length - 1] : r.root; };
   /* the path made of the first n steps, for breadcrumbs */

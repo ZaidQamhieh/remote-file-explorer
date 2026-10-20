@@ -373,7 +373,7 @@
     }
   };
   A.fxHandlers = H;
-  document.addEventListener('click', (e) => { const b = e.target.closest('[data-fx]'); if (!b) return; const [act, a1, a2] = b.dataset.fx.split('|'); if (H[act]) { e.preventDefault(); H[act](a1, a2, b, e); } });
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-fx]'); if (!b) return; const raw = b.dataset.fx, cut = raw.indexOf('|'), act = cut < 0 ? raw : raw.slice(0, cut), a1 = cut < 0 ? undefined : raw.slice(cut + 1), a2 = undefined; /* only the first | separates: a search text may contain one */ if (H[act]) { e.preventDefault(); H[act](a1, a2, b, e); } });
 
   A.fx = { restoreRows, purgeRows, shareDialog, fileOp, compress, extract, checksumDialog, batchRename, audit, rel, left, CAPS, GRANTS, plural, persist };
   A.renderRail();

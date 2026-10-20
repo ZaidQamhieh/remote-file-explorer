@@ -228,9 +228,23 @@ pub fn rename(path: &str, new_name: &str) -> Result<FileEntry, String> {
         return Err(format!("“{new_name}” already exists"));
     }
     std::fs::rename(&from, &to).map_err(|e| format!("cannot rename {}: {e}", from.display()))?;
-    let meta = std::fs::metadata(&to).map_err(|e| e.to_string())?;
-    let is_dir = meta.is_dir();
-    Ok(entry(&to, &meta, is_dir, false))
+    // The rename already happened, so a link that leads nowhere is described as itself
+    // instead of turning a successful rename into an error.
+    let (meta, is_dir, link) = match std::fs::metadata(&to) {
+        Ok(m) => {
+            let d = m.is_dir();
+            let l = std::fs::symlink_metadata(&to)
+                .map(|x| x.file_type().is_symlink())
+                .unwrap_or(false);
+            (m, d, l)
+        }
+        Err(_) => (
+            std::fs::symlink_metadata(&to).map_err(|e| e.to_string())?,
+            false,
+            true,
+        ),
+    };
+    Ok(entry(&to, &meta, is_dir, link))
 }
 
 /// Deletes for good. The window asks first, naming what will go.
@@ -445,14 +459,31 @@ pub fn walk_all(path: &str) -> Result<Tree, String> {
     };
     let mut files = Vec::new();
     let mut dirs = Vec::new();
-    let mut stack = vec![root];
+    let mut skipped = 0usize;
+    let mut stack = vec![root.clone()];
     while let Some(p) = stack.pop() {
-        let meta = std::fs::symlink_metadata(&p)
-            .map_err(|e| format!("cannot read {}: {e}", p.display()))?;
+        // The folder or file the user picked is followed even when it is a link (the
+        // window lists it as what it leads to); links found inside it are not, so a
+        // loop cannot run forever.
+        let meta = if p == root {
+            std::fs::metadata(&p)
+        } else {
+            std::fs::symlink_metadata(&p)
+        }
+        .map_err(|e| format!("cannot read {}: {e}", p.display()))?;
         if meta.is_dir() {
             dirs.push(relative(&p)?);
-            let rd =
-                std::fs::read_dir(&p).map_err(|e| format!("cannot open {}: {e}", p.display()))?;
+            let rd = match std::fs::read_dir(&p) {
+                Ok(rd) => rd,
+                // The picked folder itself must open; one unreadable folder inside it is
+                // left out of the upload and noted in the log rather than ending it.
+                Err(e) if p != root => {
+                    skipped += 1;
+                    crate::applog::error(&format!("upload skipped an unreadable folder: {e}"));
+                    continue;
+                }
+                Err(e) => return Err(format!("cannot open {}: {e}", p.display())),
+            };
             for item in rd.flatten() {
                 stack.push(item.path());
             }
@@ -463,6 +494,11 @@ pub fn walk_all(path: &str) -> Result<Tree, String> {
         if files.len() + dirs.len() > MAX_ENTRIES {
             return Err("that folder holds too many files to upload at once".into());
         }
+    }
+    if skipped > 0 {
+        crate::applog::info(&format!(
+            "{skipped} unreadable folder(s) were left out of the upload"
+        ));
     }
     files.sort_by(|a, b| a.1.cmp(&b.1));
     // Shallowest first, so a parent is made before what is inside it.
@@ -684,6 +720,42 @@ mod tests {
         assert_eq!(walked[0].1, "papers/a.txt");
         delete(&r.path).unwrap();
         assert!(list(&root).unwrap().entries.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn walking_follows_a_linked_root_and_skips_an_unreadable_subfolder() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let t = tempfile::tempdir().unwrap();
+        let real = t.path().join("real");
+        std::fs::create_dir_all(real.join("open")).unwrap();
+        std::fs::create_dir_all(real.join("locked")).unwrap();
+        std::fs::write(real.join("open/a.txt"), b"a").unwrap();
+        std::fs::write(real.join("locked/b.txt"), b"b").unwrap();
+        symlink(&real, t.path().join("link")).unwrap();
+        let linked = walk_all(t.path().join("link").to_str().unwrap()).unwrap();
+        assert!(!linked.0.is_empty(), "a linked root yields its files");
+        std::fs::set_permissions(real.join("locked"), std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+        let unreadable = std::fs::read_dir(real.join("locked")).is_err();
+        let walked = walk_all(real.to_str().unwrap());
+        std::fs::set_permissions(real.join("locked"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        if unreadable {
+            let w = walked.expect("an unreadable subfolder is skipped, not fatal");
+            assert!(w.0.iter().any(|f| f.1.ends_with("a.txt")));
+            assert!(!w.0.iter().any(|f| f.1.ends_with("b.txt")));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn renaming_a_dangling_link_succeeds() {
+        let t = tempfile::tempdir().unwrap();
+        let l = t.path().join("dead");
+        std::os::unix::fs::symlink("/nonexistent-target", &l).unwrap();
+        let r = rename(l.to_str().unwrap(), "dead2").unwrap();
+        assert_eq!(r.name, "dead2");
     }
 }
 

@@ -64,3 +64,20 @@ test("the window cannot be made smaller than the layout needs", () => {
   assert.ok(w.minWidth >= 900 && w.minHeight >= 600);
   assert.ok(w.width >= w.minWidth && w.height >= w.minHeight);
 });
+
+test("a computer's name is escaped wherever it goes into a dialog body (it can come from the network)", () => {
+  for (const f of scripts) {
+    read(f).split("\n").forEach((line, i) => {
+      if (!/\bbody:/.test(line)) return;
+      for (const m of line.matchAll(/(?:hostLabel|hostName)\(/g)) {
+        const before = line.slice(0, m.index);
+        const open = (before.match(/esc\(/g) || []).length;
+        assert.ok(open > 0, `${f}:${i + 1} puts a host name in a dialog body without esc()`);
+      }
+    });
+  }
+});
+
+test("the data-fx dispatcher splits at the first | only, so a search text with a | survives", () => {
+  assert.doesNotMatch(read("features.js"), /dataset\.fx\.split\('\|'\)/);
+});

@@ -32,8 +32,16 @@ pub struct Found {
 
 /// Text from the network, made safe to show: no control characters, bounded length.
 fn display(s: &str, max: usize) -> String {
+    // Control characters and angle brackets become spaces: a name that arrives
+    // over the network is shown in the interface and must never look like markup.
     s.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || c == '<' || c == '>' {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(max)
         .collect::<String>()
         .trim()
@@ -125,4 +133,15 @@ fn browse(window: Duration) -> Result<Vec<Found>, String> {
     }
     let _ = daemon.shutdown();
     Ok(found.into_values().take(MAX_FOUND).collect())
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::display;
+
+    #[test]
+    fn network_names_never_carry_markup_or_controls() {
+        assert_eq!(display("<img src=x onerror=1>", 64), "img src=x onerror=1");
+        assert_eq!(display("a\u{0007}b\nc", 64), "a b c");
+    }
 }

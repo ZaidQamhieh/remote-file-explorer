@@ -210,11 +210,14 @@ class TransferEngine(
         creds, timeoutMs,
         stopped = { Thread.currentThread().isInterrupted || attempt.stop != null },
         track = { calls[id] = it },
-        save = { next -> r = update(next) },
+        // A worker that was stopped and replaced (pause, then an immediate resume) must not write progress or
+        // finish the transfer under the new attempt (audit F-126).
+        save = { next -> if (attempts[id] === attempt) r = update(next) },
         chunkSize = uploadChunkSize,
         busyDelayMs = busyDelayMs,
       )
       r = uploader.run(r)
+      if (attempts[id] !== attempt) return // replaced while finishing: the new attempt still needs the source
       update(r.copy(state = TransferState.DONE, received = r.total, error = null))
       discardSource(r)
     } catch (e: Exception) {

@@ -208,7 +208,12 @@ func cmdPairRequests(args []string) error {
 		return nil
 	}
 	for _, r := range list {
-		sas, _ := pairing.SAS(security.Fingerprint(cert), r.ClientNonce, r.ID)
+		sas, err := pairing.SAS(security.Fingerprint(cert), r.ClientNonce, r.ID)
+		if err != nil {
+			// Never show a blank match code next to a request the owner might approve.
+			fmt.Printf("%s  %-24s  from %-15s  match code unavailable (%v): do not approve\n", r.ID[:8], r.Label, r.RemoteIP, err)
+			continue
+		}
 		fmt.Printf("%s  %-24s  from %-15s  match code %s\n", r.ID[:8], r.Label, r.RemoteIP, sas)
 		if d, ok, _ := db.ClientDeviceByID(r.ClientID); ok && (d.Revoked || (d.PublicKey != "" && d.PublicKey != r.PublicKey)) {
 			fmt.Printf("          replaces the paired device %q: new key and token, access reset to browse only\n", d.Label)
@@ -454,6 +459,11 @@ func cmdJail(args []string) error {
 	// exists; passing nil seed roots here is a no-op against an existing
 	// DB — it only seeds on a brand-new store, which the daemon's first
 	// run would already have done).
+	if ok, err := settings.Initialised(db); err != nil {
+		return fmt.Errorf("settings: %w", err)
+	} else if !ok {
+		return fmt.Errorf("this agent has not been started yet; run it (or `rfe-agent setup`) once so its folder settings exist")
+	}
 	st, err := settings.Load(db, false, nil, "")
 	if err != nil {
 		return fmt.Errorf("settings: %w", err)

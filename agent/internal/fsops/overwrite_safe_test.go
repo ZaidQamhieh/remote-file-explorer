@@ -62,3 +62,33 @@ func TestCopyOverwrite_SuccessReplacesAndCleansUp(t *testing.T) {
 		t.Fatalf("aside copy left behind: %v", ents)
 	}
 }
+
+// F-144: a read-only source folder is copied with its contents and keeps its mode.
+func TestCopy_ReadOnlySourceFolder(t *testing.T) {
+	ops, root := setupJail(t)
+	src := filepath.Join(root, "ro")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(src, 0o755)
+	dstDir := filepath.Join(root, "out")
+	_ = os.MkdirAll(dstDir, 0o755)
+	res := ops.Copy([]string{src}, dstDir, false, false)
+	if !res[0].OK {
+		t.Fatalf("copy: %+v", res[0])
+	}
+	copied := filepath.Join(dstDir, "ro")
+	defer os.Chmod(copied, 0o755)
+	if b, err := os.ReadFile(filepath.Join(copied, "a.txt")); err != nil || string(b) != "a" {
+		t.Fatalf("content: %v %q", err, b)
+	}
+	if fi, _ := os.Stat(copied); fi.Mode().Perm() != 0o555 {
+		t.Fatalf("mode = %v, want 0555", fi.Mode().Perm())
+	}
+}

@@ -1092,7 +1092,9 @@ func copySecureRecursive(src, dst *securePath) error {
 		return os.Symlink(target, dst.full)
 	}
 	if info.IsDir() {
-		if err := dst.mkdirAll(info.Mode().Perm()); err != nil {
+		// The owner can always write while the children are copied; the source mode is applied after,
+		// so a read-only source folder (0555) can still be copied whole (audit F-144).
+		if err := dst.mkdirAll(info.Mode().Perm() | 0o700); err != nil {
 			return err
 		}
 		dir, err := src.open()
@@ -1111,6 +1113,14 @@ func copySecureRecursive(src, dst *securePath) error {
 			if err := copySecureRecursive(src.child(entry.Name()), dst.child(entry.Name())); err != nil {
 				return err
 			}
+		}
+		if info.Mode().Perm()|0o700 != info.Mode().Perm() {
+			d, err := dst.open()
+			if err != nil {
+				return err
+			}
+			defer d.Close()
+			return d.Chmod(info.Mode().Perm())
 		}
 		return nil
 	}

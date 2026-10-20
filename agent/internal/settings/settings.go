@@ -41,6 +41,13 @@ type Store struct {
 	photoBackupRoot string
 }
 
+// Initialised reports whether the agent has already written its settings. The admin CLI checks it before
+// Load, because Load on a database that was never started would seed an empty root list (unrestricted
+// access) and read-only=false behind the daemon's back (audit F-122).
+func Initialised(db *store.DB) (bool, error) {
+	return db.HasConfig(keyRoots)
+}
+
 // Load builds a Store. Any config key that is unset is seeded from the
 // provided default (typically a CLI flag) and written back; once a key exists
 // in the DB, the persisted value wins on every subsequent load.

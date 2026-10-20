@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/zqamhieh/remote-file-explorer/agent/internal/settings"
 	"github.com/zqamhieh/remote-file-explorer/agent/internal/store"
 )
 
@@ -20,5 +21,29 @@ func TestCliAuditWritesAnEntry(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Action != store.AuditDeviceRevoked || entries[0].Actor != cliActor || entries[0].Target != "dev-1" {
 		t.Fatalf("audit entries = %+v", entries)
+	}
+}
+
+// F-122: the jail command on a database the daemon never started must not seed unrestricted settings.
+func TestJailRefusesAnUninitialisedDatabase(t *testing.T) {
+	data := initializeAdminData(t)
+	db, err := store.Open(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateDevice("d1", "phone", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if _, err := captureStdout(t, func() error { return cmdJail([]string{"-data", data, "d1", t.TempDir()}) }); err == nil {
+		t.Fatal("jail on a never-started database should be refused")
+	}
+	db, err = store.Open(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if ok, _ := settings.Initialised(db); ok {
+		t.Fatal("the command wrote settings it should not have")
 	}
 }

@@ -246,7 +246,10 @@ impl Visitor for Builder<'_> {
         };
         let n = chunk.recs.len();
         let b = chunk.bytes();
-        self.chunks.lock().unwrap().push(Arc::new(chunk));
+        self.chunks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(Arc::new(chunk));
         let total_n = self.entries.fetch_add(n, Ordering::Relaxed) + n;
         let total_b = self.bytes.fetch_add(b, Ordering::Relaxed) + b;
         if total_n >= self.hard_entries || total_b >= self.hard_bytes {

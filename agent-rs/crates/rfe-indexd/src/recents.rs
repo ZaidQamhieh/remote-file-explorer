@@ -72,7 +72,7 @@ impl Visitor for Scan<'_> {
                 continue;
             }
             let entry = wire_entry(at, &os, join_path(dir_path, name), &meta);
-            let mut heap = self.heap.lock().unwrap();
+            let mut heap = self.heap.lock().unwrap_or_else(|e| e.into_inner());
             heap.push(Reverse(Item {
                 mtime_ns: mtime,
                 entry,

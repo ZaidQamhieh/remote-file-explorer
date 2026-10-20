@@ -103,8 +103,10 @@ class TransferService : Service() {
     engine.list().filter { it.state == TransferState.RUNNING || it.state == TransferState.QUEUED }.forEach { engine.pause(it.id) }
     stopForeground(STOP_FOREGROUND_REMOVE)
     // A start already requested must not be discarded by this stop (it would get the app killed); the pending
-    // start re-enters the foreground itself.
-    if (pendingStarts.get() == 0) stopSelf()
+    // start re-enters the foreground itself. The check and the stop share the lock with start().
+    synchronized(lock) {
+      if (pendingStarts.get() == 0) stopSelf()
+    }
   }
 
   override fun onDestroy() {

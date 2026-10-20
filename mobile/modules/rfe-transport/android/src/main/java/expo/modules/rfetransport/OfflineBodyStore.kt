@@ -56,7 +56,9 @@ class OfflineBodyStore(private val dir: File, private val keyProvider: () -> Byt
     try {
       dest.parentFile?.mkdirs()
       FileInputStream(src).use { raw ->
-        aead().newDecryptingStream(raw, aad(hostId, path)).use { plain ->
+        // A header Tink rejects while the stream is built is as unreadable as a bad body.
+        val stream = try { aead().newDecryptingStream(raw, aad(hostId, path)) } catch (e: IOException) { unreadable = true; throw e }
+        stream.use { plain ->
           FileOutputStream(tmp).use { out ->
             val buf = ByteArray(64 * 1024)
             while (true) {

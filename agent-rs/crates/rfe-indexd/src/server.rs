@@ -63,7 +63,7 @@ type Out<W> = Arc<Mutex<W>>;
 
 fn send<W: Write>(out: &Out<W>, v: &Value) {
     let bytes = serde_json::to_vec(v).unwrap_or_default();
-    let mut w = out.lock().unwrap();
+    let mut w = out.lock().unwrap_or_else(|e| e.into_inner());
     // A write failure means the Go agent is gone; the read loop will see EOF and exit.
     let _ = write_frame(&mut *w, KIND_JSON, &bytes).and_then(|_| w.flush());
 }
@@ -106,7 +106,12 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
             continue;
         };
         if env.op == "cancel" {
-            if let Some(flag) = state.cancels.lock().unwrap().get(&env.target) {
+            if let Some(flag) = state
+                .cancels
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&env.target)
+            {
                 flag.store(true, Ordering::Relaxed);
             }
             send(&out, &json!({"id": env.id, "ok": true}));
@@ -124,7 +129,7 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
         }
         let cancel = Arc::new(AtomicBool::new(false));
         {
-            let mut cancels = state.cancels.lock().unwrap();
+            let mut cancels = state.cancels.lock().unwrap_or_else(|e| e.into_inner());
             if cancels.contains_key(&env.id) {
                 drop(cancels);
                 send(
@@ -151,7 +156,11 @@ pub fn serve<R: Read, W: Write + Send + 'static>(mut input: R, output: W) -> std
                 Ok(Err((c, m))) => error_response(id, c, &m),
                 Err(_) => error_response(id, code::INTERNAL, "request panicked"),
             };
-            state.cancels.lock().unwrap().remove(&id);
+            state
+                .cancels
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&id);
             send(&out2, &resp);
         }));
     }
@@ -259,7 +268,12 @@ fn live_ok(state: &State) -> bool {
         .as_ref()
     {
         Some(w) => {
-            w.health.complete.load(Ordering::Relaxed) && w.health.error.lock().unwrap().is_empty()
+            w.health.complete.load(Ordering::Relaxed)
+                && w.health
+                    .error
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .is_empty()
         }
         None => false,
     }
@@ -275,7 +289,11 @@ fn live_stats(state: &State) -> Value {
         Some(w) => (
             w.health.watches.load(Ordering::Relaxed),
             w.health.complete.load(Ordering::Relaxed),
-            w.health.error.lock().unwrap().clone(),
+            w.health
+                .error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
         ),
         None => (0, false, "no watcher".to_string()),
     };

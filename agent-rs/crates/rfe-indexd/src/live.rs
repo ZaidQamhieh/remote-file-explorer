@@ -39,7 +39,7 @@ pub struct Batch {
 
 impl Events {
     pub fn mark(&self, dir: String) {
-        let mut p = self.pending.lock().unwrap();
+        let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         p.first.get_or_insert(now);
         p.last = Some(now);
@@ -48,7 +48,7 @@ impl Events {
     }
 
     pub fn mark_overflow(&self) {
-        let mut p = self.pending.lock().unwrap();
+        let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         p.first.get_or_insert(now);
         p.last = Some(now);
@@ -58,17 +58,20 @@ impl Events {
 
     /// True while a lost-events marker waits for the applier: the published index may be missing changes.
     pub fn overflow_pending(&self) -> bool {
-        self.pending.lock().unwrap().overflow
+        self.pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .overflow
     }
 
     /// Forgets everything pending (a full rebuild is about to read the disk afresh).
     pub fn clear(&self) {
-        *self.pending.lock().unwrap() = Pending::default();
+        *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = Pending::default();
     }
 
     /// Puts a batch back (the applier could not run it yet).
     pub fn restore(&self, batch: Batch) {
-        let mut p = self.pending.lock().unwrap();
+        let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         p.first.get_or_insert(now);
         p.last = Some(now);
@@ -78,7 +81,7 @@ impl Events {
 
     /// Blocks until a batch is ready (events have gone quiet) or `stop` is set; `None` on stop.
     pub fn next_batch(&self, stop: &AtomicBool) -> Option<Batch> {
-        let mut p = self.pending.lock().unwrap();
+        let mut p = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         loop {
             if stop.load(Ordering::Relaxed) {
                 return None;
@@ -161,7 +164,7 @@ impl Watch {
     /// Watches every directory in `dirs` (or, where the platform does it cheaply, each root recursively).
     /// Stops at the first failure and records why (typically the inotify watch limit).
     pub fn register<'a>(&self, roots: &[String], dirs: impl Iterator<Item = &'a str>) {
-        let mut w = self.watcher.lock().unwrap();
+        let mut w = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
         let result: notify::Result<()> = if per_directory() {
             let mut r = Ok(());
             for d in dirs {
@@ -185,7 +188,7 @@ impl Watch {
         };
         match result {
             Ok(()) => self.health.complete.store(true, Ordering::Relaxed),
-            Err(e) => *self.health.error.lock().unwrap() = e.to_string(),
+            Err(e) => *self.health.error.lock().unwrap_or_else(|e| e.into_inner()) = e.to_string(),
         }
     }
 
@@ -194,7 +197,7 @@ impl Watch {
         if !per_directory() {
             return;
         }
-        let mut w = self.watcher.lock().unwrap();
+        let mut w = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
         for d in dirs {
             match w.watch(Path::new(d), RecursiveMode::NonRecursive) {
                 Ok(()) => {
@@ -202,7 +205,7 @@ impl Watch {
                 }
                 Err(e) => {
                     self.health.complete.store(false, Ordering::Relaxed);
-                    *self.health.error.lock().unwrap() = e.to_string();
+                    *self.health.error.lock().unwrap_or_else(|e| e.into_inner()) = e.to_string();
                     return;
                 }
             }
@@ -286,7 +289,12 @@ mod tests {
         if per_directory() {
             w.register(&[], ["/definitely/not/a/directory"].into_iter());
             assert!(!w.health.complete.load(Ordering::Relaxed));
-            assert!(!w.health.error.lock().unwrap().is_empty());
+            assert!(!w
+                .health
+                .error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_empty());
         }
     }
 
